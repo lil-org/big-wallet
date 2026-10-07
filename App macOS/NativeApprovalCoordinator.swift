@@ -85,10 +85,7 @@ final class NativeApprovalCoordinator {
         let prepareWithoutWallets: @MainActor @Sendable (ExtensionBridge.RequestBinding) -> DappRequestPreparation?
         let reloadWallets: @MainActor @Sendable () async -> Bool
         let prepare: @MainActor @Sendable (ExtensionBridge.RequestBinding) -> DappRequestPreparation?
-        let attemptNativeDecision: @MainActor @Sendable (
-            ExtensionBridge.Snapshot, ReviewConsent
-        ) async ->
-            NativeApprovalFinalizationResult
+        let attemptNativeDecision: @MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult
 
         init(
             now: @escaping @MainActor @Sendable () -> Date,
@@ -98,9 +95,7 @@ final class NativeApprovalCoordinator {
             prepareWithoutWallets: (@MainActor @Sendable (ExtensionBridge.RequestBinding) -> DappRequestPreparation?)? = nil,
             reloadWallets: (@MainActor @Sendable () async -> Bool)? = nil,
             prepare: (@MainActor @Sendable (ExtensionBridge.RequestBinding) -> DappRequestPreparation?)? = nil,
-            attemptNativeDecision: (@MainActor @Sendable (
-                ExtensionBridge.Snapshot, ReviewConsent
-            ) async -> NativeApprovalFinalizationResult)? = nil
+            attemptNativeDecision: (@MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult)? = nil
         ) {
             self.now = now
             self.uptime = uptime ?? { ProcessInfo.processInfo.systemUptime }
@@ -115,7 +110,7 @@ final class NativeApprovalCoordinator {
                 guard let catalog = WalletsManager.shared.reviewCatalog() else { return nil }
                 return DappRequestProcessor().prepare($0, catalog: catalog)
             }
-            self.attemptNativeDecision = attemptNativeDecision ?? { _, _ in .pending }
+            self.attemptNativeDecision = attemptNativeDecision ?? { _ in .pending }
         }
 
         static let live = Environment(
@@ -124,8 +119,8 @@ final class NativeApprovalCoordinator {
                 let clock = ContinuousClock()
                 try? await clock.sleep(until: clock.now.advanced(by: .nanoseconds(Int64(clamping: nanoseconds))), tolerance: nil)
             },
-            attemptNativeDecision: { snapshot, authorization in
-                await NativeApprovalFinalizer.shared.attempt(snapshot: snapshot, consent: authorization)
+            attemptNativeDecision: { consent in
+                await NativeApprovalFinalizer.shared.attempt(consent: consent)
             }
         )
     }
@@ -942,12 +937,12 @@ final class NativeApprovalCoordinator {
         while work.isCurrent {
             guard let status = await work.load() else { return }
             switch status {
-            case .pending(let snapshot, .current):
+            case .pending(_, .current):
                 guard work.update({ work.environment.now() < $0.terminalDeadline }) == true else {
                     work.update { $0.finish() }
                     return
                 }
-                let result = await work.environment.attemptNativeDecision(snapshot, consent)
+                let result = await work.environment.attemptNativeDecision(consent)
                 guard work.isCurrent else { return }
                 switch result {
                 case .responseReady:

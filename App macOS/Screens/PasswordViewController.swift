@@ -10,6 +10,7 @@ class PasswordViewController: NSViewController {
         reason: AuthenticationReason? = nil,
         reviewLifetime: NativeApprovalReviewLifetime? = nil,
         onboardingCancelled: (() -> Void)? = nil,
+        credentialUnavailable: (() -> Void)? = nil,
         completion: ((Bool) -> Void)?
     ) -> PasswordViewController {
         let new = instantiate(PasswordViewController.self)
@@ -17,6 +18,7 @@ class PasswordViewController: NSViewController {
         new.reason = reason
         new.reviewLifetime = reviewLifetime
         new.onboardingCancelled = onboardingCancelled
+        new.credentialUnavailable = credentialUnavailable
         new.completion = completion
         return new
     }
@@ -31,6 +33,7 @@ class PasswordViewController: NSViewController {
     private var passwordToRepeat: String?
     private var completion: ((Bool) -> Void)?
     private var onboardingCancelled: (() -> Void)?
+    private var credentialUnavailable: (() -> Void)?
     private var didCallCompletion = false
     private var initialRefreshTask: Task<Void, Never>?
     private var reviewLifetime: NativeApprovalReviewLifetime?
@@ -185,12 +188,17 @@ class PasswordViewController: NSViewController {
         guard reviewLifetime?.isActive != false, !didCallCompletion, !isSaving else { return }
         switch mode {
         case .create:
+            guard let credentialUnavailable else {
+                callCompletion(result: false)
+                return
+            }
             let welcome = WelcomeViewController.new(
                 onboardingCancelled: onboardingCancelled,
+                credentialUnavailable: credentialUnavailable,
                 completion: completion
             )
             welcome.keychain = keychain
-            retire()
+            retireCredentialPresentation()
             view.window?.contentViewController = welcome
         case .repeatAfterCreate:
             switchToMode(.create)
@@ -201,9 +209,12 @@ class PasswordViewController: NSViewController {
     
     private func callCompletion(result: Bool) {
         guard reviewLifetime?.isActive != false, !didCallCompletion else { return }
-        retire()
-        completion?(result)
-        retainedReturnController = nil
+        let completion = completion
+        let returningController = retainedReturnController
+        retireCredentialPresentation()
+        withExtendedLifetime(returningController) {
+            completion?(result)
+        }
     }
 
     private func cancelOnboarding() {
@@ -212,18 +223,23 @@ class PasswordViewController: NSViewController {
             callCompletion(result: false)
             return
         }
-        retire()
+        retireCredentialPresentation()
         onboardingCancelled()
-        retainedReturnController = nil
     }
 
-    private func retire() {
+    func retireCredentialPresentation() {
         didCallCompletion = true
         initialRefreshTask?.cancel()
+        initialRefreshTask = nil
         saveTask?.cancel()
+        saveTask = nil
         passwordToRepeat = nil
-        passwordTextField.stringValue = ""
+        if isViewLoaded { passwordTextField.stringValue = "" }
         NotificationCenter.default.removeObserver(self)
+        completion = nil
+        onboardingCancelled = nil
+        credentialUnavailable = nil
+        retainedReturnController = nil
     }
 
     @objc private func walletsChanged() {
@@ -268,6 +284,11 @@ class PasswordViewController: NSViewController {
     }
 
     private func showPasswordUnavailable() {
+        if let credentialUnavailable {
+            retireCredentialPresentation()
+            credentialUnavailable()
+            return
+        }
         isPasswordUnavailable = true
         passwordToRepeat = nil
         if mode == .repeatAfterCreate { mode = .create }

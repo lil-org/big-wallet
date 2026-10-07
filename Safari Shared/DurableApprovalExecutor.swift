@@ -111,6 +111,32 @@ final class DurableApprovalExecutor {
     nonisolated static let defaultBroadcastTimeoutNanoseconds: UInt64 =
         120 * 1_000_000_000
 
+    @MainActor
+    struct Environment {
+        let requestProcessor: any DappRequestProcessing
+        let broadcastSender: any ApprovedBroadcastSending
+        let broadcastTimeoutNanoseconds: UInt64
+        let clock: @MainActor @Sendable () -> Date
+        let waitForExecutionDeadline: (@MainActor @Sendable (Date) async -> Void)?
+
+        static var live: Self { Self() }
+
+        init(
+            requestProcessor: (any DappRequestProcessing)? = nil,
+            broadcastSender: (any ApprovedBroadcastSending)? = nil,
+            broadcastTimeoutNanoseconds: UInt64 =
+                DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
+            clock: @escaping @MainActor @Sendable () -> Date = Date.init,
+            waitForExecutionDeadline: (@MainActor @Sendable (Date) async -> Void)? = nil
+        ) {
+            self.requestProcessor = requestProcessor ?? DappRequestProcessor()
+            self.broadcastSender = broadcastSender ?? DappBroadcastSender()
+            self.broadcastTimeoutNanoseconds = broadcastTimeoutNanoseconds
+            self.clock = clock
+            self.waitForExecutionDeadline = waitForExecutionDeadline
+        }
+    }
+
     private let store: PopupRequestStore
     private let requestProcessor: DappRequestProcessing
     private let broadcastSender: any ApprovedBroadcastSending
@@ -118,34 +144,16 @@ final class DurableApprovalExecutor {
     private let clock: @MainActor @Sendable () -> Date
     private let waitForExecutionDeadline: (@MainActor @Sendable (Date) async -> Void)?
 
-    convenience init(
-        store: PopupRequestStore,
-        requestProcessor: DappRequestProcessing? = nil,
-        broadcastSender: (any ApprovedBroadcastSending)? = nil,
-        broadcastTimeoutNanoseconds: UInt64 = DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
-        clock: @escaping @MainActor @Sendable () -> Date = { Date() }
-    ) {
-        self.init(
-            store: store, requestProcessor: requestProcessor, broadcastSender: broadcastSender,
-            broadcastTimeoutNanoseconds: broadcastTimeoutNanoseconds, clock: clock, waitForExecutionDeadline: nil
-        )
-    }
-
     init(
         store: PopupRequestStore,
-        requestProcessor: DappRequestProcessing? = nil,
-        broadcastSender: (any ApprovedBroadcastSending)? = nil,
-        broadcastTimeoutNanoseconds: UInt64 =
-            DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
-        clock: @escaping @MainActor @Sendable () -> Date = Date.init,
-        waitForExecutionDeadline: (@MainActor @Sendable (Date) async -> Void)?
+        environment: Environment = .live
     ) {
         self.store = store
-        self.requestProcessor = requestProcessor ?? DappRequestProcessor()
-        self.broadcastSender = broadcastSender ?? DappBroadcastSender()
-        self.broadcastTimeoutNanoseconds = broadcastTimeoutNanoseconds
-        self.clock = clock
-        self.waitForExecutionDeadline = waitForExecutionDeadline
+        requestProcessor = environment.requestProcessor
+        broadcastSender = environment.broadcastSender
+        broadcastTimeoutNanoseconds = environment.broadcastTimeoutNanoseconds
+        clock = environment.clock
+        waitForExecutionDeadline = environment.waitForExecutionDeadline
     }
 
     func execute(

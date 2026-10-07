@@ -64,6 +64,8 @@ Revocation history retains the latest removal of each wallet or account without 
 
 Initial password setup only inserts a missing credential; it never replaces an existing password. Unreadable or malformed credentials, and wallet records without their password, stop setup and offer Retry. Competing setup sessions must authenticate with the credential that was actually stored.
 
+During macOS startup or onboarding, a credential-storage failure cancels the current step, clears password drafts, and shows Retry in the same window. Only explicit Retry restarts the flow from current storage state; an existing password requires fresh authentication. Closing the flow cancels its pending wallet-open and pre-authentication approval requests.
+
 Seed phrases and private keys disappear when their scene or window becomes inactive or closes. Returning requires a fresh reveal and authentication. Secret clipboard copies stay on the current device and expire after 30 seconds. iOS and visionOS enforce expiration through the system; macOS uses elapsed time while the app is running, checks ownership before clearing, and clears its own copy on normal termination. Forced termination can prevent macOS cleanup. These controls do not guarantee erasure of Swift string storage or copies already obtained by another application.
 
 ### iPhone debugger launch stalls in Xcode 27

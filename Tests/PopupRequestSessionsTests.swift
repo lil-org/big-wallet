@@ -115,9 +115,11 @@ final class PopupRequestSessionsTests: XCTestCase {
         let snapshot = try await enqueue(popupSnapshot(id: 701, provider: .ethereum, method: "addEthereumChain"), in: store)
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor(),
             walletEnvironment: popupWalletEnvironment(),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor()
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let stale = try popupCommand(
@@ -160,7 +162,6 @@ final class PopupRequestSessionsTests: XCTestCase {
         var preparationUpdate: ((Transaction) -> Void)?
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor { _ in .approval(.approveTransaction(action)) },
             walletEnvironment: popupWalletEnvironment(),
             loadsTransactionContext: false,
             transactionApprovalOperations: TransactionApprovalOperations(
@@ -176,6 +177,9 @@ final class PopupRequestSessionsTests: XCTestCase {
 
                     return try await source.value(cancellation: nil)
                 }
+            ),
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor { _ in .approval(.approveTransaction(action)) }
             )
         )
         let read = try popupCommand(
@@ -220,9 +224,11 @@ final class PopupRequestSessionsTests: XCTestCase {
         let snapshot = try await enqueue(popupSnapshot(id: 703, provider: .ethereum, method: "addEthereumChain"), in: store)
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor(),
             walletEnvironment: popupWalletEnvironment(),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor()
+            )
         )
         _ = try await materializeToken(controller: controller, snapshot: snapshot)
         let reads = await store.loadCount()
@@ -246,9 +252,11 @@ final class PopupRequestSessionsTests: XCTestCase {
         let snapshot = try await enqueue(popupSnapshot(id: 704, provider: .ethereum, method: "addEthereumChain"), in: store)
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor(),
             walletEnvironment: popupWalletEnvironment(),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor()
+            )
         )
         try await store.cleanup()
         for subject in ["getApprovalState", "retryApproval", "rejectRequest"] {
@@ -329,14 +337,16 @@ final class PopupRequestSessionsTests: XCTestCase {
                 ))
                 let authorization = try await store.prepareNativeApproval(handle: snapshot.handle, decision: decision)
                 let finalizer = NativeApprovalFinalizer(
-                    store: store, requestProcessor: processor,
-                    refreshWalletCatalog: { access }, networkResolver: { _ in
+                    store: store,
+                    executionEnvironment: .init(
+                        requestProcessor: processor
+                    ),
+                    refreshWalletCatalog: { access },
+                    networkResolver: { _ in
                         .resolved(ResolvedEthereumNetwork(network: network, source: .custom))
                     }
                 )
-                let result = await attemptNativeDecision(
-                    finalizer, store: store, snapshot: snapshot, authorization: authorization
-                )
+                let result = await finalizer.attempt(consent: authorization)
                 let error = await store.completedErrorCode(handle: snapshot.handle)
                 let committed = await store.completedApprovalWasCommitted(handle: snapshot.handle)
                 XCTAssertEqual(result, knownButUnavailable ? .reviewRequired : .responseReady)
@@ -347,11 +357,14 @@ final class PopupRequestSessionsTests: XCTestCase {
 #endif
             } else {
                 let controller = PopupRequestSessions(
-                    store: store, requestProcessor: processor,
+                    store: store,
                     walletEnvironment: popupWalletEnvironment(reviewCatalog: { access }),
                     loadsTransactionContext: false,
                     selectionNetworkResolver: { _ in network },
-                    approvalNetworkResolver: { _ in .resolved(ResolvedEthereumNetwork(network: network, source: .custom)) }
+                    approvalNetworkResolver: { _ in .resolved(ResolvedEthereumNetwork(network: network, source: .custom)) },
+                    executionEnvironment: .init(
+                        requestProcessor: processor
+                    )
                 )
                 let token = try await materializeToken(controller: controller, snapshot: snapshot)
                 let command = try popupCommand(
@@ -391,9 +404,11 @@ final class PopupRequestSessionsTests: XCTestCase {
         var acquisitions = 0
         let executor = DurableApprovalExecutor(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in .rollback }) { _ in
-                .immediate(.failure(.internalError))
-            }
+            environment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in .rollback }) { _ in
+                    .immediate(.failure(.internalError))
+                }
+            )
         )
         let result = await execute(executor, setup: setup, signing: .unlocked(makeWalletSigningSessionForTesting(
                 authorization: walletSigningAuthorizationForTesting(
@@ -509,11 +524,15 @@ final class PopupRequestSessionsTests: XCTestCase {
                     : approvedFailureForTesting(.internalError, permit: permit)
             }) { _ in .immediate(.failure(.internalError)) }
             let executor = DurableApprovalExecutor(
-                store: store, requestProcessor: processor,
-                broadcastSender: PopupBroadcastSender { _, _ in
-                    XCTFail("Expired broadcast must not be sent")
-                    return .failure(.transport)
-                }, clock: { clock.now }
+                store: store,
+                environment: .init(
+                    requestProcessor: processor,
+                    broadcastSender: PopupBroadcastSender { _, _ in
+                        XCTFail("Expired broadcast must not be sent")
+                        return .failure(.transport)
+                    },
+                    clock: { clock.now }
+                )
             )
             let result = await execute(executor, setup: setup, signing: .unlocked(makeWalletSigningSessionForTesting(
                     authorization: walletSigningAuthorizationForTesting(
@@ -543,13 +562,16 @@ final class PopupRequestSessionsTests: XCTestCase {
         let deadline = setup.claim.executionDeadline
         let executor = DurableApprovalExecutor(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
-                await popupPreparedBroadcast(permit: permit, signer: signer)
-            }) { _ in .immediate(.failure(.internalError)) },
-            broadcastSender: PopupBroadcastSender { _, _ in
-                await store.record("send")
-                return .failure(.rpc(.serverError(4001, Strings.canceled)))
-            }, clock: { clock.now }
+            environment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
+                    await popupPreparedBroadcast(permit: permit, signer: signer)
+                }) { _ in .immediate(.failure(.internalError)) },
+                broadcastSender: PopupBroadcastSender { _, _ in
+                    await store.record("send")
+                    return .failure(.rpc(.serverError(4001, Strings.canceled)))
+                },
+                clock: { clock.now }
+            )
         )
         let result = await execute(executor, setup: setup, signing: .unlocked(makeWalletSigningSessionForTesting(
                 authorization: walletSigningAuthorizationForTesting(
@@ -574,14 +596,16 @@ final class PopupRequestSessionsTests: XCTestCase {
             await store.setBroadcastCheckpointHook { state.observeDurableCommit() }
             let executor = DurableApprovalExecutor(
                 store: store,
-                requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
-                    broadcasts ? await popupPreparedBroadcast(permit: permit, signer: signer)
-                        : approvedFailureForTesting(.internalError, permit: permit)
-                }) { _ in .immediate(.failure(.internalError)) },
-                broadcastSender: PopupBroadcastSender { _, _ in
-                    state.observeBroadcast()
-                    return .failure(.rpc(.serverError(4001, Strings.canceled)))
-                }
+                environment: .init(
+                    requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
+                        broadcasts ? await popupPreparedBroadcast(permit: permit, signer: signer)
+                            : approvedFailureForTesting(.internalError, permit: permit)
+                    }) { _ in .immediate(.failure(.internalError)) },
+                    broadcastSender: PopupBroadcastSender { _, _ in
+                        state.observeBroadcast()
+                        return .failure(.rpc(.serverError(4001, Strings.canceled)))
+                    }
+                )
             )
             let result = await execute(executor, setup: setup, signing: .unlocked(makeWalletSigningSessionForTesting(
                     authorization: walletSigningAuthorizationForTesting(
@@ -607,11 +631,13 @@ final class PopupRequestSessionsTests: XCTestCase {
         let late = expectation(description: "late catalog refresh discarded")
         let executor = DurableApprovalExecutor(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
-                XCTFail("A catalog result arriving after the deadline must not execute")
-                return .rollback
-            }),
-            clock: { setup.claim.executionDeadline.addingTimeInterval(-0.01) }
+            environment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
+                    XCTFail("A catalog result arriving after the deadline must not execute")
+                    return .rollback
+                }),
+                clock: { setup.claim.executionDeadline.addingTimeInterval(-0.01) }
+            )
         )
         let task = Task {
             let result = await executor.execute(
@@ -648,21 +674,24 @@ final class PopupRequestSessionsTests: XCTestCase {
         var leases = 0
         let executor = DurableApprovalExecutor(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
-                let prepared = await popupPreparedBroadcast(permit: permit, signer: signer)
-                guard case .broadcast = prepared else {
-                    XCTFail("Expected a signed broadcast before the operation stalls")
-                    return .rollback
-                }
-                await gate.wait()
-                XCTAssertTrue(Task.isCancelled)
-                late.fulfill()
-                return prepared
-            }) { _ in .immediate(.failure(.internalError)) },
-            broadcastSender: PopupBroadcastSender { _, _ in
-                XCTFail("Late prepared broadcast must not send")
-                return .failure(.transport)
-            }, clock: { setup.claim.executionDeadline.addingTimeInterval(-0.1) }
+            environment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
+                    let prepared = await popupPreparedBroadcast(permit: permit, signer: signer)
+                    guard case .broadcast = prepared else {
+                        XCTFail("Expected a signed broadcast before the operation stalls")
+                        return .rollback
+                    }
+                    await gate.wait()
+                    XCTAssertTrue(Task.isCancelled)
+                    late.fulfill()
+                    return prepared
+                }) { _ in .immediate(.failure(.internalError)) },
+                broadcastSender: PopupBroadcastSender { _, _ in
+                    XCTFail("Late prepared broadcast must not send")
+                    return .failure(.transport)
+                },
+                clock: { setup.claim.executionDeadline.addingTimeInterval(-0.1) }
+            )
         )
         let task = Task { @MainActor in
             let result = await execute(executor, setup: setup, signing: .unlocked(makeWalletSigningSessionForTesting(
@@ -695,11 +724,13 @@ final class PopupRequestSessionsTests: XCTestCase {
                 let setup = try await makeExecutionSetup(store: store, id: 457, native: kind == "native", signing: kind != "ordinary")
                 let executor = DurableApprovalExecutor(
                     store: store,
-                    requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
-                        XCTFail("Expired operation must not start")
-                        return .rollback
-                    }) { _ in .immediate(.failure(.internalError)) },
-                    clock: { setup.claim.executionDeadline.addingTimeInterval(offset) }
+                    environment: .init(
+                        requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
+                            XCTFail("Expired operation must not start")
+                            return .rollback
+                        }) { _ in .immediate(.failure(.internalError)) },
+                        clock: { setup.claim.executionDeadline.addingTimeInterval(offset) }
+                    )
                 )
                 let result: DurableApprovalExecutor.Result
                 if kind == "ordinary" {
@@ -735,16 +766,18 @@ final class PopupRequestSessionsTests: XCTestCase {
         let started = expectation(description: "broadcast started after checkpoint")
         let executor = DurableApprovalExecutor(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
-                await popupPreparedBroadcast(permit: permit, signer: signer)
-            }) { _ in .immediate(.failure(.internalError)) },
-            broadcastSender: PopupBroadcastSender { _, _ in
-                await store.record("send")
-                started.fulfill()
-                await gate.wait()
-                XCTAssertFalse(Task.isCancelled)
-                return .failure(.rpc(.serverError(4001, Strings.canceled)))
-            }
+            environment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
+                    await popupPreparedBroadcast(permit: permit, signer: signer)
+                }) { _ in .immediate(.failure(.internalError)) },
+                broadcastSender: PopupBroadcastSender { _, _ in
+                    await store.record("send")
+                    started.fulfill()
+                    await gate.wait()
+                    XCTAssertFalse(Task.isCancelled)
+                    return .failure(.rpc(.serverError(4001, Strings.canceled)))
+                }
+            )
         )
         let task = Task { @MainActor in
             await execute(executor, setup: setup, signing: .source { makeWalletSignerForTesting($0) })
@@ -767,14 +800,16 @@ final class PopupRequestSessionsTests: XCTestCase {
         await store.setBroadcastCheckpointCommittedHook { withUnsafeCurrentTask { $0?.cancel() } }
         let executor = DurableApprovalExecutor(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
-                await popupPreparedBroadcast(permit: permit, signer: signer)
-            }) { _ in .immediate(.failure(.internalError)) },
-            broadcastSender: PopupBroadcastSender { _, _ in
-                XCTAssertFalse(Task.isCancelled)
-                await store.record("send")
-                return .failure(.rpc(.serverError(4001, Strings.canceled)))
-            }
+            environment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
+                    await popupPreparedBroadcast(permit: permit, signer: signer)
+                }) { _ in .immediate(.failure(.internalError)) },
+                broadcastSender: PopupBroadcastSender { _, _ in
+                    XCTAssertFalse(Task.isCancelled)
+                    await store.record("send")
+                    return .failure(.rpc(.serverError(4001, Strings.canceled)))
+                }
+            )
         )
         let task = Task { @MainActor in
             await execute(executor, setup: setup, signing: .source { makeWalletSignerForTesting($0) })
@@ -809,8 +844,18 @@ final class PopupRequestSessionsTests: XCTestCase {
             executions += 1
             return approvedFailureForTesting(.userRejected, permit: permit)
         }) { _ in .immediate(.failure(.internalError)) }
-        let original = DurableApprovalExecutor(store: store, requestProcessor: processor)
-        let duplicate = DurableApprovalExecutor(store: store, requestProcessor: processor)
+        let original = DurableApprovalExecutor(
+            store: store,
+            environment: .init(
+                requestProcessor: processor
+            )
+        )
+        let duplicate = DurableApprovalExecutor(
+            store: store,
+            environment: .init(
+                requestProcessor: processor
+            )
+        )
         let task = Task { @MainActor in
             await original.execute(claim: setup.claim, prepare: { context in
                 preparations += 1
@@ -858,12 +903,14 @@ final class PopupRequestSessionsTests: XCTestCase {
             var executions = 0
             let executor = DurableApprovalExecutor(
                 store: store,
-                requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
-                    executions += 1
-                    started.fulfill()
-                    await gate.wait()
-                    return approvedFailureForTesting(.userRejected, permit: permit)
-                }) { _ in .immediate(.failure(.internalError)) }
+                environment: .init(
+                    requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
+                        executions += 1
+                        started.fulfill()
+                        await gate.wait()
+                        return approvedFailureForTesting(.userRejected, permit: permit)
+                    }) { _ in .immediate(.failure(.internalError)) }
+                )
             )
             let session = makeWalletSigningSessionForTesting(
                 authorization: walletSigningAuthorizationForTesting(
@@ -928,11 +975,13 @@ final class PopupRequestSessionsTests: XCTestCase {
             let started = expectation(description: "cancellation boundary reached")
             let executor = DurableApprovalExecutor(
                 store: store,
-                requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
-                    if !cancelDuringLease { started.fulfill(); await gate.wait() }
-                    XCTAssertFalse(Task.isCancelled)
-                    return approvedFailureForTesting(.userRejected, permit: permit)
-                }) { _ in .immediate(.failure(.internalError)) }
+                environment: .init(
+                    requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
+                        if !cancelDuringLease { started.fulfill(); await gate.wait() }
+                        XCTAssertFalse(Task.isCancelled)
+                        return approvedFailureForTesting(.userRejected, permit: permit)
+                    }) { _ in .immediate(.failure(.internalError)) }
+                )
             )
             let session = makeWalletSigningSessionForTesting(
                 authorization: walletSigningAuthorizationForTesting(
@@ -966,16 +1015,19 @@ final class PopupRequestSessionsTests: XCTestCase {
         var sendFinished = false
         let executor = DurableApprovalExecutor(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
-                await popupPreparedBroadcast(permit: permit, signer: signer)
-            }) { _ in .immediate(.failure(.internalError)) },
-            broadcastSender: PopupBroadcastSender { _, _ in
-                sendStarted = true
-                await store.record("send")
-                await gate.wait()
-                sendFinished = true
-                return .failure(.rpc(.serverError(4001, Strings.canceled)))
-            }, broadcastTimeoutNanoseconds: 0
+            environment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
+                    await popupPreparedBroadcast(permit: permit, signer: signer)
+                }) { _ in .immediate(.failure(.internalError)) },
+                broadcastSender: PopupBroadcastSender { _, _ in
+                    sendStarted = true
+                    await store.record("send")
+                    await gate.wait()
+                    sendFinished = true
+                    return .failure(.rpc(.serverError(4001, Strings.canceled)))
+                },
+                broadcastTimeoutNanoseconds: 0
+            )
         )
         let task = Task { @MainActor in
             let result = await execute(executor, setup: setup, signing: .unlocked(makeWalletSigningSessionForTesting(authorization: walletSigningAuthorizationForTesting(
@@ -1769,9 +1821,11 @@ extension PopupRequestSessionsTests {
         let snapshot = try await enqueue(popupSnapshot(id: 20, provider: .ethereum, method: "requestAccounts"), in: store)
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor(),
             walletEnvironment: popupWalletEnvironment(reviewCatalog: { nil }),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor()
+            )
         )
         let request = try popupCommand(
             subject: "getApprovalState",
@@ -2032,12 +2086,14 @@ extension PopupRequestSessionsTests {
         var preparations = 0
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor { request in
-                preparations += 1
-                return .immediate(.failure(.userRejected))
-            },
             walletEnvironment: popupWalletEnvironment(),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor { request in
+                    preparations += 1
+                    return .immediate(.failure(.userRejected))
+                }
+            )
         )
         let stateRequest = try popupCommand(
             subject: "getApprovalState",
@@ -2112,14 +2168,16 @@ extension PopupRequestSessionsTests {
         var preparations = 0
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor { _ in
-                preparations += 1
-                return .approval(.addEthereumChain(AddEthereumChainAction(
-                    chainToAdd: popupTestNetwork()
-                )))
-            },
             walletEnvironment: popupWalletEnvironment(),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor { _ in
+                    preparations += 1
+                    return .approval(.addEthereumChain(AddEthereumChainAction(
+                        chainToAdd: popupTestNetwork()
+                    )))
+                }
+            )
         )
         let originalToken = try await materializeToken(controller: controller, snapshot: snapshot)
         await store.forceNextClaimResult(.unavailable)
@@ -2193,12 +2251,14 @@ extension PopupRequestSessionsTests {
         var preparations = 0
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor { request in
-                preparations += 1
-                return .immediate(.failure(.userRejected))
-            },
             walletEnvironment: popupWalletEnvironment(),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor { request in
+                    preparations += 1
+                    return .immediate(.failure(.userRejected))
+                }
+            )
         )
         let read = try popupCommand(
             subject: "getApprovalState",
@@ -2265,17 +2325,19 @@ extension PopupRequestSessionsTests {
         var requiresReview = false
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor { request in
-                preparations += 1
-                if requiresReview {
-                    return .approval(.addEthereumChain(AddEthereumChainAction(
-                        chainToAdd: popupTestNetwork()
-                    )))
-                }
-                return .immediate(.failure(.userRejected))
-            },
             walletEnvironment: popupWalletEnvironment(),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor { request in
+                    preparations += 1
+                    if requiresReview {
+                        return .approval(.addEthereumChain(AddEthereumChainAction(
+                            chainToAdd: popupTestNetwork()
+                        )))
+                    }
+                    return .immediate(.failure(.userRejected))
+                }
+            )
         )
         let read = try popupCommand(
             subject: "getApprovalState",
@@ -2320,12 +2382,14 @@ extension PopupRequestSessionsTests {
         var preparations = 0
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor { request in
-                preparations += 1
-                return .immediate(.failure(.userRejected))
-            },
             walletEnvironment: popupWalletEnvironment(),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor { request in
+                    preparations += 1
+                    return .immediate(.failure(.userRejected))
+                }
+            )
         )
         let read = try popupCommand(
             subject: "getApprovalState",
@@ -2379,17 +2443,19 @@ extension PopupRequestSessionsTests {
             var requiresReview = false
             let controller = PopupRequestSessions(
                 store: store,
-                requestProcessor: CompactPopupProcessor { request in
-                    preparations += 1
-                    if requiresReview {
-                        return .approval(.addEthereumChain(AddEthereumChainAction(
-                            chainToAdd: popupTestNetwork()
-                        )))
-                    }
-                    return .immediate(.failure(.userRejected))
-                },
                 walletEnvironment: popupWalletEnvironment(),
-                loadsTransactionContext: false
+                loadsTransactionContext: false,
+                executionEnvironment: .init(
+                    requestProcessor: CompactPopupProcessor { request in
+                        preparations += 1
+                        if requiresReview {
+                            return .approval(.addEthereumChain(AddEthereumChainAction(
+                                chainToAdd: popupTestNetwork()
+                            )))
+                        }
+                        return .immediate(.failure(.userRejected))
+                    }
+                )
             )
             let read = try popupCommand(
                 subject: "getApprovalState", id: snapshot.handle.id,
@@ -2433,18 +2499,20 @@ extension PopupRequestSessionsTests {
         var immediatePreparations = 0
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor { request in
-                if request.name == "requestAccounts" {
-                    immediatePreparations += 1
-                    return .immediate(.failure(.userRejected))
-                }
-                reviewPreparations += 1
-                return .approval(.addEthereumChain(AddEthereumChainAction(
-                    chainToAdd: popupTestNetwork()
-                )))
-            },
             walletEnvironment: popupWalletEnvironment(),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor { request in
+                    if request.name == "requestAccounts" {
+                        immediatePreparations += 1
+                        return .immediate(.failure(.userRejected))
+                    }
+                    reviewPreparations += 1
+                    return .approval(.addEthereumChain(AddEthereumChainAction(
+                        chainToAdd: popupTestNetwork()
+                    )))
+                }
+            )
         )
         let reviewToken = try await materializeToken(controller: controller, snapshot: review)
         await store.suspendNextCompletion()
@@ -2491,14 +2559,16 @@ extension PopupRequestSessionsTests {
             var preparations = 0
             let controller = PopupRequestSessions(
                 store: store,
-                requestProcessor: CompactPopupProcessor { _ in
-                    preparations += 1
-                    return .approval(.addEthereumChain(AddEthereumChainAction(
-                        chainToAdd: popupTestNetwork()
-                    )))
-                },
                 walletEnvironment: popupWalletEnvironment(),
-                loadsTransactionContext: false
+                loadsTransactionContext: false,
+                executionEnvironment: .init(
+                    requestProcessor: CompactPopupProcessor { _ in
+                        preparations += 1
+                        return .approval(.addEthereumChain(AddEthereumChainAction(
+                            chainToAdd: popupTestNetwork()
+                        )))
+                    }
+                )
             )
             let token = try await materializeToken(controller: controller, snapshot: snapshot)
             await store.forceNextClaimResult(.unavailable)
@@ -2544,14 +2614,16 @@ extension PopupRequestSessionsTests {
         var preparationCount = 0
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor { request in
-                preparationCount += 1
-                return .approval(.addEthereumChain(AddEthereumChainAction(
-                    chainToAdd: popupTestNetwork()
-                )))
-            },
             walletEnvironment: popupWalletEnvironment(),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor { request in
+                    preparationCount += 1
+                    return .approval(.addEthereumChain(AddEthereumChainAction(
+                        chainToAdd: popupTestNetwork()
+                    )))
+                }
+            )
         )
         let request = try popupCommand(
             subject: "getApprovalState",
@@ -2576,14 +2648,16 @@ extension PopupRequestSessionsTests {
         var preparationCount = 0
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor { request in
-                preparationCount += 1
-                return .approval(.addEthereumChain(AddEthereumChainAction(
-                    chainToAdd: popupTestNetwork()
-                )))
-            },
             walletEnvironment: popupWalletEnvironment(),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor { request in
+                    preparationCount += 1
+                    return .approval(.addEthereumChain(AddEthereumChainAction(
+                        chainToAdd: popupTestNetwork()
+                    )))
+                }
+            )
         )
         let request = try popupCommand(
             subject: "getApprovalState",
@@ -2665,7 +2739,6 @@ extension PopupRequestSessionsTests {
         }
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: {
                     refreshEvents.append("catalog")
@@ -2673,7 +2746,10 @@ extension PopupRequestSessionsTests {
                 }
             ),
             loadsTransactionContext: false,
-            invalidateNetworkCache: { refreshEvents.append("invalidate") }
+            invalidateNetworkCache: { refreshEvents.append("invalidate") },
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let request = try popupCommand(
             subject: "getApprovalState",
@@ -2780,11 +2856,13 @@ extension PopupRequestSessionsTests {
             }
             let controller = PopupRequestSessions(
                 store: store,
-                requestProcessor: processor,
                 walletEnvironment: popupWalletEnvironment(
                     reviewCatalog: { catalog }
                 ),
-                loadsTransactionContext: false
+                loadsTransactionContext: false,
+                executionEnvironment: .init(
+                    requestProcessor: processor
+                )
             )
             let token = try await materializeToken(
                 controller: controller,
@@ -2857,11 +2935,13 @@ extension PopupRequestSessionsTests {
         }
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(reviewCatalog: { catalog }),
             loadsTransactionContext: false,
             selectionNetworkResolver: { $0 == network.chainIdHexString ? network : nil },
-            approvalNetworkResolver: { $0 == network.chainId ? .resolved(ResolvedEthereumNetwork(network: network, source: .custom)) : .missing }
+            approvalNetworkResolver: { $0 == network.chainId ? .resolved(ResolvedEthereumNetwork(network: network, source: .custom)) : .missing },
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let command = try popupCommand(
@@ -3056,7 +3136,6 @@ extension PopupRequestSessionsTests {
         }
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(reviewCatalog: {
                 if failNextCatalogRead {
                     failNextCatalogRead = false
@@ -3066,7 +3145,10 @@ extension PopupRequestSessionsTests {
             }),
             loadsTransactionContext: false,
             selectionNetworkResolver: { $0 == network.chainIdHexString ? network : nil },
-            approvalNetworkResolver: { $0 == network.chainId ? .resolved(ResolvedEthereumNetwork(network: network, source: .custom)) : .missing }
+            approvalNetworkResolver: { $0 == network.chainId ? .resolved(ResolvedEthereumNetwork(network: network, source: .custom)) : .missing },
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         await store.observeNextClaim { _ in failNextCatalogRead = true }
@@ -3163,19 +3245,21 @@ extension PopupRequestSessionsTests {
         var networkAvailable = true
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupAccessProcessor(execute: { _, _, _, permit in
-                XCTFail("Removed network must not execute")
-                return .rollback
-            }) { _, _ in
-                .approval(.selectAccount(.init(
-                    coinType: .ethereum, selectedAccounts: Set(catalog.orderedAccounts),
-                    initiallyConnectedProviders: [], network: network
-                )))
-            },
             walletEnvironment: popupWalletEnvironment(reviewCatalog: { catalog }),
             loadsTransactionContext: false,
             selectionNetworkResolver: { _ in networkAvailable ? network : nil },
-            approvalNetworkResolver: { _ in networkAvailable ? .resolved(ResolvedEthereumNetwork(network: network, source: .custom)) : .missing }
+            approvalNetworkResolver: { _ in networkAvailable ? .resolved(ResolvedEthereumNetwork(network: network, source: .custom)) : .missing },
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupAccessProcessor(execute: { _, _, _, permit in
+                    XCTFail("Removed network must not execute")
+                    return .rollback
+                }) { _, _ in
+                    .approval(.selectAccount(.init(
+                        coinType: .ethereum, selectedAccounts: Set(catalog.orderedAccounts),
+                        initiallyConnectedProviders: [], network: network
+                    )))
+                }
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         await store.observeNextClaim { _ in networkAvailable = false }
@@ -3211,19 +3295,21 @@ extension PopupRequestSessionsTests {
             var executions = 0
             let controller = PopupRequestSessions(
                 store: store,
-                requestProcessor: CompactPopupAccessProcessor(execute: { _, _, _, permit in
-                    executions += 1
-                    return ApprovedCompletion.accountSelection(permit: permit).map(ApprovedExecutionResult.completed) ?? .rollback
-                }) { _, _ in
-                    .approval(.selectAccount(.init(
-                        coinType: .ethereum, selectedAccounts: Set(catalog.orderedAccounts),
-                        initiallyConnectedProviders: [], network: network
-                    )))
-                },
                 walletEnvironment: popupWalletEnvironment(reviewCatalog: { catalog }),
                 loadsTransactionContext: false,
                 selectionNetworkResolver: { _ in resolution == available ? network : nil },
-                approvalNetworkResolver: { _ in resolution }
+                approvalNetworkResolver: { _ in resolution },
+                executionEnvironment: .init(
+                    requestProcessor: CompactPopupAccessProcessor(execute: { _, _, _, permit in
+                        executions += 1
+                        return ApprovedCompletion.accountSelection(permit: permit).map(ApprovedExecutionResult.completed) ?? .rollback
+                    }) { _, _ in
+                        .approval(.selectAccount(.init(
+                            coinType: .ethereum, selectedAccounts: Set(catalog.orderedAccounts),
+                            initiallyConnectedProviders: [], network: network
+                        )))
+                    }
+                )
             )
             let token = try await materializeToken(controller: controller, snapshot: snapshot)
             resolution = temporarilyUnavailable ? .unavailable : .missing
@@ -3365,14 +3451,16 @@ extension PopupRequestSessionsTests {
         var preparations = 0
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor { request in
-                preparations += 1
-                return .approval(.addEthereumChain(AddEthereumChainAction(
-                    chainToAdd: popupTestNetwork()
-                )))
-            },
             walletEnvironment: popupWalletEnvironment(),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor { request in
+                    preparations += 1
+                    return .approval(.addEthereumChain(AddEthereumChainAction(
+                        chainToAdd: popupTestNetwork()
+                    )))
+                }
+            )
         )
         let reject = try popupCommand(
             subject: "rejectRequest",
@@ -3401,14 +3489,16 @@ extension PopupRequestSessionsTests {
             var preparations = 0
             let controller = PopupRequestSessions(
                 store: store,
-                requestProcessor: CompactPopupProcessor { request in
-                    preparations += 1
-                    return .approval(.addEthereumChain(AddEthereumChainAction(
-                        chainToAdd: popupTestNetwork()
-                    )))
-                },
                 walletEnvironment: popupWalletEnvironment(),
-                loadsTransactionContext: false
+                loadsTransactionContext: false,
+                executionEnvironment: .init(
+                    requestProcessor: CompactPopupProcessor { request in
+                        preparations += 1
+                        return .approval(.addEthereumChain(AddEthereumChainAction(
+                            chainToAdd: popupTestNetwork()
+                        )))
+                    }
+                )
             )
             let originalToken = try await materializeToken(
                 controller: controller,
@@ -3450,11 +3540,13 @@ extension PopupRequestSessionsTests {
         }
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 unlockWallets: { _, _ in .canceled }
             ),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -3492,12 +3584,14 @@ extension PopupRequestSessionsTests {
         var authentications = 0
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor(),
             walletEnvironment: popupWalletEnvironment(unlockWallets: { _, _ in
                 authentications += 1
                 return authentications == 1 ? .unavailable : .canceled
             }),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor()
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -3554,18 +3648,6 @@ extension PopupRequestSessionsTests {
             }
             let controller = PopupRequestSessions(
                 store: store,
-                requestProcessor: CompactPopupProcessor(execute: { request, approval, walletAccess, permit in
-                    XCTFail("A failed release must not sign")
-                    return approvedFailureForTesting(.internalError, permit: permit)
-                }) { request in
-                    .approval(.approveMessage(SignMessageAction(
-                        subject: .signPersonalMessage,
-                        walletId: "wallet",
-                        account: popupTestAccount(),
-                        meta: "reviewed",
-                        payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
-                    )))
-                },
                 walletEnvironment: popupWalletEnvironment(
                     unlockWallets: { _, _ in
                         if result == .ownershipLost {
@@ -3581,7 +3663,21 @@ extension PopupRequestSessionsTests {
                         return .canceled
                     }
                 ),
-                loadsTransactionContext: false
+                loadsTransactionContext: false,
+                executionEnvironment: .init(
+                    requestProcessor: CompactPopupProcessor(execute: { request, approval, walletAccess, permit in
+                        XCTFail("A failed release must not sign")
+                        return approvedFailureForTesting(.internalError, permit: permit)
+                    }) { request in
+                        .approval(.approveMessage(SignMessageAction(
+                            subject: .signPersonalMessage,
+                            walletId: "wallet",
+                            account: popupTestAccount(),
+                            meta: "reviewed",
+                            payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
+                        )))
+                    }
+                )
             )
             let token = try await materializeToken(controller: controller, snapshot: snapshot)
             let approve = try popupCommand(
@@ -3625,15 +3721,17 @@ extension PopupRequestSessionsTests {
         await store.observeNextClaim { capturedDeadline = $0.executionDeadline }
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor { _ in
-                .approval(.approveMessage(SignMessageAction(
-                    subject: .signPersonalMessage, walletId: "wallet", account: popupTestAccount(),
-                    meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
-                )))
-            },
             walletEnvironment: popupWalletEnvironment(unlockWallets: { _, _ in .canceled }),
             loadsTransactionContext: false,
-            clock: { now }
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor { _ in
+                    .approval(.approveMessage(SignMessageAction(
+                        subject: .signPersonalMessage, walletId: "wallet", account: popupTestAccount(),
+                        meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
+                    )))
+                },
+                clock: { now }
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -3667,15 +3765,6 @@ extension PopupRequestSessionsTests {
             }
             let controller = PopupRequestSessions(
                 store: store,
-                requestProcessor: CompactPopupAccessProcessor(execute: { request, _, _, permit in
-                    executionCount += 1
-                    return approvedFailureForTesting(.internalError, permit: permit)
-                }) { _, _ in
-                    .approval(.approveMessage(SignMessageAction(
-                        subject: .signPersonalMessage, walletId: "wallet", account: popupTestAccount(),
-                        meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
-                    )))
-                },
                 walletEnvironment: PopupWalletEnvironment(
                     reviewCatalog: { catalog },
                     unlockWallets: { _, authorization in
@@ -3694,14 +3783,25 @@ extension PopupRequestSessionsTests {
                     }
                 ),
                 loadsTransactionContext: false,
-                clock: { clock.now },
-                waitForExecutionDeadline: { deadline in
-                    observedDeadline = deadline
-                    await timeoutGate.wait()
-                    if !timeoutWins { XCTAssertTrue(Task.isCancelled) }
-                    clock.now = deadline
-                    timerReturned.fulfill()
-                }
+                executionEnvironment: .init(
+                    requestProcessor: CompactPopupAccessProcessor(execute: { request, _, _, permit in
+                        executionCount += 1
+                        return approvedFailureForTesting(.internalError, permit: permit)
+                    }) { _, _ in
+                        .approval(.approveMessage(SignMessageAction(
+                            subject: .signPersonalMessage, walletId: "wallet", account: popupTestAccount(),
+                            meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
+                        )))
+                    },
+                    clock: { clock.now },
+                    waitForExecutionDeadline: { deadline in
+                        observedDeadline = deadline
+                        await timeoutGate.wait()
+                        if !timeoutWins { XCTAssertTrue(Task.isCancelled) }
+                        clock.now = deadline
+                        timerReturned.fulfill()
+                    }
+                )
             )
             let token = try await materializeToken(controller: controller, snapshot: snapshot)
             let request = try popupCommand(
@@ -3758,11 +3858,6 @@ extension PopupRequestSessionsTests {
         var transaction = popupReadyTransaction()
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
-                executionStarted = true
-                await executionGate.wait()
-                return approvedFailureForTesting(.userRejected, permit: permit)
-            }) { _ in .approval(popupTransactionAction()) },
             walletEnvironment: popupWalletEnvironment(reviewCatalog: { catalog }) { _, authorization in
                 await authenticationGate.wait()
                 return .unlocked(catalog: catalog, session: makeWalletSigningSessionForTesting(authorization: authorization))
@@ -3783,12 +3878,19 @@ extension PopupRequestSessionsTests {
                 }
             ),
             approvalNetworkResolver: popupApprovalNetwork,
-            clock: { clock.now },
-            waitForExecutionDeadline: { value in
-                deadlines.append(value)
-                do { try await Task.sleep(for: .seconds(60)) }
-                catch { cancelledTimers += 1 }
-            }
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
+                    executionStarted = true
+                    await executionGate.wait()
+                    return approvedFailureForTesting(.userRejected, permit: permit)
+                }) { _ in .approval(popupTransactionAction()) },
+                clock: { clock.now },
+                waitForExecutionDeadline: { value in
+                    deadlines.append(value)
+                    do { try await Task.sleep(for: .seconds(60)) }
+                    catch { cancelledTimers += 1 }
+                }
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let request = try popupCommand(
@@ -3823,13 +3925,6 @@ extension PopupRequestSessionsTests {
         var preparations = 0
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
-                XCTFail("An expired warning must not execute")
-                return .rollback
-            }) { _ in
-                preparations += 1
-                return .approval(popupTransactionAction())
-            },
             walletEnvironment: popupWalletEnvironment(reviewCatalog: { catalog }) { _, authorization in
                 .unlocked(catalog: catalog, session: makeWalletSigningSessionForTesting(material, authorization: authorization))
             },
@@ -3852,7 +3947,16 @@ extension PopupRequestSessionsTests {
                 }
             ),
             approvalNetworkResolver: popupApprovalNetwork,
-            clock: { clock.now }
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
+                    XCTFail("An expired warning must not execute")
+                    return .rollback
+                }) { _ in
+                    preparations += 1
+                    return .approval(popupTransactionAction())
+                },
+                clock: { clock.now }
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let response = await controller.dispatchJSON(request: try popupCommand(
@@ -3891,16 +3995,6 @@ extension PopupRequestSessionsTests {
         await store.observeNextClaim { originalClaim = $0 }
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupAccessProcessor(execute: { request, _, _, permit in
-                executions += 1
-                return approvedFailureForTesting(.internalError, permit: permit)
-            }) { _, _ in
-                preparations += 1
-                return .approval(.approveMessage(SignMessageAction(
-                    subject: .signPersonalMessage, walletId: "wallet", account: popupTestAccount(),
-                    meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
-                )))
-            },
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { catalog },
                 unlockWallets: { _, authorization in
@@ -3913,7 +4007,19 @@ extension PopupRequestSessionsTests {
                     return .unlocked(catalog: catalog, session: signer)
                 }
             ),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupAccessProcessor(execute: { request, _, _, permit in
+                    executions += 1
+                    return approvedFailureForTesting(.internalError, permit: permit)
+                }) { _, _ in
+                    preparations += 1
+                    return .approval(.approveMessage(SignMessageAction(
+                        subject: .signPersonalMessage, walletId: "wallet", account: popupTestAccount(),
+                        meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
+                    )))
+                }
+            )
         )
         let originalToken = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -3997,7 +4103,6 @@ extension PopupRequestSessionsTests {
         }
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: {
                     catalogReads += 1
@@ -4013,7 +4118,10 @@ extension PopupRequestSessionsTests {
                     return .unlocked(catalog: unlockedCatalog, session: access)
                 }
             ),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(
             controller: controller,
@@ -4085,7 +4193,6 @@ extension PopupRequestSessionsTests {
             }
             let controller = PopupRequestSessions(
                 store: store,
-                requestProcessor: processor,
                 walletEnvironment: PopupWalletEnvironment(
                     reviewCatalog: { catalog },
                     unlockWallets: { _, authorization in
@@ -4110,7 +4217,10 @@ extension PopupRequestSessionsTests {
                         return try await source.value(cancellation: nil)
                     }
                 ),
-                approvalNetworkResolver: popupApprovalNetwork
+                approvalNetworkResolver: popupApprovalNetwork,
+                executionEnvironment: .init(
+                    requestProcessor: processor
+                )
             )
             let token = try await materializeToken(controller: controller, snapshot: snapshot)
             let response = await controller.dispatchJSON(request: try popupCommand(
@@ -4162,7 +4272,7 @@ extension PopupRequestSessionsTests {
             )))
         }
         let controller = PopupRequestSessions(
-            store: store, requestProcessor: processor,
+            store: store,
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { catalog },
                 unlockWallets: { _, authorization in
@@ -4171,7 +4281,10 @@ extension PopupRequestSessionsTests {
                     ))
                 }
             ),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         _ = await controller.dispatchJSON(request: try popupCommand(
@@ -4214,7 +4327,6 @@ extension PopupRequestSessionsTests {
         }
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { catalog },
                 unlockWallets: { _, authorization in
@@ -4222,7 +4334,10 @@ extension PopupRequestSessionsTests {
                     return .unlocked(catalog: emptyCatalog, session: makeWalletSigningSessionForTesting(authorization: authorization))
                 }
             ),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(
             controller: controller,
@@ -4275,7 +4390,6 @@ extension PopupRequestSessionsTests {
         let authenticationCatalog = WalletReviewCatalog(account: popupTestAccount())
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: { authenticationCatalog },
                 unlockWallets: { _, authorization in
@@ -4284,7 +4398,10 @@ extension PopupRequestSessionsTests {
                     return .unlocked(catalog: authenticationCatalog, session: makeWalletSigningSessionForTesting(authorization: authorization))
                 }
             ),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -4345,7 +4462,6 @@ extension PopupRequestSessionsTests {
         }
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { catalog },
                 unlockWallets: { _, authorization in
@@ -4353,7 +4469,10 @@ extension PopupRequestSessionsTests {
                     return .unlocked(catalog: catalog, session: makeWalletSigningSessionForTesting(authorization: authorization))
                 }
             ),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -4428,7 +4547,6 @@ extension PopupRequestSessionsTests {
         let authenticationCatalog = WalletReviewCatalog(account: popupTestAccount())
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: { authenticationCatalog },
                 unlockWallets: { _, authorization in .unlocked(catalog: authenticationCatalog, session: makeWalletSigningSessionForTesting(authorization: authorization)) }
@@ -4436,7 +4554,10 @@ extension PopupRequestSessionsTests {
             loadsTransactionContext: false,
             transactionApprovalOperations: popupImmediateTransactionOperations(),
             approvalNetworkResolver: popupApprovalNetwork,
-            broadcastSender: sender
+            executionEnvironment: .init(
+                requestProcessor: processor,
+                broadcastSender: sender
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -4496,7 +4617,6 @@ extension PopupRequestSessionsTests {
         }
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { catalog },
                 unlockWallets: { _, authorization in
@@ -4515,7 +4635,10 @@ extension PopupRequestSessionsTests {
             loadsTransactionContext: false,
             transactionApprovalOperations: popupImmediateTransactionOperations(),
             approvalNetworkResolver: popupApprovalNetwork,
-            broadcastSender: sender
+            executionEnvironment: .init(
+                requestProcessor: processor,
+                broadcastSender: sender
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -4557,7 +4680,6 @@ extension PopupRequestSessionsTests {
         }
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { catalog },
                 unlockWallets: { _, authorization in
@@ -4569,7 +4691,10 @@ extension PopupRequestSessionsTests {
             loadsTransactionContext: false,
             transactionApprovalOperations: popupImmediateTransactionOperations(),
             approvalNetworkResolver: popupApprovalNetwork,
-            broadcastSender: sender
+            executionEnvironment: .init(
+                requestProcessor: processor,
+                broadcastSender: sender
+            )
         )
         let token = try await materializeToken(
             controller: controller,
@@ -4644,7 +4769,6 @@ extension PopupRequestSessionsTests {
         }
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { catalog },
                 unlockWallets: { _, authorization in
@@ -4654,7 +4778,10 @@ extension PopupRequestSessionsTests {
                 }
             ),
             loadsTransactionContext: false,
-            clock: { now }
+            executionEnvironment: .init(
+                requestProcessor: processor,
+                clock: { now }
+            )
         )
         let token = try await materializeToken(
             controller: controller,
@@ -4701,12 +4828,14 @@ extension PopupRequestSessionsTests {
         }
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { catalog },
                 unlockWallets: { _, _ in .canceled }
             ),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(
             controller: controller,
@@ -4756,13 +4885,6 @@ extension PopupRequestSessionsTests {
         var authentications = 0
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
-                XCTFail("Cancelled authentication must not execute")
-                return .rollback
-            }) { _ in
-                reviewPreparations += 1
-                return .approval(popupTransactionAction())
-            },
             walletEnvironment: popupWalletEnvironment(reviewCatalog: { catalog }) { _, _ in
                 authentications += 1
                 return .canceled
@@ -4787,7 +4909,16 @@ extension PopupRequestSessionsTests {
                     return try await source.value(cancellation: nil)
                 }
             ),
-            approvalNetworkResolver: popupApprovalNetwork
+            approvalNetworkResolver: popupApprovalNetwork,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
+                    XCTFail("Cancelled authentication must not execute")
+                    return .rollback
+                }) { _ in
+                    reviewPreparations += 1
+                    return .approval(popupTransactionAction())
+                }
+            )
         )
         let initialToken = try await materializeToken(controller: controller, snapshot: snapshot)
         let edited = try await controller.dispatchPreparedJSON(request: try popupCommand(
@@ -4915,23 +5046,25 @@ extension PopupRequestSessionsTests {
         var reviewPreparations = 0
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
-                XCTFail("Cancelled authentication must not execute")
-                return .rollback
-            }) { _ in
-                reviewPreparations += 1
-                return .approval(.approveTransaction(.init(
-                    transaction: popupReadyTransaction(), resolvedNetwork: network,
-                    walletId: "wallet", account: popupTestAccount()
-                )))
-            },
             walletEnvironment: popupWalletEnvironment(reviewCatalog: { catalog }) { _, _ in
                 network = ResolvedEthereumNetwork(network: replacementNetwork, source: .custom)
                 return .canceled
             },
             loadsTransactionContext: false,
             transactionApprovalOperations: popupImmediateTransactionOperations(),
-            approvalNetworkResolver: { $0 == network.network.chainId ? .resolved(network) : .missing }
+            approvalNetworkResolver: { $0 == network.network.chainId ? .resolved(network) : .missing },
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
+                    XCTFail("Cancelled authentication must not execute")
+                    return .rollback
+                }) { _ in
+                    reviewPreparations += 1
+                    return .approval(.approveTransaction(.init(
+                        transaction: popupReadyTransaction(), resolvedNetwork: network,
+                        walletId: "wallet", account: popupTestAccount()
+                    )))
+                }
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let edited = try await controller.dispatchPreparedJSON(request: try popupCommand(
@@ -4985,7 +5118,6 @@ extension PopupRequestSessionsTests {
             let signingAccess = PopupRecordingWalletSigningAccess()
             let controller = PopupRequestSessions(
                 store: store,
-                requestProcessor: processor,
                 walletEnvironment: popupWalletEnvironment(reviewCatalog: { catalog }) { _, authorization in
                     storage.withLock { $0 = .corrupt }
                     return .unlocked(catalog: catalog, session: makeWalletSigningSessionForTesting(
@@ -4994,7 +5126,10 @@ extension PopupRequestSessionsTests {
                 },
                 loadsTransactionContext: false,
                 transactionApprovalOperations: popupImmediateTransactionOperations(),
-                approvalNetworkResolver: resolve
+                approvalNetworkResolver: resolve,
+                executionEnvironment: .init(
+                    requestProcessor: processor
+                )
             )
             let originalToken = try await materializeToken(controller: controller, snapshot: snapshot)
             let failed = await controller.dispatchJSON(request: try popupCommand(
@@ -5052,18 +5187,20 @@ extension PopupRequestSessionsTests {
         var catalog = WalletReviewCatalog(account: popupTestAccount())
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupAccessProcessor { _, currentCatalog in
-                let selected = currentCatalog.orderedAccounts[0]
-                return .approval(.approveTransaction(.init(
-                    transaction: popupReadyTransaction(),
-                    resolvedNetwork: .init(network: popupTransactionNetwork(), source: .custom),
-                    walletId: selected.walletId, account: selected.account
-                )))
-            },
             walletEnvironment: popupWalletEnvironment(reviewCatalog: { catalog }),
             loadsTransactionContext: false,
             transactionApprovalOperations: popupImmediateTransactionOperations(),
-            approvalNetworkResolver: popupApprovalNetwork
+            approvalNetworkResolver: popupApprovalNetwork,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupAccessProcessor { _, currentCatalog in
+                    let selected = currentCatalog.orderedAccounts[0]
+                    return .approval(.approveTransaction(.init(
+                        transaction: popupReadyTransaction(),
+                        resolvedNetwork: .init(network: popupTransactionNetwork(), source: .custom),
+                        walletId: selected.walletId, account: selected.account
+                    )))
+                }
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: first)
         let edited = try await controller.dispatchPreparedJSON(request: try popupCommand(
@@ -5134,19 +5271,6 @@ extension PopupRequestSessionsTests {
         var executedTransactions = [Transaction]()
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { _, approval, signer, permit in
-                if let transaction = popupExecutedTransaction(approval: approval) {
-                    executedTransactions.append(transaction)
-                }
-                guard let signer, case .success = await signer.sign() else {
-                    XCTFail("The fresh approval must use its newly authenticated signer")
-                    return .rollback
-                }
-                return approvedFailureForTesting(.userRejected, permit: permit)
-            }) { _ in
-                reviewPreparations += 1
-                return .approval(popupTransactionAction())
-            },
             walletEnvironment: popupWalletEnvironment(reviewCatalog: { catalog }) { _, authorization in
                 let material = PopupRecordingWalletSigningAccess()
                 let session = makeWalletSigningSessionForTesting(material, authorization: authorization)
@@ -5176,7 +5300,22 @@ extension PopupRequestSessionsTests {
                     return try await source.value(cancellation: nil)
                 }
             ),
-            approvalNetworkResolver: popupApprovalNetwork
+            approvalNetworkResolver: popupApprovalNetwork,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { _, approval, signer, permit in
+                    if let transaction = popupExecutedTransaction(approval: approval) {
+                        executedTransactions.append(transaction)
+                    }
+                    guard let signer, case .success = await signer.sign() else {
+                        XCTFail("The fresh approval must use its newly authenticated signer")
+                        return .rollback
+                    }
+                    return approvedFailureForTesting(.userRejected, permit: permit)
+                }) { _ in
+                    reviewPreparations += 1
+                    return .approval(popupTransactionAction())
+                }
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -5248,7 +5387,6 @@ extension PopupRequestSessionsTests {
         }
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { currentCatalog },
                 unlockWallets: { _, _ in
@@ -5256,7 +5394,10 @@ extension PopupRequestSessionsTests {
                     return .unavailable
                 }
             ),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(
             controller: controller,
@@ -5308,19 +5449,6 @@ extension PopupRequestSessionsTests {
         var preparedCatalogs = [WalletCatalogIdentity]()
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupAccessProcessor(execute: { request, approval, walletAccess, permit in
-                XCTFail("A changed catalog must be reviewed before signing")
-                return approvedFailureForTesting(.internalError, permit: permit)
-            }) { request, access in
-                preparedCatalogs.append(access.identity)
-                return .approval(.approveMessage(SignMessageAction(
-                    subject: .signPersonalMessage,
-                    walletId: "wallet",
-                    account: account,
-                    meta: "reviewed",
-                    payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
-                )))
-            },
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { currentCatalog },
                 unlockWallets: { _, authorization in
@@ -5328,7 +5456,22 @@ extension PopupRequestSessionsTests {
                     return .unlocked(catalog: replacement, session: makeWalletSigningSessionForTesting(authorization: authorization))
                 }
             ),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupAccessProcessor(execute: { request, approval, walletAccess, permit in
+                    XCTFail("A changed catalog must be reviewed before signing")
+                    return approvedFailureForTesting(.internalError, permit: permit)
+                }) { request, access in
+                    preparedCatalogs.append(access.identity)
+                    return .approval(.approveMessage(SignMessageAction(
+                        subject: .signPersonalMessage,
+                        walletId: "wallet",
+                        account: account,
+                        meta: "reviewed",
+                        payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
+                    )))
+                }
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -5368,16 +5511,6 @@ extension PopupRequestSessionsTests {
         var preparedAccounts = [[SpecificWalletAccount]]()
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupAccessProcessor(execute: { _, _, _, permit in
-                XCTFail("An unavailable selected account must not sign")
-                return approvedFailureForTesting(.internalError, permit: permit)
-            }) { _, access in
-                preparedAccounts.append(access.orderedAccounts)
-                return .approval(.approveMessage(SignMessageAction(
-                    subject: .signPersonalMessage, walletId: "wallet", account: account,
-                    meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
-                )))
-            },
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { currentCatalog },
                 unlockWallets: { _, _ in
@@ -5385,7 +5518,19 @@ extension PopupRequestSessionsTests {
                     return .unavailable
                 }
             ),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupAccessProcessor(execute: { _, _, _, permit in
+                    XCTFail("An unavailable selected account must not sign")
+                    return approvedFailureForTesting(.internalError, permit: permit)
+                }) { _, access in
+                    preparedAccounts.append(access.orderedAccounts)
+                    return .approval(.approveMessage(SignMessageAction(
+                        subject: .signPersonalMessage, walletId: "wallet", account: account,
+                        meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
+                    )))
+                }
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let response = await controller.dispatchJSON(request: try popupCommand(
@@ -5424,7 +5569,6 @@ extension PopupRequestSessionsTests {
             let signingAccess = PopupRecordingWalletSigningAccess()
             let controller = PopupRequestSessions(
                 store: store,
-                requestProcessor: processor,
                 walletEnvironment: PopupWalletEnvironment(
                     reviewCatalog: { currentCatalog },
                     unlockWallets: { _, authorization in
@@ -5434,7 +5578,10 @@ extension PopupRequestSessionsTests {
                         ))
                     }
                 ),
-                loadsTransactionContext: false
+                loadsTransactionContext: false,
+                executionEnvironment: .init(
+                    requestProcessor: processor
+                )
             )
             let token = try await materializeToken(controller: controller, snapshot: snapshot)
             guard case .snapshot(let before) = await store.bridge.configurationSnapshot(
@@ -5509,20 +5656,6 @@ extension PopupRequestSessionsTests {
         let signingAccess = PopupRecordingWalletSigningAccess()
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupAccessProcessor(execute: { _, _, signer, permit in
-                guard let signer,
-                      case .success(.response) = await signer.sign() else {
-                    XCTFail("The available selected account must remain authorized to sign")
-                    return .rollback
-                }
-                return approvedFailureForTesting(.userRejected, permit: permit)
-            }) { _, _ in
-                preparations += 1
-                return .approval(.approveMessage(SignMessageAction(
-                    subject: .signPersonalMessage, walletId: "wallet", account: account,
-                    meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
-                )))
-            },
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { currentCatalog.value },
                 unlockWallets: { _, authorization in
@@ -5538,7 +5671,23 @@ extension PopupRequestSessionsTests {
                     ))
                 }
             ),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupAccessProcessor(execute: { _, _, signer, permit in
+                    guard let signer,
+                          case .success(.response) = await signer.sign() else {
+                        XCTFail("The available selected account must remain authorized to sign")
+                        return .rollback
+                    }
+                    return approvedFailureForTesting(.userRejected, permit: permit)
+                }) { _, _ in
+                    preparations += 1
+                    return .approval(.approveMessage(SignMessageAction(
+                        subject: .signPersonalMessage, walletId: "wallet", account: account,
+                        meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
+                    )))
+                }
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         _ = await controller.dispatchJSON(request: try popupCommand(
@@ -5572,19 +5721,6 @@ extension PopupRequestSessionsTests {
             var preparedAccounts = [[SpecificWalletAccount]]()
             let controller = PopupRequestSessions(
                 store: store,
-                requestProcessor: CompactPopupAccessProcessor { _, access in
-                    preparedAccounts.append(access.orderedAccounts)
-                    if isSelection {
-                        return .approval(.selectAccount(SelectAccountAction(
-                            coinType: .ethereum, selectedAccounts: Set(access.orderedAccounts),
-                            initiallyConnectedProviders: [], network: popupTransactionNetwork()
-                        )))
-                    }
-                    return .approval(.approveMessage(SignMessageAction(
-                        subject: .signPersonalMessage, walletId: "wallet", account: account,
-                        meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
-                    )))
-                },
                 walletEnvironment: PopupWalletEnvironment(
                     reviewCatalog: { currentCatalog },
                     unlockWallets: { _, _ in
@@ -5592,7 +5728,22 @@ extension PopupRequestSessionsTests {
                         return .unavailable
                     }
                 ),
-                loadsTransactionContext: false
+                loadsTransactionContext: false,
+                executionEnvironment: .init(
+                    requestProcessor: CompactPopupAccessProcessor { _, access in
+                        preparedAccounts.append(access.orderedAccounts)
+                        if isSelection {
+                            return .approval(.selectAccount(SelectAccountAction(
+                                coinType: .ethereum, selectedAccounts: Set(access.orderedAccounts),
+                                initiallyConnectedProviders: [], network: popupTransactionNetwork()
+                            )))
+                        }
+                        return .approval(.approveMessage(SignMessageAction(
+                            subject: .signPersonalMessage, walletId: "wallet", account: account,
+                            meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
+                        )))
+                    }
+                )
             )
             let token = try await materializeToken(controller: controller, snapshot: snapshot)
             currentCatalog = remainingCatalog
@@ -5659,7 +5810,6 @@ extension PopupRequestSessionsTests {
             }
             let controller = PopupRequestSessions(
                 store: store,
-                requestProcessor: processor,
                 walletEnvironment: PopupWalletEnvironment(
                     reviewCatalog: { currentCatalog },
                     unlockWallets: { _, _ in
@@ -5667,7 +5817,10 @@ extension PopupRequestSessionsTests {
                         return .unavailable
                     }
                 ),
-                loadsTransactionContext: false
+                loadsTransactionContext: false,
+                executionEnvironment: .init(
+                    requestProcessor: processor
+                )
             )
             _ = try await materializeToken(
                 controller: controller,
@@ -5726,7 +5879,6 @@ extension PopupRequestSessionsTests {
             }
             let controller = PopupRequestSessions(
                 store: store,
-                requestProcessor: processor,
                 walletEnvironment: PopupWalletEnvironment(
                     reviewCatalog: { catalog },
                     unlockWallets: { _, _ in
@@ -5734,7 +5886,10 @@ extension PopupRequestSessionsTests {
                         return .unavailable
                     }
                 ),
-                loadsTransactionContext: false
+                loadsTransactionContext: false,
+                executionEnvironment: .init(
+                    requestProcessor: processor
+                )
             )
             let first = try await enqueue(popupSnapshot(id: 418, provider: .ethereum, method: isSelection ? "requestAccounts" : "signPersonalMessage"), in: store)
             let next = try await enqueue(popupSnapshot(id: 419, provider: .ethereum, method: isSelection ? "requestAccounts" : "signPersonalMessage"), in: store)
@@ -5777,7 +5932,6 @@ extension PopupRequestSessionsTests {
         let processor = CompactPopupProcessor(walletIndependent: true)
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { nil },
                 unlockWallets: { _, _ in
@@ -5785,7 +5939,10 @@ extension PopupRequestSessionsTests {
                     return .unavailable
                 }
             ),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let stateRequest = try popupCommand(
             subject: "getApprovalState",
@@ -5823,7 +5980,6 @@ extension PopupRequestSessionsTests {
         let authenticationCatalog = WalletReviewCatalog(account: popupTestAccount())
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: { authenticationCatalog },
                 unlockWallets: { _, authorization in .unlocked(catalog: authenticationCatalog, session: makeWalletSigningSessionForTesting(authorization: authorization)) }
@@ -5831,7 +5987,10 @@ extension PopupRequestSessionsTests {
             loadsTransactionContext: false,
             transactionApprovalOperations: popupImmediateTransactionOperations(),
             approvalNetworkResolver: popupApprovalNetwork,
-            broadcastSender: sender
+            executionEnvironment: .init(
+                requestProcessor: processor,
+                broadcastSender: sender
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -5912,7 +6071,6 @@ extension PopupRequestSessionsTests {
         let authenticationCatalog = WalletReviewCatalog(account: popupTestAccount())
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: { authenticationCatalog },
                 unlockWallets: { _, authorization in
@@ -5924,7 +6082,10 @@ extension PopupRequestSessionsTests {
             ),
             loadsTransactionContext: false,
             transactionApprovalOperations: operations,
-            approvalNetworkResolver: popupApprovalNetwork
+            approvalNetworkResolver: popupApprovalNetwork,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -6051,14 +6212,16 @@ extension PopupRequestSessionsTests {
         let authenticationCatalog = WalletReviewCatalog(account: popupTestAccount())
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: { authenticationCatalog },
                 unlockWallets: { _, authorization in .unlocked(catalog: authenticationCatalog, session: makeWalletSigningSessionForTesting(backingAccess, authorization: authorization)) }
             ),
             loadsTransactionContext: false,
             transactionApprovalOperations: operations,
-            approvalNetworkResolver: popupApprovalNetwork
+            approvalNetworkResolver: popupApprovalNetwork,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(
             controller: controller,
@@ -6142,7 +6305,6 @@ extension PopupRequestSessionsTests {
         let authenticationCatalog = WalletReviewCatalog(account: popupTestAccount())
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: { authenticationCatalog },
                 unlockWallets: { _, authorization in
@@ -6152,7 +6314,10 @@ extension PopupRequestSessionsTests {
             ),
             loadsTransactionContext: false,
             transactionApprovalOperations: operations,
-            approvalNetworkResolver: popupApprovalNetwork
+            approvalNetworkResolver: popupApprovalNetwork,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(
             controller: controller,
@@ -6226,7 +6391,6 @@ extension PopupRequestSessionsTests {
         let authenticationCatalog = WalletReviewCatalog(account: popupTestAccount())
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: { authenticationCatalog },
                 unlockWallets: { _, authorization in
@@ -6238,7 +6402,10 @@ extension PopupRequestSessionsTests {
             transactionApprovalOperations: operations,
             approvalNetworkResolver: { chainID in
                 chainID == currentNetwork.network.chainId ? .resolved(currentNetwork) : .missing
-            }
+            },
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(
             controller: controller,
@@ -6312,14 +6479,16 @@ extension PopupRequestSessionsTests {
         let authenticationCatalog = WalletReviewCatalog(account: popupTestAccount())
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: { authenticationCatalog },
                 unlockWallets: { _, authorization in .unlocked(catalog: authenticationCatalog, session: makeWalletSigningSessionForTesting(authorization: authorization)) }
             ),
             loadsTransactionContext: false,
             transactionApprovalOperations: operations,
-            approvalNetworkResolver: popupApprovalNetwork
+            approvalNetworkResolver: popupApprovalNetwork,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let firstToken = try await materializeToken(
             controller: controller,
@@ -6435,7 +6604,6 @@ extension PopupRequestSessionsTests {
         let authenticationCatalog = WalletReviewCatalog(account: popupTestAccount())
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: { authenticationCatalog },
                 unlockWallets: { _, authorization in
@@ -6445,7 +6613,10 @@ extension PopupRequestSessionsTests {
             ),
             loadsTransactionContext: false,
             transactionApprovalOperations: operations,
-            approvalNetworkResolver: popupApprovalNetwork
+            approvalNetworkResolver: popupApprovalNetwork,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -6522,20 +6693,6 @@ extension PopupRequestSessionsTests {
         var executionCount = 0
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { request, _, _, permit in
-                executionCount += 1
-                return approvedFailureForTesting(.userRejected, permit: permit)
-            }) { _ in
-                .approval(.approveTransaction(SendTransactionAction(
-                    transaction: transaction,
-                    resolvedNetwork: ResolvedEthereumNetwork(
-                        network: popupTransactionNetwork(),
-                        source: .custom
-                    ),
-                    walletId: "wallet",
-                    account: popupTestAccount()
-                )))
-            },
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { catalog },
                 unlockWallets: { _, authorization in
@@ -6558,7 +6715,23 @@ extension PopupRequestSessionsTests {
                     return try await source.value(cancellation: cancellation)
                 }
             ),
-            approvalNetworkResolver: popupApprovalNetwork
+            approvalNetworkResolver: popupApprovalNetwork,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { request, _, _, permit in
+                    executionCount += 1
+                    return approvedFailureForTesting(.userRejected, permit: permit)
+                }) { _ in
+                    .approval(.approveTransaction(SendTransactionAction(
+                        transaction: transaction,
+                        resolvedNetwork: ResolvedEthereumNetwork(
+                            network: popupTransactionNetwork(),
+                            source: .custom
+                        ),
+                        walletId: "wallet",
+                        account: popupTestAccount()
+                    )))
+                }
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -6610,18 +6783,6 @@ extension PopupRequestSessionsTests {
             var executionCount = 0
             let controller = PopupRequestSessions(
                 store: store,
-                requestProcessor: CompactPopupProcessor(execute: { request, _, _, permit in
-                    executionCount += 1
-                    return approvedFailureForTesting(.userRejected, permit: permit)
-                }) { _ in
-                    .approval(.approveTransaction(SendTransactionAction(
-                        transaction: transaction,
-                        resolvedNetwork: ResolvedEthereumNetwork(
-                            network: popupTransactionNetwork(), source: .custom
-                        ),
-                        walletId: "wallet", account: popupTestAccount()
-                    )))
-                },
                 walletEnvironment: PopupWalletEnvironment(
                     reviewCatalog: { catalog },
                     unlockWallets: { _, authorization in
@@ -6646,7 +6807,21 @@ extension PopupRequestSessionsTests {
                     }
                 ),
                 approvalNetworkResolver: popupApprovalNetwork,
-                clock: { nativeClock.now }
+                executionEnvironment: .init(
+                    requestProcessor: CompactPopupProcessor(execute: { request, _, _, permit in
+                        executionCount += 1
+                        return approvedFailureForTesting(.userRejected, permit: permit)
+                    }) { _ in
+                        .approval(.approveTransaction(SendTransactionAction(
+                            transaction: transaction,
+                            resolvedNetwork: ResolvedEthereumNetwork(
+                                network: popupTransactionNetwork(), source: .custom
+                            ),
+                            walletId: "wallet", account: popupTestAccount()
+                        )))
+                    },
+                    clock: { nativeClock.now }
+                )
             )
             let token = try await materializeToken(controller: controller, snapshot: snapshot)
             let approve = try popupCommand(
@@ -6716,7 +6891,6 @@ extension PopupRequestSessionsTests {
         var access: WalletSigningSession!
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: { authenticationCatalog },
                 unlockWallets: { _, authorization in
@@ -6729,7 +6903,10 @@ extension PopupRequestSessionsTests {
             ),
             loadsTransactionContext: false,
             transactionApprovalOperations: operations,
-            approvalNetworkResolver: popupApprovalNetwork
+            approvalNetworkResolver: popupApprovalNetwork,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -6791,7 +6968,6 @@ extension PopupRequestSessionsTests {
         let authenticationCatalog = WalletReviewCatalog(account: popupTestAccount())
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: { authenticationCatalog },
                 unlockWallets: { _, authorization in .unlocked(catalog: authenticationCatalog, session: makeWalletSigningSessionForTesting(authorization: authorization)) }
@@ -6799,8 +6975,11 @@ extension PopupRequestSessionsTests {
             loadsTransactionContext: false,
             transactionApprovalOperations: popupImmediateTransactionOperations(),
             approvalNetworkResolver: popupApprovalNetwork,
-            broadcastSender: sender,
-            broadcastTimeoutNanoseconds: 1_000_000
+            executionEnvironment: .init(
+                requestProcessor: processor,
+                broadcastSender: sender,
+                broadcastTimeoutNanoseconds: 1_000_000
+            )
         )
         let token = try await materializeToken(
             controller: controller,
@@ -6864,7 +7043,6 @@ extension PopupRequestSessionsTests {
         let authenticationCatalog = WalletReviewCatalog(account: popupTestAccount())
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: { authenticationCatalog },
                 unlockWallets: { _, authorization in
@@ -6872,7 +7050,10 @@ extension PopupRequestSessionsTests {
                     return .unlocked(catalog: authenticationCatalog, session: makeWalletSigningSessionForTesting(authorization: authorization))
                 }
             ),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         await store.setAuthorityCurrent(false)
@@ -6929,7 +7110,6 @@ extension PopupRequestSessionsTests {
         let authenticationCatalog = WalletReviewCatalog(account: popupTestAccount())
         let controller = PopupRequestSessions(
             store: store,
-            requestProcessor: processor,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: { authenticationCatalog },
                 unlockWallets: { _, authorization in
@@ -6937,7 +7117,10 @@ extension PopupRequestSessionsTests {
                     return .unlocked(catalog: authenticationCatalog, session: makeWalletSigningSessionForTesting(authorization: authorization))
                 }
             ),
-            loadsTransactionContext: false
+            loadsTransactionContext: false,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            )
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let request = try XCTUnwrap(snapshot.request)
@@ -6992,7 +7175,10 @@ extension PopupRequestSessionsTests {
             return .immediate(.failure(.internalError))
         }
         let finalizer = NativeApprovalFinalizer(
-            store: store, requestProcessor: processor,
+            store: store,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            ),
             refreshWalletCatalog: {
                 catalogRefreshes += 1
                 return WalletReviewCatalog(account: popupTestAccount())
@@ -7007,7 +7193,7 @@ extension PopupRequestSessionsTests {
             }
         )
 
-        let result = await attemptNativeDecision(finalizer, store: store, snapshot: snapshot, authorization: authorization)
+        let result = await finalizer.attempt(consent: authorization)
         let errorCode = await store.completedErrorCode(handle: snapshot.handle)
         let committed = await store.completedApprovalWasCommitted(handle: snapshot.handle)
 
@@ -7051,7 +7237,10 @@ extension PopupRequestSessionsTests {
                 return .immediate(.failure(.internalError))
             }
             let finalizer = NativeApprovalFinalizer(
-                store: store, requestProcessor: processor,
+                store: store,
+                executionEnvironment: .init(
+                    requestProcessor: processor
+                ),
                 refreshWalletCatalog: { catalog },
                 makeSigner: { operation in
                     XCTAssertEqual(operation.approvedAccount, approvedAccount)
@@ -7061,7 +7250,7 @@ extension PopupRequestSessionsTests {
                 networkResolver: popupApprovalNetwork
             )
 
-            let result = await attemptNativeDecision(finalizer, store: store, snapshot: snapshot, authorization: authorization)
+            let result = await finalizer.attempt(consent: authorization)
             let errorCode = await store.completedErrorCode(handle: snapshot.handle)
             let committed = await store.completedApprovalWasCommitted(handle: snapshot.handle)
 
@@ -7089,7 +7278,10 @@ extension PopupRequestSessionsTests {
             .approval(.addEthereumChain(AddEthereumChainAction(chainToAdd: popupTestNetwork())))
         }
         let finalizer = NativeApprovalFinalizer(
-            store: store, requestProcessor: processor,
+            store: store,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            ),
             refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
             makeSigner: { _ in
                 XCTFail("Adding a chain must not create a signer")
@@ -7098,7 +7290,7 @@ extension PopupRequestSessionsTests {
             networkResolver: popupApprovalNetwork
         )
 
-        let result = await attemptNativeDecision(finalizer, store: store, snapshot: snapshot, authorization: authorization)
+        let result = await finalizer.attempt(consent: authorization)
 
         XCTAssertEqual(result, .responseReady)
         XCTAssertEqual(executions, 1)
@@ -7163,7 +7355,9 @@ extension PopupRequestSessionsTests {
             }
             let finalizer = NativeApprovalFinalizer(
                 store: store,
-                requestProcessor: processor,
+                executionEnvironment: .init(
+                    requestProcessor: processor
+                ),
                 refreshWalletCatalog: {
                     catalogRefreshes += 1
                     return WalletReviewCatalog(accounts: scenario.accounts)
@@ -7175,7 +7369,7 @@ extension PopupRequestSessionsTests {
                 }
             )
 
-            let result = await attemptNativeDecision(finalizer, store: store, snapshot: snapshot, authorization: authorization)
+            let result = await finalizer.attempt(consent: authorization)
             let committed = await store.completedApprovalWasCommitted(handle: snapshot.handle)
             let errorCode = await store.completedErrorCode(handle: snapshot.handle)
 
@@ -7185,6 +7379,140 @@ extension PopupRequestSessionsTests {
             XCTAssertEqual(executionCount, scenario.allowed ? 1 : 0, scenario.name)
             XCTAssertEqual(committed, scenario.allowed, scenario.name)
             XCTAssertEqual(errorCode, scenario.allowed ? 4001 : -32603, scenario.name)
+        }
+    }
+
+    func testNativeFinalizerOverlappingAttemptPreservesExecutingConsent() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
+            id: 815, provider: .ethereum, method: "signPersonalMessage"
+        ), in: store)
+        let consent = try await store.prepareNativeApproval(
+            handle: snapshot.handle,
+            decision: .message(.init(approvedAccount: popupTestAccountDescriptor(), solanaCluster: nil))
+        )
+        let refreshStarted = expectation(description: "first attempt is refreshing the catalog")
+        let refreshGate = makeGate()
+        let signingAccess = PopupRecordingWalletSigningAccess()
+        var refreshes = 0
+        var signerCreations = 0
+        var executions = 0
+        let finalizer = NativeApprovalFinalizer(
+            store: store,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
+                    executions += 1
+                    guard let signer,
+                          case .success(.response(let signed)) = await signer.sign(),
+                          signed.executionID == permit.executionID else {
+                        XCTFail("The original attempt must retain its signing authorization")
+                        return .rollback
+                    }
+                    return .completed(ApprovedCompletion(signed: signed))
+                })
+            ),
+            refreshWalletCatalog: {
+                refreshes += 1
+                refreshStarted.fulfill()
+                await refreshGate.wait()
+                return WalletReviewCatalog(account: popupTestAccount())
+            },
+            makeSigner: { operation in
+                signerCreations += 1
+                let session = WalletSigningSession(
+                    signingAccess, authorization: operation.authorization, isCurrent: { true }
+                )
+                XCTAssertTrue(session.bind(operation: operation))
+                return session
+            },
+            networkResolver: { _ in
+                XCTFail("Message signing must not resolve a network")
+                return .missing
+            }
+        )
+        let first = Task { await finalizer.attempt(consent: consent) }
+        await fulfillment(of: [refreshStarted], timeout: 1)
+        XCTAssertTrue(consent.authorizationIsAvailable)
+
+        let overlapping = await finalizer.attempt(consent: consent)
+
+        XCTAssertEqual(overlapping, .pending)
+        XCTAssertTrue(consent.authorizationIsAvailable)
+        XCTAssertEqual(refreshes, 1)
+        XCTAssertEqual(signerCreations, 0)
+        XCTAssertEqual(executions, 0)
+        XCTAssertTrue(signingAccess.operations.isEmpty)
+        await refreshGate.open()
+        let completed = await first.value
+        let response = await store.response(handle: snapshot.handle)
+        let events = await store.events()
+
+        XCTAssertEqual(completed, .responseReady)
+        XCTAssertNotNil(response?["result"] as? String)
+        XCTAssertNil(response?["error"])
+        XCTAssertFalse(consent.authorizationIsAvailable)
+        XCTAssertEqual(refreshes, 1)
+        XCTAssertEqual(signerCreations, 1)
+        XCTAssertEqual(executions, 1)
+        XCTAssertEqual(signingAccess.operations.count, 1)
+        XCTAssertEqual(signingAccess.invalidationCount, 1)
+        XCTAssertEqual(events, ["nativeClaim", "complete"])
+    }
+
+    func testNativeFinalizerTerminalAndMissingRequestsDoNoPrivilegedWork() async throws {
+        for missing in [false, true] {
+            let consentStore = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(
+                id: 816, provider: .ethereum, method: "signPersonalMessage"
+            ), in: consentStore)
+            let consent = try await consentStore.prepareNativeApproval(
+                handle: snapshot.handle,
+                decision: .message(.init(approvedAccount: popupTestAccountDescriptor(), solanaCluster: nil))
+            )
+            let store: ApprovalStoreTestFixture
+            if missing {
+                store = try makeStore()
+            } else {
+                store = consentStore
+                let receipt = try XCTUnwrap(consent.nativeReceipt)
+                let rejected = await store.bridge.rejectNativeDelivery(
+                    handle: snapshot.handle, nativeDeliveryNonce: receipt.nativeDeliveryNonce,
+                    runtimeInstanceIdentifier: receipt.owner.runtimeInstanceIdentifier
+                )
+                XCTAssertEqual(rejected, .persisted)
+            }
+            let finalizer = NativeApprovalFinalizer(
+                store: store,
+                executionEnvironment: .init(
+                    requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
+                        XCTFail("A terminal or missing request cannot execute")
+                        return .rollback
+                    })
+                ),
+                refreshWalletCatalog: {
+                    XCTFail("A terminal or missing request cannot refresh wallet authority")
+                    return nil
+                },
+                makeSigner: { _ in
+                    XCTFail("A terminal or missing request cannot create a signer")
+                    return TestWalletSigner()
+                },
+                networkResolver: { _ in
+                    XCTFail("A terminal or missing request cannot resolve a network")
+                    return .missing
+                }
+            )
+            let loadsBefore = await store.loadCount()
+            XCTAssertTrue(consent.authorizationIsAvailable)
+
+            let result = await finalizer.attempt(consent: consent)
+            let loadsAfter = await store.loadCount()
+            let events = await store.events()
+
+            XCTAssertEqual(result, .responseReady)
+            XCTAssertFalse(consent.authorizationIsAvailable)
+            XCTAssertEqual(loadsAfter, loadsBefore)
+            XCTAssertTrue(events.isEmpty)
         }
     }
 
@@ -7233,7 +7561,9 @@ extension PopupRequestSessionsTests {
         }
         let finalizer = NativeApprovalFinalizer(
             store: store,
-            requestProcessor: processor,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            ),
             refreshWalletCatalog: {
                 refreshes += 1
                 guard refreshes == 1 else {
@@ -7251,16 +7581,8 @@ extension PopupRequestSessionsTests {
             }
         )
 
-        let result = await attemptNativeDecision(
-            finalizer,
-            store: store,
-            snapshot: snapshot, authorization: authorization
-        )
-        let second = await attemptNativeDecision(
-            finalizer,
-            store: store,
-            snapshot: snapshot, authorization: authorization
-        )
+        let result = await finalizer.attempt(consent: authorization)
+        let second = await finalizer.attempt(consent: authorization)
         let events = await store.events()
         let committed = await store.completedApprovalWasCommitted(
             handle: snapshot.handle
@@ -7292,14 +7614,16 @@ extension PopupRequestSessionsTests {
         nativeClock.now = now
         let finalizer = NativeApprovalFinalizer(
             store: store,
-            requestProcessor: CompactPopupProcessor(),
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor(),
+                clock: { now }
+            ),
             refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
-            networkResolver: popupApprovalNetwork,
-            clock: { now }
+            networkResolver: popupApprovalNetwork
         )
 
-        let result = await attemptStoredDecision(finalizer, store: store, handle: snapshot.handle, authorization: authorization)
-        let second = await attemptStoredDecision(finalizer, store: store, handle: snapshot.handle, authorization: authorization)
+        let result = await finalizer.attempt(consent: authorization)
+        let second = await finalizer.attempt(consent: authorization)
         let events = await store.events()
 
         XCTAssertEqual(result, .responseReady)
@@ -7333,10 +7657,12 @@ extension PopupRequestSessionsTests {
             var transactionLookups = 0
             let finalizer = NativeApprovalFinalizer(
                 store: store,
-                requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
-                    XCTFail("A missing or changed route must not execute")
-                    return .rollback
-                }),
+                executionEnvironment: .init(
+                    requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
+                        XCTFail("A missing or changed route must not execute")
+                        return .rollback
+                    })
+                ),
                 refreshWalletCatalog: {
                     catalogRefreshes += 1
                     return WalletReviewCatalog(account: popupTestAccount())
@@ -7351,9 +7677,7 @@ extension PopupRequestSessionsTests {
                     return routeIsMissing ? .missing : .resolved(ResolvedEthereumNetwork(network: changedNetwork, source: .custom))
                 }
             )
-            let result = await attemptNativeDecision(
-                finalizer, store: store, snapshot: snapshot, authorization: consent
-            )
+            let result = await finalizer.attempt(consent: consent)
             let error = await store.completedErrorCode(handle: snapshot.handle)
             let committed = await store.completedApprovalWasCommitted(handle: snapshot.handle)
             let events = await store.events()
@@ -7386,10 +7710,12 @@ extension PopupRequestSessionsTests {
             ) else { return XCTFail("Expected the reviewed grant") }
             let finalizer = NativeApprovalFinalizer(
                 store: store,
-                requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
-                    XCTFail("A removed account must not execute")
-                    return .rollback
-                }),
+                executionEnvironment: .init(
+                    requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
+                        XCTFail("A removed account must not execute")
+                        return .rollback
+                    })
+                ),
                 refreshWalletCatalog: { WalletReviewCatalog(accounts: []) },
                 makeSigner: { _ in
                     XCTFail("A removed account must not create a signer")
@@ -7397,9 +7723,7 @@ extension PopupRequestSessionsTests {
                 },
                 networkResolver: popupApprovalNetwork
             )
-            let result = await attemptNativeDecision(
-                finalizer, store: store, snapshot: snapshot, authorization: consent
-            )
+            let result = await finalizer.attempt(consent: consent)
             let storedResponse = await store.response(handle: snapshot.handle)
             let response = try XCTUnwrap(storedResponse)
             XCTAssertEqual(result, .responseReady)
@@ -7443,19 +7767,19 @@ extension PopupRequestSessionsTests {
             ) else { return XCTFail("Expected the reviewed grant") }
             let finalizer = NativeApprovalFinalizer(
                 store: store,
-                requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
-                    XCTFail("An unavailable signing account must not execute")
-                    return .rollback
-                }),
+                executionEnvironment: .init(
+                    requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
+                        XCTFail("An unavailable signing account must not execute")
+                        return .rollback
+                    })
+                ),
                 refreshWalletCatalog: { unavailable },
                 makeSigner: { _ in
                     XCTFail("An unavailable signing account must not create a signer")
                     return TestWalletSigner()
                 }
             )
-            let result = await attemptNativeDecision(
-                finalizer, store: store, snapshot: snapshot, authorization: consent
-            )
+            let result = await finalizer.attempt(consent: consent)
             let response = await store.response(handle: snapshot.handle)
             guard case .snapshot(let after) = await store.bridge.configurationSnapshot(
                 configurationKey: snapshot.configurationKey, profileIdentifier: snapshot.handle.profileIdentifier
@@ -7466,9 +7790,7 @@ extension PopupRequestSessionsTests {
             XCTAssertEqual(after.ethereumAccount, before.ethereumAccount)
             XCTAssertEqual(after.solanaAccount, before.solanaAccount)
             XCTAssertFalse(consent.authorizationIsAvailable)
-            let repeated = await attemptNativeDecision(
-                finalizer, store: store, snapshot: snapshot, authorization: consent
-            )
+            let repeated = await finalizer.attempt(consent: consent)
             let events = await store.events()
             XCTAssertEqual(repeated, .reviewRequired)
             XCTAssertEqual(events, ["nativeClaim", "returnToReview"])
@@ -7514,7 +7836,9 @@ extension PopupRequestSessionsTests {
         }
         let finalizer = NativeApprovalFinalizer(
             store: store,
-            requestProcessor: processor,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            ),
             refreshWalletCatalog: {
                 refreshes += 1
                 return refreshes == 1 ? nil : WalletReviewCatalog(account: account)
@@ -7524,11 +7848,7 @@ extension PopupRequestSessionsTests {
             }
         )
 
-        let first = await attemptNativeDecision(
-            finalizer,
-            store: store,
-            snapshot: snapshot, authorization: authorization
-        )
+        let first = await finalizer.attempt(consent: authorization)
         guard case .found(let retained) = await store.load(
             handle: snapshot.handle
         ) else { return XCTFail("Expected a request retained for fresh review") }
@@ -7547,9 +7867,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(resolves, 0)
         XCTAssertFalse(authorization.authorizationIsAvailable)
 
-        let repeated = await attemptNativeDecision(
-            finalizer, store: store, snapshot: snapshot, authorization: authorization
-        )
+        let repeated = await finalizer.attempt(consent: authorization)
         XCTAssertEqual(repeated, .reviewRequired)
         XCTAssertEqual(refreshes, 1)
         XCTAssertEqual(resolves, 0)
@@ -7558,9 +7876,7 @@ extension PopupRequestSessionsTests {
             handle: snapshot.handle, decision: authorization.decision
         )
         XCTAssertFalse(freshConsent.sharesAuthorization(with: authorization))
-        let retried = await attemptNativeDecision(
-            finalizer, store: store, snapshot: snapshot, authorization: freshConsent
-        )
+        let retried = await finalizer.attempt(consent: freshConsent)
         let finalEvents = await store.events()
         let committed = await store.completedApprovalWasCommitted(handle: snapshot.handle)
 
@@ -7596,37 +7912,40 @@ extension PopupRequestSessionsTests {
 
         }
         let finalizer = NativeApprovalFinalizer(
-                store: store,
+            store: store,
+            executionEnvironment: .init(
                 requestProcessor: CompactPopupProcessor(execute: { _, _, signer, permit in
-                    executions += 1
-                    guard let signer,
-                          case .success(.broadcast(let signed)) = await signer.sign() else {
-                        XCTFail("Expected signing before the checkpoint attempt")
-                        return .rollback
-                    }
-                    return .broadcast(PreparedBroadcast(signed: signed))
-                }) { _ in
-                    .approval(popupTransactionAction())
-                },
-                refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
-                makeSigner: { operation in
+                        executions += 1
+                        guard let signer,
+                              case .success(.broadcast(let signed)) = await signer.sign() else {
+                            XCTFail("Expected signing before the checkpoint attempt")
+                            return .rollback
+                        }
+                        return .broadcast(PreparedBroadcast(signed: signed))
+                    }) { _ in
+                        .approval(popupTransactionAction())
+                    },
+                broadcastSender: sender
+            ),
+            refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
+            makeSigner: { operation in
                     signerCreations += 1
                     XCTAssertEqual(operation.handle, snapshot.handle)
                     XCTAssertEqual(operation.approvedAccount, popupTestAccountDescriptor())
                     let session = WalletSigningSession(signingAccess, authorization: operation.authorization, isCurrent: { true })
                     XCTAssertTrue(session.bind(operation: operation))
                     return session
-                }, networkResolver: popupApprovalNetwork, broadcastSender: sender)
-            let result = await attemptNativeDecision(
-                finalizer, store: store, snapshot: snapshot, authorization: authorization
-            )
+                },
+            networkResolver: popupApprovalNetwork
+        )
+            let result = await finalizer.attempt(consent: authorization)
             XCTAssertEqual(result, .interruptionRequired)
             let storedResponse = await store.response(handle: snapshot.handle)
             let terminal = try XCTUnwrap(storedResponse)
             let error = try XCTUnwrap(terminal["error"] as? [String: Any])
             XCTAssertEqual(error["message"] as? String, committedBeforeFailure
                 ? Strings.transactionSubmissionStatusUnknown : Strings.approvalInterrupted)
-            let repeated = await attemptStoredDecision(finalizer, store: store, handle: snapshot.handle, authorization: authorization)
+            let repeated = await finalizer.attempt(consent: authorization)
             XCTAssertEqual(repeated, .responseReady)
             XCTAssertEqual(executions, 1)
             XCTAssertEqual(signerCreations, 1)
@@ -7651,20 +7970,26 @@ extension PopupRequestSessionsTests {
         }
         let finalizer = NativeApprovalFinalizer(
             store: store,
-            requestProcessor: CompactPopupProcessor(execute: { request, _, signer, permit in
-                let prepared = await popupPreparedBroadcast(permit: permit, signer: signer)
-                guard case .broadcast = prepared else {
-                    XCTFail("Expected a signed broadcast before cancellation")
-                    return .rollback
-                }
-                started.fulfill()
-                await gate.wait()
-                return prepared
-            }) { _ in
-                .approval(popupTransactionAction())
-            },
-                refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) }, makeSigner: { makeWalletSignerForTesting($0) }, networkResolver: popupApprovalNetwork, broadcastSender: sender)
-        let task = Task { await attemptStoredDecision(finalizer, store: store, handle: snapshot.handle, authorization: authorization) }
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { request, _, signer, permit in
+                    let prepared = await popupPreparedBroadcast(permit: permit, signer: signer)
+                    guard case .broadcast = prepared else {
+                        XCTFail("Expected a signed broadcast before cancellation")
+                        return .rollback
+                    }
+                    started.fulfill()
+                    await gate.wait()
+                    return prepared
+                }) { _ in
+                    .approval(popupTransactionAction())
+                },
+                broadcastSender: sender
+            ),
+            refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
+            makeSigner: { makeWalletSignerForTesting($0) },
+            networkResolver: popupApprovalNetwork
+        )
+        let task = Task { await finalizer.attempt(consent: authorization) }
         await fulfillment(of: [started], timeout: 1)
         task.cancel()
         await gate.open()
@@ -7673,7 +7998,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(sends, 0)
         let events = await store.events()
         XCTAssertFalse(events.contains("checkpoint"))
-        let repeated = await attemptStoredDecision(finalizer, store: store, handle: snapshot.handle, authorization: authorization)
+        let repeated = await finalizer.attempt(consent: authorization)
         XCTAssertEqual(repeated, .responseReady)
     }
 
@@ -7691,23 +8016,23 @@ extension PopupRequestSessionsTests {
             var executions = 0
             let finalizer = NativeApprovalFinalizer(
                 store: store,
-                requestProcessor: CompactPopupProcessor(execute: { request, _, _, permit in
-                    executions += 1
-                    return approvedFailureForTesting(.userRejected, permit: permit)
-                }) { _ in
-                    .approval(.approveMessage(SignMessageAction(
-                        subject: .signPersonalMessage, walletId: "wallet", account: popupTestAccount(),
-                        meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
-                    )))
-                },
+                executionEnvironment: .init(
+                    requestProcessor: CompactPopupProcessor(execute: { request, _, _, permit in
+                        executions += 1
+                        return approvedFailureForTesting(.userRejected, permit: permit)
+                    }) { _ in
+                        .approval(.approveMessage(SignMessageAction(
+                            subject: .signPersonalMessage, walletId: "wallet", account: popupTestAccount(),
+                            meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
+                        )))
+                    }
+                ),
                 refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
                 networkResolver: popupApprovalNetwork
             )
-            let result = await attemptNativeDecision(
-                finalizer, store: store, snapshot: snapshot, authorization: authorization
-            )
+            let result = await finalizer.attempt(consent: authorization)
             XCTAssertEqual(result, .interruptionRequired)
-            let repeated = await attemptStoredDecision(finalizer, store: store, handle: snapshot.handle, authorization: authorization)
+            let repeated = await finalizer.attempt(consent: authorization)
             XCTAssertEqual(repeated, .responseReady)
             XCTAssertEqual(executions, failure == "authorization" ? 0 : 1)
         }
@@ -7732,17 +8057,15 @@ extension PopupRequestSessionsTests {
         }
         let finalizer = NativeApprovalFinalizer(
             store: store,
-            requestProcessor: processor,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            ),
             refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
             networkResolver: popupApprovalNetwork
         )
 
         await store.setAuthorityCurrent(false)
-        let result = await attemptNativeDecision(
-            finalizer,
-            store: store,
-            snapshot: snapshot, authorization: authorization
-        )
+        let result = await finalizer.attempt(consent: authorization)
         XCTAssertEqual(result, .interruptionRequired)
         let events = await store.events()
         XCTAssertTrue(events.contains("nativeClaim"))
@@ -7791,13 +8114,16 @@ extension PopupRequestSessionsTests {
                 var executions = 0
                 let finalizer = NativeApprovalFinalizer(
                     store: store,
-                    requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
-                        executions += 1
-                        return approvedFailureForTesting(.userRejected, permit: permit)
-                    }, handler: { _ in
-                        XCTFail("Native finalization must use the original reviewed payload")
-                        return .immediate(.failure(.internalError))
-                    }),
+                    executionEnvironment: .init(
+                        requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
+                            executions += 1
+                            return approvedFailureForTesting(.userRejected, permit: permit)
+                        }, handler: { _ in
+                            XCTFail("Native finalization must use the original reviewed payload")
+                            return .immediate(.failure(.internalError))
+                        }),
+                        clock: { nativeClock.now }
+                    ),
                     refreshWalletCatalog: {
                         catalogRefreshes += 1
                         return WalletReviewCatalog(account: account)
@@ -7807,13 +8133,10 @@ extension PopupRequestSessionsTests {
                         XCTAssertEqual(operation.deadline, approvedAt.addingTimeInterval(limit), label)
                         return TestWalletSigner()
                     },
-                    networkResolver: popupApprovalNetwork,
-                    clock: { nativeClock.now }
+                    networkResolver: popupApprovalNetwork
                 )
 
-                let result = await attemptNativeDecision(
-                    finalizer, store: store, snapshot: snapshot, authorization: authorization
-                )
+                let result = await finalizer.attempt(consent: authorization)
                 let errorCode = await store.completedErrorCode(handle: snapshot.handle)
                 let committed = await store.completedApprovalWasCommitted(handle: snapshot.handle)
                 let fresh = age < limit
@@ -7861,20 +8184,18 @@ extension PopupRequestSessionsTests {
         _ = try XCTUnwrap(snapshot.request)
         let finalizer = NativeApprovalFinalizer(
             store: store,
-            requestProcessor: CompactPopupProcessor { _ in
-                XCTFail("Future transaction decision must not be prepared")
-                return .immediate(.failure(.internalError))
-            },
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor { _ in
+                    XCTFail("Future transaction decision must not be prepared")
+                    return .immediate(.failure(.internalError))
+                },
+                clock: { nativeClock.now }
+            ),
             refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
-            networkResolver: popupApprovalNetwork,
-            clock: { nativeClock.now }
+            networkResolver: popupApprovalNetwork
         )
 
-        let result = await attemptNativeDecision(
-            finalizer,
-            store: store,
-            snapshot: snapshot, authorization: authorization
-        )
+        let result = await finalizer.attempt(consent: authorization)
         let events = await store.events()
         let errorCode = await store.completedErrorCode(handle: snapshot.handle)
         let committed = await store.completedApprovalWasCommitted(
@@ -7913,20 +8234,18 @@ extension PopupRequestSessionsTests {
             _ = try XCTUnwrap(snapshot.request)
             let finalizer = NativeApprovalFinalizer(
                 store: store,
-                requestProcessor: CompactPopupProcessor { _ in
-                    XCTFail("Future \(method) decision must not be prepared")
-                    return .immediate(.failure(.internalError))
-                },
+                executionEnvironment: .init(
+                    requestProcessor: CompactPopupProcessor { _ in
+                        XCTFail("Future \(method) decision must not be prepared")
+                        return .immediate(.failure(.internalError))
+                    },
+                    clock: { nativeClock.now }
+                ),
                 refreshWalletCatalog: { WalletReviewCatalog(account: popupSolanaTestAccount()) },
-                networkResolver: popupApprovalNetwork,
-                clock: { nativeClock.now }
+                networkResolver: popupApprovalNetwork
             )
 
-        let result = await attemptNativeDecision(
-            finalizer,
-            store: store,
-            snapshot: snapshot, authorization: authorization
-        )
+        let result = await finalizer.attempt(consent: authorization)
             let errorCode = await store.completedErrorCode(
                 handle: snapshot.handle
             )
@@ -7963,22 +8282,22 @@ extension PopupRequestSessionsTests {
             var executions = 0
             let finalizer = NativeApprovalFinalizer(
                 store: store,
-                requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
-                    executions += 1
-                    return approvedFailureForTesting(.userRejected, permit: permit)
-                }, handler: { _ in
-                    XCTFail("Native finalization must use the original reviewed payload")
-                    return .immediate(.failure(.internalError))
-                }),
+                executionEnvironment: .init(
+                    requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
+                        executions += 1
+                        return approvedFailureForTesting(.userRejected, permit: permit)
+                    }, handler: { _ in
+                        XCTFail("Native finalization must use the original reviewed payload")
+                        return .immediate(.failure(.internalError))
+                    }),
+                    clock: { nativeClock.now }
+                ),
                 refreshWalletCatalog: { WalletReviewCatalog(account: account) },
                 makeSigner: { _ in TestWalletSigner() },
-                networkResolver: popupApprovalNetwork,
-                clock: { nativeClock.now }
+                networkResolver: popupApprovalNetwork
             )
 
-            let result = await attemptNativeDecision(
-                finalizer, store: store, snapshot: snapshot, authorization: authorization
-            )
+            let result = await finalizer.attempt(consent: authorization)
             let committed = await store.completedApprovalWasCommitted(handle: snapshot.handle)
             let errorCode = await store.completedErrorCode(handle: snapshot.handle)
             XCTAssertEqual(result, .responseReady, method)
@@ -8029,7 +8348,10 @@ extension PopupRequestSessionsTests {
         }
         let finalizer = NativeApprovalFinalizer(
             store: store,
-            requestProcessor: processor,
+            executionEnvironment: .init(
+                requestProcessor: processor,
+                clock: { nativeClock.now }
+            ),
             refreshWalletCatalog: {
                 nativeClock.now = nativeClock.now.addingTimeInterval(ExtensionBridge.maximumTransactionDecisionAge + 1)
                 return WalletReviewCatalog(account: popupTestAccount())
@@ -8038,15 +8360,10 @@ extension PopupRequestSessionsTests {
                 XCTFail("An expired approval must not issue a signer")
                 return TestWalletSigner()
             },
-            networkResolver: popupApprovalNetwork,
-            clock: { nativeClock.now }
+            networkResolver: popupApprovalNetwork
         )
 
-        let result = await attemptNativeDecision(
-            finalizer,
-            store: store,
-            snapshot: snapshot, authorization: authorization
-        )
+        let result = await finalizer.attempt(consent: authorization)
         let events = await store.events()
         let errorCode = await store.completedErrorCode(handle: snapshot.handle)
         let committed = await store.completedApprovalWasCommitted(
@@ -8106,21 +8423,19 @@ extension PopupRequestSessionsTests {
         }
         let finalizer = NativeApprovalFinalizer(
             store: store,
-            requestProcessor: processor,
+            executionEnvironment: .init(
+                requestProcessor: processor,
+                clock: { nativeClock.now }
+            ),
             refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
             makeSigner: { _ in
                 XCTFail("An expired approval must not issue a signer")
                 return TestWalletSigner()
             },
-            networkResolver: popupApprovalNetwork,
-            clock: { nativeClock.now }
+            networkResolver: popupApprovalNetwork
         )
 
-        let result = await attemptNativeDecision(
-            finalizer,
-            store: store,
-            snapshot: snapshot, authorization: authorization
-        )
+        let result = await finalizer.attempt(consent: authorization)
         let events = await store.events()
         let errorCode = await store.completedErrorCode(handle: snapshot.handle)
         let committed = await store.completedApprovalWasCommitted(
@@ -8167,7 +8482,10 @@ extension PopupRequestSessionsTests {
             }
             let finalizer = NativeApprovalFinalizer(
                 store: store,
-                requestProcessor: processor,
+                executionEnvironment: .init(
+                    requestProcessor: processor,
+                    clock: { nativeClock.now }
+                ),
                 refreshWalletCatalog: {
                     if !advancesAtClaim {
                         nativeClock.now = nativeClock.now.addingTimeInterval(ExtensionBridge.maximumTransactionDecisionAge + 1)
@@ -8178,15 +8496,10 @@ extension PopupRequestSessionsTests {
                     XCTFail("An expired approval must not issue a signer")
                     return TestWalletSigner()
                 },
-                networkResolver: popupApprovalNetwork,
-                clock: { nativeClock.now }
+                networkResolver: popupApprovalNetwork
             )
 
-        let result = await attemptNativeDecision(
-            finalizer,
-            store: store,
-            snapshot: snapshot, authorization: authorization
-        )
+        let result = await finalizer.attempt(consent: authorization)
             let errorCode = await store.completedErrorCode(
                 handle: snapshot.handle
             )
@@ -8401,18 +8714,25 @@ extension PopupRequestSessionsTests {
                 await store.failNextCheckpoint(afterWriting: failure == "checkpointAfter")
             }
             let finalizer = NativeApprovalFinalizer(
-                store: store, requestProcessor: processor,
+                store: store,
+                executionEnvironment: .init(
+                    requestProcessor: processor,
+                    broadcastSender: sender
+                ),
                 refreshWalletCatalog: {
                     WalletReviewCatalog(account: popupTestAccount())
-                }, makeSigner: { makeWalletSignerForTesting($0) }, networkResolver: popupApprovalNetwork, broadcastSender: sender)
+                },
+                makeSigner: { makeWalletSignerForTesting($0) },
+                networkResolver: popupApprovalNetwork
+            )
             var attempts = 0
             let coordinator = makeNativeIntegrationCoordinator(store: store, snapshot: snapshot, action: action) {
-                delivered, authorization in
+                authorization in
                 attempts += 1
                 let loads = await store.loadCount()
-                let result = await finalizer.attempt(snapshot: delivered, consent: authorization)
+                let result = await finalizer.attempt(consent: authorization)
                 let laterLoads = await store.loadCount()
-                XCTAssertEqual(loads, laterLoads, "The finalizer must use the supplied snapshot")
+                XCTAssertEqual(loads, laterLoads, "The finalizer must claim directly without a preliminary load")
                 XCTAssertEqual(result, .interruptionRequired)
                 return result
             }
@@ -8457,18 +8777,23 @@ extension PopupRequestSessionsTests {
             XCTFail("A cleared receipt cannot authorize execution")
             return approvedFailureForTesting(.internalError, permit: permit)
         }) { _ in .approval(action) }
-        let finalizer = NativeApprovalFinalizer(store: store, requestProcessor: processor,
-                refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
-                networkResolver: popupApprovalNetwork)
+        let finalizer = NativeApprovalFinalizer(
+            store: store,
+            executionEnvironment: .init(
+                requestProcessor: processor
+            ),
+            refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
+            networkResolver: popupApprovalNetwork
+        )
         let observer = await store.makeObserverBridge()
         let coordinator = makeNativeIntegrationCoordinator(store: store, snapshot: snapshot, action: action) {
-            delivered, authorization in
+            authorization in
             let cleared = await observer.clearNativeDeliveryReceipt(
-                handle: delivered.handle, nativeDeliveryNonce: authorization.nativeReceipt!.nativeDeliveryNonce,
+                handle: authorization.binding.handle, nativeDeliveryNonce: authorization.nativeReceipt!.nativeDeliveryNonce,
                 runtimeInstanceIdentifier: authorization.nativeReceipt!.owner.runtimeInstanceIdentifier
             )
             XCTAssertEqual(cleared, .persisted)
-            let result = await finalizer.attempt(snapshot: delivered, consent: authorization)
+            let result = await finalizer.attempt(consent: authorization)
             XCTAssertEqual(result, .interruptionRequired)
             return result
         }
@@ -8506,8 +8831,16 @@ extension PopupRequestSessionsTests {
                 executions += 1
                 return await popupPreparedBroadcast(permit: permit, signer: signer)
             }) { _ in .approval(action) }
-            let finalizer = NativeApprovalFinalizer(store: store, requestProcessor: processor,
-                refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) }, makeSigner: { makeWalletSignerForTesting($0) }, networkResolver: popupApprovalNetwork, broadcastSender: sender)
+            let finalizer = NativeApprovalFinalizer(
+                store: store,
+                executionEnvironment: .init(
+                    requestProcessor: processor,
+                    broadcastSender: sender
+                ),
+                refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
+                makeSigner: { makeWalletSignerForTesting($0) },
+                networkResolver: popupApprovalNetwork
+            )
             var coordinator: NativeApprovalCoordinator?
             weak var weakCoordinator: NativeApprovalCoordinator?
             if failure == "authorization" {
@@ -8518,14 +8851,14 @@ extension PopupRequestSessionsTests {
             }
             let completed = expectation(description: "attempt completed")
             let gate = makeGate()
-            var captured: (ExtensionBridge.Snapshot, ReviewConsent)?
+            var captured: ReviewConsent?
             var presentations = 0
             coordinator = makeNativeIntegrationCoordinator(
                 store: store, snapshot: snapshot, action: action,
                 onPresentation: { presentations += 1 }
-            ) { delivered, authorization in
-                captured = (delivered, authorization)
-                let result = await finalizer.attempt(snapshot: delivered, consent: authorization)
+            ) { authorization in
+                captured = authorization
+                let result = await finalizer.attempt(consent: authorization)
                 XCTAssertEqual(result, .interruptionRequired)
                 completed.fulfill()
                 await gate.wait()
@@ -8549,8 +8882,8 @@ extension PopupRequestSessionsTests {
             let expected = failure == "checkpointAfter"
                 ? recovery.markingApprovalCommitted() : request.response(error: .approvalInterrupted)
             XCTAssertEqual(json["response"] as? NSDictionary, expected.json as NSDictionary)
-            let (delivered, authorization) = try XCTUnwrap(captured)
-            let repeated = await finalizer.attempt(snapshot: delivered, consent: authorization)
+            let authorization = try XCTUnwrap(captured)
+            let repeated = await finalizer.attempt(consent: authorization)
             XCTAssertEqual(repeated, .responseReady)
             await gate.open()
             for _ in 0..<30 { await Task.yield() }
@@ -8570,7 +8903,7 @@ extension PopupRequestSessionsTests {
         snapshot: ExtensionBridge.Snapshot,
         action: DappRequestAction,
         onPresentation: @escaping () -> Void = {},
-        attempt: @escaping @MainActor @Sendable (ExtensionBridge.Snapshot, ReviewConsent) async -> NativeApprovalFinalizationResult
+        attempt: @escaping @MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult
     ) -> NativeApprovalCoordinator {
         let coordinator = NativeApprovalCoordinator(
             handle: snapshot.handle, nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
@@ -8642,27 +8975,6 @@ extension PopupRequestSessionsTests {
         )
     }
 
-    private func attemptStoredDecision(
-        _ finalizer: NativeApprovalFinalizer,
-        store: ApprovalStoreTestFixture,
-        handle: ExtensionBridge.Handle,
-        authorization: ReviewConsent
-    ) async -> NativeApprovalFinalizationResult {
-        guard case .found(let snapshot) = await store.load(handle: handle) else {
-            XCTFail("Expected a stored decision")
-            return .interruptionRequired
-        }
-        return await finalizer.attempt(snapshot: snapshot, consent: authorization)
-    }
-
-    private func attemptNativeDecision(
-        _ finalizer: NativeApprovalFinalizer,
-        store: ApprovalStoreTestFixture,
-        snapshot: ExtensionBridge.Snapshot,
-        authorization: ReviewConsent
-    ) async -> NativeApprovalFinalizationResult {
-        await attemptStoredDecision(finalizer, store: store, handle: snapshot.handle, authorization: authorization)
-    }
     #endif
 
     private func makeGate() -> CompactPopupGate {
@@ -8797,10 +9109,12 @@ extension PopupRequestSessionsTests {
     private func popupController(store: ApprovalStoreTestFixture) -> PopupRequestSessions {
         return PopupRequestSessions(
             store: store,
-            requestProcessor: CompactPopupProcessor(),
             walletEnvironment: popupWalletEnvironment(),
             loadsTransactionContext: false,
-            approvalNetworkResolver: popupApprovalNetwork
+            approvalNetworkResolver: popupApprovalNetwork,
+            executionEnvironment: .init(
+                requestProcessor: CompactPopupProcessor()
+            )
         )
     }
 

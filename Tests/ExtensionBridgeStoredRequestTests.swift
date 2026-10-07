@@ -6306,8 +6306,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     throw Failure.injectedWrite
                 })
                 let executor = DurableApprovalExecutor(
-                    store: writer, requestProcessor: processor, broadcastSender: sender,
-                    clock: { [clock = clock!] in clock.now }
+                    store: writer,
+                    environment: .init(
+                        requestProcessor: processor,
+                        broadcastSender: sender,
+                        clock: { [clock = clock!] in clock.now }
+                    )
                 )
                 let signing = makeWalletSigningSessionForTesting(authorization: .init(
                     handle: claim.handle,
@@ -6788,7 +6792,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }, synchronizePublishedFile: synchronize)
         let processor = StorageExecutionProcessor(broadcasts: true)
         let sender = StorageBroadcastSender()
-        let executor = DurableApprovalExecutor(store: writer, requestProcessor: processor, broadcastSender: sender, clock: { [clock = clock!] in clock.now })
+        let executor = DurableApprovalExecutor(
+            store: writer,
+            environment: .init(
+                requestProcessor: processor,
+                broadcastSender: sender,
+                clock: { [clock = clock!] in clock.now }
+            )
+        )
         let signing = makeWalletSigningSessionForTesting(authorization: .init(
             handle: claim.handle,
             approvedAccount: try XCTUnwrap(approval.approval.signingAccount),

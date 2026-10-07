@@ -9,10 +9,7 @@ enum NativeApprovalFinalizationResult: Equatable {
 @MainActor
 final class NativeApprovalFinalizer {
 
-    static let shared = NativeApprovalFinalizer(
-        store: ExtensionBridge.shared,
-        requestProcessor: DappRequestProcessor()
-    )
+    static let shared = NativeApprovalFinalizer(store: ExtensionBridge.shared)
 
     private let store: NativeApprovalStore
     private let refreshWalletCatalog: @MainActor () async -> WalletReviewCatalog?
@@ -20,42 +17,21 @@ final class NativeApprovalFinalizer {
     private let networkResolver: (Int) -> ApprovalNetworkResolution
     private let executor: DurableApprovalExecutor
 
-    convenience init(
-        store: NativeApprovalStore,
-        requestProcessor: DappRequestProcessing,
-        makeSigner: DurableApprovalExecutor.SourceSignerFactory? = nil,
-        networkResolver: @escaping (Int) -> ApprovalNetworkResolution = { NetworkResolver.main.approvalResolution(chainId: $0) },
-        clock: @escaping @MainActor @Sendable () -> Date = { Date() },
-        broadcastSender: (any ApprovedBroadcastSending)? = nil,
-        broadcastTimeoutNanoseconds: UInt64 = DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds
-    ) {
-        self.init(
-            store: store, requestProcessor: requestProcessor,
-            refreshWalletCatalog: {
-                guard await WalletsManager.shared.start() else { return nil }
-                return WalletsManager.shared.reviewCatalog()
-            },
-            makeSigner: makeSigner, networkResolver: networkResolver,
-            clock: clock,
-            broadcastSender: broadcastSender, broadcastTimeoutNanoseconds: broadcastTimeoutNanoseconds
-        )
-    }
-
     init(
         store: NativeApprovalStore,
-        requestProcessor: DappRequestProcessing,
-        refreshWalletCatalog: @escaping @MainActor () async -> WalletReviewCatalog?,
+        executionEnvironment: DurableApprovalExecutor.Environment = .live,
+        refreshWalletCatalog: @escaping @MainActor () async -> WalletReviewCatalog? = {
+            guard await WalletsManager.shared.start() else { return nil }
+            return WalletsManager.shared.reviewCatalog()
+        },
         makeSigner: DurableApprovalExecutor.SourceSignerFactory? = nil,
         networkResolver: @escaping (Int) -> ApprovalNetworkResolution = {
             NetworkResolver.main.approvalResolution(chainId: $0)
-        },
-        clock: @escaping @MainActor @Sendable () -> Date = Date.init,
-        broadcastSender: (any ApprovedBroadcastSending)? = nil,
-        broadcastTimeoutNanoseconds: UInt64 =
-            DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds
+        }
     ) {
         self.store = store
         self.refreshWalletCatalog = refreshWalletCatalog
+        let clock = executionEnvironment.clock
         self.makeSigner = makeSigner ?? { operation in
             WalletSigningSession.fromSource(
                 operation: operation,
@@ -65,39 +41,11 @@ final class NativeApprovalFinalizer {
         self.networkResolver = networkResolver
         executor = DurableApprovalExecutor(
             store: store,
-            requestProcessor: requestProcessor,
-            broadcastSender: broadcastSender,
-            broadcastTimeoutNanoseconds: broadcastTimeoutNanoseconds,
-            clock: clock
+            environment: executionEnvironment
         )
     }
 
-    func attempt(
-        snapshot: ExtensionBridge.Snapshot,
-        consent: ReviewConsent
-    ) async -> NativeApprovalFinalizationResult {
-        switch snapshot.state {
-        case .responded:
-            consent.invalidateAuthorization()
-            return .responseReady
-        case .approving:
-            return .pending
-        case .queued(_, .delivered):
-            return await claimAndExecute(snapshot: snapshot, consent: consent)
-        case .queued:
-            return .pending
-        }
-    }
-
-    private func claimAndExecute(
-        snapshot: ExtensionBridge.Snapshot,
-        consent: ReviewConsent
-    ) async -> NativeApprovalFinalizationResult {
-        guard let receipt = consent.nativeReceipt,
-              snapshot.nativeDeliveryReceipt == receipt,
-              snapshot.requestBinding == consent.binding else {
-            return .interruptionRequired
-        }
+    func attempt(consent: ReviewConsent) async -> NativeApprovalFinalizationResult {
         let claim: ExtensionBridge.ApprovalClaim
         switch await store.claimNativeExecution(consent: consent) {
         case .claimed(let value):

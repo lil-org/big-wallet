@@ -300,7 +300,6 @@ final class PopupRequestSessions {
 
 #if os(iOS) || os(visionOS)
     static let shared: PopupRequestSessions = {
-        let processor = DappRequestProcessor()
         let environment = PopupWalletEnvironment(
             reviewCatalog: { SafariApprovalVault.shared.reviewCatalog() },
             approvalCatalog: { SafariApprovalVault.shared.approvalCatalog() },
@@ -311,17 +310,9 @@ final class PopupRequestSessions {
         let operations = TransactionApprovalOperations.live(ethereum: .shared)
         return PopupRequestSessions(
             store: ExtensionBridge.shared,
-            requestProcessor: processor,
             walletEnvironment: environment,
             loadsTransactionContext: true,
-            transactionApprovalOperations: operations,
-            invalidateNetworkCache: { CustomNetworkCache.shared.invalidate() },
-            selectionNetworkResolver: { Networks.withChainIdHex($0) },
-            approvalNetworkResolver: { NetworkResolver.main.approvalResolution(chainId: $0) },
-            broadcastSender: DappBroadcastSender(),
-            broadcastTimeoutNanoseconds: DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
-            clock: { Date() },
-            waitForExecutionDeadline: nil
+            transactionApprovalOperations: operations
         )
     }()
 #endif
@@ -339,31 +330,8 @@ final class PopupRequestSessions {
     private let presenter: PopupApprovalStatePresenter
     private var entries = [ExtensionBridge.Handle: RequestEntry]()
 
-    convenience init(
-        store: PopupRequestStore,
-        requestProcessor: DappRequestProcessing,
-        walletEnvironment: PopupWalletEnvironment,
-        loadsTransactionContext: Bool,
-        transactionApprovalOperations: TransactionApprovalOperations? = nil,
-        invalidateNetworkCache: @escaping () -> Void = { CustomNetworkCache.shared.invalidate() },
-        selectionNetworkResolver: @escaping (String) -> EthereumNetwork? = { Networks.withChainIdHex($0) },
-        approvalNetworkResolver: @escaping (Int) -> ApprovalNetworkResolution = { NetworkResolver.main.approvalResolution(chainId: $0) },
-        broadcastSender: (any ApprovedBroadcastSending)? = nil,
-        broadcastTimeoutNanoseconds: UInt64 = DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
-        clock: @escaping @MainActor @Sendable () -> Date = { Date() }
-    ) {
-        self.init(
-            store: store, requestProcessor: requestProcessor, walletEnvironment: walletEnvironment,
-            loadsTransactionContext: loadsTransactionContext, transactionApprovalOperations: transactionApprovalOperations,
-            invalidateNetworkCache: invalidateNetworkCache, selectionNetworkResolver: selectionNetworkResolver,
-            approvalNetworkResolver: approvalNetworkResolver, broadcastSender: broadcastSender,
-            broadcastTimeoutNanoseconds: broadcastTimeoutNanoseconds, clock: clock, waitForExecutionDeadline: nil
-        )
-    }
-
     init(
         store: PopupRequestStore,
-        requestProcessor: DappRequestProcessing,
         walletEnvironment: PopupWalletEnvironment,
         loadsTransactionContext: Bool,
         transactionApprovalOperations: TransactionApprovalOperations? = nil,
@@ -376,28 +344,20 @@ final class PopupRequestSessions {
         approvalNetworkResolver: @escaping (Int) -> ApprovalNetworkResolution = {
             NetworkResolver.main.approvalResolution(chainId: $0)
         },
-        broadcastSender: (any ApprovedBroadcastSending)? = nil,
-        broadcastTimeoutNanoseconds: UInt64 =
-            DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
-        clock: @escaping @MainActor @Sendable () -> Date = { Date() },
-        waitForExecutionDeadline: (@MainActor @Sendable (Date) async -> Void)?
+        executionEnvironment: DurableApprovalExecutor.Environment = .live
     ) {
         self.store = store
-        self.requestProcessor = requestProcessor
+        requestProcessor = executionEnvironment.requestProcessor
         self.walletEnvironment = walletEnvironment
         self.transactionApprovalOperations = transactionApprovalOperations ?? .live()
         self.loadsTransactionContext = loadsTransactionContext
         self.invalidateNetworkCache = invalidateNetworkCache
         self.selectionNetworkResolver = selectionNetworkResolver
         self.approvalNetworkResolver = approvalNetworkResolver
-        self.clock = clock
+        clock = executionEnvironment.clock
         durableApprovalExecutor = DurableApprovalExecutor(
             store: store,
-            requestProcessor: requestProcessor,
-            broadcastSender: broadcastSender,
-            broadcastTimeoutNanoseconds: broadcastTimeoutNanoseconds,
-            clock: clock,
-            waitForExecutionDeadline: waitForExecutionDeadline
+            environment: executionEnvironment
         )
         presenter = PopupApprovalStatePresenter()
     }

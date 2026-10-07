@@ -228,22 +228,29 @@ final class PasswordStorageTests: XCTestCase {
         XCTAssertEqual(completions, [true])
     }
 
-    func testMacWelcomeRetriesUnavailablePasswordInsteadOfEnteringOnboarding() {
+    func testMacWelcomeReportsUnavailableStorageAndRetiresItsCallbacks() {
         let fixture = PasswordKeychainFixture()
         fixture.readStatus = errSecInteractionNotAllowed
         var completions = [Bool]()
-        let controller = WelcomeViewController.new { completions.append($0) }
+        var failures = 0
+        var controller: WelcomeViewController!
+        controller = WelcomeViewController.new(credentialUnavailable: {
+            failures += 1
+            controller.retireCredentialPresentation()
+        }) { completions.append($0) }
         controller.keychain = fixture.keychain
         _ = controller.view
         controller.actionButtonTapped(controller.getStartedButton as Any)
-        XCTAssertEqual(controller.getStartedButton.title, Strings.tryAgain)
+        XCTAssertEqual(failures, 1)
         XCTAssertTrue(completions.isEmpty)
         fixture.readStatus = nil
         fixture.passwordData = Data("existing".utf8)
         controller.actionButtonTapped(controller.getStartedButton as Any)
-        XCTAssertEqual(completions, [false])
+        XCTAssertTrue(completions.isEmpty)
+        XCTAssertEqual(failures, 1)
         XCTAssertEqual(fixture.addCount, 0)
     }
+
 #else
     func testPasswordFallbackReadFailureRetriesWithoutReportingMismatch() async {
         var prompts = [LocalAuthentication.Prompt]()

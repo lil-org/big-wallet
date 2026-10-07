@@ -11,19 +11,21 @@ final class OnboardingCancellationTests: XCTestCase {
             let fixture = OnboardingKeychainFixture()
             let agent = Agent(approvalInbox: ApprovalInbox())
             agent.keychain = fixture.keychain
+            let priorWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
             let window = try await openOnboarding(agent)
             defer { window.close() }
             try await advance(window, to: stage)
 
             window.close()
-            await settleUI()
+            await waitUntil { !window.isVisible }
             let passwordReads = fixture.passwordReads
             for _ in 0..<3 { agent.applicationDidBecomeActive() }
 
             XCTAssertFalse(window.isVisible)
             XCTAssertEqual(fixture.passwordReads, passwordReads)
             XCTAssertFalse(NSApp.windows.contains { candidate in
-                candidate.isVisible && (candidate.contentViewController is WelcomeViewController ||
+                !priorWindows.contains(ObjectIdentifier(candidate)) && candidate.isVisible &&
+                    (candidate.contentViewController is WelcomeViewController ||
                     candidate.contentViewController is PasswordViewController)
             })
         }
@@ -78,7 +80,7 @@ final class OnboardingCancellationTests: XCTestCase {
         XCTAssertEqual(cancellations, 0)
     }
 
-    func testClosingRetiredSetupWindowDoesNotCancelExternalCredentialHandoff() async throws {
+    func testRetiredSetupCallbackDoesNotCancelExternalCredentialHandoff() async throws {
         let fixture = OnboardingKeychainFixture()
         let agent = OnboardingAuthenticationAgent(approvalInbox: ApprovalInbox())
         agent.keychain = fixture.keychain
@@ -86,14 +88,14 @@ final class OnboardingCancellationTests: XCTestCase {
         let window = try await openOnboarding(agent)
         defer { window.close() }
         try await advance(window, to: .create)
+        let oldForm = try XCTUnwrap(window.contentViewController as? PasswordViewController)
         fixture.password = "externally-created-password"
 
         agent.applicationDidBecomeActive()
-        window.close()
+        oldForm.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: window))
         await waitUntil { agent.authenticationRequests == 1 }
 
         XCTAssertTrue(agent.observedPendingIntent)
-        XCTAssertFalse(window.isVisible)
     }
 
     func testReturningToWelcomeRetiresOldPasswordCallbacksAndKeepsCancellation() async throws {
@@ -103,6 +105,7 @@ final class OnboardingCancellationTests: XCTestCase {
         let password = PasswordViewController.with(
             mode: .create,
             onboardingCancelled: { cancellations += 1 },
+            credentialUnavailable: { XCTFail("Expected available credentials") },
             completion: { completions.append($0) }
         )
         password.keychain = fixture.keychain
@@ -141,7 +144,7 @@ final class OnboardingCancellationTests: XCTestCase {
             defer { failureWindow.close() }
 
             failureWindow.close()
-            await settleUI()
+            await waitUntil { !failureWindow.isVisible }
             XCTAssertFalse(failureWindow.isVisible)
             XCTAssertFalse(setupWindow.isVisible)
             fixture.readStatus = nil
@@ -173,51 +176,84 @@ final class OnboardingCancellationTests: XCTestCase {
         }
     }
 
-    func testPasswordFailureRetryPreservesSetupAndIgnoresOldFailureClose() async throws {
+    func testStorageFailureReplacesEverySetupStageAndRequiresExplicitRetry() async throws {
+        for stage in [Stage.welcome, .create, .repeatPassword] {
+            let fixture = OnboardingKeychainFixture()
+            let agent = Agent(approvalInbox: ApprovalInbox())
+            agent.keychain = fixture.keychain
+            let window = try await openOnboarding(agent)
+            defer { window.close() }
+            try await advance(window, to: stage)
+            let originalForm = window.contentViewController as? PasswordViewController
+            let originalWelcome = window.contentViewController as? WelcomeViewController
+            fixture.readStatus = errSecInteractionNotAllowed
+            let failure = try await showPasswordFailure(agent)
+
+            XCTAssertTrue(failure.controller.window === window)
+            XCTAssertTrue(window.contentViewController === failure.viewController)
+            if let originalForm { XCTAssertTrue(originalForm.passwordTextField.stringValue.isEmpty) }
+            fixture.readStatus = nil
+            let reads = fixture.passwordReads
+            for _ in 0..<3 {
+                agent.applicationDidBecomeActive()
+                NotificationCenter.default.post(name: .walletsChanged, object: nil)
+                agent.open()
+            }
+            await settleUI()
+            XCTAssertEqual(fixture.passwordReads, reads)
+            XCTAssertTrue(window.contentViewController === failure.viewController)
+            if let originalForm {
+                originalForm.passwordTextField.stringValue = "retired-draft"
+                originalForm.actionButtonTapped(originalForm.okButton as Any)
+                originalForm.cancelButtonTapped(originalForm.cancelButton)
+            }
+            originalWelcome?.actionButtonTapped(originalWelcome?.getStartedButton as Any)
+            XCTAssertEqual(fixture.passwordReads, reads)
+            XCTAssertEqual(fixture.addCount, 0)
+
+            failure.viewController.actionButtonTapped(failure.viewController.okButton as Any)
+            await settleUI()
+            let restarted = try XCTUnwrap(window.contentViewController as? WelcomeViewController)
+            XCTAssertFalse(restarted === originalWelcome)
+            XCTAssertTrue(window.isVisible)
+            failure.viewController.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: window))
+            failure.viewController.actionButtonTapped(failure.viewController.okButton as Any)
+            XCTAssertTrue(window.contentViewController === restarted)
+            XCTAssertEqual(fixture.addCount, 0)
+        }
+    }
+
+    func testRetryRechecksUnavailableAndNewlyCreatedCredentials() async throws {
         let fixture = OnboardingKeychainFixture()
-        let agent = Agent(approvalInbox: ApprovalInbox())
+        let agent = SuspendedOnboardingAuthenticationAgent(approvalInbox: ApprovalInbox())
         agent.keychain = fixture.keychain
-        let setupWindow = try await openOnboarding(agent)
-        defer { setupWindow.close() }
-        try await advance(setupWindow, to: .repeatPassword)
-        let originalForm = try XCTUnwrap(setupWindow.contentViewController as? PasswordViewController)
+        defer { agent.completeAll() }
+        let window = try await openOnboarding(agent)
+        defer { window.close() }
+        try await advance(window, to: .repeatPassword)
         fixture.readStatus = errSecInteractionNotAllowed
         let firstFailure = try await showPasswordFailure(agent)
-        let firstFailureWindow = try XCTUnwrap(firstFailure.controller.window)
-        defer { firstFailureWindow.close() }
 
-        fixture.readStatus = nil
         firstFailure.viewController.actionButtonTapped(firstFailure.viewController.okButton as Any)
         await settleUI()
-
-        XCTAssertFalse(firstFailureWindow.isVisible)
-        XCTAssertTrue(setupWindow.isVisible)
-        XCTAssertTrue(setupWindow.contentViewController === originalForm)
-        XCTAssertNil(fixture.password)
-        XCTAssertEqual(fixture.addCount, 0)
-
-        fixture.readStatus = errSecInteractionNotAllowed
-        let currentFailure = try await showPasswordFailure(agent)
-        let currentFailureWindow = try XCTUnwrap(currentFailure.controller.window)
-        defer { currentFailureWindow.close() }
-        firstFailure.viewController.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: firstFailureWindow))
-        XCTAssertTrue(currentFailureWindow.isVisible)
-        XCTAssertTrue(setupWindow.isVisible)
-
+        let secondFailure = try XCTUnwrap(window.contentViewController as? WaitingViewController)
+        XCTAssertEqual(secondFailure.okButton.title, Strings.tryAgain)
+        XCTAssertEqual(agent.authenticationRequests, 0)
         fixture.readStatus = nil
-        currentFailure.viewController.actionButtonTapped(currentFailure.viewController.okButton as Any)
+        fixture.password = "externally-created-password"
+        secondFailure.actionButtonTapped(secondFailure.okButton as Any)
+        await waitUntil { agent.authenticationRequests == 1 }
+        firstFailure.viewController.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: window))
+        secondFailure.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: window))
+        for _ in 0..<3 { agent.open() }
         await settleUI()
-        let activeReads = fixture.passwordReads
-        agent.applicationDidBecomeActive()
 
-        XCTAssertGreaterThan(fixture.passwordReads, activeReads)
-        XCTAssertFalse(currentFailureWindow.isVisible)
-        XCTAssertTrue(setupWindow.isVisible)
-        XCTAssertTrue(setupWindow.contentViewController === originalForm)
+        XCTAssertEqual(agent.authenticationRequests, 1)
+        XCTAssertEqual(fixture.password, "externally-created-password")
         XCTAssertEqual(fixture.addCount, 0)
     }
 
-    func testClosingPasswordFailureCancelsStartupWithoutCorruptingNewAuthentication() async throws {
+    func testOldSuccessfulAuthenticationCannotFinishReplacementFlow() async throws {
         let fixture = OnboardingKeychainFixture()
         fixture.password = "stored-password"
         let agent = SuspendedOnboardingAuthenticationAgent(approvalInbox: ApprovalInbox())
@@ -227,33 +263,30 @@ final class OnboardingCancellationTests: XCTestCase {
         await waitUntil { agent.authenticationRequests == 1 }
         fixture.readStatus = errSecInteractionNotAllowed
         let failure = try await showPasswordFailure(agent)
-        let failureWindow = try XCTUnwrap(failure.controller.window)
-        defer { failureWindow.close() }
-
-        failureWindow.close()
+        let window = try XCTUnwrap(failure.controller.window)
+        defer { window.close() }
         fixture.readStatus = nil
-        let cancelledReads = fixture.passwordReads
-        agent.applicationDidBecomeActive()
-        XCTAssertEqual(fixture.passwordReads, cancelledReads)
-        XCTAssertEqual(agent.authenticationRequests, 1)
-
-        agent.open()
+        failure.viewController.actionButtonTapped(failure.viewController.okButton as Any)
         await waitUntil { agent.authenticationRequests == 2 }
-        agent.complete(1)
+
+        agent.complete(1, result: true)
         await waitUntil { agent.cancelledAtReturn[1] != nil }
-        await settleUI()
-        XCTAssertEqual(agent.cancelledAtReturn[1], true)
-        failure.viewController.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: failureWindow))
-        let activeReads = fixture.passwordReads
-        agent.applicationDidBecomeActive()
+        failure.viewController.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: window))
+        for _ in 0..<3 { agent.open() }
         await settleUI()
 
-        XCTAssertGreaterThan(fixture.passwordReads, activeReads)
+        XCTAssertEqual(agent.cancelledAtReturn[1], true)
         XCTAssertEqual(agent.authenticationRequests, 2)
-        XCTAssertEqual(fixture.addCount, 0)
+        XCTAssertFalse(window.contentViewController is AccountsListViewController)
+        agent.complete(2, result: false)
+        await waitUntil { agent.cancelledAtReturn[2] != nil }
+        await settleUI()
+        let reads = fixture.passwordReads
+        agent.applicationDidBecomeActive()
+        XCTAssertEqual(fixture.passwordReads, reads)
     }
 
-    func testBiometricFailureReplacesErrorWithLivePasswordFallback() async throws {
+    func testRetiredBiometricFailureCannotReplaceExplicitRetryScreen() async throws {
         let fixture = OnboardingKeychainFixture()
         fixture.password = "stored-password"
         let agent = BiometricFallbackAgent(approvalInbox: ApprovalInbox())
@@ -263,79 +296,32 @@ final class OnboardingCancellationTests: XCTestCase {
         await waitUntil { agent.deviceAttempts == 1 }
         fixture.readStatus = errSecInteractionNotAllowed
         let failure = try await showPasswordFailure(agent)
-        let failureWindow = try XCTUnwrap(failure.controller.window)
-        defer { failureWindow.close() }
-        let priorWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
-
+        let window = try XCTUnwrap(failure.controller.window)
+        defer { window.close() }
         agent.completeDeviceAttempt(1, outcome: .failed)
-        let passwordWindow = try await waitForPasswordWindow(excluding: priorWindows)
-        defer { passwordWindow.close() }
-        let password = try XCTUnwrap(passwordWindow.contentViewController as? PasswordViewController)
-        await waitUntil { password.okButton.title == Strings.tryAgain }
+        await waitUntil { agent.authenticationResults.count == 1 }
+        XCTAssertTrue(window.contentViewController === failure.viewController)
+        XCTAssertEqual(agent.authenticationResults, [false])
 
-        XCTAssertFalse(failureWindow.isVisible)
-        XCTAssertTrue(passwordWindow.isVisible)
-        XCTAssertTrue(agent.authenticationResults.isEmpty)
-        XCTAssertEqual(agent.deviceAttempts, 1)
         fixture.readStatus = nil
-        password.actionButtonTapped(password.okButton as Any)
-        XCTAssertTrue(password.passwordTextField.isEnabled)
+        failure.viewController.actionButtonTapped(failure.viewController.okButton as Any)
+        await waitUntil { agent.deviceAttempts == 2 }
+        let working = try XCTUnwrap(window.contentViewController as? WaitingViewController)
+        agent.completeDeviceAttempt(2, outcome: .failed)
+        await waitUntil { window.contentViewController is PasswordViewController }
+        let password = try XCTUnwrap(window.contentViewController as? PasswordViewController)
+        await waitUntil { password.passwordTextField.isEnabled }
+        working.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: window))
+        XCTAssertTrue(window.contentViewController === password)
         password.passwordTextField.stringValue = "stored-password"
         password.actionButtonTapped(password.okButton as Any)
-        await waitUntil { agent.authenticationResults.count == 1 }
-        await settleUI()
+        await waitUntil { agent.authenticationResults.count == 2 }
 
-        XCTAssertEqual(agent.authenticationResults, [true])
-        XCTAssertFalse(passwordWindow.isVisible)
-        XCTAssertFalse(failureWindow.isVisible)
-        XCTAssertEqual(fixture.password, "stored-password")
+        XCTAssertEqual(agent.authenticationResults, [false, true])
         XCTAssertEqual(fixture.addCount, 0)
     }
 
-    func testClosingSetupAlsoClosesCredentialErrorAndRetiresRetry() async throws {
-        for stage in [Stage.create, .repeatPassword] {
-            let fixture = OnboardingKeychainFixture()
-            let agent = Agent(approvalInbox: ApprovalInbox())
-            agent.keychain = fixture.keychain
-            let setupWindow = try await openOnboarding(agent)
-            defer { setupWindow.close() }
-            try await advance(setupWindow, to: stage)
-            let staleForm = try XCTUnwrap(setupWindow.contentViewController as? PasswordViewController)
-            fixture.readStatus = errSecInteractionNotAllowed
-            let failure = try await showPasswordFailure(agent)
-            let failureWindow = try XCTUnwrap(failure.controller.window)
-            defer { failureWindow.close() }
-
-            setupWindow.close()
-            await settleUI()
-
-            XCTAssertFalse(setupWindow.isVisible)
-            XCTAssertFalse(failureWindow.isVisible)
-            fixture.readStatus = nil
-            let cancelledReads = fixture.passwordReads
-            failure.viewController.actionButtonTapped(failure.viewController.okButton as Any)
-            failure.viewController.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: failureWindow))
-            for _ in 0..<3 {
-                staleForm.passwordTextField.stringValue = "draft-password"
-                staleForm.actionButtonTapped(staleForm.okButton as Any)
-                await settleUI()
-            }
-            agent.applicationDidBecomeActive()
-
-            XCTAssertEqual(fixture.passwordReads, cancelledReads)
-            XCTAssertEqual(fixture.addCount, 0)
-            XCTAssertNil(fixture.password)
-            XCTAssertFalse(setupWindow.isVisible)
-            XCTAssertFalse(failureWindow.isVisible)
-            XCTAssertFalse(NSApp.windows.contains { candidate in
-                candidate.isVisible && (candidate.contentViewController is WelcomeViewController ||
-                    candidate.contentViewController is PasswordViewController ||
-                    candidate.contentViewController is WaitingViewController)
-            })
-        }
-    }
-
-    func testClosingStartupPasswordAlsoClosesCredentialErrorAndRetiresRetry() async throws {
+    func testStartupPasswordFailureUsesSameWindowAndRetiresForm() async throws {
         let fixture = OnboardingKeychainFixture()
         fixture.password = "stored-password"
         let agent = BiometricFallbackAgent(approvalInbox: ApprovalInbox())
@@ -345,38 +331,141 @@ final class OnboardingCancellationTests: XCTestCase {
         agent.open()
         await waitUntil { agent.deviceAttempts == 1 }
         agent.completeDeviceAttempt(1, outcome: nil)
-        let passwordWindow = try await waitForPasswordWindow(excluding: priorWindows)
-        defer { passwordWindow.close() }
-        let staleForm = try XCTUnwrap(passwordWindow.contentViewController as? PasswordViewController)
-        await waitUntil { staleForm.passwordTextField.isEnabled }
+        let window = try await waitForPasswordWindow(excluding: priorWindows)
+        defer { window.close() }
+        let form = try XCTUnwrap(window.contentViewController as? PasswordViewController)
+        await waitUntil { form.passwordTextField.isEnabled }
+        form.passwordTextField.stringValue = "draft-password"
         fixture.readStatus = errSecInteractionNotAllowed
         let failure = try await showPasswordFailure(agent)
-        let failureWindow = try XCTUnwrap(failure.controller.window)
-        defer { failureWindow.close() }
-
-        passwordWindow.close()
+        XCTAssertTrue(failure.controller.window === window)
+        XCTAssertTrue(form.passwordTextField.stringValue.isEmpty)
         await waitUntil { agent.authenticationResults.count == 1 }
-        await settleUI()
 
-        XCTAssertEqual(agent.authenticationResults, [false])
-        XCTAssertFalse(passwordWindow.isVisible)
-        XCTAssertFalse(failureWindow.isVisible)
+        window.close()
+        await waitUntil { !window.isVisible }
         fixture.readStatus = nil
-        let cancelledReads = fixture.passwordReads
+        let reads = fixture.passwordReads
+        form.passwordTextField.stringValue = "stored-password"
+        form.actionButtonTapped(form.okButton as Any)
+        form.cancelButtonTapped(form.cancelButton)
         failure.viewController.actionButtonTapped(failure.viewController.okButton as Any)
-        failure.viewController.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: failureWindow))
-        staleForm.passwordTextField.stringValue = "stored-password"
-        staleForm.actionButtonTapped(staleForm.okButton as Any)
-        staleForm.cancelButtonTapped(staleForm.cancelButton)
+        failure.viewController.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: window))
         agent.applicationDidBecomeActive()
         await settleUI()
 
+        XCTAssertEqual(fixture.passwordReads, reads)
         XCTAssertEqual(agent.authenticationResults, [false])
-        XCTAssertEqual(agent.deviceAttempts, 1)
-        XCTAssertEqual(fixture.passwordReads, cancelledReads)
         XCTAssertEqual(fixture.addCount, 0)
-        XCTAssertFalse(passwordWindow.isVisible)
-        XCTAssertFalse(failureWindow.isVisible)
+        XCTAssertFalse(window.isVisible)
+    }
+
+    func testPasswordDisappearingDuringAuthenticationRetiresItsResult() async throws {
+        let fixture = OnboardingKeychainFixture()
+        fixture.password = "stored-password"
+        let agent = SuspendedOnboardingAuthenticationAgent(approvalInbox: ApprovalInbox())
+        agent.keychain = fixture.keychain
+        defer { agent.completeAll() }
+        agent.open()
+        await waitUntil { agent.authenticationRequests == 1 }
+        fixture.password = nil
+        let window = try await openOnboarding(agent)
+        defer { window.close() }
+        agent.complete(1, result: true)
+        await waitUntil { agent.cancelledAtReturn[1] != nil }
+        await settleUI()
+
+        XCTAssertEqual(agent.cancelledAtReturn[1], true)
+        XCTAssertTrue(window.contentViewController is WelcomeViewController)
+        XCTAssertEqual(fixture.addCount, 0)
+    }
+
+    func testRepeatedOpenDeduplicatesSetupAndAuthentication() async throws {
+        let fixture = OnboardingKeychainFixture()
+        let agent = SuspendedOnboardingAuthenticationAgent(approvalInbox: ApprovalInbox())
+        agent.keychain = fixture.keychain
+        defer { agent.completeAll() }
+        let window = try await openOnboarding(agent)
+        defer { window.close() }
+        let welcome = window.contentViewController
+        for _ in 0..<5 { agent.open() }
+        XCTAssertTrue(window.contentViewController === welcome)
+        fixture.password = "external-password"
+        agent.applicationDidBecomeActive()
+        await waitUntil { agent.authenticationRequests == 1 }
+        for _ in 0..<5 {
+            agent.open()
+            agent.applicationDidBecomeActive()
+        }
+        await settleUI()
+        XCTAssertEqual(agent.authenticationRequests, 1)
+    }
+
+    func testDockHandoffDeduplicatesAndIgnoresRetiredSuccess() async throws {
+        let fixture = OnboardingKeychainFixture()
+        let agent = DockHandoffAgent(approvalInbox: ApprovalInbox())
+        agent.keychain = fixture.keychain
+        defer { agent.completeAll() }
+        agent.open()
+        await waitUntil { agent.handoffRequests == 1 }
+        for _ in 0..<5 { agent.open() }
+        await settleUI()
+        XCTAssertEqual(agent.handoffRequests, 1)
+        fixture.readStatus = errSecInteractionNotAllowed
+        let failure = try await showPasswordFailure(agent)
+        let window = try XCTUnwrap(failure.controller.window)
+        defer { window.close() }
+        fixture.readStatus = nil
+        failure.viewController.actionButtonTapped(failure.viewController.okButton as Any)
+        await waitUntil { agent.handoffRequests == 2 }
+        agent.complete(1, result: true)
+        await settleUI()
+        XCTAssertEqual(agent.handoffRequests, 2)
+        agent.complete(2, result: false)
+        await waitUntil {
+            (window.contentViewController as? WaitingViewController)?.okButton?.title == Strings.tryAgain
+        }
+        let currentFailure = try XCTUnwrap(window.contentViewController as? WaitingViewController)
+        currentFailure.actionButtonTapped(currentFailure.okButton as Any)
+        await waitUntil { agent.handoffRequests == 3 }
+        agent.complete(3, result: true)
+        await settleUI()
+        let reads = fixture.passwordReads
+        agent.applicationDidBecomeActive()
+        XCTAssertEqual(fixture.passwordReads, reads)
+        XCTAssertEqual(agent.handoffRequests, 3)
+    }
+
+    func testCommittedPasswordCreationNotifiesAfterItsFlowCloses() async throws {
+        let fixture = OnboardingKeychainFixture()
+        fixture.allowsCreation = true
+        let agent = Agent(approvalInbox: ApprovalInbox())
+        agent.keychain = fixture.keychain
+        let window = try await openOnboarding(agent)
+        defer { window.close() }
+        try await advance(window, to: .repeatPassword)
+        let password = try XCTUnwrap(window.contentViewController as? PasswordViewController)
+        let changed = expectation(description: "Committed password notifies storage")
+        changed.assertForOverFulfill = false
+        let observation = NotificationCenter.default.addObserver(forName: .walletsChanged, object: nil, queue: nil) { _ in
+            changed.fulfill()
+        }
+        defer { NotificationCenter.default.removeObserver(observation) }
+        fixture.afterInsertion = { [weak window] in MainActor.assumeIsolated { window?.close() } }
+        defer { fixture.afterInsertion = nil }
+        password.passwordTextField.stringValue = "draft-password"
+        password.actionButtonTapped(password.okButton as Any)
+        await fulfillment(of: [changed], timeout: 2)
+        await waitUntil { !window.isVisible }
+
+        XCTAssertEqual(fixture.password, "draft-password")
+        XCTAssertEqual(fixture.addCount, 1)
+        XCTAssertFalse(window.isVisible)
+        let reads = fixture.passwordReads
+        agent.applicationDidBecomeActive()
+        password.actionButtonTapped(password.okButton as Any)
+        XCTAssertEqual(fixture.passwordReads, reads)
+        XCTAssertFalse(window.isVisible)
     }
 
     private enum Stage { case welcome, create, repeatPassword, returnedWelcome }
@@ -414,10 +503,11 @@ final class OnboardingCancellationTests: XCTestCase {
     }
 
     private func showPasswordFailure(_ agent: Agent) async throws -> (controller: NSWindowController, viewController: WaitingViewController) {
-        let priorWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
+        let priorControllers = Set(NSApp.windows.compactMap(\.contentViewController).map(ObjectIdentifier.init))
         agent.applicationDidBecomeActive()
         let window = try XCTUnwrap(NSApp.windows.first {
-            !priorWindows.contains(ObjectIdentifier($0)) && $0.contentViewController is WaitingViewController
+            guard $0.isVisible, let controller = $0.contentViewController as? WaitingViewController else { return false }
+            return !priorControllers.contains(ObjectIdentifier(controller))
         })
         window.setFrameOrigin(NSPoint(x: -10_000, y: -10_000))
         let controller = try XCTUnwrap(window.windowController)
@@ -495,8 +585,8 @@ private final class SuspendedOnboardingAuthenticationAgent: Agent {
         return result
     }
 
-    func complete(_ identifier: Int) {
-        pending.removeValue(forKey: identifier)?.resume(returning: false)
+    func complete(_ identifier: Int, result: Bool = false) {
+        pending.removeValue(forKey: identifier)?.resume(returning: result)
     }
 
     func completeAll() {
@@ -535,12 +625,38 @@ private final class BiometricFallbackAgent: Agent {
     }
 }
 
+@MainActor
+private final class DockHandoffAgent: Agent {
+    var handoffRequests = 0
+    private var pending = [Int: CheckedContinuation<Bool, Never>]()
+
+    override var canCreatePassword: Bool { false }
+
+    override func openDockForOnboarding() async -> Bool {
+        handoffRequests += 1
+        let identifier = handoffRequests
+        return await withCheckedContinuation { pending[identifier] = $0 }
+    }
+
+    func complete(_ identifier: Int, result: Bool) {
+        pending.removeValue(forKey: identifier)?.resume(returning: result)
+    }
+
+    func completeAll() {
+        let continuations = Array(pending.values)
+        pending.removeAll()
+        continuations.forEach { $0.resume(returning: false) }
+    }
+}
+
 private final class OnboardingKeychainFixture: Sendable {
     private struct State {
         var password: String?
         var passwordReads = 0
         var readStatus: OSStatus?
         var addCount = 0
+        var allowsCreation = false
+        var afterInsertion: (@Sendable () -> Void)?
     }
     private let state = Mutex(State())
 
@@ -551,6 +667,14 @@ private final class OnboardingKeychainFixture: Sendable {
 
     var passwordReads: Int { state.withLock { $0.passwordReads } }
     var addCount: Int { state.withLock { $0.addCount } }
+    var allowsCreation: Bool {
+        get { state.withLock { $0.allowsCreation } }
+        set { state.withLock { $0.allowsCreation = newValue } }
+    }
+    var afterInsertion: (@Sendable () -> Void)? {
+        get { state.withLock { $0.afterInsertion } }
+        set { state.withLock { $0.afterInsertion = newValue } }
+    }
 
     var readStatus: OSStatus? {
         get { state.withLock { $0.readStatus } }
@@ -571,10 +695,20 @@ private final class OnboardingKeychainFixture: Sendable {
             guard let password else { return errSecItemNotFound }
             result?.pointee = Data(password.utf8) as CFData
             return errSecSuccess
-        }, add: { [self] _, _ in
-            state.withLock { $0.addCount += 1 }
-            XCTFail("Cancellation tests must not create credentials")
-            return errSecNotAvailable
+        }, add: { [self] query, _ in
+            let data = (query as NSDictionary)[kSecValueData] as? Data
+            let result: (OSStatus, (@Sendable () -> Void)?) = state.withLock {
+                $0.addCount += 1
+                guard $0.allowsCreation, let data, let password = String(data: data, encoding: .utf8) else {
+                    XCTFail("Cancellation tests must not create credentials")
+                    return (errSecNotAvailable, nil)
+                }
+                guard $0.password == nil else { return (errSecDuplicateItem, nil) }
+                $0.password = password
+                return (errSecSuccess, $0.afterInsertion)
+            }
+            result.1?()
+            return result.0
         }, update: { _, _ in
             XCTFail("Cancellation tests must not update credentials")
             return errSecNotAvailable

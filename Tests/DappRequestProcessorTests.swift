@@ -104,7 +104,10 @@ final class DappRequestProcessorTests: XCTestCase {
             return XCTFail("Expected execution claim")
         }
         let executor = DurableApprovalExecutor(
-            store: ExtensionBridge(store: fixture.store), clock: { fixture.now }
+            store: ExtensionBridge(store: fixture.store),
+            environment: .init(
+                clock: { fixture.now }
+            )
         )
         let result = await executor.execute(claim: claim, prepare: { _ in
             .ready(consent: consent, signing: .none)

@@ -7,10 +7,12 @@ class WelcomeViewController: NSViewController {
     
     static func new(
         onboardingCancelled: (() -> Void)? = nil,
+        credentialUnavailable: @escaping () -> Void,
         completion: ((Bool) -> Void)?
     ) -> WelcomeViewController {
         let new = instantiate(WelcomeViewController.self)
         new.onboardingCancelled = onboardingCancelled
+        new.credentialUnavailable = credentialUnavailable
         new.completion = completion
         return new
     }
@@ -21,9 +23,9 @@ class WelcomeViewController: NSViewController {
     
     private var completion: ((Bool) -> Void)?
     private var onboardingCancelled: (() -> Void)?
+    private var credentialUnavailable: (() -> Void)?
     private var didCallCompletion = false
     private var initialRefreshTask: Task<Void, Never>?
-    private var isPasswordUnavailable = true
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -52,16 +54,15 @@ class WelcomeViewController: NSViewController {
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        let wasUnavailable = isPasswordUnavailable
-        guard refreshPasswordState(), !wasUnavailable else { return }
-        didCallCompletion = true
-        NotificationCenter.default.removeObserver(self)
+        guard refreshPasswordState(), let credentialUnavailable else { return }
         let passwordViewController = PasswordViewController.with(
             mode: .create,
             onboardingCancelled: onboardingCancelled,
+            credentialUnavailable: credentialUnavailable,
             completion: completion
         )
         passwordViewController.keychain = keychain
+        retireCredentialPresentation()
         view.window?.contentViewController = passwordViewController
     }
 
@@ -82,25 +83,33 @@ class WelcomeViewController: NSViewController {
                 callCompletion(result: false)
                 return false
             }
-            isPasswordUnavailable = false
             messageLabel.stringValue = Strings.welcomeScreenText
             getStartedButton.title = Strings.getStarted
             getStartedButton.isEnabled = true
             return true
         } catch {
-            isPasswordUnavailable = true
-            messageLabel.stringValue = Strings.failedToLoad
-            getStartedButton.title = Strings.tryAgain
-            getStartedButton.isEnabled = true
+            let credentialUnavailable = credentialUnavailable
+            retireCredentialPresentation()
+            credentialUnavailable?()
             return false
         }
     }
 
     private func callCompletion(result: Bool) {
         guard !didCallCompletion else { return }
-        didCallCompletion = true
-        NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
+        let completion = completion
+        retireCredentialPresentation()
         completion?(result)
+    }
+
+    func retireCredentialPresentation() {
+        didCallCompletion = true
+        initialRefreshTask?.cancel()
+        initialRefreshTask = nil
+        NotificationCenter.default.removeObserver(self)
+        completion = nil
+        onboardingCancelled = nil
+        credentialUnavailable = nil
     }
     
 }
