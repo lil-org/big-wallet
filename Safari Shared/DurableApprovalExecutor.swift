@@ -73,8 +73,8 @@ final class DurableApprovalExecutor {
     }
 
     typealias SourceSignerFactory = @MainActor @Sendable (
-        ApprovedWalletSigningOperation
-    ) -> any WalletSigning
+        WalletSigningAuthorization
+    ) -> WalletSigningSession
 
     enum SigningAccess {
         case none
@@ -312,18 +312,21 @@ final class DurableApprovalExecutor {
         _ signing: SigningAccess,
         permit: ExtensionBridge.ApprovedExecutionPermit
     ) -> (any WalletSigning)? {
-        guard permit.approval.signingAccount != nil else { return nil }
+        guard let authorization = WalletSigningAuthorization(permit: permit) else { return nil }
+        let session: WalletSigningSession
         switch signing {
         case .none:
             return nil
-        case .unlocked(let session):
-            guard let operation = ApprovedWalletSigningOperation(permit: permit),
-                  session.bind(operation: operation) else { return nil }
-            return session
+        case .unlocked(let unlocked):
+            session = unlocked
         case .source(let factory):
-            guard let operation = ApprovedWalletSigningOperation(permit: permit) else { return nil }
-            return factory(operation)
+            session = factory(authorization)
         }
+        guard session.attach(permit: permit) else {
+            session.invalidate()
+            return nil
+        }
+        return session
     }
 
     private func complete(

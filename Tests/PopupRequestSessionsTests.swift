@@ -736,9 +736,12 @@ final class PopupRequestSessionsTests: XCTestCase {
                 if kind == "ordinary" {
                     result = await execute(executor, setup: setup, signing: .none)
                 } else if kind == "native" {
-                    result = await execute(executor, setup: setup, signing: .source { _ in
+                    result = await execute(executor, setup: setup, signing: .source { signingAuthorization in
                         XCTFail("Expired operation must not create a signer")
-                        return TestWalletSigner()
+                        return WalletSigningSession(
+                            TestWalletSigningAccess(), authorization: signingAuthorization,
+                            isCurrent: { true }, clock: { setup.claim.executionDeadline.addingTimeInterval(offset) }
+                        )
                     })
                 } else {
                     let session = makeWalletSigningSessionForTesting(
@@ -780,7 +783,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             )
         )
         let task = Task { @MainActor in
-            await execute(executor, setup: setup, signing: .source { makeWalletSignerForTesting($0) })
+            await execute(executor, setup: setup, signing: .source { makeSourceWalletSigningSessionForTesting($0) })
         }
         await fulfillment(of: [started], timeout: 1)
         task.cancel()
@@ -812,7 +815,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             )
         )
         let task = Task { @MainActor in
-            await execute(executor, setup: setup, signing: .source { makeWalletSignerForTesting($0) })
+            await execute(executor, setup: setup, signing: .source { makeSourceWalletSigningSessionForTesting($0) })
         }
         let taskResult = await task.value
         XCTAssertEqual(taskResult, .persisted)
@@ -7183,9 +7186,12 @@ extension PopupRequestSessionsTests {
                 catalogRefreshes += 1
                 return WalletReviewCatalog(account: popupTestAccount())
             },
-            makeSigner: { _ in
+            makeSigner: { signingAuthorization in
                 signerCreations += 1
-                return TestWalletSigner()
+                return WalletSigningSession(
+                    TestWalletSigningAccess(), authorization: signingAuthorization,
+                    isCurrent: { true }
+                )
             },
             networkResolver: { _ in
                 XCTFail("Message resolution must not look up a network")
@@ -7242,10 +7248,13 @@ extension PopupRequestSessionsTests {
                     requestProcessor: processor
                 ),
                 refreshWalletCatalog: { catalog },
-                makeSigner: { operation in
-                    XCTAssertEqual(operation.approvedAccount, approvedAccount)
+                makeSigner: { signingAuthorization in
+                    XCTAssertEqual(signingAuthorization.approvedAccount, approvedAccount)
                     signerCreations += 1
-                    return TestWalletSigner()
+                    return WalletSigningSession(
+                        TestWalletSigningAccess(), authorization: signingAuthorization,
+                        isCurrent: { true }
+                    )
                 },
                 networkResolver: popupApprovalNetwork
             )
@@ -7283,9 +7292,12 @@ extension PopupRequestSessionsTests {
                 requestProcessor: processor
             ),
             refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
-            makeSigner: { _ in
+            makeSigner: { signingAuthorization in
                 XCTFail("Adding a chain must not create a signer")
-                return TestWalletSigner()
+                return WalletSigningSession(
+                    TestWalletSigningAccess(), authorization: signingAuthorization,
+                    isCurrent: { true }
+                )
             },
             networkResolver: popupApprovalNetwork
         )
@@ -7417,12 +7429,11 @@ extension PopupRequestSessionsTests {
                 await refreshGate.wait()
                 return WalletReviewCatalog(account: popupTestAccount())
             },
-            makeSigner: { operation in
+            makeSigner: { signingAuthorization in
                 signerCreations += 1
                 let session = WalletSigningSession(
-                    signingAccess, authorization: operation.authorization, isCurrent: { true }
+                    signingAccess, authorization: signingAuthorization, isCurrent: { true }
                 )
-                XCTAssertTrue(session.bind(operation: operation))
                 return session
             },
             networkResolver: { _ in
@@ -7493,9 +7504,12 @@ extension PopupRequestSessionsTests {
                     XCTFail("A terminal or missing request cannot refresh wallet authority")
                     return nil
                 },
-                makeSigner: { _ in
+                makeSigner: { signingAuthorization in
                     XCTFail("A terminal or missing request cannot create a signer")
-                    return TestWalletSigner()
+                    return WalletSigningSession(
+                        TestWalletSigningAccess(), authorization: signingAuthorization,
+                        isCurrent: { true }
+                    )
                 },
                 networkResolver: { _ in
                     XCTFail("A terminal or missing request cannot resolve a network")
@@ -7525,7 +7539,6 @@ extension PopupRequestSessionsTests {
         ), in: store)
         let account = popupTestAccount()
         let access = WalletReviewCatalog(account: account)
-        let signer = TestWalletSigner()
         var refreshes = 0
         var preparations = 0
         let network = popupTransactionNetwork()
@@ -7572,9 +7585,12 @@ extension PopupRequestSessionsTests {
                 }
                 return access
             },
-            makeSigner: { _ in
+            makeSigner: { signingAuthorization in
                 XCTFail("Account selection must not create a signer")
-                return signer
+                return WalletSigningSession(
+                    TestWalletSigningAccess(), authorization: signingAuthorization,
+                    isCurrent: { true }
+                )
             },
             networkResolver: { chainID in
                 chainID == network.chainId ? .resolved(ResolvedEthereumNetwork(network: network, source: .custom)) : .missing
@@ -7667,9 +7683,12 @@ extension PopupRequestSessionsTests {
                     catalogRefreshes += 1
                     return WalletReviewCatalog(account: popupTestAccount())
                 },
-                makeSigner: { _ in
+                makeSigner: { signingAuthorization in
                     XCTFail("A missing or changed route must not create a signer")
-                    return TestWalletSigner()
+                    return WalletSigningSession(
+                        TestWalletSigningAccess(), authorization: signingAuthorization,
+                        isCurrent: { true }
+                    )
                 },
                 networkResolver: { chainID in
                     transactionLookups += 1
@@ -7717,9 +7736,12 @@ extension PopupRequestSessionsTests {
                     })
                 ),
                 refreshWalletCatalog: { WalletReviewCatalog(accounts: []) },
-                makeSigner: { _ in
+                makeSigner: { signingAuthorization in
                     XCTFail("A removed account must not create a signer")
-                    return TestWalletSigner()
+                    return WalletSigningSession(
+                        TestWalletSigningAccess(), authorization: signingAuthorization,
+                        isCurrent: { true }
+                    )
                 },
                 networkResolver: popupApprovalNetwork
             )
@@ -7774,9 +7796,12 @@ extension PopupRequestSessionsTests {
                     })
                 ),
                 refreshWalletCatalog: { unavailable },
-                makeSigner: { _ in
+                makeSigner: { signingAuthorization in
                     XCTFail("An unavailable signing account must not create a signer")
-                    return TestWalletSigner()
+                    return WalletSigningSession(
+                        TestWalletSigningAccess(), authorization: signingAuthorization,
+                        isCurrent: { true }
+                    )
                 }
             )
             let result = await finalizer.attempt(consent: consent)
@@ -7928,12 +7953,11 @@ extension PopupRequestSessionsTests {
                 broadcastSender: sender
             ),
             refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
-            makeSigner: { operation in
+            makeSigner: { signingAuthorization in
                     signerCreations += 1
-                    XCTAssertEqual(operation.handle, snapshot.handle)
-                    XCTAssertEqual(operation.approvedAccount, popupTestAccountDescriptor())
-                    let session = WalletSigningSession(signingAccess, authorization: operation.authorization, isCurrent: { true })
-                    XCTAssertTrue(session.bind(operation: operation))
+                    XCTAssertEqual(signingAuthorization.handle, snapshot.handle)
+                    XCTAssertEqual(signingAuthorization.approvedAccount, popupTestAccountDescriptor())
+                    let session = WalletSigningSession(signingAccess, authorization: signingAuthorization, isCurrent: { true })
                     return session
                 },
             networkResolver: popupApprovalNetwork
@@ -7986,7 +8010,7 @@ extension PopupRequestSessionsTests {
                 broadcastSender: sender
             ),
             refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
-            makeSigner: { makeWalletSignerForTesting($0) },
+            makeSigner: { makeSourceWalletSigningSessionForTesting($0) },
             networkResolver: popupApprovalNetwork
         )
         let task = Task { await finalizer.attempt(consent: authorization) }
@@ -8128,10 +8152,13 @@ extension PopupRequestSessionsTests {
                         catalogRefreshes += 1
                         return WalletReviewCatalog(account: account)
                     },
-                    makeSigner: { operation in
+                    makeSigner: { signingAuthorization in
                         signerCreations += 1
-                        XCTAssertEqual(operation.deadline, approvedAt.addingTimeInterval(limit), label)
-                        return TestWalletSigner()
+                        XCTAssertEqual(signingAuthorization.signingDeadline, approvedAt.addingTimeInterval(limit), label)
+                        return WalletSigningSession(
+                            TestWalletSigningAccess(), authorization: signingAuthorization,
+                            isCurrent: { true }, clock: { nativeClock.now }
+                        )
                     },
                     networkResolver: popupApprovalNetwork
                 )
@@ -8293,7 +8320,12 @@ extension PopupRequestSessionsTests {
                     clock: { nativeClock.now }
                 ),
                 refreshWalletCatalog: { WalletReviewCatalog(account: account) },
-                makeSigner: { _ in TestWalletSigner() },
+                makeSigner: { signingAuthorization in
+                    WalletSigningSession(
+                        TestWalletSigningAccess(), authorization: signingAuthorization,
+                        isCurrent: { true }, clock: { nativeClock.now }
+                    )
+                },
                 networkResolver: popupApprovalNetwork
             )
 
@@ -8356,9 +8388,12 @@ extension PopupRequestSessionsTests {
                 nativeClock.now = nativeClock.now.addingTimeInterval(ExtensionBridge.maximumTransactionDecisionAge + 1)
                 return WalletReviewCatalog(account: popupTestAccount())
             },
-            makeSigner: { _ in
+            makeSigner: { signingAuthorization in
                 XCTFail("An expired approval must not issue a signer")
-                return TestWalletSigner()
+                return WalletSigningSession(
+                    TestWalletSigningAccess(), authorization: signingAuthorization,
+                    isCurrent: { true }, clock: { nativeClock.now }
+                )
             },
             networkResolver: popupApprovalNetwork
         )
@@ -8428,9 +8463,12 @@ extension PopupRequestSessionsTests {
                 clock: { nativeClock.now }
             ),
             refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
-            makeSigner: { _ in
+            makeSigner: { signingAuthorization in
                 XCTFail("An expired approval must not issue a signer")
-                return TestWalletSigner()
+                return WalletSigningSession(
+                    TestWalletSigningAccess(), authorization: signingAuthorization,
+                    isCurrent: { true }, clock: { nativeClock.now }
+                )
             },
             networkResolver: popupApprovalNetwork
         )
@@ -8492,9 +8530,12 @@ extension PopupRequestSessionsTests {
                     }
                     return WalletReviewCatalog(account: popupSolanaTestAccount())
                 },
-                makeSigner: { _ in
+                makeSigner: { signingAuthorization in
                     XCTFail("An expired approval must not issue a signer")
-                    return TestWalletSigner()
+                    return WalletSigningSession(
+                        TestWalletSigningAccess(), authorization: signingAuthorization,
+                        isCurrent: { true }, clock: { nativeClock.now }
+                    )
                 },
                 networkResolver: popupApprovalNetwork
             )
@@ -8722,7 +8763,7 @@ extension PopupRequestSessionsTests {
                 refreshWalletCatalog: {
                     WalletReviewCatalog(account: popupTestAccount())
                 },
-                makeSigner: { makeWalletSignerForTesting($0) },
+                makeSigner: { makeSourceWalletSigningSessionForTesting($0) },
                 networkResolver: popupApprovalNetwork
             )
             var attempts = 0
@@ -8838,7 +8879,7 @@ extension PopupRequestSessionsTests {
                     broadcastSender: sender
                 ),
                 refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
-                makeSigner: { makeWalletSignerForTesting($0) },
+                makeSigner: { makeSourceWalletSigningSessionForTesting($0) },
                 networkResolver: popupApprovalNetwork
             )
             var coordinator: NativeApprovalCoordinator?

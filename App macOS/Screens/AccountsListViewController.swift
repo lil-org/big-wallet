@@ -161,7 +161,6 @@ class AccountsListViewController: NSViewController {
         case switchAccount
     }
 
-    private let agent = Agent.shared
     var walletsManager = WalletsManager.shared
     private var cellModels = [CellModel]()
     private var preferencesButton: NSButton?
@@ -880,10 +879,10 @@ class AccountsListViewController: NSViewController {
             guard let self,
                   acceptsManagementActions else { return }
             if response == .alertFirstButtonReturn {
-                let presentation = Agent.WeakViewControllerReference(self)
+                let window = viewIfLoaded?.window
                 authenticationTask?.cancel()
-                authenticationTask = Task { [weak self, agent] in
-                    let allowed = await agent.askAuthentication(for: .walletManagement(returningTo: presentation), reason: .removeWallet)
+                authenticationTask = Task { [weak self, weak window] in
+                    let allowed = await Window.authenticate(in: window, reason: .removeWallet)
                     guard let self, allowed, !Task.isCancelled, acceptsManagementActions else { return }
                     Window.activateWindow(view.window)
                     removeWallet(wallet)
@@ -957,11 +956,11 @@ class AccountsListViewController: NSViewController {
                 let reason: AuthenticationReason = showingMnemonic
                     ? .showSecretWords
                     : .showPrivateKey
-                let presentation = Agent.WeakViewControllerReference(self)
+                let window = viewIfLoaded?.window
                 authenticationTask?.cancel()
                 secretAuthenticationToken = token
-                authenticationTask = Task { [weak self, agent] in
-                    let allowed = await agent.askAuthentication(for: .walletManagement(returningTo: presentation), reason: reason)
+                authenticationTask = Task { [weak self, weak window] in
+                    let allowed = await Window.authenticate(in: window, reason: reason)
                     guard let self, secretToken == token else { return }
                     secretAuthenticationToken = nil
                     authenticationTask = nil

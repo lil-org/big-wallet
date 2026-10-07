@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FCE09CD8813E4FFEADF20B96 /* StartupCredentialCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C359A5323A2E444E97DED478 /* StartupCredentialCoordinator.swift */; };
+		3337F2FABF114CC7A7B54579 /* StartupCredentialCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C359A5323A2E444E97DED478 /* StartupCredentialCoordinator.swift */; };
+		694B6F93DCA9419A809F8FD2 /* WindowAuthenticationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B72F05A3BFC42A48FF6D0F4 /* WindowAuthenticationSession.swift */; };
+		CD1CB8B0AC1547D1AB79089A /* WindowAuthenticationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B72F05A3BFC42A48FF6D0F4 /* WindowAuthenticationSession.swift */; };
+		485AE8E32BAF4FACBC5772D6 /* WindowAuthenticationSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F4B3A76A2A0449AA8E83C95 /* WindowAuthenticationSessionTests.swift */; };
 		2A041DA7B5322FEE7D8068FD /* OnboardingCancellationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FD0D903F81791CE40249653 /* OnboardingCancellationTests.swift */; };
 		DEBC408FFA115904C2E37B9E /* PasswordStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89A2D2D640FAAE265554D6E9 /* PasswordStorageTests.swift */; };
 		B88AC23A97E5D2325D6A47E9 /* PasswordStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89A2D2D640FAAE265554D6E9 /* PasswordStorageTests.swift */; };
@@ -1000,6 +1005,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		C359A5323A2E444E97DED478 /* StartupCredentialCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupCredentialCoordinator.swift; sourceTree = "<group>"; };
+		7B72F05A3BFC42A48FF6D0F4 /* WindowAuthenticationSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAuthenticationSession.swift; sourceTree = "<group>"; };
+		3F4B3A76A2A0449AA8E83C95 /* WindowAuthenticationSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAuthenticationSessionTests.swift; sourceTree = "<group>"; };
 		9FD0D903F81791CE40249653 /* OnboardingCancellationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingCancellationTests.swift; sourceTree = "<group>"; };
 		89A2D2D640FAAE265554D6E9 /* PasswordStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordStorageTests.swift; sourceTree = "<group>"; };
 		FC2E171219948EE197A1FE1E /* NativeSecretAlertPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeSecretAlertPresentationTests.swift; sourceTree = "<group>"; };
@@ -1333,6 +1341,7 @@
 			isa = PBXGroup;
 			children = (
 				9FD0D903F81791CE40249653 /* OnboardingCancellationTests.swift */,
+				3F4B3A76A2A0449AA8E83C95 /* WindowAuthenticationSessionTests.swift */,
 				89A2D2D640FAAE265554D6E9 /* PasswordStorageTests.swift */,
 				FC2E171219948EE197A1FE1E /* NativeSecretAlertPresentationTests.swift */,
 				00763481BF42CDF20948490A /* SecretAlertPresentationTests.swift */,
@@ -1450,6 +1459,8 @@
 				2C1995482674C4BA00A8E370 /* Info.plist */,
 				2C208AA126813497005BA500 /* Supporting Files */,
 				D2419DDB6D67104CD553ACC9 /* NativeApprovalCoordinator.swift */,
+				C359A5323A2E444E97DED478 /* StartupCredentialCoordinator.swift */,
+				7B72F05A3BFC42A48FF6D0F4 /* WindowAuthenticationSession.swift */,
 			);
 			path = "App macOS";
 			sourceTree = "<group>";
@@ -3304,6 +3315,8 @@
 				2C917429267D2A6E00049075 /* Keychain.swift in Sources */,
 				954716660F1C28F809E485F9 /* Browser.swift in Sources */,
 				625264DBCEAE01A2E231C075 /* NativeApprovalCoordinator.swift in Sources */,
+				FCE09CD8813E4FFEADF20B96 /* StartupCredentialCoordinator.swift in Sources */,
+				694B6F93DCA9419A809F8FD2 /* WindowAuthenticationSession.swift in Sources */,
 				A5D18571BC4C7270C74E6C6B /* ApproveTransactionViewController.swift in Sources */,
 				88FA3502258DACEFB0EC6463 /* ApproveViewController.swift in Sources */,
 				84E4EDBA338FB3ECFD12DB0F /* WaitingViewController.swift in Sources */,
@@ -3680,6 +3693,8 @@
 				7D856928A8D3B8B22F36F4EA /* Keychain.swift in Sources */,
 				FB0F5B37D913E78CAB23D589 /* Browser.swift in Sources */,
 				EFD994CD1769D972C8882520 /* NativeApprovalCoordinator.swift in Sources */,
+				3337F2FABF114CC7A7B54579 /* StartupCredentialCoordinator.swift in Sources */,
+				CD1CB8B0AC1547D1AB79089A /* WindowAuthenticationSession.swift in Sources */,
 				B9AC7DD412DB92E7FF10CFD1 /* ApproveTransactionViewController.swift in Sources */,
 				8123E82655465B1DF7F30C29 /* ApproveViewController.swift in Sources */,
 				A4D9374752C920CF9FA80188 /* WaitingViewController.swift in Sources */,
@@ -3792,6 +3807,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2A041DA7B5322FEE7D8068FD /* OnboardingCancellationTests.swift in Sources */,
+				485AE8E32BAF4FACBC5772D6 /* WindowAuthenticationSessionTests.swift in Sources */,
 				B88AC23A97E5D2325D6A47E9 /* PasswordStorageTests.swift in Sources */,
 				876E9FF013C22F4A21A5E26D /* NativeSecretAlertPresentationTests.swift in Sources */,
 				D036C5CB6B19DF985F136E67 /* SecretHandlingTests.swift in Sources */,

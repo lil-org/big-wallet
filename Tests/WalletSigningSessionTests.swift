@@ -6,11 +6,11 @@ import XCTest
 @MainActor
 final class WalletSigningSessionTests: XCTestCase {
     func testAuthorityValidationKeepsMainActorResponsiveWhileStoreIsLocked() async throws {
-        let operation = try operation()
+        let permit = try permit()
         let material = SessionSigningMaterial()
         let sourceCheckThreads = Mutex([Bool]())
         let session = WalletSigningSession(
-            material, authorization: operation.authorization,
+            material, authorization: try XCTUnwrap(WalletSigningAuthorization(permit: permit)),
             isCurrent: {
                 sourceCheckThreads.withLock { $0.append(Thread.isMainThread) }
                 return true
@@ -18,11 +18,11 @@ final class WalletSigningSessionTests: XCTestCase {
         )
         let releaseLock = DispatchSemaphore(value: 0)
         defer { releaseLock.signal() }
-        XCTAssertTrue(session.bind(operation: operation))
+        XCTAssertTrue(session.attach(permit: permit))
         sourceCheckThreads.withLock { $0.removeAll() }
         let lockHeld = expectation(description: "Approval store lock held by another worker")
         let holder = Task.detached {
-            operation.withCurrentAuthority {
+            permit.withCurrentAuthority {
                 lockHeld.fulfill()
                 return releaseLock.wait(timeout: .now() + 5) == .success
             } ?? false
@@ -45,16 +45,23 @@ final class WalletSigningSessionTests: XCTestCase {
         XCTAssertEqual(material.signCount, 1)
     }
 
-    func testBindingRejectsAnotherAuthorizationAndCannotBeReplaced() async throws {
-        let operation = try operation()
+    func testAttachmentRejectsAnotherAuthorizationAndCannotBeReplaced() async throws {
+        let permit = try permit()
         let material = SessionSigningMaterial()
         let session = WalletSigningSession(
-            material, authorization: operation.authorization, isCurrent: { true }
+            material, authorization: try XCTUnwrap(WalletSigningAuthorization(permit: permit)), isCurrent: { true }
         )
-        let different = try self.operation(requestID: 2)
-        XCTAssertFalse(session.bind(operation: different))
-        XCTAssertTrue(session.bind(operation: operation))
-        XCTAssertFalse(session.bind(operation: operation))
+        let different = try self.permit(requestID: 2)
+        XCTAssertFalse(session.attach(permit: different))
+        let otherMaterial = SessionSigningMaterial()
+        let otherSession = WalletSigningSession(
+            otherMaterial,
+            authorization: try XCTUnwrap(WalletSigningAuthorization(permit: different)),
+            isCurrent: { true }
+        )
+        XCTAssertTrue(otherSession.attach(permit: different))
+        XCTAssertTrue(session.attach(permit: permit))
+        XCTAssertFalse(session.attach(permit: permit))
 
         guard case .success = await session.sign() else {
             return XCTFail("The original authorized operation must sign")
@@ -64,23 +71,124 @@ final class WalletSigningSessionTests: XCTestCase {
         }
         XCTAssertEqual(material.signCount, 1)
         XCTAssertEqual(material.erasureCount, 1)
+        guard case .success = await otherSession.sign() else {
+            return XCTFail("A rejected scope must leave the permit available to its matching session")
+        }
+        XCTAssertEqual(otherMaterial.signCount, 1)
+    }
+
+    func testAttachedSessionDoesNotConsumeAReplacementPermit() async throws {
+        let firstPermit = try permit()
+        let replacementPermit = try permit()
+        let authorization = try XCTUnwrap(WalletSigningAuthorization(permit: firstPermit))
+        XCTAssertEqual(WalletSigningAuthorization(permit: replacementPermit), authorization)
+        let firstMaterial = SessionSigningMaterial()
+        let secondMaterial = SessionSigningMaterial()
+        let first = WalletSigningSession(firstMaterial, authorization: authorization, isCurrent: { true })
+        let second = WalletSigningSession(secondMaterial, authorization: authorization, isCurrent: { true })
+        XCTAssertTrue(first.attach(permit: firstPermit))
+        XCTAssertFalse(first.attach(permit: replacementPermit))
+        XCTAssertTrue(second.attach(permit: replacementPermit))
+        guard case .success = await first.sign(), case .success = await second.sign() else {
+            return XCTFail("Each permit must remain with the session that successfully attached it")
+        }
+        XCTAssertEqual(firstMaterial.signCount, 1)
+        XCTAssertEqual(secondMaterial.signCount, 1)
+    }
+
+    func testInvalidationDuringAttachmentSourceCheckDoesNotConsumePermit() async throws {
+        let permit = try permit()
+        let authorization = try XCTUnwrap(WalletSigningAuthorization(permit: permit))
+        let material = SessionSigningMaterial()
+        let reference = Mutex<WalletSigningSession?>(nil)
+        let invalidated = WalletSigningSession(
+            material, authorization: authorization,
+            isCurrent: {
+                reference.withLock { $0 }?.invalidate()
+                return true
+            }
+        )
+        reference.withLock { $0 = invalidated }
+        defer { reference.withLock { $0 = nil } }
+        XCTAssertFalse(invalidated.attach(permit: permit))
+        XCTAssertEqual(material.erasureCount, 1)
+        let rightfulMaterial = SessionSigningMaterial()
+        let rightful = WalletSigningSession(rightfulMaterial, authorization: authorization, isCurrent: { true })
+        XCTAssertTrue(rightful.attach(permit: permit))
+        guard case .success = await rightful.sign() else {
+            return XCTFail("An invalidated session must not consume another session's permit")
+        }
+        XCTAssertEqual(material.signCount, 0)
+        XCTAssertEqual(rightfulMaterial.signCount, 1)
+    }
+
+    func testExpiredAttachmentDoesNotConsumePermit() async throws {
+        let deadline = Date().addingTimeInterval(10)
+        let permit = try approvedWalletSigningPermitForTesting(
+            approvedAccount: .init(
+                walletID: "session-wallet", coin: .ethereum,
+                normalizedAddress: WalletCoreProxyTestVectors.sequentialEthereumAddress.lowercased(),
+                derivationPath: "m/44'/60'/0'/0/0"
+            ),
+            deadline: deadline
+        )
+        let authorization = try XCTUnwrap(WalletSigningAuthorization(permit: permit))
+        let expiredMaterial = SessionSigningMaterial()
+        let expired = WalletSigningSession(
+            expiredMaterial, authorization: authorization, isCurrent: { true }, clock: { deadline }
+        )
+        XCTAssertFalse(expired.attach(permit: permit))
+        let currentMaterial = SessionSigningMaterial()
+        let current = WalletSigningSession(
+            currentMaterial, authorization: authorization, isCurrent: { true },
+            clock: { deadline.addingTimeInterval(-1) }
+        )
+        XCTAssertTrue(current.attach(permit: permit))
+        guard case .success = await current.sign() else {
+            return XCTFail("A session's expired clock must not consume the current permit")
+        }
+        XCTAssertEqual(expiredMaterial.signCount, 0)
+        XCTAssertEqual(currentMaterial.signCount, 1)
+    }
+
+    func testCommitLeaseDoesNotRequireASigningAttachment() async throws {
+        let permit = try permit()
+        let material = SessionSigningMaterial()
+        var acquisitions = 0
+        let session = WalletSigningSession(
+            material, authorization: try XCTUnwrap(WalletSigningAuthorization(permit: permit)),
+            isCurrent: { true },
+            acquireCommitLease: {
+                acquisitions += 1
+                return WalletExecutionLease(release: {})
+            }
+        )
+        let acquired = await session.takeCommitLease()
+        let lease = try XCTUnwrap(acquired)
+        let duplicate = await session.takeCommitLease()
+        XCTAssertNil(duplicate)
+        XCTAssertFalse(session.attach(permit: permit))
+        XCTAssertEqual(acquisitions, 1)
+        XCTAssertEqual(material.signCount, 0)
+        XCTAssertEqual(material.erasureCount, 1)
+        lease.release()
     }
 
     func testFailedSigningErasesMaterialAndStillAllowsOneCommitLease() async throws {
-        let operation = try operation()
+        let permit = try permit()
         let material = SessionSigningMaterial { _ in .failure(.failedToSign) }
         let released = expectation(description: "Transferred lease released")
         var acquisitions = 0
         let session = WalletSigningSession(
             material,
-            authorization: operation.authorization,
+            authorization: try XCTUnwrap(WalletSigningAuthorization(permit: permit)),
             isCurrent: { true },
             acquireCommitLease: {
                 acquisitions += 1
                 return WalletExecutionLease { released.fulfill() }
             }
         )
-        XCTAssertTrue(session.bind(operation: operation))
+        XCTAssertTrue(session.attach(permit: permit))
         guard case .failure(.failedToSign) = await session.sign() else {
             return XCTFail("The signing failure must be preserved")
         }
@@ -99,21 +207,21 @@ final class WalletSigningSessionTests: XCTestCase {
     }
 
     func testInvalidationDisposesOfLeaseArrivingAfterAcquisitionStarted() async throws {
-        let operation = try operation()
+        let permit = try permit()
         let material = SessionSigningMaterial()
         let acquisitionStarted = expectation(description: "Acquisition started")
         let released = expectation(description: "Late lease released")
         let resolution = ApprovalResolution<WalletExecutionLease?>()
         let session = WalletSigningSession(
             material,
-            authorization: operation.authorization,
+            authorization: try XCTUnwrap(WalletSigningAuthorization(permit: permit)),
             isCurrent: { true },
             acquireCommitLease: {
                 acquisitionStarted.fulfill()
                 return await resolution.value()
             }
         )
-        XCTAssertTrue(session.bind(operation: operation))
+        XCTAssertTrue(session.attach(permit: permit))
         let acquisition = Task { await session.takeCommitLease() }
         await fulfillment(of: [acquisitionStarted], timeout: 1)
         XCTAssertEqual(material.erasureCount, 1)
@@ -128,7 +236,7 @@ final class WalletSigningSessionTests: XCTestCase {
     }
 
     func testCommitAcquisitionFencesSignatureAlreadyBeingProduced() async throws {
-        let operation = try operation()
+        let permit = try permit()
         let signingStarted = expectation(description: "Signing started")
         let resolution = ApprovalResolution<Void>()
         let material = SessionSigningMaterial { operation in
@@ -139,11 +247,11 @@ final class WalletSigningSessionTests: XCTestCase {
         }
         let session = WalletSigningSession(
             material,
-            authorization: operation.authorization,
+            authorization: try XCTUnwrap(WalletSigningAuthorization(permit: permit)),
             isCurrent: { true },
             acquireCommitLease: { WalletExecutionLease(release: {}) }
         )
-        XCTAssertTrue(session.bind(operation: operation))
+        XCTAssertTrue(session.attach(permit: permit))
         let signing = Task { await session.sign() }
         await fulfillment(of: [signingStarted], timeout: 1)
         guard case .failure(.authorizationUnavailable) = await session.sign() else {
@@ -166,25 +274,27 @@ final class WalletSigningSessionTests: XCTestCase {
         XCTAssertEqual(material.erasureCount, 1)
     }
 
-    func testApprovedPermitAndOperationEachIssueSigningAuthorityOnlyOnce() async throws {
-        let (permit, operation) = try unconsumedSigningOperationForSessionTests(approvedAccount: .init(
+    func testPermitAttachesToOnlyOneSession() async throws {
+        let permit = try unconsumedSigningPermitForSessionTests(approvedAccount: .init(
             walletID: "session-wallet", coin: .ethereum,
             normalizedAddress: WalletCoreProxyTestVectors.sequentialEthereumAddress.lowercased(),
             derivationPath: "m/44'/60'/0'/0/0"
         ))
-        XCTAssertNil(ApprovedWalletSigningOperation(permit: permit))
         let firstMaterial = SessionSigningMaterial()
         let secondMaterial = SessionSigningMaterial()
-        let first = WalletSigningSession(firstMaterial, authorization: operation.authorization, isCurrent: { true })
-        let second = WalletSigningSession(secondMaterial, authorization: operation.authorization, isCurrent: { true })
-        let copiedOperation = operation
-        XCTAssertTrue(first.bind(operation: operation))
-        XCTAssertFalse(second.bind(operation: copiedOperation))
+        let authorization = try XCTUnwrap(WalletSigningAuthorization(permit: permit))
+        XCTAssertEqual(WalletSigningAuthorization(permit: permit), authorization)
+        let first = WalletSigningSession(firstMaterial, authorization: authorization, isCurrent: { true })
+        let second = WalletSigningSession(secondMaterial, authorization: authorization, isCurrent: { true })
+        let copiedPermit = permit
+        XCTAssertTrue(first.attach(permit: permit))
+        XCTAssertFalse(second.attach(permit: copiedPermit))
+        XCTAssertEqual(WalletSigningAuthorization(permit: permit), authorization)
         second.invalidate()
         XCTAssertTrue(permit.consumeExecution())
         guard case .success = await first.sign(),
               case .failure(.authorizationUnavailable) = await second.sign() else {
-            return XCTFail("Only the session that bound the operation may sign")
+            return XCTFail("Only the session that attached the permit may sign")
         }
         XCTAssertEqual(firstMaterial.signCount, 1)
         XCTAssertEqual(secondMaterial.signCount, 0)
@@ -192,14 +302,14 @@ final class WalletSigningSessionTests: XCTestCase {
 
     func testUnstartedAndReleasedPermitsNeverCallSigningAccess() async throws {
         for released in [false, true] {
-            let (permit, operation) = try unconsumedSigningOperationForSessionTests(approvedAccount: .init(
+            let permit = try unconsumedSigningPermitForSessionTests(approvedAccount: .init(
                 walletID: "session-wallet", coin: .ethereum,
                 normalizedAddress: WalletCoreProxyTestVectors.sequentialEthereumAddress.lowercased(),
                 derivationPath: "m/44'/60'/0'/0/0"
             ))
             let material = SessionSigningMaterial()
-            let session = WalletSigningSession(material, authorization: operation.authorization, isCurrent: { true })
-            XCTAssertTrue(session.bind(operation: operation))
+            let session = WalletSigningSession(material, authorization: try XCTUnwrap(WalletSigningAuthorization(permit: permit)), isCurrent: { true })
+            XCTAssertTrue(session.attach(permit: permit))
             if released {
                 XCTAssertTrue(permit.consumeExecution())
                 permit.releaseLease()
@@ -212,7 +322,7 @@ final class WalletSigningSessionTests: XCTestCase {
     }
 
     func testReleasedPermitDiscardsSigningAccessResult() async throws {
-        let (permit, operation) = try unconsumedSigningOperationForSessionTests(approvedAccount: .init(
+        let permit = try unconsumedSigningPermitForSessionTests(approvedAccount: .init(
             walletID: "session-wallet", coin: .ethereum,
             normalizedAddress: WalletCoreProxyTestVectors.sequentialEthereumAddress.lowercased(),
             derivationPath: "m/44'/60'/0'/0/0"
@@ -222,8 +332,8 @@ final class WalletSigningSessionTests: XCTestCase {
             permit.releaseLease()
             return result
         }
-        let session = WalletSigningSession(material, authorization: operation.authorization, isCurrent: { true })
-        XCTAssertTrue(session.bind(operation: operation))
+        let session = WalletSigningSession(material, authorization: try XCTUnwrap(WalletSigningAuthorization(permit: permit)), isCurrent: { true })
+        XCTAssertTrue(session.attach(permit: permit))
         XCTAssertTrue(permit.consumeExecution())
         guard case .failure(.authorizationUnavailable) = await session.sign() else {
             return XCTFail("A result must not escape after execution ownership is released")
@@ -233,7 +343,7 @@ final class WalletSigningSessionTests: XCTestCase {
 
     func testPermitReleasedDuringAuthorityCheckPreventsSigningOrDiscardsResult() async throws {
         for suspendedCheck in [1, 2] {
-            let (permit, operation) = try unconsumedSigningOperationForSessionTests(approvedAccount: .init(
+            let permit = try unconsumedSigningPermitForSessionTests(approvedAccount: .init(
                 walletID: "session-wallet", coin: .ethereum,
                 normalizedAddress: WalletCoreProxyTestVectors.sequentialEthereumAddress.lowercased(),
                 derivationPath: "m/44'/60'/0'/0/0"
@@ -243,9 +353,9 @@ final class WalletSigningSessionTests: XCTestCase {
             defer { sourceCheck.release() }
             let material = SessionSigningMaterial()
             let session = WalletSigningSession(
-                material, authorization: operation.authorization, isCurrent: sourceCheck.check
+                material, authorization: try XCTUnwrap(WalletSigningAuthorization(permit: permit)), isCurrent: sourceCheck.check
             )
-            XCTAssertTrue(session.bind(operation: operation))
+            XCTAssertTrue(session.attach(permit: permit))
             sourceCheck.arm(check: suspendedCheck)
             XCTAssertTrue(permit.consumeExecution())
             let signing = Task { await session.sign() }
@@ -264,7 +374,7 @@ final class WalletSigningSessionTests: XCTestCase {
     func testSigningResultMustReturnBeforeItsDeadline() async throws {
         let deadline = Date(timeIntervalSince1970: 2_100_000_000)
         for offset: TimeInterval in [-0.001, 0, 0.001] {
-            let operation = try approvedWalletSigningOperationForTesting(
+            let permit = try approvedWalletSigningPermitForTesting(
                 approvedAccount: WalletAccountDescriptor(
                     walletID: "session-wallet",
                     coin: .ethereum,
@@ -282,11 +392,11 @@ final class WalletSigningSessionTests: XCTestCase {
             }
             let session = WalletSigningSession(
                 material,
-                authorization: operation.authorization,
+                authorization: try XCTUnwrap(WalletSigningAuthorization(permit: permit)),
                 isCurrent: { true },
                 clock: { now }
             )
-            XCTAssertTrue(session.bind(operation: operation))
+            XCTAssertTrue(session.attach(permit: permit))
 
             let result = await session.sign()
             if offset < 0 {
@@ -303,8 +413,8 @@ final class WalletSigningSessionTests: XCTestCase {
         }
     }
 
-    private func operation(requestID: Int = 1) throws -> ApprovedWalletSigningOperation {
-        try approvedWalletSigningOperationForTesting(
+    private func permit(requestID: Int = 1) throws -> ExtensionBridge.ApprovedExecutionPermit {
+        try approvedWalletSigningPermitForTesting(
             approvedAccount: WalletAccountDescriptor(
                 walletID: "session-wallet",
                 coin: .ethereum,
@@ -409,13 +519,13 @@ final class UnlockedAccountSignerTests: XCTestCase {
                 descriptor(coin: coin == .ethereum ? .solana : .ethereum, key: key),
             ]
             for account in alternatives {
-                let operation = try approvedWalletSigningOperationForTesting(approvedAccount: account)
-                assertUnavailable(await sign(operation, using: signer))
+                let permit = try approvedWalletSigningPermitForTesting(approvedAccount: account)
+                assertUnavailable(await sign(permit, using: signer))
             }
 
-            let operation = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
-            try assertWalletSigningSuccessForTesting(await sign(operation, using: signer), account: approved.account)
-            assertUnavailable(await sign(operation, using: signer))
+            let permit = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
+            try assertWalletSigningSuccessForTesting(await sign(permit, using: signer), account: approved.account)
+            assertUnavailable(await sign(permit, using: signer))
         }
     }
 
@@ -423,14 +533,14 @@ final class UnlockedAccountSignerTests: XCTestCase {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
         let approved = descriptor(coin: .ethereum, key: key)
         let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
-        let malformed = try approvedWalletSigningOperationForTesting(
+        let malformed = try approvedWalletSigningPermitForTesting(
             approvedAccount: approved,
             payload: .signature(.ethereumTypedData(WalletCoreProxyTestVectors.malformedTypedDataJSON))
         )
         guard case .failure(.failedToSign) = await sign(malformed, using: signer) else {
             return XCTFail("Malformed typed data must fail cryptographic signing")
         }
-        let valid = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
+        let valid = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
         assertUnavailable(await sign(valid, using: signer))
     }
 
@@ -445,11 +555,11 @@ final class UnlockedAccountSignerTests: XCTestCase {
                 return false
             }
         ))
-        let operation = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
+        let permit = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
 
-        assertUnavailable(await sign(operation, using: signer))
+        assertUnavailable(await sign(permit, using: signer))
         XCTAssertEqual(sourceChecks.withLock { $0 }, [false])
-        let retry = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
+        let retry = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
         assertUnavailable(await sign(retry, using: signer))
         XCTAssertEqual(sourceChecks.withLock { $0.count }, 1)
     }
@@ -458,9 +568,9 @@ final class UnlockedAccountSignerTests: XCTestCase {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
         let approved = descriptor(coin: .ethereum, key: key)
         let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
-        let operation = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
-        let first = Task { await sign(operation, using: signer) }
-        let second = Task { await sign(operation, using: signer) }
+        let permit = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
+        let first = Task { await sign(permit, using: signer) }
+        let second = Task { await sign(permit, using: signer) }
         let results = await [first.value, second.value]
         var signatures = 0
         for result in results {
@@ -473,20 +583,21 @@ final class UnlockedAccountSignerTests: XCTestCase {
             }
         }
         XCTAssertEqual(signatures, 1)
-        assertUnavailable(await sign(operation, using: signer))
+        assertUnavailable(await sign(permit, using: signer))
     }
 
     func testOneOperationCannotSignThroughMultipleAccountSigners() async throws {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
         for coin: WalletCoin in [.ethereum, .solana] {
             let approved = descriptor(coin: coin, key: key)
-            let operation = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
+            let permit = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
             let first = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
             let second = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
             var secondResult: Result<WalletSigningOutput, WalletSigningFailure>?
-            let result = await signingAttempt(operation) {
+            let result = await signingAttempt(permit) { operation in
+                let copiedOperation = operation
                 let firstResult = await first.sign(operation)
-                secondResult = await second.sign(operation)
+                secondResult = await second.sign(copiedOperation)
                 return firstResult
             }
             try assertWalletSigningSuccessForTesting(result, account: approved.account)
@@ -499,10 +610,10 @@ final class UnlockedAccountSignerTests: XCTestCase {
         for coin: WalletCoin in [.ethereum, .solana] {
             let approved = descriptor(coin: coin, key: key)
             let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
-            let operation = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
+            let permit = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
             signer.invalidate()
             signer.invalidate()
-            assertUnavailable(await sign(operation, using: signer))
+            assertUnavailable(await sign(permit, using: signer))
         }
     }
 
@@ -511,8 +622,8 @@ final class UnlockedAccountSignerTests: XCTestCase {
         for coin: WalletCoin in [.ethereum, .solana] {
             let approved = descriptor(coin: coin, key: key)
             let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
-            let operation = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
-            let result = await signingAttempt(operation) {
+            let permit = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
+            let result = await signingAttempt(permit) { operation in
                 let task = Task {
                     withUnsafeCurrentTask { $0?.cancel() }
                     return await signer.sign(operation)
@@ -520,8 +631,8 @@ final class UnlockedAccountSignerTests: XCTestCase {
                 return await task.value
             }
             assertUnavailable(result)
-            let nextOperation = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
-            assertUnavailable(await sign(nextOperation, using: signer))
+            let nextPermit = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
+            assertUnavailable(await sign(nextPermit, using: signer))
         }
     }
 
@@ -550,32 +661,35 @@ final class UnlockedAccountSignerTests: XCTestCase {
                     return (approved, signer)
                 }
                 XCTAssertNil(releasedWallet)
-                let operation = try approvedWalletSigningOperationForTesting(approvedAccount: approved)
-                try assertWalletSigningSuccessForTesting(await sign(operation, using: signer), account: approved.account)
-                assertUnavailable(await sign(operation, using: signer))
+                let permit = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
+                try assertWalletSigningSuccessForTesting(await sign(permit, using: signer), account: approved.account)
+                assertUnavailable(await sign(permit, using: signer))
             }
         }
     }
 
     private func sign(
-        _ operation: ApprovedWalletSigningOperation,
+        _ permit: ExtensionBridge.ApprovedExecutionPermit,
         using signer: UnlockedAccountSigner
     ) async -> Result<WalletSigningOutput, WalletSigningFailure> {
-        await signingAttempt(operation) {
+        await signingAttempt(permit) { operation in
             await signer.sign(operation)
         }
     }
 
     private func signingAttempt(
-        _ operation: ApprovedWalletSigningOperation,
-        signing: @escaping @MainActor @Sendable () async -> Result<WalletSigningOutput, WalletSigningFailure>
+        _ permit: ExtensionBridge.ApprovedExecutionPermit,
+        signing: @escaping @MainActor @Sendable (ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure>
     ) async -> Result<WalletSigningOutput, WalletSigningFailure> {
+        guard let authorization = WalletSigningAuthorization(permit: permit) else {
+            return .failure(.authorizationUnavailable)
+        }
         let session = WalletSigningSession(
-            SessionSigningMaterial { _ in await signing() },
-            authorization: operation.authorization,
+            SessionSigningMaterial(operation: signing),
+            authorization: authorization,
             isCurrent: { true }
         )
-        guard session.bind(operation: operation) else {
+        guard session.attach(permit: permit) else {
             return .failure(.authorizationUnavailable)
         }
         return await session.sign()
@@ -602,9 +716,9 @@ final class UnlockedAccountSignerTests: XCTestCase {
 }
 
 @MainActor
-private func unconsumedSigningOperationForSessionTests(
+private func unconsumedSigningPermitForSessionTests(
     approvedAccount: WalletAccountDescriptor
-) throws -> (ExtensionBridge.ApprovedExecutionPermit, ApprovedWalletSigningOperation) {
+) throws -> ExtensionBridge.ApprovedExecutionPermit {
     let fixture = try ApprovedExecutionTestFixture()
     try fixture.establishGrant(approvedAccount)
     let snapshot = try fixture.enqueue(
@@ -621,7 +735,7 @@ private func unconsumedSigningOperationForSessionTests(
         snapshot: snapshot, action: intent.action,
         decision: .message(.init(approvedAccount: approvedAccount, solanaCluster: nil))
     )
-    return (permit, try XCTUnwrap(ApprovedWalletSigningOperation(permit: permit)))
+    return permit
 }
 
 private final class SessionSigningMaterial: OwnedWalletSigningAccess {

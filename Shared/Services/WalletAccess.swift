@@ -255,6 +255,22 @@ struct WalletSigningAuthorization: Equatable, Sendable {
     let signingDeadline: Date
 }
 
+extension WalletSigningAuthorization {
+    init?(permit: ExtensionBridge.ApprovedExecutionPermit) {
+        guard case .signing(let approvedAccount, let payload) = permit.approval.kind,
+              permit.request.id == permit.handle.id,
+              permit.signingDeadline.timeIntervalSince1970.isFinite,
+              approvedAccount.isValid,
+              permit.request.authorizedAccount == approvedAccount,
+              approvedAccount.coin.correspondingInpageProvider == permit.request.provider,
+              payload.coin == approvedAccount.coin else { return nil }
+        self.init(
+            handle: permit.handle, approvedAccount: approvedAccount,
+            signingDeadline: permit.signingDeadline
+        )
+    }
+}
+
 struct ApprovedWalletSigningOperation: Sendable {
 
     enum Payload: Sendable {
@@ -297,22 +313,21 @@ struct ApprovedWalletSigningOperation: Sendable {
     var deadline: Date { authorization.signingDeadline }
     var isAuthorizedToSign: Bool { permit.isSigningAuthorized }
 
-    init?(permit: ExtensionBridge.ApprovedExecutionPermit) {
-        guard case .signing(let approvedAccount, let payload) = permit.approval.kind,
-              permit.request.id == permit.handle.id,
-              permit.signingDeadline.timeIntervalSince1970.isFinite,
-              approvedAccount.isValid,
-              permit.request.authorizedAccount == approvedAccount,
-              approvedAccount.coin.correspondingInpageProvider == permit.request.provider,
-              payload.coin == approvedAccount.coin,
-              permit.consumeSigningOperation() else { return nil }
+    fileprivate init?(
+        permit: ExtensionBridge.ApprovedExecutionPermit,
+        authorization: WalletSigningAuthorization
+    ) {
+        guard WalletSigningAuthorization(permit: permit) == authorization,
+              case .signing(_, let payload) = permit.approval.kind,
+              permit.issueSigningOperation() else { return nil }
         self.permit = permit
-        authorization = WalletSigningAuthorization(
-            handle: permit.handle, approvedAccount: approvedAccount,
-            signingDeadline: permit.signingDeadline
-        )
+        self.authorization = authorization
         self.payload = payload
     }
+
+    fileprivate func beginAttempt() -> Bool { permit.beginSigningAttempt() }
+    fileprivate func finishAttempt() { permit.finishSigningAttempt() }
+    fileprivate var isAttemptCurrent: Bool { permit.isSigningAttemptCurrent }
 
     func withCurrentAuthority<Value>(_ operation: () throws -> Value) rethrows -> Value? {
         try permit.withCurrentAuthority(operation)
@@ -683,28 +698,27 @@ final class UnlockedAccountSigner: OwnedWalletSigningAccess {
 @MainActor
 final class WalletSigningSession: WalletSigning {
     private enum Resources: Sendable {
-        case available(ApprovedWalletSigningOperation?)
-        case spent
+        case owned((any OwnedWalletSigningAccess)?)
         case acquiringCommitLease
         case leaseTransferred
         case invalidated
 
         var permitsCommit: Bool {
             switch self {
-            case .available, .spent: true
+            case .owned: true
             case .acquiringCommitLease, .leaseTransferred, .invalidated: false
             }
         }
 
-        var binding: ApprovedWalletSigningOperation? {
-            guard case .available(let binding) = self else { return nil }
-            return binding
+        var access: (any OwnedWalletSigningAccess)? {
+            guard case .owned(let access) = self else { return nil }
+            return access
         }
     }
 
     private struct State: Sendable {
-        var resources = Resources.available(nil)
-        var access: (any OwnedWalletSigningAccess)?
+        var resources: Resources
+        var operation: ApprovedWalletSigningOperation?
     }
 
     nonisolated let authorization: WalletSigningAuthorization
@@ -712,7 +726,6 @@ final class WalletSigningSession: WalletSigning {
     var requiresCommitLease: Bool { acquireCommitLease != nil }
 
     private nonisolated let state: Mutex<State>
-    private nonisolated let sessionID = UUID()
     private let isCurrent: @Sendable () -> Bool
     private let acquireCommitLease: (@MainActor @Sendable () async -> WalletExecutionLease?)?
     private let clock: @MainActor @Sendable () -> Date
@@ -724,7 +737,7 @@ final class WalletSigningSession: WalletSigning {
         acquireCommitLease: (@MainActor @Sendable () async -> WalletExecutionLease?)? = nil,
         clock: @escaping @MainActor @Sendable () -> Date = Date.init
     ) {
-        state = Mutex(State(access: access))
+        state = Mutex(State(resources: .owned(access)))
         self.authorization = authorization
         self.isCurrent = isCurrent
         self.acquireCommitLease = acquireCommitLease
@@ -732,18 +745,16 @@ final class WalletSigningSession: WalletSigning {
     }
 
     static func fromSource(
-        operation: ApprovedWalletSigningOperation,
+        authorization: WalletSigningAuthorization,
         walletsManager: WalletsManager = .shared,
         clock: @escaping @MainActor @Sendable () -> Date = Date.init
     ) -> WalletSigningSession {
-        let access = SourceWalletSigningAccess(approvedAccount: operation.approvedAccount, repository: walletsManager.repository)
-        let session = WalletSigningSession(
-            access, authorization: operation.authorization,
+        let access = SourceWalletSigningAccess(approvedAccount: authorization.approvedAccount, repository: walletsManager.repository)
+        return WalletSigningSession(
+            access, authorization: authorization,
             isCurrent: { access.isCurrent },
             clock: clock
         )
-        _ = session.bind(operation: operation)
-        return session
     }
 
     func validateCurrent() -> Bool {
@@ -754,22 +765,24 @@ final class WalletSigningSession: WalletSigning {
         return state.withLock { $0.resources.permitsCommit }
     }
 
-    func bind(operation: ApprovedWalletSigningOperation) -> Bool {
-        guard operation.authorization == authorization,
+    func attach(permit: ExtensionBridge.ApprovedExecutionPermit) -> Bool {
+        guard WalletSigningAuthorization(permit: permit) == authorization,
               clock() < authorization.signingDeadline, validateCurrent() else { return false }
         return state.withLock { state in
-            guard case .available(nil) = state.resources, state.access != nil,
-                  operation.permit.bindSigningOperation(to: sessionID) else { return false }
-            state.resources = .available(operation)
+            guard state.operation == nil, state.resources.access != nil,
+                  let operation = ApprovedWalletSigningOperation(
+                    permit: permit, authorization: authorization
+                  ) else { return false }
+            state.operation = operation
             return true
         }
     }
 
     func sign() async -> Result<WalletSigningOutput, WalletSigningFailure> {
         let bound = state.withLock { state -> (ApprovedWalletSigningOperation, any OwnedWalletSigningAccess)? in
-            guard let binding = state.resources.binding, let access = state.access,
-                  binding.permit.beginSigningAttempt(for: sessionID) else { return nil }
-            return (binding, access)
+            guard let operation = state.operation, let access = state.resources.access,
+                  operation.beginAttempt() else { return nil }
+            return (operation, access)
         }
         guard let (binding, access) = bound else { return .failure(.authorizationUnavailable) }
         defer { finishSigningAttempt(binding) }
@@ -794,34 +807,34 @@ final class WalletSigningSession: WalletSigning {
 
     private func isLocallyAuthorizedToSign(_ binding: ApprovedWalletSigningOperation) -> Bool {
         !Task.isCancelled && clock() < authorization.signingDeadline &&
-            state.withLock { $0.resources.binding != nil } &&
-            binding.permit.isSigningAttemptCurrent(for: sessionID)
+            binding.isAttemptCurrent
     }
 
     private nonisolated func finishSigningAttempt(_ binding: ApprovedWalletSigningOperation) {
         let access = state.withLock { state in
-            if case .available = state.resources { state.resources = .spent }
-            let access = state.access
-            state.access = nil
+            binding.finishAttempt()
+            let access = state.resources.access
+            if case .owned = state.resources { state.resources = .owned(nil) }
             return access
         }
-        binding.permit.finishSigningAttempt(for: sessionID)
         access?.invalidate()
     }
 
     func takeCommitLease() async -> WalletExecutionLease? {
         guard let acquireCommitLease else { return nil }
-        let retired = state.withLock { state -> (ApprovedWalletSigningOperation?, (any OwnedWalletSigningAccess)?)? in
+        let retired = state.withLock { state -> (operation: ApprovedWalletSigningOperation?, resources: Resources)? in
             guard state.resources.permitsCommit else { return nil }
-            let binding = state.resources.binding
+            let operation = state.operation
+            operation?.finishAttempt()
+            state.operation = nil
+            let resources = state.resources
             state.resources = .acquiringCommitLease
-            let access = state.access
-            state.access = nil
-            return (binding, access)
+            return (operation, resources)
         }
-        guard let (binding, access) = retired else { return nil }
-        binding?.permit.finishSigningAttempt(for: sessionID)
-        access?.invalidate()
+        guard let retired else { return nil }
+        withExtendedLifetime(retired.operation) {
+            retired.resources.access?.invalidate()
+        }
         return await withTaskCancellationHandler {
             let lease = await acquireCommitLease()
             let canTransfer = state.withLock { state in
@@ -840,15 +853,17 @@ final class WalletSigningSession: WalletSigning {
     }
 
     nonisolated func invalidate() {
-        let (binding, access) = state.withLock { state in
-            let binding = state.resources.binding
+        let retired = state.withLock { state in
+            let operation = state.operation
+            operation?.finishAttempt()
+            state.operation = nil
+            let access = state.resources.access
             state.resources = .invalidated
-            let access = state.access
-            state.access = nil
-            return (binding, access)
+            return (operation: operation, access: access)
         }
-        binding?.permit.finishSigningAttempt(for: sessionID)
-        access?.invalidate()
+        withExtendedLifetime(retired.operation) {
+            retired.access?.invalidate()
+        }
     }
 
     deinit {

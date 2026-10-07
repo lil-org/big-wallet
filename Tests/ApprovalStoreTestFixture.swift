@@ -555,15 +555,6 @@ func makeWalletSigningSessionForTesting(
     )
 }
 
-final class TestWalletSigner: WalletSigning {
-    func invalidate() {}
-
-    @MainActor
-    func sign() async -> Result<WalletSigningOutput, WalletSigningFailure> {
-        .failure(.failedToSign)
-    }
-}
-
 final class TestWalletSigningAccess: OwnedWalletSigningAccess {
     @MainActor
     func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
@@ -574,19 +565,26 @@ final class TestWalletSigningAccess: OwnedWalletSigningAccess {
 }
 
 final class OperationWalletSigningAccessForTesting: OwnedWalletSigningAccess {
+    private let privateKey: WalletPrivateKey?
+
+    init(privateKey: WalletPrivateKey? = nil) {
+        self.privateKey = privateKey
+    }
+
     @MainActor
     func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
-        walletSigningResultForTesting(operation)
+        if let privateKey { return operation.sign(with: privateKey) }
+        return walletSigningResultForTesting(operation)
     }
 
     func invalidate() {}
 }
 
 @MainActor
-func makeWalletSignerForTesting(_ operation: ApprovedWalletSigningOperation) -> WalletSigningSession {
-    let session = makeWalletSigningSessionForTesting(authorization: operation.authorization)
-    XCTAssertTrue(session.bind(operation: operation))
-    return session
+func makeSourceWalletSigningSessionForTesting(_ authorization: WalletSigningAuthorization) -> WalletSigningSession {
+    WalletSigningSession(
+        OperationWalletSigningAccessForTesting(), authorization: authorization, isCurrent: { true }
+    )
 }
 
 final class BorrowedWalletSignerForTesting: OwnedWalletSigningAccess {
@@ -630,19 +628,22 @@ func walletSigningResultForTesting(
     return operation.sign(with: key)
 }
 
+@MainActor
 func walletSigningOutputForTesting(
     permit: ExtensionBridge.ApprovedExecutionPermit,
-    privateKey: WalletPrivateKey? = nil
-) throws -> WalletSigningOutput {
-    let operation = try XCTUnwrap(ApprovedWalletSigningOperation(permit: permit))
-    let sessionID = UUID()
-    guard permit.bindSigningOperation(to: sessionID),
-          permit.beginSigningAttempt(for: sessionID) else {
+    privateKey: WalletPrivateKey? = nil,
+    clock: @escaping @MainActor @Sendable () -> Date = Date.init
+) async throws -> WalletSigningOutput {
+    let session = WalletSigningSession(
+        OperationWalletSigningAccessForTesting(privateKey: privateKey),
+        authorization: try XCTUnwrap(WalletSigningAuthorization(permit: permit)),
+        isCurrent: { true }, clock: clock
+    )
+    defer { session.invalidate() }
+    guard session.attach(permit: permit) else {
         throw WalletSigningFailure.authorizationUnavailable
     }
-    defer { permit.finishSigningAttempt(for: sessionID) }
-    if let privateKey { return try operation.sign(with: privateKey).get() }
-    return try walletSigningResultForTesting(operation).get()
+    return try await session.sign().get()
 }
 
 func walletSigningResponseForTesting(
@@ -654,24 +655,26 @@ func walletSigningResponseForTesting(
     return signed.response
 }
 
+@MainActor
 func preparedBroadcastForTesting(
-    permit: ExtensionBridge.ApprovedExecutionPermit
-) throws -> PreparedBroadcast {
-    guard case .broadcast(let signed) = try walletSigningOutputForTesting(permit: permit) else {
+    permit: ExtensionBridge.ApprovedExecutionPermit,
+    clock: @escaping @MainActor @Sendable () -> Date = Date.init
+) async throws -> PreparedBroadcast {
+    guard case .broadcast(let signed) = try await walletSigningOutputForTesting(permit: permit, clock: clock) else {
         throw WalletSigningFailure.invalidTransaction
     }
     return PreparedBroadcast(signed: signed)
 }
 
 @MainActor
-func approvedWalletSigningOperationForTesting(
+func approvedWalletSigningPermitForTesting(
     approvedAccount: WalletAccountDescriptor,
     payload: SignMessageAction.Payload? = nil,
     deadline: Date = .distantFuture,
     requestID: Int = 1,
     authorization: WalletSigningAuthorization? = nil,
     serializedTransaction: String? = nil
-) throws -> ApprovedWalletSigningOperation {
+) throws -> ExtensionBridge.ApprovedExecutionPermit {
     let requestID = authorization?.handle.id ?? requestID
     let deadline = authorization?.signingDeadline ?? deadline
     let ethereum = approvedAccount.coin == .ethereum
@@ -748,7 +751,7 @@ func approvedWalletSigningOperationForTesting(
         ))
     )
     XCTAssertTrue(permit.consumeExecution())
-    return try XCTUnwrap(ApprovedWalletSigningOperation(permit: permit))
+    return permit
 }
 
 private func signingOptionsForTesting(_ options: Solana.PreparedSendOptions) -> [String: Any] {

@@ -140,13 +140,17 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let accounts = try XCTUnwrap(window.contentViewController as? AccountsListViewController)
         let selection = try XCTUnwrap(accounts.accountSelection)
         let oldReview = try XCTUnwrap(approval.currentReview)
-        var passwordCompletions = 0
-        let password = PasswordViewController.with(
-            mode: .enter, reviewLifetime: oldReview,
-            completion: { _ in passwordCompletions += 1 }
-        )
-        window.contentViewController = password
-        _ = password.view
+        let windowController = try XCTUnwrap(approval.windowController as? WalletWindowController)
+        let authentication = Task {
+            await windowController.authenticate(
+                reason: .approveTransaction, reviewLifetime: oldReview,
+                dependencies: .init(keychain: authenticationKeychain(), attemptBiometrics: { _ in nil })
+            )
+        }
+        defer { authentication.cancel() }
+        await waitForCondition { windowController.currentAuthenticationSession?.sheet?.sheetParent === window }
+        let password = try XCTUnwrap(windowController.currentAuthenticationSession?.sheet?.contentViewController as? PasswordViewController)
+        XCTAssertTrue(window.contentViewController === accounts)
 
         let freshReview = try XCTUnwrap(approval.beginReview())
         XCTAssertFalse(oldReview.isActive)
@@ -155,13 +159,17 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         password.cancelButtonTapped(password.cancelButton)
         _ = accounts.perform(NSSelectorFromString("didClickImportAccount"))
 
-        XCTAssertTrue(window.contentViewController === password)
-        XCTAssertEqual(passwordCompletions, 0)
+        let authenticated = await authentication.value
+        XCTAssertFalse(authenticated)
+        XCTAssertNil(windowController.currentAuthenticationSession)
+        XCTAssertNil(window.attachedSheet)
+        XCTAssertFalse(password.passwordTextField.isEnabled)
+        XCTAssertTrue(window.contentViewController === accounts)
         XCTAssertEqual(fixture.coordinator.phase, .reviewing)
         XCTAssertTrue(approval.currentReview === freshReview)
     }
 
-    func testClosingApprovalPasswordTearsDownReviewWithoutCompletingAuthentication() async throws {
+    func testClosingApprovalPasswordTearsDownReviewWithoutAuthenticating() async throws {
         let fixture = try makeFixture()
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
@@ -186,14 +194,19 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             rejections += 1
             return .persisted
         }
-        var completionCount = 0
-        let password = PasswordViewController.with(
-            mode: .enter,
-            reviewLifetime: lifetime,
-            completion: { _ in completionCount += 1 }
-        )
-        window.contentViewController = password
-        password.viewDidAppear()
+        let windowController = try XCTUnwrap(approval.windowController as? WalletWindowController)
+        var completions = [Bool]()
+        let authentication = Task {
+            let result = await windowController.authenticate(
+                reason: .approveTransaction, reviewLifetime: lifetime,
+                dependencies: .init(keychain: authenticationKeychain(), attemptBiometrics: { _ in nil })
+            )
+            completions.append(result)
+            return result
+        }
+        defer { authentication.cancel() }
+        await waitForCondition { windowController.currentAuthenticationSession?.sheet?.sheetParent === window }
+        let password = try XCTUnwrap(windowController.currentAuthenticationSession?.sheet?.contentViewController as? PasswordViewController)
 
         window.close()
         window.close()
@@ -201,28 +214,47 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         selection.complete(accounts: [])
         _ = accounts.perform(NSSelectorFromString("didClickImportAccount"))
         await waitForState(fixture.coordinator, .finished)
+        let authenticated = await authentication.value
 
         XCTAssertFalse(lifetime.isActive)
         XCTAssertEqual(cleanupCount, 1)
-        XCTAssertEqual(completionCount, 0)
+        XCTAssertFalse(authenticated)
+        XCTAssertEqual(completions, [false])
+        XCTAssertNil(windowController.currentAuthenticationSession)
+        XCTAssertFalse(password.passwordTextField.isEnabled)
         XCTAssertEqual(rejections, 1)
     }
 
-    func testClosingOrdinaryPasswordCancelsAuthenticationOnce() async {
+    func testClosingOrdinaryPasswordCancelsAuthenticationOnce() async throws {
         var completions = [Bool]()
-        let password = PasswordViewController.with(mode: .enter) { completions.append($0) }
         let window = NSWindow(
             contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 320),
             styleMask: [.titled, .closable], backing: .buffered, defer: false
         )
         window.isReleasedWhenClosed = false
-        window.contentViewController = password
+        let originalController = NSViewController()
+        window.contentViewController = originalController
+        let windowController = WalletWindowController(window: window)
         window.orderFront(nil)
-        password.viewDidAppear()
+        let authentication = Task {
+            let result = await windowController.authenticate(
+                reason: .approveTransaction,
+                dependencies: .init(keychain: authenticationKeychain(), attemptBiometrics: { _ in nil })
+            )
+            completions.append(result)
+            return result
+        }
+        defer { authentication.cancel(); window.close() }
+        await waitForCondition { windowController.currentAuthenticationSession?.sheet?.sheetParent === window }
+        let password = try XCTUnwrap(windowController.currentAuthenticationSession?.sheet?.contentViewController as? PasswordViewController)
+        XCTAssertTrue(window.contentViewController === originalController)
         window.close()
         window.close()
         password.cancelButtonTapped(password.cancelButton)
+        let authenticated = await authentication.value
+        XCTAssertFalse(authenticated)
         XCTAssertEqual(completions, [false])
+        XCTAssertNil(windowController.currentAuthenticationSession)
     }
 
     func testApprovalPickerBlocksWalletManagementActions() async throws {
@@ -701,19 +733,42 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
-    func testInitialAuthenticationFailureFallsBackOnlyOnStart() async {
-        XCTAssertEqual(
-            Agent.localAuthenticationResolution(success: true, onStart: true),
-            .authenticated
+    func testInitialAuthenticationFailureFallsBackOnlyOnStart() async throws {
+        let keychain = authenticationKeychain()
+        var events = [StartupCredentialCoordinator.Event]()
+        let startup = StartupCredentialCoordinator(
+            dependencies: .init(keychain: keychain, attemptBiometrics: { _ in .failed }),
+            onEvent: { events.append($0) }
         )
-        XCTAssertEqual(
-            Agent.localAuthenticationResolution(success: false, onStart: true),
-            .showPassword
+        defer { startup.cancel() }
+        startup.requestAccess()
+        await waitForCondition { startup.windowController?.contentViewController is PasswordViewController }
+        XCTAssertTrue(events.isEmpty)
+        let password = try XCTUnwrap(startup.windowController?.contentViewController as? PasswordViewController)
+        XCTAssertEqual(password.titleLabel.stringValue, Strings.enterPassword)
+        startup.cancel()
+        XCTAssertEqual(events, [.cancelled])
+
+        let window = NSWindow(
+            contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 320),
+            styleMask: [.titled, .closable], backing: .buffered, defer: false
         )
-        XCTAssertEqual(
-            Agent.localAuthenticationResolution(success: false, onStart: false),
-            .failed
-        )
+        window.isReleasedWhenClosed = false
+        let originalController = NSViewController()
+        window.contentViewController = originalController
+        let windowController = WalletWindowController(window: window)
+        window.orderFront(nil)
+        defer { window.close() }
+        for outcome in [DeviceAuthentication.Outcome.failed, .succeeded] {
+            let authenticated = await windowController.authenticate(
+                reason: .approveTransaction,
+                dependencies: .init(keychain: keychain, attemptBiometrics: { _ in outcome })
+            )
+            XCTAssertEqual(authenticated, outcome == .succeeded)
+            XCTAssertNil(window.attachedSheet)
+            XCTAssertNil(windowController.currentAuthenticationSession)
+            XCTAssertTrue(window.contentViewController === originalController)
+        }
     }
 
     func testPendingWalletOpenIntentIsConsumedOnce() async {
@@ -1467,15 +1522,43 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(newerWindow.isVisible)
     }
 
-    func testAmbientMissingPasswordRejectsApprovalBeforeOnboarding() async {
-        XCTAssertEqual(
-            Agent.missingPasswordApprovalAction(canCreatePassword: false),
-            .rejectAndOpenDock
+    func testAmbientMissingPasswordRejectsApprovalBeforeOnboarding() async throws {
+        let fixture = try makeFixture()
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        var inbox = ApprovalInbox<Agent.ActiveApproval>()
+        XCTAssertTrue(inbox.register(fixture.coordinator))
+        var rejections = 0
+        fixture.store.rejectHandler = { _, _, _ in
+            rejections += 1
+            return .persisted
+        }
+        var dockLaunches = 0
+        let agent = Agent(approvalInbox: inbox, credentialDependencies: .init(
+            keychain: authenticationKeychain(password: nil), canCreatePassword: false,
+            attemptBiometrics: { _ in XCTFail("A missing credential must not authenticate"); return nil },
+            openDock: {
+                XCTAssertFalse(fixture.coordinator.isAwaitingAuthentication)
+                dockLaunches += 1
+                return true
+            }
+        ))
+        agent.start(openOnLaunch: false)
+        await waitForState(fixture.coordinator, .finished)
+        await waitForCondition { dockLaunches == 1 }
+        XCTAssertEqual(rejections, 1)
+
+        var events = [StartupCredentialCoordinator.Event]()
+        let startup = StartupCredentialCoordinator(
+            dependencies: .init(keychain: authenticationKeychain(password: nil), canCreatePassword: true,
+                attemptBiometrics: { _ in XCTFail("Setup must not authenticate"); return nil },
+                openDock: { XCTFail("The dock app owns setup"); return false }),
+            onEvent: { events.append($0) }
         )
-        XCTAssertEqual(
-            Agent.missingPasswordApprovalAction(canCreatePassword: true),
-            .awaitOnboarding
-        )
+        defer { startup.cancel() }
+        startup.requestAccess()
+        XCTAssertTrue(startup.windowController?.contentViewController is WelcomeViewController)
+        XCTAssertTrue(events.isEmpty)
     }
 
     func testFinishedApprovalAlwaysClosesExistingWindow() async {
@@ -1611,10 +1694,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
         windowController.approvalPeer = PeerMeta(title: "wallet.example")
         let controller = PasswordViewController.with(
-            mode: .enter,
-            reason: .approveTransaction,
-            completion: nil
-        )
+            configuration: .init(mode: .enter, reason: .approveTransaction)
+        ) { _ in }
         windowController.contentViewController = controller
         controller.viewWillAppear()
         controller.view.layoutSubtreeIfNeeded()
@@ -4601,6 +4682,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             clock: clock,
             events: events
         )
+    }
+
+    private func authenticationKeychain(password: String? = "test-password") -> Keychain {
+        let reader = KeychainCopyMatchingStub()
+        reader.passwordData = password.map { Data($0.utf8) }
+        return Keychain(copyMatching: reader.copyMatching)
     }
 
     private func attachApprovalWindow(to fixture: Fixture) throws -> (Agent, Agent.ActiveApproval, TrackingWindow) {

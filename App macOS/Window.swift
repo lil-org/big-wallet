@@ -4,12 +4,41 @@ import Cocoa
 
 final class WalletWindowController: NSWindowController {
     var approvalPeer: PeerMeta?
+    private(set) var currentAuthenticationSession: WindowAuthenticationSession?
+
+    func authenticate(
+        reason: AuthenticationReason,
+        reviewLifetime: NativeApprovalReviewLifetime? = nil,
+        dependencies: WindowAuthenticationSession.Dependencies = .init()
+    ) async -> Bool {
+        guard currentAuthenticationSession == nil, !Task.isCancelled,
+              reviewLifetime?.isActive != false,
+              let window, Window.isVisibleContentWindow(window) else { return false }
+        let session = WindowAuthenticationSession(
+            owner: window, reason: reason, reviewLifetime: reviewLifetime,
+            dependencies: dependencies
+        )
+        currentAuthenticationSession = session
+        defer {
+            if currentAuthenticationSession === session { currentAuthenticationSession = nil }
+        }
+        return await session.run()
+    }
 }
 
 @MainActor
 struct Window {
     
     private static var isClosingAllWindows = false
+
+    static func authenticate(
+        in window: NSWindow?,
+        reason: AuthenticationReason,
+        reviewLifetime: NativeApprovalReviewLifetime? = nil
+    ) async -> Bool {
+        guard let controller = window?.windowController as? WalletWindowController else { return false }
+        return await controller.authenticate(reason: reason, reviewLifetime: reviewLifetime)
+    }
     
     static func showNew(
         closeOthers: Bool,
@@ -73,7 +102,9 @@ struct Window {
     
     static func reactivateWindow(_ windowController: NSWindowController) {
         windowController.showWindow(nil)
-        windowController.window?.deminiaturize(nil)
+        if windowController.window?.isMiniaturized == true {
+            windowController.window?.deminiaturize(nil)
+        }
         activateWindow(windowController.window)
     }
 

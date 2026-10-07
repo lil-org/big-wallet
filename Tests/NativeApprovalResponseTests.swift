@@ -167,9 +167,9 @@ final class NativeApprovalResponseTests: XCTestCase {
             decision: .message(.init(approvedAccount: account, solanaCluster: nil))
         )
         XCTAssertTrue(permit.consumeExecution())
-        let operation = try XCTUnwrap(ApprovedWalletSigningOperation(permit: permit))
-        let session = WalletSigningSession(access, authorization: operation.authorization, isCurrent: { true })
-        XCTAssertTrue(session.bind(operation: operation))
+        let authorization = try XCTUnwrap(WalletSigningAuthorization(permit: permit))
+        let session = WalletSigningSession(access, authorization: authorization, isCurrent: { true })
+        XCTAssertTrue(session.attach(permit: permit))
         return (session, fixture)
     }
 

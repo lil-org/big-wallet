@@ -778,14 +778,11 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 profileIdentifier: claim.handle.profileIdentifier, now: clock()
             ) else { return .retryablePersistenceFailure }
             let now = clock()
-            guard let index = profile.state.records.firstIndex(where: { $0.handle == claim.handle }),
-                  case .claimed(let claimID, _, _) = profile.state.records[index].state,
-                  claim.matches(handle: claim.handle, value: claimID),
-                  claim.binding.matches(profile.state.records[index]),
+            guard let index = boundRecordIndex(for: claim.binding, in: profile.state),
                   profile.state.records[index].nativeDeliveryReceipt == claim.nativeReceipt,
-                  ExtensionRequestProfile.authorityIsCurrent(profile.state.records[index], in: profile.state),
-                  profile.state.records[index].authorizesExecution(
-                      authority: claim.authority, now: now, isCancelled: Task.isCancelled
+                  authorizesCurrentClaim(
+                      claim, record: profile.state.records[index], in: profile.state,
+                      at: now, isCancelled: Task.isCancelled
                   ),
                   now < claim.request.admissionDeadline else { return .ownershipLost }
             claim.lifecycle.nativeConsent?.invalidateAuthorization()
@@ -876,6 +873,31 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         }
     }
 
+    private func boundRecordIndex(
+        for binding: ExtensionBridge.RequestBinding,
+        in profile: ProfileState
+    ) -> Int? {
+        guard let index = profile.records.firstIndex(where: { $0.handle == binding.handle }),
+              binding.matches(profile.records[index]) else { return nil }
+        return index
+    }
+
+    private func authorizesCurrentClaim(
+        _ claim: ExtensionBridge.ApprovalClaim,
+        record: Record,
+        in profile: ProfileState,
+        at now: Date,
+        isCancelled: Bool
+    ) -> Bool {
+        guard case .claimed(let claimID, _, _) = record.state,
+              claim.matches(handle: record.handle, value: claimID),
+              claim.binding.matches(record),
+              ExtensionRequestProfile.authorityIsCurrent(record, in: profile),
+              record.authorizesExecution(authority: claim.authority, now: now, isCancelled: isCancelled)
+        else { return false }
+        return true
+    }
+
     func authorize(
         claim: ExtensionBridge.ApprovalClaim,
         approval: ResolvedDappApproval
@@ -891,16 +913,16 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 profileIdentifier: claim.handle.profileIdentifier, now: clock()
             ) else { return .retryablePersistenceFailure }
             let now = clock()
-            guard let record = profile.state.records.first(where: { $0.handle == claim.handle }),
-                  case .claimed(let claimID, _, _) = record.state,
-                  claim.matches(handle: record.handle, value: claimID),
-                  claim.binding.matches(record),
-                  approval.approvedAt >= record.createdAt,
+            guard let index = boundRecordIndex(for: claim.binding, in: profile.state) else { return .ownershipLost }
+            let record = profile.state.records[index]
+            guard approval.approvedAt >= record.createdAt,
                   approval.approvedAt <= now,
                   record.nativeDeliveryReceipt == claim.nativeReceipt,
-                  ExtensionRequestProfile.authorityIsCurrent(record, in: profile.state),
                   record.claimedApproval?.authority.isWithinClaimLifetime(at: now) == true,
-                  record.authorizesExecution(authority: claim.authority, now: now, isCancelled: Task.isCancelled)
+                  authorizesCurrentClaim(
+                      claim, record: record, in: profile.state,
+                      at: now, isCancelled: Task.isCancelled
+                  )
             else { return .ownershipLost }
             if case .native(let approvedAt, _) = claim.authority,
                approvedAt != approval.approvedAt { return .ownershipLost }
@@ -920,13 +942,12 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             ) else { return nil }
             let now = clock()
             guard claim.lifecycle.isSigningAuthorized(now: now),
-                  let record = profile.state.records.first(where: { $0.handle == claim.handle }),
-                  case .claimed(let claimID, _, _) = record.state,
-                  claim.matches(handle: record.handle, value: claimID),
-                  claim.binding.matches(record),
-                  record.nativeDeliveryReceipt == claim.nativeReceipt,
-                  ExtensionRequestProfile.authorityIsCurrent(record, in: profile.state),
-                  record.authorizesExecution(authority: claim.authority, now: now, isCancelled: Task.isCancelled)
+                  let index = boundRecordIndex(for: claim.binding, in: profile.state),
+                  profile.state.records[index].nativeDeliveryReceipt == claim.nativeReceipt,
+                  authorizesCurrentClaim(
+                      claim, record: profile.state.records[index], in: profile.state,
+                      at: now, isCancelled: Task.isCancelled
+                  )
             else { return nil }
             return try operation()
         } ?? nil
@@ -948,18 +969,16 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             guard case .state(var profile) = recoverProfileLocked(
                 profileIdentifier: permit.handle.profileIdentifier, now: readTime
             ) else { return .retryablePersistenceFailure }
-            guard let index = profile.state.records.firstIndex(where: { $0.handle == permit.handle }) else {
+            guard let index = boundRecordIndex(for: claim.binding, in: profile.state) else {
                 return .ownershipLost
             }
             switch profile.state.records[index].state {
-            case .claimed(let claimID, _, _):
+            case .claimed:
                 let authorizationTime = clock()
                 guard permit.isExecuting,
-                      claim.matches(handle: permit.handle, value: claimID),
-                      claim.binding.matches(profile.state.records[index]),
-                      ExtensionRequestProfile.authorityIsCurrent(profile.state.records[index], in: profile.state),
-                      profile.state.records[index].authorizesExecution(
-                          authority: permit.authority, now: authorizationTime, isCancelled: Task.isCancelled
+                      authorizesCurrentClaim(
+                          claim, record: profile.state.records[index], in: profile.state,
+                          at: authorizationTime, isCancelled: Task.isCancelled
                       ),
                       profile.state.records[index].prepareBroadcast(recoveryResponse: responseData) else {
                     return .ownershipLost
@@ -967,7 +986,6 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 guard writeProfileLocked(profile) else { return .retryablePersistenceFailure }
             case .broadcastPrepared(let claimID, _, let existing, _):
                 guard claim.matches(handle: permit.handle, value: claimID),
-                      claim.binding.matches(profile.state.records[index]),
                       existing == responseData else { return .ownershipLost }
                 guard files.synchronizeProfileLocked(permit.handle.profileIdentifier) else {
                     return .retryablePersistenceFailure
@@ -1014,16 +1032,16 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         guard case .state(var profile) = recoverProfileLocked(
             profileIdentifier: claim.handle.profileIdentifier, now: clock()
         ) else { return .retryablePersistenceFailure }
-        guard let index = profile.state.records.firstIndex(where: { $0.handle == claim.handle }),
-              claim.binding.matches(profile.state.records[index]) else { return .ownershipLost }
+        guard let index = boundRecordIndex(for: claim.binding, in: profile.state) else { return .ownershipLost }
         let record = profile.state.records[index]
         switch record.state {
-        case .claimed(let claimID, _, _):
+        case .claimed:
             let now = clock()
             guard claim.lifecycle.isPreparing,
-                  claim.matches(handle: record.handle, value: claimID),
-                  ExtensionRequestProfile.authorityIsCurrent(record, in: profile.state),
-                  record.authorizesExecution(authority: claim.authority, now: now, isCancelled: Task.isCancelled),
+                  authorizesCurrentClaim(
+                      claim, record: record, in: profile.state,
+                      at: now, isCancelled: Task.isCancelled
+                  ),
                   let request = profile.request(for: record),
                   let responseData = ExtensionRequestProfileCodec.boundedResponseData(response, request: request),
                   profile.applyAuthorityEffect(response, record: record, now: now) else { return .ownershipLost }
@@ -1048,17 +1066,17 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         guard case .state(var profile) = recoverProfileLocked(
             profileIdentifier: claim.handle.profileIdentifier, now: clock()
         ) else { return .retryablePersistenceFailure }
-        guard let index = profile.state.records.firstIndex(where: { $0.handle == claim.handle }),
-              claim.binding.matches(profile.state.records[index]) else { return .ownershipLost }
+        guard let index = boundRecordIndex(for: claim.binding, in: profile.state) else { return .ownershipLost }
         let record = profile.state.records[index]
         switch record.state {
-        case .claimed(let claimID, _, _):
+        case .claimed:
             let now = clock()
             guard claim.lifecycle.hasActiveApprovedOwnership,
-                  claim.matches(handle: record.handle, value: claimID),
                   permit.isExecuting,
-                  ExtensionRequestProfile.authorityIsCurrent(record, in: profile.state),
-                  record.authorizesExecution(authority: claim.authority, now: now, isCancelled: Task.isCancelled),
+                  authorizesCurrentClaim(
+                      claim, record: record, in: profile.state,
+                      at: now, isCancelled: Task.isCancelled
+                  ),
                   let request = profile.request(for: record) else { return .ownershipLost }
             var response = response
             if response.addsEthereumChain, !completeChainAddition(permit) {
@@ -1096,8 +1114,8 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             at: files.profileURL(binding.handle.profileIdentifier),
             profileIdentifier: binding.handle.profileIdentifier, now: clock()
         ) else { return .retryablePersistenceFailure }
-        guard let record = profile.state.records.first(where: { $0.handle == binding.handle }),
-              binding.matches(record), case .completed = record.state else { return .ownershipLost }
+        guard let index = boundRecordIndex(for: binding, in: profile.state),
+              case .completed = profile.state.records[index].state else { return .ownershipLost }
         return synchronizedMutationResultLocked(binding.handle.profileIdentifier)
     }
 
@@ -1127,8 +1145,8 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             guard case .state(let profile) = recoverProfileLocked(
                 profileIdentifier: claim.handle.profileIdentifier, now: clock()
             ) else { return .retryablePersistenceFailure }
-            guard let record = profile.state.records.first(where: { $0.handle == claim.handle }),
-                  claim.binding.matches(record) else { return .ownershipLost }
+            guard let index = boundRecordIndex(for: claim.binding, in: profile.state) else { return .ownershipLost }
+            let record = profile.state.records[index]
             switch record.state {
             case .pending:
                 guard record.nativeDeliveryReceipt == claim.nativeReceipt else { return .ownershipLost }
@@ -1540,7 +1558,7 @@ extension ExtensionBridge {
             case closed(AuthorizationStage)
         }
         private enum SigningSlot {
-            case unissued, issued, bound(UUID), signing(UUID), signed(UUID), finished
+            case unissued, ready, signing, used, finished
         }
 
         let binding: RequestBinding
@@ -1654,12 +1672,12 @@ extension ExtensionBridge {
             now < signingDeadline && executionTimeIsCurrent(now)
         }
 
-        func consumeSigningOperation(now: Date) -> Bool {
+        func issueSigningOperation(now: Date) -> Bool {
             state.withLock { state in
                 guard signingTimeIsCurrent(now), case .unissued = state.signing else { return false }
                 switch state.phase {
                 case .authorized, .executing:
-                    state.signing = .issued
+                    state.signing = .ready
                     return true
                 case .claimed, .preparing, .checkpointed, .closed:
                     return false
@@ -1667,24 +1685,11 @@ extension ExtensionBridge {
             }
         }
 
-        func bindSigningOperation(to sessionID: UUID, now: Date) -> Bool {
-            state.withLock { state in
-                guard signingTimeIsCurrent(now), case .issued = state.signing else { return false }
-                switch state.phase {
-                case .authorized, .executing:
-                    state.signing = .bound(sessionID)
-                    return true
-                case .claimed, .preparing, .checkpointed, .closed:
-                    return false
-                }
-            }
-        }
-
-        func beginSigningAttempt(for sessionID: UUID, now: Date) -> Bool {
+        func beginSigningAttempt(now: Date) -> Bool {
             state.withLock { state in
                 guard case .executing = state.phase, signingTimeIsCurrent(now),
-                      case .bound(let boundID) = state.signing, boundID == sessionID else { return false }
-                state.signing = .signing(sessionID)
+                      case .ready = state.signing else { return false }
+                state.signing = .signing
                 return true
             }
         }
@@ -1692,29 +1697,29 @@ extension ExtensionBridge {
         func consumeSigningUse(now: Date) -> Bool {
             state.withLock { state in
                 guard case .executing = state.phase, signingTimeIsCurrent(now),
-                      case .signing(let sessionID) = state.signing else { return false }
-                state.signing = .signed(sessionID)
+                      case .signing = state.signing else { return false }
+                state.signing = .used
                 return true
             }
         }
 
-        func finishSigningAttempt(for sessionID: UUID) {
+        func finishSigningAttempt() {
             state.withLock { state in
                 switch state.signing {
-                case .bound(let current), .signing(let current), .signed(let current):
-                    if current == sessionID { state.signing = .finished }
-                case .unissued, .issued, .finished:
+                case .ready, .signing, .used:
+                    state.signing = .finished
+                case .unissued, .finished:
                     break
                 }
             }
         }
 
-        func isSigningAttemptCurrent(for sessionID: UUID, now: Date) -> Bool {
+        func isSigningAttemptCurrent(now: Date) -> Bool {
             state.withLock { state in
                 guard case .executing = state.phase, signingTimeIsCurrent(now) else { return false }
                 switch state.signing {
-                case .signing(let current), .signed(let current): return current == sessionID
-                case .unissued, .issued, .bound, .finished: return false
+                case .signing, .used: return true
+                case .unissued, .ready, .finished: return false
                 }
             }
         }
@@ -1862,20 +1867,11 @@ extension ExtensionBridge {
         func consumeExecution() -> Bool { claim.lifecycle.consumeExecution(now: clock()) }
         var isExecuting: Bool { claim.lifecycle.isExecuting(now: clock()) }
         func releaseLease() { claim.lifecycle.closeApproved() }
-        func consumeSigningOperation() -> Bool { claim.lifecycle.consumeSigningOperation(now: clock()) }
-        func bindSigningOperation(to sessionID: UUID) -> Bool {
-            claim.lifecycle.bindSigningOperation(to: sessionID, now: clock())
-        }
-        func beginSigningAttempt(for sessionID: UUID) -> Bool {
-            claim.lifecycle.beginSigningAttempt(for: sessionID, now: clock())
-        }
+        func issueSigningOperation() -> Bool { claim.lifecycle.issueSigningOperation(now: clock()) }
+        func beginSigningAttempt() -> Bool { claim.lifecycle.beginSigningAttempt(now: clock()) }
         func consumeSigningUse() -> Bool { claim.lifecycle.consumeSigningUse(now: clock()) }
-        func finishSigningAttempt(for sessionID: UUID) {
-            claim.lifecycle.finishSigningAttempt(for: sessionID)
-        }
-        func isSigningAttemptCurrent(for sessionID: UUID) -> Bool {
-            claim.lifecycle.isSigningAttemptCurrent(for: sessionID, now: clock())
-        }
+        func finishSigningAttempt() { claim.lifecycle.finishSigningAttempt() }
+        var isSigningAttemptCurrent: Bool { claim.lifecycle.isSigningAttemptCurrent(now: clock()) }
         var isSigningAuthorized: Bool { claim.lifecycle.isSigningAuthorized(now: clock()) }
 
         fileprivate func checkpoint(broadcast: PreparedBroadcast) -> BroadcastDispatchPermit? {

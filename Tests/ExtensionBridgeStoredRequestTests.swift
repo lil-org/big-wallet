@@ -119,10 +119,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 let pending = try await admit(baseID + index * 5 + 1)
                 let claimed = try await admit(baseID + index * 5 + 2)
                 let claim = try approvalClaim(await bridge.claim(handle: claimed.handle))
-                let permit = try reviewedExecution(claim)
+                let permit = try await reviewedExecution(claim)
                 let broadcast = try await admittedBroadcast(account, id: baseID + index * 5 + 3)
                 let broadcastClaim = try approvalClaim(await bridge.claim(handle: broadcast.handle))
-                let broadcastPermit = try reviewedExecution(broadcastClaim)
+                let broadcastPermit = try await reviewedExecution(broadcastClaim)
                 let recovery = broadcastPermit.recoveryResponse
                 let checkpoint = await prepareReviewedBroadcast(broadcastPermit, in: bridge)
                 XCTAssertEqual(checkpoint, .persisted)
@@ -532,15 +532,15 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let pending = try await admittedSigning(account, id: 64_012)
         let claimed = try await admittedSigning(account, id: 64_013)
         let claim = try approvalClaim(await bridge.claim(handle: claimed.handle))
-        let permit = try reviewedExecution(claim)
+        let permit = try await reviewedExecution(claim)
         let selection = try makeManualFixture(id: 64_014, enqueueAttempt: attempt(for: 64_014), latestConfigurations: [])
         let selectionHandle = try accepted(await bridge.enqueue(ingress: selection.ingress, profileIdentifier: nil)).handle
         let selectionClaim = try approvalClaim(await bridge.claim(handle: selectionHandle))
-        let selectionPermit = try reviewedExecution(selectionClaim, accounts: [account])
+        let selectionPermit = try await reviewedExecution(selectionClaim, accounts: [account])
         let broadcast = try makeTransactionFixture(id: 64_015)
         let broadcastHandle = try accepted(await bridge.enqueue(ingress: broadcast.ingress, profileIdentifier: nil)).handle
         let broadcastClaim = try approvalClaim(await bridge.claim(handle: broadcastHandle))
-        let broadcastPermit = try reviewedExecution(broadcastClaim)
+        let broadcastPermit = try await reviewedExecution(broadcastClaim)
         _ = broadcastPermit.recoveryResponse
         let checkpoint = await prepareReviewedBroadcast(broadcastPermit, in: bridge)
         XCTAssertEqual(checkpoint, .persisted)
@@ -552,7 +552,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let liveBroadcast = try makeTransactionFixture(id: 64_019, host: "healthy.example")
         let liveHandle = try accepted(await bridge.enqueue(ingress: liveBroadcast.ingress, profileIdentifier: nil)).handle
         let liveClaim = try approvalClaim(await bridge.claim(handle: liveHandle))
-        let livePermit = try reviewedExecution(liveClaim)
+        let livePermit = try await reviewedExecution(liveClaim)
         let liveCheckpoint = await prepareReviewedBroadcast(livePermit, in: bridge)
         XCTAssertEqual(liveCheckpoint, .persisted)
         let originalRecords = try XCTUnwrap(storedProfile()["records"] as? [[String: Any]])
@@ -762,10 +762,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let first = try await admittedSigning(account, id: 60_021)
         let firstClaim = try approvalClaim(await bridge.claim(handle: first.handle))
         XCTAssertEqual(firstClaim.executionDeadline, clock.now.addingTimeInterval(150))
-        let firstPermit = try reviewedExecution(firstClaim)
+        let firstPermit = try await reviewedExecution(firstClaim)
         let broadcast = try await admittedBroadcast(account, id: 60_022)
         let broadcastClaim = try approvalClaim(await bridge.claim(handle: broadcast.handle))
-        let broadcastPermit = try reviewedExecution(broadcastClaim)
+        let broadcastPermit = try await reviewedExecution(broadcastClaim)
         _ = broadcastPermit.recoveryResponse
         let checkpoint = await prepareReviewedBroadcast(broadcastPermit, in: bridge)
         XCTAssertEqual(checkpoint, .persisted)
@@ -967,7 +967,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let fixture = try makeTransactionFixture(id: 60_035)
         let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
         let originalClaim = try approvalClaim(await bridge.claim(handle: handle))
-        let originalPermit = try reviewedExecution(originalClaim)
+        let originalPermit = try await reviewedExecution(originalClaim)
         let rollback = await bridge.abandon(permit: originalPermit.permit)
         XCTAssertEqual(rollback, .persisted)
 
@@ -976,7 +976,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         guard case .claimed(let currentClaim) = await claimDeliveredNativeExecution(
             in: bridge, handle: handle, approvedAt: clock.now
         ) else { return XCTFail("Expected native claim") }
-        let currentPermit = try reviewedExecution(currentClaim)
+        let currentPermit = try await reviewedExecution(currentClaim)
         defer { currentPermit.releaseLease() }
         let staleCheckpoint = await prepareReviewedBroadcast(originalPermit, in: bridge)
         let staleCompletion = await completeReviewedExecution(originalPermit, in: bridge)
@@ -1175,7 +1175,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 retainedPermit = permit
                 if stage != "authorized" { XCTAssertTrue(permit.consumeExecution()) }
                 if stage == "broadcast" {
-                    let broadcast = try preparedBroadcastForTesting(permit: permit)
+                    let broadcast = try await preparedBroadcastForTesting(permit: permit, clock: { [clock = clock!] in clock.now })
                     guard case .prepared = await bridge.prepareBroadcast(permit: permit, broadcast: broadcast) else {
                         return XCTFail("Expected broadcast checkpoint")
                     }
@@ -1804,16 +1804,16 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let pending = try await admittedSigning(account, id: 63_011)
         let claimed = try await admittedSigning(account, id: 63_012)
         let claim = try approvalClaim(await bridge.claim(handle: claimed.handle))
-        let permit = try reviewedExecution(claim)
+        let permit = try await reviewedExecution(claim)
         let broadcast = try await admittedBroadcast(account, id: 63_013)
         let broadcastClaim = try approvalClaim(await bridge.claim(handle: broadcast.handle))
-        let broadcastPermit = try reviewedExecution(broadcastClaim)
+        let broadcastPermit = try await reviewedExecution(broadcastClaim)
         let checkpoint = await prepareReviewedBroadcast(broadcastPermit, in: bridge)
         XCTAssertEqual(checkpoint, .persisted)
         let selection = try makeFixture(id: 63_014, name: "requestAccounts", host: "selection.example")
         let selectionHandle = try accepted(await bridge.enqueue(ingress: selection.ingress, profileIdentifier: nil)).handle
         let selectionClaim = try approvalClaim(await bridge.claim(handle: selectionHandle))
-        let selectionPermit = try reviewedExecution(selectionClaim, accounts: [account])
+        let selectionPermit = try await reviewedExecution(selectionClaim, accounts: [account])
         let native = try makeFixture(id: 63_015, name: "requestAccounts", host: "native.example")
         let nativeHandle = try accepted(await bridge.enqueue(ingress: native.ingress, profileIdentifier: nil)).handle
         _ = try await recordNativeDelivery(handle: nativeHandle)
@@ -1908,7 +1908,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         _ = try await grantAuthority(account, id: 63_070)
         let signing = try await admittedBroadcast(account, id: 63_071)
         let claim = try approvalClaim(await bridge.claim(handle: signing.handle))
-        let permit = try reviewedExecution(claim)
+        let permit = try await reviewedExecution(claim)
         defer { permit.releaseLease() }
         try removalStore().withRevokedWalletAuthority(matching: .accounts([account])) {}
         let checkpoint = await prepareReviewedBroadcast(permit, in: bridge)
@@ -1928,7 +1928,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let pending = try await admittedSigning(account, id: baseID + 2)
             let broadcast = try await admittedBroadcast(account, id: baseID + 3)
             let claim = try approvalClaim(await bridge.claim(handle: broadcast.handle))
-            let permit = try reviewedExecution(claim)
+            let permit = try await reviewedExecution(claim)
             defer { permit.releaseLease() }
             let recovery = permit.recoveryResponse
             let checkpoint = await prepareReviewedBroadcast(permit, in: bridge)
@@ -2869,7 +2869,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertNil(claimed.nativeApproval)
         XCTAssertNil(claimed.nativeExecutionContext)
 
-        let permit = try reviewedExecution(claim)
+        let permit = try await reviewedExecution(claim)
         let recovery = permit.recoveryResponse
         let checkpoint = await prepareReviewedBroadcast(permit, in: bridge)
         XCTAssertEqual(checkpoint, .persisted)
@@ -3150,7 +3150,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
-    func testCanonicalBodySurvivesClaimReleaseRollbackAndBroadcast() throws {
+    func testCanonicalBodySurvivesClaimReleaseRollbackAndBroadcast() async throws {
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
             clock: { [clock = clock!] in clock.now }
         ))
@@ -3180,7 +3180,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(try firstStoredBody("pending"), try bodyData(for: fixture.ingress))
 
         let claim = try approvalClaim(store.claim(handle: handle))
-        let permit = try reviewedExecution(claim)
+        let permit = try await reviewedExecution(claim)
         _ = permit.recoveryResponse
         XCTAssertEqual(prepareReviewedBroadcast(permit, in: store), .persisted)
         XCTAssertEqual(try firstStoredBody("broadcastPrepared"), try bodyData(for: fixture.ingress))
@@ -3192,7 +3192,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
-    func testStoredPayloadSupportsExpiryAndAbandonedExecutionRecovery() throws {
+    func testStoredPayloadSupportsExpiryAndAbandonedExecutionRecovery() async throws {
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
             clock: { [clock = clock!] in clock.now }
         ))
@@ -3206,7 +3206,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             if state != "pending" {
                 let claim = try approvalClaim(store.claim(handle: handle))
                 if state == "broadcastPrepared" {
-                    let permit = try reviewedExecution(claim)
+                    let permit = try await reviewedExecution(claim)
                     expectedRecovery = permit.recoveryResponse
                     XCTAssertEqual(prepareReviewedBroadcast(permit, in: store), .persisted)
                     permit.releaseLease()
@@ -3407,7 +3407,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         ) else { return XCTFail("A released claim must reject the unauthorized retry") }
 
         let nextClaim = try approvalClaim(await bridge.claim(handle: original.handle))
-        let permit = try reviewedExecution(nextClaim)
+        let permit = try await reviewedExecution(nextClaim)
         let checkpoint = await prepareReviewedBroadcast(permit, in: bridge)
         XCTAssertEqual(checkpoint, .persisted)
         let broadcasting = try accepted(await bridge.enqueue(
@@ -4942,7 +4942,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             configurationKey: fixture.request.configurationKey
         )
         XCTAssertEqual(claimed, .retryablePersistenceFailure)
-        let permit = try reviewedExecution(claim)
+        let permit = try await reviewedExecution(claim)
         let prepared = await prepareReviewedBroadcast(permit, in: bridge)
         XCTAssertEqual(prepared, .persisted)
         let broadcasting = await bridge.acknowledgeResponse(
@@ -5151,7 +5151,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             profileIdentifier: nil
         )).handle
         let preparedClaim = try approvalClaim(await bridge.claim(handle: preparedHandle))
-        let permit = try reviewedExecution(preparedClaim)
+        let permit = try await reviewedExecution(preparedClaim)
         _ = permit.recoveryResponse
         let preparation = await prepareReviewedBroadcast(permit, in: bridge)
         XCTAssertEqual(preparation, .persisted)
@@ -5205,7 +5205,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         XCTAssertEqual(delivered, .persisted)
         guard case .claimed(let claim) = await claimDeliveredNativeExecution(in: bridge, handle: admission.handle, approvedAt: clock.now) else { return XCTFail("Expected native claim") }
-        let permit = try reviewedExecution(claim)
+        let permit = try await reviewedExecution(claim)
         _ = try await fillCompletedByteCapacity()
         let prepared = await prepareReviewedBroadcast(permit, in: bridge)
         XCTAssertEqual(prepared, .persisted)
@@ -5876,8 +5876,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let firstHandle = try accepted(await bridge.enqueue(ingress: firstFixture.ingress, profileIdentifier: nil)).handle
         let secondFixture = try makeTransactionFixture(id: 76_051)
         let secondHandle = try accepted(await bridge.enqueue(ingress: secondFixture.ingress, profileIdentifier: nil)).handle
-        let first = try reviewedExecution(approvalClaim(await bridge.claim(handle: firstHandle)))
-        let second = try reviewedExecution(approvalClaim(await bridge.claim(handle: secondHandle)))
+        let first = try await reviewedExecution(approvalClaim(await bridge.claim(handle: firstHandle)))
+        let second = try await reviewedExecution(approvalClaim(await bridge.claim(handle: secondHandle)))
         let mismatch = await completeReviewedExecution(first, result: second.completion, in: bridge)
         XCTAssertEqual(mismatch, .ownershipLost)
         XCTAssertTrue(first.permit.isExecuting)
@@ -5994,7 +5994,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let fixture = try makeTransactionFixture(id: 76_110, host: "signing-gate.example")
         let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
         let claim = try approvalClaim(await bridge.claim(handle: handle))
-        let execution = try reviewedExecution(claim)
+        let execution = try await reviewedExecution(claim)
         defer { execution.releaseLease() }
         let contender = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v9.lock"))
         let result = try execution.permit.withCurrentAuthority {
@@ -6015,7 +6015,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let fixture = try makeTransactionFixture(id: 76_120 + index, host: "signing-gate-\(index).example")
             let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
             let claim = try approvalClaim(await bridge.claim(handle: handle))
-            let execution = try reviewedExecution(claim)
+            let execution = try await reviewedExecution(claim)
             defer { execution.releaseLease() }
             XCTAssertEqual(execution.permit.withCurrentAuthority { true }, true)
             switch invalidation {
@@ -6074,7 +6074,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
         let claim = try approvalClaim(await bridge.claim(handle: handle))
         let copy = claim
-        let execution = try reviewedExecution(claim)
+        let execution = try await reviewedExecution(claim)
         let abandoned = await bridge.abandon(claim: copy)
         let completion = await bridge.complete(claim: copy, resolution: .failure(.userRejected))
         XCTAssertEqual(abandoned, .ownershipLost)
@@ -6197,6 +6197,62 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     @MainActor
+    func testSigningAndPublicationRecheckDeadlineAfterProfileRead() async throws {
+        for (index, boundary) in ["signing", "broadcast", "completion"].enumerated() {
+            let fixture = try makeTransactionFixture(id: 76_052 + index, host: "read-deadline-\(index).example")
+            let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
+            let claim = try approvalClaim(await bridge.claim(handle: handle))
+            let approval = try reviewedApproval(claim)
+            let deadline = claim.executionDeadline
+            let callbackClock = clock!
+            let expireDuringRead = LockedTestValue(false)
+            let reads = LockedTestValue(0)
+            let expectedProfileURL = profileURL(handle.profileIdentifier)
+            let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
+                clock: { callbackClock.now },
+                atomicWrite: ApprovalStoreTestPersistence.write,
+                readData: { url in
+                    let data = try Data(contentsOf: url)
+                    if expireDuringRead.value, url == expectedProfileURL {
+                        reads.withValue { $0 += 1 }
+                        callbackClock.now = deadline
+                    }
+                    return data
+                }
+            ))
+            guard claim.adoptForExecution(),
+                  case .authorized(let permit) = store.authorize(claim: claim, approval: approval),
+                  permit.consumeExecution() else { return XCTFail("Expected approved execution") }
+            defer { permit.releaseLease() }
+            let broadcast: PreparedBroadcast?
+            if boundary == "signing" {
+                broadcast = nil
+            } else {
+                broadcast = try await preparedBroadcastForTesting(permit: permit, clock: { callbackClock.now })
+            }
+            clock.now = deadline.addingTimeInterval(-0.01)
+            expireDuringRead.value = true
+            switch boundary {
+            case "signing":
+                var entered = false
+                let result = permit.withCurrentAuthority {
+                    entered = true
+                    return true
+                }
+                XCTAssertNil(result)
+                XCTAssertFalse(entered)
+            case "broadcast":
+                let prepared = store.prepareBroadcast(permit: permit, broadcast: try XCTUnwrap(broadcast))
+                guard case .ownershipLost = prepared else { return XCTFail("Expired execution must not checkpoint") }
+            default:
+                let completion = try XCTUnwrap(broadcast?.recoveryCompletion(for: permit))
+                XCTAssertEqual(store.complete(permit: permit, result: completion), .ownershipLost)
+            }
+            XCTAssertGreaterThan(reads.value, 0, boundary)
+        }
+    }
+
+    @MainActor
     func testDroppedPermitReleasesPhysicalLockDespiteRetainedClaimAliases() async throws {
         let fixture = try makeTransactionFixture(id: 76_060)
         let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
@@ -6237,7 +6293,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             _ = try accepted(await bridge.enqueue(ingress: sibling.ingress, profileIdentifier: nil))
             let claim = try approvalClaim(await bridge.claim(handle: handle))
             let approval = boundary == "authorize" ? try reviewedApproval(claim) : nil
-            let permit = boundary == "authorize" ? nil : try reviewedExecution(claim)
+            let permit = boundary == "authorize" ? nil : try await reviewedExecution(claim)
             var authorizedPermit: ExtensionBridge.ApprovedExecutionPermit?
             clock.now.addTimeInterval(2)
             let writes = LockedTestValue(0)
@@ -6360,7 +6416,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertNil(claimedRecords.first?["executionDeadline"])
 
         let observer = makeBridge(clock: { [clock = clock!] in clock.now })
-        let firstPermit = try reviewedExecution(firstClaim)
+        let firstPermit = try await reviewedExecution(firstClaim)
         let rolledBack = await observer.abandon(permit: firstPermit.permit)
         XCTAssertEqual(rolledBack, .persisted)
         _ = try firstStoredState("pending")
@@ -6368,7 +6424,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let nextClaim = try approvalClaim(await observer.claim(handle: handle))
         defer { nextClaim.releaseUnapproved() }
         XCTAssertGreaterThan(nextClaim.executionDeadline, firstClaim.executionDeadline)
-        let nextPermit = try reviewedExecution(nextClaim)
+        let nextPermit = try await reviewedExecution(nextClaim)
         let checkpointed = await prepareReviewedBroadcast(nextPermit, in: observer)
         XCTAssertEqual(checkpointed, .persisted)
         let broadcastState = try firstStoredState("broadcastPrepared")
@@ -6396,7 +6452,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     profileIdentifier: nil
                 )).handle
                 let claim = try approvalClaim(await bridge.claim(handle: handle))
-                let permit = try reviewedExecution(claim)
+                let permit = try await reviewedExecution(claim)
                 let failingWriter = makeBridge(
                     clock: { [clock = clock!] in clock.now },
                     atomicWrite: { data, url in
@@ -6606,7 +6662,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 profileIdentifier: profileIdentifier
             )).handle
             let claim = try approvalClaim(await bridge.claim(handle: handle))
-            let permit = try reviewedExecution(claim)
+            let permit = try await reviewedExecution(claim)
             defer { permit.releaseLease() }
             let expected = checkpointsBroadcast
                 ? permit.recoveryResponse
@@ -6731,7 +6787,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             profileIdentifier: nil
         )).handle
         let claim = try approvalClaim(await bridge.claim(handle: handle))
-        let permit = try reviewedExecution(claim)
+        let permit = try await reviewedExecution(claim)
         defer { permit.releaseLease() }
         let recovery = permit.recoveryResponse
         let prepared = await prepareReviewedBroadcast(permit, in: bridge)
@@ -6945,7 +7001,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     ingress: fixture.ingress, profileIdentifier: nil
                 )).handle
                 let claim = try approvalClaim(await bridge.claim(handle: handle))
-                let execution = try reviewedExecution(claim)
+                let execution = try await reviewedExecution(claim)
                 defer { execution.releaseLease() }
                 clock.now = claim.executionDeadline.addingTimeInterval(-ExtensionBridge.executionLifetime + offset)
                 XCTAssertTrue(execution.permit.isExecuting)
@@ -6967,7 +7023,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 profileIdentifier: nil
             )).handle
             let claim = try approvalClaim(await bridge.claim(handle: handle))
-            let permit = try reviewedExecution(claim)
+            let permit = try await reviewedExecution(claim)
             let deadline = claim.executionDeadline
             clock.now = deadline
 
@@ -7019,7 +7075,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             profileIdentifier: nil
         )).handle
         let claim = try approvalClaim(await bridge.claim(handle: handle))
-        var permit: ReviewedExecution? = try reviewedExecution(claim)
+        var permit: ReviewedExecution? = try await reviewedExecution(claim)
         _ = try XCTUnwrap(permit).recoveryResponse
         let preparation = await prepareReviewedBroadcast(try XCTUnwrap(permit), in: bridge)
         XCTAssertEqual(preparation, .persisted)
@@ -7056,7 +7112,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )).handle
         clock.now.addTimeInterval(ExtensionBridge.requestTTL - 1)
         let claim = try approvalClaim(await bridge.claim(handle: handle))
-        var permit: ReviewedExecution? = try reviewedExecution(claim)
+        var permit: ReviewedExecution? = try await reviewedExecution(claim)
         clock.now.addTimeInterval(2)
         _ = try XCTUnwrap(permit).recoveryResponse
         let preparation = await prepareReviewedBroadcast(try XCTUnwrap(permit), in: bridge)
@@ -7088,7 +7144,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         var claim: ExtensionBridge.ApprovalClaim? = try approvalClaim(
             await bridge.claim(handle: handle)
         )
-        var permit: ReviewedExecution? = try reviewedExecution(try XCTUnwrap(claim))
+        var permit: ReviewedExecution? = try await reviewedExecution(try XCTUnwrap(claim))
         _ = try XCTUnwrap(permit).recoveryResponse
         let preparation = await prepareReviewedBroadcast(try XCTUnwrap(permit), in: bridge)
         XCTAssertEqual(preparation, .persisted)
@@ -7122,7 +7178,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let fixture = try makeTransactionFixture(id: 80 + index)
             let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
             let claim = try approvalClaim(await bridge.claim(handle: handle))
-            let execution = try reviewedExecution(claim)
+            let execution = try await reviewedExecution(claim)
             let checkpoint = await prepareReviewedBroadcast(execution)
             XCTAssertEqual(checkpoint, .persisted)
             let sender = StorageBroadcastSender()
@@ -7151,7 +7207,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let fixture = try makeTransactionFixture(id: 75_000 + index)
             let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
             let claim = try approvalClaim(await bridge.claim(handle: handle))
-            let execution = try reviewedExecution(claim)
+            let execution = try await reviewedExecution(claim)
             let payload = String(repeating: "{\"value\":", count: depth) + "null" + String(repeating: "}", count: depth)
             let result = try XCTUnwrap(ApprovedCompletion.failure(.init(message: "Rejected", code: -32_000, context: .dataJSON(payload)), permit: execution.permit))
             let response = try XCTUnwrap(result.response(for: execution.permit))
@@ -7190,7 +7246,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let fixture = try makeTransactionFixture(id: 51)
         let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
         let claim = try approvalClaim(await bridge.claim(handle: handle))
-        let execution = try reviewedExecution(claim)
+        let execution = try await reviewedExecution(claim)
         let oversized = try XCTUnwrap(ApprovedCompletion.failure(.init(
             message: String(repeating: "x", count: ExtensionBridge.maximumPayloadBytes),
             code: ProviderResponseError.internalErrorCode
@@ -7212,7 +7268,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let fixture = try makeTransactionFixture(id: 52)
         let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil)).handle
         let claim = try approvalClaim(await bridge.claim(handle: handle))
-        let execution = try reviewedExecution(claim)
+        let execution = try await reviewedExecution(claim)
         let oversized = try XCTUnwrap(ApprovedCompletion.failure(.init(
             message: String(repeating: "x", count: ExtensionBridge.maximumPayloadBytes),
             code: ProviderResponseError.internalErrorCode
@@ -9747,7 +9803,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         _ claim: ExtensionBridge.ApprovalClaim,
         accounts: [WalletAccountDescriptor]? = nil,
         chainID: String = "0x1"
-    ) throws -> ReviewedExecution {
+    ) async throws -> ReviewedExecution {
         let store = removalStore()
         let resolved = try reviewedApproval(claim, accounts: accounts, chainID: chainID)
         guard claim.adoptForExecution(),
@@ -9761,7 +9817,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         case .addEthereumChain:
             completion = try XCTUnwrap(ApprovedCompletion.chainAdded(permit: permit))
         case .signing:
-            switch try walletSigningOutputForTesting(permit: permit) {
+            switch try await walletSigningOutputForTesting(permit: permit, clock: { [clock = clock!] in clock.now }) {
             case .response(let signed):
                 completion = ApprovedCompletion(signed: signed)
             case .broadcast(let signed):
@@ -9778,7 +9834,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     @MainActor
     private func completeApprovedSelection(handle: ExtensionBridge.Handle, accounts: [WalletAccountDescriptor], chainID: String = "0x1") async throws -> ExtensionBridge.StoreMutationResult {
         let claim = try approvalClaim(await bridge.claim(handle: handle))
-        let execution = try reviewedExecution(claim, accounts: accounts, chainID: chainID)
+        let execution = try await reviewedExecution(claim, accounts: accounts, chainID: chainID)
         return await completeReviewedExecution(execution)
     }
 
@@ -9904,7 +9960,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         case .ownershipLost, .executing, .responded, .missing, .unavailable, .reviewRequired:
             throw Failure.expectedValue
         }
-        let permit = try reviewedExecution(nativeClaim)
+        let permit = try await reviewedExecution(nativeClaim)
         return (
             fixture.request,
             handle,

@@ -272,7 +272,7 @@ struct ApprovalResolutionContext: Sendable {
 
 struct ReviewConsent: Sendable {
     let intent: BoundApprovalIntent
-    fileprivate let authorizationUse: ConsentAuthorizationUse
+    private let authorizationUse: ConsentAuthorizationUse
     let decision: DappApprovalDecision
     let approvedAt: Date
     let nativeReceipt: ExtensionBridge.NativeDeliveryReceipt?
@@ -299,7 +299,11 @@ struct ReviewConsent: Sendable {
     }
 
     func invalidateAuthorization() {
-        _ = authorizationUse.consume()
+        _ = consumeAuthorization()
+    }
+
+    fileprivate func consumeAuthorization() -> Bool {
+        authorizationUse.consume()
     }
 
     @MainActor
@@ -309,45 +313,35 @@ struct ReviewConsent: Sendable {
         DappApprovalValidator.resolve(
             action: intent.action, decision: decision, context: context
         ).map { approval in
-            ResolvedDappApproval(
-                binding: binding, approval: approval,
-                nativeReceipt: nativeReceipt, approvedAt: approvedAt,
-                authorizationUse: authorizationUse
-            )
+            ResolvedDappApproval(consent: self, approval: approval)
         }
     }
 
 }
 
 struct ResolvedDappApproval: Sendable {
-    let binding: ExtensionBridge.RequestBinding
+    private let consent: ReviewConsent
     let approval: DappApprovalValidator.Approval
-    private let authorizationUse: ConsentAuthorizationUse
-    let nativeReceipt: ExtensionBridge.NativeDeliveryReceipt?
-    let approvedAt: Date
 
-    var request: SafariRequest { binding.request }
+    var binding: ExtensionBridge.RequestBinding { consent.binding }
+    var request: SafariRequest { consent.request }
+    var nativeReceipt: ExtensionBridge.NativeDeliveryReceipt? { consent.nativeReceipt }
+    var approvedAt: Date { consent.approvedAt }
 
     fileprivate init(
-        binding: ExtensionBridge.RequestBinding,
-        approval: DappApprovalValidator.Approval,
-        nativeReceipt: ExtensionBridge.NativeDeliveryReceipt?,
-        approvedAt: Date,
-        authorizationUse: ConsentAuthorizationUse
+        consent: ReviewConsent,
+        approval: DappApprovalValidator.Approval
     ) {
-        self.binding = binding
+        self.consent = consent
         self.approval = approval
-        self.authorizationUse = authorizationUse
-        self.nativeReceipt = nativeReceipt
-        self.approvedAt = approvedAt
     }
 
     func consumeAuthorization() -> Bool {
-        authorizationUse.consume()
+        consent.consumeAuthorization()
     }
 
     func sharesAuthorization(with consent: ReviewConsent) -> Bool {
-        authorizationUse === consent.authorizationUse
+        self.consent.sharesAuthorization(with: consent)
     }
 }
 

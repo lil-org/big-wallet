@@ -173,15 +173,15 @@ final class SafariApprovalVaultTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async throws {
-        let operation = try approvedWalletSigningOperationForTesting(
+        let permit = try approvedWalletSigningPermitForTesting(
             approvedAccount: WalletAccountDescriptor(walletID: walletID, account: account),
             authorization: walletSigningAuthorizationForTesting(
                 approvedAccount: WalletAccountDescriptor(walletID: walletID, account: account),
                 handle: access.authorization.handle, deadline: access.authorization.signingDeadline
             )
         )
-        guard access.bind(operation: operation) else {
-            XCTAssertFalse(expectedSuccess, "Expected authorization to bind", file: file, line: line)
+        guard access.attach(permit: permit) else {
+            XCTAssertFalse(expectedSuccess, "Expected authorization to attach", file: file, line: line)
             return
         }
         try assertSigningResultForTesting(await access.sign(), account: account, expectedSuccess: expectedSuccess, file: file, line: line)

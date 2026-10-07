@@ -88,7 +88,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApp.activate(ignoringOtherApps: true)
-        windows.forEach { $0.deminiaturize(nil) }
+        windows.filter(\.isMiniaturized).forEach { $0.deminiaturize(nil) }
         NSApp.arrangeInFront(nil)
     }
     

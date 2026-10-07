@@ -68,42 +68,6 @@ final class NativeApprovalWindowCloseObserver {
 @MainActor
 class Agent: NSObject {
     
-    @MainActor
-    final class WeakViewControllerReference {
-        weak var value: NSViewController?
-
-        init(_ value: NSViewController? = nil) {
-            self.value = value
-        }
-
-    }
-
-    @MainActor
-    private final class WeakWindowReference {
-        weak var value: NSWindow?
-
-        init(_ value: NSWindow?) {
-            self.value = value
-        }
-    }
-
-    enum LocalAuthenticationResolution: Equatable {
-        case authenticated
-        case showPassword
-        case failed
-    }
-
-    enum AuthenticationContext: Sendable {
-        case startup
-        case walletManagement(returningTo: WeakViewControllerReference)
-        case approval(returningTo: WeakViewControllerReference, lifetime: NativeApprovalReviewLifetime)
-    }
-
-    enum MissingPasswordApprovalAction: Equatable {
-        case awaitOnboarding
-        case rejectAndOpenDock
-    }
-
     enum FinishedApprovalWindowAction: Equatable {
         case none
         case close
@@ -198,41 +162,42 @@ class Agent: NSObject {
         }
     }
 
-    @MainActor
-    private final class CredentialSession {
-        enum Step {
-            case setup, authenticating, unavailable, handingOff
-        }
-
-        let step: Step
-        var windowController: NSWindowController?
-        var task: Task<Void, Never>?
-        var closeObserver: NativeApprovalWindowCloseObserver?
-
-        init(step: Step) {
-            self.step = step
+    static let shared = Agent()
+    private var isReady = false
+    private let credentialDependencies: StartupCredentialCoordinator.Dependencies
+    private lazy var startupCredentials = StartupCredentialCoordinator(
+        dependencies: credentialDependencies
+    ) { [weak self] event in
+        guard let self else { return }
+        switch event {
+        case .authenticated:
+            activateAwaitingApprovals()
+            if pendingWalletOpenIntent.consume() { showWallet() }
+        case .cancelled:
+            pendingWalletOpenIntent.cancel()
+            cancelPendingApprovals()
+        case .setupRequiredInDockApp:
+            cancelPendingApprovals()
+        case .handedOff:
+            pendingWalletOpenIntent.cancel()
         }
     }
-
-    static let shared = Agent()
-    var keychain = Keychain.shared
-    var canCreatePassword: Bool { CurrentApp.canCreatePassword }
-    private var didStart = false
-    private var isReady = false
-    private var didEnterPasswordOnStart = false
-    private var credentialSession: CredentialSession?
     private var walletWindowController: NSWindowController?
-    private var isUpdatingCredentialPresentation = false
     private var pendingWalletOpenIntent = PendingWalletOpenIntent()
     private var nativeDeliveryOwner: ExtensionBridge.NativeDeliveryOwner?
     private var approvalInbox = ApprovalInbox<ActiveApproval>()
 
     private override init() {
+        credentialDependencies = .init()
         super.init()
     }
 
-    init(approvalInbox: ApprovalInbox<ActiveApproval>) {
+    init(
+        approvalInbox: ApprovalInbox<ActiveApproval>,
+        credentialDependencies: StartupCredentialCoordinator.Dependencies = .init()
+    ) {
         self.approvalInbox = approvalInbox
+        self.credentialDependencies = credentialDependencies
         super.init()
     }
     
@@ -246,15 +211,6 @@ class Agent: NSObject {
             isReady = true
         } else if CurrentApp.isDockApp {
             isReady = true
-        }
-        if !didStart {
-            didStart = true
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(walletsChanged),
-                name: .walletsChanged,
-                object: nil
-            )
         }
         if openOnLaunch {
             pendingWalletOpenIntent.record()
@@ -275,7 +231,6 @@ class Agent: NSObject {
             if let existing = approvalInbox.coordinator(for: key) {
                 if existing.isAwaitingAuthentication {
                     resumePendingWork()
-                    reactivateCredentialPresentation()
                 } else {
                     reactivateApprovalIfNeeded(for: key)
                 }
@@ -318,209 +273,15 @@ class Agent: NSObject {
         restoreOldestRecoverableApproval()
         pendingWalletOpenIntent.record()
         resumePendingWork()
-        reactivateCredentialPresentation()
     }
 
-    static func missingPasswordApprovalAction(
-        canCreatePassword: Bool
-    ) -> MissingPasswordApprovalAction {
-        canCreatePassword ? .awaitOnboarding : .rejectAndOpenDock
-    }
-
-    private func resumePendingWork(retrying failedSession: CredentialSession? = nil) {
-        guard isReady, !isUpdatingCredentialPresentation else { return }
-        if let failedSession {
-            guard credentialSession === failedSession,
-                  failedSession.step == .unavailable else { return }
-        } else if credentialSession?.step == .unavailable {
-            return
-        }
+    private func resumePendingWork() {
+        guard isReady else { return }
         startPendingApprovals()
-        guard pendingWalletOpenIntent.isPending || approvalInbox.hasAwaitingAuthentication || failedSession != nil,
-              let passwordState = passwordStateForPendingWork() else { return }
-        guard passwordState == .present else {
-            didEnterPasswordOnStart = false
-            switch Self.missingPasswordApprovalAction(canCreatePassword: canCreatePassword) {
-            case .awaitOnboarding:
-                showWelcomeIfNeeded()
-            case .rejectAndOpenDock:
-                cancelPendingApprovals()
-                requestDockOnboarding()
-            }
-            return
-        }
-
-        if credentialSession?.step == .setup || credentialSession?.step == .handingOff {
-            didEnterPasswordOnStart = false
-        }
-
-        if didEnterPasswordOnStart {
-            if let credentialSession { finishCredentialStep(credentialSession) }
-            activateAwaitingApprovals()
-            if pendingWalletOpenIntent.consume() {
-                showWallet()
-            }
-        } else {
-            requestStartupAuthenticationIfNeeded()
-        }
+        guard pendingWalletOpenIntent.isPending || approvalInbox.hasAwaitingAuthentication else { return }
+        startupCredentials.requestAccess()
     }
 
-    private func requestStartupAuthenticationIfNeeded() {
-        guard credentialSession?.step != .authenticating else { return }
-        let session = beginCredentialStep(.authenticating)
-        if session.windowController != nil {
-            presentCredentialWaiting(session, reason: Strings.loading)
-        }
-        session.task = Task { [weak self, weak session] in
-            guard let self, let session, credentialSession === session else { return }
-            let success = await askAuthentication(for: .startup, reason: .start)
-            guard !Task.isCancelled, credentialSession === session else { return }
-            session.task = nil
-            guard success else {
-                cancelCredentialFlow(matching: session)
-                return
-            }
-            completeCredentialStep(session, authenticated: true)
-        }
-    }
-
-    func askAuthentication(for authentication: AuthenticationContext, reason: AuthenticationReason) async -> Bool {
-        let returningController: WeakViewControllerReference?
-        let reviewLifetime: NativeApprovalReviewLifetime?
-        let startupSession: CredentialSession?
-        switch authentication {
-        case .startup:
-            guard let session = credentialSession, session.step == .authenticating else { return false }
-            startupSession = session
-            returningController = nil
-            reviewLifetime = nil
-        case .walletManagement(let controller):
-            startupSession = nil
-            returningController = controller
-            reviewLifetime = nil
-        case .approval(let controller, let lifetime):
-            startupSession = nil
-            returningController = controller
-            reviewLifetime = lifetime
-        }
-        func authenticationIsCurrent() -> Bool {
-            !Task.isCancelled && reviewLifetime?.isActive != false &&
-                (startupSession == nil || credentialSession === startupSession)
-        }
-        guard authenticationIsCurrent() else { return false }
-        let onStart = returningController == nil
-        let originalWindow = WeakWindowReference(returningController?.value?.viewIfLoaded?.window)
-        guard onStart || returningController?.value != nil else { return false }
-
-        func showPasswordScreen() async -> Bool {
-            guard authenticationIsCurrent() else { return false }
-            let response = AuthenticationResponse()
-            return await response.wait { response in
-                let wasUpdating = isUpdatingCredentialPresentation
-                if onStart { isUpdatingCredentialPresentation = true }
-                defer { isUpdatingCredentialPresentation = wasUpdating }
-                let existingWindow = originalWindow.value
-                let window: NSWindow?
-                if let startupSession {
-                    window = credentialWindow(for: startupSession)?.window
-                } else {
-                    window = existingWindow ?? Window.showNew(closeOthers: false).window
-                }
-                guard authenticationIsCurrent(), window != nil else {
-                    if !onStart, existingWindow == nil { window?.close() }
-                    response.resolve(false)
-                    return
-                }
-                let presentation = WeakViewControllerReference()
-                let credentialUnavailable: (() -> Void)?
-                if let startupSession {
-                    credentialUnavailable = { [weak self, weak startupSession] in
-                        guard let self, let startupSession else { return }
-                        showCredentialUnavailable(matching: startupSession)
-                    }
-                } else {
-                    credentialUnavailable = nil
-                }
-                let passwordViewController = PasswordViewController.with(
-                    mode: .enter,
-                    reason: reason,
-                    reviewLifetime: reviewLifetime,
-                    credentialUnavailable: credentialUnavailable
-                ) { [weak self, weak window] success in
-                    guard reviewLifetime?.isActive != false,
-                          startupSession == nil || self?.credentialSession === startupSession,
-                          window?.contentViewController === presentation.value else {
-                        response.resolve(false)
-                        return
-                    }
-                    if let returningController = returningController?.value {
-                        window?.contentViewController = returningController
-                    } else if !onStart {
-                        Window.closeWindow(idToClose: window?.windowNumber)
-                    }
-                    response.resolve(success)
-                }
-                passwordViewController.keychain = keychain
-                passwordViewController.retainedReturnController = returningController?.value
-                presentation.value = passwordViewController
-                window?.contentViewController = passwordViewController
-            }
-        }
-
-        guard let outcome = await attemptDeviceAuthentication(reason: reason.title) else {
-            return await showPasswordScreen()
-        }
-        guard authenticationIsCurrent() else { return false }
-        switch Self.localAuthenticationResolution(success: outcome == .succeeded, onStart: onStart) {
-        case .authenticated: return true
-        case .showPassword: return await showPasswordScreen()
-        case .failed: return false
-        }
-    }
-
-    func attemptDeviceAuthentication(reason: String) async -> DeviceAuthentication.Outcome? {
-        guard DeviceAuthentication.canUseBiometrics else { return nil }
-        return await DeviceAuthentication.attemptBiometrics(reason: reason)
-    }
-
-    @MainActor
-    private final class AuthenticationResponse {
-        private var continuation: CheckedContinuation<Bool, Never>?
-        private var result: Bool?
-
-        func wait(_ present: (AuthenticationResponse) -> Void) async -> Bool {
-            guard !Task.isCancelled else { return false }
-            return await withTaskCancellationHandler {
-                await withCheckedContinuation { continuation in
-                    if let result {
-                        continuation.resume(returning: result)
-                    } else {
-                        self.continuation = continuation
-                        present(self)
-                    }
-                }
-            } onCancel: {
-                Task { @MainActor in self.resolve(false) }
-            }
-        }
-
-        func resolve(_ result: Bool) {
-            guard self.result == nil else { return }
-            self.result = result
-            let continuation = continuation
-            self.continuation = nil
-            continuation?.resume(returning: result)
-        }
-    }
-
-    static func localAuthenticationResolution(
-        success: Bool,
-        onStart: Bool
-    ) -> LocalAuthenticationResolution {
-        if success { return .authenticated }
-        return onStart ? .showPassword : .failed
-    }
-        
     private func startPendingApprovals() {
         guard isReady,
               let nativeDeliveryOwner else { return }
@@ -550,198 +311,7 @@ class Agent: NSObject {
     }
 
     func applicationDidBecomeActive() {
-        guard pendingWalletOpenIntent.isPending || approvalInbox.hasAwaitingAuthentication else { return }
-        resumePendingWork()
-    }
-
-    private func passwordStateForPendingWork() -> Keychain.PasswordState? {
-        do {
-            return try keychain.passwordState()
-        } catch {
-            showCredentialUnavailable()
-            return nil
-        }
-    }
-
-    private func beginCredentialStep(_ step: CredentialSession.Step) -> CredentialSession {
-        let previous = credentialSession
-        let session = CredentialSession(step: step)
-        session.windowController = previous?.windowController
-        credentialSession = session
-        if let previous {
-            retireCredentialSession(previous, closeWindow: false)
-        }
-        observeCredentialWindow(for: session)
-        return session
-    }
-
-    private func retireCredentialSession(_ session: CredentialSession, closeWindow: Bool) {
-        let controller = session.windowController
-        session.windowController = nil
-        let task = session.task
-        session.task = nil
-        session.closeObserver?.disable()
-        session.closeObserver = nil
-        task?.cancel()
-        switch controller?.contentViewController {
-        case let password as PasswordViewController:
-            password.retireCredentialPresentation()
-        case let welcome as WelcomeViewController:
-            welcome.retireCredentialPresentation()
-        default:
-            break
-        }
-        controller?.window?.delegate = nil
-        if closeWindow { controller?.close() }
-    }
-
-    private func finishCredentialStep(_ session: CredentialSession) {
-        guard credentialSession === session else { return }
-        credentialSession = nil
-        let wasUpdating = isUpdatingCredentialPresentation
-        isUpdatingCredentialPresentation = true
-        defer { isUpdatingCredentialPresentation = wasUpdating }
-        retireCredentialSession(session, closeWindow: true)
-    }
-
-    private func cancelCredentialFlow(matching session: CredentialSession) {
-        guard credentialSession === session else { return }
-        pendingWalletOpenIntent.cancel()
-        finishCredentialStep(session)
-        cancelPendingApprovals()
-    }
-
-    private func observeCredentialWindow(for session: CredentialSession) {
-        guard let window = session.windowController?.window else { return }
-        let observer = NativeApprovalWindowCloseObserver { [weak self, weak session] in
-            guard let self, let session else { return }
-            cancelCredentialFlow(matching: session)
-        }
-        session.closeObserver = observer
-        observer.observe(window)
-    }
-
-    private func credentialWindow(for session: CredentialSession) -> NSWindowController? {
-        guard credentialSession === session else { return nil }
-        if let controller = session.windowController { return controller }
-        let wasUpdating = isUpdatingCredentialPresentation
-        isUpdatingCredentialPresentation = true
-        defer { isUpdatingCredentialPresentation = wasUpdating }
-        let controller = Window.showNew(closeOthers: false)
-        guard credentialSession === session else {
-            controller.window?.delegate = nil
-            controller.close()
-            return nil
-        }
-        session.windowController = controller
-        observeCredentialWindow(for: session)
-        return controller
-    }
-
-    private func presentCredentialController(_ controller: NSViewController, for session: CredentialSession) {
-        let wasUpdating = isUpdatingCredentialPresentation
-        isUpdatingCredentialPresentation = true
-        defer { isUpdatingCredentialPresentation = wasUpdating }
-        guard let windowController = credentialWindow(for: session) else { return }
-        windowController.window?.delegate = nil
-        windowController.contentViewController = controller
-        guard credentialSession === session else { return }
-        Window.reactivateWindow(windowController)
-    }
-
-    private func presentCredentialWaiting(_ session: CredentialSession, reason: String) {
-        let isUnavailable = session.step == .unavailable
-        let controller = WaitingViewController.with(
-            reason: reason,
-            isWorking: !isUnavailable,
-            retryAction: isUnavailable ? { [weak self, weak session] in
-                guard let self, let session else { return }
-                resumePendingWork(retrying: session)
-            } : nil
-        ) {}
-        presentCredentialController(controller, for: session)
-    }
-
-    private func showCredentialUnavailable(
-        matching session: CredentialSession? = nil,
-        reason: String = Strings.failedToLoad
-    ) {
-        if let session, credentialSession !== session { return }
-        guard credentialSession?.step != .unavailable else { return }
-        didEnterPasswordOnStart = false
-        let failure = beginCredentialStep(.unavailable)
-        presentCredentialWaiting(failure, reason: reason)
-    }
-
-    private func reactivateCredentialPresentation() {
-        guard let controller = credentialSession?.windowController else { return }
-        Window.reactivateWindow(controller)
-    }
-
-    func openDockForOnboarding() async -> Bool {
-        await DockAppLauncher.openDockApp()
-    }
-
-    private func requestDockOnboarding() {
-        guard credentialSession?.step != .handingOff else { return }
-        let session = beginCredentialStep(.handingOff)
-        if session.windowController != nil {
-            presentCredentialWaiting(session, reason: Strings.loading)
-        }
-        session.task = Task { [weak self, weak session] in
-            guard let self, let session, credentialSession === session else { return }
-            let succeeded = await openDockForOnboarding()
-            guard !Task.isCancelled, credentialSession === session else { return }
-            session.task = nil
-            guard succeeded else {
-                showCredentialUnavailable(matching: session, reason: Strings.somethingWentWrong)
-                return
-            }
-            pendingWalletOpenIntent.cancel()
-            finishCredentialStep(session)
-        }
-    }
-
-    private func showWelcomeIfNeeded(restarting: Bool = false) {
-        if !restarting, credentialSession?.step == .setup {
-            reactivateCredentialPresentation()
-            return
-        }
-        let session = beginCredentialStep(.setup)
-        let welcome = WelcomeViewController.new(
-            onboardingCancelled: { [weak self, weak session] in
-                guard let self, let session else { return }
-                cancelCredentialFlow(matching: session)
-            },
-            credentialUnavailable: { [weak self, weak session] in
-                guard let self, let session else { return }
-                showCredentialUnavailable(matching: session)
-            }
-        ) { [weak self, weak session] createdPassword in
-            guard let self, let session, credentialSession === session else { return }
-            completeCredentialStep(session, authenticated: createdPassword)
-        }
-        welcome.keychain = keychain
-        presentCredentialController(welcome, for: session)
-    }
-
-    private func completeCredentialStep(_ session: CredentialSession, authenticated: Bool) {
-        guard credentialSession === session,
-              let passwordState = passwordStateForPendingWork() else { return }
-        didEnterPasswordOnStart = authenticated && passwordState == .present
-        if passwordState == .missing {
-            if canCreatePassword {
-                showWelcomeIfNeeded(restarting: true)
-            } else {
-                cancelPendingApprovals()
-                requestDockOnboarding()
-            }
-        } else if didEnterPasswordOnStart {
-            finishCredentialStep(session)
-            resumePendingWork()
-        } else {
-            requestStartupAuthenticationIfNeeded()
-        }
+        startupCredentials.refresh()
     }
 
     private func showWallet() {
@@ -774,7 +344,7 @@ class Agent: NSObject {
               let snapshot = approval.beginRenderingCurrentPresentation(
                   allowNewWaitingWindow: allowNewWaitingWindow
               ) else { return }
-        let finishedWindowAction = approval.present(snapshot.presentation, using: self)
+        let finishedWindowAction = approval.present(snapshot.presentation)
         if finishedWindowAction != nil {
             approvalInbox.remove(ApprovalRouteKey(
                 handle: handle,
@@ -824,22 +394,17 @@ class Agent: NSObject {
         oldest.value.restorePresentation(retryPaused: false, using: self)
     }
 
-    @objc private func walletsChanged() {
-        guard approvalInbox.hasAwaitingAuthentication ||
-                pendingWalletOpenIntent.isPending else { return }
-        resumePendingWork()
-    }
+
 }
 
 extension Agent.ActiveApproval {
 
     fileprivate func present(
-        _ presentation: NativeApprovalCoordinator.Presentation,
-        using agent: Agent
+        _ presentation: NativeApprovalCoordinator.Presentation
     ) -> Agent.FinishedApprovalWindowAction? {
         switch presentation {
         case .approval(let request, let action):
-            present(action: action, peer: request.peerMeta, using: agent)
+            present(action: action, peer: request.peerMeta)
         case .waiting:
             showWaiting()
         case .retryRequired:
@@ -857,7 +422,7 @@ extension Agent.ActiveApproval {
         return nil
     }
 
-    private func present(action: DappRequestAction, peer: PeerMeta, using agent: Agent) {
+    private func present(action: DappRequestAction, peer: PeerMeta) {
         guard let review = beginReview() else { return }
         let windowController = approvalWindow(peer: peer)
         switch action {
@@ -866,7 +431,7 @@ extension Agent.ActiveApproval {
         case .switchAccount(let action):
             presentAccountSelection(action, mode: .switchAccount, review: review)
         case .approveMessage(let action):
-            showApproveMessage(action, review: review, using: agent)
+            showApproveMessage(action, review: review)
         case .approveTransaction(let action):
             windowController.contentViewController = ApproveTransactionViewController.with(
                 transaction: action.transaction,
@@ -955,8 +520,7 @@ extension Agent.ActiveApproval {
 
     private func showApproveMessage(
         _ action: SignMessageAction,
-        review: NativeApprovalReviewLifetime,
-        using agent: Agent
+        review: NativeApprovalReviewLifetime
     ) {
         let controller = approvalWindow()
         let window = controller.window
@@ -969,7 +533,7 @@ extension Agent.ActiveApproval {
             walletId: action.walletId,
             solanaClusterOptions: action.solanaClusterOptions,
             reviewLifetime: review
-        ) { [weak self, weak agent, weak window] decision in
+        ) { [weak self, weak window] decision in
             guard let self, acceptsActions(for: review) else { return }
             guard case .approved = decision else {
                 guard !didResolveAuthentication else { return }
@@ -977,17 +541,16 @@ extension Agent.ActiveApproval {
                 coordinator.reject()
                 return
             }
-            guard let returningController = window?.contentViewController else {
+            guard let window else {
                 coordinator.reject()
                 return
             }
-            let authentication = Agent.AuthenticationContext.approval(returningTo: .init(returningController), lifetime: review)
             authenticationTask?.cancel()
-            authenticationTask = Task { [weak self, weak window, weak agent] in
-                guard let agent else { return }
-                let success = await agent.askAuthentication(
-                    for: authentication,
-                    reason: action.subject.asAuthenticationReason
+            authenticationTask = Task { [weak self, weak window] in
+                let success = await Window.authenticate(
+                    in: window,
+                    reason: action.subject.asAuthenticationReason,
+                    reviewLifetime: review
                 )
                 guard let self, !Task.isCancelled, acceptsActions(for: review), !didResolveAuthentication else { return }
                 didResolveAuthentication = true

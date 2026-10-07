@@ -32,9 +32,9 @@ final class NativeApprovalFinalizer {
         self.store = store
         self.refreshWalletCatalog = refreshWalletCatalog
         let clock = executionEnvironment.clock
-        self.makeSigner = makeSigner ?? { operation in
+        self.makeSigner = makeSigner ?? { authorization in
             WalletSigningSession.fromSource(
-                operation: operation,
+                authorization: authorization,
                 clock: clock
             )
         }

@@ -182,72 +182,92 @@ final class PasswordStorageTests: XCTestCase {
     }
 
 #if os(macOS)
-    func testMacPasswordRetryNeverInterpretsUnavailableStorageAsMissing() throws {
+    func testMacPasswordRetryNeverInterpretsUnavailableStorageAsMissing() async throws {
         let fixture = PasswordKeychainFixture()
         fixture.readStatus = errSecInteractionNotAllowed
-        var completions = [Bool]()
-        let controller = PasswordViewController.with(mode: .create) { completions.append($0) }
-        controller.keychain = fixture.keychain
-        _ = controller.view
-        controller.actionButtonTapped(controller.okButton as Any)
-        XCTAssertEqual(controller.titleLabel.stringValue, Strings.failedToLoad)
-        XCTAssertEqual(controller.okButton.title, Strings.tryAgain)
-        XCTAssertFalse(controller.passwordTextField.isEnabled)
-        XCTAssertTrue(completions.isEmpty)
+        var events = [StartupCredentialCoordinator.Event]()
+        var dependencies = StartupCredentialCoordinator.Dependencies()
+        dependencies.keychain = fixture.keychain
+        dependencies.canCreatePassword = true
+        dependencies.attemptBiometrics = { _ in nil }
+        let flow = StartupCredentialCoordinator(dependencies: dependencies) { events.append($0) }
+        defer { flow.cancel() }
+        flow.requestAccess()
+        let window = try XCTUnwrap(flow.windowController?.window)
+        let failure = try XCTUnwrap(window.contentViewController as? WaitingViewController)
+        XCTAssertEqual(failure.titleLabel.stringValue, Strings.failedToLoad)
+        XCTAssertEqual(failure.okButton.title, Strings.tryAgain)
+        failure.actionButtonTapped(failure.okButton as Any)
+        XCTAssertTrue(window.contentViewController is WaitingViewController)
+        XCTAssertTrue(events.isEmpty)
         fixture.readStatus = nil
-        controller.actionButtonTapped(controller.okButton as Any)
-        XCTAssertEqual(controller.titleLabel.stringValue, Strings.createPassword)
-        controller.passwordTextField.stringValue = "draft"
-        controller.actionButtonTapped(controller.okButton as Any)
-        XCTAssertEqual(controller.titleLabel.stringValue, Strings.repeatPassword)
-        controller.passwordTextField.stringValue = "draft"
+        let retry = try XCTUnwrap(window.contentViewController as? WaitingViewController)
+        retry.actionButtonTapped(retry.okButton as Any)
+        let welcome = try XCTUnwrap(window.contentViewController as? WelcomeViewController)
+        welcome.actionButtonTapped(welcome.getStartedButton as Any)
+        let create = try XCTUnwrap(window.contentViewController as? PasswordViewController)
+        create.passwordTextField.stringValue = "draft"
+        create.actionButtonTapped(create.okButton as Any)
+        let repeatForm = try XCTUnwrap(window.contentViewController as? PasswordViewController)
+        XCTAssertEqual(repeatForm.titleLabel.stringValue, Strings.repeatPassword)
+        repeatForm.passwordTextField.stringValue = "draft"
         fixture.passwordData = Data("other-session".utf8)
-        controller.actionButtonTapped(controller.okButton as Any)
-        XCTAssertEqual(completions, [false])
-        XCTAssertTrue(controller.passwordTextField.stringValue.isEmpty)
+        repeatForm.actionButtonTapped(repeatForm.okButton as Any)
+        for _ in 0..<20 { await Task.yield() }
+        let enter = try XCTUnwrap(window.contentViewController as? PasswordViewController)
+        XCTAssertEqual(enter.titleLabel.stringValue, Strings.enterPassword)
+        XCTAssertTrue(repeatForm.passwordTextField.stringValue.isEmpty)
+        XCTAssertTrue(events.isEmpty)
         XCTAssertEqual(fixture.addCount, 0)
         XCTAssertEqual(try fixture.keychain.readPassword(), "other-session")
     }
 
-    func testMacPasswordEntryAcceptsExistingShortPasswordAfterRetry() {
+    func testMacPasswordEntryAcceptsExistingShortPasswordAfterRetry() async throws {
         let fixture = PasswordKeychainFixture()
         fixture.passwordData = Data("x".utf8)
         fixture.readStatus = errSecInteractionNotAllowed
-        var completions = [Bool]()
-        let controller = PasswordViewController.with(mode: .enter) { completions.append($0) }
-        controller.keychain = fixture.keychain
-        _ = controller.view
-        controller.actionButtonTapped(controller.okButton as Any)
-        XCTAssertTrue(completions.isEmpty)
+        var events = [StartupCredentialCoordinator.Event]()
+        var dependencies = StartupCredentialCoordinator.Dependencies()
+        dependencies.keychain = fixture.keychain
+        dependencies.attemptBiometrics = { _ in nil }
+        let flow = StartupCredentialCoordinator(dependencies: dependencies) { events.append($0) }
+        defer { flow.cancel() }
+        flow.requestAccess()
+        let window = try XCTUnwrap(flow.windowController?.window)
+        let failure = try XCTUnwrap(window.contentViewController as? WaitingViewController)
+        XCTAssertTrue(events.isEmpty)
         fixture.readStatus = nil
-        controller.actionButtonTapped(controller.okButton as Any)
+        failure.actionButtonTapped(failure.okButton as Any)
+        for _ in 0..<20 { await Task.yield() }
+        let controller = try XCTUnwrap(window.contentViewController as? PasswordViewController)
         controller.passwordTextField.stringValue = "x"
         controller.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
         XCTAssertTrue(controller.okButton.isEnabled)
         controller.actionButtonTapped(controller.okButton as Any)
-        XCTAssertEqual(completions, [true])
+        XCTAssertEqual(events, [.authenticated])
     }
 
-    func testMacWelcomeReportsUnavailableStorageAndRetiresItsCallbacks() {
+    func testMacWelcomeReportsUnavailableStorageAndRetiresItsCallbacks() throws {
         let fixture = PasswordKeychainFixture()
+        var events = [StartupCredentialCoordinator.Event]()
+        var dependencies = StartupCredentialCoordinator.Dependencies()
+        dependencies.keychain = fixture.keychain
+        dependencies.canCreatePassword = true
+        dependencies.attemptBiometrics = { _ in nil }
+        let flow = StartupCredentialCoordinator(dependencies: dependencies) { events.append($0) }
+        defer { flow.cancel() }
+        flow.requestAccess()
+        let window = try XCTUnwrap(flow.windowController?.window)
+        let welcome = try XCTUnwrap(window.contentViewController as? WelcomeViewController)
         fixture.readStatus = errSecInteractionNotAllowed
-        var completions = [Bool]()
-        var failures = 0
-        var controller: WelcomeViewController!
-        controller = WelcomeViewController.new(credentialUnavailable: {
-            failures += 1
-            controller.retireCredentialPresentation()
-        }) { completions.append($0) }
-        controller.keychain = fixture.keychain
-        _ = controller.view
-        controller.actionButtonTapped(controller.getStartedButton as Any)
-        XCTAssertEqual(failures, 1)
-        XCTAssertTrue(completions.isEmpty)
+        welcome.actionButtonTapped(welcome.getStartedButton as Any)
+        let failure = try XCTUnwrap(window.contentViewController as? WaitingViewController)
+        XCTAssertTrue(events.isEmpty)
         fixture.readStatus = nil
         fixture.passwordData = Data("existing".utf8)
-        controller.actionButtonTapped(controller.getStartedButton as Any)
-        XCTAssertTrue(completions.isEmpty)
-        XCTAssertEqual(failures, 1)
+        welcome.actionButtonTapped(welcome.getStartedButton as Any)
+        XCTAssertTrue(window.contentViewController === failure)
+        XCTAssertTrue(events.isEmpty)
         XCTAssertEqual(fixture.addCount, 0)
     }
 

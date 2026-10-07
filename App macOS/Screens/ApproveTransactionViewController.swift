@@ -8,7 +8,7 @@ class ApproveTransactionViewController: NSViewController {
         case idle
         case approvalAlert(NSAlert, TransactionApprovalAlertToken)
         case transactionEditor(NSWindow)
-        case endingTransactionEditor(() -> Void)
+        case endingTransactionEditor(NSWindow, () -> Void)
     }
     
     @IBOutlet weak var infoTextViewBottomConstraint: NSLayoutConstraint!
@@ -24,7 +24,6 @@ class ApproveTransactionViewController: NSViewController {
     @IBOutlet weak var fastSpeedLabel: NSTextField!
     @IBOutlet weak var peerNameLabel: NSTextField!
     
-    private let agent = Agent.shared
     private let ethereum = Ethereum.shared
     private let priceService = PriceService.shared
     private var authenticationTask: Task<Void, Never>?
@@ -157,7 +156,7 @@ class ApproveTransactionViewController: NSViewController {
         token: TransactionApprovalRequestToken
     ) {
         cancelAuthentication()
-        guard view.window != nil else {
+        guard let window = view.window else {
             coordinator.authenticationCompleted(
                 token: token,
                 succeeded: false
@@ -166,9 +165,9 @@ class ApproveTransactionViewController: NSViewController {
             return
         }
         authenticationToken = token
-        let authentication = Agent.AuthenticationContext.approval(returningTo: .init(self), lifetime: reviewLifetime)
-        authenticationTask = Task { [weak self, agent] in
-            let succeeded = await agent.askAuthentication(for: authentication, reason: .sendTransaction)
+        let lifetime = reviewLifetime!
+        authenticationTask = Task { [weak self, weak window] in
+            let succeeded = await Window.authenticate(in: window, reason: .sendTransaction, reviewLifetime: lifetime)
             guard let self, !Task.isCancelled, reviewLifetime.isActive else { return }
             if authenticationToken == token {
                 authenticationTask = nil
@@ -255,16 +254,36 @@ class ApproveTransactionViewController: NSViewController {
     private func endTransactionEditorSheet(
         completion: @escaping () -> Void = {}
     ) {
-        guard case let .transactionEditor(editorWindow) = sheetState,
-              let window = view.window,
-              window.attachedSheet === editorWindow else {
+        guard case let .transactionEditor(editorWindow) = sheetState else {
             completion()
             presentPendingApprovalAlertIfNeeded()
             return
         }
 
-        sheetState = .endingTransactionEditor(completion)
-        window.endSheet(editorWindow)
+        sheetState = .endingTransactionEditor(editorWindow, completion)
+        if let parent = editorWindow.sheetParent { parent.endSheet(editorWindow) }
+        else { transactionEditorDidEnd(editorWindow) }
+    }
+
+    private func transactionEditorDidEnd(_ editorWindow: NSWindow) {
+        guard reviewLifetime.isActive else {
+            editorWindow.orderOut(nil)
+            return
+        }
+        let completion: (() -> Void)?
+        switch sheetState {
+        case .endingTransactionEditor(let current, let afterDismissal) where current === editorWindow:
+            completion = afterDismissal
+        case .transactionEditor(let current) where current === editorWindow:
+            completion = nil
+        default:
+            editorWindow.orderOut(nil)
+            return
+        }
+        sheetState = .idle
+        editorWindow.orderOut(nil)
+        completion?()
+        presentPendingApprovalAlertIfNeeded()
     }
     
     private func updateInterface() {
@@ -445,7 +464,10 @@ class ApproveTransactionViewController: NSViewController {
             NSSize(width: 300, height: editWindowHeight)
         )
         sheetState = .transactionEditor(editWindow)
-        window.beginSheet(editWindow)
+        window.beginSheet(editWindow) { [weak self, weak editWindow] _ in
+            guard let self, let editWindow else { return }
+            transactionEditorDidEnd(editWindow)
+        }
     }
     
     @IBAction func sliderValueChanged(_ sender: NSSlider) {
@@ -571,21 +593,5 @@ extension ApproveTransactionViewController: NSWindowDelegate {
         updateInterface()
     }
 
-    func windowDidEndSheet(_ notification: Notification) {
-        guard reviewLifetime.isActive else { return }
-        switch sheetState {
-        case .endingTransactionEditor(let completion):
-            sheetState = .idle
-            completion()
-            presentPendingApprovalAlertIfNeeded()
-        case .transactionEditor(let editorWindow):
-            if editorWindow.sheetParent == nil {
-                sheetState = .idle
-            }
-            presentPendingApprovalAlertIfNeeded()
-        case .idle, .approvalAlert:
-            presentPendingApprovalAlertIfNeeded()
-        }
-    }
     
 }

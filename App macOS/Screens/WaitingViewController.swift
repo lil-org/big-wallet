@@ -17,7 +17,7 @@ class WaitingViewController: NSViewController {
         reason: String,
         isWorking: Bool = true,
         retryAction: (() -> Void)? = nil,
-        closeCompletion: @escaping () -> Void
+        closeCompletion: (() -> Void)? = nil
     ) -> WaitingViewController {
         let controller = instantiate(WaitingViewController.self)
         controller.reason = reason
@@ -34,7 +34,7 @@ class WaitingViewController: NSViewController {
 
     override func viewDidAppear() {
         super.viewDidAppear()
-        view.window?.delegate = self
+        if closeCompletion != nil { view.window?.delegate = self }
     }
 
     func update(reason: String, isWorking: Bool = true, retryAction: (() -> Void)? = nil) {
@@ -50,8 +50,15 @@ class WaitingViewController: NSViewController {
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
+        guard isViewLoaded, okButton.isEnabled else { return }
         if let retryAction { retryAction() }
         else { Window.closeWindow(idToClose: view.window?.windowNumber) }
+    }
+
+    func retire() {
+        closeCompletion = nil
+        retryAction = nil
+        if isViewLoaded { okButton.isEnabled = false }
     }
     
 }

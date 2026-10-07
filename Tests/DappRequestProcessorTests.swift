@@ -557,7 +557,7 @@ final class DappRequestProcessorTests: XCTestCase {
             let permit = try processorPermit(request: request, approval: approval)
             defer { permit.releaseLease() }
             XCTAssertTrue(permit.consumeExecution())
-            guard case .response(let signed) = try walletSigningOutputForTesting(permit: permit) else {
+            guard case .response(let signed) = try await walletSigningOutputForTesting(permit: permit) else {
                 return XCTFail("Expected an operation-bound signature response")
             }
             let completion = ApprovedCompletion(signed: signed)
@@ -841,7 +841,7 @@ final class DappRequestProcessorTests: XCTestCase {
             )
             defer { permit.releaseLease() }
             XCTAssertTrue(permit.consumeExecution())
-            guard case .broadcast(let signed) = try walletSigningOutputForTesting(permit: permit, privateKey: key) else {
+            guard case .broadcast(let signed) = try await walletSigningOutputForTesting(permit: permit, privateKey: key) else {
                 return XCTFail("Expected a validated signed broadcast")
             }
             guard case .solana(let validatedBytes, let validatedSignature, _, _) = signed.transaction else {
@@ -913,7 +913,7 @@ final class DappRequestProcessorTests: XCTestCase {
                 let original = try processorPermit(request: request, approval: approval)
                 defer { original.releaseLease() }
                 XCTAssertTrue(original.consumeExecution())
-                let output = try walletSigningOutputForTesting(permit: original)
+                let output = try await walletSigningOutputForTesting(permit: original)
                 let signer = ProcessorWalletSigner(result: .success(output))
                 let (permit, result) = try await executeProcessor(request: request, approval: approval, signer: signer)
                 defer { permit.releaseLease() }
@@ -3780,7 +3780,7 @@ private final class ProcessorWalletSigner: WalletSigning {
             result = supplied
         } else if let permit {
             do {
-                result = .success(try walletSigningOutputForTesting(permit: permit, privateKey: privateKey))
+                result = .success(try await walletSigningOutputForTesting(permit: permit, privateKey: privateKey))
             } catch {
                 result = .failure(error as? WalletSigningFailure ?? .failedToSign)
             }
