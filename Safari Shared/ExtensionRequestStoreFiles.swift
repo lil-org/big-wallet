@@ -320,14 +320,12 @@ final class ExtensionRequestStoreFiles: Sendable {
     func withRequiredLock<T>(_ body: () throws -> T) throws -> T {
         let lock = try acquireRequiredLock()
         defer { lock.release() }
-        removeOrphanedTemporaryFilesLocked()
         return try body()
     }
 
     func withLockIfAvailable<T>(_ body: () throws -> T) rethrows -> T? {
         guard let lock = try? acquireRequiredLock() else { return nil }
         defer { lock.release() }
-        removeOrphanedTemporaryFilesLocked()
         return try body()
     }
 
@@ -346,7 +344,7 @@ final class ExtensionRequestStoreFiles: Sendable {
         }
     }
 
-    private func removeOrphanedTemporaryFilesLocked() {
+    func removeOrphanedTemporaryFilesLocked() {
         guard let rootURL, directoryStatus(at: rootURL) == .directory else { return }
         for directory in [rootURL, profileDirectoryURL] {
             guard directoryStatus(at: directory) == .directory,

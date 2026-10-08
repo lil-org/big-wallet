@@ -1020,16 +1020,10 @@ function prepareConfiguration(provider, configuration, revision) {
     }
     return {
         __proto__: null,
-        publicKey, revision, baseline: state.notificationEpoch,
+        publicKey, revision,
         wrapper: publicKey === state.publicKeyString && revision === state.nativeRevision ? state.publicKey :
             publicKey === null ? null : new PublicKey(publicKey),
     };
-}
-
-function configurationIsCurrent(provider, prepared) {
-    const state = providerState(provider);
-    return !!state && state.runtime.phase !== "retired" &&
-        (!prepared || prepared.ignored || prepared.baseline === state.notificationEpoch);
 }
 
 function commitConfiguration(provider, prepared) {
@@ -1692,5 +1686,5 @@ BigWalletSolana.retire = retire;
 BigWalletSolana.snapshot = snapshot;
 BigWalletSolana.isReady = isReady;
 
-export { applyDecodedEnvelope, prepareConfiguration, configurationIsCurrent, commitConfiguration, emitConfiguration, finishConfiguration, isReady, retire, snapshot, subscribeNotifications };
+export { applyDecodedEnvelope, prepareConfiguration, commitConfiguration, emitConfiguration, finishConfiguration, isReady, retire, snapshot, subscribeNotifications };
 export default BigWalletSolana;

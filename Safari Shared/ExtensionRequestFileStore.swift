@@ -1394,7 +1394,10 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     }
 
     func performMaintenance() {
-        let candidates = files.withLock(or: []) { files.discoverProfileCandidates() }
+        let candidates: [ExtensionRequestStoreFiles.ProfileFileCandidate] = files.withLock(or: []) {
+            files.removeOrphanedTemporaryFilesLocked()
+            return files.discoverProfileCandidates()
+        }
         for candidate in candidates {
             let maintained = files.withLock(or: false) {
                 guard files.prepareDirectoriesLocked() else { return false }
@@ -1411,6 +1414,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
 
     func performMaintenance(profileIdentifier: UUID?) {
         _ = files.withLock(or: false) {
+            files.removeOrphanedTemporaryFilesLocked()
             guard files.prepareDirectoriesLocked() else { return false }
             _ = recoverProfileFileLocked(
                 at: files.profileURL(profileIdentifier),

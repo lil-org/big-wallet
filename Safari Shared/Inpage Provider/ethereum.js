@@ -6,7 +6,6 @@ import {
     applyFunction,
     createObjectNormally,
     freezeObjectNormally,
-    getOwnPropertyDescriptorNormally,
     isArrayNormally,
     isSafeIntegerNormally,
     getWeakMapValue,
@@ -42,13 +41,6 @@ const authorizationChangedMessage =
 
 function stateFor(provider) {
     return getWeakMapValue(providerStates, provider);
-}
-
-function dataProperty(object, name) {
-    const descriptor = getOwnPropertyDescriptorNormally(object, name);
-    return descriptor && "value" in descriptor
-        ? descriptor.value
-        : undefined;
 }
 
 function invalidParameters() {
@@ -573,14 +565,9 @@ function prepareConfiguration(provider, configuration, revision) {
     }
     return {
         __proto__: null,
-        address, chainId, revision, baseline: state.stateEpoch,
+        address, chainId, revision,
         networkVersion: normalizedNetworkVersion(chainId),
     };
-}
-
-function configurationIsCurrent(provider, prepared) {
-    const state = stateFor(provider);
-    return !!state && !state.retired && (!prepared || prepared.ignored || prepared.baseline === state.stateEpoch);
 }
 
 function commitConfiguration(provider, prepared) {
@@ -629,7 +616,7 @@ function finishConfiguration(provider, change) {
 }
 
 function responseRecord(state, envelope) {
-    const id = dataProperty(envelope, "id");
+    const id = envelope.id;
     return state.runtime.operation(id);
 }
 
@@ -643,13 +630,13 @@ function matchingResponseName(record, name) {
 function applyResultEnvelope(provider, state, envelope) {
     const record = responseRecord(state, envelope);
     if (!record || !record.metadata.dispatched) { return false; }
-    const name = dataProperty(envelope, "name");
+    const name = envelope.name;
     if (!matchingResponseName(record, name)) {
         return settleError(state, record, providerStateError());
     }
     let result;
     try {
-        result = nativeJSONClone(dataProperty(envelope, "result"));
+        result = nativeJSONClone(envelope.result);
     } catch {
         return settleError(state, record, providerStateError());
     }
@@ -674,9 +661,9 @@ function applyResultEnvelope(provider, state, envelope) {
 function applyErrorEnvelope(provider, state, envelope) {
     const record = responseRecord(state, envelope);
     if (!record || !record.metadata.dispatched) { return false; }
-    const name = dataProperty(envelope, "name");
+    const name = envelope.name;
     return settleError(state, record, matchingResponseName(record, name)
-        ? dataProperty(envelope, "error") : providerStateError());
+        ? envelope.error : providerStateError());
 }
 
 function applyDecodedEnvelope(provider, envelope) {
@@ -688,9 +675,9 @@ function applyDecodedEnvelope(provider, envelope) {
         retire(provider, providerReplacementError());
         return false;
     }
-    const kind = dataProperty(envelope, "kind");
+    const kind = envelope.kind;
     if (kind === "configurationError") {
-        const error = normalizeEthereumProviderError(dataProperty(envelope, "error"));
+        const error = normalizeEthereumProviderError(envelope.error);
         if (!state.runtime.failLoading(error)) { return false; }
         state.stateEpoch += 1;
         emitSafely(provider, "disconnect", [error]);
@@ -860,7 +847,6 @@ BigWalletEthereum.snapshot = snapshot;
 export {
     applyDecodedEnvelope,
     prepareConfiguration,
-    configurationIsCurrent,
     commitConfiguration,
     emitConfiguration,
     finishConfiguration,

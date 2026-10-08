@@ -23,6 +23,8 @@ Swift exposes `WireProtocol.Message`, `validate(_:value:)`, and `decode(_:value:
 
 The codecs check structure. Browser sender metadata, origin and document identity, response correlation, native authority revisions, ownership, deadlines, account selection, and transaction validity remain explicit checks at their existing boundaries. External RPC data, transaction parameters, and typed-data contents retain their own validators. Native-only approval mutations, approved account descriptors, profile identities, and execution permits are not wire fields.
 
+Inpage providers support ordinary SDK objects, listener reentry, and request snapshots that remain stable after caller mutation. Wire boundaries reject malformed data, accessors, cycles, and failing proxy traps before passing detached records to internal handlers. Replacing JavaScript globals or built-ins to reenter provider code during internal decoding or allocation is outside the supported behavior; the provider does not guarantee recovery from that interference. Captured intrinsics remain where inexpensive, while checks around caller-owned getters, serializers, and transaction objects still protect supported interactions.
+
 ## Differential fuzzing
 
 Run from the repository root on macOS with Node.js and the project's Xcode Swift toolchain:

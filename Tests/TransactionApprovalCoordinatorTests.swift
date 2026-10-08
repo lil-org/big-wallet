@@ -501,6 +501,94 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         guard case .approved = await task.value else { return XCTFail("Expected fresh preflight") }
     }
 
+    func testPreflightingSnapshotInvalidationPreventsDispatch() async throws {
+        let stub = ApprovalOperationsStub()
+        let coordinator = makeCoordinator(stub: stub)
+        await prepareToReady(coordinator, stub: stub)
+        let reservation = try XCTUnwrap(coordinator.reserveForPreflight())
+        coordinator.onSnapshot = { [weak coordinator] snapshot in
+            if snapshot.phase == .preflighting {
+                coordinator?.invalidate()
+            }
+        }
+
+        guard case .invalidated = await coordinator.preflight(reservation) else {
+            return XCTFail("Snapshot invalidation must settle the caller before dispatch")
+        }
+        XCTAssertTrue(stub.preflightCalls.isEmpty)
+        XCTAssertEqual(coordinator.snapshot.phase, .finished)
+    }
+
+    func testPreflightNoticeCallbackCannotClearRetriedPreparation() async throws {
+        let stub = ApprovalOperationsStub()
+        let coordinator = makeCoordinator(transaction: Self.makeReadyTransaction(gasPrice: 150), stub: stub)
+        defer { coordinator.invalidate() }
+        await prepareToReady(coordinator, stub: stub)
+        var didRetry = false
+        coordinator.onSnapshot = { [weak coordinator] snapshot in
+            if snapshot.notice == .feesUnavailable {
+                didRetry = coordinator?.retryPreparation() == true
+            }
+        }
+        let task = startPreflight(coordinator)
+        await waitFor { stub.preflightCalls.count == 1 }
+        let call = try XCTUnwrap(stub.preflightCalls.first)
+        call.completion(.unavailable(call.transaction, Self.makeEstimate()))
+
+        guard case .invalidated = await task.value else {
+            return XCTFail("The reentrant retry must invalidate the old preflight")
+        }
+        XCTAssertTrue(didRetry)
+        XCTAssertEqual(stub.preparationCalls.count, 2)
+        let preparation = try XCTUnwrap(stub.preparationCalls.last)
+        XCTAssertFalse(preparation.cancellation.isCancelled)
+        XCTAssertEqual(coordinator.snapshot.phase, .preparing)
+        preparation.completion(.success(preparation.transaction))
+        await waitFor { coordinator.snapshot.phase == .ready }
+        XCTAssertTrue(coordinator.snapshot.canApprove)
+        XCTAssertNil(coordinator.snapshot.notice)
+    }
+
+    func testInvalidationSettlesPreflightBeforeUncooperativeOperation() async throws {
+        let stub = ApprovalOperationsStub()
+        let transaction = Self.makeReadyTransaction()
+        var continuation: CheckedContinuation<TransactionFeePreflightResult, Never>?
+        var operationReturned = false
+        let coordinator = TransactionApprovalCoordinator(
+            transaction: transaction, network: Self.makeNetwork(),
+            operations: .init(prepare: stub.operations.prepare, preflight: { _, _ in
+                let result = await withCheckedContinuation { continuation = $0 }
+                operationReturned = true
+                return result
+            })
+        )
+        await prepareToReady(coordinator, stub: stub)
+        let reservation = try XCTUnwrap(coordinator.reserveForPreflight())
+        var callerSettled = false
+        let task = Task {
+            let result = await coordinator.preflight(reservation)
+            callerSettled = true
+            return result
+        }
+        await waitFor { continuation != nil }
+        let pendingOperation = try XCTUnwrap(continuation)
+        coordinator.invalidate()
+        coordinator.invalidate()
+        await waitFor { callerSettled }
+        XCTAssertTrue(callerSettled)
+        XCTAssertFalse(operationReturned)
+        XCTAssertEqual(coordinator.snapshot.phase, .finished)
+
+        pendingOperation.resume(returning: .safe(transaction, Self.makeEstimate()))
+        guard case .invalidated = await task.value else {
+            return XCTFail("Invalidation must settle the waiter")
+        }
+        await waitFor { operationReturned }
+        XCTAssertTrue(operationReturned)
+        XCTAssertEqual(coordinator.snapshot.phase, .finished)
+        XCTAssertNil(coordinator.snapshot.notice)
+    }
+
     func testCancelledPreflightSettlesBeforeUncooperativeOperation() async throws {
         let stub = ApprovalOperationsStub()
         var continuation: CheckedContinuation<TransactionFeePreflightResult, Never>?

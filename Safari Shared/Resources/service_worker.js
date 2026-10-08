@@ -103,9 +103,8 @@ async function handleDappRequest(request, context) {
         return pageFailure(message.id, message.provider, message.name, privateBrowsingUnsupportedMessage(), 4200);
     }
     if (message.provider === "solana") {
-        const object = Object.getOwnPropertyDescriptor(message.body, "object")?.value;
-        const params = WIRE.isRecord(object) ? Object.getOwnPropertyDescriptor(object, "params")?.value : null;
-        const onlyIfTrusted = WIRE.isRecord(params) ? Object.getOwnPropertyDescriptor(params, "onlyIfTrusted")?.value : undefined;
+        const params = message.body.object.params;
+        const onlyIfTrusted = WIRE.isRecord(params) ? params.onlyIfTrusted : undefined;
         if (onlyIfTrusted !== undefined && typeof onlyIfTrusted !== "boolean") {
             return pageFailure(message.id, message.provider, message.name, "onlyIfTrusted must be a boolean", -32602);
         }

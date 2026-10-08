@@ -37,7 +37,7 @@ const operationRuntimeSource = bundle("operation_runtime.js");
 const ethereumSource = bundle("ethereum-harness.js", "cjs", `
     export {
         default, applyDecodedEnvelope, subscribeNotifications, withReadyState,
-        prepareConfiguration, configurationIsCurrent, commitConfiguration,
+        prepareConfiguration, commitConfiguration,
         emitConfiguration, finishConfiguration,
     } from "./ethereum";
     export {createStableFacadeRecord} from "./stable_facades";
@@ -45,7 +45,7 @@ const ethereumSource = bundle("ethereum-harness.js", "cjs", `
 const solanaSource = bundle("solana-harness.js", "cjs", `
     export {
         default, applyDecodedEnvelope, subscribeNotifications,
-        prepareConfiguration, configurationIsCurrent, commitConfiguration,
+        prepareConfiguration, commitConfiguration,
         emitConfiguration, finishConfiguration,
     } from "./solana";
     export {createStableFacadeRecord} from "./stable_facades";
@@ -118,7 +118,7 @@ function decodedDelivery(envelope) {
 
 function applyTestConfiguration(exports, provider, configuration, revision) {
     const prepared = exports.prepareConfiguration(provider, configuration, revision);
-    if (!prepared || !exports.configurationIsCurrent(provider, prepared)) { return false; }
+    if (!prepared) { return false; }
     const change = exports.commitConfiguration(provider, prepared);
     exports.emitConfiguration(provider, change);
     exports.finishConfiguration(provider, change);
@@ -7210,88 +7210,6 @@ test("bootstrap callbacks enqueue behind earlier pending requests", async () => 
     assert.deepEqual(order, ["eth_blockNumber", "eth_gasPrice"]);
     for (const request of h.rpc) { h.applyDecodedEnvelope({id: request.message.id, kind: "result", result: "0x1"}); }
     await Promise.all([first, second]);
-});
-
-test("configuration preparation cannot overwrite a reentrant newer snapshot", () => {
-    const h = inpageHarness();
-    publishSnapshot(h, pageSnapshot());
-    h.context.publishNewer = () => publishSnapshot(h, pageSnapshot({chainId: "0x3", publicKey: secondSolanaKey, ethereum: 2, solana: 2}));
-    vm.runInContext(`
-        const OriginalUint8Array = Uint8Array;
-        let triggered = false;
-        globalThis.Uint8Array = new Proxy(OriginalUint8Array, {
-            construct(target, args) {
-                if (!triggered) { triggered = true; publishNewer(); }
-                return Reflect.construct(target, args);
-            },
-        });
-    `, h.context);
-    publishSnapshot(h, pageSnapshot({chainId: "0x2", publicKey: firstSolanaKey, ethereum: 1, solana: 1}));
-    assert.equal(h.window.ethereum.chainId, "0x3");
-    assert.equal(h.window.solana.publicKey.toString(), secondSolanaKey);
-});
-
-test("reentrant Ethereum preparation preserves an independent Solana connect", async () => {
-    const h = inpageHarness();
-    publishSnapshot(h, pageSnapshot());
-    const connecting = h.window.solana.connect();
-    const request = pageMessages(h, "request", "solana").at(-1).message;
-    h.context.publishNewerEthereum = () => publishSnapshot(h,
-        pageSnapshot({chainId: "0x3", ethereum: 2}));
-    vm.runInContext(`
-        const OriginalUint8Array = Uint8Array;
-        let triggered = false;
-        globalThis.Uint8Array = new Proxy(OriginalUint8Array, {
-            construct(target, args) {
-                if (!triggered) { triggered = true; publishNewerEthereum(); }
-                return Reflect.construct(target, args);
-            },
-        });
-    `, h.context);
-    dispatchProviderResponse(h, {
-        id: request.id, provider: "solana", name: "connect",
-        result: {publicKey: firstSolanaKey}, approvalCommitted: true,
-        state: pageSnapshot({chainId: "0x2", publicKey: firstSolanaKey, ethereum: 1, solana: 1}),
-    });
-    assert.equal((await connecting).publicKey.toString(), firstSolanaKey);
-    assert.equal(h.window.ethereum.chainId, "0x3");
-    assert.equal(h.window.solana.publicKey?.toString(), firstSolanaKey);
-    assert.equal(h.window.solana.isConnected, true);
-    const snapshots = h.window.bigWalletInpageStableFacadeRecord.snapshots();
-    assert.equal(snapshots.ethereum.nativeRevision, 2);
-    assert.equal(snapshots.solana.nativeRevision, 1);
-});
-
-test("configuration preparation errors settle correlated requests without partial updates", async () => {
-    const h = inpageHarness();
-    publishSnapshot(h, pageSnapshot());
-    let outcome;
-    const switching = h.window.ethereum.request({method: "wallet_switchEthereumChain", params: [{chainId: "0x2"}]});
-    switching.then(value => { outcome = {value}; }, error => { outcome = {error}; });
-    const request = pageMessages(h, "request", "ethereum").at(-1).message;
-    vm.runInContext(`
-        const OriginalUint8Array = Uint8Array;
-        let constructions = 0;
-        globalThis.Uint8Array = new Proxy(OriginalUint8Array, {
-            construct(target, args) {
-                if (++constructions === 3) { throw new Error("Public key construction failed"); }
-                return Reflect.construct(target, args);
-            },
-        });
-    `, h.context);
-    const state = pageSnapshot({chainId: "0x2", publicKey: firstSolanaKey, ethereum: 1, solana: 1});
-    dispatchProviderResponse(h, {
-        id: request.id, provider: "ethereum", name: request.name,
-        result: null, approvalCommitted: true, state,
-    });
-    await Promise.resolve();
-    assert.equal(outcome?.error?.code, -32603);
-    assert.equal(h.window.ethereum.chainId, "0x1");
-    assert.equal(h.window.solana.publicKey, null);
-    vm.runInContext("globalThis.Uint8Array = OriginalUint8Array", h.context);
-    publishSnapshot(h, state);
-    assert.equal(h.window.ethereum.chainId, "0x2");
-    assert.equal(h.window.solana.publicKey.toString(), firstSolanaKey);
 });
 
 for (const inheritedFlag of ["true", "throwing getter"]) {

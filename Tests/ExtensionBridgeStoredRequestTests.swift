@@ -2747,7 +2747,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             .appendingPathComponent("bridge-v9.lock").path))
     }
 
-    func testStoreRemovesOrphanedWritesAndPreservesUnrelatedEntries() async throws {
+    func testMaintenanceRemovesOrphanedWritesAndPreservesUnrelatedEntries() async throws {
         let profileDirectory = defaultProfileURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: profileDirectory, withIntermediateDirectories: true)
         let temporaryName = ".profile-write-\(UUID().uuidString.lowercased()).tmp"
@@ -2772,17 +2772,15 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             preservedFiles[child] = data
         }
 
-        for maintenance in [true, false] {
+        for allProfiles in [true, false] {
             let orphans = [rootURL!, profileDirectory].map {
                 $0.appendingPathComponent(".profile-write-\(UUID().uuidString.lowercased()).tmp")
             }
             for url in orphans { try Data("interrupted snapshot".utf8).write(to: url) }
-            if maintenance {
+            if allProfiles {
                 await bridge.performMaintenance()
             } else {
-                guard case .available = await bridge.list(profileIdentifier: nil) else {
-                    return XCTFail("Expected available store")
-                }
+                await bridge.performMaintenance(profileIdentifier: nil)
             }
             for url in orphans { XCTAssertFalse(FileManager.default.fileExists(atPath: url.path)) }
             for (url, data) in preservedFiles { XCTAssertEqual(try Data(contentsOf: url), data) }
@@ -2792,7 +2790,68 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
     }
 
-    func testOrphanedWriteCleanupFailureDoesNotBlockRecoveryAndIsRetried() throws {
+    func testOrdinaryStoreAccessLeavesOrphanedWritesForMaintenance() async throws {
+        let fixture = try makeFixture(id: 82)
+        let orphans = [rootURL!, defaultProfileURL.deletingLastPathComponent()].map {
+            $0.appendingPathComponent(".profile-write-\(UUID().uuidString.lowercased()).tmp")
+        }
+        for url in orphans { try Data("interrupted snapshot".utf8).write(to: url) }
+
+        let handle = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress, profileIdentifier: nil
+        )).handle
+        guard case .snapshot = await bridge.configurationSnapshot(
+            configurationKey: fixture.request.configurationKey, profileIdentifier: nil
+        ), case .available = await bridge.list(profileIdentifier: nil),
+           case .found = await bridge.load(handle: handle) else {
+            return XCTFail("Expected available store")
+        }
+        let claim = try approvalClaim(await bridge.claim(handle: handle))
+        defer { claim.releaseUnapproved() }
+        for url in orphans { XCTAssertTrue(FileManager.default.fileExists(atPath: url.path)) }
+
+        await bridge.performMaintenance(profileIdentifier: nil)
+        for url in orphans { XCTAssertFalse(FileManager.default.fileExists(atPath: url.path)) }
+    }
+
+    func testFullMaintenanceRemovesRootOrphansWithoutProfiles() async throws {
+        let orphan = rootURL.appendingPathComponent(".profile-write-\(UUID().uuidString.lowercased()).tmp")
+        try Data("interrupted snapshot".utf8).write(to: orphan)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: defaultProfileURL.deletingLastPathComponent().path))
+
+        await bridge.performMaintenance()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: defaultProfileURL.deletingLastPathComponent().path))
+    }
+
+    func testFullMaintenanceAttemptsOrphanCleanupOnceAcrossProfiles() throws {
+        let orphan = rootURL.appendingPathComponent(".profile-write-\(UUID().uuidString.lowercased()).tmp")
+        let removalAttempts = LockedTestValue(0)
+        let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
+            removeItem: { url in
+                if url == orphan {
+                    removalAttempts.withValue { $0 += 1 }
+                    throw Failure.injectedWrite
+                }
+                try FileManager.default.removeItem(at: url)
+            }
+        ))
+        let identifiers: [UUID?] = [nil, UUID(), UUID()]
+        for identifier in identifiers {
+            guard case .snapshot = store.configurationSnapshot(
+                configurationKey: "https://wallet.example", profileIdentifier: identifier
+            ) else { return XCTFail("Expected initialized profile") }
+        }
+        try Data("interrupted snapshot".utf8).write(to: orphan)
+
+        store.performMaintenance()
+
+        XCTAssertEqual(removalAttempts.value, 1)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: orphan.path))
+    }
+
+    func testOrphanedWriteCleanupFailureDoesNotBlockRecoveryAndRetriesAtNextMaintenance() throws {
         let orphan = rootURL.appendingPathComponent(".profile-write-\(UUID().uuidString.lowercased()).tmp")
         try Data("interrupted snapshot".utf8).write(to: orphan)
         let failRemoval = LockedTestValue(true)
@@ -2802,6 +2861,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 try FileManager.default.removeItem(at: url)
             }
         ))
+        store.performMaintenance(profileIdentifier: nil)
         guard case .available = store.list(profileIdentifier: nil) else {
             return XCTFail("Cleanup failure must not block recovery")
         }
@@ -2810,6 +2870,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         guard case .available = store.list(profileIdentifier: nil) else {
             return XCTFail("Expected available store")
         }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: orphan.path))
+        store.performMaintenance()
         XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path))
     }
 
@@ -2829,6 +2891,25 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
         let values = try rootURL.resourceValues(forKeys: [.isExcludedFromBackupKey])
         XCTAssertEqual(values.isExcludedFromBackup, true)
+    }
+
+    func testStoreRecreatesRootAndExcludesItFromBackupOnNextAccess() async throws {
+        guard case .available = await bridge.list(profileIdentifier: nil) else {
+            return XCTFail("Expected initialized store")
+        }
+        try FileManager.default.removeItem(at: rootURL)
+
+        guard case .available = await bridge.list(profileIdentifier: nil) else {
+            return XCTFail("Expected recreated store")
+        }
+
+        let recreatedRoot = URL(fileURLWithPath: rootURL.path, isDirectory: true)
+        XCTAssertEqual(
+            try recreatedRoot.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup,
+            true
+        )
+        XCTAssertTrue(FileManager.default.fileExists(atPath: recreatedRoot.appendingPathComponent("bridge-v9.lock").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: defaultProfileURL.deletingLastPathComponent().path))
     }
 
     @MainActor
@@ -9352,8 +9433,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 profileIdentifier: nil
             ) else { throw Failure.expectedValue }
             XCTAssertTrue(FileManager.default.fileExists(atPath: temporaryURL.path))
+            await self.bridge.performMaintenance()
+            XCTAssertTrue(FileManager.default.fileExists(atPath: temporaryURL.path))
+            await self.bridge.performMaintenance(profileIdentifier: nil)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: temporaryURL.path))
         }
         _ = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: temporaryURL.path))
+        await bridge.performMaintenance()
         XCTAssertFalse(FileManager.default.fileExists(atPath: temporaryURL.path))
     }
     #endif

@@ -286,6 +286,16 @@ struct TransactionApprovalReducer {
         var notice: TransactionReviewNotice?
     }
 
+    struct PreflightStart {
+        let token: TransactionApprovalRequestToken
+        let snapshot: TransactionApprovalSnapshot
+    }
+
+    struct PreflightCompletion {
+        let snapshot: TransactionApprovalSnapshot
+        let outcome: TransactionPreflightOutcome
+    }
+
     enum Event {
         case startPreparation(forceGasCheck: Bool)
         case preparationUpdate(
@@ -302,12 +312,7 @@ struct TransactionApprovalReducer {
         )
         case reserveForPreflight
         case releaseReservation(TransactionApprovalReservation)
-        case startPreflight(TransactionApprovalReservation)
         case retryPreparation
-        case preflightResult(
-            TransactionApprovalRequestToken,
-            TransactionFeePreflightResult
-        )
         case applyEdits(Transaction.Edits)
         case sliderInteractionBegan
         case setFeeForSpeed(Double)
@@ -323,12 +328,7 @@ struct TransactionApprovalReducer {
             Transaction,
             forceGasCheck: Bool
         )
-        case runPreflight(
-            TransactionApprovalRequestToken,
-            Transaction
-        )
         case snapshot(TransactionApprovalSnapshot)
-        case resolvePreflight(TransactionApprovalRequestToken, TransactionPreflightOutcome)
     }
 
     private(set) var state: State
@@ -433,17 +433,12 @@ struct TransactionApprovalReducer {
             return reserveForPreflight()
         case .releaseReservation(let reservation):
             return releaseReservation(reservation)
-        case .startPreflight(let reservation):
-            guard isCurrent(reservation) else { return [] }
-            return beginPreflight(for: state.transaction)
         case .retryPreparation:
             guard snapshot.canRetryPreparation else { return [] }
             let forceGasCheck: Bool
             if case .preparationFailed = state.notice { forceGasCheck = state.preparationForceGasCheck }
             else { forceGasCheck = false }
             return startPreparation(forceGasCheck: forceGasCheck)
-        case .preflightResult(let token, let result):
-            return receivePreflightResult(result, token: token)
         case .applyEdits(let edits):
             return apply(edits)
         case .sliderInteractionBegan:
@@ -560,36 +555,31 @@ struct TransactionApprovalReducer {
         return [snapshotEffect()]
     }
 
-    private mutating func beginPreflight(
-        for transaction: Transaction
-    ) -> [Effect] {
-        guard let attemptID = state.preparation.beginPreflight(
-            for: transaction.id
-        ) else {
-            return []
-        }
+    mutating func beginPreflight(
+        _ reservation: TransactionApprovalReservation
+    ) -> PreflightStart? {
+        guard isCurrent(reservation),
+              let attemptID = state.preparation.beginPreflight(
+                for: state.transaction.id
+              ) else { return nil }
         state.notice = nil
         let token = TransactionApprovalRequestToken(
             attemptID: attemptID,
-            transactionID: transaction.id,
+            transactionID: state.transaction.id,
             kind: .preflight
         )
-        return [
-            .cancelActiveRequest,
-            snapshotEffect(),
-            .runPreflight(token, transaction),
-        ]
+        return PreflightStart(token: token, snapshot: synchronizedSnapshot())
     }
 
-    private mutating func receivePreflightResult(
-        _ result: TransactionFeePreflightResult,
-        token: TransactionApprovalRequestToken
-    ) -> [Effect] {
-        guard token.kind == .preflight, isCurrent(token) else { return [] }
+    mutating func completePreflight(
+        _ token: TransactionApprovalRequestToken,
+        result: TransactionFeePreflightResult
+    ) -> PreflightCompletion? {
+        guard token.kind == .preflight, isCurrent(token) else { return nil }
         let outcome: TransactionPreflightOutcome
         switch result {
         case .safe(let transaction, let estimate):
-            guard transaction.id == token.transactionID else { return [] }
+            guard transaction.id == token.transactionID else { return nil }
             install(transaction, estimate: estimate)
             state.notice = nil
             state.restartGate = TransactionPreparationRestartGate()
@@ -599,7 +589,7 @@ struct TransactionApprovalReducer {
             guard transaction.id == token.transactionID,
                   state.preparation.returnToReview(
                     attemptID: token.attemptID, transactionID: token.transactionID
-                  ) else { return [] }
+                  ) else { return nil }
             install(transaction, estimate: estimate)
             state.notice = .feesUpdated
             outcome = .reviewRequired
@@ -607,7 +597,7 @@ struct TransactionApprovalReducer {
             guard transaction.id == token.transactionID,
                   state.preparation.beginUnsafeFeeEditing(
                     attemptID: token.attemptID, transactionID: token.transactionID
-                  ) else { return [] }
+                  ) else { return nil }
             install(transaction, estimate: estimate)
             state.notice = .unsafeFees
             outcome = .reviewRequired
@@ -615,12 +605,12 @@ struct TransactionApprovalReducer {
             guard transaction.id == token.transactionID,
                   state.preparation.markFailed(
                     attemptID: token.attemptID, transactionID: token.transactionID
-                  ) else { return [] }
+                  ) else { return nil }
             install(transaction, estimate: estimate)
             state.notice = .feesUnavailable
             outcome = .reviewRequired
         }
-        return [snapshotEffect(), .resolvePreflight(token, outcome)]
+        return PreflightCompletion(snapshot: synchronizedSnapshot(), outcome: outcome)
     }
 
     private mutating func apply(_ edits: Transaction.Edits) -> [Effect] {
@@ -724,11 +714,15 @@ struct TransactionApprovalReducer {
     }
 
     private mutating func snapshotEffect() -> Effect {
+        .snapshot(synchronizedSnapshot())
+    }
+
+    private mutating func synchronizedSnapshot() -> TransactionApprovalSnapshot {
         if let priorityFee = state.gasSpeedConfiguration.speedPriorityFeePerGas(for: state.transaction) {
             state.gasSpeedConfiguration.installTransactionFallback(feePerGas: priorityFee)
         }
         state.gasSpeedConfiguration.synchronizeSelectedSliderPosition(with: state.transaction)
-        return .snapshot(snapshot)
+        return snapshot
     }
 
 }
@@ -740,14 +734,23 @@ final class TransactionApprovalCoordinator {
         let outcome: TransactionPreflightOutcome
     }
 
-    private final class ActiveRequest {
+    private final class PreparationRequest {
         let token: TransactionApprovalRequestToken
         var task: Task<Void, Never>?
-        var continuation: CheckedContinuation<PreflightResolution, Never>?
+
+        init(token: TransactionApprovalRequestToken) {
+            self.token = token
+        }
+    }
+
+    private final class PreflightRequest {
+        let token: TransactionApprovalRequestToken
+        var task: Task<Void, Never>?
+        private var continuation: CheckedContinuation<PreflightResolution, Never>?
 
         init(
             token: TransactionApprovalRequestToken,
-            continuation: CheckedContinuation<PreflightResolution, Never>? = nil
+            continuation: CheckedContinuation<PreflightResolution, Never>
         ) {
             self.token = token
             self.continuation = continuation
@@ -757,6 +760,28 @@ final class TransactionApprovalCoordinator {
             let continuation = continuation
             self.continuation = nil
             continuation?.resume(returning: resolution)
+        }
+    }
+
+    private enum ActiveRequest {
+        case preparation(PreparationRequest)
+        case preflight(PreflightRequest)
+
+        var token: TransactionApprovalRequestToken {
+            switch self {
+            case .preparation(let request): request.token
+            case .preflight(let request): request.token
+            }
+        }
+
+        func cancel(attemptID: Int) {
+            switch self {
+            case .preparation(let request):
+                request.task?.cancel()
+            case .preflight(let request):
+                request.task?.cancel()
+                request.resolve(.init(attemptID: attemptID, outcome: .invalidated))
+            }
         }
     }
 
@@ -810,12 +835,24 @@ final class TransactionApprovalCoordinator {
                     continuation.resume(returning: .init(attemptID: snapshot.attemptID, outcome: .invalidated))
                     return
                 }
-                let effects = reducer.reduce(.startPreflight(reservation))
-                guard !effects.isEmpty else {
+                guard let start = reducer.beginPreflight(reservation) else {
                     continuation.resume(returning: .init(attemptID: snapshot.attemptID, outcome: .invalidated))
                     return
                 }
-                run(effects, preflightContinuation: continuation)
+                cancelActiveRequest()
+                let request = PreflightRequest(token: start.token, continuation: continuation)
+                activeRequest = .preflight(request)
+                onSnapshot(start.snapshot)
+                guard !Task.isCancelled else {
+                    cancelPreflight(reservation)
+                    request.resolve(.init(attemptID: snapshot.attemptID, outcome: .invalidated))
+                    return
+                }
+                guard isActive(request), reducer.isCurrent(start.token) else {
+                    request.resolve(.init(attemptID: snapshot.attemptID, outcome: .invalidated))
+                    return
+                }
+                runPreflight(request, transaction: start.snapshot.transaction)
             }
         } onCancel: {
             Task { @MainActor in self.cancelPreflight(reservation) }
@@ -874,10 +911,7 @@ final class TransactionApprovalCoordinator {
         return !effects.isEmpty
     }
 
-    private func run(
-        _ effects: [TransactionApprovalReducer.Effect],
-        preflightContinuation: CheckedContinuation<PreflightResolution, Never>? = nil
-    ) {
+    private func run(_ effects: [TransactionApprovalReducer.Effect]) {
         for effect in effects {
             switch effect {
             case .cancelActiveRequest:
@@ -886,16 +920,8 @@ final class TransactionApprovalCoordinator {
                 clearActiveRequest(token)
             case .runPreparation(let token, let transaction, let forceGasCheck):
                 runPreparation(token: token, transaction: transaction, forceGasCheck: forceGasCheck)
-            case .runPreflight(let token, let transaction):
-                guard let preflightContinuation else { preconditionFailure("Preflight requires a caller") }
-                runPreflight(token: token, transaction: transaction, continuation: preflightContinuation)
             case .snapshot(let snapshot):
                 onSnapshot(snapshot)
-            case .resolvePreflight(let token, let outcome):
-                guard activeRequest?.token == token else { continue }
-                let request = activeRequest
-                activeRequest = nil
-                request?.resolve(.init(attemptID: snapshot.attemptID, outcome: outcome))
             }
         }
     }
@@ -906,8 +932,8 @@ final class TransactionApprovalCoordinator {
         forceGasCheck: Bool
     ) {
         guard reducer.isCurrent(token) else { return }
-        let request = ActiveRequest(token: token)
-        activeRequest = request
+        let request = PreparationRequest(token: token)
+        activeRequest = .preparation(request)
         let stream = operations.prepare(transaction, forceGasCheck, reducer.state.network)
         request.task = Task { [weak self] in
             do {
@@ -933,48 +959,64 @@ final class TransactionApprovalCoordinator {
     }
 
     private func runPreflight(
-        token: TransactionApprovalRequestToken,
-        transaction: Transaction,
-        continuation: CheckedContinuation<PreflightResolution, Never>
+        _ request: PreflightRequest,
+        transaction: Transaction
     ) {
-        guard reducer.isCurrent(token) else {
-            continuation.resume(returning: .init(attemptID: snapshot.attemptID, outcome: .invalidated))
-            return
-        }
-        let request = ActiveRequest(token: token, continuation: continuation)
-        activeRequest = request
         let operation = operations.preflight
         let network = reducer.state.network
-        request.task = Task { [weak self] in
+        request.task = Task { [weak self, weak request] in
+            let result: TransactionFeePreflightResult
             do {
                 try Task.checkCancellation()
-                let result = try await operation(transaction, network)
+                let fetched = try await operation(transaction, network)
                 try Task.checkCancellation()
-                self?.send(.preflightResult(token, result))
+                result = fetched
             } catch {
                 guard !Task.isCancelled else { return }
-                self?.send(.preflightResult(token, .unavailable(transaction, GasService.Estimate(info: nil, nextBaseFee: nil))))
+                result = .unavailable(transaction, GasService.Estimate(info: nil, nextBaseFee: nil))
             }
-            self?.clearActiveRequest(token)
+            guard let self, let request else { return }
+            completePreflight(request, result: result)
         }
+    }
+
+    private func completePreflight(_ request: PreflightRequest, result: TransactionFeePreflightResult) {
+        guard isActive(request) else { return }
+        guard let completion = reducer.completePreflight(request.token, result: result) else {
+            clearActiveRequest(request.token)
+            return
+        }
+        let resolution = PreflightResolution(
+            attemptID: completion.snapshot.attemptID,
+            outcome: completion.outcome
+        )
+        onSnapshot(completion.snapshot)
+        guard isActive(request) else { return }
+        activeRequest = nil
+        request.resolve(resolution)
+    }
+
+    private func isActive(_ request: PreflightRequest) -> Bool {
+        guard case .preflight(let current) = activeRequest else { return false }
+        return current === request
     }
 
     private func cancelActiveRequest() {
         let request = activeRequest
         activeRequest = nil
-        request?.task?.cancel()
-        request?.resolve(.init(attemptID: snapshot.attemptID, outcome: .invalidated))
+        request?.cancel(attemptID: snapshot.attemptID)
     }
 
     private func clearActiveRequest(_ token: TransactionApprovalRequestToken) {
         guard activeRequest?.token == token else { return }
         let request = activeRequest
         activeRequest = nil
-        request?.resolve(.init(attemptID: snapshot.attemptID, outcome: .invalidated))
+        if case .preflight(let request) = request {
+            request.resolve(.init(attemptID: snapshot.attemptID, outcome: .invalidated))
+        }
     }
 
     isolated deinit {
-        activeRequest?.task?.cancel()
-        activeRequest?.resolve(.init(attemptID: reducer.snapshot.attemptID, outcome: .invalidated))
+        activeRequest?.cancel(attemptID: reducer.snapshot.attemptID)
     }
 }

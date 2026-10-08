@@ -13,7 +13,6 @@ import {
 import BigWalletEthereum, {
     applyDecodedEnvelope as applyEthereumDecodedEnvelope,
     prepareConfiguration as prepareEthereumConfiguration,
-    configurationIsCurrent as ethereumConfigurationIsCurrent,
     commitConfiguration as commitEthereumConfiguration,
     emitConfiguration as emitEthereumConfiguration,
     finishConfiguration as finishEthereumConfiguration,
@@ -23,7 +22,6 @@ import BigWalletEthereum, {
 import BigWalletSolana, {
     applyDecodedEnvelope as applySolanaDecodedEnvelope,
     prepareConfiguration as prepareSolanaConfiguration,
-    configurationIsCurrent as solanaConfigurationIsCurrent,
     commitConfiguration as commitSolanaConfiguration,
     emitConfiguration as emitSolanaConfiguration,
     finishConfiguration as finishSolanaConfiguration,
@@ -201,20 +199,20 @@ const transport = freezeObjectNormally({
     isCurrent: isCurrentInstallation,
     postRequest(message) {
         if (!message || typeof message !== "object") { return false; }
-        const provider = ownValue(message, "provider");
-        const id = ownValue(message, "id");
-        const name = ownValue(message, "name");
-        const observedRevision = ownValue(message, "observedRevision");
+        const provider = message.provider;
+        const id = message.id;
+        const name = message.name;
+        const observedRevision = message.observedRevision;
         if (!isSafeIntegerNormally(observedRevision) || observedRevision < 0) { return false; }
         let body;
         if (provider === "ethereum") {
             body = {
-                address: ownValue(message, "address"),
-                chainId: ownValue(message, "chainId"),
-                object: ownValue(message, "data"),
+                address: message.address,
+                chainId: message.chainId,
+                object: message.data,
             };
         } else if (provider === "solana") {
-            body = ownValue(message, "body");
+            body = message.body;
         } else {
             return false;
         }
@@ -238,12 +236,12 @@ const transport = freezeObjectNormally({
     },
     postDisconnect(message) {
         if (!message || typeof message !== "object") { return false; }
-        const provider = ownValue(message, "provider");
+        const provider = message.provider;
         if (provider !== "ethereum" && provider !== "solana") { return false; }
-        const observedRevision = ownValue(message, "observedRevision");
+        const observedRevision = message.observedRevision;
         if (!isSafeIntegerNormally(observedRevision) || observedRevision < 0) { return false; }
         const request = {provider, subject: "disconnect"};
-        const id = ownValue(message, "id");
+        const id = message.id;
         if (typeof id !== "undefined") { request.id = id; }
         const envelope = {
             direction: PAGE_TO_CONTENT_DIRECTION,
@@ -348,10 +346,8 @@ function handleContentBridgeMessage(event) {
         if (response.kind !== "configuration") { rejectMalformedCorrelation(response.id, response.name); }
         return;
     }
-    const ethereumChange = ethereumConfigurationIsCurrent(ethereumProvider, prepared.ethereum)
-        ? commitEthereumConfiguration(ethereumProvider, prepared.ethereum) : null;
-    const solanaChange = solanaConfigurationIsCurrent(solanaProvider, prepared.solana)
-        ? commitSolanaConfiguration(solanaProvider, prepared.solana) : null;
+    const ethereumChange = commitEthereumConfiguration(ethereumProvider, prepared.ethereum);
+    const solanaChange = commitSolanaConfiguration(solanaProvider, prepared.solana);
     if (response.kind !== "configuration") { applyDecoded(response.provider, response); }
     emitEthereumConfiguration(ethereumProvider, ethereumChange);
     emitSolanaConfiguration(solanaProvider, solanaChange);
