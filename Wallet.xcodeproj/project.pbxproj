@@ -914,6 +914,12 @@
 		3D9C6245FF110F3BCEDEF760 /* WireProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10BC9FBB397CFE426CC719F /* WireProtocolTests.swift */; };
 		3A2EDE14A0F3D547B03063A3 /* WireProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10BC9FBB397CFE426CC719F /* WireProtocolTests.swift */; };
 		4C2F013FEDB06A8169F69B5C /* WireProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10BC9FBB397CFE426CC719F /* WireProtocolTests.swift */; };
+		C4E100010001000000000000 /* AsyncTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E000010000000000000000 /* AsyncTestSupport.swift */; };
+		C4E100010002000000000000 /* AsyncTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E000010000000000000000 /* AsyncTestSupport.swift */; };
+		C4E100010003000000000000 /* AsyncTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E000010000000000000000 /* AsyncTestSupport.swift */; };
+		C4E100020001000000000000 /* AsyncTestSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E000020000000000000000 /* AsyncTestSupportTests.swift */; };
+		C4E100020002000000000000 /* AsyncTestSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E000020000000000000000 /* AsyncTestSupportTests.swift */; };
+		C4E100020003000000000000 /* AsyncTestSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E000020000000000000000 /* AsyncTestSupportTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1253,6 +1259,8 @@
 		B47BE6A967E11A172A253056 /* protocol.generated.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = protocol.generated.js; sourceTree = "<group>"; };
 		C10958F2F8BC7BC5AE7D4F95 /* wire-protocol.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "wire-protocol.json"; sourceTree = "<group>"; };
 		B10BC9FBB397CFE426CC719F /* WireProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WireProtocolTests.swift; sourceTree = "<group>"; };
+		C4E000010000000000000000 /* AsyncTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncTestSupport.swift; sourceTree = "<group>"; };
+		C4E000020000000000000000 /* AsyncTestSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncTestSupportTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1352,6 +1360,8 @@
 				C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */,
 				E9AA2E36027F3FC7353E0AE7 /* DurableProfilePersistenceTests.swift */,
 				C2D200002FC2000000000001 /* NativeApprovalServiceTestFixture.swift */,
+				C4E000020000000000000000 /* AsyncTestSupportTests.swift */,
+				C4E000010000000000000000 /* AsyncTestSupport.swift */,
 				C2D300002FC2000000000001 /* NativeApprovalServiceTests.swift */,
 				2FB200000000000000000001 /* AlchemyJWTProductionContractTests.swift */,
 				2FA400000000000000000001 /* AlchemyJWTProviderTests.swift */,
@@ -3566,6 +3576,8 @@
 				C2D100012FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */,
 				6BFAA50E1B1DC0008CAB9643 /* DurableProfilePersistenceTests.swift in Sources */,
 				C2D200012FC2000000000001 /* NativeApprovalServiceTestFixture.swift in Sources */,
+				C4E100020001000000000000 /* AsyncTestSupportTests.swift in Sources */,
+				C4E100010001000000000000 /* AsyncTestSupport.swift in Sources */,
 				C2D300012FC2000000000001 /* NativeApprovalServiceTests.swift in Sources */,
 				2F2A00000000000000000006 /* SolanaWireMessageParserTests.swift in Sources */,
 				2F2A0000000000000000000A /* SolanaTransactionSummaryFormatterTests.swift in Sources */,
@@ -3832,6 +3844,8 @@
 				C2D100022FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */,
 				36FF1130B6D56F954CD26B6D /* DurableProfilePersistenceTests.swift in Sources */,
 				C2D200022FC2000000000001 /* NativeApprovalServiceTestFixture.swift in Sources */,
+				C4E100020002000000000000 /* AsyncTestSupportTests.swift in Sources */,
+				C4E100010002000000000000 /* AsyncTestSupport.swift in Sources */,
 				C2D300022FC2000000000001 /* NativeApprovalServiceTests.swift in Sources */,
 				2F2A00000000000000000007 /* SolanaWireMessageParserTests.swift in Sources */,
 				2F2A0000000000000000000B /* SolanaTransactionSummaryFormatterTests.swift in Sources */,
@@ -3879,6 +3893,8 @@
 				C2D100032FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */,
 				89376F6FA42B124A120B0C0A /* DurableProfilePersistenceTests.swift in Sources */,
 				C2D200032FC2000000000001 /* NativeApprovalServiceTestFixture.swift in Sources */,
+				C4E100020003000000000000 /* AsyncTestSupportTests.swift in Sources */,
+				C4E100010003000000000000 /* AsyncTestSupport.swift in Sources */,
 				C2D300032FC2000000000001 /* NativeApprovalServiceTests.swift in Sources */,
 				2F2A00000000000000000008 /* SolanaWireMessageParserTests.swift in Sources */,
 				2F2A0000000000000000000C /* SolanaTransactionSummaryFormatterTests.swift in Sources */,

@@ -274,16 +274,23 @@ final class DappRequestProcessorTests: XCTestCase {
         )
         var network = action.resolvedNetwork
         var events = [String]()
-        let result = await DappApprovalResolver.resolve(consent, refreshWalletCatalog: {
+        let entered = expectation(description: "catalog read entered")
+        let release = TestGate<Void>()
+        defer { release.resolve(()) }
+        let resolution = Task { await DappApprovalResolver.resolve(consent, refreshWalletCatalog: {
             events.append("catalog")
-            await Task.yield()
-            network = changedNetwork
+            entered.fulfill()
+            await release.wait()
             return processorCatalog(accounts: [action.account])
         }, networkResolver: { chainID in
             events.append("network")
             XCTAssertEqual(chainID, action.chain.chainId)
             return .resolved(network)
-        })
+        }) }
+        await fulfillment(of: [entered], timeout: 2)
+        network = changedNetwork
+        release.resolve(())
+        let result = await resolution.value
         guard case .immediate(.failure(let error)) = result else { return XCTFail("Changed route must reject consent") }
         XCTAssertEqual(error.code, 4100)
         XCTAssertEqual(events, ["catalog", "network"])
@@ -309,14 +316,21 @@ final class DappRequestProcessorTests: XCTestCase {
         ))
         let consent = try XCTUnwrap(review.acceptTransaction(execution: execution, approvedAt: fixture.now))
         var current = true
-        let result = await DappApprovalResolver.resolve(consent, refreshWalletCatalog: {
-            await Task.yield()
-            current = false
+        let entered = expectation(description: "catalog read entered")
+        let release = TestGate<Void>()
+        defer { release.resolve(()) }
+        let resolution = Task { await DappApprovalResolver.resolve(consent, refreshWalletCatalog: {
+            entered.fulfill()
+            await release.wait()
             return nil
         }, networkResolver: { _ in
             XCTFail("Superseded review must not resolve a network")
             return .unavailable
-        }, isCurrent: { current })
+        }, isCurrent: { current }) }
+        await fulfillment(of: [entered], timeout: 2)
+        current = false
+        release.resolve(())
+        let result = await resolution.value
         guard case .abandon = result else { return XCTFail("Supersession is not temporary data unavailability") }
         consent.invalidateAuthorization()
         let replay = await DappApprovalResolver.resolve(consent, refreshWalletCatalog: {
@@ -936,17 +950,16 @@ final class DappRequestProcessorTests: XCTestCase {
             let signer = ProcessorWalletSigner()
             signer.permit = permit
             let started = expectation(description: "signer suspended")
-            var continuation: CheckedContinuation<Void, Never>?
+            let release = TestGate<Void>()
+            defer { release.resolve(()) }
             signer.beforeResult = {
-                await withCheckedContinuation {
-                    continuation = $0
-                    started.fulfill()
-                }
+                started.fulfill()
+                await release.wait()
             }
             let task = Task { await DappRequestProcessor().execute(permit: permit, signer: signer) }
             await fulfillment(of: [started], timeout: 1)
             permit.releaseLease()
-            try XCTUnwrap(continuation).resume()
+            release.resolve(())
             guard case .rollback = await task.value else {
                 return XCTFail("A released permit must discard a late signature")
             }

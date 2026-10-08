@@ -213,7 +213,7 @@ final class PasswordStorageTests: XCTestCase {
         repeatForm.passwordTextField.stringValue = "draft"
         fixture.passwordData = Data("other-session".utf8)
         repeatForm.actionButtonTapped(repeatForm.okButton as Any)
-        for _ in 0..<20 { await Task.yield() }
+        await expectEventually { (window.contentViewController as? PasswordViewController)?.titleLabel.stringValue == Strings.enterPassword }
         let enter = try XCTUnwrap(window.contentViewController as? PasswordViewController)
         XCTAssertEqual(enter.titleLabel.stringValue, Strings.enterPassword)
         XCTAssertTrue(repeatForm.passwordTextField.stringValue.isEmpty)
@@ -238,7 +238,7 @@ final class PasswordStorageTests: XCTestCase {
         XCTAssertTrue(events.isEmpty)
         fixture.readStatus = nil
         failure.actionButtonTapped(failure.okButton as Any)
-        for _ in 0..<20 { await Task.yield() }
+        await expectEventually { window.contentViewController is PasswordViewController }
         let controller = try XCTUnwrap(window.contentViewController as? PasswordViewController)
         controller.passwordTextField.stringValue = "x"
         controller.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
@@ -304,8 +304,10 @@ final class PasswordStorageTests: XCTestCase {
         var completeDismissal: (@MainActor @Sendable () -> Void)?
         var dismissalCount = 0
         var returned = false
+        let shown = expectation(description: "password alert presented")
         let request = LocalAuthentication.AlertRequest(show: { _, alert in
             presented = alert
+            shown.fulfill()
         }, dismiss: { _, _, completion in
             dismissalCount += 1
             completeDismissal = completion
@@ -317,7 +319,7 @@ final class PasswordStorageTests: XCTestCase {
             returned = true
             return result
         }
-        for _ in 0..<10 where presented == nil { await Task.yield() }
+        await fulfillment(of: [shown], timeout: 2)
         let alert = try XCTUnwrap(presented)
         alert.textFields?.first?.text = "entered-password"
         request.finish("entered-password")
@@ -369,7 +371,7 @@ final class PasswordStorageTests: XCTestCase {
         XCTAssertNil(repeated.passwordToRepeat)
         XCTAssertEqual(fixture.addCount, 0)
         repeated.viewDidAppear(false)
-        for _ in 0..<5 { await Task.yield() }
+        await expectEventually { navigation.viewControllers.count == 1 }
         repeated.viewDidDisappear(false)
         XCTAssertEqual(navigation.viewControllers.count, 1)
         XCTAssertTrue(navigation.topViewController === repeated)

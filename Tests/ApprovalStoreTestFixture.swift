@@ -852,10 +852,11 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     private var retainedClaims = [ExtensionBridge.ApprovalClaim]()
     private var authorityCurrent = true
     private var eventValues = [String]()
+    private var eventObservers = [String: [@Sendable () -> Void]]()
     private var loadCountValue = 0
     private var activeOperations = 0
     private var isClosing = false
-    private var cleanupContinuation: CheckedContinuation<Void, Never>?
+    private var cleanupGate: TestGate<Void>?
     private var nextClaimObserver: (@MainActor (ExtensionBridge.ApprovalClaim) -> Void)?
     private var nextRejectResult: ExtensionBridge.StoreMutationResult?
     private var nextAbandonResult: ExtensionBridge.StoreMutationResult?
@@ -871,11 +872,11 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     private var broadcastCheckpointCommittedHook: (@Sendable () -> Void)?
     private var committedCheckpoints = Set<ExtensionBridge.Handle>()
     private var suspendAuthorityCheck = false
-    private var authorityCheckContinuation: CheckedContinuation<Void, Never>?
+    private var authorityCheckGate: TestGate<Void>?
     private var suspendClaim = false
-    private var claimContinuation: CheckedContinuation<Void, Never>?
+    private var claimGate: TestGate<Void>?
     private var suspendCompletion = false
-    private var completionContinuation: CheckedContinuation<ExtensionBridge.StoreMutationResult?, Never>?
+    private var completionGate: TestGate<ExtensionBridge.StoreMutationResult?>?
 
     init(clock: @escaping @Sendable () -> Date = { Date() }) throws {
         rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
@@ -898,8 +899,11 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         resumeClaim()
         resumeCompletion(result: .ownershipLost)
         if activeOperations > 0 {
-            await withCheckedContinuation { cleanupContinuation = $0 }
+            let gate = TestGate<Void>()
+            cleanupGate = gate
+            await gate.wait()
         }
+        eventObservers.removeAll()
         for claim in retainedClaims { _ = await bridge.abandon(claim: claim) }
         retainedClaims.removeAll()
         try FileManager.default.removeItem(at: rootURL)
@@ -1043,10 +1047,10 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         defer { finishOperation() }
         if suspendAuthorityCheck {
             suspendAuthorityCheck = false
-            await withCheckedContinuation { continuation in
-                eventValues.append("authorityCheckStarted")
-                authorityCheckContinuation = continuation
-            }
+            let gate = TestGate<Void>()
+            authorityCheckGate = gate
+            record("authorityCheckStarted")
+            await gate.wait()
         }
         guard !isClosing, authorityCurrent else { return false }
         return await bridge.authorityIsCurrent(handle: handle)
@@ -1119,7 +1123,16 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
 
     func events() -> [String] { eventValues }
     func loadCount() -> Int { loadCountValue }
-    func record(_ event: String) { eventValues.append(event) }
+    func record(_ event: String) {
+        eventValues.append(event)
+        let observers = eventObservers.removeValue(forKey: event) ?? []
+        observers.forEach { $0() }
+    }
+
+    func onEvent(_ event: String, perform action: @escaping @Sendable () -> Void) {
+        if eventValues.contains(event) { action() }
+        else { eventObservers[event, default: []].append(action) }
+    }
     func completedErrorCode(handle: ExtensionBridge.Handle) async -> Int? {
         (await response(handle: handle)?["error"] as? [String: Any])?["code"] as? Int
     }
@@ -1156,21 +1169,21 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     }
     func suspendNextAuthorityCheck() { suspendAuthorityCheck = true }
     func resumeAuthorityCheck() {
-        let continuation = authorityCheckContinuation
-        authorityCheckContinuation = nil
-        continuation?.resume()
+        let continuation = authorityCheckGate
+        authorityCheckGate = nil
+        continuation?.resolve(())
     }
     func suspendNextClaim() { suspendClaim = true }
     func resumeClaim() {
-        let continuation = claimContinuation
-        claimContinuation = nil
-        continuation?.resume()
+        let continuation = claimGate
+        claimGate = nil
+        continuation?.resolve(())
     }
     func suspendNextCompletion() { suspendCompletion = true }
     func resumeCompletion(result: ExtensionBridge.StoreMutationResult? = nil) {
-        let continuation = completionContinuation
-        completionContinuation = nil
-        continuation?.resume(returning: result)
+        let continuation = completionGate
+        completionGate = nil
+        continuation?.resolve(result)
     }
 
     func list(profileIdentifier: UUID?) async -> ExtensionBridge.SnapshotsResult {
@@ -1201,15 +1214,15 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         }
         if suspendClaim {
             suspendClaim = false
-            await withCheckedContinuation { continuation in
-                eventValues.append("claimStarted")
-                claimContinuation = continuation
-            }
+            let gate = TestGate<Void>()
+            claimGate = gate
+            record("claimStarted")
+            await gate.wait()
         }
         guard !isClosing else { return .unavailable }
         let result = await bridge.claim(handle: handle)
         if case .claimed(let claim) = result {
-            eventValues.append("claim")
+            record("claim")
             let observer = nextClaimObserver
             nextClaimObserver = nil
             await observer?(claim)
@@ -1222,7 +1235,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         defer { finishOperation() }
         let result = await bridge.claimNativeExecution(consent: consent)
         if case .claimed(let claim) = result {
-            eventValues.append("nativeClaim")
+            record("nativeClaim")
             let observer = nextClaimObserver
             nextClaimObserver = nil
             await observer?(claim)
@@ -1259,7 +1272,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         guard !isClosing else { return .ownershipLost }
         activeOperations += 1
         defer { finishOperation() }
-        eventValues.append("reject")
+        record("reject")
         if let result = nextRejectResult {
             nextRejectResult = nil
             return result
@@ -1270,7 +1283,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         guard !isClosing else { return .ownershipLost }
         activeOperations += 1
         defer { finishOperation() }
-        eventValues.append("abandon")
+        record("abandon")
         if let result = nextAbandonResult {
             nextAbandonResult = nil
             return result
@@ -1284,7 +1297,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         guard !isClosing else { return .ownershipLost }
         activeOperations += 1
         defer { finishOperation() }
-        eventValues.append("returnToReview")
+        record("returnToReview")
         return await bridge.returnToReview(claim: claim, consent: consent)
     }
     func authorize(
@@ -1337,7 +1350,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         }
         let result = await bridge.prepareBroadcast(permit: permit, broadcast: broadcast)
         if case .prepared = result {
-            eventValues.append("checkpoint")
+            record("checkpoint")
             committedCheckpoints.insert(permit.handle)
             let committed = broadcastCheckpointCommittedHook
             broadcastCheckpointCommittedHook = nil
@@ -1350,16 +1363,16 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         activeOperations += 1
         defer { finishOperation() }
         let result = await bridge.abandon(permit: permit)
-        eventValues.append("abandon")
+        record("abandon")
         return result
     }
 
     private func finishOperation() {
         activeOperations -= 1
         if activeOperations == 0 {
-            let continuation = cleanupContinuation
-            cleanupContinuation = nil
-            continuation?.resume()
+            let continuation = cleanupGate
+            cleanupGate = nil
+            continuation?.resolve(())
         }
     }
 
@@ -1367,12 +1380,12 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         guard !isClosing else { return .ownershipLost }
         if suspendCompletion {
             suspendCompletion = false
-            let result = await withCheckedContinuation { continuation in
-                eventValues.append("completeStarted")
-                completionContinuation = continuation
-            }
+            let gate = TestGate<ExtensionBridge.StoreMutationResult?>()
+            completionGate = gate
+            record("completeStarted")
+            let result = await gate.wait()
             if let result {
-                eventValues.append("completeResumed")
+                record("completeResumed")
                 return result
             }
         }
@@ -1385,8 +1398,8 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
 
     private func recordCompletion(_ result: ExtensionBridge.StoreMutationResult) {
         switch result {
-        case .persisted: eventValues.append("complete")
-        case .retryablePersistenceFailure: eventValues.append("completeFailed")
+        case .persisted: record("complete")
+        case .retryablePersistenceFailure: record("completeFailed")
         case .ownershipLost: break
         }
     }

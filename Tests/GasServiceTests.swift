@@ -3208,15 +3208,19 @@ final class GasServiceTests: XCTestCase {
     }
 
     func testEthereumPreparationWaitsForNonceWhenGasFinishesFirst() async {
-        let rpc = EthereumPreparationRPCStub(nonceDelay: 0.03)
+        let nonce = TestDeferred<Void>()
+        defer { nonce.resolve(.success(())) }
+        let rpc = EthereumPreparationRPCStub(nonceRelease: nonce)
+        let gasReady = expectation(description: "gas finished while nonce is suspended")
         let terminalSuccess = expectation(
             description: "preparation waited for both branches"
         )
         var updates = [Transaction]()
 
-        Task { @MainActor in
+        let consumer = Task { @MainActor in
             let onUpdate: (Transaction) -> Void = { transaction in
                 updates.append(transaction)
+                if transaction.gas != nil, transaction.nonce == nil { gasReady.fulfill() }
             }
             let onFeeEstimate: (GasService.Estimate) -> Void = { _ in }
             let completion: (Result<Transaction, TransactionPreparationFailure>) -> Void = { result in
@@ -3255,7 +3259,10 @@ final class GasServiceTests: XCTestCase {
             }
         }
 
-        await fulfillment(of: [terminalSuccess], timeout: 0.2)
+        await fulfillment(of: [gasReady], timeout: 2)
+        nonce.resolve(.success(()))
+        await fulfillment(of: [terminalSuccess], timeout: 2)
+        await consumer.value
         XCTAssertEqual(updates.count, 3)
         XCTAssertNil(updates.first?.nonce)
         XCTAssertEqual(updates.first?.gasPrice, "0x64")
@@ -3465,7 +3472,7 @@ final class GasServiceTests: XCTestCase {
         let lateInspectionUpdate = expectation(
             description: "late inspection remained a partial update"
         )
-        let inspection = DeferredInspection()
+        let inspection = TestDeferred<String?>()
         var terminalResultCount = 0
         var transaction = Transaction(
             from: "0x0",
@@ -3522,7 +3529,7 @@ final class GasServiceTests: XCTestCase {
         }
 
         await fulfillment(of: [terminalSuccess], timeout: 0.2)
-        inspection.finish("late interpretation")
+        inspection.resolve(.success("late interpretation"))
         await fulfillment(
             of: [lateInspectionUpdate, additionalTerminalResult],
             timeout: 0.2
@@ -7695,28 +7702,14 @@ final class GasServiceTests: XCTestCase {
     func testEthereumRPCCancelledNilReplacementAtRetryLimitRemainsCancellation() async throws {
         let requestCount = LockedCounter()
         let replacementStarted = expectation(description: "Final unauthorized replacement started")
-        let gate = LockedTestValue((released: false, continuation: Optional<CheckedContinuation<Void, Never>>.none))
-        func releaseReplacement() {
-            let continuation = gate.withValue { gate in
-                gate.released = true
-                defer { gate.continuation = nil }
-                return gate.continuation
-            }
-            continuation?.resume()
-        }
+        let gate = TestGate<Void>()
+        func releaseReplacement() { gate.resolve(()) }
         let provider = SequencedEthereumAuthorizationProviderStub(
             authorizations: Array(repeating: .success("rejected-token"), count: 5),
             replacements: [.success(nil)],
             replacementPause: {
-                await withCheckedContinuation { continuation in
-                    let resumeNow = gate.withValue { gate in
-                        guard !gate.released else { return true }
-                        gate.continuation = continuation
-                        return false
-                    }
-                    replacementStarted.fulfill()
-                    if resumeNow { continuation.resume() }
-                }
+                replacementStarted.fulfill()
+                await gate.wait()
             }
         )
         let session = makeRPCSession()
@@ -8981,10 +8974,9 @@ private final class EthereumPreparationRPCStub: EthereumRPCClient {
     private let nonceResult: Result<String, Error>
     private let gasPriceResult: Result<String, Error>
     private var estimateGasResults: [Result<String, Error>]
-    private let nonceDelay: TimeInterval
-    private let gasPriceDelay: TimeInterval
+    private let nonceRelease: TestDeferred<Void>?
     private let defersEstimateGasCompletions: Bool
-    private var pendingEstimateGasCompletions = [() -> Void]()
+    private var pendingEstimateGasCompletions = [TestGate<Void>]()
     private(set) var nonceCallCount = 0
     private(set) var gasPriceCallCount = 0
     private(set) var estimateGasCallCount = 0
@@ -8994,15 +8986,13 @@ private final class EthereumPreparationRPCStub: EthereumRPCClient {
         nonceResult: Result<String, Error> = .success("0x1"),
         gasPriceResult: Result<String, Error> = .success("0x64"),
         estimateGasResults: [Result<String, Error>] = [.success("0x5208"), .success("0x5208")],
-        nonceDelay: TimeInterval = 0,
-        gasPriceDelay: TimeInterval = 0,
+        nonceRelease: TestDeferred<Void>? = nil,
         defersEstimateGasCompletions: Bool = false
     ) {
         self.nonceResult = nonceResult
         self.gasPriceResult = gasPriceResult
         self.estimateGasResults = estimateGasResults
-        self.nonceDelay = nonceDelay
-        self.gasPriceDelay = gasPriceDelay
+        self.nonceRelease = nonceRelease
         self.defersEstimateGasCompletions = defersEstimateGasCompletions
     }
 
@@ -9012,7 +9002,6 @@ private final class EthereumPreparationRPCStub: EthereumRPCClient {
     @MainActor
     func fetchGasPrice(endpoint: EthereumRPCEndpoint) async throws -> String {
         gasPriceCallCount += 1
-        if gasPriceDelay > 0 { try await Task.sleep(for: .seconds(gasPriceDelay)) }
         return try gasPriceResult.get()
     }
 
@@ -9029,7 +9018,7 @@ private final class EthereumPreparationRPCStub: EthereumRPCClient {
     @MainActor
     func fetchNonce(endpoint: EthereumRPCEndpoint, for address: String) async throws -> String {
         nonceCallCount += 1
-        if nonceDelay > 0 { try await Task.sleep(for: .seconds(nonceDelay)) }
+        try await nonceRelease?.value()
         return try nonceResult.get()
     }
 
@@ -9040,9 +9029,9 @@ private final class EthereumPreparationRPCStub: EthereumRPCClient {
         guard !estimateGasResults.isEmpty else { throw StubError.expected }
         let result = estimateGasResults.removeFirst()
         if defersEstimateGasCompletions {
-            await withCheckedContinuation { continuation in
-                pendingEstimateGasCompletions.append { continuation.resume() }
-            }
+            let gate = TestGate<Void>()
+            pendingEstimateGasCompletions.append(gate)
+            await gate.wait()
         }
         return try result.get()
     }
@@ -9055,7 +9044,7 @@ private final class EthereumPreparationRPCStub: EthereumRPCClient {
     @MainActor
     func completeNextEstimateGas() {
         guard !pendingEstimateGasCompletions.isEmpty else { return }
-        pendingEstimateGasCompletions.removeFirst()()
+        pendingEstimateGasCompletions.removeFirst().resolve(())
     }
 }
 
@@ -9567,48 +9556,4 @@ private final class LockedDataRecorder: Sendable {
     private let data = Mutex([Data]())
     var values: [Data] { data.withLock { $0 } }
     func append(_ value: Data) { data.withLock { $0.append(value) } }
-}
-
-private final class DeferredInspection: Sendable {
-    private struct State {
-        var result: String?
-        var canceled = false
-        var continuation: CheckedContinuation<String?, Error>?
-    }
-    private let state = Mutex(State())
-
-    func value() async throws -> String? {
-        try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
-                let result = state.withLock { state -> Result<String?, Error>? in
-                    if state.canceled { return .failure(CancellationError()) }
-                    if let result = state.result { return .success(result) }
-                    state.continuation = continuation
-                    return nil
-                }
-                if let result { continuation.resume(with: result) }
-            }
-        } onCancel: {
-            let continuation = self.state.withLock { state in
-                state.canceled = true
-                let continuation = state.continuation
-                state.continuation = nil
-                return continuation
-            }
-            continuation?.resume(throwing: CancellationError())
-        }
-    }
-
-    func finish(_ result: String) {
-        let continuation = state.withLock { state in
-            guard !state.canceled, state.result == nil else {
-                return Optional<CheckedContinuation<String?, Error>>.none
-            }
-            state.result = result
-            let continuation = state.continuation
-            state.continuation = nil
-            return continuation
-        }
-        continuation?.resume(returning: result)
-    }
 }

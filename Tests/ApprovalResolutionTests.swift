@@ -23,8 +23,8 @@ final class ApprovalResolutionTests: XCTestCase {
 
     func testWaitingResolutionRunsCleanupBeforeResuming() async {
         let resolution = ApprovalResolution<Int>()
-        let cleanupGate = ApprovalResolution<Void>()
-        let cleanupTask = Task { await cleanupGate.value() }
+        let cleanupGate = TestGate<Void>()
+        let cleanupTask = Task { await cleanupGate.wait() }
         let waiting = expectation(description: "waiter started")
         let waiter = Task {
             waiting.fulfill()
@@ -36,7 +36,7 @@ final class ApprovalResolutionTests: XCTestCase {
 
         let resolved = await resolution.resolve(42) { cleanupTask.cancel() }
         let value = await waiter.value
-        await cleanupGate.resolve(())
+        cleanupGate.resolve(())
         await cleanupTask.value
 
         XCTAssertTrue(resolved)
@@ -94,7 +94,7 @@ final class ApprovalResolutionTests: XCTestCase {
     }
 
     func testCancellationWithoutTimeoutDiscardsUncooperativeOperationResult() async {
-        let releaseOperation = ApprovalResolution<Void>()
+        let releaseOperation = TestGate<Void>()
         let started = expectation(description: "operation started")
         let completed = expectation(description: "caller returns before operation")
         let discarded = expectation(description: "late result discarded once")
@@ -109,7 +109,7 @@ final class ApprovalResolutionTests: XCTestCase {
                 },
                 operation: {
                     started.fulfill()
-                    await releaseOperation.value()
+                    await releaseOperation.wait()
                     XCTAssertTrue(Task.isCancelled)
                     return 42
                 }
@@ -120,7 +120,7 @@ final class ApprovalResolutionTests: XCTestCase {
         await fulfillment(of: [started], timeout: 1)
         waiter.cancel()
         await fulfillment(of: [completed], timeout: 1)
-        await releaseOperation.resolve(())
+        releaseOperation.resolve(())
         let value = await waiter.value
 
         XCTAssertEqual(value, -1)
@@ -129,8 +129,8 @@ final class ApprovalResolutionTests: XCTestCase {
 
     func testTimeoutCancelsUncooperativeOperationAndIgnoresLateValue() async {
         let resolution = ApprovalResolution<Int>()
-        let timeout = ApprovalResolution<Void>()
-        let releaseOperation = ApprovalResolution<Void>()
+        let timeout = TestGate<Void>()
+        let releaseOperation = TestGate<Void>()
         let started = expectation(description: "operation started")
         let returned = expectation(description: "late operation returned")
         let discarded = expectation(description: "late result discarded once")
@@ -139,14 +139,14 @@ final class ApprovalResolutionTests: XCTestCase {
             await resolution.value(
                 timeoutValue: -1,
                 callerCancellation: .ignore,
-                waitForTimeout: { await timeout.value() },
+                waitForTimeout: { await timeout.wait() },
                 onDiscardedValue: { value in
                     XCTAssertEqual(value, 42)
                     discarded.fulfill()
                 },
                 operation: {
                     started.fulfill()
-                    await releaseOperation.value()
+                    await releaseOperation.wait()
                     XCTAssertTrue(Task.isCancelled)
                     returned.fulfill()
                     return 42
@@ -154,18 +154,18 @@ final class ApprovalResolutionTests: XCTestCase {
             )
         }
         await fulfillment(of: [started], timeout: 1)
-        await timeout.resolve(())
+        timeout.resolve(())
         let value = await waiter.value
         XCTAssertEqual(value, -1)
 
-        await releaseOperation.resolve(())
+        releaseOperation.resolve(())
         await fulfillment(of: [returned, discarded], timeout: 1)
         let late = await resolution.resolve(43)
         XCTAssertFalse(late)
     }
 
     func testBlockingOperationCannotBlockTheResolutionDeadline() async {
-        let timeout = ApprovalResolution<Void>()
+        let timeout = TestGate<Void>()
         let release = DispatchSemaphore(value: 0)
         let started = expectation(description: "blocking operation started")
         let finished = expectation(description: "deadline resolved independently")
@@ -173,7 +173,7 @@ final class ApprovalResolutionTests: XCTestCase {
             let result = await ApprovalResolution<Int>().value(
                 timeoutValue: -1,
                 callerCancellation: .ignore,
-                waitForTimeout: { await timeout.value() },
+                waitForTimeout: { await timeout.wait() },
                 operation: {
                     started.fulfill()
                     blockApprovalResolutionOperation(release)
@@ -184,7 +184,7 @@ final class ApprovalResolutionTests: XCTestCase {
             return result
         }
         await fulfillment(of: [started], timeout: 1)
-        await timeout.resolve(())
+        timeout.resolve(())
         await fulfillment(of: [finished], timeout: 1)
         release.signal()
         let result = await task.value
@@ -193,33 +193,33 @@ final class ApprovalResolutionTests: XCTestCase {
 
     func testSuccessfulOperationCancelsTimerAndPreservesOptionalNil() async {
         let resolution = ApprovalResolution<Int?>()
-        let releaseTimer = ApprovalResolution<Void>()
+        let releaseTimer = TestGate<Void>()
         let timerStarted = expectation(description: "timer started")
         let timerReturned = expectation(description: "canceled timer returned")
-        let releaseOperation = ApprovalResolution<Void>()
+        let releaseOperation = TestGate<Void>()
         let waiter = Task {
             await resolution.value(
                 timeoutValue: 42,
                 callerCancellation: .ignore,
                 waitForTimeout: {
                     timerStarted.fulfill()
-                    await releaseTimer.value()
+                    await releaseTimer.wait()
                     XCTAssertTrue(Task.isCancelled)
                     timerReturned.fulfill()
                 },
                 onDiscardedValue: { _ in XCTFail("Winning value must not be discarded") },
                 operation: {
-                    await releaseOperation.value()
+                    await releaseOperation.wait()
                     return nil
                 }
             )
         }
         await fulfillment(of: [timerStarted], timeout: 1)
-        await releaseOperation.resolve(())
+        releaseOperation.resolve(())
         let value = await waiter.value
         XCTAssertNil(value)
 
-        await releaseTimer.resolve(())
+        releaseTimer.resolve(())
         await fulfillment(of: [timerReturned], timeout: 1)
         let late = await resolution.resolve(43)
         XCTAssertFalse(late)
@@ -227,45 +227,45 @@ final class ApprovalResolutionTests: XCTestCase {
 
     func testIgnoringCallerCancellationPreservesStartedAndNotYetStartedWork() async {
         for alreadyCancelled in [false, true] {
-            let entry = ApprovalResolution<Void>()
-            let releaseOperation = ApprovalResolution<Void>()
-            let releaseTimer = ApprovalResolution<Void>()
+            let entry = TestGate<Void>()
+            let releaseOperation = TestGate<Void>()
+            let releaseTimer = TestGate<Void>()
             let started = expectation(description: "operation started")
             let timerReturned = expectation(description: "timer released")
             let waiter = Task {
-                await entry.value()
+                await entry.wait()
                 return await ApprovalResolution<Int>().value(
                     timeoutValue: -1,
                     callerCancellation: .ignore,
                     waitForTimeout: {
-                        await releaseTimer.value()
+                        await releaseTimer.wait()
                         timerReturned.fulfill()
                     },
                     onDiscardedValue: { _ in XCTFail("Approved work must survive caller cancellation") },
                     operation: {
                         XCTAssertFalse(Task.isCancelled)
                         started.fulfill()
-                        await releaseOperation.value()
+                        await releaseOperation.wait()
                         XCTAssertFalse(Task.isCancelled)
                         return 42
                     }
                 )
             }
             if alreadyCancelled { waiter.cancel() }
-            await entry.resolve(())
+            entry.resolve(())
             await fulfillment(of: [started], timeout: 1)
             if !alreadyCancelled { waiter.cancel() }
-            await releaseOperation.resolve(())
+            releaseOperation.resolve(())
             let value = await waiter.value
             XCTAssertEqual(value, 42)
-            await releaseTimer.resolve(())
+            releaseTimer.resolve(())
             await fulfillment(of: [timerReturned], timeout: 1)
         }
     }
 
     func testCallerCancellationReturnsBeforeUncooperativeWorkAndDiscardsItsResult() async {
-        let releaseOperation = ApprovalResolution<Void>()
-        let releaseTimer = ApprovalResolution<Void>()
+        let releaseOperation = TestGate<Void>()
+        let releaseTimer = TestGate<Void>()
         let started = expectation(description: "operation started")
         let discarded = expectation(description: "canceled result discarded once")
         discarded.assertForOverFulfill = true
@@ -276,7 +276,7 @@ final class ApprovalResolutionTests: XCTestCase {
                 timeoutValue: -1,
                 callerCancellation: .resolveTimeout,
                 waitForTimeout: {
-                    await releaseTimer.value()
+                    await releaseTimer.wait()
                     timerReturned.fulfill()
                 },
                 onDiscardedValue: { value in
@@ -285,7 +285,7 @@ final class ApprovalResolutionTests: XCTestCase {
                 },
                 operation: {
                     started.fulfill()
-                    await releaseOperation.value()
+                    await releaseOperation.wait()
                     XCTAssertTrue(Task.isCancelled)
                     return 42
                 }
@@ -296,8 +296,8 @@ final class ApprovalResolutionTests: XCTestCase {
         await fulfillment(of: [started], timeout: 1)
         waiter.cancel()
         await fulfillment(of: [completed], timeout: 1)
-        await releaseOperation.resolve(())
-        await releaseTimer.resolve(())
+        releaseOperation.resolve(())
+        releaseTimer.resolve(())
         let value = await waiter.value
         XCTAssertEqual(value, -1)
         await fulfillment(of: [discarded, timerReturned], timeout: 1)
@@ -307,9 +307,9 @@ final class ApprovalResolutionTests: XCTestCase {
         for existingWinner in [nil, 42] as [Int?] {
             let resolution = ApprovalResolution<Int>()
             if let existingWinner { await resolution.resolve(existingWinner) }
-            let entry = ApprovalResolution<Void>()
+            let entry = TestGate<Void>()
             let waiter = Task {
-                await entry.value()
+                await entry.wait()
                 return await resolution.value(
                     timeoutValue: -1,
                     callerCancellation: .resolveTimeout,
@@ -321,15 +321,15 @@ final class ApprovalResolutionTests: XCTestCase {
                 )
             }
             waiter.cancel()
-            await entry.resolve(())
+            entry.resolve(())
             let value = await waiter.value
             XCTAssertEqual(value, existingWinner ?? -1)
         }
     }
 
     func testCallerCancellationImmediatelyReachesTheRunningOperation() async {
-        let releaseOperation = ApprovalResolution<Void>()
-        let releaseTimer = ApprovalResolution<Void>()
+        let releaseOperation = TestGate<Void>()
+        let releaseTimer = TestGate<Void>()
         let discarded = expectation(description: "operation released")
         let timerReturned = expectation(description: "timer released")
         let completed = expectation(description: "caller returns after cancellation")
@@ -339,14 +339,14 @@ final class ApprovalResolutionTests: XCTestCase {
                 timeoutValue: -1,
                 callerCancellation: .resolveTimeout,
                 waitForTimeout: {
-                    await releaseTimer.value()
+                    await releaseTimer.wait()
                     timerReturned.fulfill()
                 },
                 onDiscardedValue: { _ in discarded.fulfill() },
                 operation: { @MainActor in
                     waiter.cancel()
                     XCTAssertTrue(Task.isCancelled)
-                    await releaseOperation.value()
+                    await releaseOperation.wait()
                     return 42
                 }
             )
@@ -354,8 +354,8 @@ final class ApprovalResolutionTests: XCTestCase {
             return value
         }
         await fulfillment(of: [completed], timeout: 1)
-        await releaseOperation.resolve(())
-        await releaseTimer.resolve(())
+        releaseOperation.resolve(())
+        releaseTimer.resolve(())
         let value = await waiter.value
         XCTAssertEqual(value, -1)
         await fulfillment(of: [discarded, timerReturned], timeout: 1)

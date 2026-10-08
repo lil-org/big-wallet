@@ -49,90 +49,24 @@
 
     @MainActor
     final class NativeApprovalServiceTestFixture {
-        final class Clock: Sendable {
-            private struct State {
-                var uptime: UInt64 = 1_000_000_000
-                var wallTime = Date(timeIntervalSince1970: 1_800_000_000)
-                var waiters = [UUID: (UInt64, CheckedContinuation<Void, Never>)]()
-            }
-            private let state = Mutex(State())
-
-            var now: UInt64 { state.withLock { $0.uptime } }
-            var date: Date { state.withLock { $0.wallTime } }
-            var deadlines: [UInt64] { state.withLock { $0.waiters.values.map { $0.0 }.sorted() } }
-
-            func sleepUntil(_ deadline: UInt64) async {
-                let id = UUID()
-                await withTaskCancellationHandler {
-                    await withCheckedContinuation { continuation in
-                        let shouldWait = state.withLock { state in
-                            guard !Task.isCancelled, deadline > state.uptime else { return false }
-                            state.waiters[id] = (deadline, continuation)
-                            return true
-                        }
-                        if !shouldWait { continuation.resume() }
-                    }
-                } onCancel: {
-                    let continuation = self.state.withLock { $0.waiters.removeValue(forKey: id)?.1 }
-                    continuation?.resume()
-                }
-            }
-
-            func advance(to deadline: UInt64) {
-                let ready = state.withLock { state -> [CheckedContinuation<Void, Never>] in
-                    guard deadline >= state.uptime else { return [] }
-                    state.wallTime += Double(deadline - state.uptime) / 1_000_000_000
-                    state.uptime = deadline
-                    let ready = state.waiters.filter { $0.value.0 <= state.uptime }
-                    for id in ready.keys { state.waiters[id] = nil }
-                    return ready.values.map { $0.1 }
-                }
-                ready.forEach { $0.resume() }
-            }
-        }
-
-        final class Gate: Sendable {
-            private struct State {
-                var isOpen = false
-                var waiters = [CheckedContinuation<Void, Never>]()
-            }
-            private let state = Mutex(State())
-
-            func wait() async {
-                await withCheckedContinuation { continuation in
-                    let shouldWait = state.withLock { state in
-                        guard !state.isOpen else { return false }
-                        state.waiters.append(continuation)
-                        return true
-                    }
-                    if !shouldWait { continuation.resume() }
-                }
-            }
-
-            func open() {
-                let pending = state.withLock { state in
-                    state.isOpen = true
-                    let pending = state.waiters
-                    state.waiters.removeAll()
-                    return pending
-                }
-                pending.forEach { $0.resume() }
-            }
-        }
-
+        private var observers = [UUID: (condition: @MainActor () -> Bool, expectation: XCTestExpectation)]()
+        private var gates = [TestGate<Void>]()
+        private var launchGates = [TestGate<Bool>]()
+        private var isClosing = false
+        private var activeCallbacks = 0 { didSet { changed() } }
         let bundleURL: URL
-        let clock = Clock()
-        var snapshots = [ExtensionBridge.Handle: ExtensionBridge.Snapshot]()
-        var processes = [Int32: AmbientRuntimeIdentity]()
-        var unidentifiedProcesses = [Int32: NativeAgentLauncher.RuntimeHelper]()
-        var launches = [(target: NativeAgentLauncher.HelperTarget, route: NativeAgentRoute, time: UInt64)]()
-        var quits = [Int32]()
-        var clears = [ExtensionBridge.NativeDeliveryReceipt]()
-        var validations = [URL]()
-        var loads = [(ExtensionBridge.Handle, UInt64)]()
-        var maintainedProfiles = [UUID?]()
-        var responseStatusReads = [ExtensionBridge.Handle]()
-        var responses = [ExtensionBridge.Handle: [String: Any]]()
+        let clock = TestClock()
+        var snapshots = [ExtensionBridge.Handle: ExtensionBridge.Snapshot]() { didSet { changed() } }
+        var processes = [Int32: AmbientRuntimeIdentity]() { didSet { changed() } }
+        var unidentifiedProcesses = [Int32: NativeAgentLauncher.RuntimeHelper]() { didSet { changed() } }
+        var launches = [(target: NativeAgentLauncher.HelperTarget, route: NativeAgentRoute, time: UInt64)]() { didSet { changed() } }
+        var quits = [Int32]() { didSet { changed() } }
+        var clears = [ExtensionBridge.NativeDeliveryReceipt]() { didSet { changed() } }
+        var validations = [URL]() { didSet { changed() } }
+        var loads = [(ExtensionBridge.Handle, UInt64)]() { didSet { changed() } }
+        var maintainedProfiles = [UUID?]() { didSet { changed() } }
+        var responseStatusReads = [ExtensionBridge.Handle]() { didSet { changed() } }
+        var responses = [ExtensionBridge.Handle: [String: Any]]() { didSet { changed() } }
         var onResponseStatus: (@MainActor (ExtensionBridge.Handle, String) async -> ExtensionBridge.ResponseStatusResult)?
         var onValidate: (@MainActor (URL) async -> Bool)?
         var onLoad: (@MainActor (ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult)?
@@ -158,6 +92,8 @@
                 ], format: .xml, options: 0)
             try data.write(to: contents.appendingPathComponent("Info.plist"))
             _ = try XCTUnwrap(AmbientRuntimeIdentity.bundleVersion(at: bundleURL))
+            clock.onRegistration = { [weak self] _ in Task { @MainActor in self?.changed() } }
+            clock.onCompletion = { [weak self] _ in Task { @MainActor in self?.changed() } }
         }
 
         deinit { try? FileManager.default.removeItem(at: bundleURL) }
@@ -246,27 +182,36 @@
 
         var launcherDependencies: NativeAgentLauncher.Dependencies {
             launcherTestDependencies(
-                helperURL: { self.bundleURL },
+                helperURL: { self.isClosing ? nil : self.bundleURL },
                 validate: { url in
+                    guard !self.isClosing else { return false }
+                    self.activeCallbacks += 1
+                    defer { self.activeCallbacks -= 1 }
                     self.validations.append(url)
                     return await self.onValidate?(url)
                         ?? (url.standardizedFileURL == self.bundleURL.standardizedFileURL)
                 },
                 helpers: {
-                    self.processes.keys.sorted().compactMap(self.helper)
+                    guard !self.isClosing else { return [] }
+                    return self.processes.keys.sorted().compactMap(self.helper)
                         + Array(self.unidentifiedProcesses.values)
                 },
                 helper: helper,
                 identity: { self.processes[$0] },
                 launch: { target, url in
-                    guard let route = NativeAgentRoute(url: url) else { return false }
-                    self.launches.append((target, route, self.clock.now))
+                    guard !self.isClosing, let route = NativeAgentRoute(url: url) else { return false }
+                    self.activeCallbacks += 1
+                    defer { self.activeCallbacks -= 1 }
+                    self.launches.append((target, route, self.clock.uptimeNanoseconds))
                     guard let onLaunch = self.onLaunch else { return false }
-                    return await withCheckedContinuation { continuation in
-                        onLaunch(target, route) { continuation.resume(returning: $0) }
-                    }
+                    let gate = TestGate<Bool>()
+                    self.launchGates.append(gate)
+                    defer { self.launchGates.removeAll { $0 === gate }; self.changed() }
+                    onLaunch(target, route) { gate.resolve($0) }
+                    self.changed()
+                    return await gate.wait()
                 },
-                uptime: { [clock] in clock.now }, sleepUntil: clock.sleepUntil
+                uptime: { [clock] in clock.uptimeNanoseconds }, sleepUntil: { [clock] in try? await clock.sleep(until: $0) }
             )
         }
 
@@ -274,11 +219,17 @@
             approvalServiceTestDependencies(
                 launcher: NativeAgentLauncher(dependencies: launcherDependencies),
                 load: { handle in
-                    self.loads.append((handle, self.clock.now))
+                    guard !self.isClosing else { return .missing }
+                    self.activeCallbacks += 1
+                    defer { self.activeCallbacks -= 1 }
+                    self.loads.append((handle, self.clock.uptimeNanoseconds))
                     if let onLoad = self.onLoad { return await onLoad(handle) }
                     return self.snapshots[handle].map(ExtensionBridge.SnapshotResult.found) ?? .missing
                 },
                 responseStatus: { handle, key in
+                    guard !self.isClosing else { return .missing }
+                    self.activeCallbacks += 1
+                    defer { self.activeCallbacks -= 1 }
                     self.responseStatusReads.append(handle)
                     if let onResponseStatus = self.onResponseStatus { return await onResponseStatus(handle, key) }
                     guard let snapshot = self.snapshots[handle], snapshot.configurationKey == key else { return .missing }
@@ -286,6 +237,9 @@
                 },
                 maintainProfile: { self.maintainedProfiles.append($0) },
                 clearReceipt: { handle, receipt in
+                    guard !self.isClosing else { return .ownershipLost }
+                    self.activeCallbacks += 1
+                    defer { self.activeCallbacks -= 1 }
                     self.clears.append(receipt)
                     if let onClear = self.onClear { return await onClear(handle, receipt) }
                     guard let snapshot = self.snapshots[handle], snapshot.nativeDeliveryReceipt == receipt,
@@ -301,8 +255,8 @@
                     }
                     return .persisted
                 },
-                uptime: { [clock] in clock.now },
-                sleepUntil: { [clock] in await clock.sleepUntil($0) }
+                uptime: { [clock] in clock.uptimeNanoseconds },
+                sleepUntil: { [clock] in try? await clock.sleep(until: $0) }
             )
         }
 
@@ -329,34 +283,81 @@
 
         func advanceClock(by interval: UInt64, steps: Int = 1, waiters: Int = 1) async throws {
             for _ in 0..<steps {
-                let deadline = clock.now + interval
-                try await eventually { self.clock.deadlines.filter { $0 == deadline }.count >= waiters }
+                let deadline = clock.uptimeNanoseconds + interval
+                try await eventually { self.clock.pendingSleeps.map(\.deadline).filter { $0 == deadline }.count >= waiters }
                 clock.advance(to: deadline)
             }
         }
 
-        func finish<Value>(
+        func finish<Value: Sendable>(
             afterStarting: () async throws -> Void = {},
             _ operation: @escaping @MainActor () async -> Value
         ) async throws -> Value {
-            var result: Value?
-            let task = Task { result = await operation() }
+            let completed = XCTestExpectation(description: "approval operation completed")
+            let task = Task {
+                let result = await operation()
+                completed.fulfill()
+                return result
+            }
             defer { task.cancel() }
             try await afterStarting()
-            for _ in 0..<20_000 {
-                if let result { return result }
-                try await Task.sleep(for: .milliseconds(1))
+            guard await XCTWaiter.fulfillment(of: [completed], timeout: 20) == .completed else {
+                XCTFail("Approval operation did not complete")
+                throw CocoaError(.coderInvalidValue)
             }
-            throw CocoaError(.coderInvalidValue)
+            return await task.value
         }
 
-        func eventually(_ condition: () -> Bool) async throws {
-            for _ in 0..<2_000 {
-                if condition() { return }
-                try await Task.sleep(for: .milliseconds(1))
+        func eventually(_ condition: @escaping @MainActor () -> Bool) async throws {
+            guard !condition() else { return }
+            let id = UUID()
+            let observed = XCTestExpectation(description: "approval fixture changed")
+            observers[id] = (condition, observed)
+            defer { observers.removeValue(forKey: id) }
+            guard await XCTWaiter.fulfillment(of: [observed], timeout: 2) == .completed else {
+                XCTFail("Approval service condition did not become true")
+                throw CocoaError(.coderInvalidValue)
             }
-            XCTFail("Approval service condition did not become true")
-            throw CocoaError(.coderInvalidValue)
+        }
+
+        private func changed() {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                for (id, observer) in observers where observer.condition() {
+                    observers.removeValue(forKey: id)
+                    observer.expectation.fulfill()
+                }
+            }
+        }
+
+        func waitForCallbacks() async throws {
+            try await eventually { self.activeCallbacks == 0 && self.clock.activeSleepCount == 0 }
+        }
+
+        func makeGate() -> TestGate<Void> {
+            let gate = TestGate<Void>()
+            gates.append(gate)
+            return gate
+        }
+
+        func cleanup() async throws {
+            isClosing = true
+            onValidate = nil
+            onLoad = nil
+            onLaunch = nil
+            onQuit = nil
+            onClear = nil
+            onResponseStatus = nil
+            gates.forEach { $0.resolve(()) }
+            launchGates.forEach { $0.resolve(false) }
+            clock.onRegistration = { [weak clock] sleep in clock?.wake(sleep.id) }
+            clock.pendingSleeps.forEach { clock.wake($0.id) }
+            try await eventually { self.activeCallbacks == 0 && self.clock.activeSleepCount == 0 }
+            snapshots.removeAll()
+            processes.removeAll()
+            unidentifiedProcesses.removeAll()
+            gates.removeAll()
+            try FileManager.default.removeItem(at: bundleURL)
         }
     }
 #endif

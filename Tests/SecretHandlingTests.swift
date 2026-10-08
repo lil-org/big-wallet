@@ -55,14 +55,14 @@ final class SecretHandlingTests: XCTestCase {
         XCTAssertEqual(fixture.pasteboard.options, [.currentHostOnly])
         #endif
 
-        fixture.clock.advance(by: 29)
+        fixture.clock.advance(by: 29_000_000_000)
         fixture.scheduler.fire(0)
         XCTAssertEqual(fixture.scheduler.intervals.count, 2)
         XCTAssertEqual(fixture.scheduler.cancellations, [true, false])
         XCTAssertEqual(fixture.pasteboard.value, "secret")
         XCTAssertEqual(fixture.scheduler.intervals, [30, 1])
 
-        fixture.clock.advance(by: 1)
+        fixture.clock.advance(by: 1_000_000_000)
         fixture.scheduler.fire(1)
         XCTAssertEqual(fixture.pasteboard.clearCount, 1)
         XCTAssertNil(fixture.pasteboard.value)
@@ -73,7 +73,7 @@ final class SecretHandlingTests: XCTestCase {
         fixture.clipboard.copy("secret")
         XCTAssertEqual(fixture.scheduler.intervals.count, 1)
         fixture.pasteboard.replace(with: "public address")
-        fixture.clock.advance(by: 30)
+        fixture.clock.advance(by: 30_000_000_000)
 
         fixture.scheduler.fire(0)
         XCTAssertTrue(fixture.pasteboard.readCount > 0)
@@ -86,8 +86,8 @@ final class SecretHandlingTests: XCTestCase {
         let fixture = ClipboardFixture()
         fixture.clipboard.copy("secret")
         XCTAssertEqual(fixture.scheduler.intervals.count, 1)
-        fixture.clock.date.addTimeInterval(-3_600)
-        fixture.clock.advance(by: 30)
+        fixture.clock.setDate(fixture.clock.date.addingTimeInterval(-3_600))
+        fixture.clock.advance(by: 30_000_000_000)
 
         fixture.scheduler.fire(0)
         XCTAssertEqual(fixture.pasteboard.clearCount, 1)
@@ -100,12 +100,12 @@ final class SecretHandlingTests: XCTestCase {
         let fixture = ClipboardFixture()
         fixture.clipboard.copy("first secret")
         XCTAssertEqual(fixture.scheduler.intervals.count, 1)
-        fixture.clock.advance(by: 10)
+        fixture.clock.advance(by: 10_000_000_000)
         fixture.clipboard.copy("second secret")
         XCTAssertEqual(fixture.scheduler.intervals.count, 2)
         XCTAssertEqual(fixture.scheduler.cancellations, [true, false])
 
-        fixture.clock.advance(by: 20)
+        fixture.clock.advance(by: 20_000_000_000)
         fixture.scheduler.fire(0, evenIfCancelled: true)
 
         XCTAssertEqual(fixture.pasteboard.value, "second secret")
@@ -116,14 +116,14 @@ final class SecretHandlingTests: XCTestCase {
         XCTAssertEqual(fixture.scheduler.intervals.count, 3)
         XCTAssertEqual(fixture.scheduler.intervals, [30, 30, 10])
 
-        fixture.clock.advance(by: 10)
+        fixture.clock.advance(by: 10_000_000_000)
         fixture.scheduler.fire(2)
         XCTAssertEqual(fixture.pasteboard.clearCount, 1)
         XCTAssertNil(fixture.pasteboard.value)
     }
 
     func testReleasingClipboardCancelsTimerAndRejectsItsLateCallback() {
-        let clock = ClipboardClock()
+        let clock = TestClock(date: Date(timeIntervalSince1970: 1_000))
         let scheduler = ClipboardScheduler()
         let pasteboard = ClipboardPasteboard()
         var clipboard: SecretClipboard? = SecretClipboard(
@@ -139,7 +139,7 @@ final class SecretHandlingTests: XCTestCase {
 
         XCTAssertEqual(scheduler.cancellations, [true])
         pasteboard.replace(with: "replacement")
-        clock.advance(by: 30)
+        clock.advance(by: 30_000_000_000)
         scheduler.fire(0, evenIfCancelled: true)
         XCTAssertEqual(pasteboard.value, "replacement")
         XCTAssertEqual(pasteboard.clearCount, 0)
@@ -175,7 +175,7 @@ final class SecretHandlingTests: XCTestCase {
         fixture.pasteboard.replacementDuringWrite = "another application's text"
         fixture.clipboard.copy("secret")
         XCTAssertEqual(fixture.scheduler.intervals.count, 1)
-        fixture.clock.advance(by: 30)
+        fixture.clock.advance(by: 30_000_000_000)
 
         fixture.scheduler.fire(0)
         XCTAssertTrue(fixture.pasteboard.readCount > 0)
@@ -193,7 +193,7 @@ final class SecretHandlingTests: XCTestCase {
 
         fixture.clipboard.copy("second secret")
         XCTAssertEqual(fixture.scheduler.cancellations, [true])
-        fixture.clock.advance(by: 30)
+        fixture.clock.advance(by: 30_000_000_000)
         fixture.scheduler.fire(0, evenIfCancelled: true)
 
         XCTAssertEqual(fixture.scheduler.intervals.count, 1)
@@ -205,7 +205,7 @@ final class SecretHandlingTests: XCTestCase {
         let fixture = ClipboardFixture()
         fixture.clipboard.copy("secret")
         XCTAssertEqual(fixture.scheduler.intervals.count, 1)
-        fixture.clock.advance(by: 31)
+        fixture.clock.advance(by: 31_000_000_000)
 
         fixture.workspaceNotifications.post(name: NSWorkspace.didWakeNotification, object: nil)
 
@@ -222,7 +222,7 @@ final class SecretHandlingTests: XCTestCase {
         let fixture = ClipboardFixture()
         fixture.clipboard.copy("secret")
         XCTAssertEqual(fixture.scheduler.intervals.count, 1)
-        fixture.clock.advance(by: 20)
+        fixture.clock.advance(by: 20_000_000_000)
 
         fixture.workspaceNotifications.post(name: NSWorkspace.didWakeNotification, object: nil)
         XCTAssertEqual(fixture.scheduler.intervals.count, 2)
@@ -231,7 +231,7 @@ final class SecretHandlingTests: XCTestCase {
         XCTAssertEqual(fixture.pasteboard.value, "secret")
 
         fixture.pasteboard.replace(with: "replacement")
-        fixture.clock.advance(by: 11)
+        fixture.clock.advance(by: 11_000_000_000)
         fixture.workspaceNotifications.post(name: NSWorkspace.didWakeNotification, object: nil)
         XCTAssertEqual(fixture.pasteboard.value, "replacement")
         XCTAssertEqual(fixture.pasteboard.clearCount, 0)
@@ -254,7 +254,7 @@ final class SecretHandlingTests: XCTestCase {
             XCTAssertEqual(fixture.pasteboard.clearCount, replaceBeforeTermination ? 0 : 1)
             XCTAssertEqual(fixture.scheduler.cancellations, [true])
             fixture.pasteboard.replace(with: "later replacement")
-            fixture.clock.advance(by: 30)
+            fixture.clock.advance(by: 30_000_000_000)
             fixture.scheduler.fire(0, evenIfCancelled: true)
             XCTAssertEqual(fixture.pasteboard.value, "later replacement")
         }
@@ -269,7 +269,7 @@ final class SecretHandlingTests: XCTestCase {
 
         XCTAssertEqual(fixture.pasteboard.value, "secret")
         XCTAssertEqual(fixture.scheduler.cancellations, [false])
-        fixture.clock.advance(by: 30)
+        fixture.clock.advance(by: 30_000_000_000)
         fixture.scheduler.fire(0)
         XCTAssertEqual(fixture.pasteboard.clearCount, 1)
         XCTAssertNil(fixture.pasteboard.value)
@@ -288,14 +288,14 @@ final class SecretHandlingTests: XCTestCase {
         XCTAssertNil(session.value(for: token))
         XCTAssertEqual(fixture.pasteboard.value, "secret")
         XCTAssertEqual(fixture.scheduler.cancellations, [false])
-        fixture.clock.advance(by: 30)
+        fixture.clock.advance(by: 30_000_000_000)
         fixture.scheduler.fire(0)
         XCTAssertEqual(fixture.pasteboard.clearCount, 1)
         XCTAssertNil(fixture.pasteboard.value)
     }
 
     func testSystemManagedClipboardNeverSchedulesOrManuallyClearsContents() {
-        let clock = ClipboardClock()
+        let clock = TestClock(date: Date(timeIntervalSince1970: 1_000))
         let notifications = NotificationCenter()
         var value: String?
         var deadline: Date?
@@ -319,7 +319,7 @@ final class SecretHandlingTests: XCTestCase {
         XCTAssertEqual(value, "secret")
         XCTAssertEqual(deadline, clock.date.addingTimeInterval(30))
         value = "another application's text"
-        clock.advance(by: 31)
+        clock.advance(by: 31_000_000_000)
 
         notifications.post(name: activationNotification, object: nil)
         notifications.post(name: terminationNotification, object: nil)
@@ -334,7 +334,7 @@ final class SecretHandlingTests: XCTestCase {
 
     #if !os(macOS)
     func testUIKitAdapterWritesLocalOnlySystemExpirationWithoutAdoptingReplacement() {
-        let clock = ClipboardClock()
+        let clock = TestClock(date: Date(timeIntervalSince1970: 1_000))
         let notifications = NotificationCenter()
         var items = [[String: Any]]()
         var options = [UIPasteboard.OptionsKey: Any]()
@@ -358,7 +358,7 @@ final class SecretHandlingTests: XCTestCase {
         XCTAssertEqual(options[.localOnly] as? Bool, true)
         XCTAssertEqual(options[.expirationDate] as? Date, clock.date.addingTimeInterval(30))
         items = [[UIPasteboard.typeAutomatic: "replacement"]]
-        clock.advance(by: 31)
+        clock.advance(by: 31_000_000_000)
         notifications.post(name: activationNotification, object: nil)
         notifications.post(name: terminationNotification, object: nil)
         XCTAssertEqual(items.first?[UIPasteboard.typeAutomatic] as? String, "replacement")
@@ -369,7 +369,7 @@ final class SecretHandlingTests: XCTestCase {
     func testActivationRechecksOverdueClipboardWithoutWaitingForTimer() {
         let fixture = ClipboardFixture()
         fixture.clipboard.copy("secret")
-        fixture.clock.advance(by: 31)
+        fixture.clock.advance(by: 31_000_000_000)
 
         fixture.applicationNotifications.post(name: activationNotification, object: nil)
 
@@ -491,7 +491,7 @@ private final class ClipboardModalProbe: NSObject {
 
 @MainActor
 private final class ClipboardFixture {
-    let clock = ClipboardClock()
+    let clock = TestClock(date: Date(timeIntervalSince1970: 1_000))
     let scheduler = ClipboardScheduler()
     let pasteboard = ClipboardPasteboard()
     let applicationNotifications = NotificationCenter()
@@ -507,17 +507,6 @@ private final class ClipboardFixture {
             applicationNotifications: applicationNotifications,
             workspaceNotifications: workspaceNotifications
         )
-    }
-}
-
-@MainActor
-private final class ClipboardClock {
-    var date = Date(timeIntervalSince1970: 1_000)
-    var instant = ContinuousClock().now
-
-    func advance(by seconds: TimeInterval) {
-        date.addTimeInterval(seconds)
-        instant = instant.advanced(by: .seconds(seconds))
     }
 }
 

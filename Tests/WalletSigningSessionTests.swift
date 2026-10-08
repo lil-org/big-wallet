@@ -470,11 +470,14 @@ final class WalletSigningSessionTests: XCTestCase {
                 ),
                 deadline: deadline
             )
-            var now = deadline.addingTimeInterval(-1)
+            let clock = TestClock(date: deadline.addingTimeInterval(-1))
+            let entered = expectation(description: "signing suspended before deadline")
+            let release = TestGate<Void>()
+            defer { release.resolve(()) }
             let material = SessionSigningMaterial { operation in
                 let result = walletSigningResultForTesting(operation)
-                await Task.yield()
-                now = deadline.addingTimeInterval(offset)
+                entered.fulfill()
+                await release.wait()
                 return result
             }
             let session = makeWalletSigningSessionForTesting(
@@ -482,11 +485,14 @@ final class WalletSigningSessionTests: XCTestCase {
                 sign: { operation, _ in await material.sign(operation) },
                 retireSigningMaterial: material.invalidate,
                 requiresCommitLease: false,
-                clock: { now }
+                clock: { clock.date }
             )
             XCTAssertTrue(session.attach(permit: permit))
-
-            let result = await session.sign()
+            let signing = Task { await session.sign() }
+            await fulfillment(of: [entered], timeout: 2)
+            clock.setDate(deadline.addingTimeInterval(offset))
+            release.resolve(())
+            let result = await signing.value
             if offset < 0 {
                 guard case .success = result else {
                     return XCTFail("A signature returned before the deadline must be available")

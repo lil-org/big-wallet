@@ -1552,26 +1552,24 @@ final class SafariApprovalVaultTests: XCTestCase {
         let account = try fixture().account
         for cancel in [false, true] {
             let started = expectation(description: "Lease acquisition started")
-            var continuation: CheckedContinuation<WalletExecutionLease?, Never>?
+            let release = TestGate<WalletExecutionLease?>()
+            defer { release.resolve(nil) }
             let access = makeWalletSigningSessionForTesting(
                 authorization: walletSigningAuthorizationForTesting(approvedAccount: WalletAccountDescriptor(walletID: "wallet", account: account)),
                 acquireCommitLease: {
-                    await withCheckedContinuation {
-                        continuation = $0
-                        started.fulfill()
-                    }
+                    started.fulfill()
+                    return await release.wait()
                 }
             )
             let acquisition = Task { await access.takeCommitLease() }
             await fulfillment(of: [started], timeout: 1)
-            let finishAcquisition = try XCTUnwrap(continuation)
             if cancel {
                 acquisition.cancel()
             } else {
                 access.invalidate()
             }
             let released = LockedTestValue(false)
-            finishAcquisition.resume(returning: WalletExecutionLease { released.value = true })
+            release.resolve(WalletExecutionLease { released.value = true })
 
             let lease = await acquisition.value
 
@@ -4986,32 +4984,20 @@ final class SafariApprovalVaultTests: XCTestCase {
 }
 
 private final class ReconciliationTestGate: Sendable {
-    private struct State {
-        var suspended = false
-        var waiters = [CheckedContinuation<Void, Never>]()
-    }
-    private let state = Mutex(State())
+    private let gate = Mutex<TestGate<Void>?>(nil)
 
     init(label: String) {}
-    func suspend() { state.withLock { $0.suspended = true } }
+    func suspend() { gate.withLock { if $0 == nil { $0 = TestGate<Void>() } } }
     func resume() {
-        let waiters = state.withLock { state in
-            state.suspended = false
-            let waiters = state.waiters
-            state.waiters.removeAll()
-            return waiters
+        let pending = gate.withLock { gate in
+            defer { gate = nil }
+            return gate
         }
-        waiters.forEach { $0.resume() }
+        pending?.resolve(())
     }
     func wait() async {
-        await withCheckedContinuation { continuation in
-            let suspended = state.withLock { state in
-                guard state.suspended else { return false }
-                state.waiters.append(continuation)
-                return true
-            }
-            if !suspended { continuation.resume() }
-        }
+        let pending = gate.withLock { $0 }
+        await pending?.wait()
     }
 }
 

@@ -990,12 +990,11 @@ final class WalletSigningScopeTests: XCTestCase {
     func testConcurrentSigningConsumesAuthorizationBeforeSuspension() async throws {
         let backing = SigningProbe()
         let started = expectation(description: "Signing started")
-        var continuation: CheckedContinuation<Void, Never>?
+        let release = TestGate<Void>()
+        defer { release.resolve(()) }
         backing.beforeReturn = {
-            await withCheckedContinuation {
-                continuation = $0
-                started.fulfill()
-            }
+            started.fulfill()
+            await release.wait()
         }
         let access = requestAccess(approved: descriptor(), backing: backing)
         let signer = access
@@ -1004,7 +1003,7 @@ final class WalletSigningScopeTests: XCTestCase {
         await fulfillment(of: [started], timeout: 1)
         assertUnavailable(await signer.sign())
         XCTAssertEqual(backing.operations.count, 1)
-        try XCTUnwrap(continuation).resume()
+        release.resolve(())
         _ = await first.value
     }
 
@@ -1113,12 +1112,11 @@ final class WalletSigningScopeTests: XCTestCase {
             let current = Mutex(true)
             let backing = SigningProbe()
             let started = expectation(description: "Signing started")
-            var continuation: CheckedContinuation<Void, Never>?
+            let release = TestGate<Void>()
+            defer { release.resolve(()) }
             backing.beforeReturn = {
-                await withCheckedContinuation {
-                    continuation = $0
-                    started.fulfill()
-                }
+                started.fulfill()
+                await release.wait()
             }
             let access = requestAccess(
                 approved: descriptor(), backing: backing, deadline: start.addingTimeInterval(1),
@@ -1139,7 +1137,7 @@ final class WalletSigningScopeTests: XCTestCase {
             if interruption == 0 || interruption == 2 {
                 XCTAssertEqual(backing.retirements, 1)
             }
-            try XCTUnwrap(continuation).resume()
+            release.resolve(())
             assertUnavailable(await signing.value)
             assertUnavailable(await signer.sign())
             XCTAssertEqual(backing.operations.count, 1)
@@ -1185,7 +1183,7 @@ final class WalletSigningScopeTests: XCTestCase {
             reader.walletData = [walletID: Vectors.walletCoreJSONPrivateKeyFixture]
             reader.passwordData = Vectors.walletCoreJSONPrivateKeyPassword
             let derivationStarted = expectation(description: "Key derivation suspended")
-            let gate = SourceSigningGate()
+            let gate = TestGate<Void>()
             let key = try XCTUnwrap(WalletPrivateKey(data: Vectors.walletCoreJSONPrivateKeyData))
             let manager = WalletsManager(
                 keychain: Keychain(copyMatching: reader.copyMatching),
@@ -1214,14 +1212,14 @@ final class WalletSigningScopeTests: XCTestCase {
                     configurationKey: "https://wallet.example", provider: .ethereum,
                     attempt: UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased(), expected: authority.version, profileIdentifier: nil
                 ) else {
-                    await gate.open()
+                    gate.resolve(())
                     _ = await signing.value
                     return XCTFail("Expected authority revocation during derivation")
                 }
             } else {
                 reader.walletData[walletID] = nil
             }
-            await gate.open()
+            gate.resolve(())
 
             assertUnavailable(await signing.value)
             assertUnavailable(await session.sign())
@@ -1232,7 +1230,7 @@ final class WalletSigningScopeTests: XCTestCase {
         let fixture = try ApprovedExecutionTestFixture()
         let permit = try sourceSigningPermit(in: fixture, account: descriptor())
         let signingStarted = expectation(description: "Signing started before revocation")
-        let gate = SourceSigningGate()
+        let gate = TestGate<Void>()
         let backing = SigningProbe()
         backing.beforeReturn = {
             signingStarted.fulfill()
@@ -1255,11 +1253,11 @@ final class WalletSigningScopeTests: XCTestCase {
             attempt: UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased(),
             expected: authority.version, profileIdentifier: nil
         ) else {
-            await gate.open()
+            gate.resolve(())
             _ = await signing.value
             return XCTFail("Expected permission revocation while signing was suspended")
         }
-        await gate.open()
+        gate.resolve(())
 
         assertUnavailable(await signing.value)
         assertUnavailable(await session.sign())
@@ -1267,22 +1265,6 @@ final class WalletSigningScopeTests: XCTestCase {
         XCTAssertEqual(backing.retirements, 1)
     }
 
-    private actor SourceSigningGate {
-        private var isOpen = false
-        private var continuation: CheckedContinuation<Void, Never>?
-
-        func wait() async {
-            guard !isOpen else { return }
-            await withCheckedContinuation { continuation = $0 }
-        }
-
-        func open() {
-            isOpen = true
-            let continuation = continuation
-            self.continuation = nil
-            continuation?.resume()
-        }
-    }
 
     private func sourceSigningPermit(
         in fixture: ApprovedExecutionTestFixture,

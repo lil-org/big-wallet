@@ -39,7 +39,7 @@ performance() {
 }
 
 tsan() {
-    xcodebuild -jobs 2 -enableCodeCoverage NO test -project Wallet.xcodeproj -scheme 'Tests macOS' -configuration Debug -destination "$mac_destination" -parallel-testing-enabled NO -collect-test-diagnostics never -enableThreadSanitizer YES -only-testing:'Tests macOS/AlchemyJWTProviderTests' -only-testing:'Tests macOS/SolanaOptionsTests' -only-testing:'Tests macOS/ApprovalResolutionTests' -only-testing:'Tests macOS/WalletSigningSessionTests' -only-testing:'Tests macOS/WalletSigningScopeTests' -only-testing:'Tests macOS/NativeApprovalServiceTests' -only-testing:'Tests macOS/TransactionInspectorTests' -only-testing:'Tests macOS/WalletsManagerPreviewTests' -only-testing:'Tests macOS/WalletCoreProxyParallelDerivationTests'
+    xcodebuild -jobs 2 -enableCodeCoverage NO test -project Wallet.xcodeproj -scheme 'Tests macOS' -configuration Debug -destination "$mac_destination" -parallel-testing-enabled NO -collect-test-diagnostics never -enableThreadSanitizer YES -only-testing:'Tests macOS/AsyncTestSupportTests' -only-testing:'Tests macOS/AlchemyJWTProviderTests' -only-testing:'Tests macOS/SolanaOptionsTests' -only-testing:'Tests macOS/ApprovalResolutionTests' -only-testing:'Tests macOS/WalletSigningSessionTests' -only-testing:'Tests macOS/WalletSigningScopeTests' -only-testing:'Tests macOS/NativeApprovalServiceTests' -only-testing:'Tests macOS/TransactionInspectorTests' -only-testing:'Tests macOS/WalletsManagerPreviewTests' -only-testing:'Tests macOS/WalletCoreProxyParallelDerivationTests'
 }
 
 fuzz() {

@@ -25,9 +25,9 @@ final class SecretAlertPresentationTests: XCTestCase {
             XCTAssertFalse(presentation.accepts(token))
             presentation.show("late export", title: "Secret", token: token, from: controller)
             XCTAssertNil(presentation.alert)
-            await withCheckedContinuation { continuation in
-                alert.dismissAfterCurrentTransition(animated: false) { continuation.resume() }
-            }
+            let dismissed = self.expectation(description: "secret alert dismissed")
+            alert.dismissAfterCurrentTransition(animated: false) { dismissed.fulfill() }
+            await self.fulfillment(of: [dismissed], timeout: 3)
         }
     }
 
@@ -59,9 +59,7 @@ final class SecretAlertPresentationTests: XCTestCase {
             window.rootViewController = nil
             previousKeyWindow?.makeKey()
         }
-        for _ in 0..<200 where !controller.canPresentSecret {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await expectEventually { controller.canPresentSecret }
         XCTAssertTrue(controller.viewIfLoaded?.window === window)
         XCTAssertTrue(controller.canPresentSecret)
         try await body(controller, scene)

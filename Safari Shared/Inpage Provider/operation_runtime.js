@@ -148,15 +148,10 @@ class OperationRuntime {
         this.#phase = "draining";
         this.#loadingError = undefined;
         let dispatched = 0;
-        let drainingQueue = this.#queue;
+        const drainingQueue = this.#queue;
         let queueIndex = 0;
         try {
-            while (this.#phase === "draining") {
-                if (drainingQueue !== this.#queue) {
-                    drainingQueue = this.#queue;
-                    queueIndex = 0;
-                }
-                if (queueIndex >= drainingQueue.length) { break; }
+            while (this.#phase === "draining" && queueIndex < drainingQueue.length) {
                 const record = drainingQueue[queueIndex];
                 drainingQueue[queueIndex] = null;
                 queueIndex += 1;
@@ -196,7 +191,7 @@ class OperationRuntime {
         return true;
     }
 
-    rejectAll(error) {
+    #rejectAll(error) {
         const entries = operationQueue();
         applyFunction(forEachMapNormally, this.#operations, [entry => {
             applyFunction(pushArrayNormally, entries, [entry]);
@@ -218,7 +213,7 @@ class OperationRuntime {
         if (this.#phase !== "loading") { return false; }
         this.#phase = "failed";
         this.#loadingError = error;
-        this.rejectAll(error);
+        this.#rejectAll(error);
         return true;
     }
 
@@ -226,7 +221,7 @@ class OperationRuntime {
         if (this.#phase === "retired") { return 0; }
         this.#phase = "retired";
         this.#retirementError = error;
-        return this.rejectAll(error);
+        return this.#rejectAll(error);
     }
 
     #take(record) {

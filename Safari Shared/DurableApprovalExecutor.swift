@@ -91,6 +91,8 @@ final class DurableApprovalExecutor {
         case ready(consent: ReviewConsent, signing: SigningAccess)
         case rejected(ImmediateResolution)
         case abandon
+        case notAccepted
+        case correctionRequired
     }
 
     enum Resolution: Sendable {
@@ -106,6 +108,8 @@ final class DurableApprovalExecutor {
         case retryablePersistenceFailure
         case reviewRequired
         case abandoned
+        case notAccepted(ExtensionBridge.StoreMutationResult)
+        case correctionRequired(ExtensionBridge.StoreMutationResult)
     }
 
     nonisolated static let defaultBroadcastTimeoutNanoseconds: UInt64 =
@@ -179,6 +183,10 @@ final class DurableApprovalExecutor {
             return await complete(claim: claim, resolution: resolution)
         case .abandon:
             return await abandon(claim: claim)
+        case .notAccepted:
+            return .notAccepted(await store.abandon(claim: claim))
+        case .correctionRequired:
+            return .correctionRequired(await store.abandon(claim: claim))
         }
         defer { signing.session?.invalidate() }
         guard claim.matchesConsent(consent) else {

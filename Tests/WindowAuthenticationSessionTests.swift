@@ -46,9 +46,10 @@ final class WindowAuthenticationSessionTests: XCTestCase {
             )
             return result
         }
+        defer { authentication.cancel() }
         let (sheet, form) = try await passwordSheet(in: controller)
         authenticationSheet = sheet
-        await waitUntil { NSApp.keyWindow === sheet && sheet.isKeyWindow }
+        try await requireActiveKeyWindow(sheet)
         submit("password", to: form)
         await assertResult(authentication, equals: true)
         XCTAssertTrue(wasDismissedAtReturn)
@@ -78,13 +79,12 @@ final class WindowAuthenticationSessionTests: XCTestCase {
             otherWasKeyAtReturn = NSApp.keyWindow === other && other.isKeyWindow
             return result
         }
+        defer { authentication.cancel() }
         let (sheet, form) = try await passwordSheet(in: controller)
         authenticationSheet = sheet
-        await waitUntil { NSApp.keyWindow === sheet && sheet.isKeyWindow }
+        try await requireActiveKeyWindow(sheet)
         form.passwordTextField.stringValue = "password"
-        other.center()
-        other.makeKeyAndOrderFront(nil)
-        await waitUntil { NSApp.keyWindow === other && other.isKeyWindow }
+        try await requireActiveKeyWindow(other)
         form.actionButtonTapped(form.okButton as Any)
         await assertResult(authentication, equals: true)
         XCTAssertTrue(wasDismissedAtReturn)
@@ -252,12 +252,12 @@ final class WindowAuthenticationSessionTests: XCTestCase {
             let authentication = Task {
                 await controller.authenticate(reason: .sendTransaction, reviewLifetime: review, dependencies: dependencies)
             }
-            await waitUntil { gate.isWaiting }
+            await gate.waitForEntry()
             if invalidatesReview { review.invalidate() }
             else { controller.close() }
             await assertResult(authentication, equals: false)
             gate.complete(.succeeded)
-            await waitUntil { gate.cancelledAtReturn != nil }
+            await gate.waitForReturn()
             XCTAssertEqual(gate.cancelledAtReturn, true)
             XCTAssertNil(controller.currentAuthenticationSession)
             XCTAssertTrue(controller.window?.sheets.isEmpty == true)
@@ -331,7 +331,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
     }
 
     private func requireActiveKeyWindow(_ window: NSWindow) async throws {
-        window.center()
+        if window.sheetParent == nil { window.center() }
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         for _ in 0..<100 {
@@ -387,31 +387,33 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         XCTAssertEqual(result, expected, file: file, line: line)
     }
 
-    private func waitUntil(_ predicate: () -> Bool) async {
-        for _ in 0..<100 {
-            if predicate() { return }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        XCTAssertTrue(predicate())
+    private func waitUntil(_ predicate: () -> Bool, file: StaticString = #filePath, line: UInt = #line) async {
+        await expectEventually(file: file, line: line, predicate)
     }
 }
 
 @MainActor
 private final class BiometricGate {
-    private var continuation: CheckedContinuation<DeviceAuthentication.Outcome?, Never>?
+    private let gate = TestGate<DeviceAuthentication.Outcome?>()
+    private let entered = XCTestExpectation(description: "biometrics entered")
+    private let returned = XCTestExpectation(description: "biometrics returned")
     private(set) var cancelledAtReturn: Bool?
-    var isWaiting: Bool { continuation != nil }
 
     func attempt() async -> DeviceAuthentication.Outcome? {
-        let result = await withCheckedContinuation { continuation = $0 }
+        entered.fulfill()
+        let result = await gate.wait()
         cancelledAtReturn = Task.isCancelled
+        returned.fulfill()
         return result
     }
-
-    func complete(_ outcome: DeviceAuthentication.Outcome?) {
-        let continuation = continuation
-        self.continuation = nil
-        continuation?.resume(returning: outcome)
+    func complete(_ outcome: DeviceAuthentication.Outcome?) { gate.resolve(outcome) }
+    func waitForEntry() async {
+        let result = await XCTWaiter.fulfillment(of: [entered], timeout: 2)
+        XCTAssertEqual(result, .completed)
+    }
+    func waitForReturn() async {
+        let result = await XCTWaiter.fulfillment(of: [returned], timeout: 2)
+        XCTAssertEqual(result, .completed)
     }
 }
 

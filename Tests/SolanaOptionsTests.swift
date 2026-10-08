@@ -11,8 +11,8 @@ final class SolanaOptionsTests: XCTestCase {
 
     func testCancellationDuringAuthorizationInvalidationDoesNotStartConfirmation() async throws {
         let recorder = SolanaRPCRequestRecorder()
-        let entered = SolanaTestSignal()
-        let released = SolanaTestSignal()
+        let entered = TestGate<Void>()
+        let released = TestGate<Void>()
         let session = makeRPCSession { request in
             _ = try recorder.record(request)
             return (
@@ -32,7 +32,7 @@ final class SolanaOptionsTests: XCTestCase {
         }
         await entered.wait()
         operation.cancel()
-        await released.signal()
+        released.resolve(())
         do {
             _ = try await operation.value
             XCTFail("Cancellation must be checked after authorization invalidation")
@@ -71,7 +71,7 @@ final class SolanaOptionsTests: XCTestCase {
 
     func testCancellationDuringConfirmationSleepDoesNotResubmit() async throws {
         let recorder = SolanaRPCRequestRecorder()
-        let sleeping = SolanaTestSignal()
+        let sleeping = TestGate<Void>()
         let session = makeRPCSession { request in
             let method = try recorder.record(request)
             let body: String
@@ -90,8 +90,8 @@ final class SolanaOptionsTests: XCTestCase {
             urlSession: session,
             rpcConfiguration: .bundled,
             timing: .init(now: { Date() }, sleep: { _ in
-                await sleeping.signal()
-                try await Task.sleep(for: .seconds(3_600))
+                sleeping.resolve(())
+                try await TestDeferred<Void>().value()
             })
         )
         let signed = try signedTransactionFixture()
@@ -1491,8 +1491,8 @@ final class SolanaOptionsTests: XCTestCase {
 }
 
 private struct SuspendedSolanaInvalidation: Big_Wallet.AlchemyAuthorizationProviding {
-    let entered: SolanaTestSignal
-    let released: SolanaTestSignal
+    let entered: TestGate<Void>
+    let released: TestGate<Void>
 
     func authorization(for url: URL) async throws -> Big_Wallet.AlchemyAuthorization? {
         Big_Wallet.AlchemyAuthorization(token: "initial-token")
@@ -1503,26 +1503,12 @@ private struct SuspendedSolanaInvalidation: Big_Wallet.AlchemyAuthorizationProvi
     }
 
     func invalidateAuthorization(afterUnauthorized rejected: Big_Wallet.AlchemyAuthorization, for url: URL) async {
-        await entered.signal()
+        entered.resolve(())
         await released.wait()
     }
 }
 
-private actor SolanaTestSignal {
-    private var signaled = false
-    private var waiter: CheckedContinuation<Void, Never>?
 
-    func wait() async {
-        guard !signaled else { return }
-        await withCheckedContinuation { waiter = $0 }
-    }
-
-    func signal() {
-        signaled = true
-        waiter?.resume()
-        waiter = nil
-    }
-}
 
 private final class SolanaRPCRequestRecorder: Sendable {
 

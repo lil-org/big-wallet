@@ -116,7 +116,7 @@ for (const family of ["reflection", "collections"]) {
                 runtime.drain(operation => runtime.resolve(operation, operation.payload.value));
                 const rejected = runtime.register({payload: {value: 8}});
                 const rejection = rejected.promise.catch(error => error.message);
-                const rejectedCount = runtime.rejectAll(new Error("reset"));
+                const rejectedCount = runtime.retire(new Error("reset"));
                 const snapshot = outboundDataSnapshot({items: [1, 2]});
                 return {
                     settled: await record.promise,
@@ -178,7 +178,7 @@ test("operation queues do not expose records to inherited array accessors", asyn
             drained = runtime.drain(operation => {
                 order += operation.payload + ";";
                 if (operation === first) { runtime.resolve(operation, "first"); }
-                else { rejected = runtime.rejectAll(new Error("reset")); }
+                else { rejected = runtime.retire(new Error("reset")); }
             });
         } finally {
             if (original) { Object.defineProperty(Array.prototype, "0", original); }

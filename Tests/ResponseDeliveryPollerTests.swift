@@ -101,7 +101,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
 
     func testCancellationBeforePollingDoesNotStartAnyOperation() async {
         for mode in modes {
-            let gate = ApprovalResolution<Void>()
+            let gate = TestGate<Void>()
             let poller = ResponseDeliveryPoller(
                 responseStatus: { _, _ in
                     XCTFail("Canceled polling must not read status")
@@ -118,13 +118,13 @@ final class ResponseDeliveryPollerTests: XCTestCase {
             )
             var result: ExtensionBridge.ResponseReadResult?
             let task = Task { @MainActor in
-                await gate.value()
+                await gate.wait()
                 result = await poller.poll(
                     handle: self.makeHandle(), configurationKey: self.configurationKey, maintenance: mode
                 )
             }
             task.cancel()
-            await gate.resolve(())
+            gate.resolve(())
             await task.value
 
             guard let result else { return XCTFail("Expected canceled poll result") }
@@ -136,19 +136,19 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         for mode in modes {
             for status in [ExtensionBridge.ResponseStatusResult.ready, .pending, .missing] {
                 let started = expectation(description: "status operation started")
-                let gate = ApprovalResolution<Void>()
+                let gate = TestGate<Void>()
                 let calls = LockedTestValue([String]())
                 let poller = ResponseDeliveryPoller(
                     responseStatus: { _, _ in
                         calls.withValue { $0.append("status") }
                         started.fulfill()
-                        await gate.value()
+                        await gate.wait()
                         return status
                     },
                     maintain: { _, _, receivedMode in
                         calls.withValue { $0.append("maintain:\(receivedMode.rawValue)") }
                         started.fulfill()
-                        await gate.value()
+                        await gate.wait()
                         return status
                     },
                     prepareDelivery: { _, _ in
@@ -164,7 +164,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
                 }
                 await fulfillment(of: [started], timeout: 1)
                 task.cancel()
-                await gate.resolve(())
+                gate.resolve(())
                 await task.value
 
                 guard let result else { return XCTFail("Expected canceled poll result") }
@@ -179,7 +179,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
             let handle = makeHandle()
             let expected = delivery(handle)
             let started = expectation(description: "delivery preparation started")
-            let gate = ApprovalResolution<Void>()
+            let gate = TestGate<Void>()
             let preparations = LockedTestValue(0)
             let poller = ResponseDeliveryPoller(
                 responseStatus: { _, _ in .ready },
@@ -187,7 +187,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
                 prepareDelivery: { _, _ in
                     preparations.withValue { $0 += 1 }
                     started.fulfill()
-                    await gate.value()
+                    await gate.wait()
                     return .response(expected)
                 }
             )
@@ -199,7 +199,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
             }
             await fulfillment(of: [started], timeout: 1)
             task.cancel()
-            await gate.resolve(())
+            gate.resolve(())
             await task.value
 
             guard let result else { return XCTFail("Expected canceled poll result") }

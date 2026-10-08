@@ -2128,7 +2128,7 @@ final class NetworkCatalogTests: XCTestCase {
             (.invalidation, "replacement")
         ]
         for (checkpoint, replacement) in cases {
-            let gate = SafariAuthorizationSuspension()
+            let gate = TestGate<Void>()
             let reachedCheckpoint = expectation(description: "Reached \(checkpoint)")
             let requestCount = LockedNetworkCatalogCounter()
             let provider = SafariAuthorizationProviderStub(
@@ -2144,7 +2144,7 @@ final class NetworkCatalogTests: XCTestCase {
                 return (401, Data(#"{"jsonrpc":"2.0","id":1,"error":{"code":401,"message":"rejected"}}"#.utf8))
             }
             defer {
-                gate.resume()
+                gate.resolve(())
                 session.invalidateAndCancel()
                 SafariAuthorizationURLProtocol.removeRequestHandler()
             }
@@ -2155,7 +2155,7 @@ final class NetworkCatalogTests: XCTestCase {
             let task = Task { try await client.send(endpoint: endpoint, body: body, expectedResponseID: 1) }
             await fulfillment(of: [reachedCheckpoint], timeout: 2)
             task.cancel()
-            gate.resume()
+            gate.resolve(())
             switch await task.result {
             case .success:
                 XCTFail("Canceled request accepted a response after \(checkpoint)")
@@ -2504,34 +2504,6 @@ private final class SafariAuthorizationProviderStub: AlchemyAuthorizationProvidi
     }
 }
 
-private final class SafariAuthorizationSuspension: Sendable {
-    private struct State {
-        var released = false
-        var continuation: CheckedContinuation<Void, Never>?
-    }
-    private let state = Mutex(State())
-
-    func wait() async {
-        await withCheckedContinuation { continuation in
-            let resumeNow = state.withLock { state in
-                guard !state.released else { return true }
-                state.continuation = continuation
-                return false
-            }
-            if resumeNow { continuation.resume() }
-        }
-    }
-
-    func resume() {
-        let continuation = state.withLock { state in
-            state.released = true
-            let continuation = state.continuation
-            state.continuation = nil
-            return continuation
-        }
-        continuation?.resume()
-    }
-}
 
 private final class LockedNetworkCatalogCounter: Sendable {
     private let count = Mutex(0)

@@ -305,8 +305,6 @@ final class AlchemyJWTProviderTests: XCTestCase {
                 provider: providerFactory
             )
         )
-        try? await Task.sleep(nanoseconds: 25_000_000)
-
         XCTAssertEqual(providerAccessCount, 0)
         XCTAssertEqual(store.loadCount, 0)
         let skippedFetchCount = await broker.fetchCount
@@ -335,9 +333,11 @@ final class AlchemyJWTProviderTests: XCTestCase {
             expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: nil)
+        let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
+        defer { firstFetchGate.release() }
         let broker = TestAlchemyJWTBroker(
             records: [record],
-            delayNanoseconds: 75_000_000
+            firstFetchGate: firstFetchGate
         )
         let provider = makeProvider(
             store: store,
@@ -347,13 +347,22 @@ final class AlchemyJWTProviderTests: XCTestCase {
             now: now
         )
 
-        await withTaskGroup(of: Void.self) { group in
+        let entered = expectation(description: "all prewarm callers entered")
+        entered.expectedFulfillmentCount = 20
+        let calls = Task {
+            await withTaskGroup(of: Void.self) { group in
             for _ in 0..<20 {
                 group.addTask {
+                    entered.fulfill()
                     await provider.prewarmForImmediateUse()
                 }
             }
         }
+        }
+        await fulfillment(of: [entered], timeout: 2)
+        await firstFetchGate.waitUntilStarted()
+        firstFetchGate.release()
+        await calls.value
 
         let prewarmFetchCount = await broker.fetchCount
         XCTAssertEqual(prewarmFetchCount, 1)
@@ -419,16 +428,22 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let now: Int64 = 2_000_000_000
         let record = makeRecord(issuedAt: now, expiresAt: now + 21_600)
         let store = TestAlchemyJWTStore(record: nil)
+        let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
+        defer { firstFetchGate.release() }
         let broker = TestAlchemyJWTBroker(
             records: [record],
-            delayNanoseconds: 50_000_000
+            firstFetchGate: firstFetchGate
         )
         let provider = makeProvider(store: store, broker: broker, now: now)
 
-        let tokens = try await withThrowingTaskGroup(of: String?.self) { group in
+        let entered = expectation(description: "all authorization callers entered")
+        entered.expectedFulfillmentCount = 20
+        let calls = Task {
+            try await withThrowingTaskGroup(of: String?.self) { group in
             for _ in 0..<20 {
                 group.addTask {
-                    try await provider.authorization(for: alchemyURL)?.token
+                    entered.fulfill()
+                    return try await provider.authorization(for: alchemyURL)?.token
                 }
             }
 
@@ -438,6 +453,11 @@ final class AlchemyJWTProviderTests: XCTestCase {
             }
             return values
         }
+        }
+        await fulfillment(of: [entered], timeout: 2)
+        await firstFetchGate.waitUntilStarted()
+        firstFetchGate.release()
+        let tokens = try await calls.value
 
         XCTAssertEqual(Set(tokens.compactMap { $0 }), [record.token])
         let fetchCount = await broker.fetchCount
@@ -451,15 +471,22 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let record = makeRecord(issuedAt: now, expiresAt: now + 21_600)
         let store = TestAlchemyJWTStore(record: nil)
         let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
+        defer { firstFetchGate.release() }
         let broker = TestAlchemyJWTBroker(
             records: [record],
             firstFetchGate: firstFetchGate
         )
         let refreshLock = TestAlchemyJWTRefreshLock()
+        let observeDemand = Mutex(false)
+        let contended = expectation(description: "overlapping demand attempted held lock")
+        contended.assertForOverFulfill = false
+        let observedLock = ObservedAlchemyJWTRefreshLock(refreshLock) { acquired in
+            if !acquired, observeDemand.withLock({ $0 }) { contended.fulfill() }
+        }
         let provider = makeProvider(
             store: store,
             broker: broker,
-            refreshLock: refreshLock,
+            refreshLock: observedLock,
             now: now
         )
 
@@ -467,11 +494,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
             await provider.prewarmForImmediateUse()
         }
         await firstFetchGate.waitUntilStarted()
+        observeDemand.withLock { $0 = true }
         let rpc = Task {
             try await provider.authorization(for: alchemyURL)?.token
         }
-        await waitUntil { refreshLock.attemptCount >= 2 }
-        await firstFetchGate.release()
+        await fulfillment(of: [contended], timeout: 2)
+        firstFetchGate.release()
 
         let resolvedRPCToken = try await rpc.value
         await prewarm.value
@@ -487,26 +515,36 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let now: Int64 = 2_000_000_000
         let record = makeRecord(issuedAt: now, expiresAt: now + 21_600)
         let store = TestAlchemyJWTStore(record: nil)
+        let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
+        defer { firstFetchGate.release() }
         let broker = TestAlchemyJWTBroker(
             records: [record],
-            delayNanoseconds: 75_000_000
+            firstFetchGate: firstFetchGate
         )
+        let contended = expectation(description: "second provider contended on shared lock")
+        contended.assertForOverFulfill = false
         let sharedLock = TestAlchemyJWTRefreshLock()
+        let observedLock = ObservedAlchemyJWTRefreshLock(sharedLock) { acquired in
+            if !acquired { contended.fulfill() }
+        }
         let first = makeProvider(
             store: store,
             broker: broker,
-            refreshLock: sharedLock,
+            refreshLock: observedLock,
             now: now
         )
         let second = makeProvider(
             store: store,
             broker: broker,
-            refreshLock: sharedLock,
+            refreshLock: observedLock,
             now: now
         )
 
         async let firstToken = first.authorization(for: alchemyURL)?.token
         async let secondToken = second.authorization(for: alchemyURL)?.token
+        await firstFetchGate.waitUntilStarted()
+        await fulfillment(of: [contended], timeout: 2)
+        firstFetchGate.release()
         let resolvedTokens = try await (firstToken, secondToken)
         let values = [resolvedTokens.0, resolvedTokens.1]
 
@@ -632,21 +670,23 @@ final class AlchemyJWTProviderTests: XCTestCase {
             expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: current)
+        let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
+        defer { firstFetchGate.release() }
         let broker = TestAlchemyJWTBroker(
             records: [replacement],
-            delayNanoseconds: 75_000_000
+            firstFetchGate: firstFetchGate
         )
         let provider = makeProvider(store: store, broker: broker, now: now)
 
         let authorization = try await provider.authorization(for: alchemyURL)
 
         XCTAssertEqual(authorization?.token, current.token)
-        await waitUntil {
-            let authorization = try? await provider.authorization(
-                for: alchemyURL
-            )
-            return authorization?.token == replacement.token
-        }
+        await firstFetchGate.waitUntilStarted()
+        XCTAssertEqual(store.record, current)
+        let refresh = provider.prewarm()
+        firstFetchGate.release()
+        await refresh.value
+        XCTAssertEqual(store.record, replacement)
         let refreshedAuthorization = try await provider.authorization(
             for: alchemyURL
         )
@@ -680,9 +720,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
             )
             XCTAssertEqual(authorization?.token, current.token)
         }
-        await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in pendingCount == 1 }
 
         let durations = await sleeper.requestedDurations()
         let fetchCount = await broker.fetchCount
@@ -705,8 +743,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
         let sleeper = TestAlchemyJWTProactiveSleeper()
         let broker = TestAlchemyJWTBroker(records: [replacement])
-        let clock = TestAlchemyJWTClock(
-            now: Date(timeIntervalSince1970: TimeInterval(now))
+        let clock = TestClock(date: Date(timeIntervalSince1970: TimeInterval(now))
         )
         let provider = makeProvider(
             store: TestAlchemyJWTStore(record: current),
@@ -719,16 +756,13 @@ final class AlchemyJWTProviderTests: XCTestCase {
 
         let original = try await provider.authorization(for: alchemyURL)
         XCTAssertEqual(original?.token, current.token)
-        await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in pendingCount == 1 }
 
-        clock.advance(by: 16_200)
+        clock.advance(by: 16_200_000_000_000)
         await sleeper.resumeNext()
-        await waitUntil {
-            let durations = await sleeper.requestedDurations()
-            return await broker.fetchCount == 1 && durations.count == 2
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in durations.count == 2 }
+        let checkpointFetchCount2 = await broker.fetchCount
+        XCTAssertEqual(checkpointFetchCount2, 1)
 
         let refreshed = try await provider.authorization(for: alchemyURL)
         let durations = await sleeper.requestedDurations()
@@ -757,12 +791,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
         let sleeper = TestAlchemyJWTProactiveSleeper()
         let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
+        defer { firstFetchGate.release() }
         let broker = TestAlchemyJWTBroker(
             records: [replacement],
             firstFetchGate: firstFetchGate
         )
-        let clock = TestAlchemyJWTClock(
-            now: Date(timeIntervalSince1970: TimeInterval(now))
+        let clock = TestClock(date: Date(timeIntervalSince1970: TimeInterval(now))
         )
         let provider = makeProvider(
             store: TestAlchemyJWTStore(record: current),
@@ -775,13 +809,11 @@ final class AlchemyJWTProviderTests: XCTestCase {
 
         let initial = try await provider.authorization(for: alchemyURL)
         XCTAssertEqual(initial?.token, current.token)
-        await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in pendingCount == 1 }
         await sleeper.resumeNext()
         await firstFetchGate.waitUntilStarted()
 
-        clock.advanceUptime(by: 2)
+        clock.advanceUptime(by: 2_000_000_000)
         let lifecyclePrewarm = provider.prewarm()
         var concurrentTokens: [String?] = []
         for _ in 0..<20 {
@@ -795,19 +827,15 @@ final class AlchemyJWTProviderTests: XCTestCase {
                 concurrentTokens.append(nil)
             }
         }
-        for _ in 0..<10 {
-            await Task.yield()
-        }
 
         let inFlightDurations = await sleeper.requestedDurations()
         let inFlightPendingCount = await sleeper.pendingCount()
         let inFlightFetchCount = await broker.fetchCount
-        await firstFetchGate.release()
+        firstFetchGate.release()
         await lifecyclePrewarm.value
-        await waitUntil {
-            let durations = await sleeper.requestedDurations()
-            return await broker.fetchCount == 1 && durations.count == 2
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in durations.count == 2 }
+        let checkpointFetchCount4 = await broker.fetchCount
+        XCTAssertEqual(checkpointFetchCount4, 1)
 
         XCTAssertEqual(
             Set(concurrentTokens.compactMap { $0 }),
@@ -835,6 +863,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
         let sleeper = TestAlchemyJWTProactiveSleeper()
         let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
+        defer { firstFetchGate.release() }
         let broker = TestAlchemyJWTBroker(
             records: [current, unexpectedSecond],
             firstFetchGate: firstFetchGate
@@ -849,19 +878,16 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
 
         _ = try await provider.authorization(for: alchemyURL)
-        await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in pendingCount == 1 }
         await sleeper.resumeNext()
         await firstFetchGate.waitUntilStarted()
 
         let overlappingPrewarm = provider.prewarm()
-        await firstFetchGate.release()
+        firstFetchGate.release()
         await overlappingPrewarm.value
-        await waitUntil {
-            let durations = await sleeper.requestedDurations()
-            return await broker.fetchCount == 1 && durations.count == 2
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in durations.count == 2 }
+        let checkpointFetchCount6 = await broker.fetchCount
+        XCTAssertEqual(checkpointFetchCount6, 1)
 
         await provider.prewarm().value
         let durations = await sleeper.requestedDurations()
@@ -881,8 +907,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
             expiresAt: now + 11_600
         )
         let sleeper = TestAlchemyJWTProactiveSleeper()
-        let clock = TestAlchemyJWTClock(
-            now: Date(timeIntervalSince1970: TimeInterval(now))
+        let clock = TestClock(date: Date(timeIntervalSince1970: TimeInterval(now))
         )
         let notificationCenter = NotificationCenter()
         let broker = TestAlchemyJWTBroker(records: [])
@@ -897,29 +922,19 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
 
         _ = try await provider.authorization(for: alchemyURL)
-        await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
-        clock.adjustWallTime(by: 3_600)
+        await waitForSleeper(sleeper) { durations, pendingCount in pendingCount == 1 }
+        clock.setDate(clock.date.addingTimeInterval(3_600))
         notificationCenter.post(
             name: .NSSystemClockDidChange,
             object: nil
         )
-        await waitUntil {
-            let durations = await sleeper.requestedDurations()
-            let pendingCount = await sleeper.pendingCount()
-            return durations.count == 2 && pendingCount == 1
-        }
-        clock.adjustWallTime(by: -7_200)
+        await waitForSleeper(sleeper) { durations, pendingCount in durations.count == 2 && pendingCount == 1 }
+        clock.setDate(clock.date.addingTimeInterval(-7_200))
         notificationCenter.post(
             name: .NSSystemClockDidChange,
             object: nil
         )
-        await waitUntil {
-            let durations = await sleeper.requestedDurations()
-            let pendingCount = await sleeper.pendingCount()
-            return durations.count == 3 && pendingCount == 1
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in durations.count == 3 && pendingCount == 1 }
 
         let durations = await sleeper.requestedDurations()
         let fetchCount = await broker.fetchCount
@@ -960,16 +975,10 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
 
         _ = try await provider.authorization(for: alchemyURL)
-        await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in pendingCount == 1 }
         store.record = second
         provider.reloadFromPersistence()
-        await waitUntil {
-            let durations = await sleeper.requestedDurations()
-            let pendingCount = await sleeper.pendingCount()
-            return durations.count == 2 && pendingCount == 1
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in durations.count == 2 && pendingCount == 1 }
 
         let authorization = try await provider.authorization(for: alchemyURL)
         let durations = await sleeper.requestedDurations()
@@ -1007,8 +1016,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
                 TestBrokerError.unavailable,
             ]
         )
-        let clock = TestAlchemyJWTClock(
-            now: Date(timeIntervalSince1970: TimeInterval(now))
+        let clock = TestClock(date: Date(timeIntervalSince1970: TimeInterval(now))
         )
         let provider = makeProvider(
             store: store,
@@ -1020,35 +1028,26 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
 
         _ = try await provider.authorization(for: alchemyURL)
-        await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in pendingCount == 1 }
         await sleeper.resumeNext()
-        await waitUntil {
-            let durations = await sleeper.requestedDurations()
-            return await broker.fetchCount == 1 && durations.count == 2
-        }
-        clock.advance(by: 2)
+        await waitForSleeper(sleeper) { durations, pendingCount in durations.count == 2 }
+        let checkpointFetchCount13 = await broker.fetchCount
+        XCTAssertEqual(checkpointFetchCount13, 1)
+        clock.advance(by: 2_000_000_000)
         await sleeper.resumeNext()
-        await waitUntil {
-            let durations = await sleeper.requestedDurations()
-            return await broker.fetchCount == 2 && durations.count == 3
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in durations.count == 3 }
+        let checkpointFetchCount14 = await broker.fetchCount
+        XCTAssertEqual(checkpointFetchCount14, 2)
 
         store.record = replacement
         provider.reloadFromPersistence()
-        await waitUntil {
-            let durations = await sleeper.requestedDurations()
-            return await sleeper.pendingCount() == 1
-                && durations.count == 4
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in pendingCount == 1 && durations.count == 4 }
 
-        clock.advance(by: 16_200)
+        clock.advance(by: 16_200_000_000_000)
         await sleeper.resumeNext()
-        await waitUntil {
-            let durations = await sleeper.requestedDurations()
-            return await broker.fetchCount == 3 && durations.count == 5
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in durations.count == 5 }
+        let checkpointFetchCount16 = await broker.fetchCount
+        XCTAssertEqual(checkpointFetchCount16, 3)
 
         let durations = await sleeper.requestedDurations()
         XCTAssertGreaterThan(durations[1], 750_000_000)
@@ -1077,8 +1076,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
                 TestBrokerError.unavailable,
             ]
         )
-        let clock = TestAlchemyJWTClock(
-            now: Date(timeIntervalSince1970: TimeInterval(now))
+        let clock = TestClock(date: Date(timeIntervalSince1970: TimeInterval(now))
         )
         let provider = makeProvider(
             store: store,
@@ -1094,14 +1092,14 @@ final class AlchemyJWTProviderTests: XCTestCase {
 
         store.record = replacement
         provider.reloadFromPersistence()
-        clock.advance(by: 21_601)
+        clock.advance(by: 21_601_000_000_000)
 
         do {
             _ = try await provider.authorization(for: alchemyURL)
             XCTFail("Expected the post-expiry demand failure")
         } catch {
         }
-        clock.advance(by: 0.3)
+        clock.advance(by: 300_000_000)
         do {
             _ = try await provider.authorization(for: alchemyURL)
             XCTFail("Expected the retry demand failure")
@@ -1134,17 +1132,13 @@ final class AlchemyJWTProviderTests: XCTestCase {
             for: alchemyURL
         )
         let authorization = try XCTUnwrap(loadedAuthorization)
-        await waitUntil {
-            await rejectedSleeper.pendingCount() == 1
-        }
+        await waitForSleeper(rejectedSleeper) { durations, pendingCount in pendingCount == 1 }
 
         await rejectedProvider.invalidateAuthorization(
             afterUnauthorized: authorization,
             for: alchemyURL
         )
-        await waitUntil {
-            await rejectedSleeper.pendingCount() == 0
-        }
+        await waitForSleeper(rejectedSleeper) { durations, pendingCount in pendingCount == 0 }
         let rejectedFetchCount = await rejectedBroker.fetchCount
         XCTAssertEqual(rejectedFetchCount, 0)
 
@@ -1160,15 +1154,11 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
         weakProvider = provider
         _ = try await provider?.authorization(for: alchemyURL)
-        await waitUntil {
-            await deinitSleeper.pendingCount() == 1
-        }
+        await waitForSleeper(deinitSleeper) { durations, pendingCount in pendingCount == 1 }
 
         provider = nil
-        await waitUntil {
-            let pendingCount = await deinitSleeper.pendingCount()
-            return weakProvider == nil && pendingCount == 0
-        }
+        await waitForSleeper(deinitSleeper) { _, pending in pending == 0 }
+        XCTAssertNil(weakProvider)
     }
 
     func testRepeatedNoProgressWakesUseBoundedExponentialBackoff()
@@ -1189,8 +1179,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
                 count: expectedBackoffs.count
             )
         )
-        let clock = TestAlchemyJWTClock(
-            now: Date(timeIntervalSince1970: TimeInterval(now))
+        let clock = TestClock(date: Date(timeIntervalSince1970: TimeInterval(now))
         )
         let provider = makeProvider(
             store: TestAlchemyJWTStore(record: current),
@@ -1203,17 +1192,13 @@ final class AlchemyJWTProviderTests: XCTestCase {
 
         let authorization = try await provider.authorization(for: alchemyURL)
         XCTAssertEqual(authorization?.token, current.token)
-        await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in pendingCount == 1 }
 
         for (index, expectedSeconds) in expectedBackoffs.enumerated() {
             await sleeper.resumeNext()
-            await waitUntil {
-                let durations = await sleeper.requestedDurations()
-                return await broker.fetchCount == index + 1
-                    && durations.count == index + 2
-            }
+            await waitForSleeper(sleeper) { durations, _ in durations.count == index + 2 }
+            let fetchCount = await broker.fetchCount
+            XCTAssertEqual(fetchCount, index + 1)
 
             let durations = await sleeper.requestedDurations()
             XCTAssertEqual(durations.first, 0)
@@ -1226,7 +1211,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
                 durations[index + 1],
                 expectedNanoseconds
             )
-            clock.advance(by: TimeInterval(expectedSeconds + 1))
+            clock.advance(by: UInt64(expectedSeconds + 1) * 1_000_000_000)
         }
     }
 
@@ -1253,8 +1238,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
                 replacement,
             ]
         )
-        let clock = TestAlchemyJWTClock(
-            now: Date(timeIntervalSince1970: TimeInterval(now))
+        let clock = TestClock(date: Date(timeIntervalSince1970: TimeInterval(now))
         )
         let provider = makeProvider(
             store: TestAlchemyJWTStore(record: current),
@@ -1266,18 +1250,14 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
 
         _ = try await provider.authorization(for: alchemyURL)
-        await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in pendingCount == 1 }
 
         for (index, advance) in [0, 2, 3, 5].enumerated() {
-            clock.advance(by: TimeInterval(advance))
+            clock.advance(by: UInt64(advance) * 1_000_000_000)
             await sleeper.resumeNext()
-            await waitUntil {
-                let durations = await sleeper.requestedDurations()
-                return await broker.fetchCount == index + 1
-                    && durations.count == index + 2
-            }
+            await waitForSleeper(sleeper) { durations, _ in durations.count == index + 2 }
+            let fetchCount = await broker.fetchCount
+            XCTAssertEqual(fetchCount, index + 1)
         }
 
         var durations = await sleeper.requestedDurations()
@@ -1291,12 +1271,11 @@ final class AlchemyJWTProviderTests: XCTestCase {
         XCTAssertGreaterThan(durations[4], 16_199_750_000_000)
         XCTAssertLessThanOrEqual(durations[4], 16_200_000_000_000)
 
-        clock.advance(by: 16_200)
+        clock.advance(by: 16_200_000_000_000)
         await sleeper.resumeNext()
-        await waitUntil {
-            let values = await sleeper.requestedDurations()
-            return await broker.fetchCount == 5 && values.count == 6
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in durations.count == 6 }
+        let checkpointFetchCount24 = await broker.fetchCount
+        XCTAssertEqual(checkpointFetchCount24, 5)
 
         durations = await sleeper.requestedDurations()
         XCTAssertGreaterThan(durations[5], 750_000_000)
@@ -1325,9 +1304,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
                 ),
             ]
         )
-        let clock = TestAlchemyJWTClock(
-            now: Date(timeIntervalSince1970: TimeInterval(now)),
-            advancesWithRealTime: false
+        let clock = TestClock(date: Date(timeIntervalSince1970: TimeInterval(now))
         )
         let provider = makeProvider(
             store: TestAlchemyJWTStore(record: current),
@@ -1339,14 +1316,11 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
 
         _ = try await provider.authorization(for: alchemyURL)
-        await waitUntil {
-            await sleeper.pendingCount() == 1
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in pendingCount == 1 }
         await sleeper.resumeNext()
-        await waitUntil {
-            let durations = await sleeper.requestedDurations()
-            return await broker.fetchCount == 1 && durations.count == 2
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in durations.count == 2 }
+        let checkpointFetchCount26 = await broker.fetchCount
+        XCTAssertEqual(checkpointFetchCount26, 1)
 
         let throttled = try await provider.authorization(for: alchemyURL)
         let throttledDurations = await sleeper.requestedDurations()
@@ -1356,12 +1330,11 @@ final class AlchemyJWTProviderTests: XCTestCase {
         XCTAssertEqual(throttledDurations[1], 60_000_000_000)
         XCTAssertEqual(throttledFetchCount, 1)
 
-        clock.advance(by: 61)
+        clock.advance(by: 61_000_000_000)
         await sleeper.resumeNext()
-        await waitUntil {
-            let durations = await sleeper.requestedDurations()
-            return await broker.fetchCount == 2 && durations.count == 3
-        }
+        await waitForSleeper(sleeper) { durations, pendingCount in durations.count == 3 }
+        let checkpointFetchCount27 = await broker.fetchCount
+        XCTAssertEqual(checkpointFetchCount27, 2)
         let refreshed = try await provider.authorization(for: alchemyURL)
         XCTAssertEqual(refreshed?.token, replacement.token)
     }
@@ -1441,7 +1414,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
 
         XCTAssertEqual(replacement?.token, newer.token)
-        await waitUntil { store.record == newer }
+        await waitForStoredRecord(newer, in: store)
         XCTAssertEqual(store.record, newer)
         XCTAssertEqual(store.saveCount, 1)
         let fetchCount = await broker.fetchCount
@@ -1535,10 +1508,10 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let saveIsBlocked = await store.waitUntilSaveIsBlocked()
         XCTAssertTrue(saveIsBlocked)
 
-        let completionFlag = TestAlchemyJWTCompletionFlag()
+        let replacementFinished = expectation(description: "replacement finished while save is blocked")
         let replacementTask = Task.detached {
             () -> Result<AlchemyAuthorization?, Error> in
-            defer { completionFlag.markCompleted() }
+            defer { replacementFinished.fulfill() }
             do {
                 return .success(
                     try await provider.replacementAuthorization(
@@ -1552,11 +1525,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
                 return .failure(error)
             }
         }
-        let fastPathDeadline = Date().addingTimeInterval(1)
-        while !completionFlag.isCompleted, Date() < fastPathDeadline {
-            try? await Task.sleep(nanoseconds: 10_000_000)
-        }
-        let completedBeforeSaveWasReleased = completionFlag.isCompleted
+        let completedBeforeSaveWasReleased = await XCTWaiter.fulfillment(of: [replacementFinished], timeout: 1) == .completed
 
         store.releaseBlockedSave()
         let replacement = try await replacementTask.value.get()
@@ -1566,11 +1535,9 @@ final class AlchemyJWTProviderTests: XCTestCase {
         XCTAssertEqual(replacement?.token, newer.token)
         let fetchCount = await broker.fetchCount
         XCTAssertEqual(fetchCount, 0)
-        await waitUntil {
-            store.state?.record == newer
-                && store.state?.tombstones.contains {
-                    $0.tokenDigest == self.tokenDigest(rejected.token)
-                } == true
+        let rejectedDigest = tokenDigest(rejected.token)
+        await waitForStoredState(in: store.store) { state in
+            state.record == newer && state.tombstones.contains { $0.tokenDigest == rejectedDigest }
         }
     }
 
@@ -1601,7 +1568,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
 
         XCTAssertEqual(replacement?.token, newer.token)
-        await waitUntil { store.record == newer }
+        await waitForStoredRecord(newer, in: store)
         XCTAssertEqual(store.record, newer)
         XCTAssertEqual(store.saveCount, 1)
         let fetchCount = await broker.fetchCount
@@ -1652,11 +1619,18 @@ final class AlchemyJWTProviderTests: XCTestCase {
             expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: rejected)
+        let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
+        defer { firstFetchGate.release() }
         let broker = TestAlchemyJWTBroker(
             records: [replacement],
-            delayNanoseconds: 75_000_000
+            firstFetchGate: firstFetchGate
         )
-        let provider = makeProvider(store: store, broker: broker, now: now)
+        let contended = expectation(description: "concurrent rejection reached held lock")
+        contended.assertForOverFulfill = false
+        let lock = ObservedAlchemyJWTRefreshLock(TestAlchemyJWTRefreshLock()) { acquired in
+            if !acquired { contended.fulfill() }
+        }
+        let provider = makeProvider(store: store, broker: broker, refreshLock: lock, now: now)
         let currentAuthorization = try await provider.authorization(
             for: alchemyURL
         )
@@ -1670,6 +1644,9 @@ final class AlchemyJWTProviderTests: XCTestCase {
             afterUnauthorized: original,
             for: alchemyURL
         )
+        await firstFetchGate.waitUntilStarted()
+        await fulfillment(of: [contended], timeout: 2)
+        firstFetchGate.release()
         let resolvedAuthorizations = try await (first, second)
         let authorizations = [
             resolvedAuthorizations.0,
@@ -1784,25 +1761,38 @@ final class AlchemyJWTProviderTests: XCTestCase {
             expiresAt: now + 21_601
         )
         let store = TestAlchemyJWTStore(record: nil)
+        let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
+        defer { firstFetchGate.release() }
         let broker = TestAlchemyJWTBroker(
             records: [rejected, replacement],
-            delayNanoseconds: 50_000_000
+            firstFetchGate: firstFetchGate
         )
+        let rejectionEntered = expectation(description: "rejection attempted persistence")
+        rejectionEntered.assertForOverFulfill = false
+        let refreshLock = ObservedAlchemyJWTRefreshLock(TestAlchemyJWTRefreshLock()) { acquired in
+            if !acquired { rejectionEntered.fulfill() }
+        }
         let provider = makeProvider(
             store: store,
             broker: broker,
+            refreshLock: refreshLock,
             now: now
         )
 
         let demand = Task {
             try await provider.authorization(for: alchemyURL)
         }
-        await waitUntil { await broker.fetchCount == 1 }
+        await firstFetchGate.waitUntilStarted()
 
-        let authorization = try await provider.replacementAuthorization(
-            afterUnauthorized: AlchemyAuthorization(token: rejected.token),
-            for: alchemyURL
-        )
+        let recovery = Task {
+            try await provider.replacementAuthorization(
+                afterUnauthorized: AlchemyAuthorization(token: rejected.token),
+                for: alchemyURL
+            )
+        }
+        await fulfillment(of: [rejectionEntered], timeout: 2)
+        firstFetchGate.release()
+        let authorization = try await recovery.value
         let demandResult = await demand.result
 
         if case .success = demandResult {
@@ -1953,14 +1943,16 @@ final class AlchemyJWTProviderTests: XCTestCase {
             record: persisted,
             loadError: .transient
         )
+        let cooldown = TestAlchemyJWTProactiveSleeper()
         let provider = makeProvider(
             store: store,
             broker: TestAlchemyJWTBroker(records: [memoryOnly]),
-            now: now
+            now: now,
+            persistenceRepairCooldownSleep: { try await cooldown.sleep($0) }
         )
 
         let authorization = try await provider.authorization(for: alchemyURL)
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        await waitForSleeper(cooldown) { _, pending in pending == 1 }
 
         XCTAssertEqual(authorization?.token, memoryOnly.token)
         XCTAssertEqual(store.state?.record, persisted)
@@ -1978,33 +1970,40 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let broker = TestAlchemyJWTBroker(
             errors: [TestBrokerError.unavailable, TestBrokerError.unavailable]
         )
-        let clock = TestAlchemyJWTClock(now: Date(timeIntervalSince1970: TimeInterval(now)))
+        let clock = TestClock(date: Date(timeIntervalSince1970: TimeInterval(now)))
+        let sleeper = TestAlchemyJWTProactiveSleeper()
         let provider = makeProvider(
             store: store,
             broker: broker,
-            clock: clock
+            clock: clock,
+            proactiveRefreshSleep: { try await sleeper.sleep($0) }
         )
 
         let firstAuthorization = try await provider.authorization(
             for: alchemyURL
         )
         XCTAssertEqual(firstAuthorization?.token, current.token)
-        await waitUntil { await broker.fetchCount == 1 }
+        await waitForSleeper(sleeper) { durations, pending in durations.last == 0 && pending == 1 }
+        await sleeper.resumeNext()
+        await waitForSleeper(sleeper) { durations, pending in durations.last == 1_000_000_000 && pending == 1 }
 
         let backedOffAuthorization = try await provider.authorization(
             for: alchemyURL
         )
         XCTAssertEqual(backedOffAuthorization?.token, current.token)
-        try? await Task.sleep(nanoseconds: 25_000_000)
         let backedOffFetchCount = await broker.fetchCount
         XCTAssertEqual(backedOffFetchCount, 1)
 
-        clock.advance(by: 2)
+        clock.advance(by: 2_000_000_000)
         let retryAuthorization = try await provider.authorization(
             for: alchemyURL
         )
         XCTAssertEqual(retryAuthorization?.token, current.token)
-        await waitUntil { await broker.fetchCount == 2 }
+        await waitForSleeper(sleeper) { durations, pending in durations.last == 0 && pending == 1 }
+        await sleeper.resumeNext()
+        await waitForSleeper(sleeper) { durations, pending in durations.last == 2_000_000_000 && pending == 1 }
+        let retryFetchCount = await broker.fetchCount
+        XCTAssertEqual(retryFetchCount, 2)
     }
 
     func testOpportunisticFailureDoesNotSuppressColdDemandAcquisition()
@@ -2065,8 +2064,10 @@ final class AlchemyJWTProviderTests: XCTestCase {
             expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: nil)
-        let broker = TestAlchemyJWTBroker(records: [replacement])
+        let fetched = expectation(description: "demand fetched without blocked opportunistic lock")
+        let broker = TestAlchemyJWTBroker(records: [replacement], onFetch: { _ in fetched.fulfill() })
         let refreshLock = BlockingFirstAlchemyJWTRefreshLock()
+        defer { refreshLock.unblockFirstAttempt() }
         let provider = makeProvider(
             store: store,
             broker: broker,
@@ -2081,7 +2082,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let demand = Task {
             try await provider.authorization(for: alchemyURL)
         }
-        await waitUntil { await broker.fetchCount == 1 }
+        await fulfillment(of: [fetched], timeout: 2)
         refreshLock.unblockFirstAttempt()
 
         let authorization = try await demand.value
@@ -2101,11 +2102,17 @@ final class AlchemyJWTProviderTests: XCTestCase {
             expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: nil)
+        let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
+        defer { firstFetchGate.release() }
         let broker = TestAlchemyJWTBroker(
             records: [replacement],
-            delayNanoseconds: 75_000_000
+            firstFetchGate: firstFetchGate
         )
-        let refreshLock = TestAlchemyJWTRefreshLock()
+        let contended = expectation(description: "cold demand reached the held lock")
+        contended.assertForOverFulfill = false
+        let refreshLock = ObservedAlchemyJWTRefreshLock(TestAlchemyJWTRefreshLock()) { acquired in
+            if !acquired { contended.fulfill() }
+        }
         let provider = makeProvider(
             store: store,
             broker: broker,
@@ -2114,8 +2121,11 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
 
         let prewarm = provider.prewarm()
-        await waitUntil { await broker.fetchCount == 1 }
-        let authorization = try await provider.authorization(for: alchemyURL)
+        await firstFetchGate.waitUntilStarted()
+        let demand = Task { try await provider.authorization(for: alchemyURL) }
+        await fulfillment(of: [contended], timeout: 2)
+        firstFetchGate.release()
+        let authorization = try await demand.value
         await prewarm.value
 
         XCTAssertEqual(authorization?.token, replacement.token)
@@ -2140,9 +2150,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
         let store = TestAlchemyJWTStore(record: nil)
         let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
+        defer { firstFetchGate.release() }
+        let demandFetched = expectation(description: "real join timeout released demand")
         let broker = TestAlchemyJWTBroker(
             records: [demandRecord, prewarmRecord],
-            firstFetchGate: firstFetchGate
+            firstFetchGate: firstFetchGate,
+            onFetch: { count in if count == 2 { demandFetched.fulfill() } }
         )
         let refreshLock = TestAlchemyJWTRefreshLock()
         let provider = makeProvider(
@@ -2160,12 +2173,10 @@ final class AlchemyJWTProviderTests: XCTestCase {
             try await provider.authorization(for: alchemyURL)
         }
 
-        await waitUntil(timeout: 1) {
-            await broker.fetchCount == 2
-        }
+        await fulfillment(of: [demandFetched], timeout: 2)
         let fetchCountBeforePrewarmRelease = await broker.fetchCount
         let authorization = try await demand.value
-        await firstFetchGate.release()
+        firstFetchGate.release()
         await prewarm.value
 
         XCTAssertEqual(fetchCountBeforePrewarmRelease, 2)
@@ -2188,16 +2199,23 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
         let store = TestAlchemyJWTStore(record: nil)
         let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
+        defer { firstFetchGate.release() }
         let broker = TestAlchemyJWTBroker(
             records: [replacement],
             errors: [TestBrokerError.unavailable],
             firstFetchGate: firstFetchGate
         )
         let refreshLock = TestAlchemyJWTRefreshLock(isAvailable: false)
+        let observeDemand = Mutex(false)
+        let contended = expectation(description: "overlapping demand attempted held lock")
+        contended.assertForOverFulfill = false
+        let observedLock = ObservedAlchemyJWTRefreshLock(refreshLock) { acquired in
+            if !acquired, observeDemand.withLock({ $0 }) { contended.fulfill() }
+        }
         let provider = makeProvider(
             store: store,
             broker: broker,
-            refreshLock: refreshLock,
+            refreshLock: observedLock,
             now: now
         )
 
@@ -2205,12 +2223,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
             await provider.prewarmForImmediateUse()
         }
         await firstFetchGate.waitUntilStarted()
+        observeDemand.withLock { $0 = true }
         let demand = Task {
             try await provider.authorization(for: alchemyURL)
         }
-        await waitUntil { refreshLock.attemptCount >= 2 }
-        await Task.yield()
-        await firstFetchGate.release()
+        await fulfillment(of: [contended], timeout: 2)
+        firstFetchGate.release()
 
         let authorization = try await demand.value
         await prewarm.value
@@ -2234,16 +2252,23 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
         let store = TestAlchemyJWTStore(record: nil)
         let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
+        defer { firstFetchGate.release() }
         let broker = TestAlchemyJWTBroker(
             records: [sentinel],
             errors: [rateLimit],
             firstFetchGate: firstFetchGate
         )
         let refreshLock = TestAlchemyJWTRefreshLock()
+        let observeDemand = Mutex(false)
+        let contended = expectation(description: "overlapping demand attempted held lock")
+        contended.assertForOverFulfill = false
+        let observedLock = ObservedAlchemyJWTRefreshLock(refreshLock) { acquired in
+            if !acquired, observeDemand.withLock({ $0 }) { contended.fulfill() }
+        }
         let provider = makeProvider(
             store: store,
             broker: broker,
-            refreshLock: refreshLock,
+            refreshLock: observedLock,
             now: now
         )
 
@@ -2251,12 +2276,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
             await provider.prewarmForImmediateUse()
         }
         await firstFetchGate.waitUntilStarted()
+        observeDemand.withLock { $0 = true }
         let demand = Task {
             try await provider.authorization(for: alchemyURL)
         }
-        await waitUntil { refreshLock.attemptCount >= 2 }
-        await Task.yield()
-        await firstFetchGate.release()
+        await fulfillment(of: [contended], timeout: 2)
+        firstFetchGate.release()
 
         do {
             _ = try await demand.value
@@ -2518,7 +2543,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
             afterUnauthorized: original,
             for: alchemyURL
         )
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        await waitForSleeper(cooldownSleeper) { _, pending in pending == 1 }
 
         XCTAssertEqual(recovered?.token, replacement.token)
         XCTAssertEqual(store.record, rejected)
@@ -2529,15 +2554,11 @@ final class AlchemyJWTProviderTests: XCTestCase {
             for: alchemyURL
         )
         XCTAssertEqual(laterAuthorization?.token, replacement.token)
-        await waitUntil {
-            await cooldownSleeper.pendingCount() == 1
-        }
+        await waitForSleeper(cooldownSleeper) { durations, pendingCount in pendingCount == 1 }
         await cooldownSleeper.resumeNext()
-        await waitUntil {
-            store.record == replacement
-                && store.state?.tombstones.contains {
-                    $0.tokenDigest == self.tokenDigest(rejected.token)
-                } == true
+        let rejectedDigest = tokenDigest(rejected.token)
+        await waitForStoredState(in: store) { state in
+            state.record == replacement && state.tombstones.contains { $0.tokenDigest == rejectedDigest }
         }
 
         XCTAssertEqual(store.record, replacement)
@@ -2600,9 +2621,9 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
         XCTAssertEqual(recovered?.token, replacement.token)
 
-        await waitUntil {
-            await sleepGate.pendingCount() == 1
-        }
+        let registered = expectation(description: "repair sleep registered")
+        await sleepGate.observeRegistration(registered)
+        await fulfillment(of: [registered], timeout: 2)
         let url = alchemyURL
         await withTaskGroup(of: Void.self) { group in
             for _ in 0..<20 {
@@ -2610,9 +2631,6 @@ final class AlchemyJWTProviderTests: XCTestCase {
                     _ = try? await provider.authorization(for: url)
                 }
             }
-        }
-        for _ in 0..<20 {
-            await Task.yield()
         }
 
         let pendingSleepCount = await sleepGate.pendingCount()
@@ -2624,14 +2642,14 @@ final class AlchemyJWTProviderTests: XCTestCase {
 
         contendedLock.makeAvailable()
         await sleepGate.resumeAll()
-        await waitUntil {
-            store.record == replacement
-                && store.state?.tombstones.contains {
-                    $0.tokenDigest == self.tokenDigest(rejected.token)
-                } == true
+        let rejectedDigest = tokenDigest(rejected.token)
+        await waitForStoredState(in: store) { state in
+            state.record == replacement && state.tombstones.contains { $0.tokenDigest == rejectedDigest }
         }
 
         XCTAssertEqual(store.saveCount, 1)
+        let finalMaximum = await sleepGate.maximumPendingCount()
+        XCTAssertEqual(finalMaximum, 1)
         let finalMaximumPendingSleepCount =
             await sleepGate.maximumPendingCount()
         XCTAssertEqual(finalMaximumPendingSleepCount, 1)
@@ -2674,9 +2692,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
         XCTAssertEqual(recovered?.token, replacement.token)
 
-        await waitUntil {
-            await cooldownSleeper.pendingCount() == 1
-        }
+        await waitForSleeper(cooldownSleeper) { durations, pendingCount in pendingCount == 1 }
         let initialCooldowns =
             await cooldownSleeper.requestedDurations()
         XCTAssertEqual(
@@ -2692,9 +2708,6 @@ final class AlchemyJWTProviderTests: XCTestCase {
                     _ = try? await provider.authorization(for: url)
                 }
             }
-        }
-        for _ in 0..<20 {
-            await Task.yield()
         }
         let pendingDuringTraffic = await cooldownSleeper.pendingCount()
         let cooldownsDuringTraffic =
@@ -2719,13 +2732,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         ]
         for expectedCount in 2...expectedCooldowns.count {
             await cooldownSleeper.resumeNext()
-            await waitUntil {
-                let durations = await cooldownSleeper.requestedDurations()
-                guard durations.count == expectedCount else {
-                    return false
-                }
-                return await cooldownSleeper.pendingCount() == 1
-            }
+            await waitForSleeper(cooldownSleeper) { durations, pending in durations.count == expectedCount && pending == 1 }
         }
         let observedCooldowns =
             await cooldownSleeper.requestedDurations()
@@ -2734,35 +2741,28 @@ final class AlchemyJWTProviderTests: XCTestCase {
             expectedCooldowns
         )
 
+        let repairReleased = expectation(description: "repair released persistence lock")
+        repairReleased.assertForOverFulfill = false
+        contendedLock.onRelease = { repairReleased.fulfill() }
         contendedLock.makeAvailable()
         await cooldownSleeper.resumeNext()
-        await waitUntil {
-            store.record == replacement
-                && store.state?.tombstones.contains {
-                    $0.tokenDigest == self.tokenDigest(rejected.token)
-                } == true
+        let rejectedDigest = tokenDigest(rejected.token)
+        await waitForStoredState(in: store) { state in
+            state.record == replacement && state.tombstones.contains { $0.tokenDigest == rejectedDigest }
         }
         XCTAssertEqual(store.saveCount, 1)
         let pendingAfterRecovery = await cooldownSleeper.pendingCount()
         XCTAssertEqual(pendingAfterRecovery, 0)
 
-        var acquiredLock = false
-        await waitUntil {
-            guard (try? contendedLock.tryAcquire()) == true else {
-                return false
-            }
-            acquiredLock = true
-            return true
-        }
+        await fulfillment(of: [repairReleased], timeout: 2)
+        contendedLock.onRelease = nil
+        let acquiredLock = try contendedLock.tryAcquire()
         XCTAssertTrue(acquiredLock)
         await provider.invalidateAuthorization(
             afterUnauthorized: try XCTUnwrap(recovered),
             for: alchemyURL
         )
-        await waitUntil {
-            await cooldownSleeper.requestedDurations().count
-                == expectedCooldowns.count + 1
-        }
+        await waitForSleeper(cooldownSleeper) { durations, pendingCount in durations.count == expectedCooldowns.count + 1 }
         let resetCooldown =
             await cooldownSleeper.requestedDurations().last
         XCTAssertEqual(
@@ -2771,9 +2771,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         )
         contendedLock.release()
         await cooldownSleeper.resumeNext()
-        await waitUntil {
-            await cooldownSleeper.pendingCount() == 0
-        }
+        await waitForSleeper(cooldownSleeper) { durations, pendingCount in pendingCount == 0 }
     }
 
     func testNewerPersistenceCannotEvictLocalRejectionAndResurrectRecord()
@@ -3034,8 +3032,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
             issuedAt: now - 10,
             expiresAt: now + 21_590
         )
-        let clock = TestAlchemyJWTClock(
-            now: Date(timeIntervalSince1970: TimeInterval(now))
+        let clock = TestClock(date: Date(timeIntervalSince1970: TimeInterval(now))
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let broker = TestAlchemyJWTBroker(records: [rejected])
@@ -3054,7 +3051,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
                 for: alchemyURL
             )
         }
-        clock.advance(by: -1)
+        clock.setDate(clock.date.addingTimeInterval(-1))
         await provider.invalidateAuthorization(
             afterUnauthorized: try XCTUnwrap(original),
             for: alchemyURL
@@ -3085,8 +3082,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
     func testRateLimitDeadlineSuppressesBrokerUntilRetryAfter()
         async throws {
         let now: Int64 = 2_000_000_000
-        let clock = TestAlchemyJWTClock(
-            now: Date(timeIntervalSince1970: TimeInterval(now))
+        let clock = TestClock(date: Date(timeIntervalSince1970: TimeInterval(now))
         )
         let replacement = makeRecord(
             marker: "replacement",
@@ -3121,7 +3117,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let backedOffFetchCount = await broker.fetchCount
         XCTAssertEqual(backedOffFetchCount, 1)
 
-        clock.advance(by: 61)
+        clock.advance(by: 61_000_000_000)
         let authorization = try await provider.authorization(for: alchemyURL)
 
         XCTAssertEqual(authorization?.token, replacement.token)
@@ -3132,8 +3128,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
     func testCooldownUsesUptimeAcrossForwardAndBackwardWallClockJumps()
         async throws {
         let now: Int64 = 2_000_000_000
-        let clock = TestAlchemyJWTClock(
-            now: Date(timeIntervalSince1970: TimeInterval(now))
+        let clock = TestClock(date: Date(timeIntervalSince1970: TimeInterval(now))
         )
         let replacement = makeRecord(
             marker: "monotonic-cooldown",
@@ -3160,14 +3155,14 @@ final class AlchemyJWTProviderTests: XCTestCase {
         } catch {
         }
 
-        clock.adjustWallTime(by: 3_600)
+        clock.setDate(clock.date.addingTimeInterval(3_600))
         do {
             _ = try await provider.authorization(for: alchemyURL)
             XCTFail("A forward wall-clock jump must not bypass cooldown")
         } catch {
         }
 
-        clock.adjustWallTime(by: -7_200)
+        clock.setDate(clock.date.addingTimeInterval(-7_200))
         do {
             _ = try await provider.authorization(for: alchemyURL)
             XCTFail("A backward wall-clock jump must not alter cooldown")
@@ -3176,7 +3171,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let backedOffFetchCount = await broker.fetchCount
         XCTAssertEqual(backedOffFetchCount, 1)
 
-        clock.advanceUptime(by: 61)
+        clock.advanceUptime(by: 61_000_000_000)
         let authorization = try await provider.authorization(for: alchemyURL)
 
         XCTAssertEqual(authorization?.token, replacement.token)
@@ -3187,8 +3182,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
     func testRateLimitDeadlineAlsoSuppressesOpportunisticRefresh()
         async throws {
         let now: Int64 = 2_000_000_000
-        let clock = TestAlchemyJWTClock(
-            now: Date(timeIntervalSince1970: TimeInterval(now))
+        let clock = TestClock(date: Date(timeIntervalSince1970: TimeInterval(now))
         )
         let replacement = makeRecord(
             marker: "replacement",
@@ -3215,7 +3209,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let throttledFetchCount = await broker.fetchCount
         XCTAssertEqual(throttledFetchCount, 1)
 
-        clock.advance(by: 61)
+        clock.advance(by: 61_000_000_000)
         await provider.prewarm().value
 
         let finalFetchCount = await broker.fetchCount
@@ -3259,7 +3253,6 @@ final class AlchemyJWTProviderTests: XCTestCase {
                 for: alchemyURL
             )
             XCTAssertEqual(authorization?.token, current.token)
-            try await Task.sleep(nanoseconds: 10_000_000)
         }
 
         XCTAssertEqual(store.loadCount, 0)
@@ -3459,25 +3452,36 @@ final class AlchemyJWTProviderTests: XCTestCase {
             )
         defer { try? FileManager.default.removeItem(at: fileURL) }
         let store = TestAlchemyJWTStore(record: nil)
+        let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
+        defer { firstFetchGate.release() }
         let broker = TestAlchemyJWTBroker(
             records: [record],
-            delayNanoseconds: 75_000_000
+            firstFetchGate: firstFetchGate
         )
+        let contended = expectation(description: "second real lock contended")
+        contended.assertForOverFulfill = false
         let first = makeProvider(
             store: store,
             broker: broker,
-            refreshLock: CrossProcessFileLock(fileURL: fileURL),
+            refreshLock: ObservedAlchemyJWTRefreshLock(CrossProcessFileLock(fileURL: fileURL)) { acquired in
+                if !acquired { contended.fulfill() }
+            },
             now: now
         )
         let second = makeProvider(
             store: store,
             broker: broker,
-            refreshLock: CrossProcessFileLock(fileURL: fileURL),
+            refreshLock: ObservedAlchemyJWTRefreshLock(CrossProcessFileLock(fileURL: fileURL)) { acquired in
+                if !acquired { contended.fulfill() }
+            },
             now: now
         )
 
         async let firstAuthorization = first.authorization(for: alchemyURL)
         async let secondAuthorization = second.authorization(for: alchemyURL)
+        await firstFetchGate.waitUntilStarted()
+        await fulfillment(of: [contended], timeout: 2)
+        firstFetchGate.release()
         let resolvedAuthorizations = try await (
             firstAuthorization,
             secondAuthorization
@@ -3589,10 +3593,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
             },
         notificationCenter: NotificationCenter = .default
     ) -> AlchemyJWTProvider {
-        return makeProvider(
-            store: store,
+        return AlchemyJWTProvider(
+            tokenStore: store,
             broker: broker,
             refreshLock: refreshLock,
+            now: { Date(timeIntervalSince1970: TimeInterval(now)) },
+            uptimeNanoseconds: { DispatchTime.now().uptimeNanoseconds },
             refreshLockTimeoutNanoseconds: refreshLockTimeoutNanoseconds,
             refreshLockPollNanoseconds: refreshLockPollNanoseconds,
             persistenceRepairWindowNanoseconds:
@@ -3601,9 +3607,6 @@ final class AlchemyJWTProviderTests: XCTestCase {
                 persistenceRepairInitialDelayNanoseconds,
             persistenceRepairMaximumDelayNanoseconds:
                 persistenceRepairMaximumDelayNanoseconds,
-            clock: TestAlchemyJWTClock(
-                now: Date(timeIntervalSince1970: TimeInterval(now))
-            ),
             sleep: sleep,
             proactiveRefreshSleep: proactiveRefreshSleep,
             persistenceRepairCooldownSleep:
@@ -3621,7 +3624,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         persistenceRepairWindowNanoseconds: UInt64 = 0,
         persistenceRepairInitialDelayNanoseconds: UInt64 = 1,
         persistenceRepairMaximumDelayNanoseconds: UInt64 = 2,
-        clock: TestAlchemyJWTClock,
+        clock: TestClock,
         sleep: @escaping @Sendable (UInt64) async throws -> Void = {
             try await Task.sleep(nanoseconds: $0)
         },
@@ -3701,19 +3704,32 @@ final class AlchemyJWTProviderTests: XCTestCase {
         return data.base64URLEncodedString
     }
 
-    private func waitUntil(
-        timeout: TimeInterval = 2,
-        condition: @escaping () async -> Bool
+    private func waitForSleeper(
+        _ sleeper: TestAlchemyJWTProactiveSleeper,
+        _ condition: @escaping @Sendable ([UInt64], Int) -> Bool
     ) async {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if await condition() {
-                return
-            }
-            try? await Task.sleep(nanoseconds: 10_000_000)
-        }
-        XCTFail("Timed out waiting for asynchronous state")
+        let observed = expectation(description: "scheduled sleep checkpoint")
+        await sleeper.observe(condition, expectation: observed)
+        await fulfillment(of: [observed], timeout: 2)
     }
+
+    private func waitForStoredRecord(_ record: AlchemyJWTRecord, in store: TestAlchemyJWTStore) async {
+        await waitForStoredState(in: store) { $0.record == record }
+    }
+
+    private func waitForStoredState(
+        in store: TestAlchemyJWTStore,
+        matching predicate: @escaping @Sendable (AlchemyJWTPersistedState) -> Bool
+    ) async {
+        let saved = expectation(description: "token state persisted")
+        saved.assertForOverFulfill = false
+        store.onSave = { state in if predicate(state) { saved.fulfill() } }
+        defer { store.onSave = nil }
+        if let state = store.state, predicate(state) { saved.fulfill() }
+        await fulfillment(of: [saved], timeout: 2)
+    }
+
+
 
 }
 
@@ -3721,21 +3737,16 @@ private enum TestBrokerError: Error {
     case unavailable
 }
 
-private final class TestAlchemyJWTCompletionFlag: Sendable {
-    private let completed = Mutex(false)
-    var isCompleted: Bool { completed.withLock { $0 } }
-    func markCompleted() { completed.withLock { $0 = true } }
-}
 
 private final class BlockingSaveAlchemyJWTStore: Sendable, AlchemyJWTStoring {
     private struct GateState {
         var shouldBlockNextSave = false
-        var didStartSave = false
         var didReleaseBlockedSave = false
     }
-    private let store: TestAlchemyJWTStore
+    let store: TestAlchemyJWTStore
     private let gate = Mutex(GateState())
     private let saveRelease = DispatchSemaphore(value: 0)
+    private let saveStarted = XCTestExpectation(description: "synchronous save blocked")
 
     init(record: AlchemyJWTRecord?) {
         store = TestAlchemyJWTStore(record: record)
@@ -3753,12 +3764,7 @@ private final class BlockingSaveAlchemyJWTStore: Sendable, AlchemyJWTStoring {
     }
 
     func waitUntilSaveIsBlocked(timeout: TimeInterval = 2) async -> Bool {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(timeout))
-        while !gate.withLock({ $0.didStartSave }), clock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(1))
-        }
-        return gate.withLock { $0.didStartSave }
+        await XCTWaiter.fulfillment(of: [saveStarted], timeout: timeout) == .completed
     }
 
     func releaseBlockedSave() {
@@ -3776,10 +3782,9 @@ private final class BlockingSaveAlchemyJWTStore: Sendable, AlchemyJWTStoring {
         let shouldBlock = gate.withLock { gate in
             guard gate.shouldBlockNextSave else { return false }
             gate.shouldBlockNextSave = false
-            gate.didStartSave = true
             return true
         }
-        if shouldBlock { saveRelease.wait() }
+        if shouldBlock { saveStarted.fulfill(); saveRelease.wait() }
         try store.save(state)
     }
 }
@@ -3793,6 +3798,11 @@ private final class TestAlchemyJWTStore: Sendable, AlchemyJWTStoring {
         var saveError: AlchemyJWTStorageError?
     }
     private let storage: Mutex<State>
+    private let saveObserver = Mutex<(@Sendable (AlchemyJWTPersistedState) -> Void)?>(nil)
+    var onSave: (@Sendable (AlchemyJWTPersistedState) -> Void)? {
+        get { saveObserver.withLock { $0 } }
+        set { saveObserver.withLock { $0 = newValue } }
+    }
 
     init(
         record: AlchemyJWTRecord?,
@@ -3849,6 +3859,7 @@ private final class TestAlchemyJWTStore: Sendable, AlchemyJWTStoring {
             state.persisted = value
             state.saves += 1
         }
+        onSave?(value)
     }
 
     func resetCounts() {
@@ -3884,6 +3895,22 @@ private final class TestEncodedAlchemyJWTStore: Sendable, AlchemyJWTStoring {
     }
 }
 
+private final class ObservedAlchemyJWTRefreshLock: AlchemyJWTRefreshLocking {
+    private let base: any AlchemyJWTRefreshLocking
+    private let attempted: @Sendable (Bool) -> Void
+
+    init(_ base: any AlchemyJWTRefreshLocking, attempted: @escaping @Sendable (Bool) -> Void) {
+        self.base = base
+        self.attempted = attempted
+    }
+    func tryAcquire() throws -> Bool {
+        let acquired = try base.tryAcquire()
+        attempted(acquired)
+        return acquired
+    }
+    func release() { base.release() }
+}
+
 private final class TestAlchemyJWTRefreshLock: Sendable, AlchemyJWTRefreshLocking {
     private struct Counts {
         var acquisitions = 0
@@ -3891,6 +3918,11 @@ private final class TestAlchemyJWTRefreshLock: Sendable, AlchemyJWTRefreshLockin
     }
     private let semaphore: DispatchSemaphore
     private let counts = Mutex(Counts())
+    private let releaseObserver = Mutex<(@Sendable () -> Void)?>(nil)
+    var onRelease: (@Sendable () -> Void)? {
+        get { releaseObserver.withLock { $0 } }
+        set { releaseObserver.withLock { $0 = newValue } }
+    }
 
     init(isAvailable: Bool = true) {
         semaphore = DispatchSemaphore(value: isAvailable ? 1 : 0)
@@ -3906,12 +3938,16 @@ private final class TestAlchemyJWTRefreshLock: Sendable, AlchemyJWTRefreshLockin
         return true
     }
 
-    func release() { semaphore.signal() }
+    func release() {
+        semaphore.signal()
+        onRelease?()
+    }
     func makeAvailable() { semaphore.signal() }
 }
 
 private final class BlockingFirstAlchemyJWTRefreshLock: Sendable, AlchemyJWTRefreshLocking {
     private let firstAttemptRelease = DispatchSemaphore(value: 0)
+    private let firstAttemptStarted = XCTestExpectation(description: "first lock attempt entered")
     private let isFirstAttempt = Mutex(true)
 
     func tryAcquire() throws -> Bool {
@@ -3919,19 +3955,14 @@ private final class BlockingFirstAlchemyJWTRefreshLock: Sendable, AlchemyJWTRefr
             defer { value = false }
             return value
         }
-        if shouldBlock { firstAttemptRelease.wait() }
+        if shouldBlock { firstAttemptStarted.fulfill(); firstAttemptRelease.wait() }
         return false
     }
 
     func release() {}
 
     func waitForFirstAttempt() async -> Bool {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(2))
-        while isFirstAttempt.withLock({ $0 }), clock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(1))
-        }
-        return isFirstAttempt.withLock { !$0 }
+        await XCTWaiter.fulfillment(of: [firstAttemptStarted], timeout: 2) == .completed
     }
 
     func unblockFirstAttempt() { firstAttemptRelease.signal() }
@@ -3946,104 +3977,64 @@ private final class TestAlchemyJWTSleeper: Sendable {
 }
 
 private actor TestAlchemyJWTProactiveSleeper {
-
-    private struct PendingSleep {
-        let continuation: CheckedContinuation<Void, Error>
-    }
-
     private var nextIdentifier: UInt64 = 0
-    private var requested: [UInt64] = []
-    private var pendingOrder: [UInt64] = []
-    private var pending: [UInt64: PendingSleep] = [:]
-    private var cancelledBeforeRegistration: Set<UInt64> = []
+    private var requested = [UInt64]()
+    private var pending = [UInt64: TestDeferred<Void>]()
+    private var observers = [(condition: @Sendable ([UInt64], Int) -> Bool, XCTestExpectation)]()
 
     func sleep(_ nanoseconds: UInt64) async throws {
-        nextIdentifier &+= 1
+        nextIdentifier += 1
         let identifier = nextIdentifier
+        let result = TestDeferred<Void>()
         requested.append(nanoseconds)
-
-        try await withTaskCancellationHandler(
-            operation: {
-                try await withCheckedThrowingContinuation {
-                    (continuation: CheckedContinuation<Void, Error>) in
-                    if cancelledBeforeRegistration.remove(identifier) != nil
-                        || Task.isCancelled {
-                        continuation.resume(throwing: CancellationError())
-                        return
-                    }
-                    pendingOrder.append(identifier)
-                    pending[identifier] = PendingSleep(
-                        continuation: continuation
-                    )
-                }
-            },
-            onCancel: {
-                Task {
-                    await self.cancel(identifier)
-                }
-            }
-        )
+        pending[identifier] = result
+        changed()
+        defer { pending.removeValue(forKey: identifier); changed() }
+        try await result.value()
     }
-
-    func requestedDurations() -> [UInt64] {
-        return requested
-    }
-
-    func pendingCount() -> Int {
-        return pending.count
-    }
-
+    func requestedDurations() -> [UInt64] { requested }
+    func pendingCount() -> Int { pending.count }
     func resumeNext() {
-        while !pendingOrder.isEmpty {
-            let identifier = pendingOrder.removeFirst()
-            guard let sleep = pending.removeValue(
-                forKey: identifier
-            ) else {
-                continue
-            }
-            sleep.continuation.resume(returning: ())
-            return
-        }
+        guard let identifier = pending.keys.min(), let result = pending.removeValue(forKey: identifier) else { return }
+        result.resolve(.success(()))
+        changed()
     }
-
-    private func cancel(_ identifier: UInt64) {
-        guard let sleep = pending.removeValue(forKey: identifier) else {
-            cancelledBeforeRegistration.insert(identifier)
-            return
-        }
-        pendingOrder.removeAll { $0 == identifier }
-        sleep.continuation.resume(throwing: CancellationError())
+    func observe(_ condition: @escaping @Sendable ([UInt64], Int) -> Bool, expectation: XCTestExpectation) {
+        if condition(requested, pending.count) { expectation.fulfill() }
+        else { observers.append((condition, expectation)) }
     }
-
+    private func changed() {
+        let ready = observers.filter { $0.condition(requested, pending.count) }
+        observers.removeAll { $0.condition(requested, pending.count) }
+        ready.forEach { $0.1.fulfill() }
+    }
 }
 
 private actor TestAlchemyJWTBroker: AlchemyJWTBrokerFetching {
 
     private var records: [AlchemyJWTRecord]
     private var errors: [Error]
-    private let delayNanoseconds: UInt64
     private let firstFetchGate: TestAlchemyJWTBrokerFirstFetchGate?
+    private let onFetch: (@Sendable (Int) -> Void)?
     private(set) var fetchCount = 0
 
     init(
         records: [AlchemyJWTRecord] = [],
         errors: [Error] = [],
-        delayNanoseconds: UInt64 = 0,
-        firstFetchGate: TestAlchemyJWTBrokerFirstFetchGate? = nil
+        firstFetchGate: TestAlchemyJWTBrokerFirstFetchGate? = nil,
+        onFetch: (@Sendable (Int) -> Void)? = nil
     ) {
         self.records = records
         self.errors = errors
-        self.delayNanoseconds = delayNanoseconds
         self.firstFetchGate = firstFetchGate
+        self.onFetch = onFetch
     }
 
     func fetchToken() async throws -> AlchemyJWTRecord {
         fetchCount += 1
+        onFetch?(fetchCount)
         if fetchCount == 1, let firstFetchGate {
             await firstFetchGate.pause()
-        }
-        if delayNanoseconds > 0 {
-            try await Task.sleep(nanoseconds: delayNanoseconds)
         }
         if !errors.isEmpty {
             throw errors.removeFirst()
@@ -4054,132 +4045,47 @@ private actor TestAlchemyJWTBroker: AlchemyJWTBrokerFetching {
 
 }
 
-private actor TestAlchemyJWTBrokerFirstFetchGate {
-
-    private var didStart = false
-    private var isReleased = false
-    private var startWaiters: [CheckedContinuation<Void, Never>] = []
-    private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
+private final class TestAlchemyJWTBrokerFirstFetchGate: Sendable {
+    private let entered = XCTestExpectation(description: "broker fetch entered")
+    private let released = TestGate<Void>()
 
     func pause() async {
-        didStart = true
-        let waiters = startWaiters
-        startWaiters.removeAll()
-        for waiter in waiters {
-            waiter.resume()
-        }
-
-        guard !isReleased else { return }
-        await withCheckedContinuation { continuation in
-            releaseWaiters.append(continuation)
-        }
+        entered.fulfill()
+        await released.wait()
     }
-
     func waitUntilStarted() async {
-        guard !didStart else { return }
-        await withCheckedContinuation { continuation in
-            startWaiters.append(continuation)
-        }
+        let result = await XCTWaiter.fulfillment(of: [entered], timeout: 2)
+        XCTAssertEqual(result, .completed)
     }
-
-    func release() {
-        isReleased = true
-        let waiters = releaseWaiters
-        releaseWaiters.removeAll()
-        for waiter in waiters {
-            waiter.resume()
-        }
-    }
-
+    func release() { released.resolve(()) }
 }
 
-private final class TestAlchemyJWTClock: Sendable {
-    private struct State {
-        var date: Date
-        var uptimeOffsetNanoseconds: UInt64 = 0
-    }
-    private let state: Mutex<State>
-    private let baseUptimeNanoseconds: UInt64
-    private let advancesWithRealTime: Bool
-
-    init(now: Date, advancesWithRealTime: Bool = true) {
-        state = Mutex(State(date: now))
-        baseUptimeNanoseconds = DispatchTime.now().uptimeNanoseconds
-        self.advancesWithRealTime = advancesWithRealTime
-    }
-
-    var date: Date { state.withLock { $0.date } }
-
-    var uptimeNanoseconds: UInt64 {
-        state.withLock { state in
-            let current = advancesWithRealTime ? DispatchTime.now().uptimeNanoseconds : baseUptimeNanoseconds
-            let (adjusted, overflow) = current.addingReportingOverflow(state.uptimeOffsetNanoseconds)
-            return overflow ? UInt64.max : adjusted
-        }
-    }
-
-    func advance(by interval: TimeInterval) {
-        state.withLock { state in
-            state.date = state.date.addingTimeInterval(interval)
-            if interval > 0 {
-                state.uptimeOffsetNanoseconds = addingNanoseconds(interval, to: state.uptimeOffsetNanoseconds)
-            }
-        }
-    }
-
-    func adjustWallTime(by interval: TimeInterval) {
-        state.withLock { $0.date = $0.date.addingTimeInterval(interval) }
-    }
-
-    func advanceUptime(by interval: TimeInterval) {
-        state.withLock { $0.uptimeOffsetNanoseconds = addingNanoseconds(interval, to: $0.uptimeOffsetNanoseconds) }
-    }
-
-    private func addingNanoseconds(
-        _ interval: TimeInterval,
-        to value: UInt64
-    ) -> UInt64 {
-        guard interval > 0 else { return value }
-        let maximumInterval = TimeInterval(
-            UInt64.max / 1_000_000_000
-        )
-        guard interval < maximumInterval else { return UInt64.max }
-        let nanoseconds = UInt64(interval * 1_000_000_000)
-        let (result, overflow) = value.addingReportingOverflow(nanoseconds)
-        return overflow ? UInt64.max : result
-    }
-
-}
 
 private actor TestAlchemyJWTSleepGate {
-
-    private var continuations: [CheckedContinuation<Void, Error>] = []
+    private var gates = [TestGate<Void>]()
     private var maximumPending = 0
+    private var waitingForRegistration = [XCTestExpectation]()
 
     func sleep() async throws {
-        try await withCheckedThrowingContinuation {
-            (continuation: CheckedContinuation<Void, Error>) in
-            continuations.append(continuation)
-            maximumPending = max(maximumPending, continuations.count)
-        }
+        let gate = TestGate<Void>()
+        gates.append(gate)
+        maximumPending = max(maximumPending, gates.count)
+        let observers = waitingForRegistration
+        waitingForRegistration.removeAll()
+        observers.forEach { $0.fulfill() }
+        await gate.wait()
     }
-
-    func pendingCount() -> Int {
-        return continuations.count
+    func observeRegistration(_ expectation: XCTestExpectation) {
+        if gates.isEmpty { waitingForRegistration.append(expectation) }
+        else { expectation.fulfill() }
     }
-
-    func maximumPendingCount() -> Int {
-        return maximumPending
-    }
-
+    func pendingCount() -> Int { gates.count }
+    func maximumPendingCount() -> Int { maximumPending }
     func resumeAll() {
-        let pending = continuations
-        continuations.removeAll()
-        for continuation in pending {
-            continuation.resume(returning: ())
-        }
+        let pending = gates
+        gates.removeAll()
+        pending.forEach { $0.resolve(()) }
     }
-
 }
 
 private extension Data {

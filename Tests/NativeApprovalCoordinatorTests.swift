@@ -39,12 +39,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             )),
         ]
         for action in actions {
-            let clock = Clock()
+            let clock = TestClock(uptimeNanoseconds: 0)
             let waits = ScheduledWaits()
             var decisions = 0
             var capturedDecision: DappApprovalDecision?
             let fixture = try makeFixture(clock: clock, environment: .init(
-                now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
+                now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) }, wait: waits.wait,
                 prepareWithoutWallets: { self.approvalPreparation($0, action: action) },
                 attemptNativeDecision: { authorization in
                     decisions += 1
@@ -312,18 +312,25 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         defer { windowController.close() }
         let session = try XCTUnwrap(controller.accountSelection)
         var launches = 0
-        var finishLaunch: CheckedContinuation<Bool, Never>?
+        let entered = (1...3).map { expectation(description: "management launch \($0) entered") }
+        let replies = (1...3).map { _ in TestGate<Bool>() }
+        defer { replies.forEach { $0.resolve(false) } }
         controller.openWalletManagement = {
+            let index = launches
             launches += 1
-            return await withCheckedContinuation { finishLaunch = $0 }
+            guard replies.indices.contains(index) else {
+                XCTFail("Retired management action launched again")
+                return false
+            }
+            entered[index].fulfill()
+            return await replies[index].wait()
         }
         let manageRow = controller.numberOfRows(in: controller.tableView) - 1
         try clickAccountRow(manageRow, in: controller, window: window)
         _ = controller.perform(NSSelectorFromString("manageWallets"))
-        await waitForCondition { launches == 1 }
+        await fulfillment(of: [entered[0]], timeout: 2)
         XCTAssertEqual(launches, 1)
-        finishLaunch?.resume(returning: true)
-        finishLaunch = nil
+        replies[0].resolve(true)
         await waitForCondition { controller.tableView(controller.tableView, rowViewForRow: manageRow)?.alphaValue == 1 }
         XCTAssertTrue(window.contentViewController === controller)
         XCTAssertTrue(session.lifetime.isActive)
@@ -331,10 +338,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertNil(window.attachedSheet)
 
         _ = controller.perform(NSSelectorFromString("manageWallets"))
-        await waitForCondition { launches == 2 }
+        await fulfillment(of: [entered[1]], timeout: 2)
         XCTAssertEqual(launches, 2)
-        finishLaunch?.resume(returning: false)
-        finishLaunch = nil
+        replies[1].resolve(false)
         await waitForCondition { window.attachedSheet != nil }
         let errorSheet = try XCTUnwrap(window.attachedSheet)
         window.endSheet(errorSheet, returnCode: .alertFirstButtonReturn)
@@ -342,11 +348,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertFalse(session.hasCompleted)
 
         _ = controller.perform(NSSelectorFromString("manageWallets"))
-        await waitForCondition { launches == 3 }
+        await fulfillment(of: [entered[2]], timeout: 2)
         XCTAssertEqual(launches, 3)
         session.lifetime.invalidate()
-        finishLaunch?.resume(returning: false)
-        finishLaunch = nil
+        replies[2].resolve(false)
         _ = controller.perform(NSSelectorFromString("manageWallets"))
         XCTAssertEqual(launches, 3)
         XCTAssertNil(window.attachedSheet)
@@ -473,63 +478,33 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    private final class Clock {
-        var now = Date(timeIntervalSince1970: 1_800_000_000) {
-            didSet { uptime += max(0, now.timeIntervalSince(oldValue)) }
-        }
-        private(set) var uptime: TimeInterval = 0
-        func advanceUptime(_ interval: TimeInterval) { uptime += interval }
-    }
-
-    @MainActor
-    private final class AsyncGate<Value: Sendable> {
-        var continuation: CheckedContinuation<Value, Never>?
-        var pendingResult: Value?
-
-        func run() async -> Value {
-            if let pendingResult {
-                self.pendingResult = nil
-                return pendingResult
-            }
-            return await withCheckedContinuation { continuation in
-                self.continuation = continuation
-            }
-        }
-
-        func resume(_ result: Value) {
-            let continuation = continuation
-            self.continuation = nil
-            if let continuation {
-                continuation.resume(returning: result)
-            } else {
-                pendingResult = result
-            }
-        }
-    }
-
-    @MainActor
     private final class ScheduledWaits {
         private(set) var delays = [UInt64]()
-        private var continuations = [Int: CheckedContinuation<Void, Never>]()
+        private var gates = [Int: TestGate<Void>]()
+        private var registrations = [(Int, XCTestExpectation)]()
+        var onReturned: ((Int) -> Void)?
 
         func wait(_ delay: UInt64) async {
             let index = delays.count
+            let gate = TestGate<Void>()
             delays.append(delay)
-            await withCheckedContinuation { continuations[index] = $0 }
+            gates[index] = gate
+            let ready = registrations.filter { delays.count >= $0.0 }
+            registrations.removeAll { delays.count >= $0.0 }
+            ready.forEach { $0.1.fulfill() }
+            await gate.wait()
+            onReturned?(index)
         }
-
-        func resume(_ index: Int) {
-            continuations.removeValue(forKey: index)?.resume()
+        func observe(count: Int, expectation: XCTestExpectation) {
+            if delays.count >= count { expectation.fulfill() }
+            else { registrations.append((count, expectation)) }
         }
-
-        func isPending(_ index: Int) -> Bool {
-            continuations[index] != nil
-        }
-
+        func resume(_ index: Int) { gates.removeValue(forKey: index)?.resolve(()) }
+        func isPending(_ index: Int) -> Bool { gates[index] != nil }
         func resumeAll() {
-            let pending = continuations.values
-            continuations.removeAll()
-            for continuation in pending { continuation.resume() }
+            let pending = Array(gates.values)
+            gates.removeAll()
+            pending.forEach { $0.resolve(()) }
         }
     }
 
@@ -537,6 +512,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     private final class CoordinatorStore: NativeDeliveryStore {
         private var outstandingWrites = 0
         private(set) var maximumOutstandingWrites = 0
+        var onRead: (() -> Void)?
+        var onWrite: (() -> Void)?
+        var onLoadReturned: (() -> Void)?
         var snapshot: ExtensionBridge.Snapshot?
         var loadHandler: (@MainActor (ExtensionBridge.Handle) async ->
             ExtensionBridge.SnapshotResult)?
@@ -569,6 +547,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         func load(
             handle: ExtensionBridge.Handle
         ) async -> ExtensionBridge.SnapshotResult {
+            onRead?()
+            defer { onLoadReturned?() }
             if let loadHandler { return await loadHandler(handle) }
             return snapshot.map(ExtensionBridge.SnapshotResult.found) ?? .missing
         }
@@ -674,6 +654,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
         @MainActor
         private func beginWrite() {
+            onWrite?()
             outstandingWrites += 1
             maximumOutstandingWrites = max(maximumOutstandingWrites, outstandingWrites)
         }
@@ -844,12 +825,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testUnavailableValidationBecomesDormantAndExplicitlyRecovers() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         var reads = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
-                clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
+                clock.advance(to: clock.date.addingTimeInterval(Double(delay) / 1_000_000_000))
                 await Task.yield()
             }
         ))
@@ -860,8 +841,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(fixture.coordinator.countsTowardUnverifiedLimit)
         XCTAssertEqual(fixture.events.authenticationCount, 0)
         let pausedReads = reads
+        let unexpectedRead = expectation(description: "Dormant start must not read the store")
+        unexpectedRead.isInverted = true
+        unexpectedRead.assertForOverFulfill = false
+        fixture.store.onRead = { unexpectedRead.fulfill() }
         start(fixture)
-        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(fixture.coordinator.phase, .paused)
+        await fulfillment(of: [unexpectedRead], timeout: 0.1)
+        fixture.store.onRead = nil
         XCTAssertEqual(reads, pausedReads)
         fixture.store.loadHandler = nil
         fixture.coordinator.retryRecovery()
@@ -892,7 +879,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testLateValidationCannotAcquireAfterCancellation() async throws {
         let fixture = try makeFixture()
-        let gate = AsyncGate<ExtensionBridge.SnapshotResult>()
+        let gate = TestGate<ExtensionBridge.SnapshotResult>()
         let original = try XCTUnwrap(fixture.store.snapshot)
         let loadStarted = expectation(description: "validation load started")
         var loads = 0
@@ -901,7 +888,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             loads += 1
             if loads == 1 {
                 loadStarted.fulfill()
-                return await gate.run()
+                return await gate.wait()
             }
             return .found(original)
         }
@@ -913,8 +900,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await fulfillment(of: [loadStarted], timeout: 1)
         fixture.coordinator.cancelBeforeAuthentication()
         await waitForState(fixture.coordinator, .finished)
-        gate.resume(.found(original))
-        for _ in 0..<20 { await Task.yield() }
+        let returned = expectation(description: "retired validation returned")
+        fixture.store.onLoadReturned = { returned.fulfill() }
+        await expectNoFurtherWork(events: fixture.events, store: fixture.store, returned: returned) {
+            gate.resolve(.found(original))
+        }
+        fixture.store.onLoadReturned = nil
         XCTAssertEqual(fixture.store.recordCount, 0)
         XCTAssertEqual(rejections, 1)
         XCTAssertEqual(fixture.events.authenticationCount, 0)
@@ -927,20 +918,20 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let snapshot = try approvalSnapshot(
             handle: fixture.key.handle,
             nonce: fixture.key.nativeDeliveryNonce,
-            deadline: fixture.clock.now.addingTimeInterval(ExtensionBridge.requestTTL + 30)
+            deadline: fixture.clock.date.addingTimeInterval(ExtensionBridge.requestTTL + 30)
         )
         fixture.store.snapshot = snapshot
-        let gate = AsyncGate<ExtensionBridge.SnapshotResult>()
+        let gate = TestGate<ExtensionBridge.SnapshotResult>()
         let loadStarted = expectation(description: "validation suspended")
         fixture.store.loadHandler = { _ in
             loadStarted.fulfill()
-            return await gate.run()
+            return await gate.wait()
         }
         start(fixture)
         await fulfillment(of: [loadStarted], timeout: 1)
-        fixture.clock.now.addTimeInterval(ExtensionBridge.requestTTL + 10)
+        fixture.clock.advance(to: fixture.clock.date.addingTimeInterval(ExtensionBridge.requestTTL + 10))
         fixture.store.loadHandler = nil
-        gate.resume(.found(snapshot))
+        gate.resolve(.found(snapshot))
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(fixture.store.recordCount, 0)
         XCTAssertEqual(fixture.events.authenticationCount, 0)
@@ -948,10 +939,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testForeignReceiptBeforeStartupNeverAuthenticatesOrPreparesWallets() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
+            now: { clock.date },
+            uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in XCTFail("Foreign ownership must not retry") },
             prepareWithoutWallets: { _ in
                 XCTFail("Foreign ownership must not prepare a request")
@@ -975,7 +966,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         let snapshot = try XCTUnwrap(fixture.store.snapshot)
-        let gate = AsyncGate<ExtensionBridge.SnapshotResult>()
+        let gate = TestGate<ExtensionBridge.SnapshotResult>()
         let loadStarted = expectation(description: "bootstrap load started")
         let loadReturned = expectation(description: "canceled bootstrap load returned")
         var didSuspend = false
@@ -983,7 +974,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             if didSuspend { return .found(snapshot) }
             didSuspend = true
             loadStarted.fulfill()
-            let result = await gate.run()
+            let result = await gate.wait()
             loadReturned.fulfill()
             return result
         }
@@ -992,7 +983,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await fulfillment(of: [loadStarted], timeout: 1)
         fixture.coordinator.reject()
         await waitForState(fixture.coordinator, .finished)
-        gate.resume(.found(snapshot))
+        gate.resolve(.found(snapshot))
         await fulfillment(of: [loadReturned], timeout: 1)
         XCTAssertEqual(fixture.coordinator.phase, .finished)
         XCTAssertEqual(fixture.events.presentations.count, 2)
@@ -1004,8 +995,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testCancellationWaitsForInFlightReceiptThenRejectsExactOwner() async throws {
         let fixture = try makeFixture()
-        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
-        fixture.store.recordHandler = { _, _, _ in await gate.run() }
+        let gate = TestGate<ExtensionBridge.StoreMutationResult>()
+        fixture.store.recordHandler = { _, _, _ in await gate.wait() }
         var rejections = 0
         fixture.store.rejectHandler = { handle, nonce, runtime in
             XCTAssertEqual(handle, fixture.key.handle)
@@ -1022,7 +1013,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.coordinator.phase, .acquiringReceipt)
         XCTAssertEqual(rejections, 0)
         fixture.store.snapshot = try ownedSnapshot(fixture)
-        gate.resume(.persisted)
+        gate.resolve(.persisted)
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(rejections, 1)
         XCTAssertEqual(fixture.events.authenticationCount, 0)
@@ -1062,15 +1053,15 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testAuthenticationWaitingExpiresAndLeavesInbox() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let expiryWaits = ScheduledWaits()
         defer { expiryWaits.resumeAll() }
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in XCTFail("Authentication expiry must not use recovery polling") },
             waitForAuthenticationExpiry: { await expiryWaits.wait(UInt64($0 * 1_000_000_000)) }
         ))
-        let deadline = clock.now.addingTimeInterval(10)
+        let deadline = clock.date.addingTimeInterval(10)
         fixture.store.snapshot = try approvalSnapshot(
             handle: fixture.key.handle,
             nonce: fixture.key.nativeDeliveryNonce,
@@ -1095,7 +1086,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         await waitForScheduledWait(expiryWaits, count: 1)
         XCTAssertEqual(expiryWaits.delays, [10_000_000_000])
-        clock.now = deadline
+        clock.advance(to: deadline)
         expiryWaits.resume(0)
         await fulfillment(of: [finished], timeout: 1)
 
@@ -1110,15 +1101,15 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testAuthenticationWaitingDoesNotExpireBeforeRecordedDeadline() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let expiryWaits = ScheduledWaits()
         defer { expiryWaits.resumeAll() }
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in XCTFail("Authentication expiry must not use recovery polling") },
             waitForAuthenticationExpiry: { await expiryWaits.wait(UInt64($0 * 1_000_000_000)) }
         ))
-        let deadline = clock.now.addingTimeInterval(10)
+        let deadline = clock.date.addingTimeInterval(10)
         fixture.store.snapshot = try approvalSnapshot(
             handle: fixture.key.handle,
             nonce: fixture.key.nativeDeliveryNonce,
@@ -1126,39 +1117,39 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
         start(fixture)
         await waitForScheduledWait(expiryWaits, count: 1)
-        clock.now.addTimeInterval(4)
+        clock.advance(to: clock.date.addingTimeInterval(4))
         expiryWaits.resume(0)
         await waitForScheduledWait(expiryWaits, count: 2)
         XCTAssertEqual(fixture.coordinator.phase, .awaitingAuthentication)
         XCTAssertTrue(fixture.events.presentations.isEmpty)
         XCTAssertEqual(expiryWaits.delays, [10_000_000_000, 6_000_000_000])
-        clock.now = deadline
+        clock.advance(to: deadline)
         expiryWaits.resume(1)
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(fixture.events.presentations.count, 1)
     }
 
     func testAuthenticationExpiryDoesNotInterruptCancellationPersistence() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let expiryWaits = ScheduledWaits()
         defer { expiryWaits.resumeAll() }
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in XCTFail("Suspended rejection must not poll") },
             waitForAuthenticationExpiry: { await expiryWaits.wait(UInt64($0 * 1_000_000_000)) }
         ))
-        let deadline = clock.now.addingTimeInterval(10)
+        let deadline = clock.date.addingTimeInterval(10)
         fixture.store.snapshot = try approvalSnapshot(
             handle: fixture.key.handle,
             nonce: fixture.key.nativeDeliveryNonce,
             deadline: deadline
         )
         let writeStarted = expectation(description: "rejection write started")
-        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
-        defer { gate.resume(.persisted) }
+        let gate = TestGate<ExtensionBridge.StoreMutationResult>()
+        defer { gate.resolve(.persisted) }
         fixture.store.rejectHandler = { _, _, _ in
             writeStarted.fulfill()
-            return await gate.run()
+            return await gate.wait()
         }
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
@@ -1166,13 +1157,17 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.cancelBeforeAuthentication()
         await fulfillment(of: [writeStarted], timeout: 1)
 
-        clock.now = deadline
-        expiryWaits.resume(0)
-        for _ in 0..<30 { await Task.yield() }
+        clock.advance(to: deadline)
+        let returned = expectation(description: "retired expiry returned")
+        expiryWaits.onReturned = { _ in returned.fulfill() }
+        await expectNoFurtherWork(events: fixture.events, store: fixture.store, returned: returned) {
+            expiryWaits.resume(0)
+        }
+        expiryWaits.onReturned = nil
         XCTAssertEqual(fixture.coordinator.phase, .rejecting)
         XCTAssertTrue(fixture.events.presentations.isEmpty)
         XCTAssertEqual(expiryWaits.delays.count, 1)
-        gate.resume(.persisted)
+        gate.resolve(.persisted)
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(fixture.events.presentations.count, 1)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
@@ -1180,15 +1175,21 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testSynchronousAuthenticationCallbackReplacesExpiryWorkBeforeItStarts() async throws {
         for authenticates in [false, true] {
-            let clock = Clock()
+            let clock = TestClock(uptimeNanoseconds: 0)
             var preparations = 0
             var expiryWaits = 0
+            let unexpectedExpiry = expectation(description: "replaced expiry must not start")
+            unexpectedExpiry.isInverted = true
             var completions = 0
             var rejections = 0
             let fixture = try makeFixture(clock: clock, environment: .init(
-                now: { clock.now }, uptime: { clock.uptime },
+                now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in XCTFail("Immediate completion must not poll") },
-                waitForAuthenticationExpiry: { _ in expiryWaits += 1; throw CancellationError() },
+                waitForAuthenticationExpiry: { _ in
+                    expiryWaits += 1
+                    unexpectedExpiry.fulfill()
+                    throw CancellationError()
+                },
                 prepareWithoutWallets: { request in
                     preparations += 1
                     XCTAssertTrue(authenticates)
@@ -1214,7 +1215,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
             start(fixture)
             await waitForState(fixture.coordinator, .finished)
-            for _ in 0..<30 { await Task.yield() }
+            await fulfillment(of: [unexpectedExpiry], timeout: 0.1)
             XCTAssertEqual(expiryWaits, 0)
             XCTAssertEqual(preparations, authenticates ? 1 : 0)
             XCTAssertEqual(completions, authenticates ? 1 : 0)
@@ -1227,15 +1228,15 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testOwnedCancellationDeadlineExpiresAuthenticationWaiting() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
+            now: { clock.date },
+            uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 if delay <= 1_000_000_000 {
-                    clock.now.addTimeInterval(ExtensionBridge.requestTTL)
+                    clock.advance(to: clock.date.addingTimeInterval(ExtensionBridge.requestTTL))
                 } else {
-                    try? await Task.sleep(nanoseconds: 60_000_000_000)
+                    try? await TestDeferred<Void>().value()
                 }
             },
             prepareWithoutWallets: { self.approvalPreparation($0) }
@@ -1259,7 +1260,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.store.snapshot = try approvalSnapshot(
             handle: fixture.key.handle, nonce: fixture.key.nativeDeliveryNonce,
-            deadline: fixture.clock.now.addingTimeInterval(300)
+            deadline: fixture.clock.date.addingTimeInterval(300)
         )
         fixture.store.unownedRejectHandler = { _ in
             XCTFail("Previously owned cancellation must never fall back to unowned rejection")
@@ -1282,7 +1283,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.store.snapshot = try approvalSnapshot(
             handle: fixture.key.handle,
             nonce: fixture.key.nativeDeliveryNonce,
-            deadline: fixture.clock.now.addingTimeInterval(300)
+            deadline: fixture.clock.date.addingTimeInterval(300)
         )
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .finished)
@@ -1293,15 +1294,15 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testReceiptAndWalletRetriesRemainOnTheirOwnSideOfAuthentication() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         var reloads = 0
         var preparations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
+            now: { clock.date },
+            uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 if reloads < 2 { await Task.yield() }
-                else { try? await Task.sleep(nanoseconds: 60_000_000_000) }
+                else { try? await TestDeferred<Void>().value() }
             },
             prepareWithoutWallets: { _ in nil },
             reloadWallets: {
@@ -1331,16 +1332,16 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testSuccessfulWalletReloadPastDeadlineLeavesLoadingState() async throws {
         for expiresRequest in [false, true] {
-            let clock = Clock()
+            let clock = TestClock(uptimeNanoseconds: 0)
             let fixture = try makeFixture(clock: clock, environment: .init(
-                now: { clock.now }, uptime: { clock.uptime },
+                now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in XCTFail("Expired preparation must not retry") },
                 prepareWithoutWallets: { _ in nil },
                 reloadWallets: {
                     if expiresRequest {
-                        clock.now.addTimeInterval(ExtensionBridge.requestTTL)
+                        clock.advance(to: clock.date.addingTimeInterval(ExtensionBridge.requestTTL))
                     } else {
-                        clock.advanceUptime(NativeApprovalTiming.recoveryTimeout)
+                        clock.advanceUptime(by: UInt64((NativeApprovalTiming.recoveryTimeout) * 1_000_000_000))
                     }
                     return true
                 },
@@ -1359,12 +1360,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testPostauthenticationLoadingStopsAtAdmissionDeadline() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         var reloads = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
-            wait: { _ in clock.now.addTimeInterval(301) },
+            now: { clock.date },
+            uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
+            wait: { _ in clock.advance(to: clock.date.addingTimeInterval(301)) },
             prepareWithoutWallets: { _ in nil },
             reloadWallets: {
                 reloads += 1
@@ -1381,11 +1382,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testPostauthenticationUnavailableLoadingStopsAtDeadline() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
-            wait: { _ in clock.now.addTimeInterval(ExtensionBridge.requestTTL) }
+            now: { clock.date },
+            uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
+            wait: { _ in clock.advance(to: clock.date.addingTimeInterval(ExtensionBridge.requestTTL)) }
         ))
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
@@ -1405,13 +1406,13 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertTrue(inbox.register(first.coordinator))
         XCTAssertTrue(inbox.register(second.coordinator))
         XCTAssertFalse(inbox.register(third.coordinator))
-        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
-        first.store.recordHandler = { _, _, _ in await gate.run() }
+        let gate = TestGate<ExtensionBridge.StoreMutationResult>()
+        first.store.recordHandler = { _, _, _ in await gate.wait() }
         start(first)
         await waitForState(first.coordinator, .acquiringReceipt)
         XCTAssertFalse(inbox.register(third.coordinator))
         first.store.snapshot = try ownedSnapshot(first)
-        gate.resume(.persisted)
+        gate.resolve(.persisted)
         await waitForState(first.coordinator, .awaitingAuthentication)
         XCTAssertTrue(inbox.register(third.coordinator))
         XCTAssertTrue(inbox.activate("first", for: first.key))
@@ -2299,11 +2300,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testWalletIndependentBootstrapSkipsReloadAndDoesNotReacquireReceipt() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
-            wait: { _ in try? await Task.sleep(nanoseconds: 60_000_000_000) },
+            now: { clock.date },
+            uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
+            wait: { _ in try? await TestDeferred<Void>().value() },
             prepareWithoutWallets: { self.approvalPreparation($0) },
             reloadWallets: {
                 XCTFail("Wallet-independent preparation must not reload wallets")
@@ -2339,14 +2340,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testImmediateResponseRetriesWithoutPrematureFailure() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let handle = makeHandle(id: 12)
         let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
         let runtime = UUID()
         var snapshot = try approvalSnapshot(
             handle: handle,
             nonce: nonce,
-            deadline: clock.now.addingTimeInterval(300)
+            deadline: clock.date.addingTimeInterval(300)
         )
         _ = try XCTUnwrap(snapshot.request)
         let response = ImmediateResolution.failure(.userRejected)
@@ -2358,7 +2359,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             snapshot = try! self.approvalSnapshot(
                 handle: handle,
                 nonce: nonce,
-                deadline: clock.now.addingTimeInterval(300),
+                deadline: clock.date.addingTimeInterval(300),
                 receipt: .init(
                     nativeDeliveryNonce: nonce,
                     owner: self.nativeOwner(runtime: runtime)
@@ -2377,8 +2378,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             nativeDeliveryNonce: nonce,
             store: store,
             environment: .init(
-                now: { clock.now },
-                uptime: { clock.uptime },
+                now: { clock.date },
+                uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in await Task.yield() },
                 prepareWithoutWallets: { _ in .immediate(response) }
             )
@@ -2398,11 +2399,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testLateResponseSettlesBeforeRecoveryCanRetry() async throws {
         for commits in [false, true] {
-            let clock = Clock()
+            let clock = TestClock(uptimeNanoseconds: 0)
             let started = expectation(description: "response in flight")
-            let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
+            let gate = TestGate<ExtensionBridge.StoreMutationResult>()
             let fixture = try makeFixture(clock: clock, environment: .init(
-                now: { clock.now }, uptime: { clock.uptime },
+                now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in await Task.yield() },
                 prepareWithoutWallets: { request in
                     .immediate(.failure(.userRejected))
@@ -2412,7 +2413,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             fixture.store.completeHandler = { _, _, _, _ in
                 writes += 1
                 started.fulfill()
-                return await gate.run()
+                return await gate.wait()
             }
             fixture.store.rejectHandler = { _, _, _ in
                 XCTFail("Closing cannot replace an accepted response")
@@ -2422,12 +2423,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             await waitForState(fixture.coordinator, .awaitingAuthentication)
             fixture.coordinator.resumeAfterAuthentication()
             await fulfillment(of: [started], timeout: 1)
-            clock.now.addTimeInterval(11)
+            clock.advance(to: clock.date.addingTimeInterval(11))
             fixture.coordinator.reject()
             fixture.coordinator.retryRecovery()
             XCTAssertEqual(writes, 1)
             XCTAssertEqual(fixture.coordinator.phase, .responding)
-            gate.resume(commits ? .persisted : .retryablePersistenceFailure)
+            gate.resolve(commits ? .persisted : .retryablePersistenceFailure)
             await waitForState(fixture.coordinator, commits ? .finished : .paused)
             XCTAssertEqual(writes, 1)
             XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
@@ -2435,14 +2436,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testDelayedResponseKeepsItsIntentAndSerializesPersistence() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let retryWrite = expectation(description: "response retries through a storage outage")
-        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
+        let gate = TestGate<ExtensionBridge.StoreMutationResult>()
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
+            now: { clock.date },
+            uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
-                clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
+                clock.advance(to: clock.date.addingTimeInterval(Double(delay) / 1_000_000_000))
                 await Task.yield()
             },
             prepareWithoutWallets: { request in
@@ -2454,7 +2455,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             responses.append(response.response(for: fixture.store.snapshot!.request!)!.json as NSDictionary)
             if responses.count == 7 {
                 retryWrite.fulfill()
-                return await gate.run()
+                return await gate.wait()
             }
             return .retryablePersistenceFailure
         }
@@ -2473,7 +2474,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             return XCTFail("Response persistence must retain its waiting presentation")
         }
         fixture.coordinator.reject()
-        gate.resume(.persisted)
+        gate.resolve(.persisted)
         await waitForState(fixture.coordinator, .finished)
 
         XCTAssertGreaterThan(responses.count, 3)
@@ -2483,10 +2484,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testResponseOwnershipLossRepeatedlyPausesWithoutRepreparing() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         var preparations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in XCTFail("Semantic failure must pause") },
             prepareWithoutWallets: { request in
                 preparations += 1
@@ -2523,15 +2524,15 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testVisibleLoadingAndResponsePersistenceShareOneRecoveryBudget() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         var delays = [UInt64]()
         var reloads = 0
         var preparations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 delays.append(delay)
-                clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
+                clock.advance(to: clock.date.addingTimeInterval(Double(delay) / 1_000_000_000))
                 await Task.yield()
             },
             prepareWithoutWallets: { _ in nil },
@@ -2551,7 +2552,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .paused)
 
-        XCTAssertEqual(clock.uptime, 10)
+        XCTAssertEqual((Double(clock.uptimeNanoseconds) / 1_000_000_000), 10)
         XCTAssertEqual(reloads, 7)
         XCTAssertEqual(preparations, 1)
         XCTAssertEqual(writes, 4)
@@ -2565,18 +2566,18 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testApprovalFinalizesImmediatelyAfterFreshReadWithExactAuthorization() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
-        let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
+        let finalizer = TestGate<NativeApprovalFinalizationResult>()
         let started = expectation(description: "finalization started without a timer")
         var authorizations = [ReviewConsent]()
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) }, wait: waits.wait,
             prepareWithoutWallets: { self.approvalPreparation($0) },
             attemptNativeDecision: { authorization in
                 authorizations.append(authorization)
                 started.fulfill()
-                return await finalizer.run()
+                return await finalizer.wait()
             }
         ))
         defer { waits.resumeAll() }
@@ -2589,15 +2590,15 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
         await waitForScheduledWait(waits, count: 1)
-        let approvedAt = clock.now.addingTimeInterval(2)
-        clock.now = approvedAt
+        let approvedAt = clock.date.addingTimeInterval(2)
+        clock.advance(to: approvedAt)
         let receipt = ExtensionBridge.NativeDeliveryReceipt(
             nativeDeliveryNonce: fixture.key.nativeDeliveryNonce,
             owner: nativeOwner(runtime: fixture.runtime)
         )
         fixture.store.snapshot = try approvalSnapshot(
             handle: fixture.key.handle, nonce: fixture.key.nativeDeliveryNonce,
-            deadline: clock.now.addingTimeInterval(200), receipt: receipt, sequence: 17
+            deadline: clock.date.addingTimeInterval(200), receipt: receipt, sequence: 17
         )
         let current = try XCTUnwrap(fixture.store.snapshot)
         var finalizationReads = 0
@@ -2632,12 +2633,16 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
         var reads = 0
         fixture.store.loadHandler = { _ in reads += 1; return .missing }
-        waits.resume(0)
-        for _ in 0..<30 { await Task.yield() }
+        let returned = expectation(description: "retired observation wait returned")
+        waits.onReturned = { _ in returned.fulfill() }
+        await expectNoFurtherWork(events: fixture.events, store: fixture.store, returned: returned) {
+            waits.resume(0)
+        }
+        waits.onReturned = nil
         XCTAssertEqual(reads, 0)
         XCTAssertEqual(authorizations.count, 1)
         XCTAssertEqual(fixture.coordinator.phase, .waiting)
-        finalizer.resume(.responseReady)
+        finalizer.resolve(.responseReady)
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(fixture.events.presentations.count, 4)
         fixture.store.loadHandler = nil
@@ -2658,7 +2663,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var reads = 0
         fixture.store.loadHandler = { _ in reads += 1; return .found(snapshot) }
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
-        fixture.clock.now = deadline
+        fixture.clock.advance(to: deadline)
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(decisions, 0)
         XCTAssertEqual(reads, 1)
@@ -2666,13 +2671,13 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testSuspendedFinalizationSurvivesCloseAndRecoveryBudget() async throws {
-        let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
+        let finalizer = TestGate<NativeApprovalFinalizationResult>()
         let started = expectation(description: "finalizer suspended")
         var decisions = 0
         let fixture = try makeFixture(attemptNativeDecision: { _ in
             decisions += 1
             started.fulfill()
-            return await finalizer.run()
+            return await finalizer.wait()
         })
         fixture.store.rejectHandler = { _, _, _ in
             XCTFail("Closing an accepted approval must only dismiss")
@@ -2688,30 +2693,30 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await fulfillment(of: [started], timeout: 1)
         window.close()
         XCTAssertTrue(approval.isDismissed)
-        fixture.clock.now.addTimeInterval(11)
+        fixture.clock.advance(to: fixture.clock.date.addingTimeInterval(11))
         fixture.coordinator.retryRecovery()
         fixture.coordinator.reject()
         XCTAssertEqual(fixture.coordinator.phase, .waiting)
         XCTAssertEqual(decisions, 1)
         XCTAssertEqual(fixture.store.interruptionCount, 0)
-        finalizer.resume(.responseReady)
+        finalizer.resolve(.responseReady)
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(decisions, 1)
     }
 
     func testPendingFinalizationObservesWithBackoffWithoutReplayingDecision() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
-        let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
+        let finalizer = TestGate<NativeApprovalFinalizationResult>()
         let started = expectation(description: "finalization started")
         var decisions = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) }, wait: waits.wait,
             prepareWithoutWallets: { self.approvalPreparation($0) },
             attemptNativeDecision: { _ in
                 decisions += 1
                 started.fulfill()
-                return await finalizer.run()
+                return await finalizer.wait()
             }
         ))
         defer { waits.resumeAll() }
@@ -2723,14 +2728,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
         await fulfillment(of: [started], timeout: 1)
         fixture.store.snapshot = try ownedSnapshot(fixture, phase: .approving)
-        finalizer.resume(.pending)
+        finalizer.resolve(.pending)
         await waitForScheduledWait(waits, count: 2)
         XCTAssertEqual(decisions, 1)
         for index in 1...3 {
             if index == 3 {
                 fixture.store.snapshot = try ownedSnapshot(fixture, phase: .responded)
             }
-            clock.now.addTimeInterval(Double(waits.delays[index]) / 1_000_000_000)
+            clock.advance(to: clock.date.addingTimeInterval(Double(waits.delays[index]) / 1_000_000_000))
             waits.resume(index)
             if index < 3 { await waitForScheduledWait(waits, count: index + 2) }
         }
@@ -2741,16 +2746,16 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testUnavailableReviewPreparationRequiresExplicitRetry() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
-        var available = false
+        let available = LockedTestValue(false)
         var preparations = 0
         var completions = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) }, wait: waits.wait,
             prepareWithoutWallets: {
                 preparations += 1
-                return available ? self.approvalPreparation($0) : .unavailable
+                return available.value ? self.approvalPreparation($0) : .unavailable
             }
         ))
         defer { waits.resumeAll() }
@@ -2768,7 +2773,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(preparations, 2)
         XCTAssertEqual(completions, 0)
 
-        available = true
+        available.value = true
         fixture.coordinator.retryRecovery()
         await waitForState(fixture.coordinator, .reviewing)
         XCTAssertEqual(preparations, 3)
@@ -2776,12 +2781,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testTemporaryResolutionFailureRequiresExplicitRetryAndNewConsent() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
         var preparations = 0
         var consents = [ReviewConsent]()
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) }, wait: waits.wait,
             prepareWithoutWallets: {
                 preparations += 1
                 return self.approvalPreparation($0)
@@ -2814,7 +2819,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             return XCTFail("Temporary resolution failure must offer a fresh review")
         }
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
-        await Task.yield()
         XCTAssertEqual(consents.count, 1)
         fixture.coordinator.retryRecovery()
         await waitForState(fixture.coordinator, .reviewing)
@@ -2833,12 +2837,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testTemporaryResolutionRetryCannotExtendOriginalAdmissionDeadline() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
         var decisions = 0
         var preparations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) }, wait: waits.wait,
             prepareWithoutWallets: {
                 preparations += 1
                 return self.approvalPreparation($0)
@@ -2857,7 +2861,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .reviewing)
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
         await waitForState(fixture.coordinator, .paused)
-        clock.now = deadline
+        clock.advance(to: deadline)
         fixture.coordinator.retryRecovery()
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(preparations, 1)
@@ -2866,10 +2870,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testReviewRetryReturnedAfterAdmissionDeadlineFinishesWithoutPausing() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let fixture = try makeFixture(clock: clock, attemptNativeDecision: { consent in
             consent.invalidateAuthorization()
-            clock.now = consent.request.admissionDeadline
+            clock.advance(to: consent.request.admissionDeadline)
             return .reviewRequired
         })
         start(fixture)
@@ -2887,18 +2891,18 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testPendingExecutionReturningToQueueInterruptsWithoutReplayingDecision() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
-        let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
+        let finalizer = TestGate<NativeApprovalFinalizationResult>()
         let started = expectation(description: "finalization started")
         var decisions = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) }, wait: waits.wait,
             prepareWithoutWallets: { self.approvalPreparation($0) },
             attemptNativeDecision: { _ in
                 decisions += 1
                 started.fulfill()
-                return await finalizer.run()
+                return await finalizer.wait()
             }
         ))
         defer { waits.resumeAll() }
@@ -2910,7 +2914,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
         await fulfillment(of: [started], timeout: 1)
         fixture.store.snapshot = try ownedSnapshot(fixture, phase: .approving)
-        finalizer.resume(.pending)
+        finalizer.resolve(.pending)
         await waitForScheduledWait(waits, count: 2)
         waits.resume(1)
         await waitForScheduledWait(waits, count: 3)
@@ -2930,11 +2934,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testInterruptionPersistenceRetriesWithoutReplayingApproval() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
         var decisions = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime }, wait: waits.wait,
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) }, wait: waits.wait,
             prepareWithoutWallets: { self.approvalPreparation($0) },
             attemptNativeDecision: { _ in decisions += 1; return .interruptionRequired }
         ))
@@ -2971,7 +2975,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testFinalizerInterruptionPublishesRejectingBeforeFirstPersistenceCompletes() async throws {
-        let gate = AsyncGate<ExtensionBridge.NativeInterruptionResult>()
+        let gate = TestGate<ExtensionBridge.NativeInterruptionResult>()
         let started = expectation(description: "interruption persistence suspended")
         var decisions = 0
         let fixture = try makeFixture(attemptNativeDecision: { _ in
@@ -2980,7 +2984,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         })
         fixture.store.interruptionHandler = {
             started.fulfill()
-            return await gate.run()
+            return await gate.wait()
         }
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
@@ -2998,7 +3002,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.coordinator.phase, .rejecting)
         XCTAssertEqual(window.activationCount, activations)
         guard case .rejecting? = fixture.coordinator.currentPresentation?.presentation else {
-            gate.resume(.interrupted)
+            gate.resolve(.interrupted)
             return XCTFail("Interruption must replace waiting before its first write settles")
         }
         let revision = fixture.coordinator.currentPresentation?.revision
@@ -3009,7 +3013,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.store.interruptionCount, 1)
         XCTAssertEqual(decisions, 1)
 
-        gate.resume(.interrupted)
+        gate.resolve(.interrupted)
         await waitForState(fixture.coordinator, .finished)
         guard case .interrupted? = fixture.coordinator.currentPresentation?.presentation else {
             return XCTFail("Expected terminal interruption")
@@ -3039,7 +3043,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testSuspendedApprovalLoadDoesNotRetainCoordinatorOrFinalizeAfterRelease() async throws {
-        let load = AsyncGate<ExtensionBridge.SnapshotResult>()
+        let load = TestGate<ExtensionBridge.SnapshotResult>()
         let started = expectation(description: "approval load suspended")
         var decisions = 0
         var fixture: Fixture? = try makeFixture(attemptNativeDecision: { _ in
@@ -3054,26 +3058,30 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         coordinator?.resumeAfterAuthentication()
         await waitForState(try XCTUnwrap(coordinator), .reviewing)
         let snapshot = try XCTUnwrap(store.snapshot)
-        store.loadHandler = { _ in started.fulfill(); return await load.run() }
+        store.loadHandler = { _ in started.fulfill(); return await load.wait() }
         coordinator?.approveAccounts([], ethereumNetwork: nil)
         await fulfillment(of: [started], timeout: 1)
         let presentations = events.presentations.count
         fixture = nil
         XCTAssertNil(coordinator)
-        load.resume(.found(snapshot))
-        for _ in 0..<30 { await Task.yield() }
+        let returned = expectation(description: "released coordinator load returned")
+        store.onLoadReturned = { returned.fulfill() }
+        await expectNoFurtherWork(events: events, store: store, returned: returned) {
+            load.resolve(.found(snapshot))
+        }
+        store.onLoadReturned = nil
         XCTAssertEqual(decisions, 0)
         XCTAssertEqual(events.presentations.count, presentations)
         XCTAssertEqual(store.interruptionCount, 0)
     }
 
     func testAcceptedResponseIgnoresCloseBetweenRetries() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let waiting = expectation(description: "retry suspended")
-        let gate = AsyncGate<Void>()
+        let gate = TestGate<Void>()
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
-            wait: { _ in waiting.fulfill(); await gate.run() },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
+            wait: { _ in waiting.fulfill(); await gate.wait() },
             prepareWithoutWallets: { request in
                 .immediate(.failure(.userRejected))
             }
@@ -3092,19 +3100,19 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.resumeAfterAuthentication()
         await fulfillment(of: [waiting], timeout: 1)
         fixture.coordinator.reject()
-        gate.resume(())
+        gate.resolve(())
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(responses, 2)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
     func testAmbiguousResponseCommitWinsOverCancellation() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let writeStarted = expectation(description: "response write in flight")
-        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
+        let gate = TestGate<ExtensionBridge.StoreMutationResult>()
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
+            now: { clock.date },
+            uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in await Task.yield() },
             prepareWithoutWallets: { request in
                 .immediate(.failure(.userRejected))
@@ -3112,7 +3120,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         ))
         fixture.store.completeHandler = { _, _, _, _ in
             writeStarted.fulfill()
-            return await gate.run()
+            return await gate.wait()
         }
         fixture.store.rejectHandler = { _, _, _ in
             XCTFail("A durably committed response must win over cancellation")
@@ -3124,7 +3132,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await fulfillment(of: [writeStarted], timeout: 1)
         fixture.coordinator.reject()
         fixture.store.snapshot = try ownedSnapshot(fixture, phase: .responded)
-        gate.resume(.retryablePersistenceFailure)
+        gate.resolve(.retryablePersistenceFailure)
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(fixture.events.presentations.count, 2)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
@@ -3133,16 +3141,16 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testRetriedRejectionCannotOverlapAnotherClose() async throws {
         let fixture = try makeFixture()
         let started = expectation(description: "retried rejection in flight")
-        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
+        let gate = TestGate<ExtensionBridge.StoreMutationResult>()
         var writes = 0
         fixture.store.rejectHandler = { _, _, _ in
             writes += 1
             if writes == 1 {
-                fixture.clock.now.addTimeInterval(11)
+                fixture.clock.advance(to: fixture.clock.date.addingTimeInterval(11))
                 return .retryablePersistenceFailure
             }
             started.fulfill()
-            return await gate.run()
+            return await gate.wait()
         }
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
@@ -3155,7 +3163,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.reject()
         fixture.coordinator.retryRecovery()
         XCTAssertEqual(writes, 2)
-        gate.resume(.persisted)
+        gate.resolve(.persisted)
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
@@ -3163,10 +3171,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testResponseReconciliationStopsWhenReceiptOwnershipChanges() async throws {
         for result in [ExtensionBridge.StoreMutationResult.ownershipLost,
                        .retryablePersistenceFailure] {
-            let clock = Clock()
+            let clock = TestClock(uptimeNanoseconds: 0)
             let fixture = try makeFixture(clock: clock, environment: .init(
-                now: { clock.now },
-                uptime: { clock.uptime },
+                now: { clock.date },
+                uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in XCTFail("Foreign ownership must not retry") },
                 prepareWithoutWallets: { request in
                     .immediate(.failure(.userRejected))
@@ -3194,14 +3202,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testResponseRecoveryUsesTenSecondBudgetAndFixedCadence() async throws {
-        let clock = Clock()
-        let started = clock.now
+        let clock = TestClock(uptimeNanoseconds: 0)
+        let started = clock.date
         var delays = [UInt64]()
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 delays.append(delay)
-                clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
+                clock.advance(to: clock.date.addingTimeInterval(Double(delay) / 1_000_000_000))
                 await Task.yield()
             },
             prepareWithoutWallets: { request in
@@ -3221,27 +3229,33 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .paused)
-        XCTAssertEqual(clock.now.timeIntervalSince(started), 10)
+        XCTAssertEqual(clock.date.timeIntervalSince(started), 10)
         XCTAssertEqual(delays, Array(repeating: 1_000_000_000, count: 10))
         XCTAssertEqual(writes, 10)
-        for _ in 0..<20 { await Task.yield() }
+        let unexpectedWrite = expectation(description: "Paused recovery must not write the store")
+        unexpectedWrite.isInverted = true
+        unexpectedWrite.assertForOverFulfill = false
+        fixture.store.onWrite = { unexpectedWrite.fulfill() }
+        await fulfillment(of: [unexpectedWrite], timeout: 0.1)
+        fixture.store.onWrite = nil
+        XCTAssertEqual(fixture.coordinator.phase, .paused)
         XCTAssertEqual(writes, 10)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
     func testLateResponseReconciliationRecognizesDurableWork() async throws {
         for phase in [ExtensionBridge.Phase.approving, .responded] {
-            let clock = Clock()
+            let clock = TestClock(uptimeNanoseconds: 0)
             let fixture = try makeFixture(clock: clock, environment: .init(
-                now: { clock.now }, uptime: { clock.uptime },
-                wait: { _ in try? await Task.sleep(nanoseconds: 60_000_000_000) },
+                now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
+                wait: { _ in try? await TestDeferred<Void>().value() },
                 prepareWithoutWallets: { request in
                     .immediate(.failure(.userRejected))
                 }
             ))
             let committed = try ownedSnapshot(fixture, phase: phase)
             fixture.store.completeHandler = { _, _, _, _ in
-                clock.now.addTimeInterval(11)
+                clock.advance(to: clock.date.addingTimeInterval(11))
                 fixture.store.snapshot = committed
                 return .retryablePersistenceFailure
             }
@@ -3260,14 +3274,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testRejectionUsesExactReceiptOwner() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let handle = makeHandle(id: 6)
         let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
         let runtime = UUID()
         let snapshot = try approvalSnapshot(
             handle: handle,
             nonce: nonce,
-            deadline: clock.now.addingTimeInterval(300),
+            deadline: clock.date.addingTimeInterval(300),
             receipt: .init(
                 nativeDeliveryNonce: nonce,
                 owner: self.nativeOwner(runtime: runtime)
@@ -3287,8 +3301,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             nativeDeliveryNonce: nonce,
             store: store,
             environment: .init(
-                now: { clock.now },
-                uptime: { clock.uptime },
+                now: { clock.date },
+                uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in await Task.yield() },
                 prepareWithoutWallets: { binding in
                     self.approvalPreparation(binding)
@@ -3306,14 +3320,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testRejectionStopsAfterReceiptOwnershipChanges() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let handle = makeHandle(id: 14)
         let nonce = ExtensionBridge.NativeDeliveryNonce(value: UUID())
         let runtime = UUID()
         var snapshot = try approvalSnapshot(
             handle: handle,
             nonce: nonce,
-            deadline: clock.now.addingTimeInterval(300),
+            deadline: clock.date.addingTimeInterval(300),
             receipt: .init(
                 nativeDeliveryNonce: nonce,
                 owner: self.nativeOwner(runtime: runtime)
@@ -3328,7 +3342,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             snapshot = try! self.approvalSnapshot(
                 handle: handle,
                 nonce: nonce,
-                deadline: clock.now.addingTimeInterval(300),
+                deadline: clock.date.addingTimeInterval(300),
                 receipt: .init(
                     nativeDeliveryNonce: nonce,
                     owner: self.nativeOwner(runtime: UUID())
@@ -3341,10 +3355,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             nativeDeliveryNonce: nonce,
             store: store,
             environment: .init(
-                now: { clock.now },
-                uptime: { clock.uptime },
+                now: { clock.date },
+                uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in
-                    try? await Task.sleep(nanoseconds: 60_000_000_000)
+                    try? await TestDeferred<Void>().value()
                 },
                 prepareWithoutWallets: { binding in
                     self.approvalPreparation(binding)
@@ -3367,14 +3381,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testBackwardWallClockCannotExtendRecoveryBudget() async throws {
-        let clock = Clock()
-        let started = clock.uptime
+        let clock = TestClock(uptimeNanoseconds: 0)
+        let started = (Double(clock.uptimeNanoseconds) / 1_000_000_000)
         var writes = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
-                clock.advanceUptime(Double(delay) / 1_000_000_000)
-                clock.now.addTimeInterval(-60)
+                clock.advanceUptime(by: UInt64((Double(delay) / 1_000_000_000) * 1_000_000_000))
+                clock.setDate(clock.date.addingTimeInterval(-60))
                 await Task.yield()
             },
             prepareWithoutWallets: { request in
@@ -3389,26 +3403,26 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .paused)
-        XCTAssertEqual(clock.uptime - started, 10)
+        XCTAssertEqual((Double(clock.uptimeNanoseconds) / 1_000_000_000) - started, 10)
         XCTAssertEqual(writes, 10)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
     func testCanceledObservationWaitCannotPollTheNewApprovalState() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
-        let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
+        let finalizer = TestGate<NativeApprovalFinalizationResult>()
         let started = expectation(description: "finalization started")
         var finalizations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
+            now: { clock.date },
+            uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: waits.wait,
             prepareWithoutWallets: { self.approvalPreparation($0) },
             attemptNativeDecision: { _ in
                 finalizations += 1
                 started.fulfill()
-                return await finalizer.run()
+                return await finalizer.wait()
             }
         ))
         defer { waits.resumeAll() }
@@ -3418,12 +3432,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .reviewing)
         await waitForScheduledWait(waits, count: 1)
         let store = fixture.store
-        clock.now.addTimeInterval(2)
+        clock.advance(to: clock.date.addingTimeInterval(2))
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
         await waitForState(fixture.coordinator, .waiting)
         await fulfillment(of: [started], timeout: 1)
         store.snapshot = try ownedSnapshot(fixture, phase: .approving)
-        finalizer.resume(.pending)
+        finalizer.resolve(.pending)
         await waitForScheduledWait(waits, count: 2)
         var loads = 0
         store.loadHandler = { _ in
@@ -3431,8 +3445,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             return store.snapshot.map(ExtensionBridge.SnapshotResult.found) ?? .missing
         }
 
-        waits.resume(0)
-        for _ in 0..<30 { await Task.yield() }
+        let returned = expectation(description: "retired observation wait returned")
+        waits.onReturned = { _ in returned.fulfill() }
+        await expectNoFurtherWork(events: fixture.events, store: fixture.store, returned: returned) {
+            waits.resume(0)
+        }
+        waits.onReturned = nil
         XCTAssertEqual(loads, 0)
         XCTAssertEqual(finalizations, 1)
         XCTAssertEqual(fixture.events.presentations.count, 3)
@@ -3445,22 +3463,22 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testSuspendedObservationDoesNotBlockRetriesOrApplyStaleMetadata() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
-        let probe = AsyncGate<ExtensionBridge.SnapshotResult>()
+        let probe = TestGate<ExtensionBridge.SnapshotResult>()
         let probeStarted = expectation(description: "observation load suspended")
-        let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
+        let finalizer = TestGate<NativeApprovalFinalizationResult>()
         let finalizerStarted = expectation(description: "finalization started")
         var finalizations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
+            now: { clock.date },
+            uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: waits.wait,
             prepareWithoutWallets: { self.approvalPreparation($0) },
             attemptNativeDecision: { _ in
                 finalizations += 1
                 finalizerStarted.fulfill()
-                return await finalizer.run()
+                return await finalizer.wait()
             }
         ))
         defer { waits.resumeAll() }
@@ -3476,7 +3494,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             loads += 1
             if loads == 1 {
                 probeStarted.fulfill()
-                return await probe.run()
+                return await probe.wait()
             }
             return store.snapshot.map(ExtensionBridge.SnapshotResult.found) ?? .missing
         }
@@ -3485,7 +3503,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
         await fulfillment(of: [finalizerStarted], timeout: 1)
         store.snapshot = try ownedSnapshot(fixture, phase: .approving)
-        finalizer.resume(.pending)
+        finalizer.resolve(.pending)
         await waitForScheduledWait(waits, count: 2)
         XCTAssertEqual(loads, 2)
         XCTAssertEqual(finalizations, 1)
@@ -3496,13 +3514,17 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let stale = try approvalSnapshot(
             handle: fixture.key.handle,
             nonce: fixture.key.nativeDeliveryNonce,
-            deadline: clock.now.addingTimeInterval(-1),
+            deadline: clock.date.addingTimeInterval(-1),
             host: "stale.example"
         )
 
         let readsBeforeOldObservationReturns = loads
-        probe.resume(.found(stale))
-        for _ in 0..<30 { await Task.yield() }
+        let returned = expectation(description: "superseded observation returned")
+        store.onLoadReturned = { returned.fulfill() }
+        await expectNoFurtherWork(events: fixture.events, store: store, returned: returned) {
+            probe.resolve(.found(stale))
+        }
+        store.onLoadReturned = nil
         XCTAssertEqual(fixture.coordinator.peer?.title, "wallet.example")
         XCTAssertEqual(fixture.coordinator.order, originalOrder)
         XCTAssertEqual(fixture.coordinator.phase, .waiting)
@@ -3517,20 +3539,20 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testPendingFinalizerAtDeadlineFinishesWithoutAnotherObservation() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
-        let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
+        let finalizer = TestGate<NativeApprovalFinalizationResult>()
         let finalizerStarted = expectation(description: "finalizer suspended")
         var finalizations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now },
-            uptime: { clock.uptime },
+            now: { clock.date },
+            uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: waits.wait,
             prepareWithoutWallets: { self.approvalPreparation($0) },
             attemptNativeDecision: { _ in
                 finalizations += 1
                 finalizerStarted.fulfill()
-                return await finalizer.run()
+                return await finalizer.wait()
             }
         ))
         defer { waits.resumeAll() }
@@ -3541,10 +3563,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForScheduledWait(waits, count: 1)
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
         await fulfillment(of: [finalizerStarted], timeout: 1)
-        clock.now.addTimeInterval(301)
-        finalizer.resume(.pending)
+        clock.advance(to: clock.date.addingTimeInterval(301))
+        finalizer.resolve(.pending)
         await waitForState(fixture.coordinator, .finished)
-        for _ in 0..<30 { await Task.yield() }
         XCTAssertEqual(finalizations, 1)
         XCTAssertEqual(waits.delays.count, 1)
         XCTAssertEqual(fixture.events.presentations.count, 4)
@@ -3556,12 +3577,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testSuspendedTasksDoNotRetainCoordinator() async throws {
         for suspendLoad in [true, false] {
-            let clock = Clock()
+            let clock = TestClock(uptimeNanoseconds: 0)
             let waits = ScheduledWaits()
-            let load = AsyncGate<ExtensionBridge.SnapshotResult>()
+            let load = TestGate<ExtensionBridge.SnapshotResult>()
             var fixture: Fixture? = try makeFixture(clock: clock, environment: .init(
-                now: { clock.now },
-                uptime: { clock.uptime },
+                now: { clock.date },
+                uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: waits.wait,
                 prepareWithoutWallets: { self.approvalPreparation($0) }
             ))
@@ -3571,7 +3592,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 let loadStarted = expectation(description: "validation load suspended")
                 fixture?.store.loadHandler = { _ in
                     loadStarted.fulfill()
-                    return await load.run()
+                    return await load.wait()
                 }
                 start(try XCTUnwrap(fixture))
                 await fulfillment(of: [loadStarted], timeout: 1)
@@ -3583,25 +3604,36 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 await waitForScheduledWait(waits, count: 1)
             }
             let presentationCount = events.presentations.count
+            let store = try XCTUnwrap(fixture?.store)
+            let returned = expectation(description: "released coordinator dependency returned")
+            if suspendLoad { store.onLoadReturned = { returned.fulfill() } }
+            else { waits.onReturned = { _ in returned.fulfill() } }
             fixture = nil
             XCTAssertNil(coordinator)
-            if suspendLoad { load.resume(.missing) }
-            waits.resumeAll()
-            for _ in 0..<30 { await Task.yield() }
+            await expectNoFurtherWork(events: events, store: store, returned: returned) {
+                if suspendLoad { load.resolve(.missing) }
+                waits.resumeAll()
+            }
             XCTAssertEqual(events.presentations.count, presentationCount)
         }
     }
 
     func testSuspendedFinalizerDoesNotRetainCoordinatorOrPresentAfterRelease() async throws {
         for result in [NativeApprovalFinalizationResult.responseReady, .interruptionRequired] {
-            let clock = Clock()
-            let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
+            let clock = TestClock(uptimeNanoseconds: 0)
+            let finalizer = TestGate<NativeApprovalFinalizationResult>()
             let started = expectation(description: "finalizer suspended")
+            let returned = expectation(description: "released finalizer returned")
             var fixture: Fixture? = try makeFixture(clock: clock, environment: .init(
-                now: { clock.now }, uptime: { clock.uptime },
+                now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in await Task.yield() },
                 prepareWithoutWallets: { self.approvalPreparation($0) },
-                attemptNativeDecision: { _ in started.fulfill(); return await finalizer.run() }
+                attemptNativeDecision: { _ in
+                    started.fulfill()
+                    let value = await finalizer.wait()
+                    returned.fulfill()
+                    return value
+                }
             ))
             weak let coordinator = fixture?.coordinator
             let events = try XCTUnwrap(fixture?.events)
@@ -3612,10 +3644,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             coordinator?.approveAccounts([], ethereumNetwork: nil)
             await fulfillment(of: [started], timeout: 1)
             let count = events.presentations.count
+            let store = try XCTUnwrap(fixture?.store)
             fixture = nil
             XCTAssertNil(coordinator)
-            finalizer.resume(result)
-            for _ in 0..<30 { await Task.yield() }
+            await expectNoFurtherWork(events: events, store: store, returned: returned) {
+                finalizer.resolve(result)
+            }
             XCTAssertEqual(events.presentations.count, count)
         }
     }
@@ -3623,9 +3657,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testRuntimeArrivalDuringCancellationCannotCauseUnownedRejection() async throws {
         let fixture = try makeFixture()
         let snapshot = try ownedSnapshot(fixture)
-        let gate = AsyncGate<ExtensionBridge.SnapshotResult>()
+        let gate = TestGate<ExtensionBridge.SnapshotResult>()
         let started = expectation(description: "pre-runtime cancellation read")
-        fixture.store.loadHandler = { _ in started.fulfill(); return await gate.run() }
+        fixture.store.loadHandler = { _ in started.fulfill(); return await gate.wait() }
         fixture.store.unownedRejectHandler = { _ in
             XCTFail("Missing captured runtime must not downgrade an owned mutation")
             return .persisted
@@ -3633,18 +3667,18 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.coordinator.cancelBeforeAuthentication()
         await fulfillment(of: [started], timeout: 1)
         start(fixture)
-        gate.resume(.found(snapshot))
+        gate.resolve(.found(snapshot))
         await waitForState(fixture.coordinator, .paused)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 0)
         fixture.store.loadHandler = nil
     }
 
     func testDormantCancellationPreservesRejectionOnForegroundRecovery() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
-                clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
+                clock.advance(to: clock.date.addingTimeInterval(Double(delay) / 1_000_000_000))
                 await Task.yield()
             }
         ))
@@ -3662,11 +3696,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testDormantEntriesExpireWithoutBlockingInboxCapacity() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
-                clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
+                clock.advance(to: clock.date.addingTimeInterval(Double(delay) / 1_000_000_000))
                 await Task.yield()
             }
         ))
@@ -3676,7 +3710,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         start(fixture)
         await waitForState(fixture.coordinator, .paused)
         XCTAssertEqual(inbox.dormantCoordinators.count, 1)
-        clock.now.addTimeInterval(ExtensionBridge.requestTTL)
+        clock.advance(to: clock.date.addingTimeInterval(ExtensionBridge.requestTTL))
         XCTAssertTrue(fixture.coordinator.isExpiredDormant)
         let replacement = try makeFixture(clock: clock)
         XCTAssertTrue(inbox.register(replacement.coordinator))
@@ -3685,14 +3719,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testFreshReviewAfterRetryFencesTheNextApproval() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let available = LockedTestValue(false)
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
-                if available.value { try? await Task.sleep(nanoseconds: 60_000_000_000) }
+                if available.value { try? await TestDeferred<Void>().value() }
                 else {
-                    clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
+                    clock.advance(to: clock.date.addingTimeInterval(Double(delay) / 1_000_000_000))
                     await Task.yield()
                 }
             },
@@ -3725,15 +3759,15 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testObservationOutagePausesAfterTenSecondsAndRetriesFreshPreparation() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
         let unavailable = LockedTestValue(false)
         var preparations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 if unavailable.value {
-                    clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
+                    clock.advance(to: clock.date.addingTimeInterval(Double(delay) / 1_000_000_000))
                     await Task.yield()
                 } else { await waits.wait(delay) }
             },
@@ -3753,9 +3787,15 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.store.loadHandler = { _ in reads += 1; return .unavailable }
         waits.resume(0)
         await waitForState(fixture.coordinator, .paused)
-        XCTAssertEqual(clock.uptime, 10)
+        XCTAssertEqual((Double(clock.uptimeNanoseconds) / 1_000_000_000), 10)
         let pausedReads = reads
-        for _ in 0..<30 { await Task.yield() }
+        let unexpectedRead = expectation(description: "Paused observation must not read the store")
+        unexpectedRead.isInverted = true
+        unexpectedRead.assertForOverFulfill = false
+        fixture.store.onRead = { unexpectedRead.fulfill() }
+        await fulfillment(of: [unexpectedRead], timeout: 0.1)
+        fixture.store.onRead = nil
+        XCTAssertEqual(fixture.coordinator.phase, .paused)
         XCTAssertEqual(reads, pausedReads)
         unavailable.value = false
         fixture.store.loadHandler = nil
@@ -3769,10 +3809,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testObservedExecutionWithoutLocalDecisionCannotExecute() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         var executions = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in await Task.yield() },
             prepareWithoutWallets: { self.approvalPreparation($0) },
             attemptNativeDecision: { _ in executions += 1; return .responseReady }
@@ -3788,16 +3828,16 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testDismissedWindowRendersLatestRecoverySnapshotWithoutRetrying() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         var rejecting = false
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 if rejecting {
-                    clock.advanceUptime(Double(delay) / 1_000_000_000)
+                    clock.advanceUptime(by: UInt64((Double(delay) / 1_000_000_000) * 1_000_000_000))
                     await Task.yield()
                 } else {
-                    try? await Task.sleep(nanoseconds: 60_000_000_000)
+                    try? await TestDeferred<Void>().value()
                 }
             },
             prepareWithoutWallets: { self.approvalPreparation($0) }
@@ -3856,17 +3896,17 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             }
         }
         let snapshot = try XCTUnwrap(fixture.store.snapshot)
-        let loadGate = AsyncGate<ExtensionBridge.SnapshotResult>()
+        let loadGate = TestGate<ExtensionBridge.SnapshotResult>()
         let loadStarted = expectation(description: "initial approval load started")
         fixture.store.loadHandler = { _ in
             loadStarted.fulfill()
-            return await loadGate.run()
+            return await loadGate.wait()
         }
         defer {
             fixture.coordinator.onEvent = nil
             fixture.store.loadHandler = nil
             fixture.store.snapshot = nil
-            loadGate.resume(.missing)
+            loadGate.resolve(.missing)
             approval.windowController?.close()
         }
         fixture.coordinator.resumeAfterAuthentication()
@@ -3894,30 +3934,30 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.coordinator.currentPresentation?.revision, revision)
 
         fixture.store.loadHandler = nil
-        loadGate.resume(.found(snapshot))
+        loadGate.resolve(.found(snapshot))
         await waitForState(fixture.coordinator, .reviewing)
         XCTAssertTrue(approval.windowController?.window === window)
         XCTAssertTrue(window.contentViewController is AccountsListViewController)
     }
 
     func testRepeatedDeliveryShowsWaitingDuringSilentResponsePersistence() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         var preparations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in XCTFail("The pending write must settle before recovery") },
             prepareWithoutWallets: { request in
                 preparations += 1
                 return .immediate(.failure(.userRejected))
             }
         ))
-        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
+        let gate = TestGate<ExtensionBridge.StoreMutationResult>()
         let started = expectation(description: "silent response persistence")
         var writes = 0
         fixture.store.completeHandler = { _, _, _, _ in
             writes += 1
             started.fulfill()
-            return await gate.run()
+            return await gate.wait()
         }
         fixture.store.rejectHandler = { _, _, _ in
             XCTFail("An accepted response cannot be replaced by rejection")
@@ -3938,7 +3978,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         defer {
             withExtendedLifetime(agent) {
                 fixture.coordinator.onEvent = nil
-                gate.resume(.persisted)
+                gate.resolve(.persisted)
                 approval.windowController?.close()
             }
         }
@@ -3971,13 +4011,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.coordinator.currentPresentation?.revision, revision)
         agent.process(route: route)
         fixture.coordinator.retryRecovery()
-        for _ in 0..<30 { await Task.yield() }
         XCTAssertTrue(window.contentViewController === waiting)
         XCTAssertEqual(fixture.coordinator.currentPresentation?.revision, revision)
         XCTAssertEqual(preparations, 1)
         XCTAssertEqual(writes, 1)
 
-        gate.resume(.persisted)
+        gate.resolve(.persisted)
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(window.closeCount, 1)
         XCTAssertFalse(window.isVisible)
@@ -3985,9 +4024,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testImmediateResponseFinishesWithoutCreatingApprovalWindow() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in XCTFail("An immediate response must not poll") },
             prepareWithoutWallets: { request in
                 .immediate(.failure(.userRejected))
@@ -4095,14 +4134,16 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testReentrantReviewDecisionCannotStartTheReplacedObserver() async throws {
         for approves in [false, true] {
-            let clock = Clock()
+            let clock = TestClock(uptimeNanoseconds: 0)
             var observationWaits = 0
+            let unexpectedObservation = expectation(description: "replaced observation must not start")
+            unexpectedObservation.isInverted = true
             var decisions = 0
             var rejections = 0
             var reviews = 0
             let fixture = try makeFixture(clock: clock, environment: .init(
-                now: { clock.now }, uptime: { clock.uptime },
-                wait: { _ in observationWaits += 1; await Task.yield() },
+                now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
+                wait: { _ in observationWaits += 1; unexpectedObservation.fulfill() },
                 prepareWithoutWallets: { self.approvalPreparation($0) },
                 attemptNativeDecision: { _ in decisions += 1; return .responseReady }
             ))
@@ -4128,7 +4169,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             await waitForState(fixture.coordinator, .awaitingAuthentication)
             fixture.coordinator.resumeAfterAuthentication()
             await waitForState(fixture.coordinator, .finished)
-            for _ in 0..<20 { await Task.yield() }
+            await fulfillment(of: [unexpectedObservation], timeout: 0.1)
 
             XCTAssertEqual(reviews, 1)
             XCTAssertEqual(decisions, approves ? 1 : 0)
@@ -4140,7 +4181,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testRecoveryAndTerminalNotificationsAllowSynchronousReentry() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let available = LockedTestValue(false)
         var waits = 0
         var preparations = 0
@@ -4148,10 +4189,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var recoveries = 0
         var finishes = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 waits += 1
-                clock.now.addTimeInterval(Double(delay) / 1_000_000_000)
+                clock.advance(to: clock.date.addingTimeInterval(Double(delay) / 1_000_000_000))
                 await Task.yield()
             },
             prepareWithoutWallets: { _ in nil },
@@ -4195,7 +4236,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .finished)
-        for _ in 0..<30 { await Task.yield() }
 
         XCTAssertEqual(waits, 10)
         XCTAssertEqual(recoveries, 1)
@@ -4210,15 +4250,15 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testInterruptedPresentationRetainsOnlyVisibleErrorWindow() async throws {
         for dismissed in [false, true] {
-            let clock = Clock()
+            let clock = TestClock(uptimeNanoseconds: 0)
             let waits = ScheduledWaits()
-            let finalizer = AsyncGate<NativeApprovalFinalizationResult>()
+            let finalizer = TestGate<NativeApprovalFinalizationResult>()
             let started = expectation(description: "finalizer suspended")
             let fixture = try makeFixture(clock: clock, environment: .init(
-                now: { clock.now }, uptime: { clock.uptime },
+                now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { await waits.wait($0) },
                 prepareWithoutWallets: { self.approvalPreparation($0) },
-                attemptNativeDecision: { _ in started.fulfill(); return await finalizer.run() }
+                attemptNativeDecision: { _ in started.fulfill(); return await finalizer.wait() }
             ))
             start(fixture)
             await waitForState(fixture.coordinator, .awaitingAuthentication)
@@ -4238,7 +4278,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             await fulfillment(of: [started], timeout: 1)
             if dismissed { window.close() }
             let activations = window.activationCount
-            finalizer.resume(.interruptionRequired)
+            finalizer.resolve(.interruptionRequired)
             await waitForState(fixture.coordinator, .finished)
             guard case .interrupted? = fixture.coordinator.currentPresentation?.presentation else {
                 return XCTFail("Expected a terminal interrupted presentation")
@@ -4303,7 +4343,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         approval.activate()
         approval.close()
         agent.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
-        await Task.yield()
         XCTAssertEqual(teardowns, 1)
         XCTAssertFalse(approval.acceptsReviewActions)
         XCTAssertEqual(fixture.coordinator.phase, .finished)
@@ -4334,14 +4373,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testClosingUnapprovedRecoveryWindowRejectsTheRequest() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
         let outage = LockedTestValue(false)
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 if outage.value {
-                    clock.advanceUptime(Double(delay) / 1_000_000_000)
+                    clock.advanceUptime(by: UInt64((Double(delay) / 1_000_000_000) * 1_000_000_000))
                     await Task.yield()
                 } else { await waits.wait(delay) }
             },
@@ -4390,13 +4429,13 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testGenericForegroundReopensDismissedOutstandingApprovalWithoutRetrying() async throws {
-        let gate = AsyncGate<NativeApprovalFinalizationResult>()
+        let gate = TestGate<NativeApprovalFinalizationResult>()
         let started = expectation(description: "finalization in flight")
         var decisions = 0
         let fixture = try makeFixture(attemptNativeDecision: { _ in
             decisions += 1
             started.fulfill()
-            return await gate.run()
+            return await gate.wait()
         })
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
@@ -4438,7 +4477,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(decisions, 1)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
         fixture.store.snapshot = try ownedSnapshot(fixture, phase: .approving)
-        gate.resume(.responseReady)
+        gate.resolve(.responseReady)
         await waitForState(fixture.coordinator, .finished)
         fixture.coordinator.onEvent = nil
         window.close()
@@ -4446,7 +4485,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testRepeatedCloseDoesNotRestartPausedRejection() async throws {
         for authenticates in [false, true] {
-            let clock = Clock()
+            let clock = TestClock(uptimeNanoseconds: 0)
             let fixture = try makeFixture(clock: clock)
             let key = fixture.key
             let runtime = fixture.runtime
@@ -4457,7 +4496,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 XCTAssertEqual(owner, runtime)
                 rejections += 1
                 if rejections == 1 {
-                    clock.now.addTimeInterval(11)
+                    clock.advance(to: clock.date.addingTimeInterval(11))
                     return .retryablePersistenceFailure
                 }
                 return .persisted
@@ -4479,7 +4518,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             XCTAssertFalse(fixture.coordinator.countsTowardUnverifiedLimit)
             if !authenticates { XCTAssertNil(fixture.coordinator.currentPresentation) }
             fixture.coordinator.reject()
-            for _ in 0..<30 { await Task.yield() }
             XCTAssertEqual(rejections, 1)
             XCTAssertTrue(fixture.coordinator.isPaused)
             fixture.coordinator.retryRecovery()
@@ -4494,7 +4532,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testFailureRejectionRetryUsesOrdinaryWaitingPresentation() async throws {
-        let clock = Clock()
+        let clock = TestClock(uptimeNanoseconds: 0)
         let account = WalletAccount(
             address: "0x0000000000000000000000000000000000000001",
             coin: .ethereum, derivation: .custom,
@@ -4508,7 +4546,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let transaction = Transaction(from: account.address, to: account.address, value: "0x0", data: "0x")
         var preparations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
-            now: { clock.now }, uptime: { clock.uptime },
+            now: { clock.date }, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in await Task.yield() },
             prepareWithoutWallets: { binding in
                 preparations += 1
@@ -4523,18 +4561,18 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         ), requestAction: .approveTransaction(SendTransactionAction(
             transaction: transaction, resolvedNetwork: network, walletId: "wallet", account: account
         )))
-        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
+        let gate = TestGate<ExtensionBridge.StoreMutationResult>()
         let retryStarted = expectation(description: "retried failure rejection")
-        defer { gate.resume(.persisted) }
+        defer { gate.resolve(.persisted) }
         var rejections = 0
         fixture.store.rejectHandler = { _, _, _ in
             rejections += 1
             if rejections == 1 {
-                clock.now.addTimeInterval(11)
+                clock.advance(to: clock.date.addingTimeInterval(11))
                 return .retryablePersistenceFailure
             }
             retryStarted.fulfill()
-            return await gate.run()
+            return await gate.wait()
         }
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
@@ -4554,12 +4592,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let revision = fixture.coordinator.currentPresentation?.revision
         fixture.coordinator.reject()
         fixture.coordinator.retryRecovery()
-        for _ in 0..<30 { await Task.yield() }
         XCTAssertEqual(fixture.coordinator.currentPresentation?.revision, revision)
         XCTAssertEqual(rejections, 2)
         XCTAssertEqual(preparations, 1)
         XCTAssertEqual(fixture.store.recordCount, 1)
-        gate.resume(.persisted)
+        gate.resolve(.persisted)
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(fixture.events.presentations.count, 6)
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
@@ -4567,17 +4604,17 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testCanceledReceiptAcquisitionRemainsCanceledAfterRecoveryPauses() async throws {
         let fixture = try makeFixture()
-        let gate = AsyncGate<ExtensionBridge.StoreMutationResult>()
+        let gate = TestGate<ExtensionBridge.StoreMutationResult>()
         let started = expectation(description: "receipt acquisition in flight")
-        fixture.store.recordHandler = { _, _, _ in started.fulfill(); return await gate.run() }
+        fixture.store.recordHandler = { _, _, _ in started.fulfill(); return await gate.wait() }
         var rejections = 0
         fixture.store.unownedRejectHandler = { _ in rejections += 1; return .persisted }
         start(fixture)
         await fulfillment(of: [started], timeout: 1)
         fixture.coordinator.cancelBeforeAuthentication()
-        fixture.clock.now.addTimeInterval(11)
+        fixture.clock.advance(to: fixture.clock.date.addingTimeInterval(11))
         fixture.store.recordHandler = nil
-        gate.resume(.retryablePersistenceFailure)
+        gate.resolve(.retryablePersistenceFailure)
         await waitForState(fixture.coordinator, .paused)
         XCTAssertEqual(rejections, 0)
         XCTAssertEqual(fixture.events.authenticationCount, 0)
@@ -4589,16 +4626,39 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
     }
 
+    private func expectNoFurtherWork(
+        events: Events,
+        store: CoordinatorStore,
+        returned: XCTestExpectation,
+        release: () -> Void
+    ) async {
+        let unexpected = expectation(description: "retired work must not read, write, or publish")
+        unexpected.isInverted = true
+        let previousEvent = events.onRecord
+        let previousRead = store.onRead
+        let previousWrite = store.onWrite
+        events.onRecord = { previousEvent?(); unexpected.fulfill() }
+        store.onRead = { previousRead?(); unexpected.fulfill() }
+        store.onWrite = { previousWrite?(); unexpected.fulfill() }
+        defer {
+            events.onRecord = previousEvent
+            store.onRead = previousRead
+            store.onWrite = previousWrite
+        }
+        release()
+        await fulfillment(of: [returned], timeout: 2)
+        await fulfillment(of: [unexpected], timeout: 0.1)
+    }
+
     private func waitForScheduledWait(
         _ waits: ScheduledWaits,
         count: Int,
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
-        for _ in 0..<1_000 {
-            if waits.delays.count >= count { return }
-            await Task.yield()
-        }
+        let registered = expectation(description: "scheduled wait registered")
+        waits.observe(count: count, expectation: registered)
+        await fulfillment(of: [registered], timeout: 2)
         XCTAssertGreaterThanOrEqual(waits.delays.count, count, file: file, line: line)
     }
 
@@ -4615,10 +4675,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     @MainActor
     private final class Events {
+        var onRecord: (() -> Void)?
         var authenticationCount = 0
         var presentations = [NativeApprovalCoordinator.Presentation]()
 
         func record(_ event: NativeApprovalCoordinator.Event, coordinator: NativeApprovalCoordinator?) {
+            onRecord?()
             switch event {
             case .authenticationRequired: authenticationCount += 1
             case .presentationChanged:
@@ -4634,7 +4696,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let store: CoordinatorStore
         let runtime: UUID
         let key: ApprovalRouteKey
-        let clock: Clock
+        let clock: TestClock
         let events: Events
     }
 
@@ -4642,7 +4704,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         key: ApprovalRouteKey? = nil,
         createdAt: TimeInterval = 1_800_000_000,
         sequence: Int = 0,
-        clock: Clock = Clock(),
+        clock: TestClock = TestClock(uptimeNanoseconds: 0),
         environment: NativeApprovalCoordinator.Environment? = nil,
         requestAction: DappRequestAction? = nil,
         attemptNativeDecision: @escaping @MainActor @Sendable (
@@ -4654,7 +4716,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         store.snapshot = try approvalSnapshot(
             handle: key.handle,
             nonce: key.nativeDeliveryNonce,
-            deadline: clock.now.addingTimeInterval(300),
+            deadline: clock.date.addingTimeInterval(300),
             createdAt: Date(timeIntervalSince1970: createdAt),
             sequence: sequence,
             action: requestAction
@@ -4665,9 +4727,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             nativeDeliveryNonce: key.nativeDeliveryNonce,
             store: store,
             environment: environment ?? .init(
-                now: { clock.now },
-                uptime: { clock.uptime },
-                wait: { _ in try? await Task.sleep(nanoseconds: 60_000_000_000) },
+                now: { clock.date },
+                uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
+                wait: { _ in try? await TestDeferred<Void>().value() },
                 prepareWithoutWallets: { self.approvalPreparation($0, action: action) },
                 attemptNativeDecision: attemptNativeDecision
             )
@@ -4726,7 +4788,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         try approvalSnapshot(
             handle: fixture.key.handle,
             nonce: fixture.key.nativeDeliveryNonce,
-            deadline: fixture.clock.now.addingTimeInterval(300),
+            deadline: fixture.clock.date.addingTimeInterval(300),
             receipt: .init(
                 nativeDeliveryNonce: fixture.key.nativeDeliveryNonce,
                 owner: nativeOwner(runtime: runtime ?? fixture.runtime)
@@ -4736,11 +4798,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     private func waitForCondition(_ condition: () -> Bool, file: StaticString = #filePath, line: UInt = #line) async {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
-        while !condition(), ContinuousClock.now < deadline {
-            do { try await Task.sleep(for: .milliseconds(1)) } catch { break }
-        }
-        XCTAssertTrue(condition(), file: file, line: line)
+        await expectEventually(file: file, line: line, condition)
     }
 
     private func waitForState(
@@ -4749,11 +4807,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
-        for _ in 0..<1000 {
-            if coordinator.phase == expected { return }
-            await Task.yield()
-        }
-        XCTAssertEqual(coordinator.phase, expected, file: file, line: line)
+        await expectEventually(file: file, line: line) { coordinator.phase == expected }
     }
 
     private func loadPreparedPresentation(

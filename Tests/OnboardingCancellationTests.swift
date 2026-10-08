@@ -15,7 +15,7 @@ final class OnboardingCancellationTests: XCTestCase {
             defer { window.close() }
             try advance(window, to: stage)
             window.close()
-            await settleUI()
+            await waitUntil { !window.isVisible }
             let reads = fixture.passwordReads
             for _ in 0..<3 {
                 agent.applicationDidBecomeActive()
@@ -61,7 +61,7 @@ final class OnboardingCancellationTests: XCTestCase {
         fixture.password = "externally-created-password"
         agent.applicationDidBecomeActive()
         oldForm.cancelButtonTapped(oldForm.cancelButton)
-        await waitUntil { authentication.count == 1 }
+        await authentication.waitForAttempt(1)
         XCTAssertTrue(window.contentViewController is WaitingViewController)
         XCTAssertTrue(oldForm.passwordTextField.stringValue.isEmpty)
         XCTAssertEqual(fixture.addCount, 0)
@@ -166,7 +166,7 @@ final class OnboardingCancellationTests: XCTestCase {
         fixture.readStatus = nil
         fixture.password = "externally-created-password"
         nextFailure.actionButtonTapped(nextFailure.okButton as Any)
-        await waitUntil { authentication.count == 1 }
+        await authentication.waitForAttempt(1)
         firstFailure.actionButtonTapped(firstFailure.okButton as Any)
         nextFailure.actionButtonTapped(nextFailure.okButton as Any)
         for _ in 0..<3 { agent.open() }
@@ -182,16 +182,16 @@ final class OnboardingCancellationTests: XCTestCase {
         let flow = makeFlow(fixture, authentication: authentication) { results.append($0) }
         defer { flow.cancel(); authentication.completeAll() }
         flow.requestAccess()
-        await waitUntil { authentication.count == 1 }
+        await authentication.waitForAttempt(1)
         fixture.readStatus = errSecInteractionNotAllowed
         flow.refresh()
         let window = try XCTUnwrap(flow.windowController?.window)
         let failure = try XCTUnwrap(window.contentViewController as? WaitingViewController)
         fixture.readStatus = nil
         failure.actionButtonTapped(failure.okButton as Any)
-        await waitUntil { authentication.count == 2 }
+        await authentication.waitForAttempt(2)
         authentication.complete(1, outcome: .succeeded)
-        await waitUntil { authentication.cancelledAtReturn[1] != nil }
+        await authentication.waitForReturn(1)
         XCTAssertEqual(authentication.cancelledAtReturn[1], true)
         XCTAssertTrue(results.isEmpty)
         XCTAssertTrue(window.contentViewController is WaitingViewController)
@@ -209,17 +209,17 @@ final class OnboardingCancellationTests: XCTestCase {
         let flow = makeFlow(fixture, authentication: authentication)
         defer { flow.cancel(); authentication.completeAll() }
         flow.requestAccess()
-        await waitUntil { authentication.count == 1 }
+        await authentication.waitForAttempt(1)
         fixture.readStatus = errSecInteractionNotAllowed
         flow.refresh()
         let window = try XCTUnwrap(flow.windowController?.window)
         let failure = try XCTUnwrap(window.contentViewController as? WaitingViewController)
         authentication.complete(1, outcome: .failed)
-        await waitUntil { authentication.cancelledAtReturn[1] != nil }
+        await authentication.waitForReturn(1)
         XCTAssertTrue(window.contentViewController === failure)
         fixture.readStatus = nil
         failure.actionButtonTapped(failure.okButton as Any)
-        await waitUntil { authentication.count == 2 }
+        await authentication.waitForAttempt(2)
         authentication.complete(2, outcome: .failed)
         await waitUntil { window.contentViewController is PasswordViewController }
         XCTAssertTrue(window.isVisible)
@@ -259,12 +259,12 @@ final class OnboardingCancellationTests: XCTestCase {
         let flow = makeFlow(fixture, authentication: authentication) { results.append($0) }
         defer { flow.cancel(); authentication.completeAll() }
         flow.requestAccess()
-        await waitUntil { authentication.count == 1 }
+        await authentication.waitForAttempt(1)
         fixture.password = nil
         flow.refresh()
         let window = try XCTUnwrap(flow.windowController?.window)
         authentication.complete(1, outcome: .succeeded)
-        await waitUntil { authentication.cancelledAtReturn[1] != nil }
+        await authentication.waitForReturn(1)
         XCTAssertTrue(window.contentViewController is WelcomeViewController)
         XCTAssertTrue(results.isEmpty)
         XCTAssertEqual(authentication.cancelledAtReturn[1], true)
@@ -282,7 +282,7 @@ final class OnboardingCancellationTests: XCTestCase {
         XCTAssertTrue(window.contentViewController === welcome)
         fixture.password = "external-password"
         agent.applicationDidBecomeActive()
-        await waitUntil { authentication.count == 1 }
+        await authentication.waitForAttempt(1)
         for _ in 0..<5 {
             agent.open()
             agent.applicationDidBecomeActive()
@@ -300,7 +300,7 @@ final class OnboardingCancellationTests: XCTestCase {
         let flow = StartupCredentialCoordinator(dependencies: dependencies) { events.append($0) }
         defer { flow.cancel(); handoff.completeAll() }
         flow.requestAccess()
-        await waitUntil { handoff.count == 1 }
+        await handoff.waitForAttempt(1)
         XCTAssertEqual(events, [.setupRequiredInDockApp])
         for _ in 0..<5 { flow.requestAccess() }
         XCTAssertEqual(events, Array(repeating: .setupRequiredInDockApp, count: 6))
@@ -311,16 +311,16 @@ final class OnboardingCancellationTests: XCTestCase {
         let failure = try XCTUnwrap(window.contentViewController as? WaitingViewController)
         fixture.readStatus = nil
         failure.actionButtonTapped(failure.okButton as Any)
-        await waitUntil { handoff.count == 2 }
+        await handoff.waitForAttempt(2)
         handoff.complete(1, result: true)
-        await settleUI()
+        await handoff.waitForReturn(1)
         XCTAssertTrue(window.isVisible)
         XCTAssertFalse(events.contains(.handedOff))
         handoff.complete(2, result: false)
         await waitUntil { (window.contentViewController as? WaitingViewController)?.okButton.title == Strings.tryAgain }
         let nextFailure = try XCTUnwrap(window.contentViewController as? WaitingViewController)
         nextFailure.actionButtonTapped(nextFailure.okButton as Any)
-        await waitUntil { handoff.count == 3 }
+        await handoff.waitForAttempt(3)
         handoff.complete(3, result: true)
         await waitUntil { !window.isVisible }
         XCTAssertEqual(events.filter { $0 == .handedOff }.count, 1)
@@ -430,62 +430,94 @@ final class OnboardingCancellationTests: XCTestCase {
     }
 
     private func waitUntil(_ predicate: () -> Bool) async {
-        for _ in 0..<100 {
-            if predicate() { return }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        XCTAssertTrue(predicate())
+        await expectEventually(predicate)
     }
 
-    private func settleUI() async {
-        for _ in 0..<5 { await Task.yield() }
-    }
 }
 
 @MainActor
 private final class AuthenticationGate {
     private(set) var count = 0
     private(set) var cancelledAtReturn = [Int: Bool]()
-    private var pending = [Int: CheckedContinuation<DeviceAuthentication.Outcome?, Never>]()
+    private var pending = [Int: TestGate<DeviceAuthentication.Outcome?>]()
+    private var entries = [Int: XCTestExpectation]()
+    private var returns = [Int: XCTestExpectation]()
 
     func attempt() async -> DeviceAuthentication.Outcome? {
         count += 1
         let identifier = count
-        let outcome = await withCheckedContinuation { pending[identifier] = $0 }
+        let gate = TestGate<DeviceAuthentication.Outcome?>()
+        pending[identifier] = gate
+        entries.removeValue(forKey: identifier)?.fulfill()
+        let outcome = await gate.wait()
         cancelledAtReturn[identifier] = Task.isCancelled
+        returns.removeValue(forKey: identifier)?.fulfill()
         return outcome
     }
-
     func complete(_ identifier: Int, outcome: DeviceAuthentication.Outcome?) {
-        pending.removeValue(forKey: identifier)?.resume(returning: outcome)
+        pending.removeValue(forKey: identifier)?.resolve(outcome)
     }
-
     func completeAll() {
-        let continuations = Array(pending.values)
+        let gates = Array(pending.values)
         pending.removeAll()
-        continuations.forEach { $0.resume(returning: .failed) }
+        gates.forEach { $0.resolve(.failed) }
+    }
+    func waitForAttempt(_ identifier: Int) async {
+        guard count < identifier else { return }
+        let event = XCTestExpectation(description: "authentication attempt entered")
+        entries[identifier] = event
+        let result = await XCTWaiter.fulfillment(of: [event], timeout: 2)
+        XCTAssertEqual(result, .completed)
+    }
+    func waitForReturn(_ identifier: Int) async {
+        guard cancelledAtReturn[identifier] == nil else { return }
+        let event = XCTestExpectation(description: "authentication attempt returned")
+        returns[identifier] = event
+        let result = await XCTWaiter.fulfillment(of: [event], timeout: 2)
+        XCTAssertEqual(result, .completed)
     }
 }
 
 @MainActor
 private final class HandoffGate {
     private(set) var count = 0
-    private var pending = [Int: CheckedContinuation<Bool, Never>]()
+    private var pending = [Int: TestGate<Bool>]()
+    private var returned = Set<Int>()
+    private var entries = [Int: XCTestExpectation]()
+    private var returns = [Int: XCTestExpectation]()
 
     func open() async -> Bool {
         count += 1
         let identifier = count
-        return await withCheckedContinuation { pending[identifier] = $0 }
+        let gate = TestGate<Bool>()
+        pending[identifier] = gate
+        entries.removeValue(forKey: identifier)?.fulfill()
+        let result = await gate.wait()
+        returned.insert(identifier)
+        returns.removeValue(forKey: identifier)?.fulfill()
+        return result
     }
-
     func complete(_ identifier: Int, result: Bool) {
-        pending.removeValue(forKey: identifier)?.resume(returning: result)
+        pending.removeValue(forKey: identifier)?.resolve(result)
     }
-
     func completeAll() {
-        let continuations = Array(pending.values)
+        let gates = Array(pending.values)
         pending.removeAll()
-        continuations.forEach { $0.resume(returning: false) }
+        gates.forEach { $0.resolve(false) }
+    }
+    func waitForAttempt(_ identifier: Int) async {
+        guard count < identifier else { return }
+        let event = XCTestExpectation(description: "handoff entered")
+        entries[identifier] = event
+        let result = await XCTWaiter.fulfillment(of: [event], timeout: 2)
+        XCTAssertEqual(result, .completed)
+    }
+    func waitForReturn(_ identifier: Int) async {
+        guard !returned.contains(identifier) else { return }
+        let event = XCTestExpectation(description: "handoff returned")
+        returns[identifier] = event
+        let result = await XCTWaiter.fulfillment(of: [event], timeout: 2)
+        XCTAssertEqual(result, .completed)
     }
 }
 private final class OnboardingKeychainFixture: Sendable {
