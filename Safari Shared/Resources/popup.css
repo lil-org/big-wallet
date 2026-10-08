@@ -400,30 +400,20 @@ button.cluster-row:focus-visible {
     justify-content: center;
 }
 
-.alert-box {
-    background: var(--bg);
-    border-radius: 14px;
-    padding: 20px;
-    margin: 24px;
-    max-width: 320px;
+.transaction-notice {
+    background: var(--fill);
+    border-radius: 10px;
+    padding: 12px;
+    margin-top: 12px;
 }
 
-.alert-title {
-    font-size: 17px;
-    font-weight: 700;
-    text-align: center;
+.transaction-notice-title {
+    font-size: 15px;
+    font-weight: 600;
 }
 
-.alert-message {
+.transaction-notice-message {
     font-size: 14px;
     color: var(--fg-secondary);
-    text-align: center;
-    margin-top: 8px;
-    margin-bottom: 16px;
-}
-
-.alert-buttons {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    margin-top: 4px;
 }

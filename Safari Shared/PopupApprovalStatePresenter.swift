@@ -104,7 +104,6 @@ final class PopupApprovalStatePresenter {
     ) -> PopupApprovalState {
         let content: PopupReview.Content
         var actions: [PopupApprovalState.Action] = [.approve, .reject]
-        var error = review.feedback
         switch review.content {
         case .selectAccount(let action), .switchAccount(let action):
             content = .accountSelection(selectionReview(action: action, reviewCatalog: review.reviewCatalog))
@@ -119,13 +118,11 @@ final class PopupApprovalStatePresenter {
                 if snapshot.allowsMutation && snapshot.transaction.feeBasisBaseFeePerGas != nil {
                     actions.append(.setTransactionSpeed)
                 }
-                if transaction.activeAlert != nil { actions.append(.resolveApprovalAlert) }
+                if snapshot.canRetryPreparation { actions.append(.retryTransaction) }
             }
             content = .sendTransaction(transactionReview(
                 transactionSession: transaction,
-                action: action,
-                mutationAllowed: transactionMutationAllowed,
-                error: &error
+                action: action
             ))
         case .addEthereumChain(let action):
             content = .addChain(PopupChainReview(
@@ -140,12 +137,8 @@ final class PopupApprovalStatePresenter {
                 reviewToken: review.reviewToken,
                 title: title(for: review.content),
                 content: content
-            ), actions: actions, feedback: error)
+            ), actions: actions, feedback: review.feedback)
         )
-    }
-
-    static func transactionAlertMessage(alert: TransactionApprovalAlertIntent) -> String {
-        alert.presentation.message ?? ""
     }
 
     private var layoutDirection: PopupQueueResponse.LayoutDirection {
@@ -221,39 +214,21 @@ final class PopupApprovalStatePresenter {
 
     private func transactionReview(
         transactionSession: PopupTransactionSession,
-        action: SendTransactionAction,
-        mutationAllowed: Bool,
-        error: inout String?
+        action: SendTransactionAction
     ) -> PopupTransactionReview {
         let chain = action.chain
         let snapshot = transactionSession.snapshot
         let transaction = snapshot.transaction
         let price = PriceService.shared.forNetwork(chain)
-        var alert: PopupTransactionAlert?
-        if let activeAlert = transactionSession.activeAlert {
-            let presentation = activeAlert.presentation
-            let message = Self.transactionAlertMessage(alert: activeAlert)
-            if mutationAllowed {
-                alert = PopupTransactionAlert(
-                    title: presentation.title,
-                    message: message,
-                    actions: presentation.actions.map {
-                        .init(title: $0.title, action: $0.action)
-                    }
-                )
-            } else {
-                error = message.isEmpty ? presentation.title : "\(presentation.title): \(message)"
-            }
-        }
         var feeLines = transaction.feeSummaryLines(chain: chain, price: price)
         if snapshot.phase == .idle || snapshot.phase == .preparing {
             feeLines.append(Strings.calculating.withEllipsis)
         }
         let canBackOffRefresh: Bool
         switch snapshot.phase {
-        case .ready, .failed, .reviewingFees, .finished:
+        case .ready, .failed, .finished:
             canBackOffRefresh = true
-        case .idle, .preparing, .editing, .authenticating, .preflighting:
+        case .idle, .preparing, .editing, .reserved, .preflighting:
             canBackOffRefresh = false
         }
         return PopupTransactionReview(
@@ -270,9 +245,7 @@ final class PopupApprovalStatePresenter {
                 maximum: GasSpeedConfiguration.maximumSliderPosition
             ),
             editor: editorModel(transaction: transaction, suggestedFee: snapshot.latestWalletSuggestedFee),
-            alert: alert,
-            editorRequestToken: transactionSession.editorRequestToken > 0
-                ? transactionSession.editorRequestToken : nil
+            notice: snapshot.notice.map { PopupTransactionNotice(title: $0.title, message: $0.message) }
         )
     }
 

@@ -281,8 +281,10 @@
       "state": "review",
       "host": "wallet.example",
       "actions": [
+        "approve",
         "reject",
-        "resolveApprovalAlert"
+        "editTransaction",
+        "setTransactionSpeed"
       ],
       "review": {
         "kind": "sendTransaction",
@@ -301,7 +303,6 @@
           "position": 100,
           "maximum": 200
         },
-        "editorRequestToken": 1,
         "editor": {
           "usesEIP1559": true,
           "nonce": "2",
@@ -310,21 +311,11 @@
           "suggestedMaxPriorityFeePerGasGwei": "2",
           "suggestedMaxFeePerGasGwei": "22"
         },
-        "alert": {
+        "canBackOffRefresh": true,
+        "notice": {
           "title": "Fees updated",
-          "message": "Review the fees",
-          "actions": [
-            {
-              "title": "OK",
-              "action": "acknowledge"
-            },
-            {
-              "title": "Edit",
-              "action": "edit"
-            }
-          ]
-        },
-        "canBackOffRefresh": true
+          "message": "Review the fees"
+        }
       }
     }
   },

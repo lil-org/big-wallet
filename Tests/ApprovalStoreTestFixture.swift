@@ -538,83 +538,118 @@ func walletSigningAuthorizationForTesting(
 }
 
 func makeWalletSigningSessionForTesting(
-    _ access: any OwnedWalletSigningAccess = OperationWalletSigningAccessForTesting(),
     authorization: WalletSigningAuthorization,
     isCurrent: @escaping @Sendable () -> Bool = { true },
+    sign: @escaping @MainActor @Sendable (ApprovedWalletSigningOperation, any WalletSigningSource) async -> Result<WalletSigningOutput, WalletSigningFailure> = { operation, _ in walletSigningResultForTesting(operation) },
+    retireSigningMaterial: @escaping @Sendable () -> Void = {},
+    requiresCommitLease: Bool = true,
     acquireCommitLease: (@MainActor @Sendable () async -> WalletExecutionLease?)? = nil,
     clock: @escaping @MainActor @Sendable () -> Date = { Date() }
 ) -> WalletSigningSession {
     WalletSigningSession(
-        BorrowedWalletSignerForTesting(access),
+        source: TestWalletSigningSource(
+            approvedAccount: authorization.approvedAccount,
+            isCurrent: isCurrent,
+            sign: sign,
+            retireSigningMaterial: retireSigningMaterial,
+            acquireCommitLease: requiresCommitLease ? acquireCommitLease ?? {
+                isCurrent() ? WalletExecutionLease(release: {}) : nil
+            } : nil
+        ),
         authorization: authorization,
-        isCurrent: isCurrent,
-        acquireCommitLease: acquireCommitLease ?? {
-            isCurrent() ? WalletExecutionLease(release: {}) : nil
-        },
         clock: clock
     )
 }
 
-final class TestWalletSigningAccess: OwnedWalletSigningAccess {
+final class TestWalletSigningSource: WalletSigningSource {
+    typealias Signing = @MainActor @Sendable (ApprovedWalletSigningOperation, any WalletSigningSource) async -> Result<WalletSigningOutput, WalletSigningFailure>
+
+    private struct State {
+        var signing: Signing?
+        var retired = false
+        var invalidated = false
+        var retirements = 0
+        var invalidations = 0
+    }
+
+    let approvedAccount: WalletAccountDescriptor
+    let requiresCommitLease: Bool
+    private let state: Mutex<State>
+    private let current: @Sendable () -> Bool
+    private let retirement: @Sendable () -> Void
+    private let invalidation: @Sendable () -> Void
+    private let lease: (@MainActor @Sendable () async -> WalletExecutionLease?)?
+
+    var materialRetirementCount: Int { state.withLock { $0.retirements } }
+    var invalidationCount: Int { state.withLock { $0.invalidations } }
+
+    init(
+        approvedAccount: WalletAccountDescriptor,
+        isCurrent: @escaping @Sendable () -> Bool = { true },
+        sign: @escaping Signing = { operation, _ in walletSigningResultForTesting(operation) },
+        retireSigningMaterial: @escaping @Sendable () -> Void = {},
+        acquireCommitLease: (@MainActor @Sendable () async -> WalletExecutionLease?)? = nil,
+        invalidate: @escaping @Sendable () -> Void = {}
+    ) {
+        self.approvedAccount = approvedAccount
+        requiresCommitLease = acquireCommitLease != nil
+        state = Mutex(State(signing: sign))
+        current = isCurrent
+        retirement = retireSigningMaterial
+        lease = acquireCommitLease
+        invalidation = invalidate
+    }
+
+    func isCurrent() -> Bool {
+        guard !state.withLock({ $0.invalidated }) else { return false }
+        return current()
+    }
+
     @MainActor
     func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
-        .failure(.failedToSign)
+        guard let signing = state.withLock({ $0.signing }) else { return .failure(.authorizationUnavailable) }
+        return await signing(operation, self)
     }
 
-    func invalidate() {}
-}
-
-final class OperationWalletSigningAccessForTesting: OwnedWalletSigningAccess {
-    private let privateKey: WalletPrivateKey?
-
-    init(privateKey: WalletPrivateKey? = nil) {
-        self.privateKey = privateKey
+    func retireSigningMaterial() {
+        let retired = state.withLock { state in
+            guard !state.retired else { return false }
+            state.retired = true
+            state.signing = nil
+            state.retirements += 1
+            return true
+        }
+        if retired { retirement() }
     }
 
     @MainActor
-    func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
-        if let privateKey { return operation.sign(with: privateKey) }
-        return walletSigningResultForTesting(operation)
+    func acquireCommitLease() async -> WalletExecutionLease? {
+        guard isCurrent() else { return nil }
+        return await lease?()
     }
 
-    func invalidate() {}
+    func invalidate() {
+        let invalidated = state.withLock { state in
+            guard !state.invalidated else { return false }
+            state.invalidated = true
+            state.invalidations += 1
+            return true
+        }
+        retireSigningMaterial()
+        if invalidated { invalidation() }
+    }
+
+    deinit {
+        invalidate()
+    }
 }
 
 @MainActor
 func makeSourceWalletSigningSessionForTesting(_ authorization: WalletSigningAuthorization) -> WalletSigningSession {
     WalletSigningSession(
-        OperationWalletSigningAccessForTesting(), authorization: authorization, isCurrent: { true }
+        source: TestWalletSigningSource(approvedAccount: authorization.approvedAccount),
+        authorization: authorization
     )
-}
-
-final class BorrowedWalletSignerForTesting: OwnedWalletSigningAccess {
-    private struct State {
-        var access: (any OwnedWalletSigningAccess)?
-        var invalidations = 0
-    }
-    private let state: Mutex<State>
-
-    var invalidationCount: Int { state.withLock { $0.invalidations } }
-
-    init(_ access: any OwnedWalletSigningAccess = TestWalletSigningAccess()) {
-        state = Mutex(State(access: access))
-    }
-
-    @MainActor
-    func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
-        guard let access = state.withLock({ $0.access }) else { return .failure(.authorizationUnavailable) }
-        return await access.sign(operation)
-    }
-
-    func invalidate() {
-        let access = state.withLock { state in
-            state.invalidations += 1
-            let access = state.access
-            state.access = nil
-            return access
-        }
-        access?.invalidate()
-    }
 }
 
 let walletSigningTestMessage = Data("Bound wallet signing operation".utf8)
@@ -634,10 +669,13 @@ func walletSigningOutputForTesting(
     privateKey: WalletPrivateKey? = nil,
     clock: @escaping @MainActor @Sendable () -> Date = Date.init
 ) async throws -> WalletSigningOutput {
-    let session = WalletSigningSession(
-        OperationWalletSigningAccessForTesting(privateKey: privateKey),
+    let session = makeWalletSigningSessionForTesting(
         authorization: try XCTUnwrap(WalletSigningAuthorization(permit: permit)),
-        isCurrent: { true }, clock: clock
+        sign: { operation, _ in
+            if let privateKey { return operation.sign(with: privateKey) }
+            return walletSigningResultForTesting(operation)
+        },
+        requiresCommitLease: false, clock: clock
     )
     defer { session.invalidate() }
     guard session.attach(permit: permit) else {

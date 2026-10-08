@@ -88,19 +88,6 @@ struct InternalSafariRequest: Decodable, Sendable {
         }
     }
 
-    struct ApprovalAlertPayload: Decodable, Sendable {
-        let action: TransactionApprovalAlertAction
-
-        init(from decoder: Decoder) throws {
-            try self.init(validatedJSON: WireProtocol.object(.approvalAlertPayload, from: decoder).json)
-        }
-
-        fileprivate init(validatedJSON: [String: Any]) throws {
-            let fields = NativeRequestFields(validatedJSON)
-            action = try fields.enumValue("action")
-        }
-    }
-
     struct ResponseIdentity: Sendable {
         let configurationKey: String
         let token: ExtensionBridge.RequestToken
@@ -149,7 +136,7 @@ struct InternalSafariRequest: Decodable, Sendable {
         case rejectRequest(PopupIdentity)
         case setTransactionSpeed(PopupIdentity, TransactionSpeedPayload)
         case applyTransactionEdits(PopupIdentity, TransactionEditsPayload)
-        case resolveApprovalAlert(PopupIdentity, ApprovalAlertPayload)
+        case retryTransaction(PopupIdentity)
 
         var identity: PopupIdentity? {
             switch self {
@@ -158,7 +145,7 @@ struct InternalSafariRequest: Decodable, Sendable {
             case .getApprovalState(let identity), .retryApproval(let identity),
                  .approveRequest(let identity, _), .rejectRequest(let identity),
                  .setTransactionSpeed(let identity, _), .applyTransactionEdits(let identity, _),
-                 .resolveApprovalAlert(let identity, _):
+                 .retryTransaction(let identity):
                 return identity
             }
         }
@@ -238,10 +225,8 @@ struct InternalSafariRequest: Decodable, Sendable {
             command = .popup(try .applyTransactionEdits(
                 fields.popupIdentity(), TransactionEditsPayload(validatedJSON: fields.value("payload"))
             ))
-        case "resolveApprovalAlert":
-            command = .popup(try .resolveApprovalAlert(
-                fields.popupIdentity(), ApprovalAlertPayload(validatedJSON: fields.value("payload"))
-            ))
+        case "retryTransaction":
+            command = .popup(.retryTransaction(try fields.popupIdentity()))
         default:
             throw fields.invalid("subject")
         }

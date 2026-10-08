@@ -283,20 +283,6 @@
         }
       ]
     },
-    "ApprovalAlertPayload": {
-      "type": "object",
-      "required": {
-        "action": {
-          "enum": [
-            "acknowledge",
-            "retry",
-            "edit",
-            "cancel"
-          ]
-        }
-      },
-      "optional": {}
-    },
     "NativeCommand": {
       "oneOf": [
         {
@@ -621,16 +607,13 @@
               "ref": "WorkflowVersion"
             },
             "subject": {
-              "const": "resolveApprovalAlert"
+              "const": "retryTransaction"
             },
             "requestToken": {
               "ref": "RequestToken"
             },
             "reviewToken": {
               "ref": "RequestToken"
-            },
-            "payload": {
-              "ref": "ApprovalAlertPayload"
             }
           },
           "optional": {}
@@ -1724,38 +1707,18 @@
         }
       ]
     },
-    "PopupTransactionAlert": {
+    "PopupTransactionNotice": {
       "type": "object",
       "required": {
         "title": {
           "type": "string"
-        },
-        "message": {
-          "type": "string"
-        },
-        "actions": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": {
-              "title": {
-                "type": "string"
-              },
-              "action": {
-                "enum": [
-                  "acknowledge",
-                  "retry",
-                  "edit",
-                  "cancel"
-                ]
-              }
-            },
-            "optional": {}
-          },
-          "minItems": 1
         }
       },
-      "optional": {}
+      "optional": {
+        "message": {
+          "type": "string"
+        }
+      }
     },
     "PopupReview": {
       "oneOf": [
@@ -1892,14 +1855,11 @@
             "dataInterpretation": {
               "type": "string"
             },
-            "alert": {
-              "ref": "PopupTransactionAlert"
-            },
-            "editorRequestToken": {
-              "ref": "NonnegativeInteger"
-            },
             "canBackOffRefresh": {
               "type": "boolean"
+            },
+            "notice": {
+              "ref": "PopupTransactionNotice"
             }
           }
         },
@@ -1949,7 +1909,7 @@
                   "reject",
                   "editTransaction",
                   "setTransactionSpeed",
-                  "resolveApprovalAlert"
+                  "retryTransaction"
                 ]
               }
             },

@@ -615,7 +615,7 @@ test("queue invalidation preserves the active review and its selections until re
     harness.setState(next, selectionState(next));
     await controller.readState();
     await flushPopup();
-    assert.equal(controller.activity.kind, "disposed");
+    assert.equal(controller.isActive, false);
     assert.equal(harness.controller.request.requestToken, next.requestToken);
     assert.equal(harness.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 1);
 });
@@ -977,8 +977,7 @@ function transactionState(request = pendingRequest(), overrides = {}, envelope =
         host: request.host,
         id: request.id,
         state: "review",
-        actions: ["approve", "reject", "editTransaction", "setTransactionSpeed",
-            ...(overrides.alert ? ["resolveApprovalAlert"] : [])],
+        actions: ["approve", "reject", "editTransaction", "setTransactionSpeed"],
         review: {
             account: {name: "Primary", croppedAddress: "0x1234"},
             editor: {
@@ -1144,12 +1143,12 @@ test("unknown approval display fields prevent approval until a valid refresh", a
         const harness = popupHarness({requests: [request]});
         harness.setState(request, {...state, displayMetadata: {label: "Unexpected"}, canApprove: true});
         await harness.boot();
-        assert.equal(harness.controller.presentationActivity.kind, "failed");
+        assert.equal(harness.controller.interaction.kind, "failed");
         await harness.get("button-approve").click();
         assert.equal(approvalMessages(harness).length, 0);
         harness.setState(request, state);
         await harness.get("button-approve").click();
-        assert.equal(harness.controller.presentationActivity.kind, "viewing");
+        assert.equal(harness.controller.interaction.kind, "viewing");
         await harness.get("button-approve").click();
         assert.equal(approvalMessages(harness).length, 1);
     }
@@ -1162,7 +1161,7 @@ test("extra capabilities and malformed approval content are rejected together", 
     const harness = popupHarness({requests: [request]});
     harness.setState(request, {...error, ...extras});
     await harness.boot();
-    assert.equal(harness.controller.presentationActivity.kind, "failed");
+    assert.equal(harness.controller.interaction.kind, "failed");
     await harness.get("button-approve").click();
     assert.equal(approvalMessages(harness).length, 0);
     assert.equal(harness.get("button-reject").disabled, true);
@@ -1189,7 +1188,7 @@ test("malformed account images reject the review without modifying its source", 
             const harness = popupHarness({requests: [request]});
             harness.setState(request, response);
             await harness.boot();
-            assert.equal(harness.controller.presentationActivity.kind, "failed");
+            assert.equal(harness.controller.interaction.kind, "failed");
             await harness.get("button-approve").click();
             assert.equal(approvalMessages(harness).length, 0);
             assert.deepEqual(normalized(response), before);
@@ -1233,7 +1232,7 @@ test("poll and edit replies reject malformed account images consistently", async
             controller.openEditor();
             await harness.get("editor-suggested").click();
         }
-        assert.equal(controller.presentationActivity.kind, "failed");
+        assert.equal(controller.interaction.kind, "failed");
         assert.equal(approvalMessages(harness).length, 0);
         assert.deepEqual(normalized(response), before);
     }
@@ -1261,7 +1260,7 @@ test("malformed image metadata never makes invalid approval content actionable",
 
         await harness.boot();
 
-        assert.equal((harness.controller.presentationActivity.kind === "failed"), true);
+        assert.equal((harness.controller.interaction.kind === "failed"), true);
         assert.equal(harness.controller.state, null);
         assert.equal(harness.get("request-error").textContent, "Failed to load");
         assert.equal(harness.get("button-approve").textContent, "Refresh");
@@ -1315,7 +1314,7 @@ test("controller approval strips caller revisions and passwords at the native bo
 test("controller errors explicitly retry the visible request without entering the queue", async () => {
     const harness = await reviewedPopup();
     const controller = harness.controller;
-    controller.commitPresentation({state: {id: controller.request.id, state: "error", actions: ["retry"], error: "Failed"}});
+    controller.adoptState({id: controller.request.id, state: "error", actions: ["retry"], error: "Failed"});
     assert.equal(harness.get("button-approve").disabled, false);
     assert.equal(harness.get("button-approve").textContent, "Refresh");
     assert.equal(harness.get("button-reject").disabled, true);
@@ -1350,7 +1349,7 @@ test("decisions adopt their current reply immediately without rereading or resub
         assert.equal(harness.get("request-title").textContent, "Current review");
         assert.equal(controller.state.review.reviewToken, requestToken(102));
         assert.equal(controller.isSubmitting, false);
-        assert.equal((controller.presentationActivity.kind === "failed"), false);
+        assert.equal((controller.interaction.kind === "failed"), false);
         assert.equal(harness.get("working-overlay").classList.contains("hidden"), true);
         assert.equal(harness.followUpTimerId(), null);
         assert.deepEqual(harness.workerMessages, []);
@@ -1374,7 +1373,7 @@ test("a completed decision immediately reconciles and acknowledges its durable r
     await controller.approve({});
     await flushPopup();
 
-    assert.equal(controller.activity.kind, "disposed");
+    assert.equal(controller.isActive, false);
     assert.deepEqual(harness.model.completed, []);
     assert.equal(harness.followUpTimerId(), null);
     assert.ok(harness.nativeMessages.every(message => ["approveRequest", "getPendingRequests"].includes(message.subject)));
@@ -1393,7 +1392,7 @@ test("unavailable approval storage retains the request instead of reconciling a 
     await flushPopup();
 
     assert.equal(controller.isActive, true);
-    assert.equal((controller.presentationActivity.kind === "failed"), true);
+    assert.equal((controller.interaction.kind === "failed"), true);
     assert.equal(harness.get("button-approve").textContent, "Refresh");
     assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["getApprovalState"]);
     assert.deepEqual(harness.workerMessages, []);
@@ -1402,13 +1401,13 @@ test("unavailable approval storage retains the request instead of reconciling a 
 test("rejectable errors submit tokenless Reject without a refresh", async () => {
     const harness = await reviewedPopup();
     const controller = harness.controller;
-    controller.commitPresentation({state: {
+    controller.adoptState({
         id: controller.request.id,
         state: "error",
         actions: ["reject"],
         host: controller.request.host,
         error: "Too much data to display",
-    }});
+    });
     assert.equal(harness.get("button-approve").disabled, true);
     assert.equal(harness.get("button-reject").disabled, false);
     assert.equal(harness.followUpTimerId(), null);
@@ -1475,12 +1474,12 @@ test("approval polling adopts an error and stops its only follow-up timer", asyn
     const harness = await reviewedPopup();
     const controller = harness.controller;
     harness.setState(controller.request, {id: controller.request.id, state: "error", actions: ["retry"], error: "Failed"});
-    controller.commitPresentation({state: {id: controller.request.id, state: "working", actions: []}});
+    controller.adoptState({id: controller.request.id, state: "working", actions: []});
 
     await harness.fire(harness.followUpTimerId());
 
     assert.equal(controller.state.state, "error");
-    assert.equal((controller.presentationActivity.kind === "failed"), false);
+    assert.equal((controller.interaction.kind === "failed"), false);
     assert.equal(harness.get("request-error").textContent, "Failed");
     assert.equal(harness.get("working-overlay").classList.contains("hidden"), true);
     assert.equal(harness.followUpTimerId(), null);
@@ -1520,18 +1519,26 @@ test("terminal decisions fence an older read and poll only after their native re
     }
 });
 
-test("replacement with the same numeric id disposes old reads actions and mutations", async () => {
-    for (const operation of ["read", "approval", "mutation", "speed"]) {
+test("replacement with the same numeric id retires old reads actions mutations and retries", async () => {
+    for (const operation of ["read", "approval", "mutation", "speed", "retry", "transaction retry"]) {
         const harness = await reviewedPopup(transactionState);
         const first = harness.controller;
         const originalTimer = harness.followUpTimerId();
         const replacement = pendingRequest(first.request.id, 2);
+        if (operation === "retry") { await harness.failTransport(first); }
+        if (operation === "transaction retry") {
+            first.adoptState(transactionState(first.request, {
+                notice: {title: "Fees unavailable", message: "Try fetching the estimate again"},
+            }, {actions: ["reject", "retryTransaction"]}));
+        }
         const gate = deferred();
         harness.handlers.native = (message, fallback) => {
             if (operation === "approval" && message.subject === "approveRequest") { return gate.promise; }
             if (message.requestToken === first.request.requestToken) {
                 const subject = operation === "read" ? "getApprovalState"
-                    : operation === "speed" ? "setTransactionSpeed" : "applyTransactionEdits";
+                    : operation === "speed" ? "setTransactionSpeed"
+                    : operation === "retry" ? "retryApproval"
+                    : operation === "transaction retry" ? "retryTransaction" : "applyTransactionEdits";
                 if (message.subject === subject) { return gate.promise; }
             }
             return fallback(message);
@@ -1542,6 +1549,8 @@ test("replacement with the same numeric id disposes old reads actions and mutati
         }
         const pending = operation === "read" ? first.readState({refresh: true})
             : operation === "approval" ? first.approve({})
+            : operation === "retry" ? first.retry()
+            : operation === "transaction retry" ? first.retryTransaction()
             : operation === "speed"
                 ? first.setSpeed({interaction: "ended", value: 145}, requestToken(101))
             : first.applyEdits();
@@ -1558,12 +1567,11 @@ test("replacement with the same numeric id disposes old reads actions and mutati
         gate.resolve(commandReply(transactionState(first.request, {
             title: "Late A",
             reviewToken: requestToken(999),
-            alert: {title: "Old alert", message: "", actions: [{title: "Cancel", action: "cancel"}]},
+            notice: {title: "Old notice", message: "Late fee estimate"},
         })));
         await pending;
         await flushPopup();
 
-        assert.equal(first.activity.kind, "disposed");
         assert.equal(first.isActive, false);
         assert.equal(harness.timers.has(originalTimer), false);
 
@@ -1608,7 +1616,7 @@ test("state transitions own one follow-up timer and ignore stale callbacks", asy
     assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
     assert.equal(harness.timerHistory.filter(timer => timer.delay === 600).length, 2);
     const last = harness.timers.get(harness.followUpTimerId());
-    controller.dispose();
+    harness.queue.close();
     last.callback();
     assert.equal(harness.followUpTimerId(), null);
     assert.equal(harness.timers.size, 0);
@@ -1628,14 +1636,15 @@ test("missing-state reconciliation shares one authoritative queue refresh", asyn
     await flushPopup();
 
     assert.equal(completion, repeated);
-    assert.equal(controller.activity.kind, "reconciling");
+    assert.equal(harness.queue.presentation.kind, "reconciling");
+    assert.equal(harness.queue.presentation.promise, completion);
     assert.equal(controller.isActive, false);
     assert.equal(harness.queue.canRefresh, true);
     assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["getPendingRequests"]);
     gate.resolve({completedResponses: [], requests: [replacement]});
     await completion;
     await flushPopup();
-    assert.equal(controller.activity.kind, "disposed");
+    assert.equal(controller.isActive, false);
     assert.equal(harness.controller.request.requestToken, replacement.requestToken);
     assert.equal(harness.get("request-title").textContent, "Replacement B");
     assert.equal(harness.model.closed, 0);
@@ -1682,7 +1691,7 @@ test("keyboard slider input stays local and one terminal command adopts its rota
     slider.value = "145";
     slider.emit("input");
     await flushPopup();
-    assert.equal((controller.activity.kind === "dragging"), true);
+    assert.equal((controller.interaction.kind === "dragging"), true);
     assert.equal(harness.get("button-approve").disabled, true);
     await controller.approveCurrent();
     await controller.approve({});
@@ -1714,6 +1723,36 @@ test("keyboard slider input stays local and one terminal command adopts its rota
     assert.equal(controller.state.review.reviewToken, requestToken(102));
     assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
     assert.equal(Number(slider.value), 145);
+});
+
+test("consecutive keyboard slider adjustments each submit and wait for native confirmation", async () => {
+    const harness = await reviewedPopup(transactionState);
+    const controller = harness.controller;
+    const slider = harness.get("tx-slider");
+    for (const [index, value] of [120, 121].entries()) {
+        const gate = deferred();
+        harness.handlers.native = (message, fallback) =>
+            message.subject === "setTransactionSpeed" ? gate.promise : fallback(message);
+        slider.value = String(value);
+        slider.emit("input");
+        assert.equal(harness.get("button-approve").disabled, true);
+        slider.emit("change");
+        await flushPopup();
+        const commands = harness.nativeMessages.filter(message => message.subject === "setTransactionSpeed");
+        assert.equal(commands.length, index + 1);
+        assert.equal(commands.at(-1).payload.value, value);
+        assert.equal(commands.at(-1).reviewToken, requestToken(101 + index));
+        assert.equal(harness.get("button-approve").disabled, true);
+
+        gate.resolve(commandReply(transactionState(controller.request, {
+            reviewToken: requestToken(102 + index),
+            slider: {maximum: 200, position: value, visible: true},
+        })));
+        await flushPopup();
+        assert.equal(Number(slider.value), value);
+        assert.equal(controller.state.review.slider.position, value);
+        assert.equal(harness.get("button-approve").disabled, false);
+    }
 });
 
 test("approval requires a fresh click after the drag result is displayed", async () => {
@@ -1769,7 +1808,7 @@ test("stale or ignored terminal slider commands block approval until a fresh rev
         const slider = harness.get("tx-slider");
         slider.emit("pointerdown");
         slider.value = "140";
-        if (stale) { controller.commitPresentation({state: fresh}); }
+        if (stale) { controller.adoptState(fresh); }
 
         const completion = controller.finishSliderInteraction("ended");
         await flushPopup();
@@ -1803,7 +1842,7 @@ test("unavailable fee-review state follows transport recovery without approving"
 
     assert.equal(await controller.setSpeed({interaction: "ended", value: 145}, requestToken(101)), false);
 
-    assert.equal((controller.presentationActivity.kind === "failed"), true);
+    assert.equal((controller.interaction.kind === "failed"), true);
     assert.equal(controller.isSubmitting, false);
     assert.equal(harness.get("request-error").textContent, "Failed to load");
     assert.equal(harness.get("button-approve").textContent, "Refresh");
@@ -1831,8 +1870,8 @@ test("replacement consumes the old drag's trailing events before accepting a new
     slider.emit("change");
     await flushPopup();
 
-    assert.equal(first.activity.kind, "disposed");
-    assert.equal((harness.controller.activity.kind === "dragging"), false);
+    assert.equal(first.isActive, false);
+    assert.equal((harness.controller.interaction.kind === "dragging"), false);
     assert.deepEqual(harness.nativeMessages, []);
     slider.emit("pointerdown");
     slider.value = "180";
@@ -1893,7 +1932,7 @@ test("Apply and Reset clear drafts so subsequent native values populate every fi
         await harness.get(button).click();
 
         assert.equal(harness.get("tx-editor").open, false);
-        assert.equal(["editing", "dragging"].includes(controller.activity.kind), false);
+        assert.equal(["editing", "dragging"].includes(controller.interaction.kind), false);
         assert.equal(harness.get("edits-error").classList.contains("hidden"), true);
         if (button === "editor-suggested") {
             assert.deepEqual(harness.nativeMessages.at(-1).payload, {mode: "suggested"});
@@ -1926,7 +1965,7 @@ test("an edit error preserves the open editor and typed values", async () => {
     assert.equal(harness.get("tx-editor").open, true);
     assert.equal(harness.get("edit-nonce").value, "invalid");
     assert.equal(harness.get("edits-error").classList.contains("hidden"), false);
-    assert.equal(controller.activity.kind, "editing");
+    assert.equal(controller.interaction.kind, "editing");
     assert.equal(Object.hasOwn(controller.state, "editsError"), false);
     assert.equal(harness.followUpTimerId(), null);
 
@@ -1942,91 +1981,176 @@ test("an edit error preserves the open editor and typed values", async () => {
     assert.equal(harness.get("edits-error").classList.contains("hidden"), false);
 });
 
-test("alert clicks send the click-time review token and ignore a superseded response", async () => {
-    const harness = await reviewedPopup(transactionState);
+test("transaction primary actions follow native capabilities without approving a correction", async () => {
+    for (const [actions, title, subject] of [
+        [["approve", "retryTransaction", "editTransaction"], "OK", "approveRequest"],
+        [["retryTransaction", "editTransaction"], "Try again", "retryTransaction"],
+        [["editTransaction"], "Edit fees", null],
+        [[], "OK", null],
+    ]) {
+        const harness = await reviewedPopup(request => transactionState(request, {
+            notice: {title: "Review fees", message: "Check the current estimate"},
+        }, {actions: ["reject", ...actions]}));
+        const controller = harness.controller;
+        const primary = harness.get("button-approve");
+        assert.equal(primary.textContent, title);
+        assert.equal(primary.disabled, actions.length === 0);
+        assert.equal(harness.get("tx-notice").classList.contains("hidden"), false);
+        assert.equal(harness.get("screen-request").inert, false);
+        assert.equal(harness.get("tx-editor").open, false);
+
+        await primary.click();
+
+        assert.deepEqual(harness.nativeMessages.map(message => message.subject), subject ? [subject] : []);
+        if (actions.length === 1) {
+            assert.equal(controller.interaction.kind, "editing");
+            assert.equal(harness.get("tx-editor").open, true);
+            assert.equal(harness.document.activeElement, harness.get("edit-gas-price"));
+            assert.equal(primary.disabled, true);
+        }
+    }
+});
+
+test("transaction Retry sends one payload-free command bound to the visible review", async () => {
+    const harness = await reviewedPopup(request => transactionState(request, {
+        notice: {title: "Fees unavailable", message: "Try fetching the estimate again"},
+    }, {actions: ["reject", "retryTransaction", "editTransaction"]}));
     const controller = harness.controller;
-    const alert = {title: "Review fees", message: "", actions: [{title: "Cancel", action: "cancel"}]};
-    harness.get("edit-nonce").focus();
-    controller.commitPresentation({state: transactionState(controller.request, {alert})});
-    const button = harness.get("alert-buttons").children[0];
     const gate = deferred();
-    harness.handlers.native = (message, fallback) =>
-        message.subject === "resolveApprovalAlert" ? gate.promise : fallback(message);
+    harness.handlers.native = (message, fallback) => message.subject === "retryTransaction" ? gate.promise : fallback(message);
 
-    const clicked = button.emit("click");
+    const retrying = harness.get("button-approve").click();
     await flushPopup();
-
+    await harness.get("button-approve").click();
+    await controller.retryTransaction();
+    await harness.get("tx-editor-summary").emit("click");
+    assert.equal(harness.get("button-approve").disabled, true);
+    assert.equal(harness.get("tx-editor").open, false);
+    assert.equal(harness.followUpTimerId(), null);
     assert.deepEqual(harness.nativeMessages, [{
-        subject: "resolveApprovalAlert",
+        subject: "retryTransaction",
         id: controller.request.id,
         workflowVersion: 4,
         requestToken: controller.request.requestToken,
         reviewToken: requestToken(101),
-        payload: {action: "cancel"},
         __bwPrivateBrowsing: false,
     }]);
-    controller.commitPresentation({state: transactionState(controller.request, {alert, reviewToken: requestToken(102)})});
-    const before = harness.visibleSnapshot();
-    const focusCount = harness.focusCalls.length;
-    gate.resolve(commandReply(transactionState(controller.request, {reviewToken: requestToken(999)})));
-    await clicked;
-    assert.equal(controller.state.review.reviewToken, requestToken(102));
-    assert.equal(harness.get("alert-overlay").classList.contains("hidden"), false);
-    assert.equal(harness.get("alert-title").textContent, "Review fees");
-    assert.equal(harness.focusCalls.length, focusCount);
+
+    gate.resolve(commandReply(transactionState(controller.request, {
+        canBackOffRefresh: false, feeLines: ["Calculating..."], reviewToken: requestToken(102),
+    }, {actions: ["reject"]})));
+    await retrying;
+    assert.equal(controller.isSubmitting, false);
+    assert.equal(harness.get("button-approve").disabled, true);
+    assert.equal(harness.get("tx-notice").classList.contains("hidden"), true);
+    assert.equal(harness.get("tx-editor").open, false);
+    assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
+    assert.equal(approvalMessages(harness).length, 0);
 });
 
-test("resolving an alert restores focus after its prior control becomes enabled", async () => {
+test("fee updates require a separate approval with the renewed review token", async () => {
     const harness = await reviewedPopup(transactionState);
     const controller = harness.controller;
-    const approve = harness.get("button-approve");
-    approve.focus();
-    harness.setState(controller.request, transactionState(controller.request, {
-        alert: {title: "Review fees", message: "", actions: [{title: "OK", action: "acknowledge"}]},
-    }, {actions: ["reject", "resolveApprovalAlert"]}));
-    await controller.readState();
-    assert.equal(approve.disabled, true);
-    harness.handlers.native = (message, fallback) => message.subject === "resolveApprovalAlert"
-        ? commandReply(transactionState(controller.request)) : fallback(message);
+    const updated = transactionState(controller.request, {
+        feeLines: ["Network fee: 0.002 ETH"], reviewToken: requestToken(102),
+        notice: {title: "Fees updated", message: "Review the new estimate before sending"},
+    });
+    harness.handlers.native = (message, fallback) => message.subject === "approveRequest"
+        ? commandReply(updated) : fallback(message);
 
-    await harness.get("alert-buttons").children[0].click();
+    await harness.get("button-approve").click();
+    await flushPopup();
 
-    assert.equal(approve.disabled, false);
-    assert.equal(harness.get("alert-overlay").classList.contains("hidden"), true);
-    assert.equal(harness.document.activeElement, approve);
+    assert.equal(approvalMessages(harness).length, 1);
+    assert.equal(approvalMessages(harness)[0].reviewToken, requestToken(101));
+    assert.equal(harness.get("tx-fee-lines").children[0].textContent, "Network fee: 0.002 ETH");
+    assert.equal(harness.get("tx-notice-title").textContent, "Fees updated");
+    assert.equal(harness.get("button-approve").disabled, false);
+    assert.equal(harness.get("tx-editor").open, false);
+
+    await harness.get("button-approve").click();
+
+    assert.equal(approvalMessages(harness).length, 2);
+    assert.equal(approvalMessages(harness)[1].reviewToken, requestToken(102));
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["approveRequest", "approveRequest"]);
 });
 
-test("disposed alert callbacks cannot close or focus the replacement request", async () => {
-    const alert = {title: "Review fees", message: "", actions: [{title: "Cancel", action: "cancel"}]};
-    const harness = await reviewedPopup(request => transactionState(request, {alert}));
-    const first = harness.controller;
-    const button = harness.get("alert-buttons").children[0];
-    const gate = deferred();
-    harness.handlers.native = (message, fallback) =>
-        message.subject === "resolveApprovalAlert" ? gate.promise : fallback(message);
-    const clicked = button.emit("click");
-    await flushPopup();
-    const replacement = pendingRequest(first.request.id, 2);
-    harness.setState(replacement, transactionState(replacement, {
-        alert: {...alert, title: "Replacement alert"},
-        reviewToken: requestToken(202),
-    }));
-    await harness.show([replacement]);
-    const before = harness.visibleSnapshot();
+test("each fee correction is revealed before reapproval without scrolling routine refreshes", async () => {
+    for (const viaPolling of [false, true]) {
+        const harness = await reviewedPopup(request => transactionState(request, {
+            dataInterpretation: "0x" + "0123456789abcdef".repeat(80),
+        }));
+        const controller = harness.controller;
+        const primary = harness.get("button-approve");
+        const notice = harness.get("tx-notice");
+        const scrollIntoView = notice.scrollIntoView;
+        notice.scrollIntoView = options => {
+            assert.equal(primary.disabled, true);
+            assert.equal(notice.classList.contains("hidden"), false);
+            scrollIntoView(options);
+        };
+        harness.get("tx-data-details").open = true;
+        let updated;
+        harness.handlers.native = (message, fallback) => {
+            if (message.subject !== "approveRequest") { return fallback(message); }
+            return commandReply(viaPolling
+                ? {id: controller.request.id, host: controller.request.host, state: "working", actions: []}
+                : updated);
+        };
+
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            updated = transactionState(controller.request, {
+                ...controller.state.review,
+                reviewToken: requestToken(102 + attempt),
+                feeLines: [`Network fee: 0.00${2 + attempt} ETH`],
+                notice: {title: "Fees updated", message: "Review the new estimate before sending"},
+            });
+            harness.setState(controller.request, updated);
+            await primary.click();
+            if (viaPolling) {
+                assert.equal(primary.disabled, true);
+                assert.equal(harness.scrollCalls.length, attempt);
+                await harness.fire(harness.followUpTimerId());
+            }
+            assert.equal(harness.scrollCalls.length, attempt + 1);
+            assert.deepEqual(harness.scrollCalls.at(-1), {id: "tx-notice", options: {block: "nearest"}});
+            assert.equal(primary.disabled, false);
+            assert.equal(harness.get("tx-data-details").open, true);
+            assert.equal(harness.get("tx-fee-lines").children[0].textContent, updated.review.feeLines[0]);
+
+            harness.setState(controller.request, {...updated, review: {...updated.review, balance: "2 ETH"}});
+            await harness.fire(harness.followUpTimerId());
+            await harness.fire(harness.followUpTimerId());
+            assert.equal(harness.scrollCalls.length, attempt + 1);
+        }
+        assert.equal(approvalMessages(harness).length, 2);
+    }
+});
+
+test("transaction notices update without stealing focus or opening the editor", async () => {
+    const harness = await reviewedPopup(transactionState);
+    const controller = harness.controller;
+    const primary = harness.get("button-approve");
+    primary.focus();
     const focusCount = harness.focusCalls.length;
-    const timer = harness.followUpTimerId();
-
-    gate.resolve(commandReply(transactionState(first.request)));
-    await clicked;
-    await button.emit("click");
-    await flushPopup();
-
-    assert.deepEqual(harness.visibleSnapshot(), before);
-    assert.equal(harness.focusCalls.length, focusCount);
-    assert.notEqual(harness.followUpTimerId(), null);
-    assert.equal(harness.get("screen-request").inert, true);
-    assert.equal(harness.get("alert-title").textContent, "Replacement alert");
-    assert.equal(harness.nativeMessages.filter(message => message.subject === "resolveApprovalAlert").length, 1);
+    for (const [index, notice] of [
+        {title: "Fees updated", message: "Review the new estimate"},
+        {title: "Fees unavailable"},
+        undefined,
+    ].entries()) {
+        harness.setState(controller.request, transactionState(controller.request, {
+            ...(notice ? {notice} : {}), reviewToken: requestToken(102 + index),
+        }));
+        await harness.fire(harness.followUpTimerId());
+        assert.equal(harness.get("tx-notice").classList.contains("hidden"), notice === undefined);
+        if (notice) { assert.equal(harness.get("tx-notice-title").textContent, notice.title); }
+        assert.equal(harness.get("tx-notice-message").classList.contains("hidden"), !notice?.message);
+        assert.equal(harness.get("tx-editor").open, false);
+        assert.equal(harness.document.activeElement, primary);
+        assert.equal(harness.focusCalls.length, focusCount);
+        assert.equal(harness.get("screen-request").inert, false);
+    }
+    assert.equal(approvalMessages(harness).length, 0);
 });
 
 test("account selection belongs to one controller and old rows cannot change its replacement", async () => {
@@ -2083,7 +2207,7 @@ test("approval reads have one token-only shape for refresh and polling", async (
     const harness = await reviewedPopup(transactionState);
     const controller = harness.controller;
     await controller.readState({refresh: true});
-    controller.commitPresentation({state: {id: controller.request.id, state: "working", actions: []}});
+    controller.adoptState({id: controller.request.id, state: "working", actions: []});
     await controller.readState();
     assert.deepEqual(harness.nativeMessages, Array.from({length: 2}, () => ({
         subject: "getApprovalState",
@@ -2122,7 +2246,7 @@ test("busy polling removes capabilities while preserving the rendered review", a
         assert.deepEqual(harness.get("tx-fee-lines").children, feeRows);
         assert.equal(harness.get("tx-editor").open, false);
         assert.equal(harness.get("edit-nonce").value, controller.state.review ? "2" : "9");
-        assert.equal(["editing", "dragging"].includes(controller.activity.kind), false);
+        assert.equal(["editing", "dragging"].includes(controller.interaction.kind), false);
         assert.equal(harness.get("button-approve").disabled, true);
         assert.equal(harness.get("button-reject").disabled, true);
         assert.equal(harness.get("tx-slider").disabled, true);
@@ -2143,14 +2267,14 @@ test("busy polling removes capabilities while preserving the rendered review", a
         await controller.readState();
         assert.equal(harness.get("tx-editor").open, false);
         assert.equal(harness.get("edit-nonce").value, controller.state.review ? "2" : "9");
-        assert.equal(["editing", "dragging"].includes(controller.activity.kind), false);
+        assert.equal(["editing", "dragging"].includes(controller.interaction.kind), false);
         assert.equal(controller.state.review.reviewToken, requestToken(202));
         assert.equal(harness.get("button-approve").disabled, false);
         assert.equal(harness.get("screen-request").inert, false);
     }
 });
 
-test("busy refresh blocks keyboard interaction and restores error and alert behavior", async () => {
+test("busy refresh blocks keyboard interaction and restores errors and inline notices", async () => {
     const harness = await reviewedPopup(transactionState);
     const controller = harness.controller;
     const busy = {id: controller.request.id, state: "working", actions: []};
@@ -2166,13 +2290,13 @@ test("busy refresh blocks keyboard interaction and restores error and alert beha
     assert.equal(harness.get("screen-request").inert, false);
     assert.equal(harness.get("button-approve").disabled, false);
 
-    controller.commitPresentation({state: busy});
+    controller.adoptState(busy);
     assert.equal(harness.get("screen-request").inert, true);
-    const alert = {title: "Review fees", message: "", actions: [{title: "Cancel", action: "cancel"}]};
-    controller.commitPresentation({state: transactionState(controller.request, {alert})});
-    assert.equal(harness.get("screen-request").inert, true);
-    assert.equal(harness.get("alert-overlay").classList.contains("hidden"), false);
-    controller.commitPresentation({state: transactionState(controller.request)});
+    const notice = {title: "Review fees", message: "Check the estimate"};
+    controller.adoptState(transactionState(controller.request, {notice}));
+    assert.equal(harness.get("screen-request").inert, false);
+    assert.equal(harness.get("tx-notice").classList.contains("hidden"), false);
+    controller.adoptState(transactionState(controller.request));
     assert.equal(harness.get("screen-request").inert, false);
 });
 
@@ -2203,7 +2327,7 @@ test("retry fences an older read and adopts its returned review without another 
     await flushPopup();
     readGate.resolve(commandReply(messageState(controller.request, {title: "Old review"})));
     await oldRead;
-    assert.equal((controller.presentationActivity.kind === "failed"), true);
+    assert.equal((controller.interaction.kind === "failed"), true);
     assert.equal(controller.isSubmitting, true);
     assert.equal(harness.get("working-overlay").classList.contains("hidden"), true);
     retryGate.resolve(commandReply(messageState(controller.request, {title: "Fresh review", reviewToken: requestToken(202)})));
@@ -2235,7 +2359,7 @@ test("retry follows busy states and reconciles missing requests", async () => {
             assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 400);
             assert.equal(harness.get("working-overlay").classList.contains("hidden"), false);
         } else {
-            assert.equal(controller.activity.kind, "disposed");
+            assert.equal(controller.isActive, false);
             assert.equal(harness.followUpTimerId(), null);
             assert.equal(harness.model.closed, 1);
         }
@@ -2302,7 +2426,7 @@ test("late idle switch replies preserve preparing and working requests", async (
             harness.setState(next, selectionState(next));
             harness.setState(request, {id: request.id, state: "missing", actions: []});
             await harness.fire(harness.followUpTimerId());
-            assert.equal(controller.activity.kind, "disposed");
+            assert.equal(controller.isActive, false);
             if (succeeds) {
                 assert.equal(harness.controller.request.requestToken, next.requestToken);
             } else {
@@ -2324,22 +2448,18 @@ test("reordered approval object keys preserve DOM nodes and transaction backoff"
     }
     const harness = await reviewedPopup(request => transactionState(request, {
         canBackOffRefresh: true,
-        alert: {
-            title: "Review fees",
-            message: "Updated estimate",
-            actions: [{title: "OK", action: "acknowledge"}],
-        },
-    }, {actions: ["reject", "resolveApprovalAlert"]}));
+        notice: {title: "Review fees", message: "Updated estimate"},
+    }));
     const controller = harness.controller;
     const original = normalized(controller.state);
     const reordered = reverseObjectKeys(original);
     const originalJSON = JSON.stringify(original);
     const reorderedJSON = JSON.stringify(reordered);
     assert.notEqual(originalJSON, reorderedJSON);
-    assert.notDeepEqual(Object.keys(original.review.alert.actions[0]), Object.keys(reordered.review.alert.actions[0]));
+    assert.notDeepEqual(Object.keys(original.review.notice), Object.keys(reordered.review.notice));
     const feeRow = harness.get("tx-fee-lines").children[0];
     const accountName = harness.get("tx-account").children[0];
-    const alertButton = harness.get("alert-buttons").children[0];
+    const noticeTitle = harness.get("tx-notice-title");
     const writes = harness.textWrites.length;
 
     for (const [index, delay] of [1200, 2400, 4800, 9600, 10000, 10000].entries()) {
@@ -2348,7 +2468,7 @@ test("reordered approval object keys preserve DOM nodes and transaction backoff"
 
         assert.equal(harness.get("tx-fee-lines").children[0], feeRow);
         assert.equal(harness.get("tx-account").children[0], accountName);
-        assert.equal(harness.get("alert-buttons").children[0], alertButton);
+        assert.equal(harness.get("tx-notice-title"), noticeTitle);
         assert.equal(harness.textWrites.length, writes);
         assert.equal(harness.timers.get(harness.followUpTimerId()).delay, delay);
     }
@@ -2431,7 +2551,7 @@ test("state reads coalesce and transaction polling preserves its backoff", async
 
 test("malformed transaction backoff rejects the review instead of silently coercing it", async () => {
     const harness = await reviewedPopup(request => transactionState(request, {canBackOffRefresh: "true"}));
-    assert.equal(harness.controller.presentationActivity.kind, "failed");
+    assert.equal(harness.controller.interaction.kind, "failed");
     assert.equal(harness.followUpTimerId(), null);
     await harness.get("button-approve").click();
     assert.deepEqual(approvalMessages(harness), []);
@@ -2570,7 +2690,7 @@ test("queued selection callbacks cannot replace a transport error with the retai
         assert.equal(controller.state, snapshot);
         assert.equal(JSON.stringify(controller.presentation.accounts), selection);
         assert.equal(controller.presentation.cluster, cluster);
-        assert.equal((controller.presentationActivity.kind === "failed"), true);
+        assert.equal((controller.interaction.kind === "failed"), true);
         assert.equal(harness.get("button-approve").textContent, "Refresh");
         assert.deepEqual(harness.nativeMessages, []);
         assert.deepEqual(harness.workerMessages, []);
@@ -2597,7 +2717,7 @@ test("advanced editing pauses refresh and exclusively owns a complete draft", as
     assert.deepEqual(harness.workerMessages, []);
     harness.get("tx-editor").open = false;
     harness.get("tx-editor").emit("toggle");
-    assert.equal(["editing", "dragging"].includes(controller.activity.kind), false);
+    assert.equal(["editing", "dragging"].includes(controller.interaction.kind), false);
     assert.equal(harness.timers.get(harness.followUpTimerId()).delay, 600);
     harness.get("tx-editor").open = true;
     harness.get("tx-editor").emit("toggle");
@@ -2634,7 +2754,7 @@ test("Advanced activation fences a pending read before the delayed toggle event"
     editor.emit("toggle");
 
     assert.equal(editor.open, true);
-    assert.equal(controller.activity.kind, "editing");
+    assert.equal(controller.interaction.kind, "editing");
     assert.equal(controller.state.review.reviewToken, requestToken(101));
     assert.equal(harness.get("button-approve").disabled, true);
     assert.equal(harness.followUpTimerId(), null);
@@ -2642,7 +2762,7 @@ test("Advanced activation fences a pending read before the delayed toggle event"
     clickSummary();
     editor.emit("toggle");
     assert.equal(editor.open, false);
-    assert.equal(controller.activity.kind, "viewing");
+    assert.equal(controller.interaction.kind, "viewing");
     assert.notEqual(harness.followUpTimerId(), null);
 });
 
@@ -2666,7 +2786,7 @@ test("interaction start fences an already-dispatched read without adopting an un
         await reading;
         assert.equal(controller.state.review.reviewToken, requestToken(101));
         assert.equal(harness.get("request-title").textContent, "Send transaction");
-        assert.equal((controller.activity.draft ?? controller.activity.gesture).reviewToken, requestToken(101));
+        assert.equal((controller.interaction.draft ?? controller.interaction.gesture).reviewToken, requestToken(101));
         assert.equal(harness.followUpTimerId(), null);
         assert.equal(interaction === "editor" ? harness.get("edit-nonce").value : harness.get("tx-slider").value,
             interaction === "editor" ? "7" : "155");
@@ -2725,7 +2845,7 @@ test("stale Apply discards a draft when recovery changes the fee model or edit c
         harness.handlers.native = (message, fallback) => message.subject === "applyTransactionEdits"
             ? commandReply(fresh, "ignored") : fallback(message);
         await harness.get("editor-apply").click();
-        assert.equal(["editing", "dragging"].includes(controller.activity.kind), false);
+        assert.equal(["editing", "dragging"].includes(controller.interaction.kind), false);
         assert.equal(harness.get("tx-editor").open, false);
         assert.equal(controller.state.review.reviewToken, requestToken(102));
         assert.equal(harness.nativeMessages.filter(message => message.subject === "applyTransactionEdits").length, 1);
@@ -2760,7 +2880,7 @@ for (const failure of ["unavailable", "transport"]) {
 
         assert.equal(harness.controller, controller);
         assert.equal(controller.isActive, true);
-        assert.equal(controller.activity.kind, "failed");
+        assert.equal(controller.interaction.kind, "failed");
         assert.equal(controller.editorDraft, null);
         assert.equal(harness.get("tx-editor").open, false);
         assert.equal(harness.get("request-error").textContent, "Failed to load");
@@ -2776,7 +2896,7 @@ for (const failure of ["unavailable", "transport"]) {
 
         assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["applyTransactionEdits", "retryApproval"]);
         assert.deepEqual(harness.workerMessages, []);
-        assert.equal(controller.activity.kind, "viewing");
+        assert.equal(controller.interaction.kind, "viewing");
         assert.equal(controller.state.review.reviewToken, requestToken(102));
         assert.equal(controller.editorDraft, null);
         assert.equal(harness.get("tx-editor").open, false);
@@ -2876,7 +2996,7 @@ test("a hung approval disables Cancel without blocking replacement requests", as
     assert.equal(harness.get("button-reject").disabled, true);
     await harness.get("button-reject").click();
     assert.equal(harness.nativeMessages.filter(message => message.subject === "rejectRequest").length, 0);
-    assert.equal(original.activity.operation.kind, "approveRequest");
+    assert.equal(original.command.kind, "approveRequest");
     const replacement = pendingRequest(original.request.id, 2);
     harness.setState(replacement, messageState(replacement, {title: "Next request"}));
     await harness.show([replacement]);
@@ -2913,7 +3033,7 @@ test("clicks during a pending fee update are discarded and failure never approve
             assert.equal(approvalMessages(harness).length, 1);
             assert.equal(approvalMessages(harness)[0].reviewToken, requestToken(102));
         } else {
-            assert.equal((controller.presentationActivity.kind === "failed"), true);
+            assert.equal((controller.interaction.kind === "failed"), true);
             await controller.approve({});
             assert.deepEqual(harness.workerMessages, []);
         }
@@ -2965,11 +3085,11 @@ test("a timed-out action releases its controller while late raw settlement canno
     assert.equal(timeout.delay, 5000);
     await harness.fire(timeout.id);
     await applying;
-    assert.equal((controller.presentationActivity.kind === "failed"), true);
+    assert.equal((controller.interaction.kind === "failed"), true);
     assert.equal(controller.isSubmitting, false);
     harness.setState(controller.request, transactionState(controller.request, {title: "Current retry", reviewToken: requestToken(103)}));
     await harness.get("button-approve").click();
-    assert.equal((controller.presentationActivity.kind === "failed"), false);
+    assert.equal((controller.interaction.kind === "failed"), false);
     assert.equal(harness.get("request-title").textContent, "Current retry");
     const snapshot = harness.visibleSnapshot();
     gate.resolve(commandReply(transactionState(controller.request, {title: "Late timed-out edit", reviewToken: requestToken(999)})));
@@ -2999,38 +3119,45 @@ test("closing a recovered stale draft cannot approve a token whose summary is st
     assert.equal(approvalMessages(harness)[0].reviewToken, requestToken(102));
 });
 
-test("modal Cancel supersedes a hung alert action only with the native reject capability", async () => {
+test("Cancel supersedes a hung transaction Retry only with the native reject capability", async () => {
     for (const rejectable of [true, false]) {
-        const alert = {title: "Review fees", message: "", actions: [{title: "Cancel", action: "cancel"}]};
-        const harness = await reviewedPopup(request => transactionState(request, {alert}, {
-            actions: ["resolveApprovalAlert", ...(rejectable ? ["reject"] : [])],
-        }));
+        const harness = await reviewedPopup(request => transactionState(request, {
+            notice: {title: "Fees unavailable", message: "Try fetching the estimate again"},
+        }, {actions: ["retryTransaction", ...(rejectable ? ["reject"] : [])]}));
         const controller = harness.controller;
         const gate = deferred();
         harness.handlers.native = (message, fallback) => {
-            if (message.subject === "resolveApprovalAlert") { return gate.promise; }
+            if (message.subject === "retryTransaction") { return gate.promise; }
             if (message.subject === "rejectRequest") {
                 return commandReply({id: controller.request.id, state: "working", actions: []});
             }
             return fallback(message);
         };
-        const cancel = harness.get("alert-buttons").children[0];
-        const resolving = cancel.emit("click");
+        const retrying = harness.get("button-approve").click();
         await flushPopup();
-        assert.equal(harness.nativeMessages[0].subject, "resolveApprovalAlert");
+        assert.equal(harness.nativeMessages[0].subject, "retryTransaction");
         assert.equal(harness.nativeMessages[0].reviewToken, requestToken(101));
-        await cancel.emit("click");
+        assert.equal(harness.get("button-reject").disabled, !rejectable);
+        await harness.get("button-reject").click();
+        await controller.reject();
         assert.equal(harness.nativeMessages.filter(message => message.subject === "rejectRequest").length, rejectable ? 1 : 0);
         if (rejectable) {
             assert.equal(Object.hasOwn(harness.nativeMessages[1], "reviewToken"), false);
-            assert.equal(harness.get("alert-overlay").classList.contains("hidden"), true);
             assert.equal(harness.get("screen-request").inert, true);
             assert.equal(harness.get("working-overlay").classList.contains("hidden"), false);
         }
-        gate.resolve(commandReply(transactionState(controller.request, {title: "Resolved alert", reviewToken: requestToken(102)})));
-        await resolving;
-        if (rejectable) { assert.equal(controller.state.state, "working"); }
-        else { assert.equal(controller.state.review.title, "Resolved alert"); }
+        const before = harness.visibleSnapshot();
+        const timer = harness.followUpTimerId();
+        gate.resolve(commandReply(transactionState(controller.request, {title: "Retried preparation", reviewToken: requestToken(102)})));
+        await retrying;
+        if (rejectable) {
+            assert.equal(controller.state.state, "working");
+            assert.equal(harness.followUpTimerId(), timer);
+            assert.deepEqual(harness.visibleSnapshot(), before);
+        } else {
+            assert.equal(controller.state.review.title, "Retried preparation");
+        }
+        assert.equal(approvalMessages(harness).length, 0);
     }
 });
 
@@ -3057,145 +3184,77 @@ test("a pending approval locks selection and Cancel until review resumes", async
     assert.equal(harness.get("button-reject").disabled, false);
 });
 
-test("an alert consumes an old editor request and Retry keeps preparation polling", async () => {
-    const alert = {title: "Failed to load", message: "Retry the request", actions: [
-        {title: "Retry", action: "retry"}, {title: "Cancel", action: "cancel"},
-    ]};
-    const harness = await reviewedPopup(request => transactionState(request, {
-        editorRequestToken: 1, alert,
-    }));
-    const controller = harness.controller;
-    assert.equal(harness.get("tx-editor").open, false);
-    assert.equal(["editing", "dragging"].includes(controller.activity.kind), false);
-    harness.handlers.native = (message, fallback) => message.subject === "resolveApprovalAlert"
-        ? commandReply(transactionState(controller.request, {
-            canBackOffRefresh: false,
-            feeLines: ["Network fee: 0.001 ETH", "Calculating…"],
-            editorRequestToken: 1, reviewToken: requestToken(102),
-        }, {actions: ["reject", "setTransactionSpeed"]})) : fallback(message);
+test("notices preserve compatible drafts after ignored or invalid edits", async () => {
+    for (const ignored of [true, false]) {
+        const harness = await reviewedPopup(transactionState);
+        const controller = harness.controller;
+        harness.get("tx-editor").open = true;
+        harness.get("tx-editor").emit("toggle");
+        harness.get("edit-gas-price").value = "8";
+        harness.get("edit-gas-price").emit("input");
+        harness.get("edit-nonce").value = ignored ? "7" : "invalid";
+        harness.get("edit-nonce").emit("input");
+        harness.get("edit-gas-price").focus();
+        const focusCount = harness.focusCalls.length;
+        const fresh = transactionState(controller.request, {
+            reviewToken: requestToken(102),
+            editor: {usesEIP1559: false, nonce: "2", gasPriceGwei: "4"},
+            notice: {title: "Unsafe fees", message: "Review the fee"},
+        }, {actions: ["reject", "editTransaction"]});
+        harness.handlers.native = (message, fallback) => message.subject === "applyTransactionEdits"
+            ? {...commandReply(fresh, ignored ? "ignored" : "ok"), ...(!ignored ? {editsError: true} : {})}
+            : fallback(message);
 
-    await harness.get("alert-buttons").children[0].click();
+        await harness.get("editor-apply").click();
 
-    assert.equal(controller.state.review.canBackOffRefresh, false);
-    assert.deepEqual(harness.get("tx-fee-lines").children.map(line => line.textContent),
-        ["Network fee: 0.001 ETH", "Calculating…"]);
-    assert.equal(["editing", "dragging"].includes(controller.activity.kind), false);
-    assert.equal(harness.get("screen-request").inert, false);
-    harness.setState(controller.request, transactionState(controller.request, {
-        editorRequestToken: 1, reviewToken: requestToken(103),
-    }));
-    await harness.fire(harness.followUpTimerId());
-    assert.equal(controller.state.review.canBackOffRefresh, true);
-    assert.equal(harness.get("button-approve").disabled, false);
-    assert.equal(harness.get("tx-editor").open, false);
+        assert.equal(controller.interaction.kind, "editing");
+        assert.equal(controller.interaction.draft.reviewToken, requestToken(102));
+        assert.equal(harness.get("tx-editor").open, true);
+        assert.equal(harness.get("edit-gas-price").value, "8");
+        assert.equal(harness.get("edit-nonce").value, ignored ? "7" : "invalid");
+        assert.equal(harness.get("edits-error").classList.contains("hidden"), false);
+        assert.equal(harness.get("tx-notice-title").textContent, "Unsafe fees");
+        assert.equal(harness.get("editor-apply").disabled, false);
+        assert.equal(harness.get("button-approve").disabled, true);
+        assert.equal(harness.document.activeElement, harness.get("edit-gas-price"));
+        assert.equal(harness.focusCalls.length, focusCount);
+        assert.equal(harness.followUpTimerId(), null);
+        assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["applyTransactionEdits"]);
+    }
 });
 
-test("an alert replaces a stale editor draft and ignored Cancel can refresh it", async () => {
-    const harness = await reviewedPopup(transactionState);
-    const controller = harness.controller;
-    harness.get("tx-editor").open = true;
-    harness.get("tx-editor").emit("toggle");
-    const alert = {title: "Unsafe fees", message: "Review the fee", actions: [
-        {title: "Edit", action: "edit"}, {title: "Cancel", action: "cancel"},
-    ]};
-    harness.setState(controller.request, transactionState(controller.request, {
-        reviewToken: requestToken(102), alert,
-    }));
-    harness.handlers.native = (message, fallback) =>
-        message.subject === "applyTransactionEdits" || message.subject === "resolveApprovalAlert"
-            ? commandReply(harness.states.get(controller.request.requestToken), "ignored") : fallback(message);
+test("direct Edit focuses the applicable fee field and never sends an approval", async () => {
+    for (const usesEIP1559 of [false, true]) {
+        const editor = usesEIP1559
+            ? {usesEIP1559, nonce: "1", maxPriorityFeePerGasGwei: "2", maxFeePerGasGwei: "22"}
+            : {usesEIP1559, nonce: "1", gasPriceGwei: "2"};
+        const harness = await reviewedPopup(request => transactionState(request, {
+            editor, notice: {title: "Unsafe fees", message: "Edit the fee"},
+        }, {actions: ["reject", "editTransaction"]}));
+        const controller = harness.controller;
 
-    await harness.get("editor-apply").click();
+        await harness.get("button-approve").click();
 
-    assert.equal(["editing", "dragging"].includes(controller.activity.kind), false);
-    assert.equal(harness.get("tx-editor").open, false);
-    assert.equal(harness.get("alert-overlay").classList.contains("hidden"), false);
-    harness.setState(controller.request, transactionState(controller.request, {reviewToken: requestToken(103)}));
-    harness.clearMessages();
-    await harness.get("alert-buttons").children[1].click();
-    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["resolveApprovalAlert"]);
-    assert.equal(harness.get("alert-overlay").classList.contains("hidden"), true);
-    assert.equal(harness.get("screen-request").inert, false);
-    assert.equal(controller.state.review.reviewToken, requestToken(103));
+        assert.equal(harness.get("tx-editor").open, true);
+        assert.equal(controller.interaction.kind, "editing");
+        assert.equal(controller.interaction.draft.reviewToken, requestToken(101));
+        assert.equal(harness.document.activeElement,
+            harness.get(usesEIP1559 ? "edit-max-priority" : "edit-gas-price"));
+        assert.equal(harness.get("editor-apply").disabled, false);
+        assert.equal(harness.get("button-approve").disabled, true);
+        assert.deepEqual(harness.nativeMessages, []);
+    }
 });
 
-test("a new Edit alert request still opens exclusive advanced editing", async () => {
-    const alert = {title: "Unsafe fees", message: "Edit the fee", actions: [
-        {title: "Edit", action: "edit"},
-    ]};
-    const harness = await reviewedPopup(request => transactionState(request, {
-        editorRequestToken: 1, alert,
-    }));
+test("notice disappearance and busy states never reopen advanced editing", async () => {
+    const notice = {title: "Fees updated", message: "Check the estimate"};
+    const harness = await reviewedPopup(request => transactionState(request, {notice}));
     const controller = harness.controller;
-    harness.handlers.native = (message, fallback) => message.subject === "resolveApprovalAlert"
-        ? commandReply(transactionState(controller.request, {
-            editorRequestToken: 2, reviewToken: requestToken(102),
-        })) : fallback(message);
-
-    await harness.get("alert-buttons").children[0].click();
-
-    assert.equal(harness.get("alert-overlay").classList.contains("hidden"), true);
-    assert.equal(harness.get("tx-editor").open, true);
-    assert.equal(controller.activity.kind, "editing");
-    assert.equal((controller.activity.draft ?? controller.activity.gesture).reviewToken, requestToken(102));
-    assert.equal(harness.get("editor-apply").disabled, false);
-    assert.equal(harness.get("button-approve").disabled, true);
-});
-
-test("a rebuilt transaction review allows the next alert Edit to reuse its request token", async () => {
-    const alert = {title: "Unsafe fees", message: "Edit the fee", actions: [
-        {title: "Edit", action: "edit"},
-    ]};
-    const harness = await reviewedPopup(request => transactionState(request, {alert}));
-    const controller = harness.controller;
-    let editRequests = 0;
-    let approvals = 0;
-    harness.handlers.native = (message, fallback) => {
-        let state;
-        if (message.subject === "resolveApprovalAlert") {
-            state = transactionState(controller.request, {
-                editorRequestToken: 1, reviewToken: requestToken(++editRequests === 1 ? 102 : 106),
-            });
-        } else if (message.subject === "applyTransactionEdits") {
-            state = transactionState(controller.request, {
-                editorRequestToken: 1, reviewToken: requestToken(103),
-            });
-        } else if (message.subject === "approveRequest") {
-            state = transactionState(controller.request, ++approvals === 1
-                ? {reviewToken: requestToken(104)}
-                : {reviewToken: requestToken(105), alert});
-        } else {
-            return fallback(message);
-        }
-        harness.setState(controller.request, state);
-        return commandReply(state);
-    };
-
-    await harness.get("alert-buttons").children[0].click();
-    assert.equal(harness.get("tx-editor").open, true);
-    controller.editField("gasPriceGwei", "3");
-    await harness.get("editor-apply").click();
     assert.equal(harness.get("tx-editor").open, false);
-
-    await controller.approveCurrent();
-    assert.equal(controller.state.review.editorRequestToken, undefined);
+    await harness.get("tx-editor-summary").click();
+    assert.equal(harness.get("tx-editor").open, true);
+    await harness.get("tx-editor-summary").click();
     assert.equal(harness.get("tx-editor").open, false);
-    await controller.approveCurrent();
-    await harness.get("alert-buttons").children[0].click();
-
-    assert.equal(editRequests, 2);
-    assert.equal(harness.get("alert-overlay").classList.contains("hidden"), true);
-    assert.equal(harness.get("tx-editor").open, true);
-    assert.equal(controller.activity.kind, "editing");
-    assert.equal(controller.activity.draft.reviewToken, requestToken(106));
-});
-
-test("review updates and busy states do not reopen a consumed editor request", async () => {
-    const harness = await reviewedPopup(request => transactionState(request, {editorRequestToken: 1}));
-    const controller = harness.controller;
-    assert.equal(harness.get("tx-editor").open, true);
-    harness.get("tx-editor").open = false;
-    await harness.get("tx-editor").emit("toggle");
 
     let revision = 101;
     for (const busyState of [null, "working", "authenticating"]) {
@@ -3203,11 +3262,14 @@ test("review updates and busy states do not reopen a consumed editor request", a
             harness.setState(controller.request, {id: controller.request.id, state: busyState, actions: []});
             await controller.readState();
         }
-        harness.setState(controller.request, transactionState(controller.request, {
-            editorRequestToken: 1, reviewToken: requestToken(++revision),
-        }));
-        await controller.readState();
-        assert.equal(harness.get("tx-editor").open, false);
-        assert.equal(controller.activity.kind, "viewing");
+        for (const present of [true, false]) {
+            harness.setState(controller.request, transactionState(controller.request, {
+                ...(present ? {notice} : {}), reviewToken: requestToken(++revision),
+            }));
+            await controller.readState();
+            assert.equal(harness.get("tx-notice").classList.contains("hidden"), !present);
+            assert.equal(harness.get("tx-editor").open, false);
+            assert.equal(controller.interaction.kind, "viewing");
+        }
     }
 });

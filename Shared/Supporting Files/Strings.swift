@@ -158,6 +158,8 @@ struct Strings {
             "reviewChanged": reviewChanged,
             "reset": reset,
             "apply": apply,
+            "tryAgain": tryAgain,
+            "editFees": editFees,
             "rpc": rpc,
             "cancel": cancel,
             "ok": ok,

@@ -219,6 +219,55 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertEqual(refreshed["approval"] as? NSDictionary, unchanged as NSDictionary)
     }
 
+    func testNativeDeliveryFencesCachedTransactionMutations() async throws {
+        let mutations: [(String, [String: Any]?)] = [
+            ("retryTransaction", nil),
+            ("applyTransactionEdits", ["mode": "custom", "nonce": "1", "gasPriceGwei": "2"]),
+            ("setTransactionSpeed", ["interaction": "ended", "value": 120]),
+        ]
+        for (subject, payload) in mutations {
+            let store = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(
+                id: 706, provider: .ethereum, method: "signTransaction"
+            ), in: store)
+            var preparations = 0
+            let controller = PopupRequestSessions(
+                store: store,
+                walletEnvironment: popupWalletEnvironment(),
+                loadsTransactionContext: false,
+                transactionApprovalOperations: TransactionApprovalOperations(
+                    prepare: { _, _, _ in
+                        preparations += 1
+                        let source = PopupPreparationSource()
+                        source.resolve(.failure(.gasPriceUnavailable))
+                        return source.stream
+                    },
+                    preflight: { transaction, _ in
+                        XCTFail("A mutation must not preflight")
+                        return .unavailable(transaction, popupTransactionEstimate())
+                    }
+                ),
+                executionEnvironment: .init(requestProcessor: CompactPopupProcessor { _ in
+                    .approval(popupTransactionAction())
+                })
+            )
+            let token = try await materializeToken(controller: controller, snapshot: snapshot)
+            await store.setNativeDeliveryReceipt(.init(
+                nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
+                owner: popupNativeDeliveryOwner()
+            ), handle: snapshot.handle)
+
+            let response = await controller.dispatchJSON(request: try popupCommand(
+                subject: subject, id: snapshot.handle.id,
+                requestToken: snapshot.handle.requestToken, reviewToken: token, payload: payload
+            ), profileIdentifier: nil)
+
+            XCTAssertEqual(response["status"] as? String, "ignored", subject)
+            XCTAssertEqual(response["state"] as? String, "working", subject)
+            XCTAssertEqual(preparations, 1, subject)
+        }
+    }
+
     func testPrivatePopupCommandsNeverExposeStoredReview() async throws {
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(id: 703, provider: .ethereum, method: "addEthereumChain"), in: store)
@@ -273,11 +322,12 @@ final class PopupRequestSessionsTests: XCTestCase {
     func testRequestScopeInvalidatesOwnedAccessOnceWithoutClearingBorrowedCatalog() {
         for explicitlyInvalidate in [false, true] {
             let catalog = WalletReviewCatalog(account: popupTestAccount())
-            let owned = BorrowedWalletSignerForTesting()
-            var scoped: WalletSigningSession? = WalletSigningSession(
-                owned,
+            let owned = PopupSigningProbe(sign: { _ in .failure(.failedToSign) })
+            var scoped: WalletSigningSession? = makeWalletSigningSessionForTesting(
                 authorization: walletSigningAuthorizationForTesting(approvedAccount: popupTestAccountDescriptor()),
                 isCurrent: { true },
+                sign: { operation, _ in await owned.sign(operation) },
+                retireSigningMaterial: { owned.retireSigningMaterial() },
                 acquireCommitLease: { WalletExecutionLease(release: {}) }
             )
             weak let scopedReference = scoped
@@ -287,12 +337,12 @@ final class PopupRequestSessionsTests: XCTestCase {
                 scoped?.invalidate()
                 scoped?.invalidate()
                 XCTAssertFalse(scoped?.validateCurrent() == true)
-                XCTAssertEqual(owned.invalidationCount, 1)
+                XCTAssertEqual(owned.retirementCount, 1)
             }
             scoped = nil
 
             XCTAssertNil(scopedReference)
-            XCTAssertEqual(owned.invalidationCount, 1)
+            XCTAssertEqual(owned.retirementCount, 1)
             XCTAssertEqual(catalog.orderedAccounts.count, 1)
         }
     }
@@ -738,9 +788,12 @@ final class PopupRequestSessionsTests: XCTestCase {
                 } else if kind == "native" {
                     result = await execute(executor, setup: setup, signing: .source { signingAuthorization in
                         XCTFail("Expired operation must not create a signer")
-                        return WalletSigningSession(
-                            TestWalletSigningAccess(), authorization: signingAuthorization,
-                            isCurrent: { true }, clock: { setup.claim.executionDeadline.addingTimeInterval(offset) }
+                        return makeWalletSigningSessionForTesting(
+                            authorization: signingAuthorization,
+                            isCurrent: { true },
+                            sign: { _, _ in .failure(.failedToSign) },
+                            requiresCommitLease: false,
+                            clock: { setup.claim.executionDeadline.addingTimeInterval(offset) }
                         )
                     })
                 } else {
@@ -831,14 +884,15 @@ final class PopupRequestSessionsTests: XCTestCase {
         let setup = try await makeExecutionSetup(store: store, id: 609)
         let gate = makeGate()
         let started = expectation(description: "original preparation started")
-        let access = BorrowedWalletSignerForTesting()
-        let signer = WalletSigningSession(
-            access,
+        let access = PopupSigningProbe(sign: { _ in .failure(.failedToSign) })
+        let signer = makeWalletSigningSessionForTesting(
             authorization: walletSigningAuthorizationForTesting(
                 approvedAccount: popupTestAccountDescriptor(), handle: setup.claim.handle,
                 deadline: setup.claim.executionDeadline
             ),
             isCurrent: { true },
+            sign: { operation, _ in await access.sign(operation) },
+            retireSigningMaterial: { access.retireSigningMaterial() },
             acquireCommitLease: { WalletExecutionLease(release: {}) }
         )
         var preparations = 0
@@ -880,7 +934,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         })
         XCTAssertEqual(duplicateResult, .ownershipLost)
         XCTAssertEqual(preparations, 1)
-        XCTAssertEqual(access.invalidationCount, 0)
+        XCTAssertEqual(access.retirementCount, 0)
         XCTAssertTrue(signer.validateCurrent())
         let before = await store.events()
         XCTAssertEqual(before, ["claim"])
@@ -892,7 +946,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         let result = await task.value
         XCTAssertEqual(result, .persisted)
         XCTAssertEqual(executions, 1)
-        XCTAssertEqual(access.invalidationCount, 1)
+        XCTAssertEqual(access.retirementCount, 1)
         let after = await store.events()
         XCTAssertEqual(after, ["claim", "complete"])
     }
@@ -1109,14 +1163,14 @@ final class PopupRequestSessionsTests: XCTestCase {
             source.resolve(.safe(transaction, popupTransactionEstimate()))
             return try await source.value(cancellation: nil)
         }
-        let token = try XCTUnwrap(session.beginApproval())
-        let result = await session.finishAuthentication(token: token, succeeded: true)
+        let token = try XCTUnwrap(session.reserveForPreflight())
+        let result = await session.preflight(token)
         guard case .approved(let transaction) = result else {
             return XCTFail("Expected approved transaction")
         }
         XCTAssertEqual(transaction.id, session.snapshot.transaction.id)
         XCTAssertEqual(session.snapshot.phase, .finished)
-        XCTAssertNil(session.activeAlert)
+        XCTAssertNil(session.snapshot.notice)
     }
 
     func testTransactionSessionRejectsDuplicatesAndFreezesPreparationDuringAuthentication()
@@ -1139,20 +1193,20 @@ final class PopupRequestSessionsTests: XCTestCase {
             }
         )
         let reviewedTransaction = session.snapshot.transaction
-        let token = try XCTUnwrap(session.beginApproval())
-        XCTAssertEqual(session.snapshot.phase, .authenticating)
+        let token = try XCTUnwrap(session.reserveForPreflight())
+        XCTAssertEqual(session.snapshot.phase, .reserved)
         var lateTransaction = reviewedTransaction
         lateTransaction.interpretation = "Unreviewed preparation update"
         preparationUpdate?(lateTransaction)
-        XCTAssertNil(session.beginApproval())
+        XCTAssertNil(session.reserveForPreflight())
         XCTAssertEqual(session.snapshot.transaction.interpretation, reviewedTransaction.interpretation)
         XCTAssertNil(preflightCompletion)
         let approvalTask = Task { @MainActor in
-            await session.finishAuthentication(token: token, succeeded: true)
+            await session.preflight(token)
         }
         try await waitForCondition { preflightCompletion != nil }
-        XCTAssertNil(session.beginApproval())
-        let duplicate = await session.finishAuthentication(token: token, succeeded: true)
+        XCTAssertNil(session.reserveForPreflight())
+        let duplicate = await session.preflight(token)
         guard case .invalidated = duplicate else { return XCTFail("Expected duplicate rejection") }
         XCTAssertEqual(session.snapshot.phase, .preflighting)
         XCTAssertEqual(preflightTransaction?.interpretation, reviewedTransaction.interpretation)
@@ -1168,12 +1222,12 @@ final class PopupRequestSessionsTests: XCTestCase {
             session.invalidate()
             return try await source.value(cancellation: nil)
         }
-        let token = try XCTUnwrap(session.beginApproval())
-        let result = await session.finishAuthentication(token: token, succeeded: true)
+        let token = try XCTUnwrap(session.reserveForPreflight())
+        let result = await session.preflight(token)
         guard case .invalidated = result else {
             return XCTFail("Invalidation must fence a preflight result that has already resumed")
         }
-        XCTAssertNil(session.beginApproval())
+        XCTAssertNil(session.reserveForPreflight())
     }
 
     func testTransactionSessionAuthenticationRefusalAllowsFreshApproval() async throws {
@@ -1184,26 +1238,26 @@ final class PopupRequestSessionsTests: XCTestCase {
             source.resolve(.safe(transaction, popupTransactionEstimate()))
             return try await source.value(cancellation: nil)
         }
-        let firstToken = try XCTUnwrap(session.beginApproval())
-        let refused = await session.finishAuthentication(token: firstToken, succeeded: false)
-        guard case .reviewRequired = refused else { return XCTFail("Expected another review") }
+        let firstToken = try XCTUnwrap(session.reserveForPreflight())
+        XCTAssertTrue(session.releaseReservation(firstToken))
+        XCTAssertFalse(session.releaseReservation(firstToken))
         XCTAssertEqual(preflightCount, 0)
         XCTAssertEqual(session.snapshot.phase, .ready)
         XCTAssertTrue(session.snapshot.canApprove)
-        let nextToken = try XCTUnwrap(session.beginApproval())
-        let retried = await session.finishAuthentication(token: nextToken, succeeded: true)
+        let nextToken = try XCTUnwrap(session.reserveForPreflight())
+        let retried = await session.preflight(nextToken)
         guard case .approved = retried else { return XCTFail("Expected approval") }
         XCTAssertEqual(preflightCount, 1)
     }
 
-    func testTransactionSessionPreflightAlertsRemainPresentable() async throws {
+    func testTransactionSessionPreflightNoticesRemainPresentable() async throws {
         let cases: [(
-            TransactionApprovalAlertIntent.Kind,
+            TransactionReviewNotice,
             (Transaction, GasService.Estimate) -> TransactionFeePreflightResult
         )] = [
             (.feesUpdated, { .walletManagedUpdated($0, $1) }),
             (.unsafeFees, { .userControlledUnsafe($0, $1) }),
-            (.unavailableFees, { .unavailable($0, $1) }),
+            (.feesUnavailable, { .unavailable($0, $1) }),
         ]
         for (kind, makeResult) in cases {
             let session = await makeTransactionApprovalSession { transaction, _ in
@@ -1212,11 +1266,11 @@ final class PopupRequestSessionsTests: XCTestCase {
                 source.resolve(.safe(transaction, popupTransactionEstimate()))
                 return try await source.value(cancellation: nil)
             }
-            let token = try XCTUnwrap(session.beginApproval())
-            let result = await session.finishAuthentication(token: token, succeeded: true)
+            let token = try XCTUnwrap(session.reserveForPreflight())
+            let result = await session.preflight(token)
             guard case .reviewRequired = result else { return XCTFail("Expected review") }
-            XCTAssertEqual(session.activeAlert?.kind, kind)
-            XCTAssertFalse(session.activeAlert?.presentation.actions.isEmpty ?? true)
+            XCTAssertEqual(session.snapshot.notice, kind)
+            XCTAssertFalse(session.snapshot.notice?.title.isEmpty ?? true)
             XCTAssertNotEqual(session.snapshot.phase, .finished)
         }
     }
@@ -1228,12 +1282,12 @@ final class PopupRequestSessionsTests: XCTestCase {
             preflightCount += 1
             return try await source.value(cancellation: nil)
         }
-        let token = try XCTUnwrap(session.beginApproval())
+        let token = try XCTUnwrap(session.reserveForPreflight())
         session.invalidate()
         session.invalidate()
-        let result = await session.finishAuthentication(token: token, succeeded: true)
+        let result = await session.preflight(token)
         guard case .invalidated = result else { return XCTFail("Expected invalidation") }
-        XCTAssertNil(session.beginApproval())
+        XCTAssertNil(session.reserveForPreflight())
         XCTAssertEqual(preflightCount, 0)
         XCTAssertEqual(session.snapshot.phase, .finished)
     }
@@ -1248,10 +1302,10 @@ final class PopupRequestSessionsTests: XCTestCase {
             return try await source.value(cancellation: cancellation)
         }
         let transaction = session.snapshot.transaction
-        let token = try XCTUnwrap(session.beginApproval())
+        let token = try XCTUnwrap(session.reserveForPreflight())
         var approvalCompleted = false
         let approvalTask = Task { @MainActor in
-            let result = await session.finishAuthentication(token: token, succeeded: true)
+            let result = await session.preflight(token)
             approvalCompleted = true
             return result
         }
@@ -1264,7 +1318,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         preflightCompletion?(.safe(transaction, popupTransactionEstimate()))
         preflightCompletion?(.unavailable(transaction, popupTransactionEstimate()))
         XCTAssertEqual(session.snapshot.phase, .finished)
-        XCTAssertNil(session.activeAlert)
+        XCTAssertNil(session.snapshot.notice)
         XCTAssertFalse(session.snapshot.canApprove)
     }
 
@@ -3375,8 +3429,8 @@ extension PopupRequestSessionsTests {
         )
         XCTAssertNotNil((state["review"] as? [String: Any])?["reviewToken"] as? String)
 
-        for subject in ["approveRequest", "applyTransactionEdits"] {
-            let payload: [String: Any] = subject == "approveRequest"
+        for subject in ["approveRequest", "applyTransactionEdits", "retryTransaction"] {
+            let payload: [String: Any]? = subject == "retryTransaction" ? nil : subject == "approveRequest"
                 ? [:]
                 : ["mode": "suggested"]
             let request = try popupCommand(
@@ -3753,7 +3807,7 @@ extension PopupRequestSessionsTests {
                 id: 603, provider: .ethereum, method: "signPersonalMessage"
             ), in: store)
             let catalog = WalletReviewCatalog(account: popupTestAccount())
-            let signingAccess = PopupRecordingWalletSigningAccess()
+            let signingAccess = PopupSigningProbe()
             var signer: WalletSigningSession!
             let unlockGate = makeGate()
             let timeoutGate = makeGate()
@@ -3771,9 +3825,12 @@ extension PopupRequestSessionsTests {
                 walletEnvironment: PopupWalletEnvironment(
                     reviewCatalog: { catalog },
                     unlockWallets: { _, authorization in
-                        signer = WalletSigningSession(
-                            signingAccess, authorization: authorization,
-                            isCurrent: { true }, acquireCommitLease: { WalletExecutionLease(release: {}) },
+                        signer = makeWalletSigningSessionForTesting(
+                            authorization: authorization,
+                            isCurrent: { true },
+                            sign: { operation, _ in await signingAccess.sign(operation) },
+                            retireSigningMaterial: { signingAccess.retireSigningMaterial() },
+                            acquireCommitLease: { WalletExecutionLease(release: {}) },
                             clock: { clock.now }
                         )
                         authenticationStarted = true
@@ -3833,7 +3890,7 @@ extension PopupRequestSessionsTests {
             XCTAssertTrue(signingAccess.operations.isEmpty)
 
             await unlockGate.open()
-            try await waitForCondition { signingAccess.invalidationCount > 0 }
+            try await waitForCondition { signingAccess.retirementCount > 0 }
             XCTAssertFalse(signer.validateCurrent())
             XCTAssertEqual(executionCount, 0)
             XCTAssertTrue(signingAccess.operations.isEmpty)
@@ -3924,12 +3981,16 @@ extension PopupRequestSessionsTests {
             id: 727, provider: .ethereum, method: "signTransaction"
         ), in: store)
         let catalog = WalletReviewCatalog(account: popupTestAccount())
-        let material = PopupRecordingWalletSigningAccess()
+        let material = PopupSigningProbe()
         var preparations = 0
         let controller = PopupRequestSessions(
             store: store,
             walletEnvironment: popupWalletEnvironment(reviewCatalog: { catalog }) { _, authorization in
-                .unlocked(catalog: catalog, session: makeWalletSigningSessionForTesting(material, authorization: authorization))
+                .unlocked(catalog: catalog, session: makeWalletSigningSessionForTesting(
+                    authorization: authorization,
+                    sign: { operation, _ in await material.sign(operation) },
+                    retireSigningMaterial: { material.retireSigningMaterial() }
+                ))
             },
             loadsTransactionContext: false,
             transactionApprovalOperations: TransactionApprovalOperations(
@@ -3970,7 +4031,7 @@ extension PopupRequestSessionsTests {
         XCTAssertNil(response["review"])
         XCTAssertEqual(response["actions"] as? [String], ["retry", "reject"])
         XCTAssertTrue(material.operations.isEmpty)
-        XCTAssertEqual(material.invalidationCount, 1)
+        XCTAssertEqual(material.retirementCount, 1)
         let polled = await controller.dispatchJSON(request: try popupCommand(
             subject: "getApprovalState", id: snapshot.handle.id,
             requestToken: snapshot.handle.requestToken
@@ -3988,7 +4049,7 @@ extension PopupRequestSessionsTests {
             id: 608, provider: .ethereum, method: "signPersonalMessage"
         ), in: store)
         let catalog = WalletReviewCatalog(account: popupTestAccount())
-        let signingAccess = PopupRecordingWalletSigningAccess()
+        let signingAccess = PopupSigningProbe()
         let unlockGate = makeGate()
         let started = expectation(description: "authentication started")
         var signer: WalletSigningSession!
@@ -4001,9 +4062,12 @@ extension PopupRequestSessionsTests {
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { catalog },
                 unlockWallets: { _, authorization in
-                    signer = WalletSigningSession(
-                        signingAccess, authorization: authorization,
-                        isCurrent: { true }, acquireCommitLease: { WalletExecutionLease(release: {}) }
+                    signer = makeWalletSigningSessionForTesting(
+                        authorization: authorization,
+                        isCurrent: { true },
+                        sign: { operation, _ in await signingAccess.sign(operation) },
+                        retireSigningMaterial: { signingAccess.retireSigningMaterial() },
+                        acquireCommitLease: { WalletExecutionLease(release: {}) }
                     )
                     started.fulfill()
                     await unlockGate.wait()
@@ -4053,7 +4117,7 @@ extension PopupRequestSessionsTests {
         await unlockGate.open()
         _ = await approval.value
         XCTAssertFalse(signer.validateCurrent())
-        XCTAssertGreaterThan(signingAccess.invalidationCount, 0)
+        XCTAssertGreaterThan(signingAccess.retirementCount, 0)
         XCTAssertTrue(signingAccess.operations.isEmpty)
         XCTAssertEqual(executions, 0)
         let current = await controller.dispatchJSON(request: read, profileIdentifier: nil)
@@ -4255,7 +4319,7 @@ extension PopupRequestSessionsTests {
         let catalog = WalletReviewCatalog(accounts: accounts.map {
             SpecificWalletAccount(walletId: "wallet", account: $0)
         })
-        let backingAccess = PopupRecordingWalletSigningAccess()
+        let backingAccess = PopupSigningProbe()
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(id: 811, provider: .ethereum, method: "signPersonalMessage"), in: store)
         var executions = 0
@@ -4280,7 +4344,9 @@ extension PopupRequestSessionsTests {
                 reviewCatalog: { catalog },
                 unlockWallets: { _, authorization in
                     .unlocked(catalog: catalog, session: makeWalletSigningSessionForTesting(
-                        backingAccess, authorization: authorization
+                        authorization: authorization,
+                        sign: { operation, _ in await backingAccess.sign(operation) },
+                        retireSigningMaterial: { backingAccess.retireSigningMaterial() }
                     ))
                 }
             ),
@@ -4586,17 +4652,17 @@ extension PopupRequestSessionsTests {
         let snapshot = try await enqueue(popupSnapshot(id: 411, provider: .ethereum, method: "signTransaction"), in: store)
         let account = popupTestAccount()
         let catalog = WalletReviewCatalog(account: account)
-        let owned = PopupRecordingWalletSigningAccess()
+        let owned = PopupSigningProbe()
         let leaseState = CompactExecutionLeaseState(held: false)
         var access: WalletSigningSession!
         await store.setBroadcastCheckpointHook {
             XCTAssertFalse(leaseState.isReleased)
-            XCTAssertEqual(owned.invalidationCount, 1)
+            XCTAssertEqual(owned.retirementCount, 1)
         }
         let sender = PopupBroadcastSender { _, _ in
                     XCTAssertFalse(access.validateCurrent())
                     XCTAssertTrue(leaseState.isReleased)
-                    XCTAssertEqual(owned.invalidationCount, 1)
+                    XCTAssertEqual(owned.retirementCount, 1)
                     guard case .failure(.authorizationUnavailable) = await access.sign() else {
                         XCTFail("Broadcast must not retain signing authority")
                         return .failure(.rpc(.serverError(-32603, Strings.somethingWentWrong)))
@@ -4624,7 +4690,9 @@ extension PopupRequestSessionsTests {
                 reviewCatalog: { catalog },
                 unlockWallets: { _, authorization in
                     access = makeWalletSigningSessionForTesting(
-                        owned, authorization: authorization,
+                        authorization: authorization,
+                        sign: { operation, _ in await owned.sign(operation) },
+                        retireSigningMaterial: { owned.retireSigningMaterial() },
                         acquireCommitLease: {
                             XCTAssertEqual(owned.operations.count, 1)
                             leaseState.acquire()
@@ -5019,10 +5087,8 @@ extension PopupRequestSessionsTests {
         original.start()
         await settleTransactionPreparation(original)
         XCTAssertEqual(original.snapshot.transaction.decimalNonceString, "5")
-        let token = try XCTUnwrap(original.beginApproval())
-        guard case .reviewRequired = await original.finishAuthentication(token: token, succeeded: false) else {
-            return XCTFail("Expected a cancelled approval")
-        }
+        let token = try XCTUnwrap(original.reserveForPreflight())
+        XCTAssertTrue(original.releaseReservation(token))
         pendingNonce = "0x6"
         let restored = PopupTransactionSession(action: action, operations: operations)
         restored.start()
@@ -5118,13 +5184,15 @@ extension PopupRequestSessionsTests {
             let processor = DappRequestProcessor(ethereumNetworkResolver: resolve)
             let admission = DappRequestAdmission(store: store, requestProcessor: processor)
             let catalog = WalletReviewCatalog(account: popupTestAccount())
-            let signingAccess = PopupRecordingWalletSigningAccess()
+            let signingAccess = PopupSigningProbe()
             let controller = PopupRequestSessions(
                 store: store,
                 walletEnvironment: popupWalletEnvironment(reviewCatalog: { catalog }) { _, authorization in
                     storage.withLock { $0 = .corrupt }
                     return .unlocked(catalog: catalog, session: makeWalletSigningSessionForTesting(
-                        signingAccess, authorization: authorization
+                        authorization: authorization,
+                        sign: { operation, _ in await signingAccess.sign(operation) },
+                        retireSigningMaterial: { signingAccess.retireSigningMaterial() }
                     ))
                 },
                 loadsTransactionContext: false,
@@ -5261,7 +5329,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual((unchanged["review"] as? [String: Any])?["editor"] as? NSDictionary, editor as NSDictionary)
     }
 
-    func testPreflightFeeWarningRetainsUpdatedReviewAndRetiresSignerBeforeRetry() async throws {
+    func testPreflightFeeNoticeRetainsUpdatedReviewAndRequiresFreshApproval() async throws {
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(
             id: 724, provider: .ethereum, method: "signTransaction"
@@ -5270,13 +5338,17 @@ extension PopupRequestSessionsTests {
         var reviewPreparations = 0
         var preflights = 0
         var sessions = [WalletSigningSession]()
-        var materials = [PopupRecordingWalletSigningAccess]()
+        var materials = [PopupSigningProbe]()
         var executedTransactions = [Transaction]()
         let controller = PopupRequestSessions(
             store: store,
             walletEnvironment: popupWalletEnvironment(reviewCatalog: { catalog }) { _, authorization in
-                let material = PopupRecordingWalletSigningAccess()
-                let session = makeWalletSigningSessionForTesting(material, authorization: authorization)
+                let material = PopupSigningProbe()
+                let session = makeWalletSigningSessionForTesting(
+                    authorization: authorization,
+                    sign: { operation, _ in await material.sign(operation) },
+                    retireSigningMaterial: { material.retireSigningMaterial() }
+                )
                 materials.append(material)
                 sessions.append(session)
                 return .unlocked(catalog: catalog, session: session)
@@ -5329,44 +5401,102 @@ extension PopupRequestSessionsTests {
         let response = await controller.dispatchJSON(request: approve, profileIdentifier: nil)
         let review = try XCTUnwrap(response["review"] as? [String: Any])
         let warningToken = try XCTUnwrap(review["reviewToken"] as? String)
-        let alert = try XCTUnwrap(review["alert"] as? [String: Any])
+        let notice = try XCTUnwrap(review["notice"] as? [String: Any])
         XCTAssertEqual(response["state"] as? String, "review")
         XCTAssertNotEqual(warningToken, token)
-        XCTAssertEqual(alert["title"] as? String, Strings.feesUpdated)
+        XCTAssertEqual(notice["title"] as? String, Strings.feesUpdated)
         XCTAssertEqual((review["editor"] as? [String: Any])?["gasPriceGwei"] as? String, "0.000000025")
-        XCTAssertTrue((response["actions"] as? [String])?.contains("resolveApprovalAlert") == true)
+        XCTAssertTrue((response["actions"] as? [String])?.contains("approve") == true)
+        XCTAssertTrue(executedTransactions.isEmpty)
         XCTAssertEqual(reviewPreparations, 1)
         XCTAssertEqual(sessions.count, 1)
         XCTAssertFalse(try XCTUnwrap(sessions.first).validateCurrent())
         XCTAssertTrue(try XCTUnwrap(materials.first).operations.isEmpty)
-        XCTAssertEqual(materials.first?.invalidationCount, 1)
+        XCTAssertEqual(materials.first?.retirementCount, 1)
 
         let stale = await controller.dispatchJSON(request: approve, profileIdentifier: nil)
         XCTAssertEqual(stale["status"] as? String, "ignored")
         XCTAssertEqual(sessions.count, 1)
-        let acknowledged = try await controller.dispatchPreparedJSON(request: try popupCommand(
-            subject: "resolveApprovalAlert", id: snapshot.handle.id,
-            requestToken: snapshot.handle.requestToken, reviewToken: warningToken,
-            payload: ["action": "acknowledge"]
-        ), profileIdentifier: nil)
-        let nextReview = try XCTUnwrap(acknowledged["review"] as? [String: Any])
-        let nextToken = try XCTUnwrap(nextReview["reviewToken"] as? String)
-        XCTAssertNil(nextReview["alert"])
-        XCTAssertEqual((nextReview["editor"] as? [String: Any])?["gasPriceGwei"] as? String, "0.000000025")
-        XCTAssertTrue((acknowledged["actions"] as? [String])?.contains("approve") == true)
-
         _ = await controller.dispatchJSON(request: try popupCommand(
             subject: "approveRequest", id: snapshot.handle.id,
-            requestToken: snapshot.handle.requestToken, reviewToken: nextToken, payload: [:]
+            requestToken: snapshot.handle.requestToken, reviewToken: warningToken, payload: [:]
         ), profileIdentifier: nil)
         XCTAssertEqual(preflights, 2)
         XCTAssertEqual(sessions.count, 2)
         XCTAssertEqual(executedTransactions.count, 1)
         XCTAssertEqual(executedTransactions.first?.preparedFee, .legacy(gasPrice: 25))
         XCTAssertEqual(materials.map { $0.operations.count }, [0, 1])
-        XCTAssertEqual(materials.map(\.invalidationCount), [1, 1])
+        XCTAssertEqual(materials.map(\.retirementCount), [1, 1])
         let events = await store.events()
         XCTAssertEqual(events, ["claim", "abandon", "claim", "complete"])
+    }
+
+    func testAuthenticationCancellationAfterFeeNoticeRequiresFreshReview() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(
+            id: 725, provider: .ethereum, method: "signTransaction"
+        ), in: store)
+        let catalog = WalletReviewCatalog(account: popupTestAccount())
+        var authentications = 0
+        var preflights = 0
+        var nextNonce = "0x7"
+        let controller = PopupRequestSessions(
+            store: store,
+            walletEnvironment: popupWalletEnvironment(reviewCatalog: { catalog }) { _, authorization in
+                authentications += 1
+                guard authentications == 1 else { return .canceled }
+                return .unlocked(catalog: catalog, session: makeWalletSigningSessionForTesting(authorization: authorization))
+            },
+            loadsTransactionContext: false,
+            transactionApprovalOperations: TransactionApprovalOperations(
+                prepare: { transaction, _, _ in
+                    let source = PopupPreparationSource()
+                    var prepared = popupPreparedTransaction(transaction)
+                    prepared.nonce = nextNonce
+                    source.update(prepared)
+                    source.resolve(.success(prepared))
+                    return source.stream
+                },
+                preflight: { transaction, _ in
+                    preflights += 1
+                    var updated = transaction
+                    updated.replacePreparedFee(.legacy(gasPrice: 25), provenance: .init(gasPrice: .automatic))
+                    return .walletManagedUpdated(updated, popupTransactionEstimate())
+                }
+            ),
+            approvalNetworkResolver: popupApprovalNetwork,
+            executionEnvironment: .init(requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
+                XCTFail("Neither fee correction nor canceled authentication may execute")
+                return .rollback
+            }) { _ in .approval(popupTransactionAction()) })
+        )
+        let token = try await materializeToken(controller: controller, snapshot: snapshot)
+        let updated = await controller.dispatchJSON(request: try popupCommand(
+            subject: "approveRequest", id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken, reviewToken: token, payload: [:]
+        ), profileIdentifier: nil)
+        let review = try XCTUnwrap(updated["review"] as? [String: Any])
+        let correctionToken = try XCTUnwrap(review["reviewToken"] as? String)
+        XCTAssertNotNil(review["notice"])
+        XCTAssertEqual((review["editor"] as? [String: Any])?["nonce"] as? String, "7")
+        nextNonce = "0x8"
+
+        let canceled = await controller.dispatchJSON(request: try popupCommand(
+            subject: "approveRequest", id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken, reviewToken: correctionToken, payload: [:]
+        ), profileIdentifier: nil)
+        XCTAssertEqual(canceled["state"] as? String, "error")
+        XCTAssertEqual(canceled["error"] as? String, Strings.approvalInterrupted)
+        XCTAssertNil(canceled["review"])
+        XCTAssertEqual(authentications, 2)
+        XCTAssertEqual(preflights, 1)
+
+        let retried = try await retryApproval(controller: controller, snapshot: snapshot)
+        let fresh = try XCTUnwrap(retried["review"] as? [String: Any])
+        XCTAssertNotEqual(fresh["reviewToken"] as? String, correctionToken)
+        XCTAssertNil(fresh["notice"])
+        XCTAssertEqual((fresh["editor"] as? [String: Any])?["nonce"] as? String, "8")
+        XCTAssertEqual((fresh["editor"] as? [String: Any])?["gasPriceGwei"] as? String, "0.00000001")
     }
 
     func testMissingVaultDuringAuthenticationShowsSecureSetupRequired()
@@ -5569,7 +5699,7 @@ extension PopupRequestSessionsTests {
             var currentCatalog = catalog
             let processor = PreparationRecordingDappRequestProcessor()
             var authentications = 0
-            let signingAccess = PopupRecordingWalletSigningAccess()
+            let signingAccess = PopupSigningProbe()
             let controller = PopupRequestSessions(
                 store: store,
                 walletEnvironment: PopupWalletEnvironment(
@@ -5577,7 +5707,9 @@ extension PopupRequestSessionsTests {
                     unlockWallets: { _, authorization in
                         authentications += 1
                         return .unlocked(catalog: currentCatalog, session: makeWalletSigningSessionForTesting(
-                            signingAccess, authorization: authorization
+                            authorization: authorization,
+                            sign: { operation, _ in await signingAccess.sign(operation) },
+                            retireSigningMaterial: { signingAccess.retireSigningMaterial() }
                         ))
                     }
                 ),
@@ -5656,7 +5788,7 @@ extension PopupRequestSessionsTests {
         )
         let currentCatalog = LockedTestValue(catalog)
         var preparations = 0
-        let signingAccess = PopupRecordingWalletSigningAccess()
+        let signingAccess = PopupSigningProbe()
         let controller = PopupRequestSessions(
             store: store,
             walletEnvironment: PopupWalletEnvironment(
@@ -5664,13 +5796,15 @@ extension PopupRequestSessionsTests {
                 unlockWallets: { _, authorization in
                     currentCatalog.value = remainingCatalog
                     return .unlocked(catalog: currentCatalog.value, session: makeWalletSigningSessionForTesting(
-                        signingAccess, authorization: authorization,
+                        authorization: authorization,
                         isCurrent: {
                             currentCatalog.value.identity == catalog.identity &&
                                 currentCatalog.value.orderedAccounts.contains(where: {
                                     authorization.approvedAccount.matches(walletID: $0.walletId, account: $0.account)
                                 })
-                        }
+                        },
+                        sign: { operation, _ in await signingAccess.sign(operation) },
+                        retireSigningMaterial: { signingAccess.retireSigningMaterial() }
                     ))
                 }
             ),
@@ -6143,7 +6277,7 @@ extension PopupRequestSessionsTests {
         let network = popupTransactionNetwork()
         var preparations = 0
         var executionCount = 0
-        let backingAccess = PopupRecordingWalletSigningAccess()
+        let backingAccess = PopupSigningProbe()
         let operations = TransactionApprovalOperations(
             prepare: { transaction, _, _ in
                 let source = PopupPreparationSource()
@@ -6217,7 +6351,11 @@ extension PopupRequestSessionsTests {
             store: store,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: { authenticationCatalog },
-                unlockWallets: { _, authorization in .unlocked(catalog: authenticationCatalog, session: makeWalletSigningSessionForTesting(backingAccess, authorization: authorization)) }
+                unlockWallets: { _, authorization in .unlocked(catalog: authenticationCatalog, session: makeWalletSigningSessionForTesting(
+                    authorization: authorization,
+                    sign: { operation, _ in await backingAccess.sign(operation) },
+                    retireSigningMaterial: { backingAccess.retireSigningMaterial() }
+                )) }
             ),
             loadsTransactionContext: false,
             transactionApprovalOperations: operations,
@@ -6246,7 +6384,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(preparations, 1)
         XCTAssertEqual(executionCount, 1)
         XCTAssertEqual(backingAccess.operations.count, 1)
-        XCTAssertEqual(backingAccess.invalidationCount, 1)
+        XCTAssertEqual(backingAccess.retirementCount, 1)
     }
 
     func testTransactionApprovalPreservesReviewedPayloadDespiteChangedPreflightOutput() async throws {
@@ -6858,14 +6996,16 @@ extension PopupRequestSessionsTests {
         }
     }
 
-    func testTransactionAlertReleasesClaimBeforeApprovalReturns() async throws {
+    func testTransactionNoticeReleasesClaimAndRetryRequiresCurrentReview() async throws {
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(id: 34, provider: .ethereum, method: "signTransaction"), in: store)
         var transaction = popupReadyTransaction()
         let network = popupTransactionNetwork()
         var preflightCompletion: ((TransactionFeePreflightResult) -> Void)?
+        var preparationCount = 0
         let operations = TransactionApprovalOperations(
             prepare: { incoming, _, _ in
+                preparationCount += 1
                 let source = PopupPreparationSource()
                 transaction = popupPreparedTransaction(incoming)
                 source.update(transaction)
@@ -6890,15 +7030,18 @@ extension PopupRequestSessionsTests {
             )))
         }
         let authenticationCatalog = WalletReviewCatalog(account: popupTestAccount())
-        let owned = BorrowedWalletSignerForTesting()
+        let owned = PopupSigningProbe(sign: { _ in .failure(.failedToSign) })
         var access: WalletSigningSession!
         let controller = PopupRequestSessions(
             store: store,
             walletEnvironment: popupWalletEnvironment(
                 reviewCatalog: { authenticationCatalog },
                 unlockWallets: { _, authorization in
-                    access = WalletSigningSession(
-                        owned, authorization: authorization, isCurrent: { true },
+                    access = makeWalletSigningSessionForTesting(
+                        authorization: authorization,
+                        isCurrent: { true },
+                        sign: { operation, _ in await owned.sign(operation) },
+                        retireSigningMaterial: { owned.retireSigningMaterial() },
                         acquireCommitLease: { WalletExecutionLease(release: {}) }
                     )
                     return .unlocked(catalog: authenticationCatalog, session: access)
@@ -6932,9 +7075,9 @@ extension PopupRequestSessionsTests {
         let events = await store.events()
         XCTAssertEqual(response["status"] as? String, "ok")
         XCTAssertEqual(events, ["claim", "abandon"])
-        XCTAssertEqual(owned.invalidationCount, 1)
+        XCTAssertEqual(owned.retirementCount, 1)
         XCTAssertEqual(response["state"] as? String, "review")
-        XCTAssertNotNil((response["review"] as? [String: Any])?["alert"])
+        XCTAssertNotNil((response["review"] as? [String: Any])?["notice"])
 
         let stateRequest = try popupCommand(
             subject: "getApprovalState",
@@ -6946,7 +7089,30 @@ extension PopupRequestSessionsTests {
             profileIdentifier: nil
         )
         XCTAssertEqual(state["state"] as? String, "review")
-        XCTAssertNotNil((state["review"] as? [String: Any])?["alert"])
+        XCTAssertNotNil((state["review"] as? [String: Any])?["notice"])
+        XCTAssertTrue((state["actions"] as? [String])?.contains("retryTransaction") == true)
+        XCTAssertFalse((state["actions"] as? [String])?.contains("approve") == true)
+        let reviewToken = try XCTUnwrap((state["review"] as? [String: Any])?["reviewToken"] as? String)
+        XCTAssertNotEqual(reviewToken, token)
+
+        let stale = await controller.dispatchJSON(request: try popupCommand(
+            subject: "retryTransaction", id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken, reviewToken: token
+        ), profileIdentifier: nil)
+        XCTAssertEqual(stale["status"] as? String, "ignored")
+        XCTAssertEqual(preparationCount, 1)
+
+        let retried = try await controller.dispatchPreparedJSON(request: try popupCommand(
+            subject: "retryTransaction", id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken, reviewToken: reviewToken
+        ), profileIdentifier: nil)
+        XCTAssertEqual(retried["status"] as? String, "ok")
+        XCTAssertEqual(preparationCount, 2)
+        XCTAssertTrue((retried["actions"] as? [String])?.contains("approve") == true)
+        XCTAssertNil((retried["review"] as? [String: Any])?["notice"])
+        XCTAssertEqual(owned.retirementCount, 1)
+        let eventsAfterRetry = await store.events()
+        XCTAssertEqual(eventsAfterRetry, ["claim", "abandon"])
     }
 
     func testHungBroadcastTimesOutToRecoveryAndInvokesSendOnce() async throws {
@@ -7188,9 +7354,11 @@ extension PopupRequestSessionsTests {
             },
             makeSigner: { signingAuthorization in
                 signerCreations += 1
-                return WalletSigningSession(
-                    TestWalletSigningAccess(), authorization: signingAuthorization,
-                    isCurrent: { true }
+                return makeWalletSigningSessionForTesting(
+                    authorization: signingAuthorization,
+                    isCurrent: { true },
+                    sign: { _, _ in .failure(.failedToSign) },
+                    requiresCommitLease: false
                 )
             },
             networkResolver: { _ in
@@ -7251,9 +7419,11 @@ extension PopupRequestSessionsTests {
                 makeSigner: { signingAuthorization in
                     XCTAssertEqual(signingAuthorization.approvedAccount, approvedAccount)
                     signerCreations += 1
-                    return WalletSigningSession(
-                        TestWalletSigningAccess(), authorization: signingAuthorization,
-                        isCurrent: { true }
+                    return makeWalletSigningSessionForTesting(
+                        authorization: signingAuthorization,
+                        isCurrent: { true },
+                        sign: { _, _ in .failure(.failedToSign) },
+                        requiresCommitLease: false
                     )
                 },
                 networkResolver: popupApprovalNetwork
@@ -7294,9 +7464,11 @@ extension PopupRequestSessionsTests {
             refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
             makeSigner: { signingAuthorization in
                 XCTFail("Adding a chain must not create a signer")
-                return WalletSigningSession(
-                    TestWalletSigningAccess(), authorization: signingAuthorization,
-                    isCurrent: { true }
+                return makeWalletSigningSessionForTesting(
+                    authorization: signingAuthorization,
+                    isCurrent: { true },
+                    sign: { _, _ in .failure(.failedToSign) },
+                    requiresCommitLease: false
                 )
             },
             networkResolver: popupApprovalNetwork
@@ -7405,7 +7577,7 @@ extension PopupRequestSessionsTests {
         )
         let refreshStarted = expectation(description: "first attempt is refreshing the catalog")
         let refreshGate = makeGate()
-        let signingAccess = PopupRecordingWalletSigningAccess()
+        let signingAccess = PopupSigningProbe()
         var refreshes = 0
         var signerCreations = 0
         var executions = 0
@@ -7431,8 +7603,12 @@ extension PopupRequestSessionsTests {
             },
             makeSigner: { signingAuthorization in
                 signerCreations += 1
-                let session = WalletSigningSession(
-                    signingAccess, authorization: signingAuthorization, isCurrent: { true }
+                let session = makeWalletSigningSessionForTesting(
+                    authorization: signingAuthorization,
+                    isCurrent: { true },
+                    sign: { operation, _ in await signingAccess.sign(operation) },
+                    retireSigningMaterial: { signingAccess.retireSigningMaterial() },
+                    requiresCommitLease: false
                 )
                 return session
             },
@@ -7466,7 +7642,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(signerCreations, 1)
         XCTAssertEqual(executions, 1)
         XCTAssertEqual(signingAccess.operations.count, 1)
-        XCTAssertEqual(signingAccess.invalidationCount, 1)
+        XCTAssertEqual(signingAccess.retirementCount, 1)
         XCTAssertEqual(events, ["nativeClaim", "complete"])
     }
 
@@ -7506,9 +7682,11 @@ extension PopupRequestSessionsTests {
                 },
                 makeSigner: { signingAuthorization in
                     XCTFail("A terminal or missing request cannot create a signer")
-                    return WalletSigningSession(
-                        TestWalletSigningAccess(), authorization: signingAuthorization,
-                        isCurrent: { true }
+                    return makeWalletSigningSessionForTesting(
+                        authorization: signingAuthorization,
+                        isCurrent: { true },
+                        sign: { _, _ in .failure(.failedToSign) },
+                        requiresCommitLease: false
                     )
                 },
                 networkResolver: { _ in
@@ -7587,9 +7765,11 @@ extension PopupRequestSessionsTests {
             },
             makeSigner: { signingAuthorization in
                 XCTFail("Account selection must not create a signer")
-                return WalletSigningSession(
-                    TestWalletSigningAccess(), authorization: signingAuthorization,
-                    isCurrent: { true }
+                return makeWalletSigningSessionForTesting(
+                    authorization: signingAuthorization,
+                    isCurrent: { true },
+                    sign: { _, _ in .failure(.failedToSign) },
+                    requiresCommitLease: false
                 )
             },
             networkResolver: { chainID in
@@ -7685,9 +7865,11 @@ extension PopupRequestSessionsTests {
                 },
                 makeSigner: { signingAuthorization in
                     XCTFail("A missing or changed route must not create a signer")
-                    return WalletSigningSession(
-                        TestWalletSigningAccess(), authorization: signingAuthorization,
-                        isCurrent: { true }
+                    return makeWalletSigningSessionForTesting(
+                        authorization: signingAuthorization,
+                        isCurrent: { true },
+                        sign: { _, _ in .failure(.failedToSign) },
+                        requiresCommitLease: false
                     )
                 },
                 networkResolver: { chainID in
@@ -7738,9 +7920,11 @@ extension PopupRequestSessionsTests {
                 refreshWalletCatalog: { WalletReviewCatalog(accounts: []) },
                 makeSigner: { signingAuthorization in
                     XCTFail("A removed account must not create a signer")
-                    return WalletSigningSession(
-                        TestWalletSigningAccess(), authorization: signingAuthorization,
-                        isCurrent: { true }
+                    return makeWalletSigningSessionForTesting(
+                        authorization: signingAuthorization,
+                        isCurrent: { true },
+                        sign: { _, _ in .failure(.failedToSign) },
+                        requiresCommitLease: false
                     )
                 },
                 networkResolver: popupApprovalNetwork
@@ -7798,9 +7982,11 @@ extension PopupRequestSessionsTests {
                 refreshWalletCatalog: { unavailable },
                 makeSigner: { signingAuthorization in
                     XCTFail("An unavailable signing account must not create a signer")
-                    return WalletSigningSession(
-                        TestWalletSigningAccess(), authorization: signingAuthorization,
-                        isCurrent: { true }
+                    return makeWalletSigningSessionForTesting(
+                        authorization: signingAuthorization,
+                        isCurrent: { true },
+                        sign: { _, _ in .failure(.failedToSign) },
+                        requiresCommitLease: false
                     )
                 }
             )
@@ -7926,7 +8112,7 @@ extension PopupRequestSessionsTests {
             var sends = 0
             var executions = 0
             var signerCreations = 0
-            let signingAccess = PopupRecordingWalletSigningAccess()
+            let signingAccess = PopupSigningProbe()
             let request = try XCTUnwrap(snapshot.request)
             _ = EthereumDappRequestProcessor.transactionSubmissionUnknownResponse(
                 to: request, transactionHash: try popupTransactionHashForTesting()
@@ -7957,7 +8143,13 @@ extension PopupRequestSessionsTests {
                     signerCreations += 1
                     XCTAssertEqual(signingAuthorization.handle, snapshot.handle)
                     XCTAssertEqual(signingAuthorization.approvedAccount, popupTestAccountDescriptor())
-                    let session = WalletSigningSession(signingAccess, authorization: signingAuthorization, isCurrent: { true })
+                    let session = makeWalletSigningSessionForTesting(
+                        authorization: signingAuthorization,
+                        isCurrent: { true },
+                        sign: { operation, _ in await signingAccess.sign(operation) },
+                        retireSigningMaterial: { signingAccess.retireSigningMaterial() },
+                        requiresCommitLease: false
+                    )
                     return session
                 },
             networkResolver: popupApprovalNetwork
@@ -7974,7 +8166,7 @@ extension PopupRequestSessionsTests {
             XCTAssertEqual(executions, 1)
             XCTAssertEqual(signerCreations, 1)
             XCTAssertEqual(signingAccess.operations.count, 1)
-            XCTAssertEqual(signingAccess.invalidationCount, 1)
+            XCTAssertEqual(signingAccess.retirementCount, 1)
             XCTAssertEqual(sends, 0)
         }
     }
@@ -8155,9 +8347,12 @@ extension PopupRequestSessionsTests {
                     makeSigner: { signingAuthorization in
                         signerCreations += 1
                         XCTAssertEqual(signingAuthorization.signingDeadline, approvedAt.addingTimeInterval(limit), label)
-                        return WalletSigningSession(
-                            TestWalletSigningAccess(), authorization: signingAuthorization,
-                            isCurrent: { true }, clock: { nativeClock.now }
+                        return makeWalletSigningSessionForTesting(
+                            authorization: signingAuthorization,
+                            isCurrent: { true },
+                            sign: { _, _ in .failure(.failedToSign) },
+                            requiresCommitLease: false,
+                            clock: { nativeClock.now }
                         )
                     },
                     networkResolver: popupApprovalNetwork
@@ -8321,9 +8516,12 @@ extension PopupRequestSessionsTests {
                 ),
                 refreshWalletCatalog: { WalletReviewCatalog(account: account) },
                 makeSigner: { signingAuthorization in
-                    WalletSigningSession(
-                        TestWalletSigningAccess(), authorization: signingAuthorization,
-                        isCurrent: { true }, clock: { nativeClock.now }
+                    makeWalletSigningSessionForTesting(
+                        authorization: signingAuthorization,
+                        isCurrent: { true },
+                        sign: { _, _ in .failure(.failedToSign) },
+                        requiresCommitLease: false,
+                        clock: { nativeClock.now }
                     )
                 },
                 networkResolver: popupApprovalNetwork
@@ -8390,9 +8588,12 @@ extension PopupRequestSessionsTests {
             },
             makeSigner: { signingAuthorization in
                 XCTFail("An expired approval must not issue a signer")
-                return WalletSigningSession(
-                    TestWalletSigningAccess(), authorization: signingAuthorization,
-                    isCurrent: { true }, clock: { nativeClock.now }
+                return makeWalletSigningSessionForTesting(
+                    authorization: signingAuthorization,
+                    isCurrent: { true },
+                    sign: { _, _ in .failure(.failedToSign) },
+                    requiresCommitLease: false,
+                    clock: { nativeClock.now }
                 )
             },
             networkResolver: popupApprovalNetwork
@@ -8465,9 +8666,12 @@ extension PopupRequestSessionsTests {
             refreshWalletCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
             makeSigner: { signingAuthorization in
                 XCTFail("An expired approval must not issue a signer")
-                return WalletSigningSession(
-                    TestWalletSigningAccess(), authorization: signingAuthorization,
-                    isCurrent: { true }, clock: { nativeClock.now }
+                return makeWalletSigningSessionForTesting(
+                    authorization: signingAuthorization,
+                    isCurrent: { true },
+                    sign: { _, _ in .failure(.failedToSign) },
+                    requiresCommitLease: false,
+                    clock: { nativeClock.now }
                 )
             },
             networkResolver: popupApprovalNetwork
@@ -8532,9 +8736,12 @@ extension PopupRequestSessionsTests {
                 },
                 makeSigner: { signingAuthorization in
                     XCTFail("An expired approval must not issue a signer")
-                    return WalletSigningSession(
-                        TestWalletSigningAccess(), authorization: signingAuthorization,
-                        isCurrent: { true }, clock: { nativeClock.now }
+                    return makeWalletSigningSessionForTesting(
+                        authorization: signingAuthorization,
+                        isCurrent: { true },
+                        sign: { _, _ in .failure(.failedToSign) },
+                        requiresCommitLease: false,
+                        clock: { nativeClock.now }
                     )
                 },
                 networkResolver: popupApprovalNetwork
@@ -9314,7 +9521,7 @@ private final class CompactPopupAccessProcessor: DappRequestProcessing {
     }
 }
 
-private final class PopupRecordingWalletSigningAccess: OwnedWalletSigningAccess {
+private final class PopupSigningProbe: Sendable {
     private struct State {
         var recordedOperations = [ApprovedWalletSigningOperation]()
         var invalidations = 0
@@ -9325,17 +9532,23 @@ private final class PopupRecordingWalletSigningAccess: OwnedWalletSigningAccess 
         state.withLock { $0.recordedOperations }
     }
 
-    var invalidationCount: Int {
+    var retirementCount: Int {
         state.withLock { $0.invalidations }
+    }
+
+    private let signing: @MainActor @Sendable (ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure>
+
+    init(sign: @escaping @MainActor @Sendable (ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> = { walletSigningResultForTesting($0) }) {
+        signing = sign
     }
 
     @MainActor
     func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
         state.withLock { $0.recordedOperations.append(operation) }
-        return walletSigningResultForTesting(operation)
+        return await signing(operation)
     }
 
-    func invalidate() {
+    func retireSigningMaterial() {
         state.withLock { $0.invalidations += 1 }
     }
 }

@@ -456,7 +456,7 @@ final class PopupStringsTests: XCTestCase {
             popupRequest(subject: "retryApproval"),
             popupRequest(subject: "setTransactionSpeed", payload: ["interaction": "ended", "value": 0.5]),
             popupRequest(subject: "applyTransactionEdits", payload: ["mode": "suggested"]),
-            popupRequest(subject: "resolveApprovalAlert", payload: ["action": "cancel"]),
+            popupRequest(subject: "retryTransaction"),
         ]
         for request in requests {
             let bounded = try boundedResponse(oversizedResponse(), for: request)
@@ -521,10 +521,7 @@ final class PopupStringsTests: XCTestCase {
                 : .legacy(gasPriceGwei: "10"), suggestedFee: type2
                 ? .eip1559(maxPriorityFeePerGasGwei: "2", maxFeePerGasGwei: "22")
                 : .legacy(gasPriceGwei: "11")),
-            alert: type2 ? .init(title: "Fees updated", message: "Review the fees", actions: [
-                .init(title: "OK", action: .acknowledge), .init(title: "Edit", action: .edit),
-            ]) : nil,
-            editorRequestToken: type2 ? 1 : nil
+            notice: type2 ? .init(title: "Fees updated", message: "Review the fees") : nil
         )
     }
 
@@ -576,7 +573,7 @@ final class PopupStringsTests: XCTestCase {
             "legacyTransaction": reviewResponse(.sendTransaction(transactionReview()), title: "Send Transaction",
                                                 actions: [.approve, .reject, .editTransaction, .setTransactionSpeed]),
             "type2Transaction": reviewResponse(.sendTransaction(transactionReview(type2: true)), title: "Send Transaction",
-                                               actions: [.reject, .resolveApprovalAlert]),
+                                               actions: [.approve, .reject, .editTransaction, .setTransactionSpeed]),
             "invalidTransactionEdits": .command(.init(
                 status: .ok(editsError: true),
                 approvalState: reviewResponse(.sendTransaction(transactionReview()), title: "Send Transaction",

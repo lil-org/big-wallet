@@ -566,12 +566,35 @@ final class SafariApprovalVaultTests: XCTestCase {
         keys.availabilityRequests.removeAll()
         XCTAssertTrue(signer.validateCurrent())
         try await assertSigningAccessForTesting(signer, walletID: selected.walletID, account: selected.account, expectedSuccess: true)
+        XCTAssertTrue(signer.validateCurrent())
         let acquired = await signer.takeCommitLease()
         let lease = try XCTUnwrap(acquired)
         lease.release()
         let identity = SafariApprovalKeyIdentity(generation: publication.generation, account: selected)
         XCTAssertTrue(keys.availabilityRequests.allSatisfy { $0 == [identity] })
         XCTAssertEqual(keys.loadedIdentities, [identity])
+    }
+
+    func testUnlockedSigningSourceDoesNotRetainVault() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        var vault: SafariApprovalVault? = SafariApprovalVault(
+            fileURL: url,
+            keyStore: MemoryApprovalKeyStore(),
+            canEvaluateAuthentication: { _, _ in true },
+            authentication: { _, _, _ in true }
+        )
+        weak var retainedVault = vault
+        try vault?.publish(source: fixture().source, integrityKey: integrityKey)
+        let unlocked = await vault?.unlockSignerForTesting(reason: "Approve")
+        let signer = try XCTUnwrap(unlocked)
+
+        vault = nil
+
+        XCTAssertNil(retainedVault)
+        XCTAssertFalse(signer.validateCurrent())
+        let lease = await signer.takeCommitLease()
+        XCTAssertNil(lease)
     }
 
     func testSelectedKeyLossRejectsSigningAndCommitLease() async throws {
@@ -1432,14 +1455,22 @@ final class SafariApprovalVaultTests: XCTestCase {
         let fixture = try fixture()
         let isCurrent = LockedTestValue(true)
         let privateKey = try XCTUnwrap(WalletPrivateKey(data: WalletCoreProxyTestVectors.walletCoreJSONPrivateKeyData))
-        let underlying = DerivationRaceWalletSigner(privateKey: privateKey) {
-            isCurrent.value = false
-        }
-        let scoped = makeWalletSigningSessionForTesting(
-            underlying,
-            authorization: walletSigningAuthorizationForTesting(approvedAccount: WalletAccountDescriptor(walletID: "wallet", account: fixture.account)),
-            isCurrent: { isCurrent.value }
+        let authorization = walletSigningAuthorizationForTesting(
+            approvedAccount: WalletAccountDescriptor(walletID: "wallet", account: fixture.account)
         )
+        let source = TestWalletSigningSource(
+            approvedAccount: authorization.approvedAccount,
+            isCurrent: { isCurrent.value },
+            sign: { operation, _ in
+                let result = operation.sign(with: privateKey)
+                if case .failure(let failure) = result {
+                    XCTFail("Expected signing before source invalidation: \(failure)")
+                }
+                isCurrent.value = false
+                return result
+            }
+        )
+        let scoped = WalletSigningSession(source: source, authorization: authorization)
 
         try await assertSigningAccessForTesting(scoped, walletID: "wallet", account: fixture.account, expectedSuccess: false)
         XCTAssertFalse(scoped.validateCurrent())
@@ -5254,26 +5285,6 @@ private final class MemoryApprovalIntegrityKeyStore: SafariApprovalIntegrityKeyS
     }
 }
 
-private final class DerivationRaceWalletSigner: OwnedWalletSigningAccess {
-    private let privateKey: WalletPrivateKey
-    private let didDerive: @MainActor () -> Void
-
-    init(privateKey: WalletPrivateKey, didDerive: @escaping @MainActor () -> Void) {
-        self.privateKey = privateKey
-        self.didDerive = didDerive
-    }
-
-    @MainActor
-    func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
-        let result = operation.sign(with: privateKey)
-        XCTAssertNoThrow(try result.get())
-        didDerive()
-        return result
-    }
-
-    func invalidate() {}
-
-}
 private extension SafariApprovalVault {
     func unlockSignerForTesting(reason: String) async -> WalletSigningSession? {
         guard let selected = reviewCatalog()?.orderedAccounts.first,

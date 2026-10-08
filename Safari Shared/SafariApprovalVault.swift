@@ -528,6 +528,70 @@ final class SafariApprovalVault: Sendable {
         }
     }
 
+    private final class SigningSource: WalletSigningSource {
+        private struct State {
+            weak var vault: SafariApprovalVault?
+        }
+
+        let approvedAccount: WalletAccountDescriptor
+        let requiresCommitLease = true
+        private let snapshotData: Data
+        private let keyIdentity: SafariApprovalKeyIdentity
+        private let signer: UnlockedAccountSigner
+        private let state: Mutex<State>
+
+        init(
+            vault: SafariApprovalVault,
+            snapshotData: Data,
+            keyIdentity: SafariApprovalKeyIdentity,
+            signer: UnlockedAccountSigner
+        ) {
+            approvedAccount = keyIdentity.account
+            self.snapshotData = snapshotData
+            self.keyIdentity = keyIdentity
+            self.signer = signer
+            state = Mutex(State(vault: vault))
+        }
+
+        func isCurrent() -> Bool {
+            guard let vault = state.withLock({ $0.vault }),
+                  vault.isCurrent(snapshotData, keyIdentity: keyIdentity) else { return false }
+            return state.withLock { $0.vault === vault }
+        }
+
+        @MainActor
+        func sign(_ operation: ApprovedWalletSigningOperation) async -> Result<WalletSigningOutput, WalletSigningFailure> {
+            guard state.withLock({ $0.vault != nil }) else {
+                return .failure(.authorizationUnavailable)
+            }
+            return await signer.sign(operation, validating: self)
+        }
+
+        func retireSigningMaterial() {
+            signer.invalidate()
+        }
+
+        @MainActor
+        func acquireCommitLease() async -> WalletExecutionLease? {
+            guard !Task.isCancelled, let vault = state.withLock({ $0.vault }) else { return nil }
+            let lease = await vault.executionLease(ifCurrent: snapshotData, keyIdentity: keyIdentity)
+            guard !Task.isCancelled, state.withLock({ $0.vault === vault }) else {
+                lease?.release()
+                return nil
+            }
+            return lease
+        }
+
+        func invalidate() {
+            state.withLock { $0.vault = nil }
+            signer.invalidate()
+        }
+
+        deinit {
+            invalidate()
+        }
+    }
+
     struct Publication: Equatable {
         let generation: UUID
         let envelopeDigest: Data
@@ -988,21 +1052,21 @@ final class SafariApprovalVault: Sendable {
                 context: context,
                 authorization: authorization
             ) else { return .unavailable }
-            guard isCurrent(snapshotData, keyIdentity: keyIdentity),
+            let source = SigningSource(
+                vault: self,
+                snapshotData: snapshotData,
+                keyIdentity: keyIdentity,
+                signer: unlocked.signer
+            )
+            guard source.isCurrent(),
                   !Task.isCancelled,
                   Date() < authorization.signingDeadline else {
-                unlocked.signer.invalidate()
+                source.invalidate()
                 return .unavailable
             }
             let session = WalletSigningSession(
-                unlocked.signer,
-                authorization: authorization,
-                isCurrent: { [weak self] in
-                    self?.isCurrent(snapshotData, keyIdentity: keyIdentity) == true
-                },
-                acquireCommitLease: { [weak self] in
-                    await self?.executionLease(ifCurrent: snapshotData, keyIdentity: keyIdentity)
-                }
+                source: source,
+                authorization: authorization
             )
             return .unlocked(catalog: unlocked.catalog, session: session)
         } onCancel: {
@@ -1057,10 +1121,7 @@ final class SafariApprovalVault: Sendable {
               let privateKey = WalletPrivateKey(data: decrypted),
               let signer = UnlockedAccountSigner(
                   approvedAccount: approvedAccount,
-                  privateKey: privateKey,
-                  sourceIsCurrent: { [weak self, data = record.data, generation = envelope.generation] in
-                      self?.isCurrent(data, keyIdentity: .init(generation: generation, account: approvedAccount)) == true
-                  }
+                  privateKey: privateKey
               ) else { return nil }
         guard let catalog = reviewCatalog(in: record),
               catalog.specificAccount(descriptor: approvedAccount) != nil else {

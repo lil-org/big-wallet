@@ -100,7 +100,7 @@ struct PopupCompletedResponse: Encodable, Sendable {
 
 struct PopupApprovalState: Encodable, Sendable {
     enum Action: String, Encodable, Sendable {
-        case approve, reject, editTransaction, setTransactionSpeed, resolveApprovalAlert
+        case approve, reject, editTransaction, setTransactionSpeed, retryTransaction
     }
 
     enum RecoveryAction: String, Encodable, Sendable { case retry, reject }
@@ -295,8 +295,7 @@ struct PopupTransactionReview: Encodable, Sendable {
     let canBackOffRefresh: Bool
     let slider: PopupTransactionSlider
     let editor: PopupTransactionEditor
-    let alert: PopupTransactionAlert?
-    let editorRequestToken: Int?
+    let notice: PopupTransactionNotice?
 }
 
 struct PopupTransactionSlider: Encodable, Sendable {
@@ -344,15 +343,9 @@ struct PopupTransactionEditor: Encodable, Sendable {
     }
 }
 
-struct PopupTransactionAlert: Encodable, Sendable {
-    struct Action: Encodable, Sendable {
-        let title: String
-        let action: TransactionApprovalAlertAction
-    }
-
+struct PopupTransactionNotice: Encodable, Sendable {
     let title: String
-    let message: String
-    let actions: [Action]
+    let message: String?
 }
 
 struct PopupChainReview: Encodable, Sendable {
@@ -407,7 +400,7 @@ enum PopupResponseEncoder: Sendable {
     private static func returnsApprovalState(_ command: InternalSafariRequest.PopupCommand) -> Bool {
         switch command {
         case .getApprovalState, .retryApproval, .applyTransactionEdits,
-             .resolveApprovalAlert, .setTransactionSpeed, .approveRequest,
+             .retryTransaction, .setTransactionSpeed, .approveRequest,
              .rejectRequest:
             return true
         case .getPendingRequests:

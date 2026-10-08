@@ -82,6 +82,7 @@ export function createPopupHarness(options = {}) {
     const workerMessages = [];
     const tabMessages = [];
     const focusCalls = [];
+    const scrollCalls = [];
     const textWrites = [];
     const elements = new Map;
     const localizedElements = [];
@@ -145,6 +146,7 @@ export function createPopupHarness(options = {}) {
             },
             click(event) { if (!this.disabled) { return this.emit("click", event); } },
             focus() { document.activeElement = this; focusCalls.push(id); },
+            scrollIntoView(options) { scrollCalls.push({id, options: normalized(options)}); },
             setAttribute(name, attribute) { this[name] = String(attribute); },
         };
         for (const [name, attribute] of Object.entries(attributes)) {
@@ -248,7 +250,7 @@ export function createPopupHarness(options = {}) {
         scripts.get(name).runInContext(context);
     }
     return {
-        browser, context, document, focusCalls, model, nativeMessages, tabMessages,
+        browser, context, document, focusCalls, scrollCalls, model, nativeMessages, tabMessages,
         textWrites, timerHistory, timers, workerMessages, close,
         get(id) {
             const value = document.getElementById(id);

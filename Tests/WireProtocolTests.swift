@@ -142,14 +142,14 @@ final class WireProtocolTests: XCTestCase {
         ]
         guard case .popup(.applyTransactionEdits(_, .custom(let edits))) = try popupCommand("applyTransactionEdits", payload: custom).command,
               case .popup(.applyTransactionEdits(_, .suggested)) = try popupCommand("applyTransactionEdits", payload: ["mode": "suggested"]).command,
-              case .popup(.resolveApprovalAlert(_, let alert)) = try popupCommand("resolveApprovalAlert", payload: ["action": "edit"]).command else {
+              case .popup(.retryTransaction(let retryIdentity)) = try popupCommand("retryTransaction").command else {
             return XCTFail("Expected mapped transaction commands")
         }
         XCTAssertEqual(edits.nonce, "001")
         XCTAssertEqual(edits.maxPriorityFeePerGasGwei, "0.123456789")
         XCTAssertEqual(edits.maxFeePerGasGwei, "2.000000001")
         XCTAssertNil(edits.gasPriceGwei)
-        XCTAssertEqual(alert.action, .edit)
+        XCTAssertEqual(retryIdentity.reviewToken?.uuidString.lowercased(), "00000000-0000-4000-8000-000000000002")
     }
 
     func testAuthorityMappingRetainsIntegerBoundsAcrossEntryPoints() throws {
@@ -209,7 +209,6 @@ final class WireProtocolTests: XCTestCase {
             ["interaction": "unknown", "value": 100],
         ])
         try check(InternalSafariRequest.TransactionEditsPayload.self, message: .transactionEditsPayload, invalid: [["mode": "unknown"]])
-        try check(InternalSafariRequest.ApprovalAlertPayload.self, message: .approvalAlertPayload, invalid: [["action": "unknown"]])
         try check(ExtensionBridge.ProviderRevisions.self, message: .revisions)
         try check(ExtensionBridge.AuthorityVersion.self, message: .authorityVersion)
     }
@@ -390,11 +389,13 @@ final class WireProtocolTests: XCTestCase {
         try JSONDecoder().decode(type, from: JSONSerialization.data(withJSONObject: value))
     }
 
-    private func popupCommand(_ subject: String, payload: [String: Any]) throws -> InternalSafariRequest {
-        try decodeJSON(InternalSafariRequest.self, [
+    private func popupCommand(_ subject: String, payload: [String: Any]? = nil) throws -> InternalSafariRequest {
+        var message: [String: Any] = [
             "id": 1, "workflowVersion": WireProtocol.workflowVersion, "subject": subject,
             "requestToken": "00000000-0000-4000-8000-000000000001",
-            "reviewToken": "00000000-0000-4000-8000-000000000002", "payload": payload,
-        ])
+            "reviewToken": "00000000-0000-4000-8000-000000000002",
+        ]
+        message["payload"] = payload
+        return try decodeJSON(InternalSafariRequest.self, message)
     }
 }

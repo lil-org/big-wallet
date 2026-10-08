@@ -5,16 +5,7 @@ import Foundation
 @MainActor
 final class PopupTransactionSession {
 
-    enum PreflightOutcome: Sendable {
-        case approved(Transaction)
-        case reviewRequired
-        case invalidated
-    }
-
     private let coordinator: TransactionApprovalCoordinator
-    private var authenticationToken: TransactionApprovalRequestToken?
-    private var preflightContinuation: CheckedContinuation<PreflightOutcome, Never>?
-    var editorRequestToken = 0
     var balance: String?
     var onChange: () -> Void = {}
 
@@ -25,25 +16,13 @@ final class PopupTransactionSession {
         coordinator = TransactionApprovalCoordinator(
             transaction: action.transaction,
             network: action.chain,
-            authenticationPolicy: .required,
             operations: operations
         )
-        coordinator.onOutput = { [weak self] output in
-            guard let self else { return }
-            receive(output)
-        }
+        coordinator.onSnapshot = { [weak self] _ in self?.onChange() }
     }
 
     var snapshot: TransactionApprovalSnapshot {
         return coordinator.snapshot
-    }
-
-    var activeAlert: TransactionApprovalAlertIntent? {
-        coordinator.activeAlert
-    }
-
-    var requiresUserCorrection: Bool {
-        activeAlert != nil || snapshot.phase == .editing || snapshot.phase == .reviewingFees
     }
 
     func start() {
@@ -51,46 +30,24 @@ final class PopupTransactionSession {
     }
 
     func invalidate() {
-        authenticationToken = nil
         coordinator.invalidate()
-        finishPreflight(with: .invalidated)
     }
 
-    func beginApproval() -> TransactionApprovalRequestToken? {
-        guard authenticationToken == nil,
-              preflightContinuation == nil,
-              coordinator.approve(),
-              let token = authenticationToken else { return nil }
-        return token
+    func reserveForPreflight() -> TransactionApprovalReservation? {
+        coordinator.reserveForPreflight()
     }
 
-    func finishAuthentication(
-        token: TransactionApprovalRequestToken,
-        succeeded: Bool
-    ) async -> PreflightOutcome {
-        guard authenticationToken == token,
-              preflightContinuation == nil else { return .invalidated }
-        defer {
-            if authenticationToken == token {
-                authenticationToken = nil
-            }
-        }
-        guard succeeded else {
-            coordinator.authenticationCompleted(token: token, succeeded: false)
-            return .reviewRequired
-        }
-        let outcome = await withCheckedContinuation { continuation in
-            preflightContinuation = continuation
-            coordinator.authenticationCompleted(token: token, succeeded: true)
-        }
-        guard authenticationToken == token else { return .invalidated }
-        return outcome
+    @discardableResult
+    func releaseReservation(_ reservation: TransactionApprovalReservation) -> Bool {
+        coordinator.releaseReservation(reservation)
     }
 
-    private func finishPreflight(with outcome: PreflightOutcome) {
-        let continuation = preflightContinuation
-        preflightContinuation = nil
-        continuation?.resume(returning: outcome)
+    func preflight(_ reservation: TransactionApprovalReservation) async -> TransactionPreflightOutcome {
+        await coordinator.preflight(reservation)
+    }
+
+    func retryPreparation() -> Bool {
+        coordinator.retryPreparation()
     }
 
     func setSpeed(
@@ -155,45 +112,11 @@ final class PopupTransactionSession {
         return commit(edits)
     }
 
-    @discardableResult
-    func resolveAlert(
-        action: TransactionApprovalAlertAction
-    ) -> Bool {
-        guard let activeAlert,
-              activeAlert.presentation.actions.contains(where: {
-                  $0.action == action
-              }) else {
-            return false
-        }
-        coordinator.handleAlert(token: activeAlert.token, action: action)
-        return true
-    }
-
     private func commit(_ edits: Transaction.Edits) -> Bool {
         guard snapshot.canEdit else { return false }
         guard coordinator.apply(edits: edits) else { return true }
         coordinator.startPreparation(forceGasCheck: true)
         return true
-    }
-
-    private func receive(_ output: TransactionApprovalOutput) {
-        switch output {
-        case .snapshot:
-            break
-        case .alert:
-            finishPreflight(with: .reviewRequired)
-        case .editorRequest:
-            editorRequestToken += 1
-        case .authenticationRequest(let token):
-            if snapshot.phase == .authenticating {
-                authenticationToken = token
-            }
-            return
-        case .completion(let transaction):
-            finishPreflight(with: transaction.map(PreflightOutcome.approved) ?? .invalidated)
-            return
-        }
-        onChange()
     }
 
 }

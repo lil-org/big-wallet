@@ -261,38 +261,6 @@
     }
   },
   {
-    "name": "alert acknowledge",
-    "type": "ApprovalAlertPayload",
-    "valid": true,
-    "value": {
-      "action": "acknowledge"
-    }
-  },
-  {
-    "name": "alert retry",
-    "type": "ApprovalAlertPayload",
-    "valid": true,
-    "value": {
-      "action": "retry"
-    }
-  },
-  {
-    "name": "alert edit",
-    "type": "ApprovalAlertPayload",
-    "valid": true,
-    "value": {
-      "action": "edit"
-    }
-  },
-  {
-    "name": "alert cancel",
-    "type": "ApprovalAlertPayload",
-    "valid": true,
-    "value": {
-      "action": "cancel"
-    }
-  },
-  {
     "name": "native command openApp 0",
     "type": "NativeCommand",
     "valid": true,
@@ -888,18 +856,15 @@
     }
   },
   {
-    "name": "native command resolveApprovalAlert 22",
+    "name": "native command retryTransaction 22",
     "type": "NativeCommand",
     "valid": true,
     "value": {
       "id": 91,
       "workflowVersion": 4,
-      "subject": "resolveApprovalAlert",
+      "subject": "retryTransaction",
       "requestToken": "00000000-0000-4000-8000-000000000091",
-      "reviewToken": "00000000-0000-4000-8000-000000000091",
-      "payload": {
-        "action": "cancel"
-      }
+      "reviewToken": "00000000-0000-4000-8000-000000000091"
     }
   },
   {
@@ -909,12 +874,9 @@
     "value": {
       "id": 91,
       "workflowVersion": 4,
-      "subject": "resolveApprovalAlert",
+      "subject": "retryTransaction",
       "requestToken": "00000000-0000-4000-8000-000000000091",
       "reviewToken": "00000000-0000-4000-8000-000000000091",
-      "payload": {
-        "action": "cancel"
-      },
       "unexpected": true
     }
   },
@@ -4941,8 +4903,10 @@
         "state": "review",
         "host": "wallet.example",
         "actions": [
+          "approve",
           "reject",
-          "resolveApprovalAlert"
+          "editTransaction",
+          "setTransactionSpeed"
         ],
         "review": {
           "kind": "sendTransaction",
@@ -4961,7 +4925,6 @@
             "position": 100,
             "maximum": 200
           },
-          "editorRequestToken": 1,
           "editor": {
             "usesEIP1559": true,
             "nonce": "2",
@@ -4970,21 +4933,11 @@
             "suggestedMaxPriorityFeePerGasGwei": "2",
             "suggestedMaxFeePerGasGwei": "22"
           },
-          "alert": {
+          "canBackOffRefresh": true,
+          "notice": {
             "title": "Fees updated",
-            "message": "Review the fees",
-            "actions": [
-              {
-                "title": "OK",
-                "action": "acknowledge"
-              },
-              {
-                "title": "Edit",
-                "action": "edit"
-              }
-            ]
-          },
-          "canBackOffRefresh": true
+            "message": "Review the fees"
+          }
         }
       }
     }
@@ -5000,8 +4953,10 @@
         "state": "review",
         "host": "wallet.example",
         "actions": [
+          "approve",
           "reject",
-          "resolveApprovalAlert"
+          "editTransaction",
+          "setTransactionSpeed"
         ],
         "review": {
           "kind": "sendTransaction",
@@ -5020,7 +4975,6 @@
             "position": 100,
             "maximum": 200
           },
-          "editorRequestToken": 1,
           "editor": {
             "usesEIP1559": true,
             "nonce": "2",
@@ -5029,21 +4983,11 @@
             "suggestedMaxPriorityFeePerGasGwei": "2",
             "suggestedMaxFeePerGasGwei": "22"
           },
-          "alert": {
+          "canBackOffRefresh": true,
+          "notice": {
             "title": "Fees updated",
-            "message": "Review the fees",
-            "actions": [
-              {
-                "title": "OK",
-                "action": "acknowledge"
-              },
-              {
-                "title": "Edit",
-                "action": "edit"
-              }
-            ]
-          },
-          "canBackOffRefresh": true
+            "message": "Review the fees"
+          }
         }
       }
     }
@@ -5057,8 +5001,10 @@
       "state": "review",
       "host": "wallet.example",
       "actions": [
+        "approve",
         "reject",
-        "resolveApprovalAlert"
+        "editTransaction",
+        "setTransactionSpeed"
       ],
       "review": {
         "kind": "sendTransaction",
@@ -5077,7 +5023,6 @@
           "position": 100,
           "maximum": 200
         },
-        "editorRequestToken": 1,
         "editor": {
           "usesEIP1559": true,
           "nonce": "2",
@@ -5086,21 +5031,11 @@
           "suggestedMaxPriorityFeePerGasGwei": "2",
           "suggestedMaxFeePerGasGwei": "22"
         },
-        "alert": {
+        "canBackOffRefresh": true,
+        "notice": {
           "title": "Fees updated",
-          "message": "Review the fees",
-          "actions": [
-            {
-              "title": "OK",
-              "action": "acknowledge"
-            },
-            {
-              "title": "Edit",
-              "action": "edit"
-            }
-          ]
-        },
-        "canBackOffRefresh": true
+          "message": "Review the fees"
+        }
       }
     }
   },
@@ -5125,7 +5060,6 @@
         "position": 100,
         "maximum": 200
       },
-      "editorRequestToken": 1,
       "editor": {
         "usesEIP1559": true,
         "nonce": "2",
@@ -5134,21 +5068,11 @@
         "suggestedMaxPriorityFeePerGasGwei": "2",
         "suggestedMaxFeePerGasGwei": "22"
       },
-      "alert": {
+      "canBackOffRefresh": true,
+      "notice": {
         "title": "Fees updated",
-        "message": "Review the fees",
-        "actions": [
-          {
-            "title": "OK",
-            "action": "acknowledge"
-          },
-          {
-            "title": "Edit",
-            "action": "edit"
-          }
-        ]
-      },
-      "canBackOffRefresh": true
+        "message": "Review the fees"
+      }
     }
   },
   {
@@ -5184,22 +5108,12 @@
     }
   },
   {
-    "name": "type2Transaction alert",
-    "type": "PopupTransactionAlert",
+    "name": "type2Transaction notice",
+    "type": "PopupTransactionNotice",
     "valid": true,
     "value": {
       "title": "Fees updated",
-      "message": "Review the fees",
-      "actions": [
-        {
-          "title": "OK",
-          "action": "acknowledge"
-        },
-        {
-          "title": "Edit",
-          "action": "edit"
-        }
-      ]
+      "message": "Review the fees"
     }
   },
   {
@@ -7485,6 +7399,56 @@
     "value": {
       "publicKey": "11111111111111111111111111111111",
       "publicKey": "11111111111111111111111111111111"
+    }
+  },
+  {
+    "name": "transaction notice title only",
+    "type": "PopupTransactionNotice",
+    "valid": true,
+    "value": {
+      "title": "Fees updated"
+    }
+  },
+  {
+    "name": "transaction notice rejects null message",
+    "type": "PopupTransactionNotice",
+    "valid": false,
+    "value": {
+      "title": "Fees updated",
+      "message": null
+    }
+  },
+  {
+    "name": "transaction notice rejects extra fields",
+    "type": "PopupTransactionNotice",
+    "valid": false,
+    "value": {
+      "title": "Fees updated",
+      "extra": true
+    }
+  },
+  {
+    "name": "transaction retry requires review token",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "retryTransaction",
+      "requestToken": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "transaction retry rejects payload",
+    "type": "NativeCommand",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "retryTransaction",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "reviewToken": "00000000-0000-4000-8000-000000000092",
+      "payload": {}
     }
   }
 ]

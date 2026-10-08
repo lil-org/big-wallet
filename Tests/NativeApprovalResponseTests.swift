@@ -93,7 +93,7 @@ final class NativeApprovalResponseTests: XCTestCase {
     }
 
     func testRevokedAuthorityNeverCallsSigner() async throws {
-        let underlying = AuthorityTestAccess()
+        let underlying = AuthoritySigningProbe()
         let context = try signingContext(access: underlying)
         revokeAuthority(in: context.fixture)
         let result = await context.signer.sign()
@@ -105,7 +105,7 @@ final class NativeApprovalResponseTests: XCTestCase {
     }
 
     func testRevocationDuringSigningDiscardsSignature() async throws {
-        let underlying = AuthorityTestAccess()
+        let underlying = AuthoritySigningProbe()
         let context = try signingContext(access: underlying)
         underlying.operation = { self.revokeAuthority(in: context.fixture) }
         let result = await context.signer.sign()
@@ -117,7 +117,7 @@ final class NativeApprovalResponseTests: XCTestCase {
     }
 
     func testCurrentAuthorityReturnsSignatureOnce() async throws {
-        let underlying = AuthorityTestAccess()
+        let underlying = AuthoritySigningProbe()
         let context = try signingContext(access: underlying)
         let result = await context.signer.sign()
         guard case .success = result else {
@@ -143,7 +143,7 @@ final class NativeApprovalResponseTests: XCTestCase {
     }
 
     private func signingContext(
-        access: AuthorityTestAccess
+        access: AuthoritySigningProbe
     ) throws -> (signer: WalletSigningSession, fixture: ApprovedExecutionTestFixture) {
         let account = WalletAccountDescriptor(
             walletID: "approved-wallet", coin: .ethereum,
@@ -168,7 +168,13 @@ final class NativeApprovalResponseTests: XCTestCase {
         )
         XCTAssertTrue(permit.consumeExecution())
         let authorization = try XCTUnwrap(WalletSigningAuthorization(permit: permit))
-        let session = WalletSigningSession(access, authorization: authorization, isCurrent: { true })
+        let session = makeWalletSigningSessionForTesting(
+            authorization: authorization,
+            isCurrent: { true },
+            sign: { operation, _ in await access.sign(operation) },
+            retireSigningMaterial: { access.retireSigningMaterial() },
+            requiresCommitLease: false
+        )
         XCTAssertTrue(session.attach(permit: permit))
         return (session, fixture)
     }
@@ -176,7 +182,7 @@ final class NativeApprovalResponseTests: XCTestCase {
 }
 
 @MainActor
-private final class AuthorityTestAccess: OwnedWalletSigningAccess {
+private final class AuthoritySigningProbe {
     var calls = 0
     private nonisolated let invalidation = Mutex(false)
     nonisolated var invalidated: Bool { invalidation.withLock { $0 } }
@@ -190,7 +196,7 @@ private final class AuthorityTestAccess: OwnedWalletSigningAccess {
         return result
     }
 
-    nonisolated func invalidate() {
+    nonisolated func retireSigningMaterial() {
         invalidation.withLock { $0 = true }
     }
 }

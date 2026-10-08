@@ -54,6 +54,10 @@
         <div id="tx-balance-row" class="info-row hidden"><span data-string="balance" class="info-label">Balance</span><span id="tx-balance" class="info-value"></span></div>
         <div id="tx-value-row" class="info-row hidden"><span id="tx-value" class="info-value strong"></span></div>
         <div id="tx-fee-lines" class="fee-lines"></div>
+        <div id="tx-notice" class="transaction-notice hidden" role="status" aria-live="polite" aria-atomic="true">
+            <div id="tx-notice-title" class="transaction-notice-title"></div>
+            <div id="tx-notice-message" class="transaction-notice-message"></div>
+        </div>
         <div id="tx-slider-row" class="slider-row hidden">
             <label data-string="fee" class="visually-hidden" for="tx-slider">Fee</label>
             <span class="slider-emoji" aria-hidden="true">🐢</span>
@@ -103,14 +107,6 @@
 
 <div id="working-overlay" class="overlay hidden">
     <div class="spinner"></div>
-</div>
-
-<div id="alert-overlay" class="overlay hidden">
-    <div id="alert-box" class="alert-box" role="alertdialog" aria-modal="true" aria-labelledby="alert-title" aria-describedby="alert-message" tabindex="-1">
-        <div id="alert-title" class="alert-title"></div>
-        <div id="alert-message" class="alert-message"></div>
-        <div id="alert-buttons" class="alert-buttons"></div>
-    </div>
 </div>
 
 <script src="protocol.generated.js"></script>
