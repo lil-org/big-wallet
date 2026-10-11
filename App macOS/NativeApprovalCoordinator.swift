@@ -426,19 +426,21 @@ final class NativeApprovalCoordinator {
         let identities = accounts.map {
             WalletAccountDescriptor(walletID: $0.walletId, account: $0.account)
         }
-        approve(.accountSelection(.init(
-            accounts: identities,
-            ethereumChainID: ethereumNetwork?.chainIdHexString
-        )))
+        acceptReview { review, approvedAt, receipt in
+            review.acceptAccounts(
+                selection: .init(accounts: identities, ethereumChainID: ethereumNetwork?.chainIdHexString),
+                approvedAt: approvedAt,
+                nativeReceipt: receipt
+            )
+        }
     }
 
     func approveMessage(solanaCluster: Solana.Cluster?) {
         guard case .reviewing(let review) = state,
-              case .approveMessage(let action) = review.action else { return }
-        approve(.message(.init(
-            approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account),
-            solanaCluster: solanaCluster
-        )))
+              case .approveMessage = review.action else { return }
+        acceptReview { review, approvedAt, receipt in
+            review.acceptMessage(cluster: solanaCluster, approvedAt: approvedAt, nativeReceipt: receipt)
+        }
     }
 
     func approveTransaction(
@@ -455,11 +457,15 @@ final class NativeApprovalCoordinator {
             failAndReject()
             return
         }
-        approve(.transaction(execution))
+        acceptReview { review, approvedAt, receipt in
+            review.acceptTransaction(execution: execution, approvedAt: approvedAt, nativeReceipt: receipt)
+        }
     }
 
     func approveAddEthereumChain() {
-        approve(.addEthereumChain)
+        acceptReview { review, approvedAt, receipt in
+            review.acceptAddEthereumChain(approvedAt: approvedAt, nativeReceipt: receipt)
+        }
     }
 
     func reject() {
@@ -475,33 +481,16 @@ final class NativeApprovalCoordinator {
         }
     }
 
-    private func approve(_ decision: DappApprovalDecision) {
+    private func acceptReview(
+        using accept: (ApprovalReview, Date, ExtensionBridge.NativeDeliveryReceipt) -> ReviewConsent?
+    ) {
         guard case .reviewing(let review) = state, let runtime else { return }
         let approvedAt = environment.now()
         let receipt = ExtensionBridge.NativeDeliveryReceipt(
             nativeDeliveryNonce: nativeDeliveryNonce,
             owner: runtime
         )
-        let consent: ReviewConsent?
-        switch decision {
-        case .accountSelection(let selection):
-            consent = review.acceptAccounts(
-                selection: selection, approvedAt: approvedAt, nativeReceipt: receipt
-            )
-        case .message(let message):
-            consent = review.acceptMessage(
-                cluster: message.solanaCluster, approvedAt: approvedAt, nativeReceipt: receipt
-            )
-        case .transaction(let execution):
-            consent = review.acceptTransaction(
-                execution: execution, approvedAt: approvedAt, nativeReceipt: receipt
-            )
-        case .addEthereumChain:
-            consent = review.acceptAddEthereumChain(
-                approvedAt: approvedAt, nativeReceipt: receipt
-            )
-        }
-        guard let consent else {
+        guard let consent = accept(review, approvedAt, receipt) else {
             failAndReject()
             return
         }

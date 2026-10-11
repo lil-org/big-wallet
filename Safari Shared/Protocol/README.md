@@ -25,6 +25,8 @@ The codecs check structure. Browser sender metadata, origin and document identit
 
 Inpage providers support ordinary SDK objects, listener reentry, and request snapshots that remain stable after caller mutation. Wire boundaries reject malformed data, accessors, cycles, and failing proxy traps before passing detached records to internal handlers. Replacing JavaScript globals or built-ins to reenter provider code during internal decoding or allocation is outside the supported behavior; the provider does not guarantee recovery from that interference. Captured intrinsics remain where inexpensive, while checks around caller-owned getters, serializers, and transaction objects still protect supported interactions.
 
+Internal transport currentness checks only read installation state; they do not invoke callbacks, mutate provider state, or throw. Transport replies arrive asynchronously through the browser message bridge. Tests for these internal hooks preserve that contract; reentry coverage belongs at caller-controlled inputs and public event listeners.
+
 ## Differential fuzzing
 
 Run from the repository root on macOS with Node.js and the project's Xcode Swift toolchain:

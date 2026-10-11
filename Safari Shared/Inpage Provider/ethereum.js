@@ -76,11 +76,7 @@ function validChainId(chainId) {
 }
 
 function transportIsCurrent(state) {
-    try {
-        return state.transport.isCurrent() === true;
-    } catch {
-        return false;
-    }
+    return state.transport.isCurrent() === true;
 }
 
 function emitSafely(provider, eventName, values, isCurrent = null) {
@@ -102,7 +98,6 @@ function withReadyState(provider, listener) {
         !isReady(provider) || !transportIsCurrent(state)) {
         return false;
     }
-    if (state.retired) { return false; }
     const payload = freezeObjectNormally({chainId: state.chainId});
     try {
         return applyFunction(listener, undefined, [payload]) === true;
@@ -114,7 +109,7 @@ function withReadyState(provider, listener) {
 
 function subscribeNotifications(provider, listener) {
     const state = stateFor(provider);
-    if (!state || state.retired || typeof listener !== "function") {
+    if (!state || state.runtime.phase === "retired" || typeof listener !== "function") {
         return () => {};
     }
     state.notificationListener = listener;
@@ -128,7 +123,7 @@ function subscribeNotifications(provider, listener) {
 function notifyReadiness(provider, flushed) {
     const state = stateFor(provider);
     const listener = state?.notificationListener;
-    if (!state || state.retired || typeof listener !== "function") { return; }
+    if (!state || state.runtime.phase === "retired" || typeof listener !== "function") { return; }
     try {
         applyFunction(listener, undefined, [freezeObjectNormally({kind: "readiness", flushed})]);
     } catch (error) {
@@ -205,12 +200,11 @@ function normalizeRequestPayload(payload) {
     };
 }
 
-function operationMetadata(method, wrapResult) {
+function operationMetadata(wrapResult) {
     return {
         authorization: null,
         expectedAddress: null,
         dispatched: false,
-        method,
         responseName: null,
         wrapResult,
     };
@@ -218,7 +212,7 @@ function operationMetadata(method, wrapResult) {
 
 function providerForOperation(provider) {
     const state = stateFor(provider);
-    if (!state || state.retired || state.runtime.phase === "retired") {
+    if (!state || state.runtime.phase === "retired") {
         throw providerReplacementError();
     }
     if (!transportIsCurrent(state)) {
@@ -239,7 +233,7 @@ function registerOperation(provider, payload, wrapResult) {
     } catch (error) {
         return Promise.reject(error);
     }
-    if (state !== stateFor(provider) || state.retired) {
+    if (state !== stateFor(provider) || state.runtime.phase === "retired") {
         return Promise.reject(providerReplacementError());
     }
     if (!transportIsCurrent(state)) {
@@ -250,10 +244,7 @@ function registerOperation(provider, payload, wrapResult) {
     let record;
     try {
         record = state.runtime.register({
-            metadata: operationMetadata(
-                normalized.payload.method,
-                wrapResult
-            ),
+            metadata: operationMetadata(wrapResult),
             originalId: normalized.originalId,
             payload: normalized.payload,
         });
@@ -426,7 +417,7 @@ function dispatchRPC(provider, state, record) {
 
 function dispatchOperation(provider, record) {
     const state = stateFor(provider);
-    if (!state || state.retired || !state.runtime.owns(record)) { return false; }
+    if (!state || state.runtime.phase === "retired" || !state.runtime.owns(record)) { return false; }
     if (!transportIsCurrent(state)) {
         retire(provider, providerReplacementError());
         return false;
@@ -539,7 +530,7 @@ function dispatchOperation(provider, record) {
 
 function prepareConfiguration(provider, configuration, revision) {
     const state = stateFor(provider);
-    if (!state || state.retired || !isSafeIntegerNormally(revision) || revision < 0) {
+    if (!state || state.runtime.phase === "retired" || !isSafeIntegerNormally(revision) || revision < 0) {
         return null;
     }
     const address = normalizedAddress(configuration.address);
@@ -561,7 +552,7 @@ function prepareConfiguration(provider, configuration, revision) {
 
 function commitConfiguration(provider, prepared) {
     const state = stateFor(provider);
-    if (!state || state.retired || !prepared || prepared.ignored) { return null; }
+    if (!state || state.runtime.phase === "retired" || !prepared || prepared.ignored) { return null; }
     const wasReady = state.runtime.phase === "ready";
     const accountsChanged = state.address !== prepared.address;
     const chainChanged = state.chainId !== prepared.chainId;
@@ -573,15 +564,15 @@ function commitConfiguration(provider, prepared) {
     state.runtime.activate();
     return {
         epoch: state.stateEpoch,
-        accountsChanged: (wasReady || state.copiedStateBaseline !== null) && accountsChanged,
-        chainChanged: (wasReady || state.copiedStateBaseline !== null) && chainChanged,
+        accountsChanged: (wasReady || state.hasCopiedStateBaseline) && accountsChanged,
+        chainChanged: (wasReady || state.hasCopiedStateBaseline) && chainChanged,
     };
 }
 
 function emitConfiguration(provider, change) {
     const state = stateFor(provider);
     if (!state || !change) { return; }
-    const current = () => stateFor(provider) === state && !state.retired &&
+    const current = () => stateFor(provider) === state && state.runtime.phase !== "retired" &&
         state.stateEpoch === change.epoch && transportIsCurrent(state);
     if (change.accountsChanged && current()) {
         emitSafely(provider, "accountsChanged", [localAccounts(state)], current);
@@ -596,10 +587,10 @@ function emitConfiguration(provider, change) {
 
 function finishConfiguration(provider, change) {
     const state = stateFor(provider);
-    if (!state || !change || state.retired || state.stateEpoch !== change.epoch) { return; }
-    state.copiedStateBaseline = null;
+    if (!state || !change || state.runtime.phase === "retired" || state.stateEpoch !== change.epoch) { return; }
+    state.hasCopiedStateBaseline = false;
     state.runtime.drain(record => dispatchOperation(provider, record));
-    if (state.stateEpoch === change.epoch && !state.retired) {
+    if (state.stateEpoch === change.epoch && state.runtime.phase !== "retired") {
         notifyReadiness(provider, true);
     }
 }
@@ -657,7 +648,7 @@ function applyErrorEnvelope(provider, state, envelope) {
 
 function applyDecodedEnvelope(provider, envelope) {
     const state = stateFor(provider);
-    if (!state || state.retired) {
+    if (!state || state.runtime.phase === "retired") {
         return false;
     }
     if (!transportIsCurrent(state)) {
@@ -683,8 +674,7 @@ function applyDecodedEnvelope(provider, envelope) {
 
 function retire(provider, error = providerReplacementError()) {
     const state = stateFor(provider);
-    if (!state || state.retired) { return false; }
-    state.retired = true;
+    if (!state || state.runtime.phase === "retired") { return false; }
     state.stateEpoch += 1;
     const hadAccount = state.address.length > 0;
     state.address = "";
@@ -703,7 +693,7 @@ function snapshot(provider) {
         address: state.address,
         chainId: state.chainId,
         generation: state.runtime.generation,
-        isConnected: !state.retired && state.runtime.phase !== "failed",
+        isConnected: state.runtime.phase !== "retired" && state.runtime.phase !== "failed",
         phase: state.runtime.phase,
         ready: isReady(provider),
     });
@@ -711,8 +701,7 @@ function snapshot(provider) {
 
 function isReady(provider) {
     const state = stateFor(provider);
-    return !!state && !state.retired &&
-        state.runtime.phase === "ready";
+    return !!state && state.runtime.phase === "ready";
 }
 
 const metamaskAPI = freezeObjectNormally({
@@ -738,10 +727,9 @@ class BigWalletEthereum {
             nativeRevision: null,
             address: normalizedAddress(initial?.address),
             chainId,
-            copiedStateBaseline: null,
+            hasCopiedStateBaseline: copiedInitialState,
             notificationListener: null,
             networkVersion: normalizedNetworkVersion(chainId),
-            retired: false,
             runtime: new OperationRuntime(providerGeneration, {
                 firstWireId: 1,
                 wireIdStep: 2,
@@ -749,16 +737,10 @@ class BigWalletEthereum {
             stateEpoch: 0,
             transport,
         };
-        if (copiedInitialState) {
-            state.copiedStateBaseline = {
-                address: state.address,
-                chainId: state.chainId,
-            };
-        }
         setWeakMapValue(providerStates, this, state);
         try {
             applyFunction(setTimeoutNormally, undefined, [() => {
-                if (!state.retired) { emitSafely(this, "_initialized", []); }
+                if (state.runtime.phase !== "retired") { emitSafely(this, "_initialized", []); }
             }, 1]);
         } catch {
         }
@@ -821,7 +803,7 @@ class BigWalletEthereum {
 
     isConnected() {
         const state = stateFor(this);
-        return !!state && !state.retired && state.runtime.phase !== "failed";
+        return !!state && state.runtime.phase !== "retired" && state.runtime.phase !== "failed";
     }
 
     isUnlocked() {

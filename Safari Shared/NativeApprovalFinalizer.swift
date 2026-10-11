@@ -69,7 +69,7 @@ final class NativeApprovalFinalizer {
             return .responseReady
         case .reviewRequired:
             return .reviewRequired
-        case .ownershipLost, .retryablePersistenceFailure, .abandoned, .notAccepted, .correctionRequired:
+        case .ownershipLost, .retryablePersistenceFailure, .abandoned:
             return .interruptionRequired
         }
     }

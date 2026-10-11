@@ -92,7 +92,6 @@ class OperationRuntime {
         });
         const record = {
             __proto__: null,
-            generation: this.#generation,
             metadata,
             originalId,
             payload,

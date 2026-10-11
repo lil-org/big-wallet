@@ -132,7 +132,6 @@ function ethereumHarness(initialState = null) {
     const disconnects = [];
     let current = true;
     let rpcObserver = null;
-    let requestObserver = null;
     const transport = Object.freeze({
         isCurrent() { return current; },
         postDisconnect(message) {
@@ -141,7 +140,6 @@ function ethereumHarness(initialState = null) {
         },
         postRequest(message) {
             requests.push(message);
-            requestObserver?.(message);
             return current;
         },
         postRPC(message, generation) {
@@ -188,7 +186,6 @@ function ethereumHarness(initialState = null) {
         rpc,
         setCurrent(value) { current = value; },
         setRPCObserver(value) { rpcObserver = value; },
-        setRequestObserver(value) { requestObserver = value; },
     };
 }
 
@@ -1189,29 +1186,6 @@ test("queued Ethereum wallet payloads retain caller JSON semantics and owned dat
     assert.equal(harness.requests.length, 1);
 });
 
-test("Ethereum wallet dispatch tolerates synchronous settlement and retirement", async () => {
-    const harness = ethereumHarness();
-    applyEthereumConfiguration(harness);
-    let settlements = 0;
-    harness.setRequestObserver(message => {
-        harness.applyDecodedEnvelope({
-            id: message.id,
-            kind: "result",
-            name: message.name,
-            result: "0xhash",
-        });
-        harness.retire(new Error("Replaced"));
-    });
-    const request = harness.provider.request({
-        method: "eth_sendTransaction",
-        params: [{value: "0x1"}],
-    }).then(value => { settlements += 1; return value; });
-    assert.equal(await request, "0xhash");
-    assert.equal(settlements, 1);
-    assert.equal(harness.requests.length, 1);
-    assert.equal(harness.provider.selectedAddress, null);
-});
-
 test("Ethereum transaction values cannot be rewritten by inherited descriptor getters", async () => {
     const harness = ethereumHarness();
     applyEthereumConfiguration(harness);
@@ -1430,22 +1404,8 @@ test("Ethereum configuration events precede bootstrap FIFO dispatch", async () =
     assert.equal(await pending, "0x1");
 });
 
-test("malformed raw configuration cannot interrupt a copied Ethereum first drain", async () => {
-    let harness;
-    let interruptDrain = false;
-    harness = inpageHarness({beforeEvaluate(window) {
-        const postMessage = window.postMessage;
-        window.postMessage = message => {
-            postMessage(message);
-            if (interruptDrain && message.kind === "rpc") {
-                interruptDrain = false;
-                harness.dispatch({
-                    kind: "response",
-                    response: {kind: "configuration", state: null},
-                });
-            }
-        };
-    }});
+test("malformed configuration from a listener cannot interrupt the copied Ethereum first drain", async () => {
+    const harness = inpageHarness();
     const firstAddress = "0x0000000000000000000000000000000000000001";
     const secondAddress = "0x0000000000000000000000000000000000000002";
     dispatchConfigurations(harness, {address: firstAddress});
@@ -1453,12 +1413,15 @@ test("malformed raw configuration cannot interrupt a copied Ethereum first drain
     const events = [];
     harness.window.ethereum.on("accountsChanged", accounts => {
         events.push(["accountsChanged", normalized(accounts)]);
+        harness.dispatch({
+            kind: "response",
+            response: {kind: "configuration", state: null},
+        });
     });
     harness.window.ethereum.on("chainChanged", chainId => {
         events.push(["chainChanged", chainId]);
     });
     const pending = harness.window.ethereum.request({method: "eth_blockNumber"});
-    interruptDrain = true;
     dispatchConfigurations(harness, {address: secondAddress, chainId: "0x2"});
     const request = pageMessages(harness, "rpc").at(-1);
     harness.dispatch({
@@ -1497,7 +1460,7 @@ test("Ethereum contains listener failures while emitting state changes", () => {
 
 test("Ethereum posts wallet requests, settles errors, and retires with 4900", async () => {
     const harness = ethereumHarness();
-    applyEthereumConfiguration(harness);
+    applyEthereumConfiguration(harness, "0x0000000000000000000000000000000000000001");
     const transaction = {from: "0x0", value: "0x1"};
     const request = harness.provider.request({
         id: 8,
@@ -1518,8 +1481,29 @@ test("Ethereum posts wallet requests, settles errors, and retires with 4900", as
         method: "personal_sign",
         params: ["0x01"],
     });
+    const events = [];
+    let retirementState;
+    let reentrantRequest;
+    harness.provider.on("disconnect", () => {
+        events.push("disconnect");
+        retirementState = {
+            phase: harness.snapshot().phase,
+            address: harness.provider.selectedAddress,
+            connected: harness.provider.isConnected(),
+            retiredAgain: harness.retire(),
+        };
+        reentrantRequest = harness.provider.request({method: "eth_accounts"});
+    });
+    harness.provider.on("accountsChanged", accounts => {
+        events.push(["accountsChanged", normalized(accounts)]);
+    });
     assert.equal(harness.retire(), true);
+    assert.deepEqual(retirementState, {
+        phase: "retired", address: null, connected: false, retiredAgain: false,
+    });
+    assert.deepEqual(events, ["disconnect", ["accountsChanged", []]]);
     await assert.rejects(pending, error => error.code === 4900);
+    await assert.rejects(reentrantRequest, error => error.code === 4900);
     assert.equal(harness.provider.isConnected(), false);
     assert.equal(harness.snapshot().phase, "retired");
     assert.equal(harness.applyDecodedEnvelope({
@@ -4675,36 +4659,6 @@ test("public Solana events cannot synthesize Wallet Standard account changes", (
     assert.equal(harness.wallet.accounts[0].address, firstSolanaKey);
 });
 
-test("Solana forwarding drops events when argument iteration replaces the target", () => {
-    const harness = solanaHarness();
-    const replacement = connectedSolanaHarness(secondSolanaKey);
-    const record = harness.exports.createStableFacadeRecord({uuid: "argument-replacement"});
-    const ethereum = ethereumFacadeTarget("current");
-    record.prepareTargets({ethereumProvider: ethereum, solanaProvider: harness.target}).commit();
-    const events = [];
-    record.solana.on("accountChanged", key => events.push(key.toString()));
-    harness.context.retarget = () => record.prepareTargets({
-        ethereumProvider: ethereum,
-        solanaProvider: replacement.target,
-    }).commit();
-    vm.runInContext(`
-        const originalIterator = Array.prototype[Symbol.iterator];
-        let replaced = false;
-        Array.prototype[Symbol.iterator] = function () {
-            if (!replaced && this.length === 1 && typeof this[0]?.toBase58 === "function") {
-                replaced = true;
-                retarget();
-            }
-            return Reflect.apply(originalIterator, this, []);
-        };
-    `, harness.context);
-
-    applySolanaConfiguration(harness, {publicKey: firstSolanaKey, isConnected: true});
-
-    assert.equal(record.wallet.accounts[0].address, secondSolanaKey);
-    assert.deepEqual(events, []);
-});
-
 test("Solana notification replacement survives an obsolete disposer during delivery", () => {
     const harness = solanaHarness();
     const first = [];
@@ -7060,30 +7014,6 @@ test("exact reinjection preserves facades and rejects all old generation work", 
     assert.notEqual(firstGeneration, secondGeneration);
 });
 
-test("Ethereum readiness does not call its listener after transport retires the engine", () => {
-    const module = moduleHarness(ethereumSource);
-    const Ethereum = module.exports.default;
-    let inspectCurrent = () => {};
-    const engine = new Ethereum("readiness-generation", {
-        isCurrent() { inspectCurrent(); return true; },
-        postDisconnect: () => true,
-        postRequest: () => true,
-        postRPC: () => true,
-    });
-    applyTestConfiguration(module.exports, engine, {address: "", chainId: "0x2"}, 2);
-    inspectCurrent = () => {
-        inspectCurrent = () => {};
-        Ethereum.retire(engine);
-    };
-    let deliveries = 0;
-    assert.equal(module.exports.withReadyState(engine, () => {
-        deliveries += 1;
-        return true;
-    }), false);
-    assert.equal(deliveries, 0);
-    assert.equal(Ethereum.snapshot(engine).phase, "retired");
-});
-
 test("Ethereum readiness preserves a replacement observer and reads state without scheduling", () => {
     const module = moduleHarness(ethereumSource);
     const Ethereum = module.exports.default;
@@ -7160,7 +7090,6 @@ for (const consumedConnect of [false, true]) {
                 record.announceEthereum();
                 Object.defineProperty(window, "bigWalletInpageStableFacadeAnchorV1", {
                     value: Object.freeze({
-                        initialSnapshots: record.snapshots(),
                         record,
                         version: 2,
                     }),

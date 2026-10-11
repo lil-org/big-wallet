@@ -99,7 +99,7 @@ function trustedStableFacadeAnchor() {
         : null;
 }
 
-function ensureStableFacadeAnchor(record, initialSnapshots) {
+function ensureStableFacadeAnchor(record) {
     const anchor = trustedStableFacadeAnchor();
     const trusted = ownValue(anchor, "record");
     if (trusted) {
@@ -113,7 +113,6 @@ function ensureStableFacadeAnchor(record, initialSnapshots) {
         throw new Error("Stable facade anchor is unavailable");
     }
     const value = freezeObjectNormally({
-        initialSnapshots,
         record,
         version: stableFacadeVersion,
     });
@@ -178,7 +177,7 @@ const initialSnapshots = freezeObjectNormally({
     ethereum: facadeSnapshots.ethereum,
     solana: facadeSnapshots.solana,
 });
-ensureStableFacadeAnchor(stableFacades, initialSnapshots);
+ensureStableFacadeAnchor(stableFacades);
 const previousPhantom = ownValue(window, "phantom");
 let committed = false;
 let ethereumProvider;

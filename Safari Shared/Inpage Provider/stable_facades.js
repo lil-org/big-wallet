@@ -364,9 +364,7 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
             if (notification.kind === "accountStateChanged") {
                 notifyAccountChanges(current);
             } else if (notification.kind === "event") {
-                const args = [notification.name, ...notification.args];
-                if (solanaTarget !== current) { return; }
-                applyFunction(emitEvent, solana, args);
+                applyFunction(emitEvent, solana, [notification.name, ...notification.args]);
             }
         });
     }

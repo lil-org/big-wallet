@@ -636,33 +636,36 @@ final class PopupRequestSessionsTests: XCTestCase {
         }
     }
 
-    func testExecutorPreservesPreparationDispositionAcrossClaimReleaseOutcomes() async throws {
-        for correction in [false, true] {
-            for release in [ExtensionBridge.StoreMutationResult.persisted, .ownershipLost, .retryablePersistenceFailure] {
-                let store = try makeStore()
-                let setup = try await makeExecutionSetup(store: store, id: 611, signing: false)
-                if release != .persisted { await store.forceNextAbandonResult(release) }
-                let executor = DurableApprovalExecutor(store: store, environment: .init(
-                    requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
-                        XCTFail("An unprepared approval must not execute")
-                        return .rollback
-                    })
-                ))
-                let result = await executor.execute(claim: setup.claim, prepare: { _ in
-                    correction ? .correctionRequired : .notAccepted
-                }, resolve: { _ in
-                    XCTFail("An unprepared approval must not resolve consent")
-                    return .abandon
+    func testExecutorMapsClaimAbandonmentOutcomes() async throws {
+        let outcomes: [(ExtensionBridge.StoreMutationResult, DurableApprovalExecutor.Result)] = [
+            (.persisted, .abandoned),
+            (.ownershipLost, .ownershipLost),
+            (.retryablePersistenceFailure, .retryablePersistenceFailure),
+        ]
+        for (release, expected) in outcomes {
+            let store = try makeStore()
+            let setup = try await makeExecutionSetup(store: store, id: 611, signing: false)
+            if release != .persisted { await store.forceNextAbandonResult(release) }
+            let executor = DurableApprovalExecutor(store: store, environment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
+                    XCTFail("An unprepared approval must not execute")
+                    return .rollback
                 })
-                XCTAssertEqual(result, correction ? .correctionRequired(release) : .notAccepted(release))
-                let events = await store.events()
-                XCTAssertEqual(events, ["claim", "abandon"])
-                let lockURL = await store.operationLockURL(handle: setup.snapshot.handle)
-                if FileManager.default.fileExists(atPath: lockURL.path) {
-                    let lock = CrossProcessFileLock(fileURL: lockURL)
-                    XCTAssertTrue(try lock.tryAcquireExisting())
-                    lock.release()
-                }
+            ))
+            let result = await executor.execute(claim: setup.claim, prepare: { _ in
+                .abandon
+            }, resolve: { _ in
+                XCTFail("An unprepared approval must not resolve consent")
+                return .abandon
+            })
+            XCTAssertEqual(result, expected)
+            let events = await store.events()
+            XCTAssertEqual(events, ["claim", "abandon"])
+            let lockURL = await store.operationLockURL(handle: setup.snapshot.handle)
+            if FileManager.default.fileExists(atPath: lockURL.path) {
+                let lock = CrossProcessFileLock(fileURL: lockURL)
+                XCTAssertTrue(try lock.tryAcquireExisting())
+                lock.release()
             }
         }
     }
