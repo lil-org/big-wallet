@@ -250,6 +250,65 @@ function dappRequest(id = 7) {
     };
 }
 
+for (const {kind, message, responseName, replies = true} of [
+    {kind: "rpc", message: {id: 7, chainId: 1, body: "{}"}, responseName: null},
+    {kind: "request", message: {...dappRequest(), body: null}, responseName: "requestAccounts"},
+    {kind: "disconnect", message: {id: 7, provider: "ethereum", unexpected: true}, responseName: "revokePermissions"},
+    {kind: "request", message: {...dappRequest(), id: "7"}, replies: false},
+    {kind: "request", message: {...dappRequest(), provider: "unknown"}, replies: false},
+    {kind: "disconnect", message: {provider: "ethereum"}, replies: false},
+]) {
+    test(`raw ${kind} boundary rejects ${JSON.stringify(message)}`, async () => {
+        const harness = makeHarness();
+        await settle();
+        const posted = harness.postedMessages.length;
+        const timers = harness.pendingTimers();
+        harness.dispatchPage(kind, message, harness.generation(), 0);
+        await settle();
+        assert.equal(harness.runtimeMessages.filter(value =>
+            ["rpc", "message-to-wallet", "disconnect"].includes(value.subject)).length, 0);
+        assert.equal(harness.context.bigWalletRequests.size, 0);
+        assert.equal(harness.pendingTimers(), timers);
+        assert.equal(harness.postedMessages.length, posted + Number(replies));
+        if (replies) {
+            const response = harness.postedMessages.at(-1).message.response;
+            assert.equal(response.id, 7);
+            assert.equal(response.error.code, -32603);
+            assert.equal(response.name, responseName);
+        }
+    });
+}
+
+for (const {kind, message} of [
+    {kind: "rpc", message: {id: 7, chainId: "0x1", body: "{}"}},
+    {kind: "disconnect", message: {id: 7, provider: "ethereum"}},
+]) {
+    test(`stale ${kind} generation cannot enter the runtime relay`, async () => {
+        const harness = makeHarness();
+        await settle();
+        harness.dispatchPage(kind, message, "stale-generation", 0);
+        await settle();
+        assert.equal(harness.runtimeMessages.filter(value => value.subject === kind).length, 0);
+        const response = harness.postedMessages.at(-1).message;
+        assert.equal(response.providerGeneration, "stale-generation");
+        assert.equal(response.response.id, 7);
+        assert.equal(response.response.error.code, -32603);
+    });
+}
+
+test("Solana disconnect without an ID receives a generated relay ID", async () => {
+    const harness = makeHarness();
+    await settle();
+    harness.dispatchPage("disconnect", {provider: "solana"});
+    await settle();
+    const sent = harness.runtimeMessages.filter(message => message.subject === "disconnect");
+    assert.ok(sent.length > 0);
+    assert.ok(Number.isSafeInteger(sent[0].id));
+    assert.ok(sent[0].id > 0);
+    assert.equal(sent[0].provider, "solana");
+    assert.ok(sent.every(message => message.id === sent[0].id));
+});
+
 test("content rejects unauthorized runtime messages without effects or a response channel", async () => {
     const harness = makeHarness({sendMessage: message => message.subject === "message-to-wallet" ? {
         id: 7,
@@ -2351,7 +2410,15 @@ test("page requests reject missing malformed and overflowing observed revisions"
     for (const observedRevision of [null, -1, 1.5, "1", Number.MAX_SAFE_INTEGER + 1]) {
         harness.dispatchPage("request", dappRequest(), harness.generation(), observedRevision);
     }
-    harness.context.bigWalletEnqueue(dappRequest(), harness.generation(), undefined);
+    harness.context.bigWalletPageMessage({
+        source: harness.context.window,
+        data: {
+            direction: "big-wallet-provider-v1",
+            kind: "request",
+            message: dappRequest(),
+            providerGeneration: harness.generation(),
+        },
+    });
     await settle();
     assert.equal(harness.runtimeMessages.filter(message => message.subject === "message-to-wallet").length, 0);
 });

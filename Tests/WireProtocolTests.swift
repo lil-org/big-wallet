@@ -221,6 +221,99 @@ final class WireProtocolTests: XCTestCase {
             XCTAssertEqual(request.id, json["id"] as? Int, fixture.name)
             XCTAssertEqual(request.name, json["name"] as? String, fixture.name)
             XCTAssertEqual(wire.json as NSDictionary, json as NSDictionary, fixture.name)
+            for raw in [
+                try XCTUnwrap(SafariRequest(json: json), fixture.name),
+                try XCTUnwrap(SafariRequest(data: canonicalJSON(json)), fixture.name),
+            ] {
+                XCTAssertEqual(request.id, raw.id, fixture.name)
+                XCTAssertEqual(request.name, raw.name, fixture.name)
+                XCTAssertEqual(request.provider, raw.provider, fixture.name)
+                XCTAssertEqual(request.host, raw.host, fixture.name)
+                XCTAssertEqual(request.configurationKey, raw.configurationKey, fixture.name)
+                XCTAssertEqual(request.enqueueAttempt, raw.enqueueAttempt, fixture.name)
+                XCTAssertEqual(request.admissionDeadlineMilliseconds, raw.admissionDeadlineMilliseconds, fixture.name)
+                XCTAssertEqual(request.workflowVersion, raw.workflowVersion, fixture.name)
+                XCTAssertEqual(request.authority, raw.authority, fixture.name)
+                switch (request.body, raw.body) {
+                case (.ethereum(let mapped), .ethereum(let original)):
+                    XCTAssertEqual(mapped.method, original.method, fixture.name)
+                    XCTAssertEqual(mapped.address, original.address, fixture.name)
+                    XCTAssertEqual(mapped.currentChainId, original.currentChainId, fixture.name)
+                    XCTAssertEqual(mapped.switchToChainId, original.switchToChainId, fixture.name)
+                    XCTAssertEqual(try mapped.parameters.map { try canonicalJSON($0) },
+                                   try original.parameters.map { try canonicalJSON($0) }, fixture.name)
+                case (.solana(let mapped), .solana(let original)):
+                    XCTAssertEqual(mapped.method, original.method, fixture.name)
+                    XCTAssertEqual(mapped.publicKey, original.publicKey, fixture.name)
+                    XCTAssertEqual(mapped.message, original.message, fixture.name)
+                    XCTAssertEqual(mapped.transaction, original.transaction, fixture.name)
+                    XCTAssertEqual(mapped.messages, original.messages, fixture.name)
+                    XCTAssertEqual(mapped.displayHex, original.displayHex, fixture.name)
+                    XCTAssertEqual(mapped.signMessageEncoding, original.signMessageEncoding, fixture.name)
+                    XCTAssertEqual(mapped.onlyIfTrusted, original.onlyIfTrusted, fixture.name)
+                    XCTAssertEqual(try mapped.sendOptions.map { try canonicalJSON($0) },
+                                   try original.sendOptions.map { try canonicalJSON($0) }, fixture.name)
+                case (.unknown(let mapped), .unknown(let original)):
+                    XCTAssertEqual(mapped.method, original.method, fixture.name)
+                    XCTAssertEqual(mapped.providerConfigurations.map(\.provider), original.providerConfigurations.map(\.provider), fixture.name)
+                    XCTAssertEqual(mapped.providerConfigurations.map(\.address), original.providerConfigurations.map(\.address), fixture.name)
+                    XCTAssertEqual(mapped.providerConfigurations.map(\.chainId), original.providerConfigurations.map(\.chainId), fixture.name)
+                default:
+                    XCTFail("Request body changed provider: \(fixture.name)")
+                }
+            }
+        }
+    }
+
+    func testRawDappAdaptersRetainOptionalAuthorityAndScalarValidation() throws {
+        let fixture = try XCTUnwrap(fixtures().first {
+            $0.message == .dappRequest && $0.valid && ($0.value as? [String: Any])?["provider"] as? String == "ethereum"
+        })
+        var json = try XCTUnwrap(fixture.value as? [String: Any])
+        json.removeValue(forKey: "authority")
+        XCTAssertNil(try XCTUnwrap(SafariRequest(json: json)).authority)
+        XCTAssertNil(try XCTUnwrap(SafariRequest(data: canonicalJSON(json))).authority)
+        XCTAssertNil(WireProtocol.object(.dappRequest, value: json))
+        for field in ["id", "admissionDeadline"] {
+            let invalidValues: [Any] = [true, 1.5, "1", 9_007_199_254_740_992]
+                + (field == "admissionDeadline" ? [-1, 0] : [])
+            for value in invalidValues {
+                var invalid = json
+                invalid[field] = value
+                XCTAssertNil(SafariRequest(json: invalid), "\(field): \(value)")
+                XCTAssertNil(SafariRequest(data: try canonicalJSON(invalid)), "\(field): \(value)")
+            }
+        }
+    }
+
+    func testValidatedSolanaPayloadRetainsBooleanDomainValidation() throws {
+        let fixture = try XCTUnwrap(fixtures().first {
+            $0.message == .dappRequest && $0.valid && ($0.value as? [String: Any])?["provider"] as? String == "solana"
+        })
+        let source = try XCTUnwrap(fixture.value as? [String: Any])
+        let values: [Any?] = [nil, true, false, 1, 0, "true", NSNull()]
+        for value in values {
+            var json = source
+            var body = try XCTUnwrap(json["body"] as? [String: Any])
+            var object = try XCTUnwrap(body["object"] as? [String: Any])
+            var params = object["params"] as? [String: Any] ?? [:]
+            params["onlyIfTrusted"] = value
+            object["params"] = params
+            body["object"] = object
+            json["body"] = body
+            let wire = try XCTUnwrap(WireProtocol.object(.dappRequest, value: json))
+            let requests = [SafariRequest(wire: wire), SafariRequest(json: json), SafariRequest(data: try canonicalJSON(json))]
+            let valid = value.map { CFGetTypeID($0 as CFTypeRef) == CFBooleanGetTypeID() } ?? true
+            for request in requests {
+                if valid {
+                    guard case .solana(let mapped) = try XCTUnwrap(request).body else {
+                        return XCTFail("Expected Solana request")
+                    }
+                    XCTAssertEqual(mapped.onlyIfTrusted, value as? Bool ?? false)
+                } else {
+                    XCTAssertNil(request, "Invalid onlyIfTrusted: \(String(describing: value))")
+                }
+            }
         }
     }
 
@@ -326,6 +419,7 @@ final class WireProtocolTests: XCTestCase {
         XCTAssertEqual(key, "https://example.com")
         let wrongContract = try XCTUnwrap(WireProtocol.object(.rpcResponse, value: ["id": 1, "result": NSNull()]))
         XCTAssertThrowsError(try InternalSafariRequest(wire: wrongContract))
+        XCTAssertNil(SafariRequest(wire: wrongContract))
     }
 
     func testRPCContainerDepthLimitIncludesTheEnvelope() throws {

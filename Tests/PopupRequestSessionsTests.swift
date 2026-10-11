@@ -3145,46 +3145,69 @@ extension PopupRequestSessionsTests {
             let session = PopupRequestSession(intent: try reviewIntentForTesting(
                 binding: XCTUnwrap(snapshot.requestBinding),
                 action: switchesAccount ? .switchAccount(action) : .selectAccount(action)
-            ), transactionApprovalOperations: unusedPopupTransactionOperations())
+            ), reviewCatalog: WalletReviewCatalog(account: account.account),
+                transactionApprovalOperations: unusedPopupTransactionOperations())
             let token = session.reviewToken
             let revision = session.presentationRevision
             XCTAssertTrue(session.setSelection(accounts: [account], network: network))
 
             let prepared: SelectAccountAction
-            let reviewed: SelectAccountAction
-            switch (session.preparedAction, session.reviewContent) {
-            case (.selectAccount(let original), .selectAccount(let current)),
-                 (.switchAccount(let original), .switchAccount(let current)):
+            switch session.preparedAction {
+            case .selectAccount(let original), .switchAccount(let original):
                 prepared = original
-                reviewed = current
             default:
                 return XCTFail("Selection draft changed the action kind")
             }
             XCTAssertTrue(prepared.selectedAccounts.isEmpty)
             XCTAssertEqual(prepared.network, switchesAccount ? Networks.ethereum : nil)
+            let reviewed = try XCTUnwrap(session.selectionDraft)
             XCTAssertEqual(reviewed.selectedAccounts, [account])
             XCTAssertEqual(reviewed.network, network)
-            XCTAssertEqual(reviewed.coinType, prepared.coinType)
-            XCTAssertEqual(reviewed.initiallyConnectedProviders, prepared.initiallyConnectedProviders)
             XCTAssertEqual(session.reviewToken, token)
             XCTAssertEqual(session.presentationRevision, revision)
             guard case .review(let presentation) = session.presentation else {
                 return XCTFail("Expected selection presentation")
             }
             let presented: SelectAccountAction
+            let presentedDraft: PopupRequestSession.SelectionDraft
             switch presentation.content {
-            case .selectAccount(let action):
+            case .selectAccount(let action, let draft):
                 XCTAssertFalse(switchesAccount)
                 presented = action
-            case .switchAccount(let action):
+                presentedDraft = draft
+            case .switchAccount(let action, let draft):
                 XCTAssertTrue(switchesAccount)
                 presented = action
+                presentedDraft = draft
             default:
                 return XCTFail("Selection presentation changed the action kind")
             }
-            XCTAssertEqual(presented.selectedAccounts, reviewed.selectedAccounts)
-            XCTAssertEqual(presented.network, reviewed.network)
+            XCTAssertEqual(presented.selectedAccounts, prepared.selectedAccounts)
+            XCTAssertEqual(presented.network, prepared.network)
+            XCTAssertEqual(presented.coinType, prepared.coinType)
+            XCTAssertEqual(presented.initiallyConnectedProviders, prepared.initiallyConnectedProviders)
+            XCTAssertEqual(presentedDraft.selectedAccounts, reviewed.selectedAccounts)
+            XCTAssertEqual(presentedDraft.network, reviewed.network)
             XCTAssertEqual(presentation.reviewToken, token)
+            let state = PopupApprovalStatePresenter().state(id: session.handle.id, presentation: session.presentation)
+            guard case .review(let rendered, _, _) = state.content,
+                  case .accountSelection(let selection) = rendered.content else {
+                return XCTFail("Expected rendered selection")
+            }
+            XCTAssertEqual(selection.accounts.filter(\.isSelected).map(\.address), [account.account.address])
+            XCTAssertEqual(selection.networks?.filter(\.isSelected).map(\.chainId), [network.chainIdHexString])
+            XCTAssertTrue(selection.canSelectNetwork)
+            XCTAssertEqual(selection.allowsEmptySelection, switchesAccount)
+            let claimToken = try XCTUnwrap(session.beginApproval())
+            XCTAssertTrue(session.acceptClaim(token: claimToken))
+            let consent = try XCTUnwrap(session.acceptAccounts(.init(
+                accounts: [WalletAccountDescriptor(walletID: account.walletId, account: account.account)],
+                ethereumChainID: nil
+            ), approvedAt: Date()))
+            guard case .accountSelection(let decision) = consent.decision else {
+                return XCTFail("Expected account-selection consent")
+            }
+            XCTAssertNil(decision.ethereumChainID)
         }
     }
 
@@ -3244,9 +3267,10 @@ extension PopupRequestSessionsTests {
             return XCTFail("Expected transaction action")
         }
         let transaction = PopupTransactionSession(action: action, operations: unusedPopupTransactionOperations())
+        let selectionDraft = PopupRequestSession.SelectionDraft(selectedAccounts: [], network: nil)
         let cases: [(PopupRequestSession.ReviewContent, String)] = [
-            (.selectAccount(selection), Strings.connectWallet),
-            (.switchAccount(selection), Strings.switchAccount),
+            (.selectAccount(action: selection, draft: selectionDraft), Strings.connectWallet),
+            (.switchAccount(action: selection, draft: selectionDraft), Strings.switchAccount),
             (.approveMessage(message), message.subject.title),
             (.approveTransaction(action: action, transaction: transaction), Strings.sendTransaction),
             (.addEthereumChain(.init(chainToAdd: popupTestNetwork())), Strings.addNetwork),

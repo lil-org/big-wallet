@@ -102,12 +102,8 @@ function withReadyState(provider, listener) {
         !isReady(provider) || !transportIsCurrent(state)) {
         return false;
     }
-    const epoch = state.stateEpoch;
+    if (state.retired) { return false; }
     const payload = freezeObjectNormally({chainId: state.chainId});
-    if (stateFor(provider) !== state || state.retired ||
-        state.stateEpoch !== epoch || !transportIsCurrent(state)) {
-        return false;
-    }
     try {
         return applyFunction(listener, undefined, [payload]) === true;
     } catch (error) {
@@ -266,7 +262,11 @@ function registerOperation(provider, payload, wrapResult) {
     }
     record.metadata.expectedAddress = expectedAddress;
     if (state.runtime.phase === "ready") {
-        dispatchSafely(provider, record);
+        try {
+            dispatchOperation(provider, record);
+        } catch (error) {
+            state.runtime.reject(record, error);
+        }
     } else if (!state.runtime.enqueue(record)) {
         state.runtime.reject(record, providerReplacementError());
     }
@@ -534,17 +534,6 @@ function dispatchOperation(provider, record) {
             );
         default:
             return dispatchRPC(provider, state, record);
-    }
-}
-
-function dispatchSafely(provider, record) {
-    const state = stateFor(provider);
-    if (!state || !state.runtime.owns(record)) { return false; }
-    try {
-        return dispatchOperation(provider, record);
-    } catch (error) {
-        state.runtime.reject(record, error);
-        return false;
     }
 }
 

@@ -292,15 +292,6 @@ struct SelectAccountAction: Sendable {
     let selectedAccounts: Set<SpecificWalletAccount>
     let initiallyConnectedProviders: Set<InpageProvider>
     let network: EthereumNetwork?
-
-    var canSelectEthereumNetwork: Bool {
-        if let coinType {
-            return coinType == .ethereum
-        }
-
-        return initiallyConnectedProviders.contains(.ethereum) ||
-            selectedAccounts.contains { $0.account.coin == .ethereum }
-    }
 }
 
 struct SigningReviewContent: Sendable {

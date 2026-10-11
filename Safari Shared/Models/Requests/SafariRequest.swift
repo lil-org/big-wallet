@@ -77,12 +77,21 @@ struct SafariRequest: Sendable {
 
     init?(wire: WireProtocol.ValidatedObject) {
         guard wire.contract == .dappRequest else { return nil }
-        self.init(json: wire.json)
+        let json = wire.json
+        guard let authorityJSON = json["authority"] as? [String: Any],
+              let authority = ExtensionBridge.AuthorityVersion(validatedJSON: authorityJSON) else { return nil }
+        self.init(fields: json, authority: authority)
     }
 
     init?(json: [String: Any]) {
         guard let idValue = json["id"], WireProtocol.validate(.requestID, value: idValue),
-              let id = idValue as? Int,
+              let admissionDeadlineValue = json["admissionDeadline"],
+              WireProtocol.validate(.positiveInteger, value: admissionDeadlineValue) else { return nil }
+        self.init(fields: json, authority: ExtensionBridge.AuthorityVersion(rawValue: json["authority"]))
+    }
+
+    private init?(fields json: [String: Any], authority: ExtensionBridge.AuthorityVersion?) {
+        guard let id = json["id"] as? Int,
               let name = json["name"] as? String,
               let jsonBody = json["body"] as? [String: Any],
               let providerValue = json["provider"] as? String,
@@ -91,9 +100,7 @@ struct SafariRequest: Sendable {
               let host = json["host"] as? String,
               let configurationKey = json["configurationKey"] as? String,
               let enqueueAttempt = json["enqueueAttempt"] as? String,
-              let admissionDeadlineValue = json["admissionDeadline"],
-              WireProtocol.validate(.positiveInteger, value: admissionDeadlineValue),
-              let admissionDeadlineMilliseconds = admissionDeadlineValue as? Int,
+              let admissionDeadlineMilliseconds = json["admissionDeadline"] as? Int,
               let workflowVersion = json["workflowVersion"] as? Int
         else { return nil }
         
@@ -104,7 +111,7 @@ struct SafariRequest: Sendable {
         self.enqueueAttempt = enqueueAttempt
         self.admissionDeadlineMilliseconds = admissionDeadlineMilliseconds
         self.workflowVersion = workflowVersion
-        authority = ExtensionBridge.AuthorityVersion(rawValue: json["authority"])
+        self.authority = authority
         authorizedAccount = nil
         
         self.provider = provider

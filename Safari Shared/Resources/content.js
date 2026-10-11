@@ -196,21 +196,16 @@ function bigWalletPageMessage(event) {
         }
         return;
     }
-    const generation = envelope.providerGeneration;
     if (envelope.kind === "rpc") {
-        bigWalletRPC(envelope.message, generation);
+        bigWalletRPC(envelope);
     } else if (envelope.kind === "request") {
-        if (envelope.message.provider === "unknown") { return; }
-        bigWalletEnqueue(envelope.message, generation, envelope.observedRevision);
+        bigWalletEnqueue(envelope);
     } else if (envelope.kind === "disconnect") {
-        bigWalletDisconnect(envelope.message, generation, envelope.observedRevision);
+        bigWalletDisconnect(envelope);
     }
 }
 
-function bigWalletRPC(message, generation) {
-    if (!bigWalletWire.isRecord(message) || !bigWalletWire.isValidRequestId(message.id)) {
-        return;
-    }
+function bigWalletRPC({message, providerGeneration: generation}) {
     if (!bigWalletMatchesGeneration(generation)) {
         bigWalletPostRPC(message.id, bigWalletErrorResponse(message.id, "ethereum", null), generation);
         return;
@@ -247,14 +242,8 @@ function bigWalletPostRPC(id, response, generation) {
     }, "*");
 }
 
-function bigWalletEnqueue(message, generation, observedRevision) {
-    if (!bigWalletWire.isRecord(message) || !bigWalletWire.isRecord(message.body) ||
-        !bigWalletWire.isValidRequestId(message.id) ||
-        typeof message.name !== "string" ||
-        !["ethereum", "solana"].includes(message.provider)) {
-        return;
-    }
-    if (!bigWalletMatchesGeneration(generation) || !Number.isSafeInteger(observedRevision) || observedRevision < 0) {
+function bigWalletEnqueue({message, providerGeneration: generation, observedRevision}) {
+    if (!bigWalletMatchesGeneration(generation)) {
         bigWalletDeliverFailure(message, generation);
         return;
     }
@@ -495,12 +484,10 @@ function bigWalletDeliverFailure(message, generation) {
     }, "*");
 }
 
-function bigWalletDisconnect(message, generation, observedRevision) {
-    if (!bigWalletWire.isValidDisconnectRequest(message)) { return; }
+function bigWalletDisconnect({message, providerGeneration: generation, observedRevision}) {
     const identity = bigWalletCurrentIdentity();
     const cached = bigWalletConfigurationState;
-    if (!Number.isSafeInteger(observedRevision) || observedRevision < 0 ||
-        !bigWalletMatchesGeneration(generation) || cached?.providerGeneration !== generation ||
+    if (!bigWalletMatchesGeneration(generation) || cached?.providerGeneration !== generation ||
         cached.configurationKey !== identity?.configurationKey) {
         bigWalletPostDisconnect(message, undefined, generation);
         return;

@@ -600,7 +600,8 @@ actor ExtensionBridge {
               ),
               rawObject["configurationKey"] as? String == request.configurationKey,
               isValidEnqueueAttempt(request.enqueueAttempt),
-              let authority = AuthorityVersion(rawValue: rawObject["authority"]),
+              let authorityJSON = rawObject["authority"] as? [String: Any],
+              let authority = AuthorityVersion(validatedJSON: authorityJSON),
               let canonicalData = payloadData(rawObject, options: [.sortedKeys]) else {
             return .invalid
         }

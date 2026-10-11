@@ -105,8 +105,8 @@ final class PopupApprovalStatePresenter {
         let content: PopupReview.Content
         var actions: [PopupApprovalState.Action] = [.approve, .reject]
         switch review.content {
-        case .selectAccount(let action), .switchAccount(let action):
-            content = .accountSelection(selectionReview(action: action, reviewCatalog: review.reviewCatalog))
+        case .selectAccount(let action, let draft), .switchAccount(let action, let draft):
+            content = .accountSelection(selectionReview(action: action, draft: draft, reviewCatalog: review.reviewCatalog))
         case .approveMessage(let action):
             content = .signMessage(messageReview(action: action))
         case .approveTransaction(let action, let transaction):
@@ -158,6 +158,7 @@ final class PopupApprovalStatePresenter {
 
     private func selectionReview(
         action: SelectAccountAction,
+        draft: PopupRequestSession.SelectionDraft,
         reviewCatalog: WalletReviewCatalog?
     ) -> PopupSelectionReview {
         var accounts = [PopupSelectableAccount]()
@@ -176,14 +177,17 @@ final class PopupApprovalStatePresenter {
                 address: account.address,
                 coin: account.coin.correspondingInpageProvider,
                 derivationPath: account.derivationPath,
-                isSelected: action.selectedAccounts.contains(specific)
+                isSelected: draft.selectedAccounts.contains(specific)
             ))
         }
-        let canSelectNetwork = action.canSelectEthereumNetwork ||
-            (action.coinType == nil && hasEthereumCandidates)
+        let canSelectNetwork = action.coinType.map { $0 == .ethereum } ?? (
+            action.initiallyConnectedProviders.contains(.ethereum) ||
+                draft.selectedAccounts.contains { $0.account.coin == .ethereum } ||
+                hasEthereumCandidates
+        )
         return PopupSelectionReview(
             accounts: accounts,
-            networks: canSelectNetwork ? networksList(selected: action.network) : nil,
+            networks: canSelectNetwork ? networksList(selected: draft.network) : nil,
             canSelectNetwork: canSelectNetwork,
             allowsEmptySelection: !action.initiallyConnectedProviders.isEmpty,
             emptyMessage: accounts.isEmpty ? action.coinType.map {

@@ -179,8 +179,6 @@
                 terminal.result === null);
     }
 
-    function isValidDisconnectRequest(request) { return isMessage("PageDisconnect", request); }
-
     function responseReadyIds(request) {
         const decoded = decodeMessage("ResponseReady", request);
         return decoded ? [...new Set(decoded.ids || [decoded.id])] : null;
@@ -273,7 +271,6 @@
         isProviderRevisions,
         isRecord,
         isRequestToken,
-        isValidDisconnectRequest,
         isValidRequestId,
         responseReadyIds,
         withTimeout,

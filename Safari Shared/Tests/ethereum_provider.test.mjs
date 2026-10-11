@@ -7060,6 +7060,30 @@ test("exact reinjection preserves facades and rejects all old generation work", 
     assert.notEqual(firstGeneration, secondGeneration);
 });
 
+test("Ethereum readiness does not call its listener after transport retires the engine", () => {
+    const module = moduleHarness(ethereumSource);
+    const Ethereum = module.exports.default;
+    let inspectCurrent = () => {};
+    const engine = new Ethereum("readiness-generation", {
+        isCurrent() { inspectCurrent(); return true; },
+        postDisconnect: () => true,
+        postRequest: () => true,
+        postRPC: () => true,
+    });
+    applyTestConfiguration(module.exports, engine, {address: "", chainId: "0x2"}, 2);
+    inspectCurrent = () => {
+        inspectCurrent = () => {};
+        Ethereum.retire(engine);
+    };
+    let deliveries = 0;
+    assert.equal(module.exports.withReadyState(engine, () => {
+        deliveries += 1;
+        return true;
+    }), false);
+    assert.equal(deliveries, 0);
+    assert.equal(Ethereum.snapshot(engine).phase, "retired");
+});
+
 test("Ethereum readiness preserves a replacement observer and reads state without scheduling", () => {
     const module = moduleHarness(ethereumSource);
     const Ethereum = module.exports.default;
