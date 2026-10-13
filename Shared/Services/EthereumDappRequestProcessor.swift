@@ -4,16 +4,18 @@ import Foundation
 
 struct EthereumDappRequestProcessor {
 
-    private static let ethereum = Ethereum.shared
-
     @MainActor
     static func prepare(
         request: SafariRequest,
         body: SafariRequest.Ethereum,
         catalog: WalletReviewCatalog,
-        networkResolver: @MainActor (Int) -> ApprovalNetworkResolution = { NetworkResolver.main.approvalResolution(chainId: $0) }
+        networkResolver: @MainActor (Int) -> ApprovalNetworkResolution = { NetworkResolver.main.approvalResolution(chainId: $0) },
+        customDefinitionResult: @MainActor (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult = {
+            Networks.existingCustomDefinitionResult(networkFromDapp: $0)
+        }
     ) -> UnboundDappRequestPreparation {
-        prepareAvailable(request: request, body: body, catalog: catalog, networkResolver: networkResolver)
+        prepareAvailable(request: request, body: body, catalog: catalog, networkResolver: networkResolver,
+            customDefinitionResult: customDefinitionResult)
             ?? .immediate(immediateFailure(to: request, error: .internalError))
     }
 
@@ -21,9 +23,13 @@ struct EthereumDappRequestProcessor {
     static func prepareWithoutWallets(
         request: SafariRequest,
         body: SafariRequest.Ethereum,
-        networkResolver: @MainActor (Int) -> ApprovalNetworkResolution = { NetworkResolver.main.approvalResolution(chainId: $0) }
+        networkResolver: @MainActor (Int) -> ApprovalNetworkResolution = { NetworkResolver.main.approvalResolution(chainId: $0) },
+        customDefinitionResult: @MainActor (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult = {
+            Networks.existingCustomDefinitionResult(networkFromDapp: $0)
+        }
     ) -> UnboundDappRequestPreparation? {
-        prepareAvailable(request: request, body: body, catalog: nil, networkResolver: networkResolver)
+        prepareAvailable(request: request, body: body, catalog: nil, networkResolver: networkResolver,
+            customDefinitionResult: customDefinitionResult)
     }
 
     @MainActor
@@ -31,7 +37,8 @@ struct EthereumDappRequestProcessor {
         request: SafariRequest,
         body: SafariRequest.Ethereum,
         catalog: WalletReviewCatalog?,
-        networkResolver: @MainActor (Int) -> ApprovalNetworkResolution
+        networkResolver: @MainActor (Int) -> ApprovalNetworkResolution,
+        customDefinitionResult: @MainActor (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult
     ) -> UnboundDappRequestPreparation? {
         lazy var walletAndAccount = request.authorizedAccount.flatMap { descriptor in
             guard descriptor.coin == .ethereum,
@@ -42,7 +49,8 @@ struct EthereumDappRequestProcessor {
 
         switch body.method {
         case .addEthereumChain:
-            return prepareAddChain(request: request, body: body, networkResolver: networkResolver)
+            return prepareAddChain(request: request, body: body, networkResolver: networkResolver,
+                customDefinitionResult: customDefinitionResult)
         case .requestAccounts:
             if let account = request.authorizedAccount, account.coin == .ethereum {
                 return .immediate(.existingEthereumAccounts)
@@ -112,7 +120,7 @@ struct EthereumDappRequestProcessor {
             return .approval(.approveTransaction(action))
         case .ecRecover:
             if let (signature, message) = body.signatureAndMessage,
-               let recovered = ethereum.recover(signature: signature, message: message) {
+               let recovered = Ethereum.recover(signature: signature, message: message) {
                 return .immediate(.ethereumRecoveredAddress(recovered))
             }
             return .immediate(immediateFailure(
@@ -213,7 +221,8 @@ struct EthereumDappRequestProcessor {
     private static func prepareAddChain(
         request: SafariRequest,
         body: SafariRequest.Ethereum,
-        networkResolver: @MainActor (Int) -> ApprovalNetworkResolution
+        networkResolver: @MainActor (Int) -> ApprovalNetworkResolution,
+        customDefinitionResult: @MainActor (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult
     ) -> UnboundDappRequestPreparation {
         guard let chainToAdd = EthereumNetworkFromDapp.from(body.parameters),
               let chainId = Int(hexString: chainToAdd.chainId),
@@ -227,7 +236,8 @@ struct EthereumDappRequestProcessor {
         case .missing: network = .unknown
         case .unavailable: return .unavailable
         }
-        if let immediate = chainAdditionResolution(chainToAdd, networkResolver: { _ in network }) {
+        if let immediate = chainAdditionResolution(chainToAdd, networkResolver: { _ in network },
+            customDefinitionResult: customDefinitionResult) {
             return .immediate(immediate)
         }
         return .approval(.addEthereumChain(AddEthereumChainAction(chainToAdd: chainToAdd)))
@@ -236,7 +246,10 @@ struct EthereumDappRequestProcessor {
     @MainActor
     static func chainAdditionResolution(
         _ chainToAdd: EthereumNetworkFromDapp,
-        networkResolver: @MainActor (Int) -> EthereumNetworkResolution = { Nodes.resolution(chainId: $0) }
+        networkResolver: @MainActor (Int) -> EthereumNetworkResolution = { Nodes.resolution(chainId: $0) },
+        customDefinitionResult: @MainActor (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult = {
+            Networks.existingCustomDefinitionResult(networkFromDapp: $0)
+        }
     ) -> ImmediateResolution? {
         guard let chainId = Int(hexString: chainToAdd.chainId), chainId > 0 else {
             return .failure(.init(message: Strings.somethingWentWrong))
@@ -246,11 +259,7 @@ struct EthereumDappRequestProcessor {
             guard existingChainAdditionMatches(
                 approvedNetwork: chainToAdd,
                 resolvedNetwork: resolvedNetwork,
-                customDefinitionResult: { network in
-                    Networks.existingCustomDefinitionResult(
-                        networkFromDapp: network
-                    )
-                }
+                customDefinitionResult: customDefinitionResult
             ) else {
                 return .failure(.init(message: Strings.somethingWentWrong))
             }
@@ -266,7 +275,14 @@ struct EthereumDappRequestProcessor {
     }
 
     static func completeApprovedChainAddition(
-        permit: ExtensionBridge.ApprovedExecutionPermit
+        permit: ExtensionBridge.ApprovedExecutionPermit,
+        networkResolver: (Int) -> EthereumNetworkResolution = { Nodes.resolution(chainId: $0) },
+        customDefinitionResult: (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult = {
+            Networks.existingCustomDefinitionResult(networkFromDapp: $0)
+        },
+        insertNetwork: (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult = {
+            Networks.add(networkFromDapp: $0)
+        }
     ) -> Bool {
         guard permit.isExecuting,
               case .addEthereumChain(let action) = permit.approval.kind,
@@ -274,23 +290,19 @@ struct EthereumDappRequestProcessor {
               body.method == .addEthereumChain,
               let chainId = Int(hexString: action.chainToAdd.chainId), chainId > 0 else { return false }
         let network = action.chainToAdd
-        switch Nodes.resolution(chainId: chainId) {
+        switch networkResolver(chainId) {
         case .resolved(let resolvedNetwork):
             return resolvedNetwork.source != .custom ||
-                Networks.existingCustomDefinitionResult(
-                    networkFromDapp: network
-                ) == .matching
+                customDefinitionResult(network) == .matching
         case .catalogOwnedButUnavailable:
             return false
         case .unknown:
-            guard Networks.add(networkFromDapp: network).succeeded,
-                  case .resolved(let resolvedNetwork) = Nodes.resolution(chainId: chainId),
+            guard insertNetwork(network).succeeded,
+                  case .resolved(let resolvedNetwork) = networkResolver(chainId),
                   resolvedNetwork.source == .custom else {
                 return false
             }
-            return Networks.existingCustomDefinitionResult(
-                networkFromDapp: network
-            ) == .matching
+            return customDefinitionResult(network) == .matching
         }
     }
 

@@ -15,6 +15,7 @@ final class NativeApprovalFinalizer {
     private let refreshWalletCatalog: @MainActor () async -> WalletReviewCatalog?
     private let makeSigner: DurableApprovalExecutor.SourceSignerFactory
     private let networkResolver: (Int) -> ApprovalNetworkResolution
+    private let customDefinitionResult: @MainActor @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult
     private let executor: DurableApprovalExecutor
 
     init(
@@ -27,6 +28,9 @@ final class NativeApprovalFinalizer {
         makeSigner: DurableApprovalExecutor.SourceSignerFactory? = nil,
         networkResolver: @escaping (Int) -> ApprovalNetworkResolution = {
             NetworkResolver.main.approvalResolution(chainId: $0)
+        },
+        customDefinitionResult: @escaping @MainActor @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult = {
+            Networks.existingCustomDefinitionResult(networkFromDapp: $0)
         }
     ) {
         self.store = store
@@ -39,6 +43,7 @@ final class NativeApprovalFinalizer {
             )
         }
         self.networkResolver = networkResolver
+        self.customDefinitionResult = customDefinitionResult
         executor = DurableApprovalExecutor(
             store: store,
             environment: executionEnvironment
@@ -78,7 +83,8 @@ final class NativeApprovalFinalizer {
         await DappApprovalResolver.resolve(
             consent,
             refreshWalletCatalog: refreshWalletCatalog,
-            networkResolver: networkResolver
+            networkResolver: networkResolver,
+            customDefinitionResult: customDefinitionResult
         )
     }
 }

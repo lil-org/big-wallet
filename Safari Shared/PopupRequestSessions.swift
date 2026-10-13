@@ -326,6 +326,7 @@ final class PopupRequestSessions {
     private let invalidateNetworkCache: () -> Void
     private let selectionNetworkResolver: (String) -> EthereumNetwork?
     private let approvalNetworkResolver: (Int) -> ApprovalNetworkResolution
+    private let customDefinitionResult: @MainActor @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult
     private let clock: @MainActor @Sendable () -> Date
     private let durableApprovalExecutor: DurableApprovalExecutor
     private let presenter: PopupApprovalStatePresenter
@@ -345,7 +346,11 @@ final class PopupRequestSessions {
         approvalNetworkResolver: @escaping (Int) -> ApprovalNetworkResolution = {
             NetworkResolver.main.approvalResolution(chainId: $0)
         },
-        executionEnvironment: DurableApprovalExecutor.Environment = .live
+        executionEnvironment: DurableApprovalExecutor.Environment = .live,
+        presentationEnvironment: PopupApprovalStatePresenter.Environment = .live,
+        customDefinitionResult: @escaping @MainActor @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult = {
+            Networks.existingCustomDefinitionResult(networkFromDapp: $0)
+        }
     ) {
         self.store = store
         requestProcessor = executionEnvironment.requestProcessor
@@ -355,12 +360,13 @@ final class PopupRequestSessions {
         self.invalidateNetworkCache = invalidateNetworkCache
         self.selectionNetworkResolver = selectionNetworkResolver
         self.approvalNetworkResolver = approvalNetworkResolver
+        self.customDefinitionResult = customDefinitionResult
         clock = executionEnvironment.clock
         durableApprovalExecutor = DurableApprovalExecutor(
             store: store,
             environment: executionEnvironment
         )
-        presenter = PopupApprovalStatePresenter()
+        presenter = PopupApprovalStatePresenter(environment: presentationEnvironment)
     }
 
 #if os(iOS) || os(visionOS)
@@ -1065,6 +1071,7 @@ final class PopupRequestSessions {
                     consent,
                     refreshWalletCatalog: { self.walletEnvironment.currentApprovalCatalog() },
                     networkResolver: self.approvalNetworkResolver,
+                    customDefinitionResult: self.customDefinitionResult,
                     isCurrent: { self.isCurrent(session, token: token) }
                 )
             })

@@ -118,6 +118,8 @@ final class DurableApprovalExecutor {
         let broadcastTimeoutNanoseconds: UInt64
         let clock: @MainActor @Sendable () -> Date
         let waitForExecutionDeadline: (@MainActor @Sendable (Date) async -> Void)?
+        let waitForBroadcastTimeout: @Sendable (UInt64) async -> Void
+        let broadcastSenderForPermit: (@MainActor @Sendable (ExtensionBridge.ApprovedExecutionPermit) -> any ApprovedBroadcastSending)?
 
         static var live: Self { Self() }
 
@@ -127,13 +129,19 @@ final class DurableApprovalExecutor {
             broadcastTimeoutNanoseconds: UInt64 =
                 DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
             clock: @escaping @MainActor @Sendable () -> Date = Date.init,
-            waitForExecutionDeadline: (@MainActor @Sendable (Date) async -> Void)? = nil
+            waitForExecutionDeadline: (@MainActor @Sendable (Date) async -> Void)? = nil,
+            waitForBroadcastTimeout: @escaping @Sendable (UInt64) async -> Void = {
+                try? await Task.sleep(nanoseconds: $0)
+            },
+            broadcastSenderForPermit: (@MainActor @Sendable (ExtensionBridge.ApprovedExecutionPermit) -> any ApprovedBroadcastSending)? = nil
         ) {
             self.requestProcessor = requestProcessor ?? DappRequestProcessor()
             self.broadcastSender = broadcastSender ?? DappBroadcastSender()
             self.broadcastTimeoutNanoseconds = broadcastTimeoutNanoseconds
             self.clock = clock
             self.waitForExecutionDeadline = waitForExecutionDeadline
+            self.waitForBroadcastTimeout = waitForBroadcastTimeout
+            self.broadcastSenderForPermit = broadcastSenderForPermit
         }
     }
 
@@ -143,6 +151,8 @@ final class DurableApprovalExecutor {
     private let broadcastTimeoutNanoseconds: UInt64
     private let clock: @MainActor @Sendable () -> Date
     private let waitForExecutionDeadline: (@MainActor @Sendable (Date) async -> Void)?
+    private let waitForBroadcastTimeout: @Sendable (UInt64) async -> Void
+    private let broadcastSenderForPermit: (@MainActor @Sendable (ExtensionBridge.ApprovedExecutionPermit) -> any ApprovedBroadcastSending)?
 
     init(
         store: PopupRequestStore,
@@ -154,6 +164,8 @@ final class DurableApprovalExecutor {
         broadcastTimeoutNanoseconds = environment.broadcastTimeoutNanoseconds
         clock = environment.clock
         waitForExecutionDeadline = environment.waitForExecutionDeadline
+        waitForBroadcastTimeout = environment.waitForBroadcastTimeout
+        broadcastSenderForPermit = environment.broadcastSenderForPermit
     }
 
     func execute(
@@ -381,11 +393,12 @@ final class DurableApprovalExecutor {
         _ dispatch: ExtensionBridge.BroadcastDispatchPermit,
         recovery: ApprovedCompletion
     ) async -> ApprovedCompletion {
-        await bounded(
+        let sender = broadcastSenderForPermit?(dispatch.approvedPermit) ?? broadcastSender
+        return await bounded(
             timeoutNanoseconds: broadcastTimeoutNanoseconds,
             timeoutValue: recovery
         ) {
-            await dispatch.broadcast.dispatch(using: dispatch, sender: self.broadcastSender) ?? recovery
+            await dispatch.broadcast.dispatch(using: dispatch, sender: sender) ?? recovery
         }
     }
 
@@ -394,10 +407,11 @@ final class DurableApprovalExecutor {
         timeoutValue: Value,
         operation: @escaping @MainActor () async -> Value
     ) async -> Value {
-        await ApprovalResolution<Value>().value(
+        let wait = waitForBroadcastTimeout
+        return await ApprovalResolution<Value>().value(
             timeoutValue: timeoutValue,
             callerCancellation: .ignore,
-            waitForTimeout: { try? await Task.sleep(nanoseconds: timeoutNanoseconds) },
+            waitForTimeout: { await wait(timeoutNanoseconds) },
             operation: { await operation() }
         )
     }

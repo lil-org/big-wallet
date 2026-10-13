@@ -14,6 +14,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     typealias ReadFileSize = @Sendable (URL) throws -> Int?
     typealias RemoveItem = @Sendable (URL) throws -> Void
     typealias CompleteChainAddition = @Sendable (ExtensionBridge.ApprovedExecutionPermit) -> Bool
+    typealias ResolveImmediate = @Sendable (ImmediateResolution, SafariRequest) -> ResponseToExtension?
 
     struct Dependencies: Sendable {
         let clock: @Sendable () -> Date
@@ -29,6 +30,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         let readFileSize: ReadFileSize
         let removeItem: RemoveItem
         let completeChainAddition: CompleteChainAddition
+        let resolveImmediate: ResolveImmediate
 
         init(
             clock: @escaping @Sendable () -> Date = { Date() },
@@ -44,7 +46,8 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             readFileSize: @escaping ReadFileSize = { try ExtensionRequestFileStore.defaultReadFileSize($0) },
             removeItem: @escaping RemoveItem = { try ExtensionRequestFileStore.defaultRemoveItem($0) },
             completeChainAddition: @escaping CompleteChainAddition =
-                { EthereumDappRequestProcessor.completeApprovedChainAddition(permit: $0) }
+                { EthereumDappRequestProcessor.completeApprovedChainAddition(permit: $0) },
+            resolveImmediate: @escaping ResolveImmediate = { $0.response(for: $1) }
         ) {
             self.clock = clock
             self.token = token
@@ -59,6 +62,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             self.readFileSize = readFileSize
             self.removeItem = removeItem
             self.completeChainAddition = completeChainAddition
+            self.resolveImmediate = resolveImmediate
         }
     }
 
@@ -79,6 +83,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     private let token: @Sendable () -> UUID
     private let revocationEpoch: @Sendable () -> UUID
     private let completeChainAddition: CompleteChainAddition
+    private let resolveImmediate: ResolveImmediate
     private let files: ExtensionRequestStoreFiles
     private let codec = Mutex(ExtensionRequestProfileCodec())
 
@@ -124,6 +129,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         token = dependencies.token
         revocationEpoch = dependencies.revocationEpoch
         completeChainAddition = dependencies.completeChainAddition
+        resolveImmediate = dependencies.resolveImmediate
         files = ExtensionRequestStoreFiles(
             rootURL: rootURL,
             directoryBoundary: directoryBoundary,
@@ -1003,7 +1009,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         resolution: ImmediateResolution
     ) -> ExtensionBridge.StoreMutationResult {
         guard claim.lifecycle.canCompleteUnapproved,
-              let response = resolution.response(for: claim.request) else { return .ownershipLost }
+              let response = resolveImmediate(resolution, claim.request) else { return .ownershipLost }
         defer { claim.releaseUnapproved() }
         return files.withLock(or: .retryablePersistenceFailure) {
             completeUnapprovedLocked(claim: claim, response: response)
@@ -1247,7 +1253,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             case .unavailable:
                 return .retryablePersistenceFailure
             }
-            guard let response = resolution.response(for: request) else { return .ownershipLost }
+            guard let response = resolveImmediate(resolution, request) else { return .ownershipLost }
             guard let responseData = ExtensionRequestProfileCodec.boundedResponseData(response, request: request) else {
                 return .retryablePersistenceFailure
             }

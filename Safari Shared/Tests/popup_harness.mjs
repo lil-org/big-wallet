@@ -226,7 +226,11 @@ export function createPopupHarness(options = {}) {
             },
         },
     };
-    const close = () => { open = false; };
+    const close = () => {
+        if (!open) { return; }
+        open = false;
+        options.onClose?.();
+    };
     const context = vm.createContext({
         URL,
         browser,
@@ -244,6 +248,7 @@ export function createPopupHarness(options = {}) {
             return timer.id;
         },
         window: {close() { model.closed += 1; close(); }},
+        ...(options.globals || {}),
     });
     for (const name of markupInventory.scripts) {
         assert.ok(scripts.has(name), `Unknown popup script: ${name}`);

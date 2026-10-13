@@ -9,14 +9,15 @@ struct PopupWalletEnvironment: Sendable {
     nonisolated init(
         reviewCatalog: @escaping @MainActor @Sendable () -> WalletReviewCatalog?,
         approvalCatalog: (@MainActor @Sendable () -> WalletReviewCatalog?)? = nil,
-        unlockWallets: @escaping @MainActor @Sendable (String, WalletSigningAuthorization) async -> WalletUnlockResult
+        unlockWallets: @escaping @MainActor @Sendable (String, WalletSigningAuthorization) async -> WalletUnlockResult,
+        reloadMetadata: @escaping @MainActor @Sendable () -> Void = { WalletsMetadataService.reload() }
     ) {
         currentReviewCatalog = {
-            WalletsMetadataService.reload()
+            reloadMetadata()
             return reviewCatalog()
         }
         currentApprovalCatalog = {
-            WalletsMetadataService.reload()
+            reloadMetadata()
             return (approvalCatalog ?? reviewCatalog)()
         }
         unlock = unlockWallets

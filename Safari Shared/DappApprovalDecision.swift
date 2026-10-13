@@ -351,6 +351,9 @@ enum DappApprovalResolver {
         _ consent: ReviewConsent,
         refreshWalletCatalog: @MainActor () async -> WalletReviewCatalog?,
         networkResolver: (Int) -> ApprovalNetworkResolution = { NetworkResolver.main.approvalResolution(chainId: $0) },
+        customDefinitionResult: @MainActor @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult = {
+            Networks.existingCustomDefinitionResult(networkFromDapp: $0)
+        },
         isCurrent: @MainActor () -> Bool = { true }
     ) async -> DurableApprovalExecutor.Resolution {
         guard !Task.isCancelled, isCurrent(), consent.authorizationIsAvailable else { return .abandon }
@@ -365,7 +368,8 @@ enum DappApprovalResolver {
             case .unavailable: return .reviewRequired
             }
             if let immediate = EthereumDappRequestProcessor.chainAdditionResolution(
-                action.chainToAdd, networkResolver: { _ in network }
+                action.chainToAdd, networkResolver: { _ in network },
+                customDefinitionResult: customDefinitionResult
             ) {
                 return .immediate(immediate)
             }

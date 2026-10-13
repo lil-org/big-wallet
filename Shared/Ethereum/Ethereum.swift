@@ -77,7 +77,7 @@ struct Ethereum: Sendable {
         return try sign(digest: digest, privateKey: privateKey)
     }
     
-    func recover(signature: Data, message: Data) -> String? {
+    static func recover(signature: Data, message: Data) -> String? {
         guard let hash = Self.prefixedDataHash(data: message) else { return nil }
         return WalletCrypto.recoverEthereumAddress(signature: signature, messageHash: hash)
     }

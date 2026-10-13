@@ -920,6 +920,112 @@
 		C4E100020001000000000000 /* AsyncTestSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E000020000000000000000 /* AsyncTestSupportTests.swift */; };
 		C4E100020002000000000000 /* AsyncTestSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E000020000000000000000 /* AsyncTestSupportTests.swift */; };
 		C4E100020003000000000000 /* AsyncTestSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E000020000000000000000 /* AsyncTestSupportTests.swift */; };
+		D565537D93C014783D189756 /* WireProtocol.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65D9FBD582C14BEE4D8BD46E /* WireProtocol.generated.swift */; };
+		921279FE64C1A5D353F999D7 /* NativeAgentRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00500000000000000001 /* NativeAgentRuntime.swift */; };
+		B897EBCC1C4CEE121410FB12 /* WalletAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A100012FD1000000000001 /* WalletAccess.swift */; };
+		376071049789E243F8CE5A4E /* PopupRequestSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00112FB2000000000000 /* PopupRequestSessions.swift */; };
+		6AC157FA407C3344F1807D90 /* DappRequestAdmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60773283A0904680972780A2 /* DappRequestAdmission.swift */; };
+		A4F135C42206AB2CA8DE14D4 /* PopupWalletEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */; };
+		62E8B190551F27CF292BFB36 /* ExtensionRequestFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F100012FC1000000000001 /* ExtensionRequestFileStore.swift */; };
+		DE489A3673D7A7FB60CA3B8A /* WalletAuthorityRevocationLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18EF384768CF4B0C9268D766 /* WalletAuthorityRevocationLedger.swift */; };
+		8285F4CB41C0650D7916AFB0 /* ExtensionRequestProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EF9463E5F000CFEEC8DBCF3 /* ExtensionRequestProfile.swift */; };
+		59DC91B7503F336174F07F22 /* ExtensionRequestProfileCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = E365B44E8D08827820E49589 /* ExtensionRequestProfileCodec.swift */; };
+		8A1B3BADDE5E2AF0BCE0A8B2 /* ExtensionRequestStoreFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 535E96B7B626FB8831FDC659 /* ExtensionRequestStoreFiles.swift */; };
+		BA035F19FB54C2FD3ED4EC3C /* DurableProfilePersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = D352832B0B5DA7C5899635F8 /* DurableProfilePersistence.swift */; };
+		DC299014BFE5B5816A3C2F1A /* PopupTransactionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F100022FC1000000000001 /* PopupTransactionSession.swift */; };
+		C92C185C6CF543A1C2E75119 /* PopupApprovalStatePresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */; };
+		6C88BAD3E58B5E14C70707CB /* PopupResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604D89B5F048A38733D60AEF /* PopupResponse.swift */; };
+		75F7EDD62793794915F7DAC1 /* EthereumDappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F100032FC1000000000001 /* EthereumDappRequestProcessor.swift */; };
+		9455F0F9A3FF3F55627281EB /* SolanaDappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F100042FC1000000000001 /* SolanaDappRequestProcessor.swift */; };
+		75C1DF282D204B5273D07035 /* DeviceAuthentication.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00012FB2000000000000 /* DeviceAuthentication.swift */; };
+		C2DD05C78B01878CA7E86806 /* DappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */; };
+		C920804AB5E6C491711B9068 /* DappRequestProcessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA83345B2BA54A09A46D7482 /* DappRequestProcessing.swift */; };
+		F9A259571A5C0669A860F6F8 /* GasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C4C268A033100D0926A /* GasService.swift */; };
+		103F42E5C1174D709FF78740 /* Solana.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00032E20000100A1A001 /* Solana.swift */; };
+		26CBCCA078B1C33EB0BCB528 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C917428267D2A6E00049075 /* Keychain.swift */; };
+		91FDF46993AB9C6326E07B0F /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C528A15267FA8EB00CA3ADD /* Defaults.swift */; };
+		78399C87D24FDDD02C13E6A8 /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC0CDBD2692027E0072922A /* PriceService.swift */; };
+		10652B75C7FD378C9C42F034 /* TransactionInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC79DF72AFD4BD6002B5A2D /* TransactionInspector.swift */; };
+		C594F1A966FE6E9EFBC00E7B /* Ethereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995552674D0F300A8E370 /* Ethereum.swift */; };
+		E049434DBEBFB56C70CD8EF8 /* EthereumRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */; };
+		9F1D1F6DC5F0076D5BC8D045 /* EthereumAccessListEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA700012FBD000000000001 /* EthereumAccessListEntry.swift */; };
+		9CF33DC5CE8EF4958ABDD331 /* Networks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86BE2AF25C32006F9E26 /* Networks.swift */; };
+		70D97208435029B82A0A5022 /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D011267F73C00032A62E /* Transaction.swift */; };
+		28AB2F30F31F9F87E1519B8A /* TransactionApprovalCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA801002FBE000000000001 /* TransactionApprovalCoordinator.swift */; };
+		7CEEEB244F51980F4C825E73 /* DappRequestAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */; };
+		273EDFBFDC836E54FEEFAF58 /* ApprovalSubject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D059AD126C2796200EE3023 /* ApprovalSubject.swift */; };
+		E5B0F21FECE12B3F68D8ABD0 /* AuthenticationReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC850E626B73A5900809E82 /* AuthenticationReason.swift */; };
+		907F7970EB4236337D6B6660 /* SpecificWalletAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */; };
+		C4D9F0AE9255CE5FA09FD1AB /* WalletsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668926B213E500728C20 /* WalletsManager.swift */; };
+		7B965B628EE6DB52981E3E63 /* WalletContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668B26B2142000728C20 /* WalletContainer.swift */; };
+		DC0A4C2C6E0CC6DC845B2998 /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3024FB28C1193100C304ED /* Account.swift */; };
+		77D6BDBA2B6C86DF8175D483 /* WalletsMetadataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE377CB2D3A748D00288FFB /* WalletsMetadataService.swift */; };
+		75890C3C48AA60FDAF387335 /* WalletCoreProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00002FA8000000000000 /* WalletCoreProxy.swift */; };
+		5DD62C8FF049834A2ACDABD9 /* WalletCoreProxyStoredKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00002FAA000000000000 /* WalletCoreProxyStoredKey.swift */; };
+		624ABA0381AF36DE04CBFA5D /* WalletCoreProxyCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00302FAA000000000000 /* WalletCoreProxyCrypto.swift */; };
+		4296144BE55F5B632D5C43CC /* WalletCoreProxyHD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00502FAA000000000000 /* WalletCoreProxyHD.swift */; };
+		2CE255319859451C51E53A06 /* WalletCoreProxyEthereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00202FAA000000000000 /* WalletCoreProxyEthereum.swift */; };
+		4149F3E828C6818684B3B235 /* WalletCoreProxySecp256k1.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00402FAA000000000000 /* WalletCoreProxySecp256k1.swift */; };
+		7386C178D7A117D0080C245C /* WalletCoreProxyEncoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00102FAA000000000000 /* WalletCoreProxyEncoding.swift */; };
+		59EEA314E2FEB8082024D1CB /* WalletCoreProxyBIP39WordList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00602FAA000000000000 /* WalletCoreProxyBIP39WordList.swift */; };
+		A8B5468966631D54DBF1577B /* secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* secp256k1.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION) -DENABLE_MODULE_RECOVERY=1 -Wno-unused-function -Wno-shorten-64-to-32"; }; };
+		0276BE5A1ECED3AEF5D227BC /* precomputed_ecmult.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007A2FAA000000000000 /* precomputed_ecmult.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
+		33BBD4BED43692639212D66D /* precomputed_ecmult_gen.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007B2FAA000000000000 /* precomputed_ecmult_gen.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
+		81979EE7BEC8C72DAB679BE1 /* big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* big_wallet_secp256k1_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
+		64BB88D117A9BBC7250B8657 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
+		0E9A0B9760B4B73E21914EA0 /* BigUInt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8ED8DB2AEADDC400818D74 /* BigUInt.swift */; };
+		8001ACD538ADE8BC56383954 /* Blockies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944CD2AEC34EB006A711F /* Blockies.swift */; };
+		AADAD5B81D08FECF795E61A2 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
+		56D93F9E5E43F12462B89E9F /* PlatformSpecificImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09FC652828331D00DE9C27 /* PlatformSpecificImage.swift */; };
+		3683D3482F94B29967A6375D /* SafariRequest+Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E62127B2ED2D00C8991E /* SafariRequest+Helpers.swift */; };
+		A35985E6A8316119145881DB /* WalletCoin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4768B32826ED83005E8D4D /* WalletCoin.swift */; };
+		3D6171B12A5C9BDE4D09969F /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C728B602AFBFAF100E4DD47 /* Image.swift */; };
+		54FCA0EB1E1628AC8D807120 /* URL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D39727623EC600687301 /* URL.swift */; };
+		9CC6C274C609CDC558DA2E40 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		D88626F45AED841B383B81A7 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
+		381AC1D5BEC5C981714EF60A /* UnknownSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BCF27B2F30C00234393 /* UnknownSafariRequest.swift */; };
+		C38F43B46CAF9110DA7BB549 /* InpageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BD427B5806200234393 /* InpageProvider.swift */; };
+		BCE72E3C5C95886B0DDEE55D /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
+		A7C21D1921EF573BDC0DB365 /* SharedDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */; };
+		C84B91FF96382D9516E5C5F6 /* FixedWidthInteger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944C42AEAFF97006A711F /* FixedWidthInteger.swift */; };
+		B24F5B3AD523E93B9118E5EA /* InternalSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */; };
+		C339A02A55AE69484495DCED /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
+		BD8DF5A8E228E79C9FAA83F1 /* Nodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B92AF1820E006F9E26 /* Nodes.swift */; };
+		7E9C4B9992E2363A7C7D5385 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */; };
+		A7C3E76D355C92236A8A74C7 /* EthereumSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BC027B2F2C100234393 /* EthereumSafariRequest.swift */; };
+		9907EA8826E3DF53175F3BBC /* SolanaSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */; };
+		DF65955F4AE55BD5F0B5641B /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BBB27B2F25E00234393 /* SafariRequest.swift */; };
+		FBF2CE34C440CF8A04A4ECC3 /* Notification.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D4269B428C00EF10EA /* Notification.swift */; };
+		D2310FD577A7C3E18FCDFC42 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
+		895A5CC741F99B8755DD7AEC /* NetworkCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0A96C0EB9F43119A1BE09C /* NetworkCatalog.swift */; };
+		48649E53B4A59934AB220F2E /* DappApprovalDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96ED201BA6F59A61E7E4D01 /* DappApprovalDecision.swift */; };
+		09E58CB189B07F07C7AEEF69 /* DurableApprovalExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249CB855F657541977C5004B /* DurableApprovalExecutor.swift */; };
+		90B8470EB3ABA8BDC981DED6 /* ApprovalResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00900000000000000001 /* ApprovalResolution.swift */; };
+		AF239BFC598C89437E02F71C /* ResponseDeliveryPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0B100000000000000001 /* ResponseDeliveryPoller.swift */; };
+		FE2F1A686AC904EC0ACE472F /* NativeAgentRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12F8F1E6BA79CB4183B8B2F4 /* NativeAgentRoute.swift */; };
+		1DC8010021B5677FA15C8239 /* NativeAgentLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 923ADB6324AA0D848152505B /* NativeAgentLauncher.swift */; };
+		6570688EB96D5D7ABEE779D1 /* NativeApprovalService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D400002FFE000000000001 /* NativeApprovalService.swift */; };
+		313490F1AC94933D686A00DD /* AmbientRuntimeIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B100002FC3000000000001 /* AmbientRuntimeIdentity.swift */; };
+		8D564A129DF1B5CE70CA78A6 /* NativeApprovalCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2419DDB6D67104CD553ACC9 /* NativeApprovalCoordinator.swift */; };
+		E0055D11749508E3DE21896F /* NativeApprovalFinalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB83BCB9CDAB99119EADC72A /* NativeApprovalFinalizer.swift */; };
+		F1350C67F7A9AB7E2337EAF1 /* NativeMessageDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39528F70797C7B12321DFA66 /* NativeMessageDispatcher.swift */; };
+		5D9A687B850ED1E53B4C468D /* NativeMessageDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39528F70797C7B12321DFA66 /* NativeMessageDispatcher.swift */; };
+		61E6CCEDE0281FAC1199C800 /* NativeMessageDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39528F70797C7B12321DFA66 /* NativeMessageDispatcher.swift */; };
+		6B718680CF1514AF96C06D6E /* NativeMessageDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39528F70797C7B12321DFA66 /* NativeMessageDispatcher.swift */; };
+		31AF02DEEDCA2F696335C6FC /* NativeMessageDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39528F70797C7B12321DFA66 /* NativeMessageDispatcher.swift */; };
+		671FC45254C3D5DB86B3D3B7 /* NativeMessageDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39528F70797C7B12321DFA66 /* NativeMessageDispatcher.swift */; };
+		D661699D9671A5D42DEBBABC /* NativeMessageDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39528F70797C7B12321DFA66 /* NativeMessageDispatcher.swift */; };
+		2D657ACB6F77A08CA2B380DC /* NativeMessageDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39528F70797C7B12321DFA66 /* NativeMessageDispatcher.swift */; };
+		75DF6A7B7B194C42E799E7A2 /* NativeMessageDispatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0D9D762A778D6D42FC747A1 /* NativeMessageDispatcherTests.swift */; };
+		E22338598B6A2F5FE5598880 /* NativeMessageDispatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0D9D762A778D6D42FC747A1 /* NativeMessageDispatcherTests.swift */; };
+		8FAF3DDD6528F23C3EC2771A /* NativeMessageDispatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0D9D762A778D6D42FC747A1 /* NativeMessageDispatcherTests.swift */; };
+		007250ABF4633DEA645F4E6E /* ApprovalCrashWorker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76C4A032D26708B9DBDD8BF8 /* ApprovalCrashWorker.swift */; };
+		DD458D439059C2411B50CA81 /* ApprovalHarnessExecution.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F6CA157802288EA781CF303 /* ApprovalHarnessExecution.swift */; };
+		11831E7598B09CB53EE40BB8 /* ApprovalHarnessIPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAA2AA68D16A9F19A4619083 /* ApprovalHarnessIPC.swift */; };
+		79607E2F5CA0D14C122455BA /* ApprovalHarnessStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 486DD2335AE1E2518BC9C939 /* ApprovalHarnessStorage.swift */; };
+		AEF38C71F07BFFA776E08F01 /* PeerMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5043FECAA8BA2EEB19DA712 /* PeerMeta.swift */; };
+		BC0CF4F6B8212E5E1C9D9627 /* ApprovalHarnessRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8B2984A6B9A250FCC9E83A /* ApprovalHarnessRuntime.swift */; };
+		CC3642631A0356B341CDFF0E /* ApprovalHarnessTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F9D85565F4CEE7DDA79AB84 /* ApprovalHarnessTransport.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1261,6 +1367,15 @@
 		B10BC9FBB397CFE426CC719F /* WireProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WireProtocolTests.swift; sourceTree = "<group>"; };
 		C4E000010000000000000000 /* AsyncTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncTestSupport.swift; sourceTree = "<group>"; };
 		C4E000020000000000000000 /* AsyncTestSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncTestSupportTests.swift; sourceTree = "<group>"; };
+		39528F70797C7B12321DFA66 /* NativeMessageDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NativeMessageDispatcher.swift"; sourceTree = "<group>"; };
+		90C5B8CA01AAC6E6B3D33B83 /* ApprovalCrashWorker */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ApprovalCrashWorker; sourceTree = BUILT_PRODUCTS_DIR; };
+		D0D9D762A778D6D42FC747A1 /* NativeMessageDispatcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMessageDispatcherTests.swift; sourceTree = "<group>"; };
+		76C4A032D26708B9DBDD8BF8 /* ApprovalCrashWorker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalCrashWorker.swift; sourceTree = "<group>"; };
+		9F6CA157802288EA781CF303 /* ApprovalHarnessExecution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalHarnessExecution.swift; sourceTree = "<group>"; };
+		EAA2AA68D16A9F19A4619083 /* ApprovalHarnessIPC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalHarnessIPC.swift; sourceTree = "<group>"; };
+		486DD2335AE1E2518BC9C939 /* ApprovalHarnessStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalHarnessStorage.swift; sourceTree = "<group>"; };
+		4B8B2984A6B9A250FCC9E83A /* ApprovalHarnessRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalHarnessRuntime.swift; sourceTree = "<group>"; };
+		0F9D85565F4CEE7DDA79AB84 /* ApprovalHarnessTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalHarnessTransport.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1334,6 +1449,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DB74028C63F3C04BDF7993F6 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -1348,6 +1464,8 @@
 		2C03EB8E2B06A18700EF61F5 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				D0D9D762A778D6D42FC747A1 /* NativeMessageDispatcherTests.swift */,
+				49639FB766301B747C6439F2 /* ApprovalLifecycle */,
 				9FD0D903F81791CE40249653 /* OnboardingCancellationTests.swift */,
 				3F4B3A76A2A0449AA8E83C95 /* WindowAuthenticationSessionTests.swift */,
 				89A2D2D640FAAE265554D6E9 /* PasswordStorageTests.swift */,
@@ -1437,6 +1555,7 @@
 		2C19953D2674C4B900A8E370 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				90C5B8CA01AAC6E6B3D33B83 /* ApprovalCrashWorker */,
 				2C19953C2674C4B900A8E370 /* Big Wallet.app */,
 				2C5FF96F26C84F7B00B32ACC /* Big Wallet.app */,
 				2C09CB9F273979C1009AD39B /* Safari macOS.appex */,
@@ -1728,6 +1847,7 @@
 		2CCEB7A227592A3800768473 /* Safari Shared */ = {
 			isa = PBXGroup;
 			children = (
+				39528F70797C7B12321DFA66 /* NativeMessageDispatcher.swift */,
 				DBB4A70689E84C70208D920F /* Protocol */,
 				C0DE00500000000000000001 /* NativeAgentRuntime.swift */,
 				D0A200012FD1000000000001 /* SafariApprovalVault.swift */,
@@ -1911,6 +2031,19 @@
 				65D9FBD582C14BEE4D8BD46E /* WireProtocol.generated.swift */,
 			);
 			path = Protocol;
+			sourceTree = "<group>";
+		};
+		49639FB766301B747C6439F2 /* ApprovalLifecycle */ = {
+			isa = PBXGroup;
+			children = (
+				0F9D85565F4CEE7DDA79AB84 /* ApprovalHarnessTransport.swift */,
+				4B8B2984A6B9A250FCC9E83A /* ApprovalHarnessRuntime.swift */,
+				486DD2335AE1E2518BC9C939 /* ApprovalHarnessStorage.swift */,
+				EAA2AA68D16A9F19A4619083 /* ApprovalHarnessIPC.swift */,
+				9F6CA157802288EA781CF303 /* ApprovalHarnessExecution.swift */,
+				76C4A032D26708B9DBDD8BF8 /* ApprovalCrashWorker.swift */,
+			);
+			path = ApprovalLifecycle;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -2123,6 +2256,20 @@
 			productReference = 2CF9B1092D526F4D00B5CE82 /* Tests visionOS.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		02BF6F22EB119D0C0F4A9BD5 /* ApprovalCrashWorker */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 45F0405D09FB0AFB9E4BAD52 /* Build configuration list for PBXNativeTarget "ApprovalCrashWorker" */;
+			buildPhases = (
+				886092A0C2816479A151EAA5 /* Sources */,
+				DB74028C63F3C04BDF7993F6 /* Frameworks */,
+			);
+			buildRules = ();
+			dependencies = ();
+			name = ApprovalCrashWorker;
+			productName = ApprovalCrashWorker;
+			productReference = 90C5B8CA01AAC6E6B3D33B83 /* ApprovalCrashWorker */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -2226,6 +2373,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				02BF6F22EB119D0C0F4A9BD5 /* ApprovalCrashWorker */,
 				2C19953B2674C4B900A8E370 /* Big Wallet */,
 				2CB9B54E2FA23F0600F094FB /* Big Wallet Ambient */,
 				2C5FF96E26C84F7B00B32ACC /* Big Wallet iOS */,
@@ -3013,6 +3161,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6B718680CF1514AF96C06D6E /* NativeMessageDispatcher.swift in Sources */,
 				0F85304BB21A78933CD22E28 /* WireProtocol.generated.swift in Sources */,
 				C0DE00500000000000000012 /* NativeAgentRuntime.swift in Sources */,
 				D0A101012FD1000000000001 /* WalletAccess.swift in Sources */,
@@ -3108,6 +3257,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F1350C67F7A9AB7E2337EAF1 /* NativeMessageDispatcher.swift in Sources */,
 				5E8078B98E67D28C7DB4366B /* SecretAlertPresentation.swift in Sources */,
 				65FE125EDB868C412908EB5C /* SecretPresentationSession.swift in Sources */,
 				08D4E4254082334408EC786C /* SecretClipboard.swift in Sources */,
@@ -3219,6 +3369,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5D9A687B850ED1E53B4C468D /* NativeMessageDispatcher.swift in Sources */,
 				3E928EDD41EF798B09ECFB79 /* SecretPresentationSession.swift in Sources */,
 				E311C12DD6B8BF2730B708C2 /* SecretClipboard.swift in Sources */,
 				FC8A8A89536DE09243F38F9E /* WireProtocol.generated.swift in Sources */,
@@ -3349,6 +3500,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				671FC45254C3D5DB86B3D3B7 /* NativeMessageDispatcher.swift in Sources */,
 				3D21F2836F718C4D85704B47 /* SecretAlertPresentation.swift in Sources */,
 				007F1C5985FEBF705F776AD8 /* SecretPresentationSession.swift in Sources */,
 				092600FCE385DB215EF29231 /* SecretClipboard.swift in Sources */,
@@ -3461,6 +3613,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D661699D9671A5D42DEBBABC /* NativeMessageDispatcher.swift in Sources */,
 				FA066DB3CB4421D42498E246 /* WireProtocol.generated.swift in Sources */,
 				D0A201032FD1000000000001 /* SafariApprovalVault.swift in Sources */,
 				D0A101052FD1000000000001 /* WalletAccess.swift in Sources */,
@@ -3552,6 +3705,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8FAF3DDD6528F23C3EC2771A /* NativeMessageDispatcherTests.swift in Sources */,
 				DEBC408FFA115904C2E37B9E /* PasswordStorageTests.swift in Sources */,
 				30C1FE53E2DDBDE640E59529 /* SecretAlertPresentationTests.swift in Sources */,
 				3F8D2802A7D082B74C8463DB /* SecretHandlingTests.swift in Sources */,
@@ -3600,6 +3754,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				61E6CCEDE0281FAC1199C800 /* NativeMessageDispatcher.swift in Sources */,
 				40343842C622D71519A25A55 /* SecretPresentationSession.swift in Sources */,
 				B02AE20901AF708B51837229 /* SecretClipboard.swift in Sources */,
 				751F21D762F3E444CE09A22D /* WireProtocol.generated.swift in Sources */,
@@ -3727,6 +3882,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				31AF02DEEDCA2F696335C6FC /* NativeMessageDispatcher.swift in Sources */,
 				D962276E119EFBCE801182FB /* WireProtocol.generated.swift in Sources */,
 				D0A201042FD1000000000001 /* SafariApprovalVault.swift in Sources */,
 				D0A101072FD1000000000001 /* WalletAccess.swift in Sources */,
@@ -3818,6 +3974,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E22338598B6A2F5FE5598880 /* NativeMessageDispatcherTests.swift in Sources */,
 				2A041DA7B5322FEE7D8068FD /* OnboardingCancellationTests.swift in Sources */,
 				485AE8E32BAF4FACBC5772D6 /* WindowAuthenticationSessionTests.swift in Sources */,
 				B88AC23A97E5D2325D6A47E9 /* PasswordStorageTests.swift in Sources */,
@@ -3869,6 +4026,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				75DF6A7B7B194C42E799E7A2 /* NativeMessageDispatcherTests.swift in Sources */,
 				5437CD9FC0D7C097A8830E54 /* PasswordStorageTests.swift in Sources */,
 				6B819B9E76242B268EEB3AE1 /* SecretAlertPresentationTests.swift in Sources */,
 				96D4C08725EDE51487E3D8CD /* SecretHandlingTests.swift in Sources */,
@@ -3910,6 +4068,109 @@
 				2F4D00A72FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
 				2CF9B10F2D526F7C00B5CE82 /* TransactionInspectorTests.swift in Sources */,
 				2C0000042FA7000000000001 /* BigUIntTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		886092A0C2816479A151EAA5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CC3642631A0356B341CDFF0E /* ApprovalHarnessTransport.swift in Sources */,
+				BC0CF4F6B8212E5E1C9D9627 /* ApprovalHarnessRuntime.swift in Sources */,
+				AEF38C71F07BFFA776E08F01 /* PeerMeta.swift in Sources */,
+				79607E2F5CA0D14C122455BA /* ApprovalHarnessStorage.swift in Sources */,
+				11831E7598B09CB53EE40BB8 /* ApprovalHarnessIPC.swift in Sources */,
+				DD458D439059C2411B50CA81 /* ApprovalHarnessExecution.swift in Sources */,
+				007250ABF4633DEA645F4E6E /* ApprovalCrashWorker.swift in Sources */,
+				D565537D93C014783D189756 /* WireProtocol.generated.swift in Sources */,
+				921279FE64C1A5D353F999D7 /* NativeAgentRuntime.swift in Sources */,
+				B897EBCC1C4CEE121410FB12 /* WalletAccess.swift in Sources */,
+				376071049789E243F8CE5A4E /* PopupRequestSessions.swift in Sources */,
+				6AC157FA407C3344F1807D90 /* DappRequestAdmission.swift in Sources */,
+				A4F135C42206AB2CA8DE14D4 /* PopupWalletEnvironment.swift in Sources */,
+				62E8B190551F27CF292BFB36 /* ExtensionRequestFileStore.swift in Sources */,
+				DE489A3673D7A7FB60CA3B8A /* WalletAuthorityRevocationLedger.swift in Sources */,
+				8285F4CB41C0650D7916AFB0 /* ExtensionRequestProfile.swift in Sources */,
+				59DC91B7503F336174F07F22 /* ExtensionRequestProfileCodec.swift in Sources */,
+				8A1B3BADDE5E2AF0BCE0A8B2 /* ExtensionRequestStoreFiles.swift in Sources */,
+				BA035F19FB54C2FD3ED4EC3C /* DurableProfilePersistence.swift in Sources */,
+				DC299014BFE5B5816A3C2F1A /* PopupTransactionSession.swift in Sources */,
+				C92C185C6CF543A1C2E75119 /* PopupApprovalStatePresenter.swift in Sources */,
+				6C88BAD3E58B5E14C70707CB /* PopupResponse.swift in Sources */,
+				75F7EDD62793794915F7DAC1 /* EthereumDappRequestProcessor.swift in Sources */,
+				9455F0F9A3FF3F55627281EB /* SolanaDappRequestProcessor.swift in Sources */,
+				75C1DF282D204B5273D07035 /* DeviceAuthentication.swift in Sources */,
+				C2DD05C78B01878CA7E86806 /* DappRequestProcessor.swift in Sources */,
+				C920804AB5E6C491711B9068 /* DappRequestProcessing.swift in Sources */,
+				F9A259571A5C0669A860F6F8 /* GasService.swift in Sources */,
+				103F42E5C1174D709FF78740 /* Solana.swift in Sources */,
+				26CBCCA078B1C33EB0BCB528 /* Keychain.swift in Sources */,
+				91FDF46993AB9C6326E07B0F /* Defaults.swift in Sources */,
+				78399C87D24FDDD02C13E6A8 /* PriceService.swift in Sources */,
+				10652B75C7FD378C9C42F034 /* TransactionInspector.swift in Sources */,
+				C594F1A966FE6E9EFBC00E7B /* Ethereum.swift in Sources */,
+				E049434DBEBFB56C70CD8EF8 /* EthereumRPC.swift in Sources */,
+				9F1D1F6DC5F0076D5BC8D045 /* EthereumAccessListEntry.swift in Sources */,
+				9CF33DC5CE8EF4958ABDD331 /* Networks.swift in Sources */,
+				70D97208435029B82A0A5022 /* Transaction.swift in Sources */,
+				28AB2F30F31F9F87E1519B8A /* TransactionApprovalCoordinator.swift in Sources */,
+				7CEEEB244F51980F4C825E73 /* DappRequestAction.swift in Sources */,
+				273EDFBFDC836E54FEEFAF58 /* ApprovalSubject.swift in Sources */,
+				E5B0F21FECE12B3F68D8ABD0 /* AuthenticationReason.swift in Sources */,
+				907F7970EB4236337D6B6660 /* SpecificWalletAccount.swift in Sources */,
+				C4D9F0AE9255CE5FA09FD1AB /* WalletsManager.swift in Sources */,
+				7B965B628EE6DB52981E3E63 /* WalletContainer.swift in Sources */,
+				DC0A4C2C6E0CC6DC845B2998 /* Account.swift in Sources */,
+				77D6BDBA2B6C86DF8175D483 /* WalletsMetadataService.swift in Sources */,
+				75890C3C48AA60FDAF387335 /* WalletCoreProxy.swift in Sources */,
+				5DD62C8FF049834A2ACDABD9 /* WalletCoreProxyStoredKey.swift in Sources */,
+				624ABA0381AF36DE04CBFA5D /* WalletCoreProxyCrypto.swift in Sources */,
+				4296144BE55F5B632D5C43CC /* WalletCoreProxyHD.swift in Sources */,
+				2CE255319859451C51E53A06 /* WalletCoreProxyEthereum.swift in Sources */,
+				4149F3E828C6818684B3B235 /* WalletCoreProxySecp256k1.swift in Sources */,
+				7386C178D7A117D0080C245C /* WalletCoreProxyEncoding.swift in Sources */,
+				59EEA314E2FEB8082024D1CB /* WalletCoreProxyBIP39WordList.swift in Sources */,
+				A8B5468966631D54DBF1577B /* secp256k1.c in Sources */,
+				0276BE5A1ECED3AEF5D227BC /* precomputed_ecmult.c in Sources */,
+				33BBD4BED43692639212D66D /* precomputed_ecmult_gen.c in Sources */,
+				81979EE7BEC8C72DAB679BE1 /* big_wallet_secp256k1_shim.c in Sources */,
+				64BB88D117A9BBC7250B8657 /* big_wallet_scrypt_shim.c in Sources */,
+				0E9A0B9760B4B73E21914EA0 /* BigUInt.swift in Sources */,
+				8001ACD538ADE8BC56383954 /* Blockies.swift in Sources */,
+				AADAD5B81D08FECF795E61A2 /* Strings.swift in Sources */,
+				56D93F9E5E43F12462B89E9F /* PlatformSpecificImage.swift in Sources */,
+				3683D3482F94B29967A6375D /* SafariRequest+Helpers.swift in Sources */,
+				A35985E6A8316119145881DB /* WalletCoin.swift in Sources */,
+				3D6171B12A5C9BDE4D09969F /* Image.swift in Sources */,
+				54FCA0EB1E1628AC8D807120 /* URL.swift in Sources */,
+				9CC6C274C609CDC558DA2E40 /* AlchemyJWTProvider.swift in Sources */,
+				D88626F45AED841B383B81A7 /* UserDefaults.swift in Sources */,
+				381AC1D5BEC5C981714EF60A /* UnknownSafariRequest.swift in Sources */,
+				C38F43B46CAF9110DA7BB549 /* InpageProvider.swift in Sources */,
+				BCE72E3C5C95886B0DDEE55D /* String.swift in Sources */,
+				A7C21D1921EF573BDC0DB365 /* SharedDefaults.swift in Sources */,
+				C84B91FF96382D9516E5C5F6 /* FixedWidthInteger.swift in Sources */,
+				B24F5B3AD523E93B9118E5EA /* InternalSafariRequest.swift in Sources */,
+				C339A02A55AE69484495DCED /* ExtensionBridge.swift in Sources */,
+				BD8DF5A8E228E79C9FAA83F1 /* Nodes.swift in Sources */,
+				7E9C4B9992E2363A7C7D5385 /* EthereumNetwork.swift in Sources */,
+				A7C3E76D355C92236A8A74C7 /* EthereumSafariRequest.swift in Sources */,
+				9907EA8826E3DF53175F3BBC /* SolanaSafariRequest.swift in Sources */,
+				DF65955F4AE55BD5F0B5641B /* SafariRequest.swift in Sources */,
+				FBF2CE34C440CF8A04A4ECC3 /* Notification.swift in Sources */,
+				D2310FD577A7C3E18FCDFC42 /* ResponseToExtension.swift in Sources */,
+				895A5CC741F99B8755DD7AEC /* NetworkCatalog.swift in Sources */,
+				48649E53B4A59934AB220F2E /* DappApprovalDecision.swift in Sources */,
+				09E58CB189B07F07C7AEEF69 /* DurableApprovalExecutor.swift in Sources */,
+				90B8470EB3ABA8BDC981DED6 /* ApprovalResolution.swift in Sources */,
+				AF239BFC598C89437E02F71C /* ResponseDeliveryPoller.swift in Sources */,
+				FE2F1A686AC904EC0ACE472F /* NativeAgentRoute.swift in Sources */,
+				1DC8010021B5677FA15C8239 /* NativeAgentLauncher.swift in Sources */,
+				6570688EB96D5D7ABEE779D1 /* NativeApprovalService.swift in Sources */,
+				313490F1AC94933D686A00DD /* AmbientRuntimeIdentity.swift in Sources */,
+				8D564A129DF1B5CE70CA78A6 /* NativeApprovalCoordinator.swift in Sources */,
+				E0055D11749508E3DE21896F /* NativeApprovalFinalizer.swift in Sources */,
+				2D657ACB6F77A08CA2B380DC /* NativeMessageDispatcher.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4796,6 +5057,34 @@
 			};
 			name = Release;
 		};
+		34F95BFD4AC23BC9BF956A19 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				ENABLE_APP_SANDBOX = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		1A83BDCBD32129A8D94793DD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				ENABLE_APP_SANDBOX = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -4894,6 +5183,15 @@
 			buildConfigurations = (
 				2CF9B10D2D526F4D00B5CE82 /* Debug */,
 				2CF9B10E2D526F4D00B5CE82 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		45F0405D09FB0AFB9E4BAD52 /* Build configuration list for PBXNativeTarget "ApprovalCrashWorker" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				34F95BFD4AC23BC9BF956A19 /* Debug */,
+				1A83BDCBD32129A8D94793DD /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

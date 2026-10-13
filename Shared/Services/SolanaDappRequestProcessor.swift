@@ -4,8 +4,6 @@ import Foundation
 
 struct SolanaDappRequestProcessor {
 
-    private static let solana = Solana.shared
-
     private enum ProviderError: Error {
         case internalError
         case malformedPayload
@@ -33,7 +31,8 @@ struct SolanaDappRequestProcessor {
     static func prepare(
         request: SafariRequest,
         body: SafariRequest.Solana,
-        catalog: WalletReviewCatalog
+        catalog: WalletReviewCatalog,
+        solana: Solana? = nil
     ) -> UnboundDappRequestPreparation {
         switch body.method {
         case .connect:
@@ -42,7 +41,8 @@ struct SolanaDappRequestProcessor {
             return prepareSigningOrSending(
                 request: request,
                 body: body,
-                catalog: catalog
+                catalog: catalog,
+                solana: solana ?? .shared
             )
         }
     }
@@ -76,7 +76,7 @@ struct SolanaDappRequestProcessor {
     ) -> Data? {
         switch messageEncoding {
         case .hex:
-            return solana.decodeMessage(message, asHex: true)
+            return WalletCrypto.hexData(string: message)
         case .utf8:
             return message.data(using: .utf8)
         }
@@ -100,7 +100,8 @@ struct SolanaDappRequestProcessor {
     private static func prepareSigningOrSending(
         request: SafariRequest,
         body: SafariRequest.Solana,
-        catalog: WalletReviewCatalog
+        catalog: WalletReviewCatalog,
+        solana: Solana
     ) -> UnboundDappRequestPreparation {
         if body.method == .signAllTransactions, body.messages == nil {
             return .immediate(immediateFailure(to: request, error: .malformedPayload))
@@ -119,7 +120,7 @@ struct SolanaDappRequestProcessor {
             return .immediate(immediateFailure(to: request, error: error))
         }
 
-        switch preparedSigningReviewContent(body: body) {
+        switch preparedSigningReviewContent(body: body, solana: solana) {
         case .success(let content):
             return .approval(.approveMessage(SignMessageAction(
                 subject: content.subject,
@@ -134,22 +135,24 @@ struct SolanaDappRequestProcessor {
     }
 
     private static func preparedSigningReviewContent(
-        body: SafariRequest.Solana
+        body: SafariRequest.Solana,
+        solana: Solana
     ) -> Result<SigningReviewContent, ProviderError> {
         switch body.method {
         case .signAllTransactions:
-            return signAllTransactionsReviewContent(body: body)
+            return signAllTransactionsReviewContent(body: body, solana: solana)
         case .signAndSendTransaction:
-            return signAndSendReviewContent(body: body)
+            return signAndSendReviewContent(body: body, solana: solana)
         case .signMessage, .signTransaction:
-            return messageReviewContent(body: body)
+            return messageReviewContent(body: body, solana: solana)
         case .connect:
             return .failure(.internalError)
         }
     }
 
     private static func signAllTransactionsReviewContent(
-        body: SafariRequest.Solana
+        body: SafariRequest.Solana,
+        solana: Solana
     ) -> Result<SigningReviewContent, ProviderError> {
         guard let messages = body.messages else {
             return .failure(.malformedPayload)
@@ -158,7 +161,7 @@ struct SolanaDappRequestProcessor {
         var preparedMessages = [SolanaPreparedTransactionMessage]()
         preparedMessages.reserveCapacity(messages.count)
         for message in messages {
-            switch preparedTransactionMessage(message, publicKey: body.publicKey) {
+            switch preparedTransactionMessage(message, publicKey: body.publicKey, solana: solana) {
             case .success(let preparedMessage):
                 preparedMessages.append(preparedMessage)
             case .failure(let error):
@@ -177,7 +180,8 @@ struct SolanaDappRequestProcessor {
     }
 
     private static func signAndSendReviewContent(
-        body: SafariRequest.Solana
+        body: SafariRequest.Solana,
+        solana: Solana
     ) -> Result<SigningReviewContent, ProviderError> {
         let sendOptions: Solana.PreparedSendOptions
         switch Solana.preparedSendOptions(from: body.sendOptions) {
@@ -203,7 +207,7 @@ struct SolanaDappRequestProcessor {
             }.mapError(ProviderError.sendTransaction)
         }
 
-        return preparedLegacySignAndSendTransaction(body: body).map { transaction in
+        return preparedLegacySignAndSendTransaction(body: body, solana: solana).map { transaction in
             SigningReviewContent(
                 subject: .approveTransaction,
                 meta: transactionApprovalMessage(
@@ -216,7 +220,8 @@ struct SolanaDappRequestProcessor {
     }
 
     private static func messageReviewContent(
-        body: SafariRequest.Solana
+        body: SafariRequest.Solana,
+        solana: Solana
     ) -> Result<SigningReviewContent, ProviderError> {
         guard let canonicalMessage = body.message else {
             return .failure(.malformedPayload)
@@ -243,7 +248,8 @@ struct SolanaDappRequestProcessor {
         case .signTransaction:
             return preparedTransactionMessage(
                 canonicalMessage,
-                publicKey: body.publicKey
+                publicKey: body.publicKey,
+                solana: solana
             ).map { preparedMessage in
                 SigningReviewContent(
                     subject: .approveTransaction,
@@ -260,7 +266,8 @@ struct SolanaDappRequestProcessor {
     }
 
     private static func preparedLegacySignAndSendTransaction(
-        body: SafariRequest.Solana
+        body: SafariRequest.Solana,
+        solana: Solana
     ) -> Result<Solana.PreparedLegacySignAndSendTransaction, ProviderError> {
         guard let message = body.message else {
             return .failure(.malformedPayload)
@@ -273,7 +280,8 @@ struct SolanaDappRequestProcessor {
 
     private static func preparedTransactionMessage(
         _ message: String,
-        publicKey: String
+        publicKey: String,
+        solana: Solana
     ) -> Result<SolanaPreparedTransactionMessage, ProviderError> {
         return solana.preparedTransactionMessageForSigning(
             message: message,
@@ -291,7 +299,7 @@ struct SolanaDappRequestProcessor {
                 ? canonicalMessage
                 : SolanaTransactionSummaryFormatter.rawApprovalMessage(messages: [canonicalMessage])
         }
-        guard let messageData = decodedMessageData ?? solana.decodeMessage(canonicalMessage, asHex: true),
+        guard let messageData = decodedMessageData ?? WalletCrypto.hexData(string: canonicalMessage),
               let messageText = String(data: messageData, encoding: .utf8),
               !messageText.isEmpty else {
             return canonicalMessage

@@ -56,6 +56,22 @@ struct WalletStoreSync {
 
 }
 
+struct WalletStoreChangeNotifications: Sendable {
+    let postLocalChange: @MainActor @Sendable () -> Void
+    let postMutation: @MainActor @Sendable () -> Void
+    let startObserving: @MainActor @Sendable (Any, Selector) -> Void
+    let stopObserving: @MainActor @Sendable (Any) -> Void
+    let isExternalChange: @Sendable (Notification) -> Bool
+
+    static let live = WalletStoreChangeNotifications(
+        postLocalChange: { WalletStoreSync.postLocalChange() },
+        postMutation: { WalletStoreSync.postLocalAndExternalChange() },
+        startObserving: { WalletStoreSync.startObserving($0, selector: $1) },
+        stopObserving: { WalletStoreSync.stopObserving($0) },
+        isExternalChange: { WalletStoreSync.isExternalChange($0) }
+    )
+}
+
 @MainActor
 final class WalletsManager: NSObject {
     enum Error: Swift.Error {
@@ -77,6 +93,7 @@ final class WalletsManager: NSObject {
     nonisolated let repository: WalletRepository
     private let reloadMetadata: @MainActor () -> Void
     private let publishLocalChange: @MainActor () -> Void
+    private nonisolated let notifications: WalletStoreChangeNotifications
     private(set) var wallets = [WalletSnapshot]()
     private var repositoryRevision: UInt64 = 0
     private var isObservingExternalChanges = false
@@ -86,6 +103,7 @@ final class WalletsManager: NSObject {
         repository = WalletRepository(keychain: .shared)
         reloadMetadata = WalletsMetadataService.reload
         publishLocalChange = WalletStoreSync.postLocalChange
+        notifications = .live
         super.init()
     }
 
@@ -94,17 +112,23 @@ final class WalletsManager: NSObject {
         reloadMetadata: @escaping @MainActor () -> Void = {},
         publishLocalChange: (@MainActor () -> Void)? = nil,
         walletSourceMutator: any WalletSourceMutating = ExtensionBridge.WalletSourceMutator(),
-        keyDerivation: WalletRepository.SigningKeyDerivation = .live
+        keyDerivation: WalletRepository.SigningKeyDerivation = .live,
+        notifications: WalletStoreChangeNotifications = .live,
+        metadataMutations: WalletRepository.MetadataMutations = .live
     ) {
-        repository = WalletRepository(keychain: keychain, walletSourceMutator: walletSourceMutator, keyDerivation: keyDerivation)
+        repository = WalletRepository(
+            keychain: keychain, walletSourceMutator: walletSourceMutator,
+            keyDerivation: keyDerivation, metadataMutations: metadataMutations
+        )
         self.reloadMetadata = reloadMetadata
-        self.publishLocalChange = publishLocalChange ?? WalletStoreSync.postLocalChange
+        self.publishLocalChange = publishLocalChange ?? notifications.postLocalChange
+        self.notifications = notifications
         super.init()
     }
 
     isolated deinit {
         externalReload?.cancel()
-        WalletStoreSync.stopObserving(self)
+        notifications.stopObserving(self)
     }
 
     @discardableResult
@@ -208,7 +232,7 @@ final class WalletsManager: NSObject {
         change = try await operation({})
 #endif
         apply(change.state)
-        WalletStoreSync.postLocalAndExternalChange()
+        notifications.postMutation()
         return change.wallet
     }
 
@@ -222,11 +246,11 @@ final class WalletsManager: NSObject {
     private func startObservingExternalChanges() {
         guard !isObservingExternalChanges else { return }
         isObservingExternalChanges = true
-        WalletStoreSync.startObserving(self, selector: #selector(externalWalletStoreChanged(_:)))
+        notifications.startObserving(self, #selector(externalWalletStoreChanged(_:)))
     }
 
     @objc nonisolated private func externalWalletStoreChanged(_ notification: Notification) {
-        guard WalletStoreSync.isExternalChange(notification) else { return }
+        guard notifications.isExternalChange(notification) else { return }
         Task { @MainActor [weak self] in self?.scheduleExternalReload() }
     }
 
@@ -355,6 +379,16 @@ final class WalletsManager: NSObject {
 }
 
 actor WalletRepository {
+    struct MetadataMutations: Sendable {
+        let removeWallet: @Sendable (WalletSnapshot) -> Void
+        let removeAccounts: @Sendable (String, [WalletAccount]) -> Void
+
+        static let live = MetadataMutations(
+            removeWallet: { WalletsMetadataService.removeMetadataForWallet($0, postChange: false) },
+            removeAccounts: { WalletsMetadataService.removeMetadataForAccounts(walletId: $0, accounts: $1, postChange: false) }
+        )
+    }
+
     struct State: Sendable {
         let revision: UInt64
         let wallets: [WalletSnapshot]
@@ -399,17 +433,20 @@ actor WalletRepository {
     private nonisolated let keychain: Keychain
     private let walletSourceMutator: any WalletSourceMutating
     private let keyDerivation: SigningKeyDerivation
+    private let metadataMutations: MetadataMutations
     private var wallets = [WalletContainer]()
     private var revision: UInt64 = 0
 
     init(
         keychain: Keychain,
         walletSourceMutator: any WalletSourceMutating = ExtensionBridge.WalletSourceMutator(),
-        keyDerivation: SigningKeyDerivation = .live
+        keyDerivation: SigningKeyDerivation = .live,
+        metadataMutations: MetadataMutations = .live
     ) {
         self.keychain = keychain
         self.walletSourceMutator = walletSourceMutator
         self.keyDerivation = keyDerivation
+        self.metadataMutations = metadataMutations
     }
 
     func reload() throws -> State {
@@ -468,7 +505,7 @@ actor WalletRepository {
             try Task.checkCancellation()
             try keychain.removeWallet(id: wallet.id)
             wallets.removeAll { $0.id == wallet.id }
-            WalletsMetadataService.removeMetadataForWallet(wallet, postChange: false)
+            metadataMutations.removeWallet(wallet)
             return wallet
         }
         return Change(state: snapshot(), wallet: removed)
@@ -527,7 +564,7 @@ actor WalletRepository {
             try Task.checkCancellation()
             try keychain.updateWallet(id: prepared.wallet.id, data: prepared.data)
             if !prepared.removedAccounts.isEmpty {
-                WalletsMetadataService.removeMetadataForAccounts(walletId: prepared.wallet.id, accounts: prepared.removedAccounts, postChange: false)
+                metadataMutations.removeAccounts(prepared.wallet.id, prepared.removedAccounts)
             }
             if let index = wallets.firstIndex(where: { $0.id == prepared.wallet.id }) {
                 wallets[index] = prepared.wallet

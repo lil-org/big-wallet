@@ -41,7 +41,13 @@ enum ImmediateResolution: Sendable {
     case ethereumRecoveredAddress(String)
     case ethereumChain(String)
 
-    func response(for request: SafariRequest) -> ResponseToExtension? {
+    func response(
+        for request: SafariRequest,
+        networkResolver: (Int) -> EthereumNetworkResolution = { Nodes.resolution(chainId: $0) },
+        customDefinitionResult: (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult = {
+            Networks.existingCustomDefinitionResult(networkFromDapp: $0)
+        }
+    ) -> ResponseToExtension? {
         switch self {
         case .failure(let error):
             return ResponseToExtension(for: request, payload: .error(error))
@@ -80,7 +86,7 @@ enum ImmediateResolution: Sendable {
             guard case .ethereum(let body) = request.body,
                   let target = Int(hexString: chainID), target > 0,
                   String.hex(target, withPrefix: true) == chainID,
-                  case .resolved(let network) = Nodes.resolution(chainId: target) else { return nil }
+                  case .resolved(let network) = networkResolver(target) else { return nil }
             switch body.method {
             case .switchEthereumChain:
                 guard body.switchToChainId == target else { return nil }
@@ -94,7 +100,7 @@ enum ImmediateResolution: Sendable {
                       EthereumDappRequestProcessor.existingChainAdditionMatches(
                         approvedNetwork: definition,
                         resolvedNetwork: network,
-                        customDefinitionResult: Networks.existingCustomDefinitionResult
+                        customDefinitionResult: customDefinitionResult
                       ) else { return nil }
             default:
                 return nil
@@ -136,14 +142,16 @@ struct ApprovedCompletion: Sendable {
     }
 
     static func accountSelection(
-        permit: ExtensionBridge.ApprovedExecutionPermit
+        permit: ExtensionBridge.ApprovedExecutionPermit,
+        fallbackNetwork: () -> EthereumNetwork? = { Networks.ethereum }
     ) -> ApprovedCompletion? {
         guard permit.isExecuting,
               case .accountSelection(let action, let selection) = permit.approval.kind else { return nil }
         return ApprovedCompletion(
             permit: permit,
             response: DappRequestProcessor.accountSelectionResponse(
-                request: permit.request, action: action, selection: selection
+                request: permit.request, action: action, selection: selection,
+                fallbackNetwork: fallbackNetwork
             )
         )
     }
@@ -257,14 +265,20 @@ protocol ApprovedBroadcastSending {
 }
 
 struct DappBroadcastSender: ApprovedBroadcastSending {
-    nonisolated init() {}
+    private let ethereum: Ethereum?
+    private let solana: Solana?
+
+    nonisolated init(ethereum: Ethereum? = nil, solana: Solana? = nil) {
+        self.ethereum = ethereum
+        self.solana = solana
+    }
 
     func sendEthereum(
         signedTransaction: String,
         network: ResolvedEthereumNetwork
     ) async -> Result<String, EthereumSendFailure> {
         do {
-            return .success(try await Ethereum.shared.sendSignedTransaction(
+            return .success(try await (ethereum ?? .shared).sendSignedTransaction(
                 signedTransaction, network: network.network
             ))
         } catch {
@@ -278,7 +292,7 @@ struct DappBroadcastSender: ApprovedBroadcastSending {
         options: Solana.PreparedSendOptions
     ) async -> Result<String, Solana.SendTransactionError> {
         do {
-            return .success(try await Solana.shared.sendSignedTransaction(
+            return .success(try await (solana ?? .shared).sendSignedTransaction(
                 signedTransaction, cluster: cluster, sendOptions: options
             ))
         } catch {

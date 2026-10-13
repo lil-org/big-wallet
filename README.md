@@ -18,7 +18,7 @@ Use Xcode 27 or newer with Swift 6.4. All native targets use Swift 6 language mo
 
 Default actor isolation is `nonisolated`, with `NonisolatedNonsendingByDefault` and `InferIsolatedConformances` enabled. UI and wallet presentation state belong to `MainActor`; shared storage and service state use actors or `Synchronization.Mutex`. Unannotated async functions stay on their caller's actor, and CPU-intensive work uses `@concurrent`. Values crossing actors must be `Sendable`. Synchronous cancellation, secret invalidation, and lease release use synchronized ownership. File locks continue to coordinate the app, Safari extensions, and approval helper across processes. Never suspend while holding an in-process mutex.
 
-Run `Scripts/check_swift6.sh` for the native Debug/Release builds, platform test suites, Safari protocol tests, Release crypto performance gates, focused Thread Sanitizer checks, and differential protocol fuzzing. Individual stages are `build`, `test`, `performance`, `tsan`, and `fuzz`. The script uses Xcode's default DerivedData, runs simulator suites serially, and disables coverage collection so sandboxed host profiling files are not required. Set `SWIFT6_IOS_DESTINATION` and `SWIFT6_VISIONOS_DESTINATION` to select installed simulator destinations. Runtime validation on the oldest supported OS versions requires those runtimes or devices separately.
+Run `Scripts/check_swift6.sh` for the native Debug/Release builds, platform test suites, Safari protocol tests, Release crypto performance gates, focused Thread Sanitizer checks, differential protocol fuzzing, and approval lifecycle tests. Individual stages are `build`, `test`, `performance`, `tsan`, `fuzz`, and `approval`. The script uses Xcode's default DerivedData, runs simulator suites serially, and disables coverage collection so sandboxed host profiling files are not required. Set `SWIFT6_IOS_DESTINATION` and `SWIFT6_VISIONOS_DESTINATION` to select installed simulator destinations. Runtime validation on the oldest supported OS versions requires those runtimes or devices separately.
 
 ### Safari wire protocol
 
@@ -27,6 +27,27 @@ Run `Scripts/check_swift6.sh` for the native Debug/Release builds, platform test
 `Scripts/check_wire_protocol.sh` checks that the generated files are current without modifying them. Xcode builds, npm build/test commands, version bumps, and release preflight run this check. The generator uses Node.js built-ins and adds no package dependencies. `BUILD_VERSION` remains release metadata in `bridge_wire.js` and is updated by the existing version-bump script.
 
 Run `node Scripts/fuzz_wire_protocol.mjs` to compare the production JavaScript and Swift codecs with independent fixtures, mandatory boundary cases, and seeded mutations. Failures are minimized and saved for replay. Commands and the Unicode-key regression found by the harness are documented in [the protocol README](Safari%20Shared/Protocol/README.md#differential-fuzzing).
+
+### Approval lifecycle and crash tests
+
+```sh
+Scripts/check_approval_lifecycle.sh
+APPROVAL_CONFIGURATION=Release Scripts/check_approval_lifecycle.sh
+Scripts/check_approval_lifecycle.sh --soak --seed 42
+Scripts/check_approval_lifecycle.sh --replay /path/to/replay.json
+```
+
+The default run checks mandatory scenarios and process-crash boundaries, then runs 32 seeded sequences of 64 actions, alternating native and popup approval. `--soak` defaults to 1,000 sequences of 200 actions; `--seed`, `--sequences`, and `--steps` select a bounded run. `--failure-dir` chooses where failure artifacts are retained. `Scripts/check_swift6.sh approval` runs the default check.
+
+The standalone `ApprovalCrashWorker` Xcode scheme builds in the default DerivedData without depending on or launching the wallet app or Safari extension. Before building, the runner checks that the target has no application dependencies, wallet entitlements, application entry points, resource-copy phases, or shell-script phases. Its two process roles share only a disposable test directory. Wallet records, metadata, networks, authentication outcomes, and RPC responses are explicit fixtures. Production routing, approval, signing, and durable persistence execute against those dependencies.
+
+The Node parent runs the actual provider, content script, service worker, and popup scripts in separate VM contexts. It controls message delivery and test clocks, records signing and simulated RPC effects outside the native processes, and kills only its own children at acknowledged checkpoints. Restarts retain the same test files and receive new process identities. A failure retains its attempted action prefix, seed, event ledger, browser trace, and storage snapshot; reduction attempts preserve the failing invariant and are capped at 200. Replay executes the scenario again rather than trusting recorded native responses. It preserves recorded scheduling decisions in order and can continue beyond that record after a fix.
+
+Random permanent message drops apply to extension/native transport boundaries. Same-document DOM events can be delayed, duplicated, or reordered; document loss is modeled by navigation or replacement. Arbitrary permanent DOM-event loss is outside the progress guarantee and may leave a provider promise pending before the extension receives it. Replay retains explicit scheduling and fault choices; automatic polling can vary with process scheduling, so its full trace is diagnostic rather than a byte-for-byte replay requirement. A failure that does not reproduce is reported as such.
+
+Fresh user consent may authorize another signing attempt after an ordinary request is abandoned before broadcast commitment. Old consent, polling, delivery retries, and process recovery cannot do so. Once a broadcast checkpoint is committed, recovery preserves its transaction identity without another signing or dispatch, including when the process died before sending. Unexpected exits, missing checkpoints, malformed replies, and watchdog timeouts fail the harness.
+
+Process kills do not simulate power loss; the persistence disk-model tests cover synchronization ordering separately. Browser APIs and authentication are simulated here. Actual Safari suspension, sender metadata, rendering, biometrics, and protected vault keys still require device testing.
 
 ### Safari authorization
 

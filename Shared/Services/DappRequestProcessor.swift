@@ -24,13 +24,24 @@ struct BoundApprovalIntent: Sendable {
 struct DappRequestProcessor: DappRequestProcessing {
 
     private let ethereumNetworkResolver: @MainActor @Sendable (Int) -> ApprovalNetworkResolution
+    private let selectionNetworkResolver: @MainActor @Sendable (String?) -> EthereumNetwork?
+    private let customDefinitionResult: @MainActor @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult
+    private let solana: Solana?
 
     nonisolated init(
         ethereumNetworkResolver: @escaping @MainActor @Sendable (Int) -> ApprovalNetworkResolution = {
             NetworkResolver.main.approvalResolution(chainId: $0)
-        }
+        },
+        selectionNetworkResolver: @escaping @MainActor @Sendable (String?) -> EthereumNetwork? = { Networks.withChainIdHex($0) },
+        customDefinitionResult: @escaping @MainActor @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult = {
+            Networks.existingCustomDefinitionResult(networkFromDapp: $0)
+        },
+        solana: Solana? = nil
     ) {
         self.ethereumNetworkResolver = ethereumNetworkResolver
+        self.selectionNetworkResolver = selectionNetworkResolver
+        self.customDefinitionResult = customDefinitionResult
+        self.solana = solana
     }
 
     func prepare(
@@ -45,19 +56,22 @@ struct DappRequestProcessor: DappRequestProcessing {
                 request: request,
                 body: body,
                 catalog: catalog,
-                networkResolver: ethereumNetworkResolver
+                networkResolver: ethereumNetworkResolver,
+                customDefinitionResult: customDefinitionResult
             )
         case .solana(let body):
             preparation = SolanaDappRequestProcessor.prepare(
                 request: request,
                 body: body,
-                catalog: catalog
+                catalog: catalog,
+                solana: solana
             )
         case .unknown(let body):
             preparation = Self.prepareSwitchAccount(
                 request: request,
                 body: body,
-                catalog: catalog
+                catalog: catalog,
+                networkResolver: selectionNetworkResolver
             )
         }
         return bind(preparation, to: binding)
@@ -73,7 +87,8 @@ struct DappRequestProcessor: DappRequestProcessing {
             preparation = EthereumDappRequestProcessor.prepareWithoutWallets(
                 request: request,
                 body: body,
-                networkResolver: ethereumNetworkResolver
+                networkResolver: ethereumNetworkResolver,
+                customDefinitionResult: customDefinitionResult
             )
         case .solana(let body):
             preparation = SolanaDappRequestProcessor.prepareWithoutWallets(
@@ -107,7 +122,9 @@ struct DappRequestProcessor: DappRequestProcessing {
         guard permit.consumeExecution() else { return .rollback }
         switch permit.approval.kind {
         case .accountSelection:
-            return ApprovedCompletion.accountSelection(permit: permit).map(ApprovedExecutionResult.completed) ?? .rollback
+            return ApprovedCompletion.accountSelection(permit: permit, fallbackNetwork: {
+                selectionNetworkResolver("0x1")
+            }).map(ApprovedExecutionResult.completed) ?? .rollback
         case .signing(_, let payload):
             guard permit.isExecuting,
                   payload.coin.correspondingInpageProvider == permit.request.provider,
@@ -155,14 +172,15 @@ struct DappRequestProcessor: DappRequestProcessing {
     private static func prepareSwitchAccount(
         request: SafariRequest,
         body: SafariRequest.Unknown,
-        catalog: WalletReviewCatalog
+        catalog: WalletReviewCatalog,
+        networkResolver: @MainActor (String?) -> EthereumNetwork?
     ) -> UnboundDappRequestPreparation {
         let initiallyConnectedProviders = connectedProviders(in: body.providerConfigurations)
         let preselectedAccounts = initiallyConnectedProviders.isEmpty
             ? catalog.suggestedAccounts()
             : request.connectedAccounts.compactMap { catalog.specificAccount(descriptor: $0) }
         let chainId = body.providerConfigurations.compactMap(\.chainId).first
-        let network = Networks.withChainIdHex(chainId)
+        let network = networkResolver(chainId)
         let action = SelectAccountAction(
             coinType: nil,
             selectedAccounts: Set(preselectedAccounts),
@@ -175,7 +193,8 @@ struct DappRequestProcessor: DappRequestProcessing {
     nonisolated static func accountSelectionResponse(
         request: SafariRequest,
         action: SelectAccountAction,
-        selection: DappApprovalValidator.Selection
+        selection: DappApprovalValidator.Selection,
+        fallbackNetwork: () -> EthereumNetwork? = { Networks.ethereum }
     ) -> ResponseToExtension {
         let accounts = selection.accounts
         let network = selection.network
@@ -183,7 +202,7 @@ struct DappRequestProcessor: DappRequestProcessing {
 
         switch request.body {
         case .unknown:
-            let resolvedChain = network ?? Networks.ethereum
+            let resolvedChain = network ?? fallbackNetwork()
             var updates = accounts.compactMap {
                 selectedAccountUpdate(for: $0.account, chain: resolvedChain)
             }

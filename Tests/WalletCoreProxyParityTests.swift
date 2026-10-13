@@ -787,19 +787,19 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
         XCTAssertEqual(tenByteSignatureHex, Vectors.ethereumTenBytePersonalMessageSignature)
         XCTAssertEqual(hundredByteSignatureHex, Vectors.ethereumHundredBytePersonalMessageSignature)
         XCTAssertEqual(longSignatureHex, Vectors.ethereumLongPersonalMessageSignature)
-        XCTAssertEqual(Ethereum.shared.recover(signature: signature, message: Vectors.ethereumPersonalMessage),
+        XCTAssertEqual(Ethereum.recover(signature: signature, message: Vectors.ethereumPersonalMessage),
                        Vectors.ethereumSignerAddress)
-        XCTAssertEqual(Ethereum.shared.recover(signature: emptySignature, message: Data()),
+        XCTAssertEqual(Ethereum.recover(signature: emptySignature, message: Data()),
                        Vectors.ethereumSignerAddress)
-        XCTAssertEqual(Ethereum.shared.recover(signature: binarySignature, message: Vectors.ethereumBinaryPersonalMessage),
+        XCTAssertEqual(Ethereum.recover(signature: binarySignature, message: Vectors.ethereumBinaryPersonalMessage),
                        Vectors.ethereumSignerAddress)
-        XCTAssertEqual(Ethereum.shared.recover(signature: newlineSignature, message: Vectors.ethereumNewlinePersonalMessage),
+        XCTAssertEqual(Ethereum.recover(signature: newlineSignature, message: Vectors.ethereumNewlinePersonalMessage),
                        Vectors.ethereumSignerAddress)
-        XCTAssertEqual(Ethereum.shared.recover(signature: tenByteSignature, message: Vectors.ethereumTenBytePersonalMessage),
+        XCTAssertEqual(Ethereum.recover(signature: tenByteSignature, message: Vectors.ethereumTenBytePersonalMessage),
                        Vectors.ethereumSignerAddress)
-        XCTAssertEqual(Ethereum.shared.recover(signature: hundredByteSignature, message: Vectors.ethereumHundredBytePersonalMessage),
+        XCTAssertEqual(Ethereum.recover(signature: hundredByteSignature, message: Vectors.ethereumHundredBytePersonalMessage),
                        Vectors.ethereumSignerAddress)
-        XCTAssertEqual(Ethereum.shared.recover(signature: longSignature, message: Vectors.ethereumLongPersonalMessage),
+        XCTAssertEqual(Ethereum.recover(signature: longSignature, message: Vectors.ethereumLongPersonalMessage),
                        Vectors.ethereumSignerAddress)
     }
 

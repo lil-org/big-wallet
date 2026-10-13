@@ -4,11 +4,30 @@ import Foundation
 
 @MainActor
 final class PopupApprovalStatePresenter {
+    struct Environment: Sendable {
+        let networks: @MainActor @Sendable () -> [EthereumNetwork]
+        let customNetworks: @MainActor @Sendable () -> [EthereumNetwork]
+        let price: @MainActor @Sendable (EthereumNetwork) -> Double?
+        let accountName: @MainActor @Sendable (String, WalletAccount) -> String
+        let icon: @MainActor @Sendable (WalletAccount) -> String?
+
+        static let live = Environment(
+            networks: { Networks.ordered }, customNetworks: { Networks.custom },
+            price: { PriceService.shared.forNetwork($0) },
+            accountName: { $1.nameOrCroppedAddress(walletId: $0) },
+            icon: { account in
+                guard let data = account.image?.pngDataRepresentation else { return nil }
+                return "data:image/png;base64," + data.base64EncodedString()
+            }
+        )
+    }
 
     private static let maximumSelectableAccountIcons = 32
     private let iconDataURLs = NSCache<NSString, NSString>()
+    private let environment: Environment
 
-    init() {
+    init(environment: Environment = .live) {
+        self.environment = environment
         iconDataURLs.countLimit = 64
         iconDataURLs.totalCostLimit = 2 * 1024 * 1024
     }
@@ -223,7 +242,7 @@ final class PopupApprovalStatePresenter {
         let chain = action.chain
         let snapshot = transactionSession.snapshot
         let transaction = snapshot.transaction
-        let price = PriceService.shared.forNetwork(chain)
+        let price = environment.price(chain)
         var feeLines = transaction.feeSummaryLines(chain: chain, price: price)
         if snapshot.phase == .idle || snapshot.phase == .preparing {
             feeLines.append(Strings.calculating.withEllipsis)
@@ -281,7 +300,7 @@ final class PopupApprovalStatePresenter {
         includesIcon: Bool = true
     ) -> PopupDisplayAccount {
         PopupDisplayAccount(
-            name: account.nameOrCroppedAddress(walletId: walletId),
+            name: environment.accountName(walletId, account),
             croppedAddress: account.croppedAddress,
             icon: includesIcon ? iconDataURL(for: account) : nil
         )
@@ -290,8 +309,8 @@ final class PopupApprovalStatePresenter {
     private func networksList(selected: EthereumNetwork?) -> [PopupNetworkOption] {
         var seen = Set<Int>()
         var list = [PopupNetworkOption]()
-        var networks = Networks.ordered
-        let customChainIds = Set(Networks.custom.map(\.chainId))
+        var networks = environment.networks()
+        let customChainIds = Set(environment.customNetworks().map(\.chainId))
         if let selected,
            let selectedIndex = networks.firstIndex(where: { $0.chainId == selected.chainId }) {
             networks.insert(networks.remove(at: selectedIndex), at: 0)
@@ -312,9 +331,7 @@ final class PopupApprovalStatePresenter {
         if let cached = iconDataURLs.object(forKey: key as NSString) {
             return cached as String
         }
-        guard let image = account.image,
-              let data = image.pngDataRepresentation else { return nil }
-        let dataURL = "data:image/png;base64," + data.base64EncodedString()
+        guard let dataURL = environment.icon(account) else { return nil }
         iconDataURLs.setObject(
             dataURL as NSString,
             forKey: key as NSString,

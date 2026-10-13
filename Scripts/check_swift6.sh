@@ -46,12 +46,17 @@ fuzz() {
     node "$script_dir/fuzz_wire_protocol.mjs"
 }
 
+approval() {
+    "$script_dir/check_approval_lifecycle.sh"
+}
+
 case "$mode" in
     build) build ;;
     test) test ;;
     performance) performance ;;
     tsan) tsan ;;
     fuzz) fuzz ;;
-    all) build; test; performance; tsan; fuzz ;;
-    *) echo 'Usage: Scripts/check_swift6.sh [all|build|test|performance|tsan|fuzz]' >&2; exit 2 ;;
+    approval) approval ;;
+    all) build; test; performance; tsan; fuzz; approval ;;
+    *) echo 'Usage: Scripts/check_swift6.sh [all|build|test|performance|tsan|fuzz|approval]' >&2; exit 2 ;;
 esac
