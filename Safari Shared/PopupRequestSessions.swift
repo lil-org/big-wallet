@@ -825,7 +825,7 @@ final class PopupRequestSessions {
                 guard let consent = session.acceptAddEthereumChain(approvedAt: self.clock()) else {
                     return (.abandon, .notAccepted)
                 }
-                return (.ready(consent: consent, signing: .none), .accepted)
+                return (.ready(consent: consent, signing: nil), .accepted)
             }
             guard accepted else { return .ignored }
         }
@@ -885,7 +885,7 @@ final class PopupRequestSessions {
             guard let consent = session.acceptAccounts(selection, approvedAt: self.clock()) else {
                 return (.abandon, .notAccepted)
             }
-            return (.ready(consent: consent, signing: .none), .accepted)
+            return (.ready(consent: consent, signing: nil), .accepted)
         }
     }
 
@@ -964,7 +964,7 @@ final class PopupRequestSessions {
             let transactionExecution: DappApprovalDecision.TransactionExecution?
             if let transactionSession, let transactionReservation,
                case .approveTransaction(let reviewedAction) = action {
-                let preflight = await context.runBeforeDeadline(onTimeout: {
+                let preflight = await context.runBeforeDeadline(onStop: {
                     signer.invalidate()
                     transactionSession.invalidate()
                 }) {
@@ -1005,7 +1005,7 @@ final class PopupRequestSessions {
             }
             guard let consent else { return (.abandon, .accepted) }
             untransferredSigner = nil
-            return (.ready(consent: consent, signing: .unlocked(signer)), .accepted)
+            return (.ready(consent: consent, signing: signer), .accepted)
         }
     }
 
@@ -1106,7 +1106,7 @@ final class PopupRequestSessions {
         let outcome: AuthenticationOutcome
         switch result {
         case .value(let value): outcome = value
-        case .expired: outcome = .abandoned(feedback: nil)
+        case .stopped: outcome = .abandoned(feedback: nil)
         }
         guard isCurrent(session, token: token), session.finishAuthentication(token: token) else {
             if case .unlocked(_, let signer) = outcome {

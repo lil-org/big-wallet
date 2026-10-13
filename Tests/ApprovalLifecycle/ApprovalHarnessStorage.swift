@@ -238,7 +238,30 @@ final class HarnessPersistence: Sendable {
 
     init(ipc: HarnessIPC) { self.ipc = ipc }
 
-    func operations() -> DurableProfilePersistence.Operations {
+    func fileIO(directoryBoundary: URL) -> ExtensionRequestStoreFiles.IO {
+        var io = ExtensionRequestStoreFiles.IO(
+            persistence: DurableProfilePersistence(
+                directoryBoundary: directoryBoundary, operations: operations()
+            ))
+        let baseIO = io
+        io.readData = { [ipc] url in
+            let details = HarnessValue.object(["path": .string(url.path)])
+            try ipc.checkpointSync("persistence.read.before", details: details)
+            let data = try baseIO.readData(url)
+            try ipc.checkpointSync("persistence.read.after", details: details)
+            return data
+        }
+        io.readFileSize = { [ipc] url in
+            let details = HarnessValue.object(["path": .string(url.path)])
+            try ipc.checkpointSync("persistence.stat.before", details: details)
+            let size = try baseIO.readFileSize(url)
+            try ipc.checkpointSync("persistence.stat.after", details: details)
+            return size
+        }
+        return io
+    }
+
+    private func operations() -> DurableProfilePersistence.Operations {
         let live = DurableProfilePersistence.Operations.live
         var operations = live
         operations.openDirectory = { [self] path in
@@ -257,7 +280,8 @@ final class HarnessPersistence: Sendable {
             let details = details(descriptor).merging(["requestedBytes": .number(Double(count))])
             try ipc.checkpointSync("persistence.write.before", details: details)
             let written = try live.write(descriptor, bytes, min(count, ipc.partialWriteBytes ?? count))
-            try ipc.checkpointSync("persistence.write.after", details: details.merging(["writtenBytes": .number(Double(written))]))
+            try ipc.checkpointSync(
+                "persistence.write.after", details: details.merging(["writtenBytes": .number(Double(written))]))
             return written
         }
         operations.fullSync = { [self] descriptor in

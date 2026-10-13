@@ -405,8 +405,7 @@ actor ExtensionBridge {
         }
 
         func allowsExecution(at now: Date, isCancelled: Bool) -> Bool {
-            if case .native = self, isCancelled { return false }
-            return isWithinExecutionWindow(at: now)
+            !isCancelled && isWithinExecutionWindow(at: now)
         }
 
         func isWithinClaimLifetime(at now: Date) -> Bool {

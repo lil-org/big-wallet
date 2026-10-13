@@ -312,17 +312,39 @@ struct ReviewConsent: Sendable {
     ) -> Result<ResolvedDappApproval, DappApprovalValidator.Failure> {
         DappApprovalValidator.resolve(
             action: intent.action, decision: decision, context: context
-        ).map { approval in
-            ResolvedDappApproval(consent: self, approval: approval)
+        ).map { kind in
+            ResolvedDappApproval(consent: self, kind: kind)
         }
     }
 
 }
 
 struct ResolvedDappApproval: Sendable {
-    private let consent: ReviewConsent
-    let approval: DappApprovalValidator.Approval
+    struct Selection: Sendable {
+        let accounts: [SpecificWalletAccount]
+        let network: EthereumNetwork?
+    }
 
+    enum Kind: Sendable {
+        case accountSelection(SelectAccountAction, Selection)
+        case signing(
+            approvedAccount: WalletAccountDescriptor,
+            payload: ApprovedWalletSigningOperation.Payload
+        )
+        case addEthereumChain(AddEthereumChainAction)
+
+        var signingAccount: WalletAccountDescriptor? {
+            switch self {
+            case .signing(let approvedAccount, _): approvedAccount
+            case .accountSelection, .addEthereumChain: nil
+            }
+        }
+    }
+
+    private let consent: ReviewConsent
+    let kind: Kind
+
+    var signingAccount: WalletAccountDescriptor? { kind.signingAccount }
     var binding: ExtensionBridge.RequestBinding { consent.binding }
     var request: SafariRequest { consent.request }
     var nativeReceipt: ExtensionBridge.NativeDeliveryReceipt? { consent.nativeReceipt }
@@ -330,10 +352,10 @@ struct ResolvedDappApproval: Sendable {
 
     fileprivate init(
         consent: ReviewConsent,
-        approval: DappApprovalValidator.Approval
+        kind: Kind
     ) {
         self.consent = consent
-        self.approval = approval
+        self.kind = kind
     }
 
     func consumeAuthorization() -> Bool {
@@ -472,37 +494,6 @@ enum DappApprovalResolver {
 
 enum DappApprovalValidator {
 
-    struct Selection: Sendable {
-        let accounts: [SpecificWalletAccount]
-        let network: EthereumNetwork?
-    }
-
-    struct Approval: Sendable {
-        enum Kind: Sendable {
-            case accountSelection(SelectAccountAction, Selection)
-            case signing(
-                approvedAccount: WalletAccountDescriptor,
-                payload: ApprovedWalletSigningOperation.Payload
-            )
-            case addEthereumChain(AddEthereumChainAction)
-        }
-
-        let kind: Kind
-
-        fileprivate init(_ kind: Kind) {
-            self.kind = kind
-        }
-
-        var signingAccount: WalletAccountDescriptor? {
-            switch kind {
-            case .signing(let approvedAccount, _):
-                return approvedAccount
-            case .accountSelection, .addEthereumChain:
-                return nil
-            }
-        }
-    }
-
     enum Failure: Error {
         case accountUnavailable
         case invalidDecision
@@ -514,7 +505,7 @@ enum DappApprovalValidator {
         action: DappRequestAction,
         decision: DappApprovalDecision,
         context: ApprovalResolutionContext
-    ) -> Result<Approval, Failure> {
+    ) -> Result<ResolvedDappApproval.Kind, Failure> {
         if let approvedAccount = action.signingAccount {
             guard context.accounts.contains(where: {
                 approvedAccount.matches(walletID: $0.walletId, account: $0.account)
@@ -530,12 +521,12 @@ enum DappApprovalValidator {
                 action: action, selection: selection,
                 accounts: context.accounts, network: context.selectionNetwork
             ) else { return .failure(.invalidDecision) }
-            return .success(Approval(.accountSelection(action, resolved)))
+            return .success(.accountSelection(action, resolved))
         case (.approveMessage(let action), .message(let approval)):
             guard let payload = resolveMessagePayload(action.payload, cluster: approval.solanaCluster) else {
                 return .failure(.invalidDecision)
             }
-            return .success(Approval(.signing(approvedAccount: approval.approvedAccount, payload: payload)))
+            return .success(.signing(approvedAccount: approval.approvedAccount, payload: payload))
         case (.approveTransaction(let action), .transaction(let execution)):
             guard let currentNetwork = context.transactionNetwork,
                   execution.isApplicable(to: action),
@@ -546,12 +537,12 @@ enum DappApprovalValidator {
             guard transaction.isReadyForApproval(on: currentNetwork.network) else {
                 return .failure(.invalidDecision)
             }
-            return .success(Approval(.signing(
+            return .success(.signing(
                 approvedAccount: execution.approvedAccount,
                 payload: .ethereumTransaction(transaction, currentNetwork)
-            )))
+            ))
         case (.addEthereumChain(let action), .addEthereumChain):
-            return .success(Approval(.addEthereumChain(action)))
+            return .success(.addEthereumChain(action))
         default:
             return .failure(.invalidDecision)
         }
@@ -578,7 +569,7 @@ enum DappApprovalValidator {
         selection: DappApprovalDecision.AccountSelection,
         accounts: [SpecificWalletAccount],
         network: EthereumNetwork?
-    ) -> Selection? {
+    ) -> ResolvedDappApproval.Selection? {
         guard let resolvedAccounts = resolveSelectionAccounts(
             action: action, selection: selection, accounts: accounts
         ) else { return nil }
@@ -588,7 +579,7 @@ enum DappApprovalValidator {
                   !resolvedAccounts.contains(where: { $0.account.coin == .ethereum }) ||
                     network != nil else { return nil }
         }
-        return Selection(accounts: resolvedAccounts, network: network)
+        return ResolvedDappApproval.Selection(accounts: resolvedAccounts, network: network)
     }
 
     static func resolveSelectionAccounts(

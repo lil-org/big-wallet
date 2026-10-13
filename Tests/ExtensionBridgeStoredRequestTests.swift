@@ -59,8 +59,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let synchronizations = LockedTestValue(0)
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { data, url in writes.withValue { $0 += 1 }; try ApprovalStoreTestPersistence.write(data, url) },
-            synchronizePublishedFile: { _ in synchronizations.withValue { $0 += 1 } }
+            fileIO: approvalStoreIO(directoryBoundary: rootURL) { io in
+                let baseIO = io
+                io.replace = { data, url in writes.withValue { $0 += 1 }; try baseIO.replace(data, url) }
+                io.synchronizePublishedFile = { _ in synchronizations.withValue { $0 += 1 } } }
         ))
         guard case .snapshot(let first) = store.configurationSnapshot(configurationKey: "https://wallet.example", profileIdentifier: nil) else {
             return XCTFail("Expected initial authority snapshot")
@@ -605,18 +607,25 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         try mutateStoredPermissions { $0["https://wallet.example"] = "incompatible permissions" }
         let corruptedData = try Data(contentsOf: defaultProfileURL)
         let writes = LockedTestValue(0)
-        let unreadable = makeBridge(clock: { [clock = clock!] in clock.date }, atomicWrite: { _, _ in
+        let unreadable = makeBridge(clock: { [clock = clock!] in clock.date },
+            configureIO: { io in
+                io.replace = { _, _ in
             writes.withValue { $0 += 1 }
             throw Failure.injectedWrite
-        }, readData: { _ in throw Failure.injectedWrite })
+        }
+                io.readData = { _ in throw Failure.injectedWrite }
+            })
         guard case .unavailable = await unreadable.configurationSnapshot(
             configurationKey: "https://wallet.example", profileIdentifier: nil
         ) else { return XCTFail("Read failures must not fabricate disconnected authority") }
         XCTAssertEqual(writes.value, 0)
-        let unwritable = makeBridge(clock: { [clock = clock!] in clock.date }, atomicWrite: { _, _ in
+        let unwritable = makeBridge(clock: { [clock = clock!] in clock.date },
+            configureIO: { io in
+                io.replace = { _, _ in
             writes.withValue { $0 += 1 }
             throw Failure.injectedWrite
-        })
+        }
+            })
         for _ in 0..<2 {
             guard case .unavailable = await unwritable.configurationSnapshot(
                 configurationKey: "https://wallet.example", profileIdentifier: nil
@@ -635,12 +644,17 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let synchronizations = LockedTestValue(0)
         for synchronizationSucceeds in [false, true] {
             try corruptedData.write(to: defaultProfileURL, options: .atomic)
-            let observer = makeBridge(clock: { [clock = clock!] in clock.date }, atomicWrite: { data, url in
-                try ApprovalStoreTestPersistence.write(data, url)
+            let observer = makeBridge(clock: { [clock = clock!] in clock.date },
+                configureIO: { io in
+                    let baseIO = io
+                    io.replace = { data, url in
+                try baseIO.replace(data, url)
                 throw Failure.injectedWrite
-            }, synchronizePublishedFile: { _ in
+            }
+                    io.synchronizePublishedFile = { _ in
                 synchronizations.withValue { $0 += 1 }
                 if !synchronizationSucceeds { throw Failure.injectedWrite }
+            }
             })
             let result = await observer.configurationSnapshot(configurationKey: "https://wallet.example", profileIdentifier: nil)
             if synchronizationSucceeds {
@@ -996,6 +1010,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(delivered, .persisted)
         let now = clock.date
         let writes = LockedTestValue(0)
+        let baseIO = ExtensionRequestStoreFiles.IO.live(directoryBoundary: rootURL)
         let atomicWrite: @Sendable (Data, URL) throws -> Void = { data, url in
             writes.withValue { $0 += 1 }
             let profile = try XCTUnwrap(PropertyListSerialization.propertyList(
@@ -1004,10 +1019,16 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let records = try XCTUnwrap(profile["records"] as? [[String: Any]])
             let state = try XCTUnwrap(records.first?["state"] as? [String: Any])
             XCTAssertEqual(Set(state.keys), ["claimed"])
-            try ApprovalStoreTestPersistence.write(data, url)
+            try baseIO.replace(data, url)
         }
-        let first = makeBridge(clock: { now }, atomicWrite: atomicWrite)
-        let second = makeBridge(clock: { now }, atomicWrite: atomicWrite)
+        let first = makeBridge(clock: { now },
+            configureIO: { io in
+                io.replace = atomicWrite
+            })
+        let second = makeBridge(clock: { now },
+            configureIO: { io in
+                io.replace = atomicWrite
+            })
         let consent = try await nativeConsent(handle: admission.handle, approvedAt: now)
         async let firstResult = first.claimNativeExecution(consent: consent)
         async let secondResult = second.claimNativeExecution(consent: consent)
@@ -1230,19 +1251,22 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let synchronizations = LockedTestValue(0)
             let writer = makeBridge(
                 clock: { [clock = clock!] in clock.date },
-                atomicWrite: { data, url in
+                configureIO: { io in
+                    let baseIO = io
+                    io.replace = { data, url in
                     XCTAssertFalse(consent.authorizationIsAvailable)
                     let contender = CrossProcessFileLock(fileURL: lockURL)
                     XCTAssertFalse(try contender.tryAcquireExisting())
-                    if mode != "beforeWrite" { try ApprovalStoreTestPersistence.write(data, url) }
+                    if mode != "beforeWrite" { try baseIO.replace(data, url) }
                     throw Failure.injectedWrite
-                },
-                synchronizePublishedFile: { url in
+                }
+                    io.synchronizePublishedFile = { url in
                     synchronizations.withValue { $0 += 1 }
                     let contender = CrossProcessFileLock(fileURL: lockURL)
                     XCTAssertFalse(try contender.tryAcquireExisting())
                     if mode == "failedSync" { throw Failure.injectedWrite }
-                    try ApprovalStoreTestPersistence.synchronize(url)
+                    try baseIO.synchronizePublishedFile(url)
+                }
                 }
             )
             let returned = await writer.returnToReview(claim: claim, consent: consent)
@@ -1393,10 +1417,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(ExtensionBridge.payloadData(boundRaw, options: [.sortedKeys])).count,
                        ExtensionBridge.maximumPayloadBytes + 1)
         let original = try Data(contentsOf: defaultProfileURL)
-        let rejectingWriter = makeBridge(clock: { [clock = clock!] in clock.date }, atomicWrite: { _, _ in
+        let rejectingWriter = makeBridge(clock: { [clock = clock!] in clock.date },
+            configureIO: { io in
+                io.replace = { _, _ in
             XCTFail("Oversized bound requests must not write the profile")
             throw Failure.injectedWrite
-        })
+        }
+            })
         guard case .rejected = await rejectingWriter.enqueue(
             ingress: oversizedAfterBinding.ingress, profileIdentifier: nil
         ) else { return XCTFail("Expected oversized bound payload to be rejected") }
@@ -1436,7 +1463,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let writes = LockedTestValue(0)
         let claimingWriter = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { data, url in
+            configureIO: { io in
+                let baseIO = io
+                io.replace = { data, url in
                 writes.withValue { $0 += 1 }
                 let profile = try XCTUnwrap(PropertyListSerialization.propertyList(
                     from: data, options: [], format: nil
@@ -1445,12 +1474,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 let record = try XCTUnwrap(records.first { $0["id"] as? Int == fixture.request.id })
                 let state = try XCTUnwrap(record["state"] as? [String: Any])
                 XCTAssertNotNil(state["completed"], "Expiry must be written instead of an invalid execution context")
-                try ApprovalStoreTestPersistence.write(data, url)
-            },
-            readData: { url in
+                try baseIO.replace(data, url)
+            }
+                io.readData = { url in
                 let data = try Data(contentsOf: url)
                 callbackClock.setDate(fixture.request.admissionDeadline.addingTimeInterval(0.01))
                 return data
+            }
             }
         )
         let result = await claimingWriter.claimNativeExecution(consent: consent)
@@ -1564,10 +1594,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         try seed(origins)
         let original = try Data(contentsOf: defaultProfileURL)
         let writes = LockedTestValue(0)
-        let tested = makeBridge(clock: { [clock = clock!] in clock.date }, atomicWrite: { data, url in
+        let tested = makeBridge(clock: { [clock = clock!] in clock.date },
+            configureIO: { io in
+                let baseIO = io
+                io.replace = { data, url in
             writes.withValue { $0 += 1 }
-            try ApprovalStoreTestPersistence.write(data, url)
-        })
+            try baseIO.replace(data, url)
+        }
+            })
         guard case .snapshot(let before) = await tested.configurationSnapshot(configurationKey: key, profileIdentifier: nil) else {
             return XCTFail("Expected valid profile at the authority byte limit")
         }
@@ -1713,7 +1747,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     func testScopedRevocationFailurePreventsSourceWriteAndReleasesTransactionLock() async throws {
         let account = authorityTestAccount()
         _ = try await grantAuthority(account, id: 62_983)
-        let store = removalStore(atomicWrite: { _, _ in throw Failure.injectedWrite })
+        let store = removalStore(configureIO: { io in
+                io.replace = { _, _ in throw Failure.injectedWrite }
+            })
         let preparations = LockedTestValue(0)
         let writes = LockedTestValue(0)
         XCTAssertThrowsError(try store.perform(preparing: {
@@ -1960,7 +1996,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let original = try Data(contentsOf: revocationLedgerURL)
         let sourceWrites = LockedTestValue(0)
         let unreadable = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
-            readData: { _ in throw Failure.injectedWrite }
+            fileIO: approvalStoreIO(directoryBoundary: rootURL) { io in
+                io.readData = { _ in throw Failure.injectedWrite }
+            }
         ))
         XCTAssertThrowsError(try unreadable.withRevokedWalletAuthority(matching: .wallet(id: "new-wallet")) {
             sourceWrites.withValue { $0 += 1 }
@@ -2027,17 +2065,20 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let callbackLedgerURL = revocationLedgerURL
         let sourceMutations = LockedTestValue(0)
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
-            atomicWrite: { data, url in
+            fileIO: approvalStoreIO(directoryBoundary: rootURL) { io in
+                let baseIO = io
+                io.replace = { data, url in
                 XCTAssertEqual(url, callbackLedgerURL)
-                try ApprovalStoreTestPersistence.write(data, url)
-            },
-            readData: { url in
+                try baseIO.replace(data, url)
+            }
+                io.readData = { url in
                 XCTAssertEqual(url, callbackLedgerURL)
                 return try Data(contentsOf: url)
-            },
-            readFileSize: { url in
+            }
+                io.readFileSize = { url in
                 XCTAssertEqual(url, callbackLedgerURL)
-                return try ExtensionRequestFileStore.defaultReadFileSize(url)
+                return try baseIO.readFileSize(url)
+            }
             }
         ))
         let result = try store.withRevokedWalletAuthority(matching: .wallet(id: "wallet")) {
@@ -2072,10 +2113,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         try FileManager.default.createSymbolicLink(at: unsafeURL, withDestinationURL: dormantURL)
         let sourceMutations = LockedTestValue(0)
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
-            atomicWrite: ApprovalStoreTestPersistence.write,
-            readData: { url in
+            fileIO: approvalStoreIO(directoryBoundary: rootURL) { io in
+                io.readData = { url in
                 guard url == callbackLedgerURL else { throw Failure.injectedWrite }
                 return try Data(contentsOf: url)
+            }
             }
         ))
         try store.withRevokedWalletAuthority(matching: .wallet(id: account.walletID)) { sourceMutations.withValue { $0 += 1 } }
@@ -2099,10 +2141,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let originalDefault = try Data(contentsOf: defaultProfileURL)
         let originalSecond = try Data(contentsOf: profileURL(secondProfile))
         let sourceMutations = LockedTestValue(0)
-        let failingStore = removalStore(atomicWrite: { _, url in
+        let failingStore = removalStore(configureIO: { io in
+                io.replace = { _, url in
             XCTAssertEqual(url, callbackLedgerURL)
             throw Failure.injectedWrite
-        })
+        }
+            })
         XCTAssertThrowsError(try failingStore.withRevokedWalletAuthority(matching: .wallet(id: account.walletID)) {
             sourceMutations.withValue { $0 += 1 }
         })
@@ -2114,10 +2158,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: defaultProfileURL), originalDefault)
         XCTAssertEqual(try Data(contentsOf: profileURL(secondProfile)), originalSecond)
 
-        let unavailable = removalStore(atomicWrite: { _, url in
+        let unavailable = removalStore(configureIO: { io in
+                io.replace = { _, url in
             XCTAssertEqual(url, callbackProfileURL)
             throw Failure.injectedWrite
-        })
+        }
+            })
         guard case .unavailable = unavailable.configurationSnapshot(configurationKey: "https://wallet.example", profileIdentifier: nil) else {
             return XCTFail("Failed catch-up must not expose authority")
         }
@@ -2133,10 +2179,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     func testWalletRemovalConfirmsLedgerDurabilityAndKeepsRevocationWhenSourceFails() async throws {
         _ = try authorityVersion("https://empty.example")
         let sourceMutations = LockedTestValue(0)
-        let failingStore = removalStore(atomicWrite: { data, url in
-            try ApprovalStoreTestPersistence.write(data, url)
+        let failingStore = removalStore(configureIO: { io in
+                let baseIO = io
+                io.replace = { data, url in
+            try baseIO.replace(data, url)
             throw Failure.injectedWrite
-        }, synchronizePublishedFile: { _ in throw Failure.injectedWrite })
+        }
+                io.synchronizePublishedFile = { _ in throw Failure.injectedWrite }
+            })
         XCTAssertThrowsError(try failingStore.withRevokedWalletAuthority(matching: .wallet(id: "absent-wallet")) {
             sourceMutations.withValue { $0 += 1 }
         })
@@ -2156,12 +2206,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
 
     private func removalStore(
-        atomicWrite: ExtensionRequestFileStore.AtomicWrite? = ApprovalStoreTestPersistence.write,
-        synchronizePublishedFile: ExtensionRequestFileStore.SynchronizePublishedFile? = nil
+        configureIO: (inout ExtensionRequestStoreFiles.IO) -> Void = { _ in }
     ) -> ExtensionRequestFileStore {
         ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
-            clock: { [clock = clock!] in clock.date }, atomicWrite: atomicWrite, synchronizePublishedFile: synchronizePublishedFile
-        ))
+            clock: { [clock = clock!] in clock.date },
+                fileIO: approvalStoreIO(directoryBoundary: rootURL, configure: configureIO)
+            ))
     }
 
     private func removalSnapshot(profileIdentifier: UUID? = nil, host: String = "wallet.example") async throws -> ExtensionBridge.AuthoritySnapshot {
@@ -2274,8 +2324,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let originalPaths = try FileManager.default.subpathsOfDirectory(atPath: rootURL.path).sorted()
         let observer = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { _, _ in XCTFail("Observation wrote storage"); throw Failure.injectedWrite },
-            synchronizePublishedFile: { _ in XCTFail("Observation synchronized storage"); throw Failure.injectedWrite }
+            configureIO: { io in
+                io.replace = { _, _ in XCTFail("Observation wrote storage"); throw Failure.injectedWrite }
+                io.synchronizePublishedFile = { _ in XCTFail("Observation synchronized storage"); throw Failure.injectedWrite }
+            }
         )
         let manualStatus = await observer.responseStatus(
             handle: manualHandle, configurationKey: manual.request.configurationKey
@@ -2348,9 +2400,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let original = try Data(contentsOf: defaultProfileURL)
             let strict = makeBridge(
                 clock: { [clock = clock!] in clock.date },
-                atomicWrite: { _, _ in XCTFail("Authority reconciliation repaired storage"); throw Failure.injectedWrite },
-                synchronizePublishedFile: { _ in XCTFail("Authority reconciliation synchronized storage"); throw Failure.injectedWrite }
-            )
+                configureIO: { io in
+                    io.replace = { _, _ in XCTFail("Authority reconciliation repaired storage"); throw Failure.injectedWrite }
+                    io.synchronizePublishedFile = { _ in XCTFail("Authority reconciliation synchronized storage"); throw Failure.injectedWrite }
+                })
 
             if interrupt {
                 let result = await strict.interruptNativeApproval(
@@ -2377,9 +2430,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let synchronizations = LockedTestValue(0)
         let observer = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { _, _ in XCTFail("Observation wrote storage"); throw Failure.injectedWrite },
-            synchronizePublishedFile: { _ in synchronizations.withValue { $0 += 1 }; throw Failure.injectedWrite }
-        )
+            configureIO: { io in
+                io.replace = { _, _ in XCTFail("Observation wrote storage"); throw Failure.injectedWrite }
+                io.synchronizePublishedFile = { _ in synchronizations.withValue { $0 += 1 }; throw Failure.injectedWrite }
+            })
         let status = await observer.responseStatus(handle: handle, configurationKey: fixture.request.configurationKey)
 
         let wrongIdentity = await observer.responseStatus(handle: handle, configurationKey: "https://other.example")
@@ -2431,8 +2485,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let original = try Data(contentsOf: defaultProfileURL)
         let observer = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { _, _ in XCTFail("Observation wrote storage"); throw Failure.injectedWrite },
-            synchronizePublishedFile: { _ in XCTFail("Observation synchronized storage"); throw Failure.injectedWrite }
+            configureIO: { io in
+                io.replace = { _, _ in XCTFail("Observation wrote storage"); throw Failure.injectedWrite }
+                io.synchronizePublishedFile = { _ in XCTFail("Observation synchronized storage"); throw Failure.injectedWrite }
+            }
         )
         for observedAt in [clock.date, future.addingTimeInterval(ExtensionBridge.responseExpiry + 1)] {
             clock.setDate(observedAt)
@@ -2458,8 +2514,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let originalPaths = try FileManager.default.subpathsOfDirectory(atPath: rootURL.path).sorted()
         let observer = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { _, _ in XCTFail("Observation recovered checkpoint"); throw Failure.injectedWrite },
-            synchronizePublishedFile: { _ in XCTFail("Observation synchronized checkpoint"); throw Failure.injectedWrite }
+            configureIO: { io in
+                io.replace = { _, _ in XCTFail("Observation recovered checkpoint"); throw Failure.injectedWrite }
+                io.synchronizePublishedFile = { _ in XCTFail("Observation synchronized checkpoint"); throw Failure.injectedWrite }
+            }
         )
         let response = await observer.responseStatus(
             handle: execution.handle, configurationKey: execution.request.configurationKey
@@ -2630,10 +2688,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             ingress: fixture.ingress, profileIdentifier: nil
         )).handle
         let unavailable = LockedTestValue(true)
-        let writer = makeBridge(clock: { [clock = clock!] in clock.date }, readData: { url in
+        let writer = makeBridge(clock: { [clock = clock!] in clock.date },
+            configureIO: { io in
+                let baseIO = io
+                io.readData = { url in
             if unavailable.value { throw CocoaError(.fileReadUnknown) }
-            return try ExtensionRequestFileStore.defaultReadData(url)
-        })
+            return try baseIO.readData(url)
+        }
+            })
 
         let failed = await writer.completeImmediate(handle: handle, resolution: immediateResolution(for: fixture.request))
         XCTAssertEqual(failed, .retryablePersistenceFailure)
@@ -2822,12 +2884,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let orphan = rootURL.appendingPathComponent(".profile-write-\(UUID().uuidString.lowercased()).tmp")
         let removalAttempts = LockedTestValue(0)
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
-            removeItem: { url in
+            fileIO: approvalStoreIO(directoryBoundary: rootURL) { io in
+                io.removeItem = { url in
                 if url == orphan {
                     removalAttempts.withValue { $0 += 1 }
                     throw Failure.injectedWrite
                 }
                 try FileManager.default.removeItem(at: url)
+            }
             }
         ))
         let identifiers: [UUID?] = [nil, UUID(), UUID()]
@@ -2849,9 +2913,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         try Data("interrupted snapshot".utf8).write(to: orphan)
         let failRemoval = LockedTestValue(true)
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
-            removeItem: { url in
+            fileIO: approvalStoreIO(directoryBoundary: rootURL) { io in
+                io.removeItem = { url in
                 if url == orphan, failRemoval.value { throw Failure.injectedWrite }
                 try FileManager.default.removeItem(at: url)
+            }
             }
         ))
         store.performMaintenance(profileIdentifier: nil)
@@ -3308,10 +3374,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let failAfterWrite = LockedTestValue(false)
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { data, url in
+            fileIO: approvalStoreIO(directoryBoundary: rootURL) { io in
+                let baseIO = io
+                io.replace = { data, url in
                 if failBeforeWrite.value { throw Failure.injectedWrite }
-                try ApprovalStoreTestPersistence.write(data, url)
+                try baseIO.replace(data, url)
                 if failAfterWrite.value { throw Failure.injectedWrite }
+            }
             }
         ))
         let fixture = try makeFixture(id: 910)
@@ -3342,9 +3411,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
     func testLostEnqueueReplyDeduplicatesTheExactAttempt() async throws {
         final class WriteControl: Sendable {
+            let baseIO: ExtensionRequestStoreFiles.IO
+            init(baseIO: ExtensionRequestStoreFiles.IO) { self.baseIO = baseIO }
             let shouldThrow = LockedTestValue(true)
             func write(_ data: Data, to url: URL) throws {
-                try ApprovalStoreTestPersistence.write(data, url)
+                try baseIO.replace(data, url)
                 let fail = url.pathExtension == "state" && shouldThrow.withValue { value in
                     defer { value = false }
                     return value
@@ -3352,10 +3423,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 if fail { throw Failure.injectedWrite }
             }
         }
-        let writes = WriteControl()
+        let writes = WriteControl(baseIO: .live(directoryBoundary: rootURL))
         bridge = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { try writes.write($0, to: $1) }
+            configureIO: { io in
+                io.replace = { try writes.write($0, to: $1) }
+            }
         )
         let fixture = try makeFixture(id: 2)
 
@@ -3707,10 +3780,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
     func testNativeDeliveryReceiptVerifiesAmbiguousWrites() async throws {
         final class WriteControl: Sendable {
+            let baseIO: ExtensionRequestStoreFiles.IO
+            init(baseIO: ExtensionRequestStoreFiles.IO) { self.baseIO = baseIO }
             let throwsRemaining = LockedTestValue(0)
 
             func write(_ data: Data, to url: URL) throws {
-                try ApprovalStoreTestPersistence.write(data, url)
+                try baseIO.replace(data, url)
                 let fail = url.pathExtension == "state" && throwsRemaining.withValue { remaining in
                     guard remaining > 0 else { return false }
                     remaining -= 1
@@ -3719,10 +3794,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 if fail { throw Failure.injectedWrite }
             }
         }
-        let writes = WriteControl()
+        let writes = WriteControl(baseIO: .live(directoryBoundary: rootURL))
         bridge = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { try writes.write($0, to: $1) }
+            configureIO: { io in
+                io.replace = { try writes.write($0, to: $1) }
+            }
         )
         let admission = try accepted(await bridge.enqueue(
             ingress: try makeFixture(id: 84).ingress,
@@ -3886,10 +3963,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
     func testNativeDeliveryOwnerMutationsVerifyAmbiguousWrites() async throws {
         final class WriteControl: Sendable {
+            let baseIO: ExtensionRequestStoreFiles.IO
+            init(baseIO: ExtensionRequestStoreFiles.IO) { self.baseIO = baseIO }
             let throwsRemaining = LockedTestValue(0)
 
             func write(_ data: Data, to url: URL) throws {
-                try ApprovalStoreTestPersistence.write(data, url)
+                try baseIO.replace(data, url)
                 let fail = url.pathExtension == "state" && throwsRemaining.withValue { remaining in
                     guard remaining > 0 else { return false }
                     remaining -= 1
@@ -3898,10 +3977,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 if fail { throw Failure.injectedWrite }
             }
         }
-        let writes = WriteControl()
+        let writes = WriteControl(baseIO: .live(directoryBoundary: rootURL))
         bridge = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { try writes.write($0, to: $1) }
+            configureIO: { io in
+                io.replace = { try writes.write($0, to: $1) }
+            }
         )
         let firstRuntime = UUID()
 
@@ -4796,8 +4877,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(recovered["result"] as? String, "0xsigned")
         let failingWriter = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { _, _ in throw Failure.injectedWrite }
-        )
+            configureIO: { io in
+                io.replace = { _, _ in throw Failure.injectedWrite }
+            })
         let repeated = await failingWriter.acknowledgeResponse(
             handle: handle,
             configurationKey: fixture.request.configurationKey
@@ -4875,8 +4957,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(completion, .persisted)
         let failingWriter = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { _, _ in throw Failure.injectedWrite }
-        )
+            configureIO: { io in
+                io.replace = { _, _ in throw Failure.injectedWrite }
+            })
         let failed = await failingWriter.acknowledgeResponse(
             handle: handle,
             configurationKey: fixture.request.configurationKey
@@ -4888,9 +4971,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
         let ambiguousWriter = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { data, url in
-                try ApprovalStoreTestPersistence.write(data, url)
+            configureIO: { io in
+                let baseIO = io
+                io.replace = { data, url in
+                try baseIO.replace(data, url)
                 throw Failure.injectedWrite
+            }
             }
         )
         let persisted = await ambiguousWriter.acknowledgeResponse(
@@ -4921,9 +5007,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let recoveryReads = LockedTestValue(0)
             let writer = makeBridge(
                 clock: { [clock = clock!] in clock.date },
-                atomicWrite: { data, url in
+                configureIO: { io in
+                    let baseIO = io
+                    io.replace = { data, url in
                     guard url == targetURL else {
-                        return try ApprovalStoreTestPersistence.write(data, url)
+                        return try baseIO.replace(data, url)
                     }
                     recovering.value = true
                     switch mode {
@@ -4947,7 +5035,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                             format: .binary,
                             options: 0
                         )
-                        try ApprovalStoreTestPersistence.write(altered, url)
+                        try baseIO.replace(altered, url)
                     case .missing:
                         try FileManager.default.removeItem(at: url)
                     case .symbolicLink:
@@ -4956,11 +5044,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                         try FileManager.default.removeItem(at: url)
                         try FileManager.default.createSymbolicLink(at: url, withDestinationURL: otherURL)
                     case .exact, .unreadable, .oversizedFile, .oversizedData, .emptyData:
-                        try ApprovalStoreTestPersistence.write(data, url)
+                        try baseIO.replace(data, url)
                     }
                     throw Failure.injectedWrite
-                },
-                readData: { url in
+                }
+                    io.readData = { url in
                     if recovering.value, url == targetURL {
                         recoveryReads.withValue { $0 += 1 }
                         switch mode {
@@ -4974,13 +5062,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                             break
                         }
                     }
-                    return try ExtensionRequestFileStore.defaultReadData(url)
-                },
-                readFileSize: { url in
+                    return try baseIO.readData(url)
+                }
+                    io.readFileSize = { url in
                     if recovering.value, url == targetURL, mode == .oversizedFile {
                         return Int.max
                     }
-                    return try ExtensionRequestFileStore.defaultReadFileSize(url)
+                    return try baseIO.readFileSize(url)
+                }
                 }
             )
             let result = await writer.completeImmediate(
@@ -5695,11 +5784,15 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     }
                     if adopted { XCTAssertTrue(claim.adoptForExecution()) }
                     let writes = LockedTestValue(0)
-                    let failingWriter = makeBridge(clock: { [clock = clock!] in clock.date }, atomicWrite: { data, url in
+                    let failingWriter = makeBridge(clock: { [clock = clock!] in clock.date },
+                        configureIO: { io in
+                            let baseIO = io
+                            io.replace = { data, url in
                         writes.withValue { $0 += 1 }
-                        if persistsBeforeFailure { try ApprovalStoreTestPersistence.write(data, url) }
+                        if persistsBeforeFailure { try baseIO.replace(data, url) }
                         throw Failure.injectedWrite
-                    })
+                    }
+                        })
                     let result = await failingWriter.abandon(claim: claim)
                     XCTAssertEqual(result, .retryablePersistenceFailure)
                     let competingLock = CrossProcessFileLock(fileURL: operationLockURL(handle))
@@ -5852,7 +5945,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     func testRevokedChainAdditionDoesNotInsertNetwork() async throws {
         let additions = LockedTestValue(0)
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
-            clock: { [clock = clock!] in clock.date }, atomicWrite: ApprovalStoreTestPersistence.write,
+            clock: { [clock = clock!] in clock.date },
+            fileIO: approvalStoreIO(directoryBoundary: rootURL),
             completeChainAddition: { _ in additions.withValue { $0 += 1 }; return true }
         ))
         let permit = try authorizeChainAddition(in: store)
@@ -5876,7 +5970,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let additions = LockedTestValue(0)
         let competingLock = CrossProcessFileLock(fileURL: rootURL.appendingPathComponent("bridge-v9.lock"))
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
-            clock: { [clock = clock!] in clock.date }, atomicWrite: ApprovalStoreTestPersistence.write,
+            clock: { [clock = clock!] in clock.date },
+            fileIO: approvalStoreIO(directoryBoundary: rootURL),
             completeChainAddition: { permit in
                 XCTAssertTrue(permit.isExecuting)
                 XCTAssertEqual(try? competingLock.tryAcquireExisting(), false)
@@ -5910,18 +6005,21 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let publications = LockedTestValue(0)
             let store = ExtensionRequestFileStore(rootURL: directory, directoryBoundary: directory, dependencies: .init(
                 clock: { [clock = clock!] in clock.date },
-                atomicWrite: { data, url in
+            fileIO: approvalStoreIO(directoryBoundary: directory) { io in
+                let baseIO = io
+                io.replace = { data, url in
                     guard failWrite.value else {
-                        return try ApprovalStoreTestPersistence.write(data, url)
+                        return try baseIO.replace(data, url)
                     }
                     publications.withValue { $0 += 1 }
-                    if writesBeforeFailing { try ApprovalStoreTestPersistence.write(data, url) }
+                    if writesBeforeFailing { try baseIO.replace(data, url) }
                     throw Failure.injectedWrite
-                },
-                synchronizePublishedFile: { url in
+                }
+                io.synchronizePublishedFile = { url in
                     if failSynchronization.value { throw Failure.injectedWrite }
-                    try ApprovalStoreTestPersistence.synchronize(url)
-                },
+                    try baseIO.synchronizePublishedFile(url)
+                }
+            },
                 completeChainAddition: { permit in
                     XCTAssertTrue(permit.isExecuting)
                     additions.withValue { $0 += 1 }
@@ -5979,14 +6077,19 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let abandonedClaim = try approvalClaim(await bridge.claim(handle: abandonedHandle))
             let publications = LockedTestValue(0)
             let synchronizations = LockedTestValue(0)
-            let writer = makeBridge(clock: { [clock = clock!] in clock.date }, atomicWrite: { data, url in
+            let writer = makeBridge(clock: { [clock = clock!] in clock.date },
+                configureIO: { io in
+                    let baseIO = io
+                    io.replace = { data, url in
                 publications.withValue { $0 += 1 }
-                if writesBeforeFailing { try ApprovalStoreTestPersistence.write(data, url) }
+                if writesBeforeFailing { try baseIO.replace(data, url) }
                 throw Failure.injectedWrite
-            }, synchronizePublishedFile: { url in
+            }
+                    io.synchronizePublishedFile = { url in
                 synchronizations.withValue { $0 += 1 }
-                try ApprovalStoreTestPersistence.synchronize(url)
-            })
+                try baseIO.synchronizePublishedFile(url)
+            }
+                })
             let first = await writer.complete(claim: claim, resolution: immediateResolution(for: fixture.request))
             XCTAssertEqual(first, .retryablePersistenceFailure)
             abandonedClaim.releaseUnapproved()
@@ -6004,7 +6107,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     func testFailedChainAdditionDoesNotChangeSelectedNetwork() async throws {
         let additions = LockedTestValue(0)
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
-            clock: { [clock = clock!] in clock.date }, atomicWrite: ApprovalStoreTestPersistence.write,
+            clock: { [clock = clock!] in clock.date },
+            fileIO: approvalStoreIO(directoryBoundary: rootURL),
             completeChainAddition: { _ in additions.withValue { $0 += 1 }; return false }
         ))
         let permit = try authorizeChainAddition(in: store)
@@ -6021,7 +6125,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     @MainActor
     func testChainAdditionFailureCompletionDoesNotInsertNetwork() async throws {
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
-            clock: { [clock = clock!] in clock.date }, atomicWrite: ApprovalStoreTestPersistence.write,
+            clock: { [clock = clock!] in clock.date },
+            fileIO: approvalStoreIO(directoryBoundary: rootURL),
             completeChainAddition: { _ in XCTFail("Failed approvals must not insert networks"); return true }
         ))
         let permit = try authorizeChainAddition(in: store)
@@ -6252,14 +6357,17 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         clock.setDate(claim.executionDeadline.addingTimeInterval(-0.01))
         let reads = LockedTestValue(0)
         let expectedProfileURL = profileURL(handle.profileIdentifier)
-        let authorizer = makeBridge(clock: { [clock = clock!] in clock.date }, readData: { url in
+        let authorizer = makeBridge(clock: { [clock = clock!] in clock.date },
+            configureIO: { io in
+                io.readData = { url in
             let data = try Data(contentsOf: url)
             if url == expectedProfileURL {
                 reads.withValue { $0 += 1 }
                 callbackClock.setDate(claim.executionDeadline)
             }
             return data
-        })
+        }
+            })
         let authorized = await authorizer.authorize(claim: claim, approval: approval)
         XCTAssertGreaterThan(reads.value, 0)
         XCTAssertEqual(authorized, .ownershipLost)
@@ -6284,8 +6392,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let expectedProfileURL = profileURL(handle.profileIdentifier)
             let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
                 clock: { callbackClock.date },
-                atomicWrite: ApprovalStoreTestPersistence.write,
-                readData: { url in
+            fileIO: approvalStoreIO(directoryBoundary: rootURL) { io in
+                io.readData = { url in
                     let data = try Data(contentsOf: url)
                     if expireDuringRead.value, url == expectedProfileURL {
                         reads.withValue { $0 += 1 }
@@ -6293,6 +6401,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     }
                     return data
                 }
+            }
             ))
             guard claim.adoptForExecution(),
                   case .authorized(let permit) = store.authorize(claim: claim, approval: approval),
@@ -6372,7 +6481,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             clock.setDate(clock.date.addingTimeInterval(2))
             let writes = LockedTestValue(0)
             let expectedOperationURL = operationLockURL(handle)
-            let writer = makeBridge(clock: { [clock = clock!] in clock.date }, atomicWrite: { data, url in
+            let writer = makeBridge(clock: { [clock = clock!] in clock.date },
+                configureIO: { io in
+                    let baseIO = io
+                    io.replace = { data, url in
                 writes.withValue { $0 += 1 }
                 let competingLock = CrossProcessFileLock(fileURL: expectedOperationURL)
                 let profile = try XCTUnwrap(PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any])
@@ -6381,8 +6493,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 let state = try XCTUnwrap(record["state"] as? [String: Any])
                 XCTAssertEqual(try competingLock.tryAcquireExisting(), state["completed"] != nil)
                 competingLock.release()
-                try ApprovalStoreTestPersistence.write(data, url)
-            })
+                try baseIO.replace(data, url)
+            }
+                })
             if boundary == "authorize" {
                 XCTAssertTrue(claim.adoptForExecution())
                 guard case .authorized(let value) = await writer.authorize(claim: claim, approval: try XCTUnwrap(approval)) else {
@@ -6431,25 +6544,29 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 ).get()
                 let processor = StorageExecutionProcessor(broadcasts: broadcasts)
                 let sender = StorageBroadcastSender()
-                let writer = makeBridge(clock: { [clock = clock!] in clock.date }, atomicWrite: { data, url in
-                    if persistsBeforeFailure { try ApprovalStoreTestPersistence.write(data, url) }
+                let writer = makeBridge(clock: { [clock = clock!] in clock.date },
+                    configureIO: { io in
+                        let baseIO = io
+                        io.replace = { data, url in
+                    if persistsBeforeFailure { try baseIO.replace(data, url) }
                     throw Failure.injectedWrite
-                })
+                }
+                    })
                 let executor = DurableApprovalExecutor(
                     store: writer,
                     environment: .init(
                         requestProcessor: processor,
-                        broadcastSender: sender,
+                        makeBroadcastSender: { _ in sender },
                         clock: { [clock = clock!] in clock.date }
                     )
                 )
                 let signing = makeWalletSigningSessionForTesting(authorization: .init(
                     handle: claim.handle,
-                    approvedAccount: try XCTUnwrap(approval.approval.signingAccount),
+                    approvedAccount: try XCTUnwrap(approval.signingAccount),
                     signingDeadline: claim.executionDeadline
                 ))
                 let result = await executor.execute(claim: claim, prepare: { _ in
-                    .ready(consent: consent, signing: .unlocked(signing))
+                    .ready(consent: consent, signing: signing)
                 }, resolve: { _ in .approved(approval) })
                 XCTAssertEqual(result, .retryablePersistenceFailure)
                 XCTAssertEqual(processor.calls, 1)
@@ -6529,11 +6646,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 let permit = try await reviewedExecution(claim)
                 let failingWriter = makeBridge(
                     clock: { [clock = clock!] in clock.date },
-                    atomicWrite: { data, url in
+                    configureIO: { io in
+                        let baseIO = io
+                        io.replace = { data, url in
                         if persistsBeforeFailure {
-                            try ApprovalStoreTestPersistence.write(data, url)
+                            try baseIO.replace(data, url)
                         }
                         throw Failure.injectedWrite
+                    }
                     }
                 )
                 let expectedResponse = checkpointsBroadcast
@@ -6577,6 +6697,129 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testCancellationAtPublicationBoundaryPreservesDurableOutcomes() async throws {
+        enum Publication: CaseIterable { case checkpoint, signature, accountGrant }
+        enum Outcome: CaseIterable { case canceledBefore, success, failedBeforeWrite, failedAfterWrite }
+        var id = 140_000
+        for native in [false, true] {
+            for publication in Publication.allCases {
+                for outcome in Outcome.allCases {
+                    id += 1
+                    let label = "native=\(native), \(publication), \(outcome)"
+                    let host = "publication-\(id).example"
+                    let account = authorityTestAccount()
+                    let fixture: Fixture
+                    switch publication {
+                    case .checkpoint:
+                        fixture = try makeTransactionFixture(id: id, host: host)
+                    case .signature:
+                        let transaction = try makeTransactionFixture(id: id, host: host)
+                        var raw = try XCTUnwrap(
+                            JSONSerialization.jsonObject(with: transaction.ingress.canonicalData) as? [String: Any])
+                        raw["name"] = "signPersonalMessage"
+                        raw["body"] = [
+                            "address": account.normalizedAddress, "chainId": "0x1", "object": ["data": "0x48656c6c6f"],
+                        ]
+                        fixture = try authorityFixture(raw)
+                    case .accountGrant:
+                        fixture = try makeFixture(id: id, name: "requestAccounts", host: host)
+                    }
+                    let handle = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
+                        .handle
+                    let claim: ExtensionBridge.ApprovalClaim
+                    if native {
+                        let receipt = try await recordNativeDelivery(handle: handle)
+                        XCTAssertEqual(receipt, .persisted, label)
+                        guard case .found(let snapshot) = await bridge.load(handle: handle) else {
+                            return XCTFail("Expected delivered request: \(label)")
+                        }
+                        let consent = try Self.reviewedConsent(snapshot, approvedAt: clock.date, accounts: [account])
+                        guard case .claimed(let acquired) = await bridge.claimNativeExecution(consent: consent) else {
+                            return XCTFail("Expected native claim: \(label)")
+                        }
+                        claim = acquired
+                        nativeClaimConsents.withValue { $0.append((claim, consent)) }
+                    } else {
+                        claim = try approvalClaim(await bridge.claim(handle: handle))
+                    }
+                    let execution = try await reviewedExecution(claim, accounts: [account])
+                    let expectedResponse = publication == .checkpoint ? execution.recoveryResponse : execution.response
+                    let writes = LockedTestValue(0)
+                    let writer = makeBridge(
+                        clock: { [clock = clock!] in clock.date },
+                        configureIO: { io in
+                            let baseIO = io
+                            io.replace = { data, url in
+                                writes.withValue { $0 += 1 }
+                                withUnsafeCurrentTask { $0?.cancel() }
+                                if outcome != .failedBeforeWrite { try baseIO.replace(data, url) }
+                                if outcome != .success { throw Failure.injectedWrite }
+                            }
+                        })
+                    let operation = Task {
+                        if outcome == .canceledBefore { withUnsafeCurrentTask { $0?.cancel() } }
+                        if publication == .checkpoint {
+                            return await prepareReviewedBroadcast(execution, in: writer)
+                        }
+                        return await completeReviewedExecution(execution, in: writer)
+                    }
+                    let result = await operation.value
+                    XCTAssertTrue(operation.isCancelled, label)
+                    switch outcome {
+                    case .canceledBefore:
+                        XCTAssertEqual(result, .ownershipLost, label)
+                        XCTAssertEqual(writes.value, 0, label)
+                    case .success:
+                        XCTAssertEqual(result, .persisted, label)
+                        XCTAssertEqual(writes.value, 1, label)
+                    case .failedBeforeWrite, .failedAfterWrite:
+                        XCTAssertEqual(result, .retryablePersistenceFailure, label)
+                        XCTAssertEqual(writes.value, 1, label)
+                    }
+                    if publication == .checkpoint, outcome == .success {
+                        let dispatch = try XCTUnwrap(execution.dispatch)
+                        XCTAssertTrue(dispatch.consume(), label)
+                        XCTAssertFalse(dispatch.consume(), label)
+                    } else {
+                        XCTAssertNil(execution.dispatch, label)
+                    }
+                    execution.releaseLease()
+                    guard case .found(let recovered) = await bridge.load(handle: handle) else {
+                        return XCTFail("Expected recoverable publication: \(label)")
+                    }
+                    let wasWritten = outcome == .success || outcome == .failedAfterWrite
+                    XCTAssertEqual(recovered.phase, wasWritten || native ? .responded : .queued, label)
+                    if wasWritten {
+                        let response = try responseJSON(
+                            await bridge.prepareResponseDelivery(
+                                id: handle.id, configurationKey: fixture.request.configurationKey,
+                                requestToken: handle.requestToken, profileIdentifier: nil
+                            ))
+                        XCTAssertEqual(response as NSDictionary, expectedResponse.json as NSDictionary, label)
+                    }
+                    if publication == .accountGrant {
+                        guard case .snapshot(let authority) = await bridge.configurationSnapshot(
+                            configurationKey: fixture.request.configurationKey, profileIdentifier: nil
+                        ) else { return XCTFail("Expected retained authority: \(label)") }
+                        XCTAssertEqual(authority.ethereumAccount, wasWritten ? account : nil, label)
+                    }
+                    if recovered.phase == .queued {
+                        let freshClaim = try approvalClaim(await bridge.claim(handle: handle))
+                        XCTAssertTrue(freshClaim.adoptForExecution(), label)
+                        let reused = await bridge.authorize(claim: freshClaim, approval: execution.approval)
+                        XCTAssertEqual(reused, .ownershipLost, label)
+                        let abandoned = await bridge.abandon(claim: freshClaim)
+                        XCTAssertEqual(abandoned, .persisted, label)
+                    } else {
+                        let terminal = await bridge.claim(handle: handle)
+                        XCTAssertEqual(terminal, .responded, label)
+                    }
+                }
+            }
+        }
+    }
+
     func testContainerStoreSynchronizesEveryCreatedAncestorAndRetriesResponseBarrier() throws {
         let container = rootURL.standardizedFileURL
         let library = container.appendingPathComponent("Library", isDirectory: true)
@@ -6609,7 +6852,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
         let store = ExtensionRequestFileStore(
             containerURL: container,
-            dependencies: .init(clock: { [clock = clock!] in clock.date }, persistenceOperations: operations)
+            dependencies: .init(clock: { [clock = clock!] in clock.date },
+                fileIO: ExtensionRequestStoreFiles.IO(
+                    persistence: DurableProfilePersistence(directoryBoundary: container, operations: operations)
+                ))
         )
         let template = try makeFixture(id: 982)
         guard case .snapshot(let snapshot) = store.configurationSnapshot(configurationKey: template.request.configurationKey, profileIdentifier: nil) else { return XCTFail("Expected container authority") }
@@ -6691,14 +6937,17 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let synchronizedURLs = LockedTestValue([URL]())
         let observer = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { data, url in
+            configureIO: { io in
+                let baseIO = io
+                io.replace = { data, url in
                 try data.write(to: url, options: .atomic)
                 throw Failure.injectedWrite
-            },
-            synchronizePublishedFile: { url in
+            }
+                io.synchronizePublishedFile = { url in
                 synchronizedURLs.withValue { $0.append(url) }
                 if failSynchronization.value { throw Failure.injectedWrite }
-                try ApprovalStoreTestPersistence.synchronize(url)
+                try baseIO.synchronizePublishedFile(url)
+            }
             }
         )
 
@@ -6747,16 +6996,19 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let expectedProfileURL = profileURL(profileIdentifier)
             let writer = makeBridge(
                 clock: { [clock = clock!] in clock.date },
-                atomicWrite: { data, url in
+                configureIO: { io in
+                    let baseIO = io
+                    io.replace = { data, url in
                     publications.withValue { $0 += 1 }
                     try data.write(to: url, options: .atomic)
                     throw Failure.injectedWrite
-                },
-                synchronizePublishedFile: { url in
+                }
+                    io.synchronizePublishedFile = { url in
                     synchronizationAttempts.withValue { $0 += 1 }
                     XCTAssertEqual(url, expectedProfileURL)
                     if failSynchronization.value { throw Failure.injectedWrite }
-                    try ApprovalStoreTestPersistence.synchronize(url)
+                    try baseIO.synchronizePublishedFile(url)
+                }
                 }
             )
             func commit() async -> ExtensionBridge.StoreMutationResult {
@@ -6811,14 +7063,17 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let synchronizationAttempts = LockedTestValue(0)
         let writer = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { data, url in
+            configureIO: { io in
+                let baseIO = io
+                io.replace = { data, url in
                 try data.write(to: url, options: .atomic)
                 throw Failure.injectedWrite
-            },
-            synchronizePublishedFile: { url in
+            }
+                io.synchronizePublishedFile = { url in
                 synchronizationAttempts.withValue { $0 += 1 }
                 if failSynchronization.value { throw Failure.injectedWrite }
-                try ApprovalStoreTestPersistence.synchronize(url)
+                try baseIO.synchronizePublishedFile(url)
+            }
             }
         )
         let first = await writer.acknowledgeResponse(
@@ -6868,12 +7123,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(prepared, .persisted)
         let failingWriter = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { data, url in
+            configureIO: { io in
+                io.replace = { data, url in
                 try data.write(to: url, options: .atomic)
                 throw Failure.injectedWrite
-            },
-            synchronizePublishedFile: { _ in throw Failure.injectedWrite }
-        )
+            }
+                io.synchronizePublishedFile = { _ in throw Failure.injectedWrite }
+            })
         let rejected = await failingWriter.reject(handle: otherHandle)
         XCTAssertEqual(rejected, .retryablePersistenceFailure)
         let repeatedCheckpoint = await prepareReviewedBroadcast(permit, in: failingWriter)
@@ -6916,27 +7172,31 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             synchronizationAttempts.withValue { $0 += 1 }
             throw Failure.injectedWrite
         }
-        let writer = makeBridge(clock: { [clock = clock!] in clock.date }, atomicWrite: { data, url in
+        let writer = makeBridge(clock: { [clock = clock!] in clock.date },
+            configureIO: { io in
+                io.replace = { data, url in
             try data.write(to: url, options: .atomic)
             try synchronize(url)
-        }, synchronizePublishedFile: synchronize)
+        }
+                io.synchronizePublishedFile = synchronize
+            })
         let processor = StorageExecutionProcessor(broadcasts: true)
         let sender = StorageBroadcastSender()
         let executor = DurableApprovalExecutor(
             store: writer,
             environment: .init(
                 requestProcessor: processor,
-                broadcastSender: sender,
+                makeBroadcastSender: { _ in sender },
                 clock: { [clock = clock!] in clock.date }
             )
         )
         let signing = makeWalletSigningSessionForTesting(authorization: .init(
             handle: claim.handle,
-            approvedAccount: try XCTUnwrap(approval.approval.signingAccount),
+            approvedAccount: try XCTUnwrap(approval.signingAccount),
             signingDeadline: claim.executionDeadline
         ))
         let result = await executor.execute(claim: claim, prepare: { _ in
-            .ready(consent: consent, signing: .unlocked(signing))
+            .ready(consent: consent, signing: signing)
         }, resolve: { _ in .approved(approval) })
         XCTAssertEqual(result, .retryablePersistenceFailure)
         XCTAssertEqual(synchronizationAttempts.value, 1)
@@ -6967,10 +7227,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let failSynchronization = LockedTestValue(true)
         let observer = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { _, _ in XCTFail("An exact native retry must not rewrite the profile") },
-            synchronizePublishedFile: { url in
+            configureIO: { io in
+                let baseIO = io
+                io.replace = { _, _ in XCTFail("An exact native retry must not rewrite the profile") }
+                io.synchronizePublishedFile = { url in
                 if failSynchronization.value { throw Failure.injectedWrite }
-                try ApprovalStoreTestPersistence.synchronize(url)
+                try baseIO.synchronizePublishedFile(url)
+            }
             }
         )
         for expected in [ExtensionBridge.StoreMutationResult.retryablePersistenceFailure, .persisted] {
@@ -7637,11 +7900,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let failWrites = LockedTestValue(false)
         bridge = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { data, url in
+            configureIO: { io in
+                let baseIO = io
+                io.replace = { data, url in
                 if failWrites.value, url.pathExtension == "state" {
                     throw Failure.injectedWrite
                 }
-                try ApprovalStoreTestPersistence.write(data, url)
+                try baseIO.replace(data, url)
+            }
             }
         )
         let fixture = try makeFixture(id: 719, name: "requestAccounts")
@@ -9460,16 +9726,19 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let failSynchronization = LockedTestValue(true)
         let writer = makeBridge(
             clock: { [clock = clock!] in clock.date },
-            atomicWrite: { data, url in
+            configureIO: { io in
+                let baseIO = io
+                io.replace = { data, url in
                 writes.withValue { $0 += 1 }
                 try data.write(to: url, options: .atomic)
                 throw Failure.injectedWrite
-            },
-            synchronizePublishedFile: { url in
+            }
+                io.synchronizePublishedFile = { url in
                 synchronizationAttempts.withValue { $0 += 1 }
                 XCTAssertEqual(url, callbackProfileURL, file: file, line: line)
                 if failSynchronization.value { throw Failure.injectedWrite }
-                try ApprovalStoreTestPersistence.synchronize(url)
+                try baseIO.synchronizePublishedFile(url)
+            }
             }
         )
         guard case .unavailable = await writer.enqueue(
@@ -9507,25 +9776,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
     private func makeBridge(
         clock: @escaping @Sendable () -> Date = { Date() },
-        atomicWrite: @escaping ExtensionRequestFileStore.AtomicWrite =
-            ApprovalStoreTestPersistence.write,
-        synchronizePublishedFile: @escaping @Sendable (URL) throws -> Void =
-            ApprovalStoreTestPersistence.synchronize,
-        readData: @escaping ExtensionRequestFileStore.ReadData =
-            ExtensionRequestFileStore.defaultReadData,
-        readFileSize: @escaping ExtensionRequestFileStore.ReadFileSize =
-            ExtensionRequestFileStore.defaultReadFileSize
+        configureIO: (inout ExtensionRequestStoreFiles.IO) -> Void = { _ in }
     ) -> ExtensionBridge {
         ExtensionBridge(store: ExtensionRequestFileStore(
             rootURL: rootURL,
             directoryBoundary: rootURL,
             dependencies: .init(
-                clock: clock,
-                atomicWrite: atomicWrite,
-                synchronizePublishedFile: synchronizePublishedFile,
-                readData: readData,
-                readFileSize: readFileSize
-            )
+                clock: clock, fileIO: approvalStoreIO(directoryBoundary: rootURL, configure: configureIO))
         ))
     }
 
@@ -9627,7 +9884,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     private func authorityVersion(_ configurationKey: String, profileIdentifier: UUID? = nil) throws -> ExtensionBridge.AuthorityVersion {
         let key = (profileIdentifier?.uuidString ?? "default") + configurationKey
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL,
-            dependencies: .init(clock: { [clock = clock!] in clock.date }, atomicWrite: ApprovalStoreTestPersistence.write))
+            dependencies: .init(clock: { [clock = clock!] in clock.date },
+            fileIO: approvalStoreIO(directoryBoundary: rootURL)
+        ))
         if case .snapshot(let snapshot) = store.configurationSnapshot(configurationKey: configurationKey, profileIdentifier: profileIdentifier) {
             knownAuthority[key] = snapshot.version
             return snapshot.version

@@ -193,7 +193,7 @@ struct DappRequestProcessor: DappRequestProcessing {
     nonisolated static func accountSelectionResponse(
         request: SafariRequest,
         action: SelectAccountAction,
-        selection: DappApprovalValidator.Selection,
+        selection: ResolvedDappApproval.Selection,
         fallbackNetwork: () -> EthereumNetwork? = { Networks.ethereum }
     ) -> ResponseToExtension {
         let accounts = selection.accounts

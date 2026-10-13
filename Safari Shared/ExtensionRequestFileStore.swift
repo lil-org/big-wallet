@@ -8,11 +8,6 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         case unavailable
     }
 
-    typealias AtomicWrite = @Sendable (Data, URL) throws -> Void
-    typealias SynchronizePublishedFile = @Sendable (URL) throws -> Void
-    typealias ReadData = @Sendable (URL) throws -> Data
-    typealias ReadFileSize = @Sendable (URL) throws -> Int?
-    typealias RemoveItem = @Sendable (URL) throws -> Void
     typealias CompleteChainAddition = @Sendable (ExtensionBridge.ApprovedExecutionPermit) -> Bool
     typealias ResolveImmediate = @Sendable (ImmediateResolution, SafariRequest) -> ResponseToExtension?
 
@@ -23,12 +18,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         let crossProcessLock: CrossProcessFileLock?
         let crossProcessLockTimeoutNanoseconds: UInt64
         let crossProcessLockPollNanoseconds: UInt64
-        let atomicWrite: AtomicWrite?
-        let synchronizePublishedFile: SynchronizePublishedFile?
-        let persistenceOperations: DurableProfilePersistence.Operations
-        let readData: ReadData
-        let readFileSize: ReadFileSize
-        let removeItem: RemoveItem
+        let fileIO: ExtensionRequestStoreFiles.IO?
         let completeChainAddition: CompleteChainAddition
         let resolveImmediate: ResolveImmediate
 
@@ -39,12 +29,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             crossProcessLock: CrossProcessFileLock? = nil,
             crossProcessLockTimeoutNanoseconds: UInt64 = 1_000_000_000,
             crossProcessLockPollNanoseconds: UInt64 = 10_000_000,
-            atomicWrite: AtomicWrite? = nil,
-            synchronizePublishedFile: SynchronizePublishedFile? = nil,
-            persistenceOperations: DurableProfilePersistence.Operations = .live,
-            readData: @escaping ReadData = { try ExtensionRequestFileStore.defaultReadData($0) },
-            readFileSize: @escaping ReadFileSize = { try ExtensionRequestFileStore.defaultReadFileSize($0) },
-            removeItem: @escaping RemoveItem = { try ExtensionRequestFileStore.defaultRemoveItem($0) },
+            fileIO: ExtensionRequestStoreFiles.IO? = nil,
             completeChainAddition: @escaping CompleteChainAddition =
                 { EthereumDappRequestProcessor.completeApprovedChainAddition(permit: $0) },
             resolveImmediate: @escaping ResolveImmediate = { $0.response(for: $1) }
@@ -55,12 +40,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             self.crossProcessLock = crossProcessLock
             self.crossProcessLockTimeoutNanoseconds = crossProcessLockTimeoutNanoseconds
             self.crossProcessLockPollNanoseconds = crossProcessLockPollNanoseconds
-            self.atomicWrite = atomicWrite
-            self.synchronizePublishedFile = synchronizePublishedFile
-            self.persistenceOperations = persistenceOperations
-            self.readData = readData
-            self.readFileSize = readFileSize
-            self.removeItem = removeItem
+            self.fileIO = fileIO
             self.completeChainAddition = completeChainAddition
             self.resolveImmediate = resolveImmediate
         }
@@ -92,19 +72,6 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     private typealias ValidatedProfile = ExtensionRequestProfile
     private typealias ReceiptIdentity = ExtensionRequestProfile.ReceiptIdentity
     private typealias WriteFailureRecovery = ExtensionRequestStoreFiles.WriteFailureRecovery
-
-    static func defaultReadData(_ url: URL) throws -> Data {
-        try Data(contentsOf: url)
-    }
-
-    static func defaultReadFileSize(_ url: URL) throws -> Int? {
-        let values = try url.resourceValues(forKeys: [.fileSizeKey])
-        return values.fileSize
-    }
-
-    static func defaultRemoveItem(_ url: URL) throws {
-        try FileManager.default.removeItem(at: url)
-    }
 
     convenience init(
         containerURL: URL?,
@@ -1845,7 +1812,7 @@ extension ExtensionBridge {
 
     final class ApprovedExecutionPermit: Equatable, Sendable {
         fileprivate let claim: ApprovalClaim
-        private let resolvedApproval: ResolvedDappApproval
+        let approval: ResolvedDappApproval
         private let authorityStore: ExtensionRequestFileStore
         private let clock: @Sendable () -> Date
 
@@ -1855,7 +1822,6 @@ extension ExtensionBridge {
         var request: SafariRequest { claim.request }
         var authority: ExecutionAuthority { claim.authority }
         var executionDeadline: Date { claim.executionDeadline }
-        var approval: DappApprovalValidator.Approval { resolvedApproval.approval }
 
         fileprivate init(
             claim: ApprovalClaim,
@@ -1864,7 +1830,7 @@ extension ExtensionBridge {
             authorityStore: ExtensionRequestFileStore
         ) {
             self.claim = claim
-            resolvedApproval = approval
+            self.approval = approval
             self.clock = clock
             self.authorityStore = authorityStore
         }

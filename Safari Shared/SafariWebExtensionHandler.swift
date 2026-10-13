@@ -53,17 +53,10 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 case .admission: nativeIntent = .admission
                 case .focus: nativeIntent = .focus
                 }
-                let result = await NativeApprovalService.live.reconcile(
+                        return await NativeApprovalService.live.reconcile(
                     .init(handle: reference.handle, configurationKey: reference.configurationKey, expectedNonce: reference.expectedNonce),
                     intent: nativeIntent
                 )
-                switch result {
-                case .pending: return .pending
-                case .responseReady: return .responseReady
-                case .opened: return .opened
-                case .missing: return .missing
-                case .unavailable: return .unavailable
-                }
 #else
                 return .unavailable
 #endif

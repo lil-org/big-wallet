@@ -270,32 +270,35 @@ final class WalletSigningSessionTests: XCTestCase {
     }
 
     func testInvalidationDisposesOfLeaseArrivingAfterAcquisitionStarted() async throws {
-        let permit = try permit()
-        let material = SessionSigningMaterial()
-        let acquisitionStarted = expectation(description: "Acquisition started")
-        let released = expectation(description: "Late lease released")
-        let resolution = ApprovalResolution<WalletExecutionLease?>()
-        let session = makeWalletSigningSessionForTesting(
-            authorization: try XCTUnwrap(WalletSigningAuthorization(permit: permit)),
-            sign: { operation, _ in await material.sign(operation) },
-            retireSigningMaterial: material.invalidate,
-            acquireCommitLease: {
-                acquisitionStarted.fulfill()
-                return await resolution.value()
-            }
-        )
-        XCTAssertTrue(session.attach(permit: permit))
-        let acquisition = Task { await session.takeCommitLease() }
-        await fulfillment(of: [acquisitionStarted], timeout: 1)
-        XCTAssertEqual(material.erasureCount, 1)
-        session.invalidate()
-        await resolution.resolve(WalletExecutionLease { released.fulfill() })
+        for cancelTask in [false, true] {
+            let permit = try permit()
+            let material = SessionSigningMaterial()
+            let acquisitionStarted = expectation(description: "Acquisition started")
+            let released = expectation(description: "Late lease released")
+            let resolution = ApprovalResolution<WalletExecutionLease?>()
+            let session = makeWalletSigningSessionForTesting(
+                authorization: try XCTUnwrap(WalletSigningAuthorization(permit: permit)),
+                sign: { operation, _ in await material.sign(operation) },
+                retireSigningMaterial: material.invalidate,
+                acquireCommitLease: {
+                    acquisitionStarted.fulfill()
+                    return await resolution.value()
+                }
+            )
+            XCTAssertTrue(session.attach(permit: permit))
+            let acquisition = Task { await session.takeCommitLease() }
+            await fulfillment(of: [acquisitionStarted], timeout: 1)
+            XCTAssertEqual(material.erasureCount, 1)
+            if cancelTask { acquisition.cancel() } else { session.invalidate() }
+            await resolution.resolve(WalletExecutionLease { released.fulfill() })
 
-        let lease = await acquisition.value
-        XCTAssertNil(lease)
-        await fulfillment(of: [released], timeout: 1)
-        XCTAssertFalse(session.validateCurrent())
-        XCTAssertEqual(material.erasureCount, 1)
+            let lease = await acquisition.value
+            XCTAssertNil(lease)
+            await fulfillment(of: [released], timeout: 1)
+            XCTAssertFalse(session.validateCurrent())
+            XCTAssertEqual(material.erasureCount, 1)
+
+        }
     }
 
     func testCommitAcquisitionFencesSignatureAlreadyBeingProduced() async throws {

@@ -212,17 +212,17 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         let now = LockedTestValue(Date(timeIntervalSince1970: 1_800_000_000))
         let writes = LockedTestValue(0)
         let synchronizations = LockedTestValue(0)
-        let (root, store) = try makeStore(dependencies: .init(
-            clock: { now.value },
-            atomicWrite: { data, url in
+        let (root, store) = try makeStore(clock: { now.value }) { io in
+            let baseIO = io
+            io.replace = { data, url in
                 writes.withValue { $0 += 1 }
-                try ApprovalStoreTestPersistence.write(data, url)
-            },
-            synchronizePublishedFile: { url in
-                synchronizations.withValue { $0 += 1 }
-                try ApprovalStoreTestPersistence.synchronize(url)
+                try baseIO.replace(data, url)
             }
-        ))
+            io.synchronizePublishedFile = { url in
+                synchronizations.withValue { $0 += 1 }
+                try baseIO.synchronizePublishedFile(url)
+            }
+        }
         let handle = try enqueue(store: store, now: now.value)
         now.withValue { $0.addTimeInterval(151) }
         let profileURL = root.appendingPathComponent("profiles-v9/default.state")
@@ -247,15 +247,14 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let failSynchronization = LockedTestValue(false)
         let synchronizations = LockedTestValue(0)
-        let (_, store) = try makeStore(dependencies: .init(
-            clock: { now },
-            atomicWrite: ApprovalStoreTestPersistence.write,
-            synchronizePublishedFile: { url in
+        let (_, store) = try makeStore(clock: { now }) { io in
+            let baseIO = io
+            io.synchronizePublishedFile = { url in
                 synchronizations.withValue { $0 += 1 }
                 if failSynchronization.value { throw CocoaError(.fileWriteUnknown) }
-                try ApprovalStoreTestPersistence.synchronize(url)
+                try baseIO.synchronizePublishedFile(url)
             }
-        ))
+        }
         let handle = try enqueue(store: store, now: now)
         XCTAssertEqual(store.completeImmediate(handle: handle, resolution: .failure(.userRejected)), .persisted)
         let poller = storePoller(store)
@@ -392,14 +391,22 @@ final class ResponseDeliveryPollerTests: XCTestCase {
     }
 
     private func makeStore(
-        dependencies: ExtensionRequestFileStore.Dependencies
+        clock: @escaping @Sendable () -> Date,
+        configureIO: (inout ExtensionRequestStoreFiles.IO) -> Void = { _ in }
     ) throws -> (URL, ExtensionRequestFileStore) {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(
             "response-poll-\(UUID().uuidString)", isDirectory: true
         )
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         addTeardownBlock { try FileManager.default.removeItem(at: root) }
-        return (root, ExtensionRequestFileStore(rootURL: root, directoryBoundary: root, dependencies: dependencies))
+        return (
+            root,
+            ExtensionRequestFileStore(
+                rootURL: root, directoryBoundary: root,
+                dependencies: .init(
+                    clock: clock, fileIO: approvalStoreIO(directoryBoundary: root, configure: configureIO)
+                ))
+        )
     }
 
     private func enqueue(store: ExtensionRequestFileStore, now: Date) throws -> ExtensionBridge.Handle {

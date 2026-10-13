@@ -110,7 +110,7 @@ final class DappRequestProcessorTests: XCTestCase {
             )
         )
         let result = await executor.execute(claim: claim, prepare: { _ in
-            .ready(consent: consent, signing: .none)
+            .ready(consent: consent, signing: nil)
         }, resolve: { _ in .abandon })
         XCTAssertEqual(result, .abandoned)
         let context = ApprovalResolutionContext(
@@ -198,7 +198,7 @@ final class DappRequestProcessorTests: XCTestCase {
                 accounts: catalog.orderedAccounts
             )
         ).get()
-        guard case .signing(_, .signature(.ethereumPersonalMessage(let data))) = resolved.approval.kind else {
+        guard case .signing(_, .signature(.ethereumPersonalMessage(let data))) = resolved.kind else {
             return XCTFail("Expected the canonical message payload")
         }
         XCTAssertEqual(data, Data([1]))
@@ -359,7 +359,7 @@ final class DappRequestProcessorTests: XCTestCase {
             return .unavailable
         })
         guard case .approved(let resolved) = result,
-              case .accountSelection(_, let selection) = resolved.approval.kind else {
+              case .accountSelection(_, let selection) = resolved.kind else {
             return XCTFail("Expected an approved disconnect")
         }
         XCTAssertTrue(selection.accounts.isEmpty)
@@ -386,7 +386,7 @@ final class DappRequestProcessorTests: XCTestCase {
             }, networkResolver: { _ in networkState })
             switch (networkState, result) {
             case (.missing, .approved(let resolved)):
-                guard case .addEthereumChain = resolved.approval.kind else { return XCTFail("Expected chain addition") }
+                guard case .addEthereumChain = resolved.kind else { return XCTFail("Expected chain addition") }
             case (.unavailable, .reviewRequired): break
             default: XCTFail("Expected approval or fresh review according to network availability")
             }
@@ -413,7 +413,7 @@ final class DappRequestProcessorTests: XCTestCase {
         guard case .success(let resolved) = result else {
             return XCTFail("Accepted execution fields must remain ready: \(result)")
         }
-        guard case .signing(_, .ethereumTransaction(let transaction, let network)) = resolved.approval.kind else {
+        guard case .signing(_, .ethereumTransaction(let transaction, let network)) = resolved.kind else {
             return XCTFail("Expected the accepted transaction")
         }
         XCTAssertEqual(transaction.nonce, accepted.nonce)
@@ -464,7 +464,7 @@ final class DappRequestProcessorTests: XCTestCase {
                 accounts: processorCatalog(accounts: [account]).orderedAccounts
             )
         ).get()
-        guard case .signing(_, .solanaSerializedBroadcast(let transaction, let retainedOptions, let cluster)) = resolved.approval.kind else {
+        guard case .signing(_, .solanaSerializedBroadcast(let transaction, let retainedOptions, let cluster)) = resolved.kind else {
             return XCTFail("Expected serialized Solana signing payload")
         }
         let signed = try XCTUnwrap(Solana.signedTransactionForSignAndSend(
@@ -869,7 +869,7 @@ final class DappRequestProcessorTests: XCTestCase {
             XCTAssertEqual(Solana.transactionSignature(signedTransaction: validatedBytes), validatedSignature)
             let checkpointed = PreparedBroadcast(signed: signed)
             let other = PreparedBroadcast(signed: signed)
-            let unrelated = try processorPermit(request: permit.request, approval: permit.approval)
+            let unrelated = try processorPermit(request: permit.request, approval: permit.approval.kind)
             defer { unrelated.releaseLease() }
             XCTAssertNil(checkpointed.recoveryCompletion(for: unrelated))
             let substitutedResult = await DappRequestProcessor().execute(
@@ -1072,7 +1072,7 @@ final class DappRequestProcessorTests: XCTestCase {
             return XCTFail("A batch must produce a response")
         }
         let batchResponse = try XCTUnwrap(batchCompletion.response(for: batchPermit))
-        guard case .signing(_, .signature(.solanaTransactions(let transactions))) = batchApproval.kind else {
+        guard case .signing(_, .signature(.solanaTransactions(let transactions))) = batchApproval else {
             return XCTFail("Expected approved Solana transaction messages")
         }
         let signatures = try XCTUnwrap(batchResponse.json["result"] as? [String])
@@ -1089,7 +1089,7 @@ final class DappRequestProcessorTests: XCTestCase {
     private func processorMessageApproval(
         coin: WalletCoin,
         batch: Bool = false
-    ) throws -> (SafariRequest, DappApprovalValidator.Approval) {
+    ) throws -> (SafariRequest, ResolvedDappApproval.Kind) {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
         let account = processorAccount(privateKey: key, coin: coin)
         let request: SafariRequest
@@ -1332,7 +1332,7 @@ final class DappRequestProcessorTests: XCTestCase {
                     continue
                 }
                 let approval = try result.get()
-                guard case .signing(let approvedAccount, let approvedPayload) = approval.kind else {
+                guard case .signing(let approvedAccount, let approvedPayload) = approval else {
                     return XCTFail("Expected a resolved signing payload")
                 }
                 XCTAssertEqual(approvedAccount, descriptor)
@@ -1506,7 +1506,7 @@ final class DappRequestProcessorTests: XCTestCase {
                 accounts: [.init(walletId: action.walletId, account: action.account)],
                 transactionNetwork: action.resolvedNetwork
             )
-        ), case .signing(let approvedAccount, .ethereumTransaction(let rebuilt, let approvedNetwork)) = approval.kind else {
+        ), case .signing(let approvedAccount, .ethereumTransaction(let rebuilt, let approvedNetwork)) = approval else {
             return XCTFail("Expected a ready reconstructed transaction")
         }
         XCTAssertEqual(approvedAccount, execution.approvedAccount)
@@ -1716,7 +1716,7 @@ final class DappRequestProcessorTests: XCTestCase {
 
     private func executeProcessor(
         request: SafariRequest,
-        approval: DappApprovalValidator.Approval,
+        approval: ResolvedDappApproval.Kind,
         signer: (any WalletSigning)?
     ) async throws -> (ExtensionBridge.ApprovedExecutionPermit, ApprovedExecutionResult) {
         let permit = try processorPermit(request: request, approval: approval)
@@ -1726,7 +1726,7 @@ final class DappRequestProcessorTests: XCTestCase {
 
     private func processorPermit(
         request: SafariRequest,
-        approval: DappApprovalValidator.Approval
+        approval: ResolvedDappApproval.Kind
     ) throws -> ExtensionBridge.ApprovedExecutionPermit {
         let fixture = try ApprovedExecutionTestFixture()
         if let account = request.authorizedAccount, account.isValid {
@@ -1735,7 +1735,7 @@ final class DappRequestProcessorTests: XCTestCase {
         let action: DappRequestAction
         let decision: DappApprovalDecision
         var accounts: [SpecificWalletAccount]?
-        switch approval.kind {
+        switch approval {
         case .accountSelection(let selectionAction, let selection):
             action = request.provider == .unknown ? .switchAccount(selectionAction) : .selectAccount(selectionAction)
             decision = .accountSelection(.init(

@@ -8,12 +8,13 @@ enum NativeApprovalFinalizationResult: Equatable {
 
 @MainActor
 final class NativeApprovalFinalizer {
+    typealias SigningSessionFactory = @MainActor @Sendable (WalletSigningAuthorization) -> WalletSigningSession
 
     static let shared = NativeApprovalFinalizer(store: ExtensionBridge.shared)
 
     private let store: NativeApprovalStore
     private let refreshWalletCatalog: @MainActor () async -> WalletReviewCatalog?
-    private let makeSigner: DurableApprovalExecutor.SourceSignerFactory
+    private let makeSigningSession: SigningSessionFactory
     private let networkResolver: (Int) -> ApprovalNetworkResolution
     private let customDefinitionResult: @MainActor @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult
     private let executor: DurableApprovalExecutor
@@ -25,7 +26,7 @@ final class NativeApprovalFinalizer {
             guard await WalletsManager.shared.start() else { return nil }
             return WalletsManager.shared.reviewCatalog()
         },
-        makeSigner: DurableApprovalExecutor.SourceSignerFactory? = nil,
+        makeSigningSession: SigningSessionFactory? = nil,
         networkResolver: @escaping (Int) -> ApprovalNetworkResolution = {
             NetworkResolver.main.approvalResolution(chainId: $0)
         },
@@ -36,7 +37,7 @@ final class NativeApprovalFinalizer {
         self.store = store
         self.refreshWalletCatalog = refreshWalletCatalog
         let clock = executionEnvironment.clock
-        self.makeSigner = makeSigner ?? { authorization in
+        self.makeSigningSession = makeSigningSession ?? { authorization in
             WalletSigningSession.fromSource(
                 authorization: authorization,
                 clock: clock
@@ -66,9 +67,20 @@ final class NativeApprovalFinalizer {
             consent.invalidateAuthorization()
             return .interruptionRequired
         }
-        let result = await executor.execute(claim: claim, prepare: { _ in
-            .ready(consent: consent, signing: .source(self.makeSigner))
-        }, resolve: resolve)
+        defer { consent.invalidateAuthorization() }
+        let result = await executor.execute(
+            claim: claim,
+            prepare: { _ in
+                let signing = consent.intent.action.signingAccount.map { account in
+                    self.makeSigningSession(WalletSigningAuthorization(
+                        handle: claim.handle, approvedAccount: account,
+                        signingDeadline: claim.authority.signingDeadline(for: claim.request)
+                    ))
+                }
+                return .ready(consent: consent, signing: signing)
+            },
+            resolve: resolve
+        )
         switch result {
         case .persisted:
             return .responseReady

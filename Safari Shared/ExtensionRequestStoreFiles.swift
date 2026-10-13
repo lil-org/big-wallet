@@ -3,12 +3,33 @@
 import Foundation
 
 final class ExtensionRequestStoreFiles: Sendable {
-    private typealias AtomicWrite = ExtensionRequestFileStore.AtomicWrite
-    private typealias SynchronizePublishedFile = ExtensionRequestFileStore.SynchronizePublishedFile
-    private typealias ReadData = ExtensionRequestFileStore.ReadData
-    private typealias ReadFileSize = ExtensionRequestFileStore.ReadFileSize
-    private typealias RemoveItem = ExtensionRequestFileStore.RemoveItem
     private typealias WalletAuthorityRemovalError = ExtensionRequestFileStore.WalletAuthorityRemovalError
+
+    struct IO: Sendable {
+        var replace: @Sendable (Data, URL) throws -> Void
+        var synchronizePublishedFile: @Sendable (URL) throws -> Void
+        var readData: @Sendable (URL) throws -> Data
+        var readFileSize: @Sendable (URL) throws -> Int?
+        var removeItem: @Sendable (URL) throws -> Void
+
+        init(persistence: DurableProfilePersistence?) {
+            replace = { data, url in
+                guard let persistence else { throw CocoaError(.fileWriteUnknown) }
+                try persistence.replace(data, at: url)
+            }
+            synchronizePublishedFile = { url in
+                guard let persistence else { throw CocoaError(.fileWriteUnknown) }
+                try persistence.synchronizePublishedFile(at: url)
+            }
+            readData = { try Data(contentsOf: $0) }
+            readFileSize = { try $0.resourceValues(forKeys: [.fileSizeKey]).fileSize }
+            removeItem = { try FileManager.default.removeItem(at: $0) }
+        }
+
+        static func live(directoryBoundary: URL?) -> Self {
+            Self(persistence: directoryBoundary.map { DurableProfilePersistence(directoryBoundary: $0) })
+        }
+    }
 
     enum ProfileDataRead {
         case missing
@@ -56,11 +77,7 @@ final class ExtensionRequestStoreFiles: Sendable {
     private let storeLock: CrossProcessFileLock?
     private let lockTimeout: UInt64
     private let lockPoll: UInt64
-    private let atomicWrite: AtomicWrite
-    private let synchronizePublishedFile: SynchronizePublishedFile
-    private let readData: ReadData
-    private let readFileSize: ReadFileSize
-    private let removeItem: RemoveItem
+    private let io: IO
     private var fileManager: FileManager { FileManager.default }
 
     init(
@@ -71,23 +88,7 @@ final class ExtensionRequestStoreFiles: Sendable {
         self.rootURL = rootURL
         lockTimeout = dependencies.crossProcessLockTimeoutNanoseconds
         lockPoll = dependencies.crossProcessLockPollNanoseconds
-        let persistence = directoryBoundary.map {
-            DurableProfilePersistence(
-                directoryBoundary: $0,
-                operations: dependencies.persistenceOperations
-            )
-        }
-        atomicWrite = dependencies.atomicWrite ?? { data, url in
-            guard let persistence else { throw CocoaError(.fileWriteUnknown) }
-            try persistence.replace(data, at: url)
-        }
-        synchronizePublishedFile = dependencies.synchronizePublishedFile ?? { url in
-            guard let persistence else { throw CocoaError(.fileWriteUnknown) }
-            try persistence.synchronizePublishedFile(at: url)
-        }
-        readData = dependencies.readData
-        readFileSize = dependencies.readFileSize
-        removeItem = dependencies.removeItem
+        io = dependencies.fileIO ?? .live(directoryBoundary: directoryBoundary)
         storeLock = dependencies.crossProcessLock ?? rootURL.map {
             CrossProcessFileLock(fileURL: $0.appendingPathComponent("bridge-v9.lock"))
         }
@@ -172,7 +173,7 @@ final class ExtensionRequestStoreFiles: Sendable {
     func removeOperationLockLocked(at url: URL) {
         guard case .unlocked = operationLockStatusLocked(at: url),
               case .regular = regularFileStatusLocked(at: url) else { return }
-        try? removeItem(url)
+        try? io.removeItem(url)
     }
 
     func readProfileDataLocked(at url: URL) -> ProfileDataRead {
@@ -187,13 +188,13 @@ final class ExtensionRequestStoreFiles: Sendable {
             return .unavailable
         }
         do {
-            guard let size = try readFileSize(url) else {
+            guard let size = try io.readFileSize(url) else {
                 return .unavailable
             }
             guard size > 0, size <= ExtensionRequestProfile.maximumProfileBytes else {
                 return .corrupt
             }
-            let data = try readData(url)
+            let data = try io.readData(url)
             guard !data.isEmpty, data.count <= ExtensionRequestProfile.maximumProfileBytes else {
                 return .corrupt
             }
@@ -215,7 +216,7 @@ final class ExtensionRequestStoreFiles: Sendable {
         case .regular: break
         case .unsafe, .unavailable: return .unavailable
         }
-        do { return .data(try readData(url)) }
+        do { return .data(try io.readData(url)) }
         catch { return .unavailable }
     }
 
@@ -226,7 +227,7 @@ final class ExtensionRequestStoreFiles: Sendable {
         case .unsafe, .unavailable: return false
         }
         do {
-            try atomicWrite(data, url)
+            try io.replace(data, url)
             return true
         } catch {
             guard case .data(let persisted) = readRevocationLedgerDataLocked(),
@@ -238,7 +239,7 @@ final class ExtensionRequestStoreFiles: Sendable {
     private func synchronizeFileLocked(at url: URL) -> Bool {
         guard case .regular = regularFileStatusLocked(at: url) else { return false }
         do {
-            try synchronizePublishedFile(url)
+            try io.synchronizePublishedFile(url)
             return true
         } catch {
             return false
@@ -353,7 +354,7 @@ final class ExtensionRequestStoreFiles: Sendable {
                   ) else { continue }
             for url in entries where DurableProfilePersistence.isTemporaryFileName(url.lastPathComponent) {
                 guard case .regular = regularFileStatusLocked(at: url) else { continue }
-                try? removeItem(url)
+                try? io.removeItem(url)
             }
         }
     }
@@ -438,7 +439,7 @@ final class ExtensionRequestStoreFiles: Sendable {
         case .unsafe, .unavailable: return false
         }
         do {
-            try atomicWrite(data, url)
+            try io.replace(data, url)
             return true
         } catch {
             guard failureRecovery == .readBack,

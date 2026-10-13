@@ -9,7 +9,7 @@ final class DurableApprovalExecutor {
     struct ClaimContext {
         enum DeadlineResult<Value: Sendable>: Sendable {
             case value(Value)
-            case expired
+            case stopped
         }
 
         let handle: ExtensionBridge.Handle
@@ -30,20 +30,20 @@ final class DurableApprovalExecutor {
         }
 
         func runBeforeDeadline<Value: Sendable>(
-            onTimeout: @MainActor () -> Void = {},
+            onStop: @MainActor () -> Void = {},
             discardValue: @escaping @Sendable (Value) -> Void = { _ in },
             operation: @escaping @MainActor () async -> Value
         ) async -> DeadlineResult<Value> {
-            guard clock() < executionDeadline else {
-                onTimeout()
-                return .expired
+            guard !Task.isCancelled, clock() < executionDeadline else {
+                onStop()
+                return .stopped
             }
             let executionDeadline = self.executionDeadline
             let customWait = waitForDeadline
             let monotonicDeadline = ContinuousClock.now + .seconds(max(0, executionDeadline.timeIntervalSince(clock())))
             let result = await ApprovalResolution<DeadlineResult<Value>>().value(
-                timeoutValue: .expired,
-                callerCancellation: .ignore,
+                timeoutValue: .stopped,
+                callerCancellation: .resolveTimeout,
                 waitForTimeout: {
                     if let customWait {
                         await customWait(executionDeadline)
@@ -55,40 +55,25 @@ final class DurableApprovalExecutor {
                     if case .value(let value) = result { discardValue(value) }
                 },
                 operation: { @MainActor in
-                    guard !Task.isCancelled, clock() < executionDeadline else { return .expired }
+                    guard !Task.isCancelled, clock() < executionDeadline else { return .stopped }
                     return .value(await operation())
                 }
             )
             if case .value(let value) = result {
-                guard clock() < executionDeadline else {
+                guard !Task.isCancelled, clock() < executionDeadline else {
                     discardValue(value)
-                    onTimeout()
-                    return .expired
+                    onStop()
+                    return .stopped
                 }
                 return .value(value)
             }
-            onTimeout()
-            return .expired
-        }
-    }
-
-    typealias SourceSignerFactory = @MainActor @Sendable (
-        WalletSigningAuthorization
-    ) -> WalletSigningSession
-
-    enum SigningAccess {
-        case none
-        case unlocked(WalletSigningSession)
-        case source(SourceSignerFactory)
-
-        var session: WalletSigningSession? {
-            guard case .unlocked(let session) = self else { return nil }
-            return session
+            onStop()
+            return .stopped
         }
     }
 
     enum Preparation {
-        case ready(consent: ReviewConsent, signing: SigningAccess)
+        case ready(consent: ReviewConsent, signing: WalletSigningSession?)
         case rejected(ImmediateResolution)
         case abandon
     }
@@ -111,48 +96,48 @@ final class DurableApprovalExecutor {
     nonisolated static let defaultBroadcastTimeoutNanoseconds: UInt64 =
         120 * 1_000_000_000
 
+    typealias BroadcastSenderFactory = @MainActor @Sendable (
+        ExtensionBridge.ApprovedExecutionPermit
+    ) -> any ApprovedBroadcastSending
+
     @MainActor
     struct Environment {
         let requestProcessor: any DappRequestProcessing
-        let broadcastSender: any ApprovedBroadcastSending
+        let makeBroadcastSender: BroadcastSenderFactory
         let broadcastTimeoutNanoseconds: UInt64
         let clock: @MainActor @Sendable () -> Date
         let waitForExecutionDeadline: (@MainActor @Sendable (Date) async -> Void)?
         let waitForBroadcastTimeout: @Sendable (UInt64) async -> Void
-        let broadcastSenderForPermit: (@MainActor @Sendable (ExtensionBridge.ApprovedExecutionPermit) -> any ApprovedBroadcastSending)?
 
         static var live: Self { Self() }
 
         init(
             requestProcessor: (any DappRequestProcessing)? = nil,
-            broadcastSender: (any ApprovedBroadcastSending)? = nil,
+            makeBroadcastSender: @escaping BroadcastSenderFactory = { _ in DappBroadcastSender() },
             broadcastTimeoutNanoseconds: UInt64 =
                 DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
             clock: @escaping @MainActor @Sendable () -> Date = Date.init,
             waitForExecutionDeadline: (@MainActor @Sendable (Date) async -> Void)? = nil,
             waitForBroadcastTimeout: @escaping @Sendable (UInt64) async -> Void = {
                 try? await Task.sleep(nanoseconds: $0)
-            },
-            broadcastSenderForPermit: (@MainActor @Sendable (ExtensionBridge.ApprovedExecutionPermit) -> any ApprovedBroadcastSending)? = nil
+            }
         ) {
             self.requestProcessor = requestProcessor ?? DappRequestProcessor()
-            self.broadcastSender = broadcastSender ?? DappBroadcastSender()
+            self.makeBroadcastSender = makeBroadcastSender
             self.broadcastTimeoutNanoseconds = broadcastTimeoutNanoseconds
             self.clock = clock
             self.waitForExecutionDeadline = waitForExecutionDeadline
             self.waitForBroadcastTimeout = waitForBroadcastTimeout
-            self.broadcastSenderForPermit = broadcastSenderForPermit
         }
     }
 
     private let store: PopupRequestStore
     private let requestProcessor: DappRequestProcessing
-    private let broadcastSender: any ApprovedBroadcastSending
+    private let makeBroadcastSender: BroadcastSenderFactory
     private let broadcastTimeoutNanoseconds: UInt64
     private let clock: @MainActor @Sendable () -> Date
     private let waitForExecutionDeadline: (@MainActor @Sendable (Date) async -> Void)?
     private let waitForBroadcastTimeout: @Sendable (UInt64) async -> Void
-    private let broadcastSenderForPermit: (@MainActor @Sendable (ExtensionBridge.ApprovedExecutionPermit) -> any ApprovedBroadcastSending)?
 
     init(
         store: PopupRequestStore,
@@ -160,12 +145,11 @@ final class DurableApprovalExecutor {
     ) {
         self.store = store
         requestProcessor = environment.requestProcessor
-        broadcastSender = environment.broadcastSender
+        makeBroadcastSender = environment.makeBroadcastSender
         broadcastTimeoutNanoseconds = environment.broadcastTimeoutNanoseconds
         clock = environment.clock
         waitForExecutionDeadline = environment.waitForExecutionDeadline
         waitForBroadcastTimeout = environment.waitForBroadcastTimeout
-        broadcastSenderForPermit = environment.broadcastSenderForPermit
     }
 
     func execute(
@@ -175,6 +159,7 @@ final class DurableApprovalExecutor {
     ) async -> Result {
         guard claim.adoptForExecution() else { return .ownershipLost }
         defer { claim.releaseUnapproved() }
+        guard !Task.isCancelled else { return await abandon(claim: claim) }
         let context = ClaimContext(
             handle: claim.handle,
             executionDeadline: claim.executionDeadline,
@@ -182,7 +167,7 @@ final class DurableApprovalExecutor {
             waitForDeadline: waitForExecutionDeadline
         )
         let consent: ReviewConsent
-        let signing: SigningAccess
+        let signing: WalletSigningSession?
         switch await prepare(context) {
         case .ready(let preparedConsent, let preparedSigning):
             consent = preparedConsent
@@ -192,12 +177,12 @@ final class DurableApprovalExecutor {
         case .abandon:
             return await abandon(claim: claim)
         }
-        defer { signing.session?.invalidate() }
+        defer { signing?.invalidate() }
         guard claim.matchesConsent(consent) else {
             return await abandon(claim: claim)
         }
         defer { consent.invalidateAuthorization() }
-        guard signingAccessMatches(signing, claim: claim),
+        guard signingSessionMatches(signing, consent: consent, claim: claim),
               claim.authority.allowsExecution(at: clock(), isCancelled: Task.isCancelled) else {
             return await abandon(claim: claim)
         }
@@ -218,7 +203,7 @@ final class DurableApprovalExecutor {
         case .immediate(let resolution):
             return await complete(claim: claim, resolution: resolution)
         case .reviewRequired:
-            signing.session?.invalidate()
+            signing?.invalidate()
             switch await store.returnToReview(claim: claim, consent: consent) {
             case .persisted: return .reviewRequired
             case .ownershipLost: return .ownershipLost
@@ -229,22 +214,25 @@ final class DurableApprovalExecutor {
         }
     }
 
-    private func signingAccessMatches(_ signing: SigningAccess, claim: ExtensionBridge.ApprovalClaim) -> Bool {
-        switch (claim.authority, signing) {
-        case (.ordinary, .none), (.native, .source):
-            return true
-        case (.ordinary, .unlocked(let session)):
-            return session.authorization.handle == claim.handle &&
-                session.authorization.signingDeadline == claim.executionDeadline && session.requiresCommitLease
-        default:
-            return false
-        }
+    private func signingSessionMatches(
+        _ session: WalletSigningSession?,
+        consent: ReviewConsent,
+        claim: ExtensionBridge.ApprovalClaim
+    ) -> Bool {
+        guard let account = consent.intent.action.signingAccount else { return session == nil }
+        let expected = WalletSigningAuthorization(
+            handle: claim.handle, approvedAccount: account,
+            signingDeadline: claim.authority.signingDeadline(for: claim.request)
+        )
+        guard let session, session.authorization == expected else { return false }
+        if case .ordinary = claim.authority { return session.requiresCommitLease }
+        return true
     }
 
     private func executeApproved(
         claim: ExtensionBridge.ApprovalClaim,
         approval: ResolvedDappApproval,
-        signing: SigningAccess,
+        signing: WalletSigningSession?,
         context: ClaimContext
     ) async -> Result {
         guard claim.authority.allowsExecution(at: clock(), isCancelled: Task.isCancelled) else {
@@ -260,14 +248,11 @@ final class DurableApprovalExecutor {
             return await abandon(claim: claim)
         }
         defer { permit.releaseLease() }
-        let signingSession = signing.session
-        let signer = makeSigner(signing, permit: permit)
-        defer { if signingSession == nil { signer?.invalidate() } }
-        guard approval.approval.signingAccount == nil || signer != nil else {
+        guard signing?.attach(permit: permit) ?? (approval.signingAccount == nil) else {
             return await abandon(permit: permit)
         }
         guard case .value(let operationResult) = await context.runBeforeDeadline(operation: {
-            await self.requestProcessor.execute(permit: permit, signer: signer)
+            await self.requestProcessor.execute(permit: permit, signer: signing)
         }) else {
             return await abandon(permit: permit)
         }
@@ -275,9 +260,14 @@ final class DurableApprovalExecutor {
             return await abandon(permit: permit)
         }
         var acquiredExecutionLease: WalletExecutionLease?
-        if let signingSession {
-            let lease = await Task { await signingSession.takeCommitLease() }.value
-            guard let lease else {
+        if let signing, signing.requiresCommitLease {
+            let acquisition = await context.runBeforeDeadline(
+                onStop: { signing.invalidate() },
+                discardValue: { $0?.release() }
+            ) {
+                await signing.takeCommitLease()
+            }
+            guard case .value(let lease?) = acquisition else {
                 return await abandon(permit: permit)
             }
             acquiredExecutionLease = lease
@@ -318,27 +308,6 @@ final class DurableApprovalExecutor {
         case .rollback:
             return await abandon(permit: permit)
         }
-    }
-
-    private func makeSigner(
-        _ signing: SigningAccess,
-        permit: ExtensionBridge.ApprovedExecutionPermit
-    ) -> (any WalletSigning)? {
-        guard let authorization = WalletSigningAuthorization(permit: permit) else { return nil }
-        let session: WalletSigningSession
-        switch signing {
-        case .none:
-            return nil
-        case .unlocked(let unlocked):
-            session = unlocked
-        case .source(let factory):
-            session = factory(authorization)
-        }
-        guard session.attach(permit: permit) else {
-            session.invalidate()
-            return nil
-        }
-        return session
     }
 
     private func complete(
@@ -393,7 +362,7 @@ final class DurableApprovalExecutor {
         _ dispatch: ExtensionBridge.BroadcastDispatchPermit,
         recovery: ApprovedCompletion
     ) async -> ApprovedCompletion {
-        let sender = broadcastSenderForPermit?(dispatch.approvedPermit) ?? broadcastSender
+        let sender = makeBroadcastSender(dispatch.approvedPermit)
         return await bounded(
             timeoutNanoseconds: broadcastTimeoutNanoseconds,
             timeoutValue: recovery

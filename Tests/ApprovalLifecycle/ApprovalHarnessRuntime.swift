@@ -142,19 +142,8 @@ final class HarnessRuntime {
         let persistence = HarnessPersistence(ipc: ipc)
         let fileStore = ExtensionRequestFileStore(rootURL: fixtures.root.appendingPathComponent("bridge", isDirectory: true),
             directoryBoundary: fixtures.root, dependencies: .init(clock: fixtures.clock.now,
-                persistenceOperations: persistence.operations(), readData: { url in
-                    let details = HarnessValue.object(["path": .string(url.path)])
-                    try ipc.checkpointSync("persistence.read.before", details: details)
-                    let data = try ExtensionRequestFileStore.defaultReadData(url)
-                    try ipc.checkpointSync("persistence.read.after", details: details)
-                    return data
-                }, readFileSize: { url in
-                    let details = HarnessValue.object(["path": .string(url.path)])
-                    try ipc.checkpointSync("persistence.stat.before", details: details)
-                    let size = try ExtensionRequestFileStore.defaultReadFileSize(url)
-                    try ipc.checkpointSync("persistence.stat.after", details: details)
-                    return size
-                }, completeChainAddition: { permit in
+                fileIO: persistence.fileIO(directoryBoundary: fixtures.root),
+                completeChainAddition: { permit in
                     EthereumDappRequestProcessor.completeApprovedChainAddition(permit: permit,
                         networkResolver: networks.resolution, customDefinitionResult: networks.matches, insertNetwork: networks.insert)
                 }, resolveImmediate: { resolution, request in
@@ -213,20 +202,31 @@ final class HarnessRuntime {
     private lazy var executionEnvironment = makeExecutionEnvironment()
 
     private func makeExecutionEnvironment() -> DurableApprovalExecutor.Environment {
-        DurableApprovalExecutor.Environment(requestProcessor: processor,
-        broadcastSender: HarnessBroadcastSender(ipc: ipc, identity: .object([:]), clock: fixtures.clock), broadcastTimeoutNanoseconds: 10_000_000_000,
-        clock: fixtures.clock.now, waitForExecutionDeadline: { [clock = fixtures.clock] deadline in
-            try? await clock.sleep(until: deadline)
-        }, waitForBroadcastTimeout: { [clock = fixtures.clock] duration in try? await clock.sleep(for: duration) },
-        broadcastSenderForPermit: { [ipc, clock = fixtures.clock] permit in
-            HarnessBroadcastSender(ipc: ipc, identity: .object(["handle": harnessHandle(permit.handle),
-                "executionID": .string(permit.executionID.uuidString.lowercased()), "enqueueAttempt": .string(permit.request.enqueueAttempt)]), clock: clock)
-        })
+        DurableApprovalExecutor.Environment(
+            requestProcessor: processor,
+            makeBroadcastSender: { [ipc, clock = fixtures.clock] permit in
+                HarnessBroadcastSender(
+                    ipc: ipc,
+                    identity: .object([
+                        "handle": harnessHandle(permit.handle),
+                        "executionID": .string(permit.executionID.uuidString.lowercased()),
+                        "enqueueAttempt": .string(permit.request.enqueueAttempt),
+                    ]), clock: clock)
+            },
+            broadcastTimeoutNanoseconds: 10_000_000_000,
+            clock: fixtures.clock.now,
+            waitForExecutionDeadline: { [clock = fixtures.clock] deadline in
+                try? await clock.sleep(until: deadline)
+            },
+            waitForBroadcastTimeout: { [clock = fixtures.clock] duration in
+                try? await clock.sleep(for: duration)
+            }
+        )
     }
 
     private lazy var finalizer = NativeApprovalFinalizer(store: store, executionEnvironment: executionEnvironment,
         refreshWalletCatalog: { [wallets] in guard await wallets.reloadFromStore() else { return nil }; return wallets.reviewCatalog() },
-        makeSigner: { [wallets, clock = fixtures.clock] authorization in
+        makeSigningSession: { [wallets, clock = fixtures.clock] authorization in
             WalletSigningSession.fromSource(authorization: authorization, walletsManager: wallets, clock: clock.now)
         }, networkResolver: networks.approval, customDefinitionResult: networks.matches)
 

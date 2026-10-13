@@ -33,20 +33,13 @@ extension ExtensionRequestFileStore {
     }
 }
 
-enum ApprovalStoreTestPersistence {
-    static func write(_ data: Data, _ url: URL) throws {
-        try fixturePersistence(for: url).replace(data, at: url)
-    }
-
-    static func synchronize(_ url: URL) throws {
-        try fixturePersistence(for: url).synchronizePublishedFile(at: url)
-    }
-
-    private static func fixturePersistence(for url: URL) -> DurableProfilePersistence {
-        DurableProfilePersistence(directoryBoundary: url
-            .deletingLastPathComponent()
-            .deletingLastPathComponent())
-    }
+func approvalStoreIO(
+    directoryBoundary: URL,
+    configure: (inout ExtensionRequestStoreFiles.IO) -> Void = { _ in }
+) -> ExtensionRequestStoreFiles.IO {
+    var io = ExtensionRequestStoreFiles.IO.live(directoryBoundary: directoryBoundary)
+    configure(&io)
+    return io
 }
 
 @MainActor
@@ -375,8 +368,7 @@ final class ApprovedExecutionTestFixture {
             rootURL: rootURL,
             directoryBoundary: rootURL,
             dependencies: .init(
-                clock: { now }, token: identifiers.take,
-                atomicWrite: ApprovalStoreTestPersistence.write
+                clock: { now }, token: identifiers.take
             )
         )
     }
@@ -488,15 +480,16 @@ extension XCTestCase {
             directoryBoundary: directory,
             dependencies: .init(
                 clock: { now },
-                token: { identifiers.withValue { $0.removeFirst() } },
-                atomicWrite: ApprovalStoreTestPersistence.write
+                token: { identifiers.withValue { $0.removeFirst() } }
             )
         )
         let configurationKey = "https://wallet.example"
-        guard case .snapshot(let authority) = store.configurationSnapshot(
-            configurationKey: configurationKey,
-            profileIdentifier: handle.profileIdentifier
-        ) else { throw CocoaError(.fileReadUnknown) }
+        guard
+            case .snapshot(let authority) = store.configurationSnapshot(
+                configurationKey: configurationKey,
+                profileIdentifier: handle.profileIdentifier
+            )
+        else { throw CocoaError(.fileReadUnknown) }
         let raw: [String: Any] = [
             "id": handle.id,
             "name": "requestAccounts",
@@ -511,10 +504,11 @@ extension XCTestCase {
         ]
         let request = try XCTUnwrap(SafariRequest(json: raw))
         guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: raw),
-              case .accepted(let admitted, _, _, _, _) = store.enqueue(
+            case .accepted(let admitted, _, _, _, _) = store.enqueue(
                 ingress: ingress, profileIdentifier: handle.profileIdentifier
-              ), admitted == handle,
-              case .claimed(let claim) = store.claim(handle: admitted) else {
+            ), admitted == handle,
+            case .claimed(let claim) = store.claim(handle: admitted)
+        else {
             throw CocoaError(.fileWriteUnknown)
         }
         addTeardownBlock {
@@ -830,6 +824,11 @@ func assertWalletSigningSuccessForTesting(
 
 private final class ApprovalStoreWrites: Sendable {
     private let failures = Mutex([Bool]())
+    private let replace: @Sendable (Data, URL) throws -> Void
+
+    init(replace: @escaping @Sendable (Data, URL) throws -> Void) {
+        self.replace = replace
+    }
 
     func failNext(afterWriting: Bool = false) {
         failures.withLock { $0.append(afterWriting) }
@@ -838,7 +837,7 @@ private final class ApprovalStoreWrites: Sendable {
     func write(_ data: Data, to url: URL) throws {
         let failure = failures.withLock { $0.isEmpty ? nil : $0.removeFirst() }
         if failure == false { throw CocoaError(.fileWriteUnknown) }
-        try ApprovalStoreTestPersistence.write(data, url)
+        try replace(data, url)
         if failure == true { throw CocoaError(.fileWriteUnknown) }
     }
 
@@ -884,12 +883,14 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         )
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         self.clock = clock
-        let writes = ApprovalStoreWrites()
+        var io = ExtensionRequestStoreFiles.IO.live(directoryBoundary: rootURL)
+        let writes = ApprovalStoreWrites(replace: io.replace)
+        io.replace = writes.write
         self.writes = writes
         bridge = ExtensionBridge(store: ExtensionRequestFileStore(
             rootURL: rootURL,
             directoryBoundary: rootURL,
-            dependencies: .init(clock: clock, atomicWrite: writes.write)
+                dependencies: .init(clock: clock, fileIO: io)
         ))
     }
 
@@ -958,14 +959,15 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
     }
 
     func makeObserverBridge(
-        atomicWrite: @escaping ExtensionRequestFileStore.AtomicWrite =
-            ApprovalStoreTestPersistence.write
+        configureIO: @Sendable (inout ExtensionRequestStoreFiles.IO) -> Void = { _ in }
     ) -> ExtensionBridge {
-        ExtensionBridge(store: ExtensionRequestFileStore(
-            rootURL: rootURL,
-            directoryBoundary: rootURL,
-            dependencies: .init(clock: clock, atomicWrite: atomicWrite)
-        ))
+        ExtensionBridge(
+            store: ExtensionRequestFileStore(
+                rootURL: rootURL,
+                directoryBoundary: rootURL,
+                dependencies: .init(
+                    clock: clock, fileIO: approvalStoreIO(directoryBoundary: rootURL, configure: configureIO))
+            ))
     }
 
     func operationLockURL(handle: ExtensionBridge.Handle) -> URL {

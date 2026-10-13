@@ -2,6 +2,10 @@
 
 import Foundation
 
+enum NativeApprovalReconciliationResult: Equatable, Sendable {
+    case pending, responseReady, opened, missing, unavailable
+}
+
 protocol NativeMessageBridge: Sendable {
     func enqueue(
         ingress: ExtensionBridge.Ingress,
@@ -48,10 +52,6 @@ struct NativeMessageDispatcher: Sendable {
         case admission, focus
     }
 
-    enum ReconciliationResult: Sendable {
-        case pending, responseReady, opened, missing, unavailable
-    }
-
     enum Error: LocalizedError, Equatable {
         case invalidMessage, unsupportedOperation, bridgeUnavailable
 
@@ -69,7 +69,7 @@ struct NativeMessageDispatcher: Sendable {
         let materialize: @Sendable (ExtensionBridge.Handle) async -> DappAdmissionDisposition
         let reconcile: @Sendable (
             ApprovalReference, ReconciliationIntent
-        ) async -> ReconciliationResult
+            ) async -> NativeApprovalReconciliationResult
         let pollResponse: @Sendable (
             ExtensionBridge.Handle, String, ResponseDeliveryPoller.Maintenance
         ) async -> ExtensionBridge.ResponseReadResult

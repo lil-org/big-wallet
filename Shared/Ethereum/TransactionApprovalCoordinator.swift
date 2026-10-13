@@ -158,25 +158,6 @@ struct TransactionPreparationState: Equatable {
 
 }
 
-struct TransactionPreparationRestartGate: Equatable {
-
-    private(set) var isPending = false
-
-    @discardableResult
-    mutating func recordMutation() -> Bool {
-        guard !isPending else { return false }
-        isPending = true
-        return true
-    }
-
-    mutating func consume() -> Bool {
-        guard isPending else { return false }
-        isPending = false
-        return true
-    }
-
-}
-
 struct TransactionApprovalReservation: Equatable, Sendable {
     let attemptID: Int
     let transactionID: UUID
@@ -186,17 +167,6 @@ enum TransactionPreflightOutcome: Sendable {
     case approved(Transaction)
     case reviewRequired
     case invalidated
-}
-
-struct TransactionApprovalRequestToken: Equatable, Hashable, Sendable {
-    enum Kind: Equatable, Hashable, Sendable {
-        case preparation
-        case preflight
-    }
-
-    let attemptID: Int
-    let transactionID: UUID
-    let kind: Kind
 }
 
 enum TransactionReviewNotice: Equatable, Sendable {
@@ -271,13 +241,24 @@ struct TransactionApprovalOperations: Sendable {
     }
 }
 
-struct TransactionApprovalReducer {
+@MainActor
+final class TransactionApprovalCoordinator {
+    private struct RequestToken: Equatable, Hashable, Sendable {
+        enum Kind: Equatable, Hashable, Sendable {
+            case preparation
+            case preflight
+        }
 
-    struct State {
+        let attemptID: Int
+        let transactionID: UUID
+        let kind: Kind
+    }
+
+    private struct State {
         var transaction: Transaction
         let network: EthereumNetwork
         var preparation = TransactionPreparationState()
-        var restartGate = TransactionPreparationRestartGate()
+        var hasPendingSliderPreparation = false
         var suggestedNonce: String?
         var verifiedFeeEstimate: GasService.Estimate?
         var gasSpeedConfiguration = GasSpeedConfiguration()
@@ -286,61 +267,76 @@ struct TransactionApprovalReducer {
         var notice: TransactionReviewNotice?
     }
 
-    struct PreflightStart {
-        let token: TransactionApprovalRequestToken
-        let snapshot: TransactionApprovalSnapshot
-    }
-
-    struct PreflightCompletion {
-        let snapshot: TransactionApprovalSnapshot
+    private struct PreflightResolution: Sendable {
+        let attemptID: Int
         let outcome: TransactionPreflightOutcome
     }
 
-    enum Event {
-        case startPreparation(forceGasCheck: Bool)
-        case preparationUpdate(
-            TransactionApprovalRequestToken,
-            Transaction
-        )
-        case preparationEstimate(
-            TransactionApprovalRequestToken,
-            GasService.Estimate
-        )
-        case preparationResult(
-            TransactionApprovalRequestToken,
-            Result<Transaction, TransactionPreparationFailure>
-        )
-        case reserveForPreflight
-        case releaseReservation(TransactionApprovalReservation)
-        case retryPreparation
-        case applyEdits(Transaction.Edits)
-        case sliderInteractionBegan
-        case setFeeForSpeed(Double)
-        case sliderInteractionEnded(cancelled: Bool)
-        case finish
+    private final class PreparationRequest {
+        let token: RequestToken
+        var task: Task<Void, Never>?
+
+        init(token: RequestToken) {
+            self.token = token
+        }
     }
 
-    enum Effect {
-        case cancelActiveRequest
-        case clearActiveRequest(TransactionApprovalRequestToken)
-        case runPreparation(
-            TransactionApprovalRequestToken,
-            Transaction,
-            forceGasCheck: Bool
-        )
-        case snapshot(TransactionApprovalSnapshot)
+    private final class PreflightRequest {
+        let token: RequestToken
+        var task: Task<Void, Never>?
+        private var continuation: CheckedContinuation<PreflightResolution, Never>?
+
+        init(
+            token: RequestToken,
+            continuation: CheckedContinuation<PreflightResolution, Never>
+        ) {
+            self.token = token
+            self.continuation = continuation
+        }
+
+        func resolve(_ resolution: PreflightResolution) {
+            let continuation = continuation
+            self.continuation = nil
+            continuation?.resume(returning: resolution)
+        }
     }
 
-    private(set) var state: State
+    private enum ActiveRequest {
+        case preparation(PreparationRequest)
+        case preflight(PreflightRequest)
+
+        var token: RequestToken {
+            switch self {
+            case .preparation(let request): request.token
+            case .preflight(let request): request.token
+            }
+        }
+
+        func cancel(attemptID: Int) {
+            switch self {
+            case .preparation(let request):
+                request.task?.cancel()
+            case .preflight(let request):
+                request.task?.cancel()
+                request.resolve(.init(attemptID: attemptID, outcome: .invalidated))
+            }
+        }
+    }
+
+    private var state: State
+    private let operations: TransactionApprovalOperations
+    private var activeRequest: ActiveRequest?
+    var onSnapshot: (TransactionApprovalSnapshot) -> Void
 
     init(
         transaction: Transaction,
-        network: EthereumNetwork
+        network: EthereumNetwork,
+        operations: TransactionApprovalOperations = .live(),
+        onSnapshot: @escaping (TransactionApprovalSnapshot) -> Void = { _ in }
     ) {
-        state = State(
-            transaction: transaction,
-            network: network
-        )
+        state = State(transaction: transaction, network: network)
+        self.operations = operations
+        self.onSnapshot = onSnapshot
     }
 
     var snapshot: TransactionApprovalSnapshot {
@@ -382,8 +378,8 @@ struct TransactionApprovalReducer {
         )
     }
 
-    func isCurrent(
-        _ token: TransactionApprovalRequestToken
+    private func isCurrent(
+        _ token: RequestToken
     ) -> Bool {
         guard state.preparation.isCurrent(
             attemptID: token.attemptID,
@@ -400,7 +396,7 @@ struct TransactionApprovalReducer {
     }
 
     private func acceptsPreparationUpdate(
-        _ token: TransactionApprovalRequestToken
+        _ token: RequestToken
     ) -> Bool {
         guard token.kind == .preparation,
               state.preparation.isCurrent(
@@ -413,417 +409,51 @@ struct TransactionApprovalReducer {
             state.preparation.phase == .ready
     }
 
-    func isCurrent(_ reservation: TransactionApprovalReservation) -> Bool {
+    private func isCurrent(_ reservation: TransactionApprovalReservation) -> Bool {
         state.preparation.phase == .reserved && state.preparation.isCurrent(
             attemptID: reservation.attemptID, transactionID: reservation.transactionID
         )
     }
 
-    mutating func reduce(_ event: Event) -> [Effect] {
-        switch event {
-        case .startPreparation(let forceGasCheck):
-            return startPreparation(forceGasCheck: forceGasCheck)
-        case .preparationUpdate(let token, let transaction):
-            return receivePreparationUpdate(transaction, token: token)
-        case .preparationEstimate(let token, let estimate):
-            return receivePreparationEstimate(estimate, token: token)
-        case .preparationResult(let token, let result):
-            return receivePreparationResult(result, token: token)
-        case .reserveForPreflight:
-            return reserveForPreflight()
-        case .releaseReservation(let reservation):
-            return releaseReservation(reservation)
-        case .retryPreparation:
-            guard snapshot.canRetryPreparation else { return [] }
-            let forceGasCheck: Bool
-            if case .preparationFailed = state.notice { forceGasCheck = state.preparationForceGasCheck }
-            else { forceGasCheck = false }
-            return startPreparation(forceGasCheck: forceGasCheck)
-        case .applyEdits(let edits):
-            return apply(edits)
-        case .sliderInteractionBegan:
-            return beginSliderInteraction()
-        case .setFeeForSpeed(let value):
-            return setFeeForSpeed(value: value)
-        case .sliderInteractionEnded(let cancelled):
-            return endSliderInteraction(cancelled: cancelled)
-        case .finish:
-            return finish()
-        }
-    }
-
-    private mutating func startPreparation(
-        forceGasCheck: Bool
-    ) -> [Effect] {
-        guard state.preparation.allowsMutation else { return [] }
+    func startPreparation(forceGasCheck: Bool) {
+        guard state.preparation.allowsMutation else { return }
         state.notice = nil
-        state.restartGate = TransactionPreparationRestartGate()
+        state.hasPendingSliderPreparation = false
         state.isSliderInteractionActive = false
         state.verifiedFeeEstimate = nil
         state.preparationForceGasCheck = forceGasCheck
         let transaction = state.transaction
-        let attemptID = state.preparation.beginPreparation(
-            for: transaction.id
-        )
-        let token = TransactionApprovalRequestToken(
-            attemptID: attemptID,
-            transactionID: transaction.id,
-            kind: .preparation
-        )
-        return [
-            .cancelActiveRequest,
-            snapshotEffect(),
-            .runPreparation(
-                token,
-                transaction,
-                forceGasCheck: forceGasCheck
-            ),
-        ]
-    }
-
-    private mutating func receivePreparationUpdate(
-        _ transaction: Transaction,
-        token: TransactionApprovalRequestToken
-    ) -> [Effect] {
-        guard acceptsPreparationUpdate(token),
-              transaction.id == token.transactionID else {
-            return []
-        }
-        state.transaction = transaction
-        state.suggestedNonce =
-            state.suggestedNonce ?? transaction.decimalNonceString
-        return [snapshotEffect()]
-    }
-
-    private mutating func receivePreparationEstimate(
-        _ estimate: GasService.Estimate,
-        token: TransactionApprovalRequestToken
-    ) -> [Effect] {
-        guard token.kind == .preparation, isCurrent(token) else {
-            return []
-        }
-        install(estimate)
-        return [snapshotEffect()]
-    }
-
-    private mutating func receivePreparationResult(
-        _ result: Result<Transaction, TransactionPreparationFailure>,
-        token: TransactionApprovalRequestToken
-    ) -> [Effect] {
-        guard token.kind == .preparation, isCurrent(token) else {
-            return []
-        }
-        switch result {
-        case .success(let prepared):
-            guard prepared.id == token.transactionID,
-                  state.preparation.markReady(
-                    attemptID: token.attemptID,
-                    transactionID: token.transactionID
-                  ) else {
-                return []
-            }
-            state.suggestedNonce =
-                state.suggestedNonce ?? prepared.decimalNonceString
-            return [snapshotEffect()]
-        case .failure(let failure):
-            guard state.preparation.markFailed(
-                attemptID: token.attemptID,
-                transactionID: token.transactionID
-            ) else {
-                return []
-            }
-            if state.verifiedFeeEstimate == nil {
-                state.transaction.currentBaseFeePerGas = nil
-                state.transaction.nextBaseFeePerGas = nil
-            }
-            state.notice = .preparationFailed(failure)
-            return [.clearActiveRequest(token), snapshotEffect()]
-        }
-    }
-
-    private mutating func reserveForPreflight() -> [Effect] {
-        let transaction = state.transaction
-        guard snapshot.canApprove,
-              state.preparation.reserveForPreflight(for: transaction.id) != nil else { return [] }
-        return [.cancelActiveRequest, snapshotEffect()]
-    }
-
-    private mutating func releaseReservation(_ reservation: TransactionApprovalReservation) -> [Effect] {
-        guard isCurrent(reservation), state.preparation.restoreReady(
-            attemptID: reservation.attemptID, transactionID: reservation.transactionID
-        ) else { return [] }
-        return [snapshotEffect()]
-    }
-
-    mutating func beginPreflight(
-        _ reservation: TransactionApprovalReservation
-    ) -> PreflightStart? {
-        guard isCurrent(reservation),
-              let attemptID = state.preparation.beginPreflight(
-                for: state.transaction.id
-              ) else { return nil }
-        state.notice = nil
-        let token = TransactionApprovalRequestToken(
-            attemptID: attemptID,
-            transactionID: state.transaction.id,
-            kind: .preflight
-        )
-        return PreflightStart(token: token, snapshot: synchronizedSnapshot())
-    }
-
-    mutating func completePreflight(
-        _ token: TransactionApprovalRequestToken,
-        result: TransactionFeePreflightResult
-    ) -> PreflightCompletion? {
-        guard token.kind == .preflight, isCurrent(token) else { return nil }
-        let outcome: TransactionPreflightOutcome
-        switch result {
-        case .safe(let transaction, let estimate):
-            guard transaction.id == token.transactionID else { return nil }
-            install(transaction, estimate: estimate)
-            state.notice = nil
-            state.restartGate = TransactionPreparationRestartGate()
-            state.preparation.finish()
-            outcome = .approved(state.transaction)
-        case .walletManagedUpdated(let transaction, let estimate):
-            guard transaction.id == token.transactionID,
-                  state.preparation.returnToReview(
-                    attemptID: token.attemptID, transactionID: token.transactionID
-                  ) else { return nil }
-            install(transaction, estimate: estimate)
-            state.notice = .feesUpdated
-            outcome = .reviewRequired
-        case .userControlledUnsafe(let transaction, let estimate):
-            guard transaction.id == token.transactionID,
-                  state.preparation.beginUnsafeFeeEditing(
-                    attemptID: token.attemptID, transactionID: token.transactionID
-                  ) else { return nil }
-            install(transaction, estimate: estimate)
-            state.notice = .unsafeFees
-            outcome = .reviewRequired
-        case .unavailable(let transaction, let estimate):
-            guard transaction.id == token.transactionID,
-                  state.preparation.markFailed(
-                    attemptID: token.attemptID, transactionID: token.transactionID
-                  ) else { return nil }
-            install(transaction, estimate: estimate)
-            state.notice = .feesUnavailable
-            outcome = .reviewRequired
-        }
-        return PreflightCompletion(snapshot: synchronizedSnapshot(), outcome: outcome)
-    }
-
-    private mutating func apply(_ edits: Transaction.Edits) -> [Effect] {
-        let previousTransaction = state.transaction
-        guard snapshot.canEdit, state.transaction.apply(edits) else {
-            return []
-        }
-        state.gasSpeedConfiguration.commitAppliedEdits(
-            edits,
-            from: previousTransaction,
-            to: state.transaction
-        )
-        state.notice = nil
-        state.restartGate = TransactionPreparationRestartGate()
-        state.isSliderInteractionActive = false
-        state.preparation.beginEditing(state.transaction.id)
-        return [
-            .cancelActiveRequest,
-            snapshotEffect(),
-        ]
-    }
-
-    private mutating func beginSliderInteraction() -> [Effect] {
-        guard state.preparation.allowsMutation else { return [] }
-        state.gasSpeedConfiguration.markGasSliderInteraction()
-        state.isSliderInteractionActive = true
-        return []
-    }
-
-    private mutating func setFeeForSpeed(value: Double) -> [Effect] {
-        guard state.preparation.allowsMutation,
-              state.transaction.feeBasisBaseFeePerGas != nil,
-              let info = state.gasSpeedConfiguration.info else { return [] }
-        state.gasSpeedConfiguration.markGasSliderInteraction()
-        let previousFee = state.transaction.preparedFee
-        let previousProvenance = state.transaction.feeProvenance
-        let previousPosition = state.gasSpeedConfiguration.sliderPosition(for: state.transaction)
-        state.transaction.setFeeForSpeed(
-            value: value,
-            inRelationTo: info
-        )
-        state.gasSpeedConfiguration.recordSelectedSliderPosition(value, for: state.transaction)
-        guard state.transaction.preparedFee != previousFee ||
-                state.transaction.feeProvenance != previousProvenance else {
-            let position = state.gasSpeedConfiguration.sliderPosition(for: state.transaction)
-            return position != previousPosition ? [snapshotEffect()] : []
-        }
-        state.gasSpeedConfiguration.markGasSliderFeeChange()
-
-        guard state.isSliderInteractionActive else {
-            state.notice = nil
-            return startPreparation(forceGasCheck: false)
-        }
-
-        var effects = [Effect]()
-        if state.restartGate.recordMutation() {
-            state.notice = nil
-            state.preparation.beginEditing(state.transaction.id)
-            effects.append(.cancelActiveRequest)
-        }
-        effects.append(snapshotEffect())
-        return effects
-    }
-
-    private mutating func endSliderInteraction(
-        cancelled: Bool
-    ) -> [Effect] {
-        state.isSliderInteractionActive = false
-        let hadPendingMutation = state.restartGate.consume()
-        let didInstallPendingQuote = state.gasSpeedConfiguration.endGasSliderInteraction(
-            didChangeFee: !cancelled && hadPendingMutation
-        )
-        guard hadPendingMutation, !cancelled, state.preparation.allowsMutation else {
-            return didInstallPendingQuote ? [snapshotEffect()] : []
-        }
-        return startPreparation(forceGasCheck: false)
-    }
-
-    private mutating func finish() -> [Effect] {
-        state.notice = nil
-        state.restartGate = TransactionPreparationRestartGate()
-        state.isSliderInteractionActive = false
-        state.preparation.finish()
-        return [.cancelActiveRequest, snapshotEffect()]
-    }
-
-    private mutating func install(
-        _ transaction: Transaction,
-        estimate: GasService.Estimate
-    ) {
-        state.transaction = transaction
-        state.suggestedNonce =
-            state.suggestedNonce ?? transaction.decimalNonceString
-        install(estimate)
-    }
-
-    private mutating func install(_ estimate: GasService.Estimate) {
-        state.verifiedFeeEstimate = estimate
-        estimate.applyBaseFeeContext(to: &state.transaction)
-        state.gasSpeedConfiguration.applyFetchedEstimate(estimate)
-    }
-
-    private mutating func snapshotEffect() -> Effect {
-        .snapshot(synchronizedSnapshot())
-    }
-
-    private mutating func synchronizedSnapshot() -> TransactionApprovalSnapshot {
-        if let priorityFee = state.gasSpeedConfiguration.speedPriorityFeePerGas(for: state.transaction) {
-            state.gasSpeedConfiguration.installTransactionFallback(feePerGas: priorityFee)
-        }
-        state.gasSpeedConfiguration.synchronizeSelectedSliderPosition(with: state.transaction)
-        return snapshot
-    }
-
-}
-
-@MainActor
-final class TransactionApprovalCoordinator {
-    private struct PreflightResolution: Sendable {
-        let attemptID: Int
-        let outcome: TransactionPreflightOutcome
-    }
-
-    private final class PreparationRequest {
-        let token: TransactionApprovalRequestToken
-        var task: Task<Void, Never>?
-
-        init(token: TransactionApprovalRequestToken) {
-            self.token = token
-        }
-    }
-
-    private final class PreflightRequest {
-        let token: TransactionApprovalRequestToken
-        var task: Task<Void, Never>?
-        private var continuation: CheckedContinuation<PreflightResolution, Never>?
-
-        init(
-            token: TransactionApprovalRequestToken,
-            continuation: CheckedContinuation<PreflightResolution, Never>
-        ) {
-            self.token = token
-            self.continuation = continuation
-        }
-
-        func resolve(_ resolution: PreflightResolution) {
-            let continuation = continuation
-            self.continuation = nil
-            continuation?.resume(returning: resolution)
-        }
-    }
-
-    private enum ActiveRequest {
-        case preparation(PreparationRequest)
-        case preflight(PreflightRequest)
-
-        var token: TransactionApprovalRequestToken {
-            switch self {
-            case .preparation(let request): request.token
-            case .preflight(let request): request.token
-            }
-        }
-
-        func cancel(attemptID: Int) {
-            switch self {
-            case .preparation(let request):
-                request.task?.cancel()
-            case .preflight(let request):
-                request.task?.cancel()
-                request.resolve(.init(attemptID: attemptID, outcome: .invalidated))
-            }
-        }
-    }
-
-    private var reducer: TransactionApprovalReducer
-    private let operations: TransactionApprovalOperations
-    private var activeRequest: ActiveRequest?
-    var onSnapshot: (TransactionApprovalSnapshot) -> Void
-
-    init(
-        transaction: Transaction,
-        network: EthereumNetwork,
-        operations: TransactionApprovalOperations = .live(),
-        onSnapshot: @escaping (TransactionApprovalSnapshot) -> Void = { _ in }
-    ) {
-        reducer = TransactionApprovalReducer(transaction: transaction, network: network)
-        self.operations = operations
-        self.onSnapshot = onSnapshot
-    }
-
-    var snapshot: TransactionApprovalSnapshot { reducer.snapshot }
-
-    func startPreparation(forceGasCheck: Bool) {
-        send(.startPreparation(forceGasCheck: forceGasCheck))
+        let attemptID = state.preparation.beginPreparation(for: transaction.id)
+        let token = RequestToken(attemptID: attemptID, transactionID: transaction.id, kind: .preparation)
+        cancelActiveRequest()
+        publishSnapshot()
+        guard isCurrent(token) else { return }
+        runPreparation(token: token, transaction: transaction, forceGasCheck: forceGasCheck)
     }
 
     func reserveForPreflight() -> TransactionApprovalReservation? {
-        let effects = reducer.reduce(.reserveForPreflight)
-        guard !effects.isEmpty else { return nil }
-        let reservation = TransactionApprovalReservation(
-            attemptID: snapshot.attemptID, transactionID: snapshot.transaction.id
-        )
-        run(effects)
-        return reducer.isCurrent(reservation) ? reservation : nil
+        guard snapshot.canApprove,
+            let attemptID = state.preparation.reserveForPreflight(for: state.transaction.id)
+        else { return nil }
+        let reservation = TransactionApprovalReservation(attemptID: attemptID, transactionID: state.transaction.id)
+        cancelActiveRequest()
+        publishSnapshot()
+        return isCurrent(reservation) ? reservation : nil
     }
 
     @discardableResult
     func releaseReservation(_ reservation: TransactionApprovalReservation) -> Bool {
-        send(.releaseReservation(reservation))
+        guard isCurrent(reservation),
+            state.preparation.restoreReady(
+                attemptID: reservation.attemptID, transactionID: reservation.transactionID
+            )
+        else { return false }
+        publishSnapshot()
+        return true
     }
 
     func preflight(_ reservation: TransactionApprovalReservation) async -> TransactionPreflightOutcome {
-        guard reducer.isCurrent(reservation) else { return .invalidated }
+        guard isCurrent(reservation) else { return .invalidated }
         guard !Task.isCancelled else {
             cancelPreflight(reservation)
             return .invalidated
@@ -835,24 +465,29 @@ final class TransactionApprovalCoordinator {
                     continuation.resume(returning: .init(attemptID: snapshot.attemptID, outcome: .invalidated))
                     return
                 }
-                guard let start = reducer.beginPreflight(reservation) else {
+                guard isCurrent(reservation),
+                    let attemptID = state.preparation.beginPreflight(for: state.transaction.id)
+                else {
                     continuation.resume(returning: .init(attemptID: snapshot.attemptID, outcome: .invalidated))
                     return
                 }
+                state.notice = nil
+                let transaction = state.transaction
+                let token = RequestToken(attemptID: attemptID, transactionID: transaction.id, kind: .preflight)
                 cancelActiveRequest()
-                let request = PreflightRequest(token: start.token, continuation: continuation)
+                let request = PreflightRequest(token: token, continuation: continuation)
                 activeRequest = .preflight(request)
-                onSnapshot(start.snapshot)
+                publishSnapshot()
                 guard !Task.isCancelled else {
                     cancelPreflight(reservation)
                     request.resolve(.init(attemptID: snapshot.attemptID, outcome: .invalidated))
                     return
                 }
-                guard isActive(request), reducer.isCurrent(start.token) else {
+                guard isActive(request), isCurrent(token) else {
                     request.resolve(.init(attemptID: snapshot.attemptID, outcome: .invalidated))
                     return
                 }
-                runPreflight(request, transaction: start.snapshot.transaction)
+                runPreflight(request, transaction: transaction)
             }
         } onCancel: {
             Task { @MainActor in self.cancelPreflight(reservation) }
@@ -863,78 +498,175 @@ final class TransactionApprovalCoordinator {
 
     @discardableResult
     func retryPreparation() -> Bool {
-        send(.retryPreparation)
+        guard snapshot.canRetryPreparation else { return false }
+        let forceGasCheck: Bool
+        if case .preparationFailed = state.notice {
+            forceGasCheck = state.preparationForceGasCheck
+        } else {
+            forceGasCheck = false
+        }
+        startPreparation(forceGasCheck: forceGasCheck)
+        return true
     }
 
     @discardableResult
     func apply(edits: Transaction.Edits) -> Bool {
-        send(.applyEdits(edits))
+        let previousTransaction = state.transaction
+        guard snapshot.canEdit, state.transaction.apply(edits) else { return false }
+        state.gasSpeedConfiguration.commitAppliedEdits(edits, from: previousTransaction, to: state.transaction)
+        state.notice = nil
+        state.hasPendingSliderPreparation = false
+        state.isSliderInteractionActive = false
+        state.preparation.beginEditing(state.transaction.id)
+        cancelActiveRequest()
+        publishSnapshot()
+        return true
     }
 
     func beginSliderInteraction() {
-        send(.sliderInteractionBegan)
+        guard state.preparation.allowsMutation else { return }
+        state.gasSpeedConfiguration.markGasSliderInteraction()
+        state.isSliderInteractionActive = true
     }
 
     @discardableResult
     func setFeeForSpeed(value: Double) -> Bool {
-        let previousTransaction = snapshot.transaction
-        let effects = reducer.reduce(.setFeeForSpeed(value))
-        let transaction = snapshot.transaction
-        let didChangeFee = transaction.preparedFee != previousTransaction.preparedFee ||
-            transaction.feeProvenance != previousTransaction.feeProvenance
-        run(effects)
-        return didChangeFee
+        guard state.preparation.allowsMutation,
+            state.transaction.feeBasisBaseFeePerGas != nil,
+            let info = state.gasSpeedConfiguration.info
+        else { return false }
+        state.gasSpeedConfiguration.markGasSliderInteraction()
+        let previousFee = state.transaction.preparedFee
+        let previousProvenance = state.transaction.feeProvenance
+        let previousPosition = state.gasSpeedConfiguration.sliderPosition(for: state.transaction)
+        state.transaction.setFeeForSpeed(value: value, inRelationTo: info)
+        state.gasSpeedConfiguration.recordSelectedSliderPosition(value, for: state.transaction)
+        guard state.transaction.preparedFee != previousFee || state.transaction.feeProvenance != previousProvenance
+        else {
+            if state.gasSpeedConfiguration.sliderPosition(for: state.transaction) != previousPosition {
+                publishSnapshot()
+            }
+            return false
+        }
+        state.gasSpeedConfiguration.markGasSliderFeeChange()
+        guard state.isSliderInteractionActive else {
+            startPreparation(forceGasCheck: false)
+            return true
+        }
+        if !state.hasPendingSliderPreparation {
+            state.hasPendingSliderPreparation = true
+            state.notice = nil
+            state.preparation.beginEditing(state.transaction.id)
+            cancelActiveRequest()
+        }
+        publishSnapshot()
+        return true
     }
 
     @discardableResult
     func endSliderInteraction(cancelled: Bool = false) -> Bool {
-        let hadPendingMutation = reducer.state.restartGate.isPending
-        send(.sliderInteractionEnded(cancelled: cancelled))
+        state.isSliderInteractionActive = false
+        let hadPendingMutation = state.hasPendingSliderPreparation
+        state.hasPendingSliderPreparation = false
+        let didInstallPendingQuote = state.gasSpeedConfiguration.endGasSliderInteraction(
+            didChangeFee: !cancelled && hadPendingMutation
+        )
+        if hadPendingMutation, !cancelled, state.preparation.allowsMutation {
+            startPreparation(forceGasCheck: false)
+        } else if didInstallPendingQuote {
+            publishSnapshot()
+        }
         return hadPendingMutation
     }
 
     func invalidate() {
-        send(.finish)
+        state.notice = nil
+        state.hasPendingSliderPreparation = false
+        state.isSliderInteractionActive = false
+        state.preparation.finish()
+        cancelActiveRequest()
+        publishSnapshot()
     }
 
     private func cancelPreflight(_ reservation: TransactionApprovalReservation) {
-        guard reducer.state.preparation.isCurrent(
+        guard
+            state.preparation.isCurrent(
             attemptID: reservation.attemptID, transactionID: reservation.transactionID
         ), snapshot.phase == .reserved || snapshot.phase == .preflighting else { return }
         invalidate()
     }
 
-    @discardableResult
-    private func send(_ event: TransactionApprovalReducer.Event) -> Bool {
-        let effects = reducer.reduce(event)
-        run(effects)
-        return !effects.isEmpty
+    private func receivePreparationUpdate(_ transaction: Transaction, token: RequestToken) {
+        guard acceptsPreparationUpdate(token), transaction.id == token.transactionID else { return }
+        state.transaction = transaction
+        state.suggestedNonce = state.suggestedNonce ?? transaction.decimalNonceString
+        publishSnapshot()
     }
 
-    private func run(_ effects: [TransactionApprovalReducer.Effect]) {
-        for effect in effects {
-            switch effect {
-            case .cancelActiveRequest:
-                cancelActiveRequest()
-            case .clearActiveRequest(let token):
-                clearActiveRequest(token)
-            case .runPreparation(let token, let transaction, let forceGasCheck):
-                runPreparation(token: token, transaction: transaction, forceGasCheck: forceGasCheck)
-            case .snapshot(let snapshot):
-                onSnapshot(snapshot)
+    private func receivePreparationEstimate(_ estimate: GasService.Estimate, token: RequestToken) {
+        guard token.kind == .preparation, isCurrent(token) else { return }
+        install(estimate)
+        publishSnapshot()
+    }
+
+    private func receivePreparationResult(
+        _ result: Result<Transaction, TransactionPreparationFailure>, token: RequestToken
+    ) {
+        guard token.kind == .preparation, isCurrent(token) else { return }
+        switch result {
+        case .success(let prepared):
+            guard prepared.id == token.transactionID,
+                state.preparation.markReady(attemptID: token.attemptID, transactionID: token.transactionID)
+            else { return }
+            state.suggestedNonce = state.suggestedNonce ?? prepared.decimalNonceString
+        case .failure(let failure):
+            guard state.preparation.markFailed(attemptID: token.attemptID, transactionID: token.transactionID) else {
+                return
             }
+            if state.verifiedFeeEstimate == nil {
+                state.transaction.currentBaseFeePerGas = nil
+                state.transaction.nextBaseFeePerGas = nil
+            }
+            state.notice = .preparationFailed(failure)
+            clearActiveRequest(token)
         }
+        publishSnapshot()
+    }
+
+    private func install(
+        _ transaction: Transaction,
+        estimate: GasService.Estimate
+    ) {
+        state.transaction = transaction
+        state.suggestedNonce =
+            state.suggestedNonce ?? transaction.decimalNonceString
+        install(estimate)
+    }
+
+    private func install(_ estimate: GasService.Estimate) {
+        state.verifiedFeeEstimate = estimate
+        estimate.applyBaseFeeContext(to: &state.transaction)
+        state.gasSpeedConfiguration.applyFetchedEstimate(estimate)
+    }
+
+    private func publishSnapshot() {
+        if let priorityFee = state.gasSpeedConfiguration.speedPriorityFeePerGas(for: state.transaction) {
+            state.gasSpeedConfiguration.installTransactionFallback(feePerGas: priorityFee)
+        }
+        state.gasSpeedConfiguration.synchronizeSelectedSliderPosition(with: state.transaction)
+        onSnapshot(snapshot)
     }
 
     private func runPreparation(
-        token: TransactionApprovalRequestToken,
+        token: RequestToken,
         transaction: Transaction,
         forceGasCheck: Bool
     ) {
-        guard reducer.isCurrent(token) else { return }
+        guard isCurrent(token) else { return }
         let request = PreparationRequest(token: token)
         activeRequest = .preparation(request)
-        let stream = operations.prepare(transaction, forceGasCheck, reducer.state.network)
+        let stream = operations.prepare(transaction, forceGasCheck, state.network)
+        guard activeRequest?.token == token, isCurrent(token) else { return }
         request.task = Task { [weak self] in
             do {
                 for try await event in stream {
@@ -942,17 +674,18 @@ final class TransactionApprovalCoordinator {
                     guard let self else { return }
                     switch event {
                     case .transactionUpdated(let value):
-                        send(.preparationUpdate(token, value))
+                        receivePreparationUpdate(value, token: token)
                     case .feeEstimate(let estimate):
-                        send(.preparationEstimate(token, estimate))
+                        receivePreparationEstimate(estimate, token: token)
                     case .ready(let value):
-                        send(.preparationResult(token, .success(value)))
+                        receivePreparationResult(.success(value), token: token)
                     }
                 }
             } catch is CancellationError {
             } catch {
                 guard !Task.isCancelled else { return }
-                self?.send(.preparationResult(token, .failure(error as? TransactionPreparationFailure ?? .invalidTransaction)))
+                self?.receivePreparationResult(
+                    .failure(error as? TransactionPreparationFailure ?? .invalidTransaction), token: token)
             }
             self?.clearActiveRequest(token)
         }
@@ -963,7 +696,7 @@ final class TransactionApprovalCoordinator {
         transaction: Transaction
     ) {
         let operation = operations.preflight
-        let network = reducer.state.network
+        let network = state.network
         request.task = Task { [weak self, weak request] in
             let result: TransactionFeePreflightResult
             do {
@@ -982,15 +715,50 @@ final class TransactionApprovalCoordinator {
 
     private func completePreflight(_ request: PreflightRequest, result: TransactionFeePreflightResult) {
         guard isActive(request) else { return }
-        guard let completion = reducer.completePreflight(request.token, result: result) else {
-            clearActiveRequest(request.token)
+        let token = request.token
+        guard token.kind == .preflight, isCurrent(token) else {
+            clearActiveRequest(token)
             return
         }
-        let resolution = PreflightResolution(
-            attemptID: completion.snapshot.attemptID,
-            outcome: completion.outcome
-        )
-        onSnapshot(completion.snapshot)
+        let outcome: TransactionPreflightOutcome
+        switch result {
+        case .safe(let transaction, let estimate):
+            guard transaction.id == token.transactionID else { clearActiveRequest(token); return }
+            install(transaction, estimate: estimate)
+            state.notice = nil
+            state.hasPendingSliderPreparation = false
+            state.preparation.finish()
+            outcome = .approved(state.transaction)
+        case .walletManagedUpdated(let transaction, let estimate):
+            guard transaction.id == token.transactionID,
+                state.preparation.returnToReview(
+                    attemptID: token.attemptID, transactionID: token.transactionID
+                )
+            else { clearActiveRequest(token); return }
+            install(transaction, estimate: estimate)
+            state.notice = .feesUpdated
+            outcome = .reviewRequired
+        case .userControlledUnsafe(let transaction, let estimate):
+            guard transaction.id == token.transactionID,
+                state.preparation.beginUnsafeFeeEditing(
+                    attemptID: token.attemptID, transactionID: token.transactionID
+                )
+            else { clearActiveRequest(token); return }
+            install(transaction, estimate: estimate)
+            state.notice = .unsafeFees
+            outcome = .reviewRequired
+        case .unavailable(let transaction, let estimate):
+            guard transaction.id == token.transactionID,
+                state.preparation.markFailed(
+                    attemptID: token.attemptID, transactionID: token.transactionID
+                )
+            else { clearActiveRequest(token); return }
+            install(transaction, estimate: estimate)
+            state.notice = .feesUnavailable
+            outcome = .reviewRequired
+        }
+        let resolution = PreflightResolution(attemptID: snapshot.attemptID, outcome: outcome)
+        publishSnapshot()
         guard isActive(request) else { return }
         activeRequest = nil
         request.resolve(resolution)
@@ -1007,7 +775,7 @@ final class TransactionApprovalCoordinator {
         request?.cancel(attemptID: snapshot.attemptID)
     }
 
-    private func clearActiveRequest(_ token: TransactionApprovalRequestToken) {
+    private func clearActiveRequest(_ token: RequestToken) {
         guard activeRequest?.token == token else { return }
         let request = activeRequest
         activeRequest = nil
@@ -1017,6 +785,6 @@ final class TransactionApprovalCoordinator {
     }
 
     isolated deinit {
-        activeRequest?.cancel(attemptID: reducer.snapshot.attemptID)
+        activeRequest?.cancel(attemptID: snapshot.attemptID)
     }
 }

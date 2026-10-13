@@ -891,7 +891,7 @@
                 completion(true)
             }
             let service = f.service()
-            var firstResult: NativeApprovalService.ReconciliationResult?
+            var firstResult: NativeApprovalReconciliationResult?
             let first = Task { firstResult = await service.reconcile(.init(firstRequest), intent: .admission) }
             try await f.eventually {
                 f.launches.count == 1 && f.clock.pendingSleeps.map(\.deadline).contains(f.clock.uptimeNanoseconds + 50_000_000)
@@ -938,7 +938,7 @@
                 }
             }
             let service = f.service()
-            var firstResult: NativeApprovalService.ReconciliationResult?
+            var firstResult: NativeApprovalReconciliationResult?
             let first = Task { firstResult = await service.reconcile(.init(firstRequest), intent: .admission) }
             try await f.eventually { firstCallback != nil }
 
@@ -972,7 +972,7 @@
                 completions[handle.id] = completion
             }
             let service = f.service()
-            var tasks = [Task<NativeApprovalService.ReconciliationResult, Never>]()
+            var tasks = [Task<NativeApprovalReconciliationResult, Never>]()
             for request in requests {
                 tasks.append(Task { await service.reconcile(.init(request), intent: .admission) })
                 try await f.eventually { completions[request.handle.id] != nil }
@@ -1518,7 +1518,7 @@
             let f = try fixture()
             let request = try f.request()
             f.deliver(request)
-            var caller: Task<NativeApprovalService.ReconciliationResult, Never>?
+            var caller: Task<NativeApprovalReconciliationResult, Never>?
             f.onValidate = { _ in
                 if f.validations.count == 1 {
                     caller?.cancel()

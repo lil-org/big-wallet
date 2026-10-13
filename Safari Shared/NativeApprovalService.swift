@@ -9,10 +9,6 @@ actor NativeApprovalService {
         case focus
     }
 
-    enum ReconciliationResult: Equatable, Sendable {
-        case pending, responseReady, opened, missing, unavailable
-    }
-
     struct RequestReference: Sendable {
         let handle: ExtensionBridge.Handle
         let configurationKey: String
@@ -52,9 +48,9 @@ actor NativeApprovalService {
             runtime: NativeAgentLauncher.IdentifiedRuntime
         )
         case needsDelivery
-        case finished(ReconciliationResult)
+        case finished(NativeApprovalReconciliationResult)
 
-        var result: ReconciliationResult {
+        var result: NativeApprovalReconciliationResult {
             switch self {
             case .owned: return .pending
             case .needsDelivery: return .unavailable
@@ -124,7 +120,7 @@ actor NativeApprovalService {
         let route: NativeAgentRoute
         let deadline: UInt64
         let preparationFinished: ApprovalResolution<Void>
-        let task: Task<ReconciliationResult, Never>
+        let task: Task<NativeApprovalReconciliationResult, Never>
     }
 
     @MainActor
@@ -147,7 +143,7 @@ actor NativeApprovalService {
         _ reference: RequestReference,
         intent: ReconciliationIntent,
         waitDeadline: UInt64? = nil
-    ) async -> ReconciliationResult {
+    ) async -> NativeApprovalReconciliationResult {
         guard !Task.isCancelled else {
             if case .maintenance = intent { return .pending }
             return .unavailable
@@ -165,7 +161,7 @@ actor NativeApprovalService {
                 reference, intent: intent, deadline: deadline, waitDeadline: waitDeadline
             )
         }
-        let result = await bounded(deadline: deadline, timeoutValue: ReconciliationResult.unavailable) {
+        let result = await bounded(deadline: deadline, timeoutValue: NativeApprovalReconciliationResult.unavailable) {
             await self.reconcileRequest(reference, intent: intent, deadline: deadline)
         }
         guard intent == .focus,
@@ -200,7 +196,7 @@ actor NativeApprovalService {
         intent: ReconciliationIntent,
         deadline: UInt64,
         waitDeadline: UInt64? = nil
-    ) async -> ReconciliationResult {
+    ) async -> NativeApprovalReconciliationResult {
         if case .maintenance = intent {
             await dependencies.maintainProfile(reference.handle.profileIdentifier)
         }
@@ -227,7 +223,7 @@ actor NativeApprovalService {
         _ snapshot: ExtensionBridge.Snapshot,
         deadline: UInt64,
         waitDeadline: UInt64?
-    ) async -> ReconciliationResult {
+    ) async -> NativeApprovalReconciliationResult {
         let reference = RequestReference(snapshot)
         let inspectionDeadline: UInt64
         if snapshot.hasActiveExecution {
@@ -247,7 +243,8 @@ actor NativeApprovalService {
                 waitDeadline ?? UInt64.max
             )
         }
-        return await bounded(deadline: inspectionDeadline, timeoutValue: ReconciliationResult.unavailable) {
+        return await bounded(deadline: inspectionDeadline, timeoutValue: NativeApprovalReconciliationResult.unavailable)
+        {
             await self.reconcileOwnership(reference, deadline: inspectionDeadline).result
         }
     }
@@ -256,7 +253,7 @@ actor NativeApprovalService {
         _ snapshot: ExtensionBridge.Snapshot,
         allowDelivery: Bool,
         deadline: UInt64
-    ) async -> ReconciliationResult {
+    ) async -> NativeApprovalReconciliationResult {
         let reference = RequestReference(snapshot)
         let quiet = !allowDelivery || (snapshot.request?.provider == .unknown &&
             snapshot.request?.name == "switchAccount")
@@ -293,7 +290,7 @@ actor NativeApprovalService {
     private func reconcileFocus(
         _ snapshot: ExtensionBridge.Snapshot,
         deadline: UInt64
-    ) async -> ReconciliationResult {
+    ) async -> NativeApprovalReconciliationResult {
         let reference = RequestReference(snapshot)
         var snapshot = snapshot
         while isPending(until: deadline) {
@@ -442,10 +439,10 @@ actor NativeApprovalService {
         let task = Task { [weak self] in
             guard let self else {
                 await preparationFinished.resolve(())
-                return ReconciliationResult.unavailable
+                return NativeApprovalReconciliationResult.unavailable
             }
             let result = await self.bounded(
-                deadline: deadline, timeoutValue: ReconciliationResult.unavailable
+                deadline: deadline, timeoutValue: NativeApprovalReconciliationResult.unavailable
             ) {
                 await precedingPreparation?.value()
                 return await self.deliver(
@@ -464,9 +461,12 @@ actor NativeApprovalService {
         return delivery
     }
 
-    private func awaitDelivery(_ delivery: DeliveryJob, callerDeadline: UInt64) async -> ReconciliationResult {
+    private func awaitDelivery(_ delivery: DeliveryJob, callerDeadline: UInt64) async
+        -> NativeApprovalReconciliationResult
+    {
         if callerDeadline < delivery.deadline {
-            return await bounded(deadline: callerDeadline, timeoutValue: ReconciliationResult.unavailable) {
+            return await bounded(deadline: callerDeadline, timeoutValue: NativeApprovalReconciliationResult.unavailable)
+            {
                 await delivery.task.value
             }
         }
@@ -486,7 +486,7 @@ actor NativeApprovalService {
         reference: RequestReference?,
         preparationFinished: ApprovalResolution<Void>,
         deadline: UInt64
-    ) async -> ReconciliationResult {
+    ) async -> NativeApprovalReconciliationResult {
         guard isPending(until: deadline) else { return .unavailable }
         if let reference {
             switch await reconcileOwnership(reference, deadline: deadline) {
