@@ -25,7 +25,10 @@ guest bootstrap and targeted test commands.
 
 The installed guest bootstrap verifies the VM, session, and source snapshot before
 loading that snapshot's test harness. Changes to the harness, stage manifest, or
-result auditor run with the next snapshot without repeating setup. Changes to the
+result auditor run with the next snapshot without repeating setup. Job selectors
+and harness options live in a payload interpreted by the snapshotted harness;
+the bootstrap validates the execution envelope and treats the profile as a report
+label. New harness options do not require reinstalling the bootstrap. Changes to the
 installed bootstrap, provisioning scripts, or pinned environment require setup
 again. Existing development baselines need one setup refresh for this separation.
 

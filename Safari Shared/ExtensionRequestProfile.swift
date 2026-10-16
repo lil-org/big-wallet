@@ -12,7 +12,7 @@ struct ExtensionRequestProfile: Sendable {
         if case .unknown = request.body {
             let authority = Self.authoritySnapshot(state, configurationKey: record.configurationKey)
             if record.authority == authority.version {
-                request.connectedAccounts = [authority.ethereumAccount, authority.solanaAccount].compactMap { $0 }
+                request.manualSwitchContext = .init(authority: authority)
             }
         }
         return request

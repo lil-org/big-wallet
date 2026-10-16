@@ -15,7 +15,7 @@ const bootstrapSource = await readFile(new URL("../guest_bootstrap.mjs", import.
 const mainDefinition = bootstrapSource.match(/^export async function main\([^]*?^}/m)[0]
     .replace(/^export /, "").replace("import(pathToFileURL(entry).href)", "loadHarness(pathToFileURL(entry).href)");
 const verifyDefinition = bootstrapSource.match(/^export async function verifySession\([^]*?^}/m)[0].replace(/^export /, "");
-const job = overrides => ({version: 1, runId: "bootstrap-fixture", vmId: "fixture-vm", kind: "run", profile: "all", stages: [], onlyTesting: [],
+const job = ({payload, ...overrides} = {}) => ({version: 1, runId: "bootstrap-fixture", vmId: "fixture-vm", kind: "run", profile: "all", payload: {stages: [], onlyTesting: [], ...payload},
     bootstrapTools: Object.fromEntries(BOOTSTRAP_TOOL_NAMES.map(name => [name, "a".repeat(64)])),
     source: {sha256: "b".repeat(64), commit: "c".repeat(40)}, ...overrides});
 
@@ -38,7 +38,7 @@ async function fixture(operation) {
         atomicJSON, hashFile,
         loadHarness: async url => { events.push("import"); return import(url); },
     };
-    const stage = async files => {
+    const stage = async (files, overrides = {}) => {
         const entries = [];
         let bytes = 0;
         for (const [name, value] of Object.entries(files)) {
@@ -54,7 +54,7 @@ async function fixture(operation) {
             }
         }
         await atomicJSON(join(exchange, "snapshot-manifest.json"), {version: 1, files: entries});
-        const selected = job({source: {sha256: await hashFile(join(exchange, "snapshot-manifest.json")), commit: "c".repeat(40), fileCount: entries.length, bytes}});
+        const selected = job({...overrides, source: {sha256: await hashFile(join(exchange, "snapshot-manifest.json")), commit: "c".repeat(40), fileCount: entries.length, bytes}});
         await atomicJSON(join(exchange, "job.json"), selected);
         return selected;
     };
@@ -83,6 +83,47 @@ test("bootstrap and manifest agree on the installed boundary without installing 
     }
     assert.doesNotMatch(bootstrapSource, /^import .* from ["'](?!node:)/m);
 });
+
+test("bootstrap validates reporting labels and opaque payloads without recognizing harness options", () => {
+    for (const selected of [job({profile: "fixture-profile"}), job({payload: {fixtureSelection: "worker"}})]) {
+        assert.deepEqual(validateJobEnvelope(selected), selected);
+        assert.throws(() => validateJob(selected));
+    }
+    assert.doesNotThrow(() => validateJobEnvelope(job({profile: "a".repeat(128)})));
+    for (const profile of [undefined, null, [], 1, "", "a".repeat(129)]) {
+        assert.throws(() => validateJobEnvelope({...job(), profile}), /profile label/);
+    }
+    for (const payload of [undefined, null, [], 1, "options"]) {
+        assert.throws(() => validateJobEnvelope({...job(), payload}), /payload must be an object/);
+    }
+    assert.doesNotThrow(() => validateJobEnvelope({...job(), payload: {}}));
+});
+
+test("a verified snapshot supports a new profile and option without changing the installed bootstrap", async () => fixture(async ({stage, run, events}) => {
+    const bootstrapTools = job().bootstrapTools;
+    const selected = await stage({
+        ...sources,
+        "Scripts/vm/test_manifest.mjs": `export function select(job) {
+            if (job.profile !== "fixture-profile" || job.payload.fixtureSelection !== "worker") { throw new Error("Invalid fixture selection"); }
+            return job.payload.fixtureSelection;
+        }`,
+        "Scripts/vm/guest.mjs": `import {select} from "./test_manifest.mjs";
+        export async function runJob({job}) {
+            return {runId: job.runId, status: "passed", profile: job.profile, selected: select(job)};
+        }`,
+    }, {profile: "fixture-profile", payload: {fixtureSelection: "worker"}});
+    assert.throws(() => validateJob(selected));
+    assert.deepEqual(selected.bootstrapTools, bootstrapTools);
+    const report = await run({bootstrapToolsEvidence: async expected => {
+        events.push("bootstrap");
+        assert.deepEqual({...expected}, bootstrapTools);
+        return {available: true};
+    }});
+    assert.equal(report.status, "passed");
+    assert.equal(report.profile, "fixture-profile");
+    assert.equal(report.selected, "worker");
+    assert.deepEqual(events, ["exchange", "identity", "bootstrap", "lock", "provision", "volume", "materialize", "import", "release"]);
+}));
 
 test("the installed bootstrap executes the current verified snapshot after every guard and holds its lock", async () => fixture(async ({events, stage, run}) => {
     const selected = await stage(sources);

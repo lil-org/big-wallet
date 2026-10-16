@@ -20,7 +20,7 @@ const fixture = async fn => {
     const root = await realpath(await mkdtemp(join(tmpdir(), "big-wallet-simulator-unit-")));
     try { return await fn(root); } finally { await rm(root, {recursive: true, force: true}); }
 };
-const job = overrides => ({version: 1, runId: "simulator-fixture", vmId: "fixture-vm", kind: "run", profile: "all", stages: [], onlyTesting: [],
+const job = ({payload, ...overrides} = {}) => ({version: 1, runId: "simulator-fixture", vmId: "fixture-vm", kind: "run", profile: "all", payload: {stages: [], onlyTesting: [], ...payload},
     bootstrapTools: Object.fromEntries(BOOTSTRAP_TOOL_NAMES.map(name => [name, "a".repeat(64)])),
     source: {sha256: "b".repeat(64), commit: "c".repeat(40)}, ...overrides});
 const nativeStage = {id: "test.visionos.debug", group: "test", command: "xcodebuild", args: ["test-without-building"],
@@ -136,7 +136,7 @@ test("build stages stay untouched and successful simulator preparation runs imme
 
 test("Debug-only unfiltered native tests receive Release performance proof on each simulator platform", () => {
     for (const stages of [[], ["test"]]) {
-        const manifest = createManifest(job({configuration: "Debug", stages}));
+        const manifest = createManifest(job({payload: {configuration: "Debug", stages}}));
         for (const platform of ["ios", "visionos"]) {
             const gate = manifest.find(stage => stage.id === `performance.${platform}.release`);
             assert.ok(gate);
@@ -154,8 +154,8 @@ test("Debug-only unfiltered native tests receive Release performance proof on ea
 });
 
 test("normal full matrices and filtered or non-test Debug selections add no simulator performance stages", () => {
-    for (const options of [{}, {profile: "extended"}, {configuration: "Debug", stages: ["build"]},
-        {configuration: "Debug", stages: ["performance"]}, {configuration: "Debug", stages: ["test"], onlyTesting: ["Tests visionOS/FixtureTests"]}]) {
+    for (const options of [{}, {profile: "extended"}, {payload: {configuration: "Debug", stages: ["build"]}},
+        {payload: {configuration: "Debug", stages: ["performance"]}}, {payload: {configuration: "Debug", stages: ["test"], onlyTesting: ["Tests visionOS/FixtureTests"]}}]) {
         const manifest = createManifest(job(options));
         assert.ok(!manifest.some(stage => /^performance\.(ios|visionos)\.release$/.test(stage.id)));
     }
@@ -170,7 +170,7 @@ test("normal full matrices and filtered or non-test Debug selections add no simu
 });
 
 test("whole-target selectors select only that platform and retain full target audit with selected overall scope", () => {
-    const selectedJob = job({stages: ["test"], onlyTesting: ["Tests visionOS"]});
+    const selectedJob = job({payload: {stages: ["test"], onlyTesting: ["Tests visionOS"]}});
     const manifest = createManifest(selectedJob);
     assert.deepEqual(manifest.filter(stage => stage.nativeAudit).map(stage => stage.id), ["test.visionos.debug", "test.visionos.release"]);
     for (const stage of manifest.filter(stage => stage.nativeAudit)) {
@@ -184,7 +184,7 @@ test("whole-target selectors select only that platform and retain full target au
 });
 
 test("Debug whole-target selection adds Release proof only for its full selected platform", () => {
-    const manifest = createManifest(job({configuration: "Debug", stages: ["test"], onlyTesting: ["Tests visionOS"]}));
+    const manifest = createManifest(job({payload: {configuration: "Debug", stages: ["test"], onlyTesting: ["Tests visionOS"]}}));
     assert.deepEqual(manifest.filter(stage => stage.nativeAudit).map(stage => stage.id), ["test.visionos.debug", "performance.visionos.release"]);
     assert.equal(manifest.find(stage => stage.id === "test.visionos.debug").nativeAudit.filtered, false);
     assert.equal(manifest.find(stage => stage.id === "performance.visionos.release").nativeAudit.platform, "visionos");
@@ -195,7 +195,7 @@ test("qualified Debug targets, performance classes, and gate methods retain Rele
         const testClass = `${platform.target}/WalletCoreProxyPerformanceGateTests`;
         const selectors = [platform.target, testClass, ...PERFORMANCE_TESTS.flatMap(name => [`${testClass}/${name}`, `${testClass}/${name}()`])];
         for (const selector of selectors) {
-            const manifest = createManifest(job({configuration: "Debug", stages: ["test"], onlyTesting: [selector]}));
+            const manifest = createManifest(job({payload: {configuration: "Debug", stages: ["test"], onlyTesting: [selector]}}));
             const native = manifest.filter(stage => stage.nativeAudit);
             const gate = platform.id === "macos" ? "performance.release" : `performance.${platform.id}.release`;
             assert.deepEqual(native.map(stage => stage.id), [`test.${platform.id}.debug`, gate], selector);
@@ -209,7 +209,7 @@ test("qualified Debug targets, performance classes, and gate methods retain Rele
 
 test("unqualified Debug performance filters retain Release proof on all three platforms", () => {
     for (const selector of ["WalletCoreProxyPerformanceGateTests", ...PERFORMANCE_TESTS.map(name => `WalletCoreProxyPerformanceGateTests/${name}()`)]) {
-        const manifest = createManifest(job({configuration: "Debug", stages: ["test"], onlyTesting: [selector]}));
+        const manifest = createManifest(job({payload: {configuration: "Debug", stages: ["test"], onlyTesting: [selector]}}));
         const gates = manifest.filter(stage => stage.nativeAudit?.kind === "performance");
         assert.deepEqual(gates.map(stage => stage.nativeAudit.platform), ["macos", "ios", "visionos"], selector);
         assert.ok(gates.every(stage => stage.nativeAudit.configuration === "Release"));
@@ -219,20 +219,20 @@ test("unqualified Debug performance filters retain Release proof on all three pl
 test("unrelated Debug methods and mixed platform filters do not add unnecessary Release proof", () => {
     for (const selector of ["FixtureTests", "WalletCoreProxyPerformanceGateTests/testScryptDefaultParametersAndSequentialDerivationVectors",
         "WalletCoreProxyPerformanceGateTests/testUnknownPerformanceGate", "OtherTests/testEd25519SigningPerformanceGate"]) {
-        const manifest = createManifest(job({configuration: "Debug", stages: ["test"], onlyTesting: [selector]}));
+        const manifest = createManifest(job({payload: {configuration: "Debug", stages: ["test"], onlyTesting: [selector]}}));
         assert.ok(!manifest.some(stage => stage.nativeAudit?.configuration === "Release"), selector);
     }
-    const manifest = createManifest(job({configuration: "Debug", stages: ["test"], onlyTesting: [
+    const manifest = createManifest(job({payload: {configuration: "Debug", stages: ["test"], onlyTesting: [
         "Tests iOS/FixtureTests", "Tests macOS/WalletCoreProxyPerformanceGateTests",
         "Tests visionOS/WalletCoreProxyPerformanceGateTests/testUnknownPerformanceGate",
-    ]}));
+    ]}}));
     assert.deepEqual(manifest.filter(stage => stage.nativeAudit?.configuration === "Release").map(stage => stage.id), ["performance.release"]);
 });
 
 test("Debug and Release filtered matrices use their selected Release tests without extra performance stages", () => {
     for (const platform of PLATFORMS) {
         for (const suffix of ["", ...PERFORMANCE_TESTS.map(name => `/${name}`)]) {
-            const manifest = createManifest(job({stages: ["test"], onlyTesting: [`${platform.target}/WalletCoreProxyPerformanceGateTests${suffix}`]}));
+            const manifest = createManifest(job({payload: {stages: ["test"], onlyTesting: [`${platform.target}/WalletCoreProxyPerformanceGateTests${suffix}`]}}));
             assert.deepEqual(manifest.filter(stage => stage.nativeAudit).map(stage => stage.id), [
                 `test.${platform.id}.debug`, `test.${platform.id}.release`,
             ]);
@@ -241,8 +241,8 @@ test("Debug and Release filtered matrices use their selected Release tests witho
 });
 
 test("only exact known whole-target names bypass the class-selector grammar", () => {
-    for (const selector of ["Tests macOS", "Tests iOS", "Tests visionOS"]) { assert.doesNotThrow(() => validateJob(job({onlyTesting: [selector]}))); }
+    for (const selector of ["Tests macOS", "Tests iOS", "Tests visionOS"]) { assert.doesNotThrow(() => validateJob(job({payload: {onlyTesting: [selector]}}))); }
     for (const selector of ["Tests watchOS", "Tests visionOS ", " Tests visionOS", "Tests visionOS;rm", "Tests visionOS/Foo bar", "Tests visionOS/../escape"]) {
-        assert.throws(() => validateJob(job({onlyTesting: [selector]})), /Invalid XCTest selection/);
+        assert.throws(() => validateJob(job({payload: {onlyTesting: [selector]}})), /Invalid XCTest selection/);
     }
 });

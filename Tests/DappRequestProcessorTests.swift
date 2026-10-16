@@ -109,10 +109,10 @@ final class DappRequestProcessorTests: XCTestCase {
                 clock: { fixture.now }
             )
         )
-        let result = await executor.execute(claim: claim, prepare: { _ in
+        let result = await executor.execute(claim: claim, prepare: { _ -> DurableApprovalExecutor.Preparation<Never> in
             .ready(consent: consent, signing: nil)
         }, resolve: { _ in .abandon })
-        XCTAssertEqual(result, .abandoned)
+        XCTAssertEqual(result, .finished(.abandoned))
         let context = ApprovalResolutionContext(
             accounts: catalog.orderedAccounts, selectionNetwork: Networks.ethereum
         )
@@ -2347,38 +2347,15 @@ final class DappRequestProcessorTests: XCTestCase {
     }
 
     func testSwitchAccountTreatsAccountlessEthereumAsDisconnectedButKeepsNetwork() async throws {
-        let requestData = try JSONSerialization.data(withJSONObject: [
-            "id": 1,
-            "name": "switchAccount",
-            "provider": "unknown",
-            "host": "example.com",
-            "configurationKey": "example.com",
-            "enqueueAttempt": "00000000000000000000000000000001",
-            "admissionDeadline": dappRequestAdmissionDeadline,
-            "workflowVersion": ExtensionBridge.workflowVersion,
-            "body": [
-                "latestConfigurations": [
-                    [
-                        "provider": "ethereum",
-                        "chainId": "0x1",
-                    ],
-                    [
-                        "provider": "ethereum",
-                        "results": [""],
-                        "chainId": "0x1",
-                    ],
-                ],
-            ],
-        ])
-        let request = try XCTUnwrap(SafariRequest(data: requestData))
-
-        guard case .approval(let actionIntent) = DappRequestProcessor().prepare(try requestBindingForTesting(request), catalog: processorCatalog(accounts: [])),
+        let binding = try switchAccountBinding(chainID: "0xa")
+        guard case .approval(let actionIntent) = DappRequestProcessor().prepare(binding, catalog: processorCatalog(accounts: [])),
               case .switchAccount(let action) = actionIntent.action else {
             return XCTFail("Expected switch-account action")
         }
 
         XCTAssertFalse(action.initiallyConnectedProviders.contains(.ethereum))
-        XCTAssertEqual(action.network?.chainId, EthereumNetwork.ethMainnetChainId)
+        XCTAssertEqual(action.network?.chainId, 10)
+        XCTAssertEqual(binding.request.manualSwitchContext?.ethereumChainId, "0xa")
     }
 
     func testPrepareReturnsUnauthorizedForUnownedKnownChainSwitch() throws {
@@ -3460,13 +3437,12 @@ final class DappRequestProcessorTests: XCTestCase {
             let account = processorAccount(privateKey: key, coin: coin)
             let first = SpecificWalletAccount(walletId: "first", account: account)
             let granted = SpecificWalletAccount(walletId: "second", account: account)
-            var request = try switchAccountRequest(connectedAccount: account)
-            request.connectedAccounts = [WalletAccountDescriptor(walletID: granted.walletId, account: account)]
+            let binding = try switchAccountBinding(accounts: [WalletAccountDescriptor(walletID: granted.walletId, account: account)])
             let catalog = WalletReviewCatalog(
                 identity: WalletCatalogIdentity(generation: nil, catalogData: Data()),
                 orderedAccounts: [first, granted]
             )
-            guard case .approval(let actionIntent) = DappRequestProcessor().prepare(try requestBindingForTesting(request), catalog: catalog),
+            guard case .approval(let actionIntent) = DappRequestProcessor().prepare(binding, catalog: catalog),
               case .switchAccount(let action) = actionIntent.action else {
                 return XCTFail("Expected manual account selection")
             }
@@ -3478,10 +3454,9 @@ final class DappRequestProcessorTests: XCTestCase {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
         for coin in [WalletCoin.ethereum, .solana] {
             let account = processorAccount(privateKey: key, coin: coin)
-            var request = try switchAccountRequest(connectedAccount: account)
-            request.connectedAccounts = [WalletAccountDescriptor(walletID: "removed", account: account)]
+            let binding = try switchAccountBinding(accounts: [WalletAccountDescriptor(walletID: "removed", account: account)])
             guard case .approval(let actionIntent) = DappRequestProcessor().prepare(
-                try requestBindingForTesting(request), catalog: processorCatalog(accounts: [account])
+                binding, catalog: processorCatalog(accounts: [account])
             ),
               case .switchAccount(let action) = actionIntent.action else { return XCTFail("Expected manual account selection") }
             XCTAssertTrue(action.selectedAccounts.isEmpty)
@@ -3492,30 +3467,34 @@ final class DappRequestProcessorTests: XCTestCase {
     func testDisconnectedSwitchAccountStillSuggestsDefaultAccount() throws {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
         let account = processorAccount(privateKey: key, coin: .ethereum)
-        let request = try switchAccountRequest(connectedAccount: nil)
         guard case .approval(let actionIntent) = DappRequestProcessor().prepare(
-            try requestBindingForTesting(request), catalog: processorCatalog(accounts: [account])
+            try switchAccountBinding(), catalog: processorCatalog(accounts: [account])
         ),
               case .switchAccount(let action) = actionIntent.action else { return XCTFail("Expected manual account selection") }
         XCTAssertEqual(action.selectedAccounts, [SpecificWalletAccount(walletId: "wallet", account: account)])
         XCTAssertTrue(action.initiallyConnectedProviders.isEmpty)
     }
 
-    private func switchAccountRequest(connectedAccount: WalletAccount?) throws -> SafariRequest {
-        var configuration: [String: Any] = ["provider": "ethereum", "results": [], "chainId": "0x1"]
-        if let account = connectedAccount {
-            configuration = account.coin == .ethereum
-                ? ["provider": "ethereum", "results": [account.address], "chainId": "0x1"]
-                : ["provider": "solana", "publicKey": account.address]
+    private func switchAccountBinding(
+        accounts: [WalletAccountDescriptor] = [],
+        chainID: String = "0x1"
+    ) throws -> ExtensionBridge.RequestBinding {
+        let fixture = try ApprovedExecutionTestFixture()
+        let network = try XCTUnwrap(Networks.withChainIdHex(chainID))
+        for account in accounts {
+            try fixture.establishGrant(account, network: network)
         }
-        return try XCTUnwrap(SafariRequest(json: [
-            "id": 1, "name": "switchAccount", "provider": "unknown",
-            "host": "example.com", "configurationKey": "https://example.com",
-            "enqueueAttempt": "00000000000000000000000000000001",
-            "admissionDeadline": dappRequestAdmissionDeadline,
-            "workflowVersion": ExtensionBridge.workflowVersion,
-            "body": ["latestConfigurations": [configuration]],
-        ]))
+        if chainID != "0x1", !accounts.contains(where: { $0.coin == .ethereum }) {
+            let chainSwitch = try fixture.enqueue(
+                id: 2, name: "switchEthereumChain", provider: .ethereum,
+                body: ["address": "", "chainId": "0x1", "object": ["chainId": chainID]]
+            )
+            XCTAssertEqual(fixture.store.completeImmediate(
+                handle: chainSwitch.handle, resolution: .ethereumChain(chainID)
+            ), .persisted)
+        }
+        let snapshot = try fixture.enqueue(id: 1, name: "switchAccount", provider: .unknown, body: [:])
+        return try XCTUnwrap(snapshot.requestBinding)
     }
 
     func testExistingCustomChainAdditionRequiresMatchingDefinition() throws {

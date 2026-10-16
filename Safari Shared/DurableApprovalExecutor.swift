@@ -72,10 +72,11 @@ final class DurableApprovalExecutor {
         }
     }
 
-    enum Preparation {
+    enum Preparation<Stop: Sendable> {
         case ready(consent: ReviewConsent, signing: WalletSigningSession?)
         case rejected(ImmediateResolution)
         case abandon
+        case stopped(Stop)
     }
 
     enum Resolution: Sendable {
@@ -85,12 +86,17 @@ final class DurableApprovalExecutor {
         case abandon
     }
 
-    enum Result: Equatable {
+    enum Result: Equatable, Sendable {
         case persisted
         case ownershipLost
         case retryablePersistenceFailure
         case reviewRequired
         case abandoned
+    }
+
+    enum ExecutionOutcome<Stop: Sendable>: Sendable {
+        case finished(Result)
+        case preparationStopped(reason: Stop, release: ExtensionBridge.StoreMutationResult)
     }
 
     nonisolated static let defaultBroadcastTimeoutNanoseconds: UInt64 =
@@ -152,14 +158,14 @@ final class DurableApprovalExecutor {
         waitForBroadcastTimeout = environment.waitForBroadcastTimeout
     }
 
-    func execute(
+    func execute<Stop: Sendable>(
         claim: ExtensionBridge.ApprovalClaim,
-        prepare: @MainActor (ClaimContext) async -> Preparation,
+        prepare: @MainActor (ClaimContext) async -> Preparation<Stop>,
         resolve: @escaping @MainActor @Sendable (ReviewConsent) async -> Resolution
-    ) async -> Result {
-        guard claim.adoptForExecution() else { return .ownershipLost }
+    ) async -> ExecutionOutcome<Stop> {
+        guard claim.adoptForExecution() else { return .finished(.ownershipLost) }
         defer { claim.releaseUnapproved() }
-        guard !Task.isCancelled else { return await abandon(claim: claim) }
+        guard !Task.isCancelled else { return .finished(await abandon(claim: claim)) }
         let context = ClaimContext(
             handle: claim.handle,
             executionDeadline: claim.executionDeadline,
@@ -173,44 +179,46 @@ final class DurableApprovalExecutor {
             consent = preparedConsent
             signing = preparedSigning
         case .rejected(let resolution):
-            return await complete(claim: claim, resolution: resolution)
+            return .finished(await complete(claim: claim, resolution: resolution))
         case .abandon:
-            return await abandon(claim: claim)
+            return .finished(await abandon(claim: claim))
+        case .stopped(let reason):
+            return .preparationStopped(reason: reason, release: await store.abandon(claim: claim))
         }
         defer { signing?.invalidate() }
         guard claim.matchesConsent(consent) else {
-            return await abandon(claim: claim)
+            return .finished(await abandon(claim: claim))
         }
         defer { consent.invalidateAuthorization() }
         guard signingSessionMatches(signing, consent: consent, claim: claim),
               claim.authority.allowsExecution(at: clock(), isCancelled: Task.isCancelled) else {
-            return await abandon(claim: claim)
+            return .finished(await abandon(claim: claim))
         }
         guard claim.authority.isDecisionFresh(for: claim.request, at: clock()) else {
-            return await complete(claim: claim, resolution: Self.staleResolution)
+            return .finished(await complete(claim: claim, resolution: Self.staleResolution))
         }
         guard case .value(let resolution) = await context.runBeforeDeadline(operation: {
             await resolve(consent)
         }) else {
-            return await abandon(claim: claim)
+            return .finished(await abandon(claim: claim))
         }
         switch resolution {
         case .approved(let approval):
             guard claim.authority.isDecisionFresh(for: claim.request, at: clock()) else {
-                return await complete(claim: claim, resolution: Self.staleResolution)
+                return .finished(await complete(claim: claim, resolution: Self.staleResolution))
             }
-            return await executeApproved(claim: claim, approval: approval, signing: signing, context: context)
+            return .finished(await executeApproved(claim: claim, approval: approval, signing: signing, context: context))
         case .immediate(let resolution):
-            return await complete(claim: claim, resolution: resolution)
+            return .finished(await complete(claim: claim, resolution: resolution))
         case .reviewRequired:
             signing?.invalidate()
             switch await store.returnToReview(claim: claim, consent: consent) {
-            case .persisted: return .reviewRequired
-            case .ownershipLost: return .ownershipLost
-            case .retryablePersistenceFailure: return .retryablePersistenceFailure
+            case .persisted: return .finished(.reviewRequired)
+            case .ownershipLost: return .finished(.ownershipLost)
+            case .retryablePersistenceFailure: return .finished(.retryablePersistenceFailure)
             }
         case .abandon:
-            return await abandon(claim: claim)
+            return .finished(await abandon(claim: claim))
         }
     }
 
@@ -394,3 +402,5 @@ final class DurableApprovalExecutor {
         )
     }
 }
+
+extension DurableApprovalExecutor.ExecutionOutcome: Equatable where Stop: Equatable {}

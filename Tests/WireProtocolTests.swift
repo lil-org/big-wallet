@@ -220,6 +220,7 @@ final class WireProtocolTests: XCTestCase {
             let request = try XCTUnwrap(SafariRequest(wire: wire), fixture.name)
             XCTAssertEqual(request.id, json["id"] as? Int, fixture.name)
             XCTAssertEqual(request.name, json["name"] as? String, fixture.name)
+            XCTAssertNil(request.manualSwitchContext, fixture.name)
             XCTAssertEqual(wire.json as NSDictionary, json as NSDictionary, fixture.name)
             for raw in [
                 try XCTUnwrap(SafariRequest(json: json), fixture.name),
@@ -234,6 +235,7 @@ final class WireProtocolTests: XCTestCase {
                 XCTAssertEqual(request.admissionDeadlineMilliseconds, raw.admissionDeadlineMilliseconds, fixture.name)
                 XCTAssertEqual(request.workflowVersion, raw.workflowVersion, fixture.name)
                 XCTAssertEqual(request.authority, raw.authority, fixture.name)
+                XCTAssertNil(raw.manualSwitchContext, fixture.name)
                 switch (request.body, raw.body) {
                 case (.ethereum(let mapped), .ethereum(let original)):
                     XCTAssertEqual(mapped.method, original.method, fixture.name)
@@ -255,9 +257,6 @@ final class WireProtocolTests: XCTestCase {
                                    try original.sendOptions.map { try canonicalJSON($0) }, fixture.name)
                 case (.unknown(let mapped), .unknown(let original)):
                     XCTAssertEqual(mapped.method, original.method, fixture.name)
-                    XCTAssertEqual(mapped.providerConfigurations.map(\.provider), original.providerConfigurations.map(\.provider), fixture.name)
-                    XCTAssertEqual(mapped.providerConfigurations.map(\.address), original.providerConfigurations.map(\.address), fixture.name)
-                    XCTAssertEqual(mapped.providerConfigurations.map(\.chainId), original.providerConfigurations.map(\.chainId), fixture.name)
                 default:
                     XCTFail("Request body changed provider: \(fixture.name)")
                 }

@@ -15,7 +15,7 @@ struct SafariRequest: Sendable {
     let workflowVersion: Int
     var authority: ExtensionBridge.AuthorityVersion?
     var authorizedAccount: WalletAccountDescriptor?
-    var connectedAccounts: [WalletAccountDescriptor] = []
+    var manualSwitchContext: ManualSwitchContext?
 
     var admissionDeadline: Date {
         Date(timeIntervalSince1970: TimeInterval(admissionDeadlineMilliseconds) / 1_000)
@@ -35,7 +35,7 @@ struct SafariRequest: Sendable {
                 guard let body = Solana(name: name, json: json) else { return nil }
                 self = .solana(body)
             case .unknown:
-                guard let body = Unknown(name: name, json: json) else { return nil }
+                guard let body = Unknown(name: name) else { return nil }
                 self = .unknown(body)
             case .multiple:
                 return nil

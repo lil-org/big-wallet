@@ -148,6 +148,37 @@ class RunSnapshotBindingTests(unittest.TestCase):
         self.assertIn('worker.current-check', [stage['id'] for stage in plan['stages']])
         self.assertNotIn('worker.check', [stage['id'] for stage in plan['stages']])
 
+    def test_new_snapshot_option_changes_the_plan_without_reprovisioning(self):
+        baseline = host.read_json(self.state / 'baseline.json')
+        path = self.tools / 'test_manifest.mjs'
+        original = path.read_text()
+        changed = original.replace(
+            'new Set(["stages", "onlyTesting", "configuration", "approvalArgs"])',
+            'new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "fixtureOption"])'
+        ).replace('["check", "check", []]', '[options.fixtureOption ? "option-check" : "check", "check", []]')
+        self.assertNotEqual(changed, original)
+        path.write_text(changed)
+        self.assertEqual(host.bootstrap_source_digest(), baseline['bootstrapSourceDigest'])
+        stage_plan = host.stage_planned_result
+        exchanges = []
+
+        def plan_with_new_option(exchange, job):
+            job['payload']['fixtureOption'] = True
+            host.atomic_json(exchange / 'job.json', job)
+            exchanges.append(exchange)
+            return stage_plan(exchange, job)
+
+        with patch.object(host, 'stage_planned_result', side_effect=plan_with_new_option), \
+                patch.object(host, 'stage_provisioning') as provisioning:
+            self.assertEqual(host.run_tests(self.args, self.state, self.environment), 0)
+        provisioning.assert_not_called()
+        self.assertEqual(host.read_json(self.state / 'baseline.json'), baseline)
+        job = host.read_json(exchanges[0] / 'job.json')
+        self.assertTrue(job['payload']['fixtureOption'])
+        plan = host.read_json(exchanges[0] / 'artifacts/planned-result.json')
+        self.assertIn('worker.option-check', [stage['id'] for stage in plan['stages']])
+        self.assertEqual(plan['jobSHA256'], host.hash_regular_file(exchanges[0] / 'job.json'))
+
     def test_later_workspace_edits_do_not_invalidate_the_verified_frozen_snapshot(self):
         snapshot = host.snapshot_source
         originals = {name: (self.tools / name).read_bytes() for name in (*self.sources, *self.harness)}
@@ -185,7 +216,7 @@ class PlannedInventoryTests(unittest.TestCase):
         host.atomic_json(self.exchange / 'snapshot-manifest.json', {'version': 1, 'files': [
             {'path': 'Scripts/vm/test_manifest.mjs', 'type': 'file', 'mode': 0o644, 'sha256': digest}]})
         self.job = {'version': 1, 'runId': 'plan-fixture', 'vmId': 'fixture-vm', 'kind': 'run',
-                    'profile': 'all', 'stages': [], 'onlyTesting': [],
+                    'profile': 'all', 'payload': {'stages': [], 'onlyTesting': []},
                     'source': {'sha256': host.hash_regular_file(self.exchange / 'snapshot-manifest.json'), 'commit': 'b' * 40},
                     'bootstrapTools': {name: 'a' * 64 for name in
                                     ('VMGuestAgent', 'guest_runner', 'guest_bootstrap.mjs')}}
@@ -231,10 +262,10 @@ class PlannedInventoryTests(unittest.TestCase):
         cases = [
             {},
             {'profile': 'extended'},
-            {'stages': ['repository', 'worker']},
-            {'stages': ['test'], 'configuration': 'Debug', 'onlyTesting': ['Tests visionOS']},
-            {'stages': ['test'], 'configuration': 'Debug', 'onlyTesting': ['Tests iOS/SecretHandlingTests/testSecretBufferIsZeroed']},
-            {'profile': 'extended', 'stages': ['approval'], 'configuration': 'Release', 'approvalArgs': ['--soak', '--seed', '42']},
+            {'payload': {'stages': ['repository', 'worker'], 'onlyTesting': []}},
+            {'payload': {'stages': ['test'], 'configuration': 'Debug', 'onlyTesting': ['Tests visionOS']}},
+            {'payload': {'stages': ['test'], 'configuration': 'Debug', 'onlyTesting': ['Tests iOS/SecretHandlingTests/testSecretBufferIsZeroed']}},
+            {'profile': 'extended', 'payload': {'stages': ['approval'], 'onlyTesting': [], 'configuration': 'Release', 'approvalArgs': ['--soak', '--seed', '42']}},
         ]
         for overrides in cases:
             with self.subTest(selection=overrides), patch.object(host, 'checked', wraps=host.checked) as commands:
@@ -245,15 +276,16 @@ class PlannedInventoryTests(unittest.TestCase):
                 self.assertNotIn('finishedAt', plan)
                 self.assertFalse((self.exchange / 'artifacts/result.json').exists())
                 self.assertEqual(plan['source'], self.job['source'])
-                self.assertEqual(plan['selection']['onlyTesting'], overrides.get('onlyTesting', []))
+                selection = overrides.get('payload', self.job['payload'])
+                self.assertEqual(plan['selection'], selection)
                 self.assertEqual(len(commands.call_args_list), 2)
                 self.assertTrue(all(Path(call.args[0][0]).name == 'node' for call in commands.call_args_list))
                 ids = {stage['id'] for stage in plan['stages']}
-                if overrides.get('onlyTesting') == ['Tests visionOS']:
+                if selection.get('onlyTesting') == ['Tests visionOS']:
                     self.assertTrue({'provider.install', 'protocol.check', 'build-tests.visionos.debug',
                                      'test.visionos.debug', 'performance.visionos.release'} <= ids)
                     self.assertFalse(any('.ios.' in identifier or '.macos.' in identifier for identifier in ids))
-                if overrides.get('onlyTesting', [''])[0].startswith('Tests iOS/'):
+                if any(test.startswith('Tests iOS/') for test in selection['onlyTesting']):
                     self.assertIn('build-tests.ios.debug', ids)
                     self.assertFalse(any(identifier.startswith('performance.') for identifier in ids))
                 if overrides == {'profile': 'extended'}:
@@ -277,7 +309,7 @@ class PlannedInventoryTests(unittest.TestCase):
             with self.subTest(trigger=trigger):
                 for name in ('stop.json', 'vm-stop', 'vm-status.json', 'artifacts/result.json'):
                     (self.exchange / name).unlink(missing_ok=True)
-                plan = self.plan(stages=['test'], configuration='Debug', onlyTesting=['Tests visionOS'])
+                plan = self.plan(payload={'stages': ['test'], 'configuration': 'Debug', 'onlyTesting': ['Tests visionOS']})
                 if trigger == 'stop':
                     host.atomic_json(self.exchange / 'stop.json', {'runId': self.job['runId']})
                 class Child:
@@ -306,7 +338,7 @@ class PlannedInventoryTests(unittest.TestCase):
                 self.assertEqual(host.read_json(self.exchange / 'artifacts/planned-result.json'), plan)
 
     def test_interrupted_reconciliation_uses_plan_when_guest_never_reported(self):
-        plan = self.plan(stages=['approval'], configuration='Release')
+        plan = self.plan(payload={'stages': ['approval'], 'configuration': 'Release', 'onlyTesting': []})
         vm = self.root / 'runs/plan-fixture.vbvm'
         vm.mkdir(parents=True)
         host.atomic_json(self.root / 'active.json', {'runId': self.job['runId'], 'exchange': str(self.exchange), 'vm': str(vm), 'cloneOwned': True, 'phase': 'preparing'})
@@ -331,7 +363,7 @@ class PlannedInventoryTests(unittest.TestCase):
 
     def test_filter_changes_cannot_reuse_an_inventory_from_the_same_source(self):
         self.plan()
-        host.atomic_json(self.exchange / 'job.json', {**self.job, 'onlyTesting': ['Tests iOS']})
+        host.atomic_json(self.exchange / 'job.json', {**self.job, 'payload': {**self.job['payload'], 'onlyTesting': ['Tests iOS']}})
         with self.assertRaisesRegex(host.RunnerError, 'planned inventory does not match'):
             host.finalize_interrupted_result(self.exchange, self.job['runId'], 'cancelled')
         self.assertFalse((self.exchange / 'artifacts/result.json').exists())
@@ -737,7 +769,7 @@ class PlannedInventoryTests(unittest.TestCase):
         for failure in (OSError('fixture: VMHost cannot execute'), KeyboardInterrupt()):
             with self.subTest(failure=type(failure).__name__):
                 (self.exchange / 'artifacts/result.json').unlink(missing_ok=True)
-                plan = self.plan(stages=['test'], onlyTesting=['Tests visionOS'])
+                plan = self.plan(payload={'stages': ['test'], 'onlyTesting': ['Tests visionOS']})
                 with patch.object(host.subprocess, 'Popen', side_effect=failure), \
                         patch.object(host, 'stop_owned_process') as stop:
                     result = host.monitor_vm(SimpleNamespace(command='run'), self.root, self.root / 'unused.vbvm',
@@ -810,7 +842,7 @@ class PlannedInventoryTests(unittest.TestCase):
                 self.assertFalse((self.root / 'active.json').exists())
 
     def test_stop_arriving_during_monitor_handoff_is_checked_before_popen(self):
-        self.plan(stages=['test'], onlyTesting=['Tests visionOS'])
+        self.plan(payload={'stages': ['test'], 'onlyTesting': ['Tests visionOS']})
         vm = self.root / 'run.vbvm'
         host.register_operation(self.root, vm, self.exchange, self.job['runId'], 'preparing')
         started = host.read_json(self.root / 'active.json')['startedAt']

@@ -250,6 +250,12 @@ The installed bootstrap consists of `VMGuestAgent`, `guest_runner`, and
 `guest_bootstrap.mjs`. It verifies the guest session, storage, and complete source
 snapshot before importing `guest.mjs` from the materialized checkout. The test
 manifest, stage execution, and result auditor run from that same captured source.
+Job identity, source and bootstrap hashes, execution kind, and the profile label
+remain in the outer job envelope. Stage selectors, XCTest filters, configuration,
+and approval arguments live in `payload`. The bootstrap checks only that the
+profile is a nonempty bounded label and the payload is an object; the captured
+harness validates supported profiles and payload options. Adding a harness option
+or profile therefore does not change the installed bootstrap or report format.
 Editing those harness files or their tests does not require baseline provisioning;
 the reported source hash identifies their tested bytes. Direct `guest.mjs`
 invocations are rejected; submit jobs through `Scripts/test_vm.sh`.
@@ -257,8 +263,10 @@ invocations are rejected; submit jobs through `Scripts/test_vm.sh`.
 Changes to the installed bootstrap, its installer, or environment pins require
 setup again. Setup applies the update headlessly using the retained guest account
 access, then checks installed bootstrap hashes before tests and baseline promotion.
-An older prepared VM needs one setup refresh to install this boundary. Interrupted
-promotion resumes from its recorded state on the next setup attempt.
+An older prepared VM needs one setup refresh to install this boundary and its
+nested job payload. Producers and consumers use the current format together,
+without accepting earlier development job formats. Interrupted promotion resumes
+from its recorded state on the next setup attempt.
 
 Live Safari UI automation, production publishing/deployment, and live paid RPC
 probes are outside this runner's suite. Simulator and fixture results do not

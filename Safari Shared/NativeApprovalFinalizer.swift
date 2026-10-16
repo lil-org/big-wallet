@@ -68,9 +68,9 @@ final class NativeApprovalFinalizer {
             return .interruptionRequired
         }
         defer { consent.invalidateAuthorization() }
-        let result = await executor.execute(
+        let outcome = await executor.execute(
             claim: claim,
-            prepare: { _ in
+            prepare: { _ -> DurableApprovalExecutor.Preparation<Never> in
                 let signing = consent.intent.action.signingAccount.map { account in
                     self.makeSigningSession(WalletSigningAuthorization(
                         handle: claim.handle, approvedAccount: account,
@@ -81,13 +81,15 @@ final class NativeApprovalFinalizer {
             },
             resolve: resolve
         )
-        switch result {
-        case .persisted:
+        switch outcome {
+        case .finished(.persisted):
             return .responseReady
-        case .reviewRequired:
+        case .finished(.reviewRequired):
             return .reviewRequired
-        case .ownershipLost, .retryablePersistenceFailure, .abandoned:
+        case .finished(.ownershipLost), .finished(.retryablePersistenceFailure), .finished(.abandoned):
             return .interruptionRequired
+        case .preparationStopped(let reason, _):
+            switch reason {}
         }
     }
 

@@ -353,7 +353,7 @@ class SetupReceiptTests(unittest.TestCase):
                    binaries, bootstrap_tools, source, password, source_digest):
             run_id, exchange = operation['runId'], operation['exchange']
             host.atomic_json(exchange / 'job.json', {'version': 1, 'runId': run_id, 'vmId': record['vmId'],
-                'kind': 'doctor', 'profile': 'all', 'stages': [], 'onlyTesting': [], 'source': source,
+                'kind': 'doctor', 'profile': 'all', 'payload': {'stages': [], 'onlyTesting': []}, 'source': source,
                 'bootstrapTools': bootstrap_tools})
             operation['monitorCalled'] = True
             return host.monitor_vm(args, state, candidate, exchange, run_id, binaries, environment,

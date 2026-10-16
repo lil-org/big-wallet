@@ -459,14 +459,14 @@ final class PopupRequestSessionsTests: XCTestCase {
             })
         ))
 
-        let result = await executor.execute(claim: setup.claim, prepare: { _ in
+        let result = await executor.execute(claim: setup.claim, prepare: { _ -> DurableApprovalExecutor.Preparation<Never> in
             .ready(consent: setup.consent, signing: session)
         }, resolve: { _ in
             XCTFail("Commit policy must be checked before resolving the approval")
             return .approved(setup.approval)
         })
 
-        XCTAssertEqual(result, .abandoned)
+        XCTAssertEqual(result, .finished(.abandoned))
         XCTAssertFalse(session.validateCurrent())
         let events = await store.events()
         XCTAssertEqual(events, ["claim", "abandon"])
@@ -715,13 +715,13 @@ final class PopupRequestSessionsTests: XCTestCase {
                     return .rollback
                 })
             ))
-            let result = await executor.execute(claim: setup.claim, prepare: { _ in
+            let result = await executor.execute(claim: setup.claim, prepare: { _ -> DurableApprovalExecutor.Preparation<Never> in
                 .abandon
             }, resolve: { _ in
                 XCTFail("An unprepared approval must not resolve consent")
                 return .abandon
             })
-            XCTAssertEqual(result, expected)
+            XCTAssertEqual(result, .finished(expected))
             let events = await store.events()
             XCTAssertEqual(events, ["claim", "abandon"])
             let lockURL = await store.operationLockURL(handle: setup.snapshot.handle)
@@ -729,6 +729,70 @@ final class PopupRequestSessionsTests: XCTestCase {
                 let lock = CrossProcessFileLock(fileURL: lockURL)
                 XCTAssertTrue(try lock.tryAcquireExisting())
                 lock.release()
+            }
+        }
+    }
+
+    func testCancellationBeforePreparationReturnsOrdinaryAbandonment() async throws {
+        let store = try makeStore()
+        let setup = try await makeExecutionSetup(store: store, id: 731, signing: false)
+        let executor = DurableApprovalExecutor(store: store)
+        let task = Task { @MainActor in
+            withUnsafeCurrentTask { $0?.cancel() }
+            return await executor.execute(claim: setup.claim, prepare: { _ in
+                XCTFail("Canceled execution must not enter preparation")
+                return .stopped("unreachable")
+            }, resolve: { _ in
+                XCTFail("Canceled execution must not resolve consent")
+                return .abandon
+            })
+        }
+        let outcome = await task.value
+        XCTAssertEqual(outcome, .finished(.abandoned))
+        let events = await store.events()
+        XCTAssertEqual(events, ["claim", "abandon"])
+    }
+
+    func testStoppedPreparationPreservesReasonAndClaimReleaseOutcome() async throws {
+        enum Stop: CaseIterable, Equatable, Sendable {
+            case notAccepted, authenticationCancelled, feeCorrectionRequired
+        }
+        for reason in Stop.allCases {
+            for release in [ExtensionBridge.StoreMutationResult.persisted, .ownershipLost, .retryablePersistenceFailure] {
+                let store = try makeStore()
+                let setup = try await makeExecutionSetup(store: store, id: 730, signing: false)
+                if release != .persisted { await store.forceNextAbandonResult(release) }
+                let executor = DurableApprovalExecutor(store: store, environment: .init(
+                    requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
+                        XCTFail("Stopped preparation must not execute")
+                        return .rollback
+                    })
+                ))
+                let outcome = await executor.execute(claim: setup.claim, prepare: { _ in
+                    .stopped(reason)
+                }, resolve: { _ in
+                    XCTFail("Stopped preparation must not resolve consent")
+                    return .abandon
+                })
+                XCTAssertEqual(outcome, .preparationStopped(reason: reason, release: release))
+                let events = await store.events()
+                XCTAssertEqual(events, ["claim", "abandon"])
+                let lockURL = await store.operationLockURL(handle: setup.snapshot.handle)
+                if FileManager.default.fileExists(atPath: lockURL.path) {
+                    let lock = CrossProcessFileLock(fileURL: lockURL)
+                    XCTAssertTrue(try lock.tryAcquireExisting())
+                    lock.release()
+                }
+                let replay = await executor.execute(claim: setup.claim, prepare: { _ in
+                    XCTFail("Released preparation cannot be entered again")
+                    return .stopped(reason)
+                }, resolve: { _ in
+                    XCTFail("Released preparation cannot resolve consent")
+                    return .abandon
+                })
+                XCTAssertEqual(replay, .finished(.ownershipLost))
+                let replayEvents = await store.events()
+                XCTAssertEqual(replayEvents, events)
             }
         }
     }
@@ -834,7 +898,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         let task = Task {
             let result = await executor.execute(
                 claim: setup.claim,
-                prepare: { _ in .ready(consent: setup.consent, signing: nil) },
+                prepare: { _ -> DurableApprovalExecutor.Preparation<Never> in .ready(consent: setup.consent, signing: nil) },
                 resolve: { _ in
                     started.fulfill()
                     await gate.wait()
@@ -843,7 +907,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                     return .approved(setup.approval)
                 }
             )
-            XCTAssertEqual(result, .abandoned)
+            XCTAssertEqual(result, .finished(.abandoned))
             finished.fulfill()
         }
         await fulfillment(of: [started, finished], timeout: 1)
@@ -1056,7 +1120,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             )
         )
         let task = Task { @MainActor in
-            await original.execute(claim: setup.claim, prepare: { context in
+            await original.execute(claim: setup.claim, prepare: { context -> DurableApprovalExecutor.Preparation<Never> in
                 preparations += 1
                 XCTAssertEqual(context.handle, setup.claim.handle)
                 XCTAssertEqual(context.executionDeadline, setup.claim.executionDeadline)
@@ -1067,14 +1131,14 @@ final class PopupRequestSessionsTests: XCTestCase {
         }
         await fulfillment(of: [started], timeout: 1)
         let copiedClaim = setup.claim
-        let duplicateResult = await duplicate.execute(claim: copiedClaim, prepare: { _ in
+        let duplicateResult = await duplicate.execute(claim: copiedClaim, prepare: { _ -> DurableApprovalExecutor.Preparation<Never> in
             XCTFail("A copied claim must not start another authentication or preparation")
             return .ready(consent: setup.consent, signing: signer)
         }, resolve: { _ in
             XCTFail("A copied claim must not resolve the original approval")
             return .approved(setup.approval)
         })
-        XCTAssertEqual(duplicateResult, .ownershipLost)
+        XCTAssertEqual(duplicateResult, .finished(.ownershipLost))
         XCTAssertEqual(preparations, 1)
         XCTAssertEqual(access.retirementCount, 0)
         XCTAssertTrue(signer.validateCurrent())
@@ -1086,7 +1150,7 @@ final class PopupRequestSessionsTests: XCTestCase {
 
         gate.resolve(())
         let result = await task.value
-        XCTAssertEqual(result, .persisted)
+        XCTAssertEqual(result, .finished(.persisted))
         XCTAssertEqual(executions, 1)
         XCTAssertEqual(access.retirementCount, 1)
         let after = await store.events()
@@ -1219,7 +1283,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                 let task = Task { @MainActor in
                     let result = await executor.execute(
                         claim: setup.claim,
-                        prepare: { _ in
+                        prepare: { _ -> DurableApprovalExecutor.Preparation<Never> in
                             .ready(consent: setup.consent, signing: session)
                         },
                         resolve: { _ in
@@ -1238,7 +1302,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                 task.cancel()
                 await fulfillment(of: [finished], timeout: 1)
                 let result = await task.value
-                XCTAssertEqual(result, .abandoned)
+                XCTAssertEqual(result, .finished(.abandoned))
                 XCTAssertFalse(session.validateCurrent())
                 XCTAssertFalse(setup.consent.authorizationIsAvailable)
                 let events = await store.events()
@@ -9767,9 +9831,13 @@ extension PopupRequestSessionsTests {
         setup: ExecutionSetup,
         signing: WalletSigningSession?
     ) async -> DurableApprovalExecutor.Result {
-        await executor.execute(claim: setup.claim, prepare: { _ in
+        let outcome = await executor.execute(claim: setup.claim, prepare: { _ -> DurableApprovalExecutor.Preparation<Never> in
             .ready(consent: setup.consent, signing: signing)
         }, resolve: { _ in .approved(setup.approval) })
+        switch outcome {
+        case .finished(let result): return result
+        case .preparationStopped(let reason, _): switch reason {}
+        }
     }
 
     private func makeExecutionSetup(
@@ -9855,15 +9923,8 @@ extension PopupRequestSessionsTests {
             parameters["messageEncoding"] = value.signMessageEncoding == .utf8 ? "utf8" : "hex"
             if value.displayHex { parameters["display"] = "hex" }
             body = ["publicKey": value.publicKey, "object": ["params": parameters]]
-        case .unknown(let value):
-            body = ["latestConfigurations": value.providerConfigurations.map { configuration in
-                var json: [String: Any] = ["provider": configuration.provider.rawValue]
-                if configuration.provider == .ethereum {
-                    json["results"] = configuration.address.map { [$0] } ?? []
-                    json["chainId"] = configuration.chainId
-                } else { json["publicKey"] = configuration.address }
-                return json
-            }]
+        case .unknown:
+            body = [:]
         }
         let admitted = try await store.enqueue(rawObject: [
             "id": request.id, "name": request.name, "provider": request.provider.rawValue,

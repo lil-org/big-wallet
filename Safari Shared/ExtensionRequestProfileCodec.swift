@@ -10,31 +10,25 @@ struct ExtensionRequestProfileCodec: Sendable {
     private var cachedProfile: (data: Data, profile: ValidatedProfile)?
 
     func bind(_ request: SafariRequest, data: Data, authority: ExtensionBridge.AuthoritySnapshot) -> (request: SafariRequest, payload: ExtensionRequestProfile.ActiveRequestPayload)? {
-        var raw = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-        raw?["authority"] = authority.version.json
+        guard var raw = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        raw["authority"] = authority.version.json
         if case .unknown = request.body {
-            var configurations = [[String: Any]]()
-            configurations.append([
-                "provider": "ethereum",
-                "results": authority.ethereumAccount.map { [$0.normalizedAddress] } ?? [],
-                "chainId": authority.ethereumChainId,
-            ])
-            if let account = authority.solanaAccount {
-                configurations.append(["provider": "solana", "publicKey": account.normalizedAddress])
-            }
-            raw?["body"] = ["latestConfigurations": configurations]
+            raw["body"] = [String: Any]()
         }
-        guard let raw, let data = ExtensionBridge.payloadData(raw, options: [.sortedKeys]),
+        guard let data = ExtensionBridge.payloadData(raw, options: [.sortedKeys]),
               data.count <= ExtensionBridge.maximumPayloadBytes,
-              var bound = SafariRequest(json: raw),
               let body = raw["body"] as? [String: Any] else { return nil }
+        var bound = request
+        bound.authority = authority.version
+        bound.authorizedAccount = nil
+        bound.manualSwitchContext = nil
         switch request.body {
         case .ethereum:
             bound.authorizedAccount = authority.ethereumAccount
         case .solana:
             bound.authorizedAccount = authority.solanaAccount
         case .unknown:
-            bound.connectedAccounts = [authority.ethereumAccount, authority.solanaAccount].compactMap { $0 }
+            bound.manualSwitchContext = .init(authority: authority)
         }
         guard let payload = ExtensionRequestProfile.ActiveRequestPayload(request: bound, body: body) else { return nil }
         return (bound, payload)

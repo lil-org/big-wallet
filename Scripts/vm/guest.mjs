@@ -228,7 +228,8 @@ export async function preflight({workspace, identity, bootstrapEvidence, provisi
 }
 
 export function coverageReport(job, stages, preflight) {
-    const selected = job.stages.length > 0 || job.onlyTesting.length > 0 || Boolean(job.configuration) || Boolean(job.approvalArgs?.length);
+    const options = job.payload;
+    const selected = options.stages.length > 0 || options.onlyTesting.length > 0 || Boolean(options.configuration) || Boolean(options.approvalArgs?.length);
     const missingPrerequisites = Object.entries(preflight?.checks ?? {}).filter(([, available]) => available !== true).map(([name]) => name);
     if (job.kind === "doctor") {
         return {scope: "prerequisites", status: preflight && !missingPrerequisites.length ? "complete" : "partial", missingPrerequisites};
@@ -241,7 +242,7 @@ export function coverageReport(job, stages, preflight) {
     const incompleteStages = manifest.filter(stage => outcomes.get(stage.id) !== "passed").map(stage => ({id: stage.id, status: outcomes.get(stage.id) ?? "not-run"}));
     const fullSuiteVerified = !selected && stages.length === manifest.length && !incompleteStages.length && !missingPrerequisites.length && auditResults(stages).status === "passed";
     return {scope: selected ? "selected" : "full", status: fullSuiteVerified ? "complete" : "partial",
-        selectedStageGroups: job.stages.length ? [...job.stages] : ["all"], onlyTesting: [...job.onlyTesting],
+        selectedStageGroups: options.stages.length ? [...options.stages] : ["all"], onlyTesting: [...options.onlyTesting],
         missingPrerequisites, incompleteStages, fullSuiteVerified};
 }
 

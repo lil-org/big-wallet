@@ -602,7 +602,7 @@ def stage_planned_result(exchange, job):
               'profile': job['profile'], 'status': 'planned', 'origin': 'host-plan',
               'plannedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
               'source': job['source'], 'jobSHA256': hash_regular_file(job_path), 'stages': stages,
-              'selection': {key: job[key] for key in ('stages', 'onlyTesting', 'configuration', 'approvalArgs') if key in job}}
+              'selection': {key: job['payload'][key] for key in ('stages', 'onlyTesting', 'configuration', 'approvalArgs') if key in job['payload']}}
     atomic_json(exchange / 'artifacts/planned-result.json', result)
     return result
 
@@ -1557,7 +1557,7 @@ def run_setup_doctor(args, state, candidate, environment, operation, record, con
     check_setup_stop(operation)
     for attempt in range(2):
         job = {'version': 1, 'runId': run_id, 'vmId': record['vmId'], 'kind': 'doctor', 'profile': 'all',
-               'stages': [], 'onlyTesting': [], 'source': source, 'bootstrapTools': bootstrap_tools}
+               'payload': {'stages': [], 'onlyTesting': []}, 'source': source, 'bootstrapTools': bootstrap_tools}
         if needs_install:
             print('Applying guest provisioning over pinned SSH with the existing guest account.', flush=True)
         hook = GuestSetupHook(module, access, configuration['consoleUser'], password, directory, exchange, job,
@@ -1752,9 +1752,10 @@ def prepare_setup(args, state, environment, operation):
         source = snapshot_source(ROOT, verification_exchange)
         verify_setup_sources(verification_exchange, source_digest, environment)
         verification_job = {'version': 1, 'runId': verification_id,
-                    'vmId': record['vmId'], 'kind': 'run', 'profile': 'all', 'stages': ['test'],
-                    'configuration': 'Debug', 'onlyTesting': ['WindowAuthenticationSessionTests',
-                    'PasswordStorageTests', 'SecretHandlingTests'], 'source': source, 'bootstrapTools': bootstrap_tools}
+                    'vmId': record['vmId'], 'kind': 'run', 'profile': 'all',
+                    'payload': {'stages': ['test'], 'configuration': 'Debug',
+                                'onlyTesting': ['WindowAuthenticationSessionTests', 'PasswordStorageTests', 'SecretHandlingTests']},
+                    'source': source, 'bootstrapTools': bootstrap_tools}
         atomic_json(verification_exchange / 'job.json', verification_job)
         stage_planned_result(verification_exchange, verification_job)
         check_setup_stop(operation)
@@ -1832,12 +1833,12 @@ def run_tests(args, state, environment):
                 if bootstrap_source_digest(exchange / 'source/Scripts/vm') != record['bootstrapSourceDigest']:
                     raise RunnerError('The snapshotted guest bootstrap/environment does not match the verified VM. Re-run setup before testing.')
                 job = {'version': 1, 'runId': run_id, 'vmId': record['vmId'], 'kind': 'run',
-                       'profile': args.profile, 'stages': args.stage, 'onlyTesting': args.only_testing, 'source': source,
+                       'profile': args.profile, 'payload': {'stages': args.stage, 'onlyTesting': args.only_testing}, 'source': source,
                        'bootstrapTools': bootstrap_tools}
                 if args.configuration:
-                    job['configuration'] = args.configuration
+                    job['payload']['configuration'] = args.configuration
                 if args.approval_arg:
-                    job['approvalArgs'] = stage_approval_arguments(args.approval_arg, exchange)
+                    job['payload']['approvalArgs'] = stage_approval_arguments(args.approval_arg, exchange)
                 atomic_json(exchange / 'job.json', job)
                 stage_planned_result(exchange, job)
                 print(f'Source: {source["sha256"]}', flush=True)

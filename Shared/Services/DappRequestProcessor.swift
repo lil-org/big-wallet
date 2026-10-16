@@ -66,11 +66,11 @@ struct DappRequestProcessor: DappRequestProcessing {
                 catalog: catalog,
                 solana: solana
             )
-        case .unknown(let body):
+        case .unknown:
+            guard let context = request.manualSwitchContext else { return .unavailable }
             guard let catalog else { return .needsCatalog }
             preparation = Self.prepareSwitchAccount(
-                request: request,
-                body: body,
+                context: context,
                 catalog: catalog,
                 networkResolver: selectionNetworkResolver
             )
@@ -149,17 +149,15 @@ struct DappRequestProcessor: DappRequestProcessing {
     }
 
     private static func prepareSwitchAccount(
-        request: SafariRequest,
-        body: SafariRequest.Unknown,
+        context: SafariRequest.ManualSwitchContext,
         catalog: WalletReviewCatalog,
         networkResolver: @MainActor (String?) -> EthereumNetwork?
     ) -> UnboundDappRequestPreparation {
-        let initiallyConnectedProviders = connectedProviders(in: body.providerConfigurations)
+        let initiallyConnectedProviders = context.initiallyConnectedProviders
         let preselectedAccounts = initiallyConnectedProviders.isEmpty
             ? catalog.suggestedAccounts()
-            : request.connectedAccounts.compactMap { catalog.specificAccount(descriptor: $0) }
-        let chainId = body.providerConfigurations.compactMap(\.chainId).first
-        let network = networkResolver(chainId)
+            : context.connectedAccounts.compactMap { catalog.specificAccount(descriptor: $0) }
+        let network = networkResolver(context.ethereumChainId)
         let action = SelectAccountAction(
             coinType: nil,
             selectedAccounts: Set(preselectedAccounts),
@@ -252,21 +250,6 @@ struct DappRequestProcessor: DappRequestProcessing {
             }
             return !selectedCoins.contains(coin)
         }
-    }
-
-    nonisolated private static func connectedProviders(
-        in providerConfigurations: [SafariRequest.Unknown.ProviderConfiguration]
-    ) -> Set<InpageProvider> {
-        return Set(providerConfigurations.compactMap { configuration in
-            guard WalletCoin.correspondingToInpageProvider(configuration.provider) != nil else {
-                return nil
-            }
-            if configuration.provider == .ethereum,
-               configuration.address?.isEmpty ?? true {
-                return nil
-            }
-            return configuration.provider
-        })
     }
 
     nonisolated private static func response(

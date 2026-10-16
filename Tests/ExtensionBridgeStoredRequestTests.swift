@@ -198,7 +198,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let processor = DappRequestProcessor()
 
         for (id, chainID) in [(68_112, "0x1"), (68_113, "0xa")] {
-            let manual = try makeManualFixture(id: id, enqueueAttempt: attempt(for: id), latestConfigurations: [])
+            let authority = try await removalSnapshot()
+            let manual = try makeManualFixture(id: id, enqueueAttempt: attempt(for: id))
             let handle = try accepted(await bridge.enqueue(ingress: manual.ingress, profileIdentifier: nil)).handle
             let testClock = try XCTUnwrap(clock)
             bridge = makeBridge(clock: { testClock.date })
@@ -208,6 +209,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                   case .switchAccount(let action) = intent.action else {
                 return XCTFail("Expected the persisted manual switch")
             }
+            let context = try XCTUnwrap(binding.request.manualSwitchContext)
+            XCTAssertEqual(context, .init(authority: authority))
+            XCTAssertEqual(context.connectedAccounts, granted)
+            XCTAssertEqual(context.initiallyConnectedProviders, [.ethereum, .solana])
             XCTAssertEqual(Set(action.selectedAccounts.map {
                 WalletAccountDescriptor(walletID: $0.walletId, account: $0.account)
             }), Set(granted))
@@ -4217,7 +4222,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
     }
 
-    func testManualSwitchReplayKeepsOriginalBodyAcrossConfigurationDrift() async throws {
+    func testManualSwitchReplayKeepsNativeContextAcrossBrowserConfigurationDrift() async throws {
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 404, chainId: "0xa")
+        let authority = try await removalSnapshot()
         let attempt = String(repeating: "e", count: 32)
         let original = try makeManualFixture(
             id: 405,
@@ -4246,12 +4254,71 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(admitted.admissionKind, .new)
         XCTAssertEqual(replay.admissionKind, .replay)
         XCTAssertEqual(replay.handle, admitted.handle)
+        XCTAssertEqual(replay.nativeDeliveryNonce, admitted.nativeDeliveryNonce)
+        XCTAssertEqual(replay.revisions, admitted.revisions)
+        XCTAssertNil(original.request.manualSwitchContext)
         guard case .found(let stored) = await bridge.load(
             handle: admitted.handle
-        ), case .unknown(let body)? = stored.request?.body else {
+        ), let request = stored.request, case .unknown = request.body else {
             return XCTFail("Expected original manual switch")
         }
-        XCTAssertEqual(body.providerConfigurations.count, 1)
+        XCTAssertEqual(request.manualSwitchContext, SafariRequest.ManualSwitchContext(authority: authority))
+        XCTAssertEqual(request.admissionDeadline, original.request.admissionDeadline)
+        let profile = try PropertyListDecoder().decode(
+            ExtensionRequestProfile.State.self, from: Data(contentsOf: defaultProfileURL)
+        )
+        let record = try XCTUnwrap(profile.records.first { $0.handle == admitted.handle })
+        XCTAssertEqual(record.state.request?.bodyData, Data("{}".utf8))
+        XCTAssertNil(record.state.request?.request(for: record).manualSwitchContext)
+        let claim = try approvalClaim(await bridge.claim(handle: admitted.handle))
+        XCTAssertEqual(claim.request.manualSwitchContext, request.manualSwitchContext)
+        let abandoned = await bridge.abandon(claim: claim)
+        XCTAssertEqual(abandoned, .persisted)
+    }
+
+    @MainActor
+    func testManualSwitchDoesNotRebuildItsReviewAfterAuthorityChanges() async throws {
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 406)
+        let manual = try makeManualFixture(id: 407, enqueueAttempt: attempt(for: 407))
+        let admitted = try accepted(await bridge.enqueue(ingress: manual.ingress, profileIdentifier: nil))
+        guard case .found(let snapshot) = await bridge.load(handle: admitted.handle),
+              let binding = snapshot.requestBinding else {
+            return XCTFail("Expected admitted manual switch")
+        }
+        let context = try XCTUnwrap(binding.request.manualSwitchContext)
+        let version = try XCTUnwrap(binding.request.authority)
+        guard case .revoked = await bridge.revoke(
+            configurationKey: manual.request.configurationKey, provider: .ethereum,
+            attempt: attempt(for: 408), expected: version, profileIdentifier: nil
+        ) else { return XCTFail("Expected native authority revocation") }
+
+        let replay = try accepted(await bridge.enqueue(ingress: manual.ingress, profileIdentifier: nil))
+        XCTAssertEqual(replay.admissionKind, .replay)
+        XCTAssertEqual(replay.handle, admitted.handle)
+        XCTAssertFalse(replay.approvalRequired)
+        guard case .found(let completed) = await bridge.load(handle: admitted.handle),
+              case .responded = completed.state else {
+            return XCTFail("Changed authority must retire the original manual review")
+        }
+        XCTAssertNil(completed.requestBinding)
+        XCTAssertEqual(binding.request.manualSwitchContext, context)
+        XCTAssertEqual(context.ethereumAccount, account)
+        let response = try await deliveredAuthority(admitted.handle)
+        XCTAssertEqual((response.response["error"] as? [String: Any])?["code"] as? Int, 4100)
+        let acknowledged = await bridge.acknowledgeResponse(
+            handle: admitted.handle, configurationKey: manual.request.configurationKey
+        )
+        XCTAssertEqual(acknowledged, .persisted)
+
+        let fresh = try makeManualFixture(id: 409, enqueueAttempt: attempt(for: 409))
+        let freshHandle = try accepted(await bridge.enqueue(ingress: fresh.ingress, profileIdentifier: nil)).handle
+        guard case .found(let refreshed) = await bridge.load(handle: freshHandle) else {
+            return XCTFail("Expected a new manual switch after revocation")
+        }
+        let refreshedContext = try XCTUnwrap(refreshed.request?.manualSwitchContext)
+        XCTAssertTrue(refreshedContext.connectedAccounts.isEmpty)
+        XCTAssertNotEqual(refreshed.request?.authority, binding.request.authority)
     }
 
     func testConcurrentManualSwitchAttemptsCoalesceAcrossStoreInstances() async throws {
@@ -4316,11 +4383,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(resumed.revisions, first.revisions)
         XCTAssertTrue(resumed.approvalRequired)
         guard case .found(let snapshot) = await observer.load(handle: resumed.handle),
-              case .unknown(let body)? = snapshot.request?.body else {
+              let request = snapshot.request, case .unknown = request.body else {
             return XCTFail("Expected original switch request")
         }
         XCTAssertEqual(snapshot.enqueueAttempt, original.request.enqueueAttempt)
-        XCTAssertEqual(body.providerConfigurations.count, 1)
+        let context = try XCTUnwrap(request.manualSwitchContext)
+        XCTAssertTrue(context.connectedAccounts.isEmpty)
+        XCTAssertEqual(context.ethereumChainId, "0x1")
+        XCTAssertEqual(request.admissionDeadline, original.request.admissionDeadline)
 
         let mismatchedAttempt = try makeManualFixture(
             id: 414,
@@ -6565,10 +6635,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     approvedAccount: try XCTUnwrap(approval.signingAccount),
                     signingDeadline: claim.executionDeadline
                 ))
-                let result = await executor.execute(claim: claim, prepare: { _ in
+                let result = await executor.execute(claim: claim, prepare: { _ -> DurableApprovalExecutor.Preparation<Never> in
                     .ready(consent: consent, signing: signing)
                 }, resolve: { _ in .approved(approval) })
-                XCTAssertEqual(result, .retryablePersistenceFailure)
+                XCTAssertEqual(result, .finished(.retryablePersistenceFailure))
                 XCTAssertEqual(processor.calls, 1)
                 XCTAssertEqual(sender.calls, 0)
                 let competingLock = CrossProcessFileLock(fileURL: operationLockURL(handle))
@@ -7195,10 +7265,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             approvedAccount: try XCTUnwrap(approval.signingAccount),
             signingDeadline: claim.executionDeadline
         ))
-        let result = await executor.execute(claim: claim, prepare: { _ in
+        let result = await executor.execute(claim: claim, prepare: { _ -> DurableApprovalExecutor.Preparation<Never> in
             .ready(consent: consent, signing: signing)
         }, resolve: { _ in .approved(approval) })
-        XCTAssertEqual(result, .retryablePersistenceFailure)
+        XCTAssertEqual(result, .finished(.retryablePersistenceFailure))
         XCTAssertEqual(synchronizationAttempts.value, 1)
         XCTAssertEqual(processor.calls, 1)
         XCTAssertEqual(sender.calls, 0)
@@ -10315,11 +10385,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     private func makeManualFixture(
         id: Int,
         enqueueAttempt: String,
-        latestConfigurations: [[String: Any]],
+        latestConfigurations: [[String: Any]]? = nil,
         host: String = "wallet.example",
         configurationKey: String = "https://wallet.example",
         admissionDeadline: Date? = nil
     ) throws -> Fixture {
+        let body: [String: Any] = latestConfigurations.map { ["latestConfigurations": $0] } ?? [:]
         let object: [String: Any] = [
             "id": id,
             "name": "switchAccount",
@@ -10334,7 +10405,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             ),
             "workflowVersion": ExtensionBridge.workflowVersion,
             "authority": try authorityVersion(configurationKey).json,
-            "body": ["latestConfigurations": latestConfigurations],
+            "body": body,
         ]
         let request = try XCTUnwrap(SafariRequest(json: object))
         guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(

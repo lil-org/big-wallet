@@ -255,14 +255,9 @@ final class PopupRequestSessions {
         case abandoned(feedback: String?)
     }
 
-    private enum PreparationDisposition {
-        case accepted, notAccepted, correctionRequired, authenticationCancelled
+    private enum PreparationStop: Equatable, Sendable {
+        case notAccepted, authenticationCancelled, feeCorrectionRequired
     }
-
-    private typealias ClaimPreparation = (
-        execution: DurableApprovalExecutor.Preparation,
-        disposition: PreparationDisposition
-    )
 
     private enum ActiveSessionResult {
         case available(PopupRequestSession)
@@ -812,9 +807,9 @@ final class PopupRequestSessions {
         case .addEthereumChain:
             let accepted = await runClaimedApproval(for: session) { _, _ in
                 guard let consent = session.acceptAddEthereumChain(approvedAt: self.clock()) else {
-                    return (.abandon, .notAccepted)
+                    return .stopped(.notAccepted)
                 }
-                return (.ready(consent: consent, signing: nil), .accepted)
+                return .ready(consent: consent, signing: nil)
             }
             guard accepted else { return .ignored }
         }
@@ -872,9 +867,9 @@ final class PopupRequestSessions {
         )
         return await runClaimedApproval(for: session) { _, _ in
             guard let consent = session.acceptAccounts(selection, approvedAt: self.clock()) else {
-                return (.abandon, .notAccepted)
+                return .stopped(.notAccepted)
             }
-            return (.ready(consent: consent, signing: nil), .accepted)
+            return .ready(consent: consent, signing: nil)
         }
     }
 
@@ -923,7 +918,7 @@ final class PopupRequestSessions {
             )
             let transactionReservation = transactionSession?.reserveForPreflight()
             if transactionSession != nil && transactionReservation == nil {
-                return (.abandon, .accepted)
+                return .abandon
             }
             let authentication = await self.authenticateClaimedSession(
                 session: session,
@@ -938,9 +933,9 @@ final class PopupRequestSessions {
                 }
                 switch authentication {
                 case .authenticationCancelled:
-                    return (.abandon, .authenticationCancelled)
+                    return .stopped(.authenticationCancelled)
                 case .rejected(let resolution):
-                    return (.rejected(resolution), .accepted)
+                    return .rejected(resolution)
                 case .abandoned(let feedback):
                     if let feedback, self.isCurrent(session, token: token) {
                         session.setFeedback(feedback)
@@ -948,7 +943,7 @@ final class PopupRequestSessions {
                 case .unlocked:
                     break
                 }
-                return (.abandon, .accepted)
+                return .abandon
             }
             var untransferredSigner: WalletSigningSession? = signer
             defer { untransferredSigner?.invalidate() }
@@ -961,19 +956,19 @@ final class PopupRequestSessions {
                 }) {
                     await transactionSession.preflight(transactionReservation)
                 }
-                guard case .value(let preflight) = preflight else { return (.abandon, .accepted) }
+                guard case .value(let preflight) = preflight else { return .abandon }
                 switch preflight {
                 case .approved(let transaction):
                     guard let execution = DappApprovalDecision.TransactionExecution(
                         transaction,
                         reviewedNetwork: reviewedAction.resolvedNetwork,
                         approvedAccount: approvedAccount
-                    ) else { return (.abandon, .accepted) }
+                    ) else { return .abandon }
                     transactionExecution = execution
                 case .reviewRequired:
-                    return (.abandon, .correctionRequired)
+                    return .stopped(.feeCorrectionRequired)
                 case .invalidated:
-                    return (.abandon, .accepted)
+                    return .abandon
                 }
             } else {
                 transactionExecution = nil
@@ -984,9 +979,9 @@ final class PopupRequestSessions {
             case .unlocked:
                 break
             case .rejected(let resolution):
-                return (.rejected(resolution), .accepted)
+                return .rejected(resolution)
             case .authenticationCancelled, .abandoned:
-                return (.abandon, .accepted)
+                return .abandon
             }
             let consent: ReviewConsent?
             if let transactionExecution {
@@ -994,9 +989,9 @@ final class PopupRequestSessions {
             } else {
                 consent = session.acceptMessage(cluster: cluster, approvedAt: self.clock())
             }
-            guard let consent else { return (.abandon, .accepted) }
+            guard let consent else { return .abandon }
             untransferredSigner = nil
-            return (.ready(consent: consent, signing: signer), .accepted)
+            return .ready(consent: consent, signing: signer)
         }
     }
 
@@ -1037,26 +1032,21 @@ final class PopupRequestSessions {
 
     private func runClaimedApproval(
         for session: PopupRequestSession,
-        prepare: @MainActor (DurableApprovalExecutor.ClaimContext, UUID) async -> ClaimPreparation
+        prepare: @MainActor (DurableApprovalExecutor.ClaimContext, UUID) async -> DurableApprovalExecutor.Preparation<PreparationStop>
     ) async -> Bool {
         let presentationRevision = session.presentationRevision
         guard let token = session.beginApproval() else { return false }
         switch await store.claim(handle: session.handle) {
         case .claimed(let claim):
-            var disposition = PreparationDisposition.accepted
-            let result = await durableApprovalExecutor.execute(claim: claim, prepare: { context in
+            let outcome = await durableApprovalExecutor.execute(claim: claim, prepare: { context in
                 guard self.isCurrent(session, token: token),
                       session.acceptClaim(token: token) else {
-                    disposition = .notAccepted
-                    return .abandon
+                    return .stopped(PreparationStop.notAccepted)
                 }
                 guard session.presentationRevision == presentationRevision else {
-                    disposition = .notAccepted
-                    return .abandon
+                    return .stopped(.notAccepted)
                 }
-                let preparation = await prepare(context, token)
-                disposition = preparation.disposition
-                return preparation.execution
+                return await prepare(context, token)
             }, resolve: { consent in
                 await DappApprovalResolver.resolve(
                     consent,
@@ -1066,8 +1056,7 @@ final class PopupRequestSessions {
                     isCurrent: { self.isCurrent(session, token: token) }
                 )
             })
-            await finishExecution(result, disposition: disposition, for: session, token: token)
-            return disposition != .notAccepted
+            return await finishExecution(outcome, for: session, token: token)
         case .executing, .responded, .missing:
             if entries[session.handle]?.session === session {
                 discardSession(handle: session.handle)
@@ -1166,36 +1155,40 @@ final class PopupRequestSessions {
     }
 
     private func finishExecution(
-        _ result: DurableApprovalExecutor.Result,
-        disposition: PreparationDisposition,
+        _ outcome: DurableApprovalExecutor.ExecutionOutcome<PreparationStop>,
         for session: PopupRequestSession,
         token: UUID
-    ) async {
-        switch result {
-        case .persisted:
+    ) async -> Bool {
+        let accepted: Bool
+        let persistenceFailed: Bool
+        switch outcome {
+        case .finished(.persisted):
             if entries[session.handle]?.session === session {
                 discardSession(handle: session.handle)
             }
-            return
-        case .ownershipLost, .reviewRequired:
-            break
-        case .abandoned:
-            if disposition == .correctionRequired || disposition == .authenticationCancelled,
-               await restoreReview(session: session, token: token, disposition: disposition) { return }
-        case .retryablePersistenceFailure:
-            guard isCurrent(session, token: token) else { return }
-            session.setFeedback(Strings.failedToLoad)
+            return true
+        case .finished(let result):
+            accepted = true
+            persistenceFailed = result == .retryablePersistenceFailure
+        case .preparationStopped(let reason, let release):
+            accepted = reason != .notAccepted
+            if release == .persisted,
+               reason == .feeCorrectionRequired || reason == .authenticationCancelled,
+               await restoreReview(session: session, token: token, reason: reason) { return accepted }
+            persistenceFailed = release == .retryablePersistenceFailure
         }
-        guard isCurrent(session, token: token) else { return }
+        guard isCurrent(session, token: token) else { return accepted }
+        if persistenceFailed { session.setFeedback(Strings.failedToLoad) }
         let feedback = session.errorText ?? Strings.approvalInterrupted
         session.invalidate()
         session.fail(feedback, token: token)
+        return accepted
     }
 
     private func restoreReview(
         session: PopupRequestSession,
         token: UUID,
-        disposition: PreparationDisposition
+        reason: PreparationStop
     ) async -> Bool {
         guard !Task.isCancelled, isCurrent(session, token: token),
               case .found(let snapshot) = await store.load(handle: session.handle),
@@ -1203,14 +1196,14 @@ final class PopupRequestSessions {
               await store.authorityIsCurrent(handle: session.handle),
               !Task.isCancelled, isCurrent(session, token: token) else { return false }
         guard snapshot.requestBinding == session.binding else {
-            guard disposition == .authenticationCancelled else { return false }
+            guard reason == .authenticationCancelled else { return false }
             discardSession(handle: session.handle)
             return true
         }
         guard let catalog = refreshWalletsAndNetworks(),
               let account = session.preparedAction.signingAccount else { return false }
         guard catalog.identity == session.reviewCatalog?.identity else {
-            guard disposition == .authenticationCancelled else { return false }
+            guard reason == .authenticationCancelled else { return false }
             discardSession(handle: session.handle)
             return true
         }
@@ -1218,7 +1211,7 @@ final class PopupRequestSessions {
         case .available:
             break
         case .removed:
-            guard disposition == .authenticationCancelled else { return false }
+            guard reason == .authenticationCancelled else { return false }
             discardSession(handle: session.handle)
             return true
         case .unavailable:
@@ -1230,20 +1223,20 @@ final class PopupRequestSessions {
             case .resolved(let network):
                 guard DappApprovalDecision.NetworkIdentity(network) ==
                     DappApprovalDecision.NetworkIdentity(action.resolvedNetwork) else {
-                    guard disposition == .authenticationCancelled else { return false }
+                    guard reason == .authenticationCancelled else { return false }
                     discardSession(handle: session.handle)
                     return true
                 }
             case .missing:
-                guard disposition == .authenticationCancelled else { return false }
+                guard reason == .authenticationCancelled else { return false }
                 discardSession(handle: session.handle)
                 return true
             case .unavailable:
                 return false
             }
-            if disposition == .authenticationCancelled,
+            if reason == .authenticationCancelled,
                session.transaction?.snapshot.canApprove != true { return false }
-        case .approveMessage where disposition == .authenticationCancelled:
+        case .approveMessage where reason == .authenticationCancelled:
             break
         default:
             return false

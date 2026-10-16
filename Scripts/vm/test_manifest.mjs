@@ -36,22 +36,27 @@ export const SHELL_TESTS = [
 
 export function validateJob(value) {
     if (!value || typeof value !== "object" || Array.isArray(value)) { throw new Error("Job must be an object"); }
-    const allowed = new Set(["version", "runId", "vmId", "kind", "profile", "stages", "onlyTesting", "source", "configuration", "approvalArgs", "bootstrapTools"]);
+    const allowed = new Set(["version", "runId", "vmId", "kind", "profile", "source", "bootstrapTools", "payload"]);
     if (Object.keys(value).some(key => !allowed.has(key)) || value.version !== 1) { throw new Error("Unsupported job schema"); }
     if (typeof value.runId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.runId) || value.runId.includes("..")) {
         throw new Error("Invalid run identifier");
     }
     if (typeof value.vmId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/.test(value.vmId)) { throw new Error("Invalid VM identifier"); }
     if (!["run", "doctor"].includes(value.kind) || !["all", "extended"].includes(value.profile)) { throw new Error("Invalid job kind or profile"); }
-    if (!Array.isArray(value.stages) || value.stages.some(stage => !SELECTORS.includes(stage)) || new Set(value.stages).size !== value.stages.length) {
+    const options = value.payload;
+    const optionNames = new Set(["stages", "onlyTesting", "configuration", "approvalArgs"]);
+    if (!options || typeof options !== "object" || Array.isArray(options) || Object.keys(options).some(key => !optionNames.has(key))) {
+        throw new Error("Unsupported job payload");
+    }
+    if (!Array.isArray(options.stages) || options.stages.some(stage => !SELECTORS.includes(stage)) || new Set(options.stages).size !== options.stages.length) {
         throw new Error("Invalid stage selection");
     }
-    if (!Array.isArray(value.onlyTesting) || value.onlyTesting.length > 200 || value.onlyTesting.some(test =>
+    if (!Array.isArray(options.onlyTesting) || options.onlyTesting.length > 200 || options.onlyTesting.some(test =>
         typeof test !== "string" || !PLATFORMS.some(platform => platform.target === test) &&
         !/^(?:(?:Tests macOS|Tests iOS|Tests visionOS)\/)?[A-Za-z_][A-Za-z0-9_]*(?:\/[A-Za-z_][A-Za-z0-9_]*(?:\(\))?)?$/.test(test))) {
         throw new Error("Invalid XCTest selection");
     }
-    if (value.configuration !== undefined && !["Debug", "Release"].includes(value.configuration)) { throw new Error("Invalid configuration"); }
+    if (options.configuration !== undefined && !["Debug", "Release"].includes(options.configuration)) { throw new Error("Invalid configuration"); }
     if (!value.bootstrapTools || typeof value.bootstrapTools !== "object" || Array.isArray(value.bootstrapTools) ||
         Object.keys(value.bootstrapTools).length !== BOOTSTRAP_TOOL_NAMES.length || BOOTSTRAP_TOOL_NAMES.some(name => !/^[a-f0-9]{64}$/.test(value.bootstrapTools[name]))) {
         throw new Error("Invalid bootstrap tool identity");
@@ -63,7 +68,7 @@ export function validateJob(value) {
     for (const key of ["fileCount", "bytes"]) {
         if (value.source[key] !== undefined && (!Number.isSafeInteger(value.source[key]) || value.source[key] < 0)) { throw new Error("Invalid source inventory"); }
     }
-    validateApprovalArguments(value.approvalArgs ?? []);
+    validateApprovalArguments(options.approvalArgs ?? []);
     return structuredClone(value);
 }
 
@@ -93,6 +98,7 @@ export function testingForPlatform(selectors, platform) {
 
 export function createManifest(job) {
     validateJob(job);
+    const options = job.payload;
     const stages = [];
     const debugPerformancePlatforms = new Set();
     const add = (id, group, command, args, extra = {}) => stages.push({
@@ -119,7 +125,7 @@ export function createManifest(job) {
         ["validate-dry-run", "validate:live", ["--", "--dry-run"]], ["deploy-dry-run", "deploy:dry-run", []], ["startup", "startup", []],
     ]) { add(`worker.${id}`, "worker", "npm", ["run", script, ...suffix], {cwd: worker, dependencies: ["worker.install"]}); }
 
-    const configurations = job.configuration ? [job.configuration] : ["Debug", "Release"];
+    const configurations = options.configuration ? [options.configuration] : ["Debug", "Release"];
     for (const configuration of configurations) {
         for (const platform of PLATFORMS) {
             const slug = `${platform.id}.${configuration.toLowerCase()}`;
@@ -133,9 +139,9 @@ export function createManifest(job) {
             add(`build-tests.${slug}`, "build", "xcodebuild", ["build-for-testing", ...base, "ENABLE_TESTABILITY=YES"], {
                 dependencies: ["provider.install", "protocol.check"], requirements: ["node", "xcode", "proofKey", platform.requirement, ...signing], proofKey: true, timeoutSeconds: 3600,
             });
-            const selectedTests = testingForPlatform(job.onlyTesting, platform);
-            if (job.onlyTesting.length && !selectedTests.length) { continue; }
-            if (job.configuration === "Debug") {
+            const selectedTests = testingForPlatform(options.onlyTesting, platform);
+            if (options.onlyTesting.length && !selectedTests.length) { continue; }
+            if (options.configuration === "Debug") {
                 const performanceClass = `${platform.target}/WalletCoreProxyPerformanceGateTests`;
                 const performanceSelectors = [platform.target, performanceClass, ...PERFORMANCE_TESTS.map(name => `${performanceClass}/${name}`)];
                 if (!selectedTests.length || selectedTests.some(test => performanceSelectors.includes(test.replace(/\(\)$/, "")))) {
@@ -159,7 +165,7 @@ export function createManifest(job) {
         dependencies: nativeDependencies, requirements: nativeRequirements, proofKey: true, timeoutSeconds: 7200,
         env: PERFORMANCE_ENV, nativeAudit: {configuration: "Release", platform: "macos", kind: "performance"}, resultBundle: true,
     });
-    if (job.configuration === "Debug" && (!job.stages.length || job.stages.includes("test"))) {
+    if (options.configuration === "Debug" && (!options.stages.length || options.stages.includes("test"))) {
         for (const platform of PLATFORMS.filter(platform => platform.id !== "macos" && debugPerformancePlatforms.has(platform.id))) {
             add(`performance.${platform.id}.release`, "performance", "xcodebuild", ["-jobs", "2", "-enableCodeCoverage", "NO", "test",
                 "-project", "Wallet.xcodeproj", "-scheme", platform.target, "-configuration", "Release", "ENABLE_TESTABILITY=YES",
@@ -189,19 +195,19 @@ export function createManifest(job) {
     }
     for (const configuration of configurations) {
         const slug = configuration.toLowerCase();
-        add(`approval.${slug}`, "approval", "/bin/sh", ["Scripts/check_approval_lifecycle.sh", ...(job.approvalArgs ?? [])], {
+        add(`approval.${slug}`, "approval", "/bin/sh", ["Scripts/check_approval_lifecycle.sh", ...(options.approvalArgs ?? [])], {
             dependencies: ["provider.install", "protocol.check"], requirements: ["node", "xcode"],
-            timeoutSeconds: job.approvalArgs?.includes("--soak") ? 21600 : 7200,
+            timeoutSeconds: options.approvalArgs?.includes("--soak") ? 21600 : 7200,
             env: {APPROVAL_CONFIGURATION: configuration}, failureDirectory: true, scratchDirectory: true,
         });
-        if (job.profile === "extended" && (job.approvalArgs ?? []).every(argument => argument === "--no-minimize")) {
-            add(`approval.soak-${slug}`, "approval", "/bin/sh", ["Scripts/check_approval_lifecycle.sh", "--soak", "--seed", "42", ...(job.approvalArgs ?? [])], {
+        if (job.profile === "extended" && (options.approvalArgs ?? []).every(argument => argument === "--no-minimize")) {
+            add(`approval.soak-${slug}`, "approval", "/bin/sh", ["Scripts/check_approval_lifecycle.sh", "--soak", "--seed", "42", ...(options.approvalArgs ?? [])], {
                 dependencies: [`approval.${slug}`], requirements: ["node", "xcode"], timeoutSeconds: 21600,
                 env: {APPROVAL_CONFIGURATION: configuration}, failureDirectory: true, scratchDirectory: true,
             });
         }
     }
-    const selected = new Set(stages.filter(stage => !job.stages.length || job.stages.includes(stage.group)).map(stage => stage.id));
+    const selected = new Set(stages.filter(stage => !options.stages.length || options.stages.includes(stage.group)).map(stage => stage.id));
     for (const stage of stages) {
         if (selected.has(stage.id) && stage.nativeAudit?.configuration === "Debug" && stage.nativeAudit.kind === "full" &&
             (!stage.nativeAudit.filtered || debugPerformancePlatforms.has(stage.nativeAudit.platform))) {

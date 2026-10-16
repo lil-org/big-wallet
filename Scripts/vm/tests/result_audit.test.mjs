@@ -64,7 +64,7 @@ test("filtered Debug manifests pass captured skip audits only when their schedul
         for (const method of [undefined, ...PERFORMANCE_TESTS]) {
             const selector = `${target ? `${target}/` : ""}WalletCoreProxyPerformanceGateTests${method ? `/${method}()` : ""}`;
             const manifest = createManifest({version: 1, runId: "filtered-gates", vmId: "fixture-vm", kind: "run", profile: "all",
-                stages: ["test"], configuration: "Debug", onlyTesting: [selector],
+                payload: {stages: ["test"], configuration: "Debug", onlyTesting: [selector]},
                 bootstrapTools: Object.fromEntries(BOOTSTRAP_TOOL_NAMES.map(name => [name, "a".repeat(64)])),
                 source: {sha256: "b".repeat(64), commit: "c".repeat(40)},
             });

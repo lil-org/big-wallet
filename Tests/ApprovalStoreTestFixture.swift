@@ -134,17 +134,8 @@ func requestBodyForTesting(_ request: SafariRequest) -> [String: Any] {
         }
         if body.displayHex { parameters["display"] = "hex" }
         return ["publicKey": body.publicKey, "object": ["params": parameters]]
-    case .unknown(let body):
-        return ["latestConfigurations": body.providerConfigurations.map { configuration in
-            var value: [String: Any] = ["provider": configuration.provider.rawValue]
-            if configuration.provider == .ethereum {
-                value["results"] = configuration.address.map { [$0] } ?? []
-                value["chainId"] = configuration.chainId
-            } else {
-                value["publicKey"] = configuration.address
-            }
-            return value
-        }]
+    case .unknown:
+        return [:]
     }
 }
 
@@ -155,13 +146,13 @@ func requestBindingForTesting(_ request: SafariRequest) throws -> ExtensionBridg
         ? request.configurationKey : "https://" + request.configurationKey
     let chainID: Int
     if case .ethereum(let body) = request.body { chainID = body.currentChainId ?? 1 }
-    else { chainID = 1 }
+    else { chainID = request.manualSwitchContext.flatMap { Int(hexString: $0.ethereumChainId) } ?? 1 }
     let network = Networks.withChainIdHex(String.hex(chainID, withPrefix: true)) ?? EthereumNetwork(
         chainId: chainID, name: "Fixture", symbol: "ETH",
         rpcEndpoint: .unauthenticated(URL(string: "https://rpc.example")!),
         isTestnet: true, mightShowPrice: false, explorer: nil
     )
-    let accounts = Set(request.connectedAccounts + [request.authorizedAccount].compactMap { $0 })
+    let accounts = Set((request.manualSwitchContext?.connectedAccounts ?? []) + [request.authorizedAccount].compactMap { $0 })
     for account in accounts {
         try fixture.establishGrant(account, configurationKey: origin, network: network)
     }
@@ -281,7 +272,7 @@ func reviewActionForTesting(
     let request = binding.request
     switch decision {
     case .accountSelection(let selection):
-        let initiallyConnected = Set(request.connectedAccounts.map(\.coin.correspondingInpageProvider))
+        let initiallyConnected = request.manualSwitchContext?.initiallyConnectedProviders ?? []
         let action = SelectAccountAction(
             coinType: WalletCoin.correspondingToInpageProvider(request.provider),
             selectedAccounts: [],

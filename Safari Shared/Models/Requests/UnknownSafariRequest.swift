@@ -3,6 +3,26 @@
 import Foundation
 
 extension SafariRequest {
+
+    struct ManualSwitchContext: Equatable, Sendable {
+        let ethereumAccount: WalletAccountDescriptor?
+        let ethereumChainId: String
+        let solanaAccount: WalletAccountDescriptor?
+
+        init(authority: ExtensionBridge.AuthoritySnapshot) {
+            ethereumAccount = authority.ethereumAccount
+            ethereumChainId = authority.ethereumChainId
+            solanaAccount = authority.solanaAccount
+        }
+
+        var connectedAccounts: [WalletAccountDescriptor] {
+            [ethereumAccount, solanaAccount].compactMap { $0 }
+        }
+
+        var initiallyConnectedProviders: Set<InpageProvider> {
+            Set(connectedAccounts.map(\.coin.correspondingInpageProvider))
+        }
+    }
     
     struct Unknown: Sendable {
         
@@ -10,42 +30,11 @@ extension SafariRequest {
             case switchAccount
         }
         
-        struct ProviderConfiguration: Sendable {
-            let provider: InpageProvider
-            let address: String?
-            let chainId: String?
-        }
-        
         let method: Method
-        let providerConfigurations: [ProviderConfiguration]
         
-        init?(name: String, json: [String: Any]) {
+        init?(name: String) {
             guard let method = Method(rawValue: name) else { return nil }
             self.method = method
-            
-            var configurations = [ProviderConfiguration]()
-            if let latestConfigurations = json["latestConfigurations"] as? [[String: Any]] {
-                for configuration in latestConfigurations {
-                    guard let providerString = configuration["provider"] as? String,
-                          let provider = InpageProvider(rawValue: providerString)
-                    else { continue }
-                    
-                    switch provider {
-                    case .ethereum:
-                        configurations.append(ProviderConfiguration(provider: provider,
-                                                                     address: (configuration["results"] as? [String])?.first,
-                                                                     chainId: configuration["chainId"] as? String))
-                    case .solana:
-                        configurations.append(ProviderConfiguration(provider: provider,
-                                                                     address: configuration["publicKey"] as? String,
-                                                                     chainId: nil))
-                    case .unknown, .multiple:
-                        continue
-                    }
-                }
-            }
-            
-            self.providerConfigurations = configurations
         }
     }
     

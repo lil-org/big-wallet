@@ -151,7 +151,7 @@ test("failure publishing the harness final report still releases the bootstrap l
     await mkdir(exchange);
     await mkdir(join(workspace, "Scripts/vm"), {recursive: true});
     await writeFile(join(workspace, "Scripts/vm/guest.mjs"), "fixture harness");
-    await writeFile(join(exchange, "job.json"), JSON.stringify({runId: "report-failure", vmId: "fixture", kind: "doctor", profile: "all"}));
+    await writeFile(join(exchange, "job.json"), JSON.stringify({runId: "report-failure", vmId: "fixture", kind: "doctor", profile: "all", payload: {stages: [], onlyTesting: []}}));
     const definition = (await readFile(new URL("../guest_bootstrap.mjs", import.meta.url), "utf8"))
         .match(/^export async function main\([^]*?^}/m)[0].replace(/^export /, "")
         .replace("import(pathToFileURL(entry).href)", "loadHarness(pathToFileURL(entry).href)");

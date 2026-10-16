@@ -29,12 +29,14 @@ function probeProcess(command, args, {timeoutSeconds = 60} = {}) {
 
 export function validateJobEnvelope(value) {
     if (!value || typeof value !== "object" || Array.isArray(value)) { throw new Error("Job must be an object"); }
-    const allowed = new Set(["version", "runId", "vmId", "kind", "profile", "stages", "onlyTesting", "source", "configuration", "approvalArgs", "bootstrapTools"]);
+    const allowed = new Set(["version", "runId", "vmId", "kind", "profile", "source", "bootstrapTools", "payload"]);
     if (Object.keys(value).some(key => !allowed.has(key)) || value.version !== 1) { throw new Error("Unsupported job schema"); }
     if (typeof value.runId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.runId) || value.runId.includes("..") ||
         typeof value.vmId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/.test(value.vmId) || !["run", "doctor"].includes(value.kind)) {
         throw new Error("Invalid guest job identity or kind");
     }
+    if (typeof value.profile !== "string" || !value.profile.length || value.profile.length > 128) { throw new Error("Invalid job profile label"); }
+    if (!value.payload || typeof value.payload !== "object" || Array.isArray(value.payload)) { throw new Error("Job payload must be an object"); }
     if (!value.source || typeof value.source !== "object" || Array.isArray(value.source) ||
         Object.keys(value.source).some(key => !["sha256", "commit", "fileCount", "bytes"].includes(key)) ||
         !/^[a-f0-9]{64}$/.test(value.source.sha256) || typeof value.source.commit !== "string" || !/^[a-f0-9]{40,64}$/.test(value.source.commit)) {

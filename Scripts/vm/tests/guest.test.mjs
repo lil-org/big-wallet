@@ -10,7 +10,7 @@ import {atomicJSON, hashFile, BUILD_VOLUME, EXCHANGE_PATH, materializeSource, pr
 import {commandForStage, createManifest, PERFORMANCE_ENV, PERFORMANCE_TESTS, PLATFORMS, SHELL_TESTS, TSAN_TESTS, EXTENDED_TSAN_TESTS, BOOTSTRAP_TOOL_NAMES, validateJob} from "../test_manifest.mjs";
 
 const digest = data => createHash("sha256").update(data).digest("hex");
-const job = overrides => ({version: 1, runId: "2026-10-13-test", vmId: "fixture-vm", kind: "run", profile: "all", stages: [], onlyTesting: [],
+const job = ({payload, ...overrides} = {}) => ({version: 1, runId: "2026-10-13-test", vmId: "fixture-vm", kind: "run", profile: "all", payload: {stages: [], onlyTesting: [], ...payload},
     bootstrapTools: Object.fromEntries(BOOTSTRAP_TOOL_NAMES.map(name => [name, "c".repeat(64)])),
     source: {sha256: "a".repeat(64), commit: "b".repeat(40)}, ...overrides});
 const fixture = async fn => {
@@ -58,12 +58,16 @@ test("job validation admits the host snapshot contract and rejects execution inj
     assert.throws(() => validateJob(job({kind: "doctor", source: undefined})));
     for (const invalid of [
         {version: 2}, {kind: "deploy"}, {profile: "fast"}, {runId: "../escape"}, {vmId: ""}, {bootstrapTools: {}},
-        {stages: ["deploy"]}, {stages: ["test", "test"]}, {configuration: "AdHoc"}, {unknown: true},
-        {onlyTesting: ["Class/test;rm"]}, {onlyTesting: ["-skip-testing:Class"]}, {source: {sha256: "a", commit: "b"}},
-        {approvalArgs: ["--worker", "/bin/sh"]}, {approvalArgs: ["--failure-dir", "/tmp/elsewhere"]}, {approvalArgs: ["--seed", "no"]},
+        {payload: {stages: ["deploy"]}}, {payload: {stages: ["test", "test"]}}, {payload: {configuration: "AdHoc"}}, {unknown: true},
+        {payload: {onlyTesting: ["Class/test;rm"]}}, {payload: {onlyTesting: ["-skip-testing:Class"]}}, {source: {sha256: "a", commit: "b"}},
+        {payload: {approvalArgs: ["--worker", "/bin/sh"]}}, {payload: {approvalArgs: ["--failure-dir", "/tmp/elsewhere"]}}, {payload: {approvalArgs: ["--seed", "no"]}},
+        {payload: {unknown: true}},
     ]) { assert.throws(() => validateJob(job(invalid)), JSON.stringify(invalid)); }
-    assert.doesNotThrow(() => validateJob(job({approvalArgs: ["--soak", "--seed", "42", "--mode", "popup"]})));
-    assert.doesNotThrow(() => validateJob(job({onlyTesting: ["Tests macOS/PasswordStorageTests/testSetup()", "SecretHandlingTests"]})));
+    for (const payload of [undefined, null, [], 1, "options", {}]) {
+        assert.throws(() => validateJob({...job(), payload}));
+    }
+    assert.doesNotThrow(() => validateJob(job({payload: {approvalArgs: ["--soak", "--seed", "42", "--mode", "popup"]}})));
+    assert.doesNotThrow(() => validateJob(job({payload: {onlyTesting: ["Tests macOS/PasswordStorageTests/testSetup()", "SecretHandlingTests"]}})));
 });
 
 test("hardware guard cannot be enabled with environment variables or a physical hypervisor", () => {
@@ -121,7 +125,7 @@ test("all matrix includes every native configuration/platform and all repository
 test("credential-independent candidate runs report partial coverage even if selected stages pass", () => {
     const stages = [{id: "worker.test", status: "passed"}];
     const preflight = {checks: {node: true, bootstrap: true, xcode: true, proofKey: false, signing: false}};
-    const selected = coverageReport(job({stages: ["worker"]}), stages, preflight);
+    const selected = coverageReport(job({payload: {stages: ["worker"]}}), stages, preflight);
     assert.equal(selected.scope, "selected");
     assert.equal(selected.status, "partial");
     assert.equal(selected.fullSuiteVerified, false);
@@ -150,7 +154,7 @@ test("all matrix never invokes live deployment, account mutation, or custom Deri
 });
 
 test("runner fixtures declare their helper compiler and manifest interpreter", () => {
-    const stages = createManifest(job({stages: ["repository"]}));
+    const stages = createManifest(job({payload: {stages: ["repository"]}}));
     assert.deepEqual(stages.find(stage => stage.id === "runner.node-tests").requirements, ["bootstrap", "node", "xcode"]);
     assert.deepEqual(stages.find(stage => stage.id === "runner.python-tests").requirements, ["bootstrap", "python", "node"]);
 });
@@ -192,7 +196,7 @@ test("explicit approval soaks use the six-hour budget without adding duplicate w
     const approvalArgs = ["--soak", "--seed", "42", "--no-minimize"];
     for (const profile of ["all", "extended"]) {
         for (const configuration of ["Debug", "Release"]) {
-            const stages = createManifest(job({profile, configuration, stages: ["approval"], approvalArgs}))
+            const stages = createManifest(job({profile, payload: {configuration, stages: ["approval"], approvalArgs}}))
                 .filter(stage => stage.group === "approval");
             assert.equal(stages.length, 1);
             assert.equal(stages[0].id, `approval.${configuration.toLowerCase()}`);
@@ -203,9 +207,9 @@ test("explicit approval soaks use the six-hour budget without adding duplicate w
 });
 
 test("diagnostics-only approval arguments retain the extended workload and reach both configurations", () => {
-    const baseline = createManifest(job({profile: "extended", stages: ["approval"]}));
+    const baseline = createManifest(job({profile: "extended", payload: {stages: ["approval"]}}));
     for (const approvalArgs of [["--no-minimize"], ["--no-minimize", "--no-minimize"]]) {
-        const stages = createManifest(job({profile: "extended", stages: ["approval"], approvalArgs}));
+        const stages = createManifest(job({profile: "extended", payload: {stages: ["approval"], approvalArgs}}));
         assert.deepEqual(stages.map(stage => stage.id), baseline.map(stage => stage.id));
         for (const configuration of ["debug", "release"]) {
             assert.deepEqual(stages.find(stage => stage.id === `approval.${configuration}`).args,
@@ -221,7 +225,7 @@ test("custom approval workloads and replays still replace the default extended s
     for (const override of [["--soak"], ["--seed", "7"], ["--sequences", "1"], ["--steps", "20"],
         ["--timeout-ms", "5000"], ["--mode", "native"], ["--random-only"], ["--replay", "/fixture/replay.json"]]) {
         for (const approvalArgs of [override, [...override, "--no-minimize"]]) {
-            const stages = createManifest(job({profile: "extended", stages: ["approval"], approvalArgs}));
+            const stages = createManifest(job({profile: "extended", payload: {stages: ["approval"], approvalArgs}}));
             assert.ok(!stages.some(stage => stage.id.startsWith("approval.soak-")));
             for (const configuration of ["debug", "release"]) {
                 assert.deepEqual(stages.find(stage => stage.id === `approval.${configuration}`).args,
@@ -229,12 +233,12 @@ test("custom approval workloads and replays still replace the default extended s
             }
         }
     }
-    const ordinary = createManifest(job({stages: ["approval"], approvalArgs: ["--no-minimize"]}));
+    const ordinary = createManifest(job({payload: {stages: ["approval"], approvalArgs: ["--no-minimize"]}}));
     assert.ok(!ordinary.some(stage => stage.id.startsWith("approval.soak-")));
 });
 
 test("narrow test selection expands required builds but does not schedule unrelated suites", () => {
-    const stages = createManifest(job({stages: ["test"], configuration: "Debug", onlyTesting: ["Tests macOS/WindowAuthenticationSessionTests"]}));
+    const stages = createManifest(job({payload: {stages: ["test"], configuration: "Debug", onlyTesting: ["Tests macOS/WindowAuthenticationSessionTests"]}}));
     const ids = stages.map(stage => stage.id);
     assert.ok(ids.includes("test.macos.debug"));
     assert.ok(ids.includes("build-tests.macos.debug"));
@@ -248,7 +252,7 @@ test("narrow test selection expands required builds but does not schedule unrela
 });
 
 test("unqualified setup selectors run available classes across all three platforms", () => {
-    const stages = createManifest(job({stages: ["test"], configuration: "Debug", onlyTesting: ["WindowAuthenticationSessionTests", "PasswordStorageTests", "SecretHandlingTests"]}));
+    const stages = createManifest(job({payload: {stages: ["test"], configuration: "Debug", onlyTesting: ["WindowAuthenticationSessionTests", "PasswordStorageTests", "SecretHandlingTests"]}}));
     for (const platform of PLATFORMS) {
         const stage = stages.find(stage => stage.id === `test.${platform.id}.debug`);
         assert.ok(stage.args.includes(`-only-testing:${platform.target}/PasswordStorageTests`));
@@ -256,7 +260,7 @@ test("unqualified setup selectors run available classes across all three platfor
 });
 
 test("full Debug test selections retain a Release performance run for skipped-gate accounting", () => {
-    const stages = createManifest(job({stages: ["test"], configuration: "Debug"}));
+    const stages = createManifest(job({payload: {stages: ["test"], configuration: "Debug"}}));
     assert.ok(stages.some(stage => stage.id === "performance.release"));
 });
 
