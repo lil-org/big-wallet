@@ -96,6 +96,24 @@ func reviewIntentForTesting(
     return intent
 }
 
+#if os(macOS)
+@MainActor
+func nativeReviewForTesting() throws -> NativeApprovalReview {
+    let fixture = try ApprovedExecutionTestFixture()
+    let snapshot = try fixture.enqueue(
+        id: 1, name: "requestAccounts", provider: .ethereum,
+        body: ["address": ""], configurationKey: "https://review.example"
+    )
+    let action = DappRequestAction.selectAccount(.init(
+        coinType: .ethereum, selectedAccounts: [],
+        initiallyConnectedProviders: [], network: Networks.ethereum
+    ))
+    return NativeApprovalReview(intent: try reviewIntentForTesting(
+        binding: XCTUnwrap(snapshot.requestBinding), action: action
+    ))
+}
+#endif
+
 func requestBodyForTesting(_ request: SafariRequest) -> [String: Any] {
     switch request.body {
     case .ethereum(let body):

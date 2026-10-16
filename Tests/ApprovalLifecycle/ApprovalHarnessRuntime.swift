@@ -464,14 +464,21 @@ final class HarnessRuntime {
             return .object(["accepted": .bool(false), "reason": .string("staleReview")])
         }
         let decision = payload["decision"].string ?? "approve"
-        if decision == "reject" { coordinator.reject(); return .object(["accepted": .bool(true)]) }
+        if decision == "reject" {
+            if case .approval(let review) = coordinator.currentPresentation?.presentation {
+                coordinator.reject(review: review)
+            } else {
+                coordinator.reject()
+            }
+            return .object(["accepted": .bool(true)])
+        }
         if decision == "retry" { coordinator.retryRecovery(); return .object(["accepted": .bool(true)]) }
-        guard decision == "approve", case .approval(_, let action) = coordinator.currentPresentation?.presentation else {
+        guard decision == "approve", case .approval(let review) = coordinator.currentPresentation?.presentation else {
             return .object(["accepted": .bool(false), "reason": .string("notReviewing")])
         }
         consentLabels[handle] = payload["saveAs"].string ?? UUID().uuidString.lowercased()
         reviewedRevisions[handle] = coordinator.currentPresentation?.revision
-        switch action {
+        switch review.action {
         case .selectAccount(let selection), .switchAccount(let selection):
             guard case .array(let choices) = payload["selectedAccounts"] else {
                 throw HarnessError.invalid("Missing explicit selected accounts")
@@ -493,12 +500,12 @@ final class HarnessRuntime {
                 }
                 return candidate
             }
-            coordinator.approveAccounts(selected, ethereumNetwork: networks.resolved(payload["chainId"].int ?? 1)?.network)
+            coordinator.approveAccounts(selected, ethereumNetwork: networks.resolved(payload["chainId"].int ?? 1)?.network, review: review)
         case .approveMessage(let action):
-            coordinator.approveMessage(solanaCluster: action.solanaClusterOptions == nil ? nil : .devnet)
+            coordinator.approveMessage(solanaCluster: action.solanaClusterOptions == nil ? nil : .devnet, review: review)
         case .approveTransaction(let action):
-            coordinator.approveTransaction(Self.preparedTransaction(action.transaction), reviewedNetwork: action.resolvedNetwork)
-        case .addEthereumChain: coordinator.approveAddEthereumChain()
+            coordinator.approveTransaction(Self.preparedTransaction(action.transaction), reviewedNetwork: action.resolvedNetwork, review: review)
+        case .addEthereumChain: coordinator.approveAddEthereumChain(review: review)
         }
         return .object(["accepted": .bool(true), "label": .string(consentLabels[handle]!)])
     }

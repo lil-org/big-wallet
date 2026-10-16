@@ -56,16 +56,16 @@ class ApproveTransactionViewController: NSViewController {
     private var gasSliderInteractionStartValue: Double?
     private var gasSliderInteractionDidMove = false
     private var sheetState = SheetState.idle
-    private var reviewLifetime: NativeApprovalReviewLifetime!
+    private var review: NativeApprovalReview!
 
     private var transaction: Transaction {
         approvalSnapshot.transaction
     }
     
-    static func with(transaction: Transaction, chain: EthereumNetwork, account: WalletAccount, walletId: String, reviewLifetime: NativeApprovalReviewLifetime, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, chain: EthereumNetwork, account: WalletAccount, walletId: String, review: NativeApprovalReview, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self)
         new.walletId = walletId
-        new.reviewLifetime = reviewLifetime
+        new.review = review
         new.account = account
         new.chain = chain
         new.completion = completion
@@ -81,7 +81,7 @@ class ApproveTransactionViewController: NSViewController {
     }
 
     func render(_ snapshot: TransactionApprovalSnapshot) {
-        guard reviewLifetime.isActive else { return }
+        guard review.isActive else { return }
         let revealNotice = snapshot.notice != nil && snapshot.notice != approvalSnapshot.notice
         approvalSnapshot = snapshot
         updateInterface(revealNotice: revealNotice)
@@ -95,15 +95,15 @@ class ApproveTransactionViewController: NSViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        reviewLifetime.register(self)
-        guard reviewLifetime.isActive else { return }
+        review.register(self)
+        guard review.isActive else { return }
         
         okButton.title = Strings.ok
         cancelButton.title = Strings.cancel
         
         priceTask = Task { [weak self, priceService] in
             await priceService.update()
-            guard let self, !Task.isCancelled, reviewLifetime.isActive else { return }
+            guard let self, !Task.isCancelled, review.isActive else { return }
             updateTextView()
         }
         titleLabel.stringValue = Strings.sendTransaction
@@ -129,7 +129,7 @@ class ApproveTransactionViewController: NSViewController {
         let address = account.address
         balanceTask = Task { [weak self, ethereum] in
             guard let balance = try? await ethereum.getBalance(network: network, address: address),
-                  let self, !Task.isCancelled, reviewLifetime.isActive else { return }
+                  let self, !Task.isCancelled, review.isActive else { return }
             self.balance = balance.eth(shortest: true) + " " + network.symbol
             updateTextView()
         }
@@ -150,13 +150,13 @@ class ApproveTransactionViewController: NSViewController {
     }
 
     private func startApproval() {
-        guard approvalAttempt == nil, reviewLifetime.isActive,
+        guard approvalAttempt == nil, review.isActive,
               let window = view.window,
               let reservation = coordinator.reserveForPreflight() else { return }
         let coordinator = coordinator!
-        let lifetime = reviewLifetime!
+        let lifetime = review!
         let task = Task { [weak self, weak window] in
-            let succeeded = await Window.authenticate(in: window, reason: .sendTransaction, reviewLifetime: lifetime)
+            let succeeded = await Window.authenticate(in: window, reason: .sendTransaction, review: lifetime)
             guard let self, !Task.isCancelled, lifetime.isActive,
                   approvalAttempt?.reservation == reservation else { return }
             defer {
@@ -187,7 +187,7 @@ class ApproveTransactionViewController: NSViewController {
     }
 
     private func complete(_ transaction: Transaction?) {
-        guard reviewLifetime.isActive, let completion else { return }
+        guard review.isActive, let completion else { return }
         self.completion = nil
         cancelApproval()
         coordinator.invalidate()
@@ -217,7 +217,7 @@ class ApproveTransactionViewController: NSViewController {
     }
 
     private func transactionEditorDidEnd(_ editorWindow: NSWindow) {
-        guard reviewLifetime.isActive else {
+        guard review.isActive else {
             editorWindow.orderOut(nil)
             return
         }
@@ -390,7 +390,7 @@ class ApproveTransactionViewController: NSViewController {
             suggestedFee: snapshot.latestWalletSuggestedFee,
             completion: { [weak self] edits in
                 guard let self,
-                      reviewLifetime.isActive else { return }
+                      review.isActive else { return }
                 guard let edits else {
                     self.endTransactionEditorSheet()
                     return
@@ -404,7 +404,7 @@ class ApproveTransactionViewController: NSViewController {
                     return
                 }
                 self.endTransactionEditorSheet { [weak self] in
-                    guard let self, reviewLifetime.isActive,
+                    guard let self, review.isActive,
                           self.approvalSnapshot.phase != .finished else {
                         return
                     }
@@ -503,7 +503,7 @@ class ApproveTransactionViewController: NSViewController {
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        guard reviewLifetime.isActive, approvalAttempt == nil else { return }
+        guard review.isActive, approvalAttempt == nil else { return }
         switch Self.primaryAction(for: approvalSnapshot) {
         case .approve: startApproval()
         case .retry: coordinator.retryPreparation()
@@ -538,7 +538,7 @@ extension ApproveTransactionViewController:
 extension ApproveTransactionViewController: NSWindowDelegate {
 
     func windowDidResignKey(_ notification: Notification) {
-        guard reviewLifetime.isActive else { return }
+        guard review.isActive else { return }
         guard gasSliderInteractionStartValue != nil else { return }
         guard approvalSnapshot.allowsMutation else {
             finishGasSliderInteraction(

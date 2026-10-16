@@ -250,12 +250,13 @@ final class PopupRequestSessions {
 
     private enum AuthenticationOutcome: Sendable {
         case unlocked(catalog: WalletReviewCatalog, session: WalletSigningSession)
+        case authenticationCancelled
         case rejected(ImmediateResolution)
         case abandoned(feedback: String?)
     }
 
     private enum PreparationDisposition {
-        case accepted, notAccepted, correctionRequired
+        case accepted, notAccepted, correctionRequired, authenticationCancelled
     }
 
     private typealias ClaimPreparation = (
@@ -936,6 +937,8 @@ final class PopupRequestSessions {
                     transactionSession.releaseReservation(transactionReservation)
                 }
                 switch authentication {
+                case .authenticationCancelled:
+                    return (.abandon, .authenticationCancelled)
                 case .rejected(let resolution):
                     return (.rejected(resolution), .accepted)
                 case .abandoned(let feedback):
@@ -982,7 +985,7 @@ final class PopupRequestSessions {
                 break
             case .rejected(let resolution):
                 return (.rejected(resolution), .accepted)
-            case .abandoned:
+            case .authenticationCancelled, .abandoned:
                 return (.abandon, .accepted)
             }
             let consent: ReviewConsent?
@@ -1096,7 +1099,8 @@ final class PopupRequestSessions {
         case .value(let value): outcome = value
         case .stopped: outcome = .abandoned(feedback: nil)
         }
-        guard isCurrent(session, token: token), session.finishAuthentication(token: token) else {
+        guard !Task.isCancelled, isCurrent(session, token: token),
+              session.finishAuthentication(token: token) else {
             if case .unlocked(_, let signer) = outcome {
                 signer.invalidate()
             }
@@ -1112,7 +1116,7 @@ final class PopupRequestSessions {
     ) async -> AuthenticationOutcome {
         switch await walletEnvironment.unlock(reason, authorization) {
         case .canceled:
-            return .abandoned(feedback: nil)
+            return Task.isCancelled ? .abandoned(feedback: nil) : .authenticationCancelled
         case .unavailable:
             if let failure = signingAccountFailure(
                 authorization.approvedAccount, request: session.request,
@@ -1176,8 +1180,8 @@ final class PopupRequestSessions {
         case .ownershipLost, .reviewRequired:
             break
         case .abandoned:
-            if disposition == .correctionRequired,
-               await restoreCorrectionReview(session: session, token: token) { return }
+            if disposition == .correctionRequired || disposition == .authenticationCancelled,
+               await restoreReview(session: session, token: token, disposition: disposition) { return }
         case .retryablePersistenceFailure:
             guard isCurrent(session, token: token) else { return }
             session.setFeedback(Strings.failedToLoad)
@@ -1188,17 +1192,63 @@ final class PopupRequestSessions {
         session.fail(feedback, token: token)
     }
 
-    private func restoreCorrectionReview(session: PopupRequestSession, token: UUID) async -> Bool {
-        guard isCurrent(session, token: token),
+    private func restoreReview(
+        session: PopupRequestSession,
+        token: UUID,
+        disposition: PreparationDisposition
+    ) async -> Bool {
+        guard !Task.isCancelled, isCurrent(session, token: token),
               case .found(let snapshot) = await store.load(handle: session.handle),
               case .queued(_, .unowned) = snapshot.state,
-              snapshot.requestBinding == session.binding,
-              let catalog = refreshWalletsAndNetworks(),
-              catalog.identity == session.reviewCatalog?.identity,
-              case .approveTransaction(let action) = session.preparedAction,
-              case .resolved(let network) = approvalNetworkResolver(action.chain.chainId),
-              DappApprovalDecision.NetworkIdentity(network) == DappApprovalDecision.NetworkIdentity(action.resolvedNetwork),
-              isCurrent(session, token: token) else { return false }
+              await store.authorityIsCurrent(handle: session.handle),
+              !Task.isCancelled, isCurrent(session, token: token) else { return false }
+        guard snapshot.requestBinding == session.binding else {
+            guard disposition == .authenticationCancelled else { return false }
+            discardSession(handle: session.handle)
+            return true
+        }
+        guard let catalog = refreshWalletsAndNetworks(),
+              let account = session.preparedAction.signingAccount else { return false }
+        guard catalog.identity == session.reviewCatalog?.identity else {
+            guard disposition == .authenticationCancelled else { return false }
+            discardSession(handle: session.handle)
+            return true
+        }
+        switch catalog.availability(of: account) {
+        case .available:
+            break
+        case .removed:
+            guard disposition == .authenticationCancelled else { return false }
+            discardSession(handle: session.handle)
+            return true
+        case .unavailable:
+            return false
+        }
+        switch session.preparedAction {
+        case .approveTransaction(let action):
+            switch approvalNetworkResolver(action.chain.chainId) {
+            case .resolved(let network):
+                guard DappApprovalDecision.NetworkIdentity(network) ==
+                    DappApprovalDecision.NetworkIdentity(action.resolvedNetwork) else {
+                    guard disposition == .authenticationCancelled else { return false }
+                    discardSession(handle: session.handle)
+                    return true
+                }
+            case .missing:
+                guard disposition == .authenticationCancelled else { return false }
+                discardSession(handle: session.handle)
+                return true
+            case .unavailable:
+                return false
+            }
+            if disposition == .authenticationCancelled,
+               session.transaction?.snapshot.canApprove != true { return false }
+        case .approveMessage where disposition == .authenticationCancelled:
+            break
+        default:
+            return false
+        }
+        guard !Task.isCancelled, isCurrent(session, token: token) else { return false }
         return session.returnToReview(token: token)
     }
 

@@ -17,7 +17,7 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
 
     private weak var owner: NSWindow?
     private let reason: AuthenticationReason
-    private let reviewLifetime: NativeApprovalReviewLifetime?
+    private let review: NativeApprovalReview?
     private let dependencies: Dependencies
     private var state = State.idle
     private var task: Task<Void, Never>?
@@ -28,12 +28,12 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
     init(
         owner: NSWindow,
         reason: AuthenticationReason,
-        reviewLifetime: NativeApprovalReviewLifetime?,
+        review: NativeApprovalReview?,
         dependencies: Dependencies = Dependencies()
     ) {
         self.owner = owner
         self.reason = reason
-        self.reviewLifetime = reviewLifetime
+        self.review = review
         self.dependencies = dependencies
         super.init()
     }
@@ -75,7 +75,7 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
     }
 
     private var ownerIsAvailable: Bool {
-        guard reviewLifetime?.isActive != false, let owner else { return false }
+        guard review?.isActive != false, let owner else { return false }
         return Window.isVisibleContentWindow(owner)
     }
 
@@ -88,7 +88,7 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
         let observer = NativeApprovalWindowCloseObserver { [weak self] in self?.cancel() }
         closeObserver = observer
         observer.observe(owner)
-        reviewLifetime?.register(self)
+        review?.register(self)
         guard case .biometrics = state else { return }
         NotificationCenter.default.addObserver(
             self, selector: #selector(refreshPassword), name: .walletsChanged, object: nil

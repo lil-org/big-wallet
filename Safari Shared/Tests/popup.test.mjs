@@ -1357,6 +1357,89 @@ test("decisions adopt their current reply immediately without rereading or resub
     }
 });
 
+test("canceling authentication restores edited transaction controls without an explicit retry", async () => {
+    const fields = {usesEIP1559: false, nonce: "7", gasPriceGwei: "25", suggestedGasPriceGwei: "3"};
+    const harness = await reviewedPopup(request => transactionState(request, {editor: fields}));
+    const controller = harness.controller;
+    const fresh = transactionState(controller.request, {editor: fields, reviewToken: requestToken(102)});
+    harness.handlers.native = (message, fallback) => message.subject === "approveRequest"
+        ? commandReply(fresh) : fallback(message);
+
+    await harness.get("button-approve").click();
+    await flushPopup();
+
+    assert.equal(controller.state.state, "review");
+    assert.equal(controller.state.review.reviewToken, requestToken(102));
+    assert.deepEqual(normalized(controller.state.review.editor), fields);
+    assert.equal(controller.isSubmitting, false);
+    assert.equal(controller.interaction.kind, "viewing");
+    assert.equal(harness.get("button-approve").disabled, false);
+    assert.equal(harness.get("button-reject").disabled, false);
+    assert.equal(harness.get("working-overlay").classList.contains("hidden"), true);
+    assert.equal(harness.get("request-error").classList.contains("hidden"), true);
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["approveRequest"]);
+
+    await harness.get("button-approve").click();
+
+    assert.deepEqual(approvalMessages(harness).map(message => message.reviewToken), [requestToken(101), requestToken(102)]);
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["approveRequest", "approveRequest"]);
+});
+
+test("canceling authentication preserves a valid Solana cluster selection for the next approval", async () => {
+    const clusters = [
+        {value: "mainnetBeta", label: "Mainnet", isSelected: true},
+        {value: "devnet", label: "Devnet", isSelected: false},
+    ];
+    const harness = await reviewedPopup(request => messageState(request, {clusters, requiresClusterSelection: false}));
+    const controller = harness.controller;
+    assert.equal(controller.state.state, "review");
+    await harness.get("clusters").children[1].click();
+    assert.equal(controller.presentation.cluster, "devnet");
+    const fresh = messageState(controller.request, {clusters, requiresClusterSelection: false, reviewToken: requestToken(102)});
+    harness.handlers.native = (message, fallback) => message.subject === "approveRequest"
+        ? commandReply(fresh) : fallback(message);
+
+    await harness.get("button-approve").click();
+
+    assert.equal(controller.presentation.cluster, "devnet");
+    assert.equal(harness.get("button-approve").disabled, false);
+    assert.equal(controller.state.review.reviewToken, requestToken(102));
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["approveRequest"]);
+    await harness.get("button-approve").click();
+    assert.deepEqual(approvalMessages(harness).map(message => message.payload), [{cluster: "devnet"}, {cluster: "devnet"}]);
+    assert.deepEqual(approvalMessages(harness).map(message => message.reviewToken), [requestToken(101), requestToken(102)]);
+});
+
+test("a restored review drops a Solana cluster that is no longer available", async () => {
+    for (const isSelected of [true, false]) {
+        const harness = await reviewedPopup(request => messageState(request, {
+            clusters: [{value: "devnet", label: "Devnet", isSelected: true}],
+            requiresClusterSelection: false,
+        }));
+        const controller = harness.controller;
+        const fresh = messageState(controller.request, {
+            clusters: [{value: "mainnetBeta", label: "Mainnet", isSelected}],
+            requiresClusterSelection: !isSelected,
+            reviewToken: requestToken(102),
+        });
+        harness.handlers.native = (message, fallback) => message.subject === "approveRequest"
+            ? commandReply(fresh) : fallback(message);
+
+        await harness.get("button-approve").click();
+
+        assert.equal(controller.presentation.cluster, isSelected ? "mainnetBeta" : null);
+        assert.equal(harness.get("button-approve").disabled, !isSelected);
+        if (!isSelected) {
+            await harness.get("button-approve").click();
+            assert.equal(approvalMessages(harness).length, 1);
+            await harness.get("clusters").children[0].click();
+        }
+        assert.equal(harness.get("button-approve").disabled, false);
+        await harness.get("button-approve").click();
+        assert.deepEqual(approvalMessages(harness).map(message => message.payload), [{cluster: "devnet"}, {cluster: "mainnetBeta"}]);
+    }
+});
+
 test("a completed decision immediately reconciles and acknowledges its durable response", async () => {
     const harness = await reviewedPopup();
     const controller = harness.controller;

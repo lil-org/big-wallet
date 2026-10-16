@@ -57,16 +57,26 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             await waitForState(fixture.coordinator, .awaitingAuthentication)
             fixture.coordinator.resumeAfterAuthentication()
             await waitForState(fixture.coordinator, .reviewing)
+            let nativeReview = try presentedReview(fixture.coordinator)
             await waitForScheduledWait(waits, count: 1)
+            let foreignReview = try nativeReviewForTesting()
+            fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: foreignReview)
+            fixture.coordinator.approveMessage(solanaCluster: nil, review: foreignReview)
+            fixture.coordinator.approveTransaction(transaction, reviewedNetwork: network, review: foreignReview)
+            fixture.coordinator.approveAddEthereumChain(review: foreignReview)
+            fixture.coordinator.reject(review: foreignReview)
+            XCTAssertEqual(fixture.coordinator.phase, .reviewing)
+            XCTAssertTrue(nativeReview.isActive)
+            XCTAssertTrue(foreignReview.isActive)
             switch action {
             case .approveMessage:
-                fixture.coordinator.approveTransaction(transaction, reviewedNetwork: network)
+                fixture.coordinator.approveTransaction(transaction, reviewedNetwork: network, review: nativeReview)
                 XCTAssertEqual(fixture.coordinator.phase, .reviewing)
-                fixture.coordinator.approveMessage(solanaCluster: nil)
+                fixture.coordinator.approveMessage(solanaCluster: nil, review: nativeReview)
             case .approveTransaction:
-                fixture.coordinator.approveMessage(solanaCluster: nil)
+                fixture.coordinator.approveMessage(solanaCluster: nil, review: nativeReview)
                 XCTAssertEqual(fixture.coordinator.phase, .reviewing)
-                fixture.coordinator.approveTransaction(transaction, reviewedNetwork: network)
+                fixture.coordinator.approveTransaction(transaction, reviewedNetwork: network, review: nativeReview)
             default:
                 return XCTFail("Expected signing action")
             }
@@ -84,8 +94,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
-    func testReviewLifetimeInvalidatesBeforeCleanupAndDoesNotRetainParticipants() async {
-        let lifetime = NativeApprovalReviewLifetime()
+    func testReviewLifetimeInvalidatesBeforeCleanupAndDoesNotRetainParticipants() async throws {
+        let lifetime = try nativeReviewForTesting()
         var cleanupCount = 0
         let participant = ReviewTeardownController()
         participant.onInvalidate = {
@@ -111,8 +121,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(cleanupCount, 2)
     }
 
-    func testReviewLifetimeKeepsAllParticipantsAliveUntilCleanupFinishes() async {
-        let lifetime = NativeApprovalReviewLifetime()
+    func testReviewLifetimeKeepsAllParticipantsAliveUntilCleanupFinishes() async throws {
+        let lifetime = try nativeReviewForTesting()
         let first = ReviewTeardownController()
         var second: ReviewTeardownController? = ReviewTeardownController()
         weak let weakSecond = second
@@ -128,8 +138,107 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertNil(weakSecond)
     }
 
+    func testReviewTeardownPrecedesNotificationAndPreservesAcceptedConsent() async throws {
+        var consent: ReviewConsent?
+        let fixture = try makeFixture(attemptNativeDecision: {
+            consent = $0
+            return .responseReady
+        })
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        let review = try presentedReview(fixture.coordinator)
+        let revision = try XCTUnwrap(fixture.coordinator.currentPresentation?.revision)
+        let participant = ReviewTeardownController()
+        var teardownCount = 0
+        var waitingNotifications = 0
+        participant.onInvalidate = {
+            teardownCount += 1
+            XCTAssertFalse(review.isActive)
+            XCTAssertEqual(fixture.coordinator.phase, .waiting)
+            XCTAssertGreaterThan(fixture.coordinator.currentPresentation?.revision ?? 0, revision)
+            guard case .waiting? = fixture.coordinator.currentPresentation?.presentation else {
+                return XCTFail("The replacement must be published before review teardown")
+            }
+            fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: review)
+            fixture.coordinator.reject(review: review)
+        }
+        review.register(participant)
+        fixture.coordinator.onEvent = { [weak coordinator = fixture.coordinator] event in
+            guard case .presentationChanged = event,
+                  case .waiting? = coordinator?.currentPresentation?.presentation else { return }
+            waitingNotifications += 1
+            XCTAssertEqual(teardownCount, 1)
+        }
+        defer { fixture.coordinator.onEvent = nil }
+
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: review)
+        XCTAssertEqual(teardownCount, 1)
+        XCTAssertEqual(waitingNotifications, 1)
+        await waitForState(fixture.coordinator, .finished)
+
+        XCTAssertTrue(try XCTUnwrap(consent).authorizationIsAvailable)
+        XCTAssertEqual(teardownCount, 1)
+        XCTAssertEqual(fixture.store.interruptionCount, 0)
+    }
+
+    func testReviewTeardownReentryPublishesOnlyTheReplacementRecoveryState() async throws {
+        let clock = TestClock(uptimeNanoseconds: 0)
+        let waits = ScheduledWaits()
+        let outage = LockedTestValue(false)
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.date }, uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 },
+            wait: { delay in
+                if outage.value {
+                    clock.advanceUptime(by: delay)
+                    await Task.yield()
+                } else {
+                    await waits.wait(delay)
+                }
+            },
+            prepare: { binding, _ in self.approvalPreparation(binding) }
+        ))
+        defer { waits.resumeAll() }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication()
+        await waitForState(fixture.coordinator, .reviewing)
+        let review = try presentedReview(fixture.coordinator)
+        await waitForScheduledWait(waits, count: 1)
+        let participant = ReviewTeardownController()
+        var teardownCount = 0
+        participant.onInvalidate = {
+            teardownCount += 1
+            XCTAssertFalse(review.isActive)
+            XCTAssertEqual(fixture.coordinator.phase, .paused)
+            outage.value = false
+            fixture.store.loadHandler = nil
+            fixture.coordinator.retryRecovery()
+            XCTAssertEqual(fixture.coordinator.phase, .loading)
+        }
+        review.register(participant)
+        let presentationsBeforeOutage = fixture.events.presentations.count
+        outage.value = true
+        fixture.store.loadHandler = { _ in .unavailable }
+        waits.resume(0)
+        await waitForCondition { teardownCount == 1 && fixture.coordinator.phase == .reviewing }
+
+        let replacement = try presentedReview(fixture.coordinator)
+        XCTAssertFalse(replacement === review)
+        XCTAssertTrue(replacement.isActive)
+        let recoveryPresentations = Array(fixture.events.presentations.dropFirst(presentationsBeforeOutage))
+        XCTAssertEqual(recoveryPresentations.count, 2)
+        guard recoveryPresentations.count == 2,
+              case .waiting = recoveryPresentations[0],
+              case .approval(let publishedReview) = recoveryPresentations[1] else {
+            return XCTFail("Teardown retry must suppress the superseded pause notification")
+        }
+        XCTAssertTrue(publishedReview === replacement)
+    }
+
     func testFreshReviewKeepsOldSelectionAndPasswordCallbacksInactive() async throws {
-        let fixture = try makeFixture()
+        let fixture = try makeFixture(attemptNativeDecision: { _ in .reviewRequired })
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         let (agent, approval, window) = try attachApprovalWindow(to: fixture)
@@ -139,11 +248,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         agent.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
         let accounts = try XCTUnwrap(window.contentViewController as? AccountsListViewController)
         let selection = try XCTUnwrap(accounts.accountSelection)
-        let oldReview = try XCTUnwrap(approval.currentReview)
+        let oldReview = try presentedReview(fixture.coordinator)
+        XCTAssertTrue(selection.review === oldReview)
         let windowController = try XCTUnwrap(approval.windowController as? WalletWindowController)
         let authentication = Task {
             await windowController.authenticate(
-                reason: .approveTransaction, reviewLifetime: oldReview,
+                reason: .approveTransaction, review: oldReview,
                 dependencies: .init(keychain: authenticationKeychain(), attemptBiometrics: { _ in nil })
             )
         }
@@ -152,9 +262,17 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let password = try XCTUnwrap(windowController.currentAuthenticationSession?.sheet?.contentViewController as? PasswordViewController)
         XCTAssertTrue(window.contentViewController === accounts)
 
-        let freshReview = try XCTUnwrap(approval.beginReview())
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: oldReview)
+        await waitForState(fixture.coordinator, .paused)
+        fixture.coordinator.retryRecovery()
+        await waitForState(fixture.coordinator, .reviewing)
+        let freshReview = try presentedReview(fixture.coordinator)
+        let freshController = window.contentViewController
+        XCTAssertFalse(oldReview === freshReview)
         XCTAssertFalse(oldReview.isActive)
         XCTAssertTrue(freshReview.isActive)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: oldReview)
+        fixture.coordinator.reject(review: oldReview)
         selection.complete(accounts: [])
         password.cancelButtonTapped(password.cancelButton)
         _ = accounts.perform(NSSelectorFromString("didClickImportAccount"))
@@ -164,9 +282,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertNil(windowController.currentAuthenticationSession)
         XCTAssertNil(window.attachedSheet)
         XCTAssertFalse(password.passwordTextField.isEnabled)
-        XCTAssertTrue(window.contentViewController === accounts)
+        XCTAssertTrue(window.contentViewController === freshController)
         XCTAssertEqual(fixture.coordinator.phase, .reviewing)
-        XCTAssertTrue(approval.currentReview === freshReview)
+        XCTAssertTrue(try presentedReview(fixture.coordinator) === freshReview)
     }
 
     func testClosingApprovalPasswordTearsDownReviewWithoutAuthenticating() async throws {
@@ -180,12 +298,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         agent.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
         let accounts = try XCTUnwrap(window.contentViewController as? AccountsListViewController)
         let selection = try XCTUnwrap(accounts.accountSelection)
-        let lifetime = try XCTUnwrap(approval.currentReview)
+        let lifetime = try presentedReview(fixture.coordinator)
         let originalController = ReviewTeardownController()
         var cleanupCount = 0
         originalController.onInvalidate = {
             XCTAssertFalse(lifetime.isActive)
-            XCTAssertFalse(approval.acceptsReviewActions)
+            XCTAssertEqual(fixture.coordinator.phase, .rejecting)
             cleanupCount += 1
         }
         lifetime.register(originalController)
@@ -198,7 +316,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var completions = [Bool]()
         let authentication = Task {
             let result = await windowController.authenticate(
-                reason: .approveTransaction, reviewLifetime: lifetime,
+                reason: .approveTransaction, review: lifetime,
                 dependencies: .init(keychain: authenticationKeychain(), attemptBiometrics: { _ in nil })
             )
             completions.append(result)
@@ -262,7 +380,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             let manager = try await accountSelectionWalletsManager()
             let wallet = try XCTUnwrap(manager.wallets.first)
             let selected = SpecificWalletAccount(walletId: wallet.id, account: wallet.accounts[0])
-            let controller = accountSelectionController(
+            let controller = try accountSelectionController(
                 manager: manager, mode: mode, selectedAccounts: [selected]
             )
             let window = accountSelectionWindow(controller: controller)
@@ -302,7 +420,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testManageWalletsHandoffKeepsApprovalPendingAndFencesLateCallbacks() async throws {
-        let controller = accountSelectionController(
+        let controller = try accountSelectionController(
             manager: try await accountSelectionWalletsManager(), mode: .selectAccount,
             selectedAccounts: []
         )
@@ -333,7 +451,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         replies[0].resolve(true)
         await waitForCondition { controller.tableView(controller.tableView, rowViewForRow: manageRow)?.alphaValue == 1 }
         XCTAssertTrue(window.contentViewController === controller)
-        XCTAssertTrue(session.lifetime.isActive)
+        XCTAssertTrue(session.review.isActive)
         XCTAssertFalse(session.hasCompleted)
         XCTAssertNil(window.attachedSheet)
 
@@ -350,7 +468,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         _ = controller.perform(NSSelectorFromString("manageWallets"))
         await fulfillment(of: [entered[2]], timeout: 2)
         XCTAssertEqual(launches, 3)
-        session.lifetime.invalidate()
+        session.review.invalidate()
         replies[2].resolve(false)
         _ = controller.perform(NSSelectorFromString("manageWallets"))
         XCTAssertEqual(launches, 3)
@@ -364,7 +482,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
         await assertWalletReload(manager)
         for mode in [NativeAccountSelectionMode.selectAccount, .switchAccount] {
-            let controller = accountSelectionController(manager: manager, mode: mode, selectedAccounts: [])
+            let controller = try accountSelectionController(manager: manager, mode: mode, selectedAccounts: [])
             let window = accountSelectionWindow(controller: controller)
             let windowController = WalletWindowController(window: window)
             windowController.approvalPeer = PeerMeta(title: "wallet.example")
@@ -410,7 +528,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let account = try XCTUnwrap(manager.wallets.first?.accounts.first)
         let selected = SpecificWalletAccount(walletId: walletID, account: account)
         var submissions = 0
-        let controller = accountSelectionController(
+        let controller = try accountSelectionController(
             manager: manager, mode: .selectAccount, selectedAccounts: [selected],
             completion: { _, _ in submissions += 1 }
         )
@@ -438,7 +556,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testOrdinaryWalletCloseStillFencesRetainedActions() async throws {
-        let controller = accountSelectionController(
+        let controller = try accountSelectionController(
             manager: try await accountSelectionWalletsManager(), mode: nil,
             selectedAccounts: []
         )
@@ -456,13 +574,13 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(menu.cancellationCount, 1)
     }
 
-    func testSelectionSubmissionKeepsReviewAliveAndFencesReentrantSubmission() async {
-        let lifetime = NativeApprovalReviewLifetime()
+    func testSelectionSubmissionKeepsReviewAliveAndFencesReentrantSubmission() async throws {
+        let lifetime = try nativeReviewForTesting()
         var completions = 0
         let session = NativeAccountSelectionSession(
             action: .init(coinType: nil, selectedAccounts: [],
                           initiallyConnectedProviders: [], network: nil),
-            mode: .selectAccount, lifetime: lifetime
+            mode: .selectAccount, review: lifetime
         ) { _, _ in completions += 1 }
 
         session.complete(accounts: []) {
@@ -1791,7 +1909,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             meta: "Review this message",
             account: account,
             walletId: "appearance-test",
-            reviewLifetime: NativeApprovalReviewLifetime(),
+            review: try nativeReviewForTesting(),
             completion: { _ in XCTFail("Appearance does not approve a request") }
         )
         windowController.contentViewController = controller
@@ -1885,7 +2003,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
     }
 
-    func testSwitchAccountHeaderDoesNotDependOnConnectedProviders() async {
+    func testSwitchAccountHeaderDoesNotDependOnConnectedProviders() async throws {
         let action = SelectAccountAction(
             coinType: nil,
             selectedAccounts: [],
@@ -1895,7 +2013,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let session = NativeAccountSelectionSession(
             action: action,
             mode: .switchAccount,
-            lifetime: NativeApprovalReviewLifetime(),
+            review: try nativeReviewForTesting(),
             completion: { _, _ in }
         )
 
@@ -1917,7 +2035,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let session = NativeAccountSelectionSession(
             action: action,
             mode: .selectAccount,
-            lifetime: NativeApprovalReviewLifetime(),
+            review: try nativeReviewForTesting(),
             completion: { _, network in completedNetwork = network }
         )
         session.network = changedNetwork
@@ -1949,7 +2067,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         controller.accountSelection = NativeAccountSelectionSession(
             action: action,
             mode: .selectAccount,
-            lifetime: NativeApprovalReviewLifetime(),
+            review: try nativeReviewForTesting(),
             completion: { _, _ in }
         )
         controller.loadView()
@@ -1992,7 +2110,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let session = NativeAccountSelectionSession(
             action: action,
             mode: .selectAccount,
-            lifetime: NativeApprovalReviewLifetime(),
+            review: try nativeReviewForTesting(),
             completion: { _, _ in completionCount += 1 }
         )
         let controller = instantiate(AccountsListViewController.self)
@@ -2016,7 +2134,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let original = SpecificWalletAccount(walletId: wallet.id, account: wallet.accounts[0])
 
         for mode in [NativeAccountSelectionMode.selectAccount, .switchAccount] {
-            let controller = accountSelectionController(
+            let controller = try accountSelectionController(
                 manager: manager,
                 mode: mode,
                 selectedAccounts: [original]
@@ -2096,7 +2214,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
 
         for mode in [NativeAccountSelectionMode.selectAccount, .switchAccount] {
-            let controller = accountSelectionController(
+            let controller = try accountSelectionController(
                 manager: manager,
                 mode: mode,
                 selectedAccounts: [accounts[0], accounts[2]]
@@ -2123,7 +2241,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             SpecificWalletAccount(walletId: wallet.id, account: $0)
         }
         for mode in [NativeAccountSelectionMode.selectAccount, .switchAccount] {
-            let controller = accountSelectionController(manager: manager, mode: mode, selectedAccounts: [])
+            let controller = try accountSelectionController(manager: manager, mode: mode, selectedAccounts: [])
             let window = accountSelectionWindow(controller: controller)
             defer { window.close() }
             let table = try XCTUnwrap(controller.tableView)
@@ -2166,7 +2284,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let manager = try await accountSelectionWalletsManager()
         let wallet = try XCTUnwrap(manager.wallets.first)
         let account = SpecificWalletAccount(walletId: wallet.id, account: wallet.accounts[0])
-        let controller = accountSelectionController(
+        let controller = try accountSelectionController(
             manager: manager,
             mode: .selectAccount,
             selectedAccounts: [account],
@@ -2191,7 +2309,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(controller.accountSelection?.selectedAccounts, [])
         XCTAssertFalse(controller.primaryButton.isEnabled)
 
-        controller.accountSelection?.lifetime.invalidate()
+        controller.accountSelection?.review.invalidate()
         try pressKey(" ", keyCode: 49, in: table, window: window)
         XCTAssertEqual(controller.accountSelection?.selectedAccounts, [])
     }
@@ -2202,7 +2320,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await assertWalletReload(manager)
         let cases: [(NativeAccountSelectionMode?, Bool)] = [(nil, true), (nil, false)]
         for (mode, useKeyboard) in cases {
-            let controller = accountSelectionController(manager: manager, mode: mode, selectedAccounts: [])
+            let controller = try accountSelectionController(manager: manager, mode: mode, selectedAccounts: [])
             let window = accountSelectionWindow(controller: controller)
             defer { window.close() }
             let table = try XCTUnwrap(controller.tableView)
@@ -2232,7 +2350,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let reader = KeychainCopyMatchingStub()
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
         await assertWalletReload(manager)
-        let controller = accountSelectionController(manager: manager, mode: nil, selectedAccounts: [])
+        let controller = try accountSelectionController(manager: manager, mode: nil, selectedAccounts: [])
         let window = accountSelectionWindow(controller: controller)
         let windowController = WalletWindowController(window: window)
         windowController.approvalPeer = PeerMeta(title: "wallet.example")
@@ -2284,7 +2402,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let wallet = try XCTUnwrap(manager.wallets.first)
         let original = SpecificWalletAccount(walletId: wallet.id, account: wallet.accounts[0])
         let replacement = SpecificWalletAccount(walletId: wallet.id, account: wallet.accounts[1])
-        let controller = accountSelectionController(
+        let controller = try accountSelectionController(
             manager: manager,
             mode: .selectAccount,
             selectedAccounts: [original],
@@ -2313,11 +2431,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
         windowController.approvalPeer = PeerMeta(title: "wallet.example")
         let controller = instantiate(AccountsListViewController.self)
-        let lifetime = NativeApprovalReviewLifetime()
+        let lifetime = try nativeReviewForTesting()
         controller.accountSelection = NativeAccountSelectionSession(
             action: SelectAccountAction(coinType: nil, selectedAccounts: [],
                                         initiallyConnectedProviders: [], network: nil),
-            mode: .selectAccount, lifetime: lifetime, completion: { _, _ in }
+            mode: .selectAccount, review: lifetime, completion: { _, _ in }
         )
         windowController.contentViewController = controller
         let addMenu = TrackingMenu()
@@ -2637,6 +2755,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
+        let nativeReview = try presentedReview(fixture.coordinator)
         await waitForScheduledWait(waits, count: 1)
         let approvedAt = clock.date.addingTimeInterval(2)
         clock.advance(to: approvedAt)
@@ -2659,17 +2778,17 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             if case .presentationChanged = event,
                case .waiting? = coordinator?.currentPresentation?.presentation {
                 XCTAssertEqual(coordinator?.phase, .waiting)
-                coordinator?.approveAccounts([], ethereumNetwork: nil)
-                coordinator?.approveAddEthereumChain()
+                coordinator?.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
+                coordinator?.approveAddEthereumChain(review: nativeReview)
                 coordinator?.reject()
             }
         }
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         XCTAssertEqual(fixture.coordinator.phase, .waiting)
         guard case .waiting? = fixture.coordinator.currentPresentation?.presentation else {
             return XCTFail("Accepting a decision must synchronously replace review")
         }
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         fixture.coordinator.reject()
         await fulfillment(of: [started], timeout: 1)
         XCTAssertEqual(authorizations.count, 1)
@@ -2706,11 +2825,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
+        let nativeReview = try presentedReview(fixture.coordinator)
         let snapshot = try XCTUnwrap(fixture.store.snapshot)
         let deadline = try XCTUnwrap(snapshot.request?.admissionDeadline)
         var reads = 0
         fixture.store.loadHandler = { _ in reads += 1; return .found(snapshot) }
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         fixture.clock.advance(to: deadline)
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(decisions, 0)
@@ -2737,7 +2857,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         defer { fixture.coordinator.onEvent = nil; window.close(); _ = agent }
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        let nativeReview = try presentedReview(fixture.coordinator)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         await fulfillment(of: [started], timeout: 1)
         window.close()
         XCTAssertTrue(approval.isDismissed)
@@ -2772,8 +2893,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
+        let nativeReview = try presentedReview(fixture.coordinator)
         await waitForScheduledWait(waits, count: 1)
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         await fulfillment(of: [started], timeout: 1)
         fixture.store.snapshot = try ownedSnapshot(fixture, phase: .approving)
         finalizer.resolve(.pending)
@@ -2852,7 +2974,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        let nativeReview = try presentedReview(fixture.coordinator)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         await waitForState(fixture.coordinator, .paused)
 
         XCTAssertTrue(fixture.coordinator.requiresExplicitReviewRetry)
@@ -2865,14 +2988,19 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         guard case .retryRequired? = fixture.coordinator.currentPresentation?.presentation else {
             return XCTFail("Temporary resolution failure must offer a fresh review")
         }
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         XCTAssertEqual(consents.count, 1)
         fixture.coordinator.retryRecovery()
         await waitForState(fixture.coordinator, .reviewing)
+        let replacementReview = try presentedReview(fixture.coordinator)
+        XCTAssertFalse(replacementReview === nativeReview)
         XCTAssertFalse(fixture.coordinator.requiresExplicitReviewRetry)
         XCTAssertEqual(preparations, 2)
         XCTAssertEqual(consents.count, 1)
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
+        fixture.coordinator.reject(review: nativeReview)
+        XCTAssertEqual(fixture.coordinator.phase, .reviewing)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: replacementReview)
         await waitForState(fixture.coordinator, .finished)
 
         XCTAssertEqual(consents.count, 2)
@@ -2906,7 +3034,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        let nativeReview = try presentedReview(fixture.coordinator)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         await waitForState(fixture.coordinator, .paused)
         clock.advance(to: deadline)
         fixture.coordinator.retryRecovery()
@@ -2927,7 +3056,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        let nativeReview = try presentedReview(fixture.coordinator)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         await waitForState(fixture.coordinator, .finished)
         XCTAssertFalse(fixture.coordinator.requiresExplicitReviewRetry)
         XCTAssertEqual(fixture.store.interruptionCount, 0)
@@ -2957,8 +3087,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
+        let nativeReview = try presentedReview(fixture.coordinator)
         await waitForScheduledWait(waits, count: 1)
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         await fulfillment(of: [started], timeout: 1)
         fixture.store.snapshot = try ownedSnapshot(fixture, phase: .approving)
         finalizer.resolve(.pending)
@@ -2976,7 +3107,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             return XCTFail("An abandoned execution requires a fresh review")
         }
         fixture.coordinator.retryRecovery()
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         XCTAssertEqual(decisions, 1)
     }
 
@@ -2999,11 +3130,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
+        let nativeReview = try presentedReview(fixture.coordinator)
         await waitForScheduledWait(waits, count: 1)
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         await waitForScheduledWait(waits, count: 2)
         XCTAssertEqual(fixture.coordinator.phase, .rejecting)
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         fixture.coordinator.retryRecovery()
         fixture.coordinator.reject()
         waits.resume(1)
@@ -3016,7 +3148,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             return XCTFail("Expected terminal interruption")
         }
         fixture.coordinator.retryRecovery()
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         XCTAssertEqual(decisions, 1)
         XCTAssertFalse(fixture.coordinator.canReactivate)
     }
@@ -3042,7 +3174,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        let nativeReview = try presentedReview(fixture.coordinator)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         let activations = window.activationCount
         await fulfillment(of: [started], timeout: 1)
 
@@ -3055,7 +3188,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let revision = fixture.coordinator.currentPresentation?.revision
         fixture.coordinator.retryRecovery()
         fixture.coordinator.reject()
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         XCTAssertEqual(fixture.coordinator.currentPresentation?.revision, revision)
         XCTAssertEqual(fixture.store.interruptionCount, 1)
         XCTAssertEqual(decisions, 1)
@@ -3067,7 +3200,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
         XCTAssertEqual(fixture.store.interruptionCount, 1)
         XCTAssertEqual(decisions, 1)
-        XCTAssertFalse(approval.acceptsReviewActions)
+        XCTAssertFalse(nativeReview.isActive)
         agent.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
         XCTAssertEqual(window.activationCount, activations)
     }
@@ -3082,7 +3215,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        let nativeReview = try presentedReview(fixture.coordinator)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         fixture.store.snapshot = try ownedSnapshot(fixture, runtime: UUID())
         await waitForState(fixture.coordinator, .finished)
         XCTAssertEqual(decisions, 0)
@@ -3104,9 +3238,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(try XCTUnwrap(coordinator), .awaitingAuthentication)
         coordinator?.resumeAfterAuthentication()
         await waitForState(try XCTUnwrap(coordinator), .reviewing)
+        let nativeReview = try presentedReview(try XCTUnwrap(coordinator))
         let snapshot = try XCTUnwrap(store.snapshot)
         store.loadHandler = { _ in started.fulfill(); return await load.wait() }
-        coordinator?.approveAccounts([], ethereumNetwork: nil)
+        coordinator?.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         await fulfillment(of: [started], timeout: 1)
         let presentations = events.presentations.count
         fixture = nil
@@ -3469,10 +3604,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
+        let nativeReview = try presentedReview(fixture.coordinator)
         await waitForScheduledWait(waits, count: 1)
         let store = fixture.store
         clock.advance(to: clock.date.addingTimeInterval(2))
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         await waitForState(fixture.coordinator, .waiting)
         await fulfillment(of: [started], timeout: 1)
         store.snapshot = try ownedSnapshot(fixture, phase: .approving)
@@ -3525,6 +3661,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
+        let nativeReview = try presentedReview(fixture.coordinator)
         await waitForScheduledWait(waits, count: 1)
         let originalOrder = fixture.coordinator.order
         let store = fixture.store
@@ -3539,7 +3676,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
         waits.resume(0)
         await fulfillment(of: [probeStarted], timeout: 1)
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         await fulfillment(of: [finalizerStarted], timeout: 1)
         store.snapshot = try ownedSnapshot(fixture, phase: .approving)
         finalizer.resolve(.pending)
@@ -3599,8 +3736,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
+        let nativeReview = try presentedReview(fixture.coordinator)
         await waitForScheduledWait(waits, count: 1)
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         await fulfillment(of: [finalizerStarted], timeout: 1)
         clock.advance(to: clock.date.addingTimeInterval(301))
         finalizer.resolve(.pending)
@@ -3627,6 +3765,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             ))
             weak let coordinator = fixture?.coordinator
             let events = try XCTUnwrap(fixture?.events)
+            var retainedReview: NativeApprovalReview?
+            let participant = ReviewTeardownController()
+            var teardownCount = 0
+            participant.onInvalidate = { teardownCount += 1 }
             if suspendLoad {
                 let loadStarted = expectation(description: "validation load suspended")
                 fixture?.store.loadHandler = { _ in
@@ -3640,6 +3782,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 await waitForState(try XCTUnwrap(coordinator), .awaitingAuthentication)
                 coordinator?.resumeAfterAuthentication()
                 await waitForState(try XCTUnwrap(coordinator), .reviewing)
+                retainedReview = try presentedReview(try XCTUnwrap(coordinator))
+                retainedReview?.register(participant)
                 await waitForScheduledWait(waits, count: 1)
             }
             let presentationCount = events.presentations.count
@@ -3649,6 +3793,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             else { waits.onReturned = { _ in returned.fulfill() } }
             fixture = nil
             XCTAssertNil(coordinator)
+            if let retainedReview {
+                XCTAssertFalse(retainedReview.isActive)
+                XCTAssertEqual(teardownCount, 1)
+            }
             await expectNoFurtherWork(events: events, store: store, returned: returned) {
                 if suspendLoad { load.resolve(.missing) }
                 waits.resumeAll()
@@ -3680,7 +3828,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             await waitForState(try XCTUnwrap(coordinator), .awaitingAuthentication)
             coordinator?.resumeAfterAuthentication()
             await waitForState(try XCTUnwrap(coordinator), .reviewing)
-            coordinator?.approveAccounts([], ethereumNetwork: nil)
+            let nativeReview = try presentedReview(try XCTUnwrap(coordinator))
+            coordinator?.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
             await fulfillment(of: [started], timeout: 1)
             let count = events.presentations.count
             let store = try XCTUnwrap(fixture?.store)
@@ -3784,9 +3933,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         available.value = true
         fixture.coordinator.retryRecovery()
         await waitForState(fixture.coordinator, .reviewing)
+        let nativeReview = try presentedReview(fixture.coordinator)
         let reviewRevision = try XCTUnwrap(fixture.coordinator.currentPresentation?.revision)
         XCTAssertGreaterThan(reviewRevision, pausedRevision)
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         guard case .waiting? = fixture.events.presentations.last else {
             return XCTFail("Approval after a recovered review must immediately fence its UI")
         }
@@ -4158,7 +4308,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             return XCTFail("Loading must synchronously publish waiting")
         }
         await waitForState(fixture.coordinator, .reviewing)
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        let nativeReview = try presentedReview(fixture.coordinator)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         guard case .waiting? = fixture.coordinator.currentPresentation?.presentation else {
             return XCTFail("Accepting the review must synchronously publish waiting")
         }
@@ -4189,14 +4340,14 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             fixture.store.rejectHandler = { _, _, _ in rejections += 1; return .persisted }
             fixture.coordinator.onEvent = { [weak coordinator = fixture.coordinator] event in
                 guard case .presentationChanged = event, let coordinator,
-                      case .approval? = coordinator.currentPresentation?.presentation else { return }
+                      case .approval(let nativeReview)? = coordinator.currentPresentation?.presentation else { return }
                 XCTAssertEqual(coordinator.phase, .reviewing)
                 let reviewRevision = coordinator.currentPresentation?.revision ?? 0
                 reviews += 1
                 if approves {
-                    coordinator.approveAccounts([], ethereumNetwork: nil)
+                    coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
                 } else {
-                    coordinator.reject()
+                    coordinator.reject(review: nativeReview)
                 }
                 XCTAssertEqual(coordinator.phase, approves ? .waiting : .rejecting)
                 XCTAssertGreaterThan(coordinator.currentPresentation?.revision ?? 0, reviewRevision)
@@ -4264,7 +4415,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 coordinator.resumeAfterAuthentication()
                 coordinator.retryRecovery()
                 coordinator.reject()
-                coordinator.approveAccounts([], ethereumNetwork: nil)
                 XCTAssertEqual(coordinator.phase, .finished)
                 XCTAssertEqual(coordinator.currentPresentation?.revision, snapshot.revision)
             default:
@@ -4310,11 +4460,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             }
             fixture.coordinator.resumeAfterAuthentication()
             await waitForState(fixture.coordinator, .reviewing)
+            let nativeReview = try presentedReview(fixture.coordinator)
             let selection = try XCTUnwrap((window.contentViewController as? AccountsListViewController)?.accountSelection)
             await waitForScheduledWait(waits, count: 1)
             var rejections = 0
             fixture.store.rejectHandler = { _, _, _ in rejections += 1; return .persisted }
-            fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+            fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
             await fulfillment(of: [started], timeout: 1)
             if dismissed { window.close() }
             let activations = window.activationCount
@@ -4329,7 +4480,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 XCTAssertTrue(error.progressIndicator.isHidden)
                 XCTAssertEqual(error.titleLabel.stringValue, Strings.approvalInterrupted)
             }
-            XCTAssertFalse(approval.acceptsReviewActions)
+            XCTAssertFalse(nativeReview.isActive)
             selection.complete(accounts: nil)
             agent.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
             approval.activate()
@@ -4355,6 +4506,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         approval.windowController = WalletWindowController(window: window)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
+        let nativeReview = try presentedReview(fixture.coordinator)
         agent.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
         let accountsList = try XCTUnwrap(window.contentViewController as? AccountsListViewController)
         let selection = try XCTUnwrap(accountsList.accountSelection)
@@ -4364,12 +4516,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             guard let approval else { return XCTFail("The approval must own teardown") }
             teardowns += 1
             agent?.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
-            XCTAssertFalse(approval.acceptsReviewActions)
-            approval.beginReview()
-            XCTAssertFalse(approval.acceptsReviewActions)
+            XCTAssertFalse(nativeReview.isActive)
+            fixture.coordinator.reject(review: nativeReview)
             XCTAssertNil(approval.beginRenderingCurrentPresentation())
         }
-        approval.currentReview?.register(outgoing)
+        nativeReview.register(outgoing)
         window.contentViewController = outgoing
 
         fixture.store.snapshot = nil
@@ -4381,13 +4532,12 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         selection.complete(accounts: nil)
         NotificationCenter.default.post(name: NSWindow.willCloseNotification, object: window)
         approval.activate()
-        approval.close()
         agent.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
         XCTAssertEqual(teardowns, 1)
-        XCTAssertFalse(approval.acceptsReviewActions)
+        XCTAssertFalse(nativeReview.isActive)
         XCTAssertEqual(fixture.coordinator.phase, .finished)
         XCTAssertEqual(window.activationCount, 0)
-        XCTAssertTrue(window.contentViewController === outgoing)
+        XCTAssertTrue(window.contentViewController is WaitingViewController)
         fixture.store.snapshot = nil
     }
 
@@ -4443,7 +4593,6 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         approval.windowController = NSWindowController(window: window)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
-        approval.beginReview()
         await waitForScheduledWait(waits, count: 1)
         fixture.coordinator.onEvent = { [weak agent] event in
             if case .presentationChanged = event {
@@ -4493,7 +4642,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         approval.windowController = NSWindowController(window: window)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
-        approval.beginReview()
+        let nativeReview = try presentedReview(fixture.coordinator)
         fixture.coordinator.onEvent = { [weak agent] event in
             if case .presentationChanged = event {
                 agent?.renderCurrentPresentation(for: fixture.key.handle, coordinator: fixture.coordinator)
@@ -4503,7 +4652,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             XCTFail("Closing an accepted approval must only dismiss")
             return .persisted
         }
-        fixture.coordinator.approveAccounts([], ethereumNetwork: nil)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: nativeReview)
         await fulfillment(of: [started], timeout: 1)
         window.resetActivationCount()
         NotificationCenter.default.post(name: NSWindow.willCloseNotification, object: window)
@@ -4618,7 +4767,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         await waitForState(fixture.coordinator, .awaitingAuthentication)
         fixture.coordinator.resumeAfterAuthentication()
         await waitForState(fixture.coordinator, .reviewing)
-        fixture.coordinator.approveTransaction(transaction, reviewedNetwork: network)
+        let nativeReview = try presentedReview(fixture.coordinator)
+        fixture.coordinator.approveTransaction(transaction, reviewedNetwork: network, review: nativeReview)
         guard case .rejecting? = fixture.coordinator.currentPresentation?.presentation else {
             return XCTFail("Invalid approval must initially show the rejection surface")
         }
@@ -4820,6 +4970,15 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
     }
 
+    private func presentedReview(_ coordinator: NativeApprovalCoordinator) throws -> NativeApprovalReview {
+        let presentation = try XCTUnwrap(coordinator.currentPresentation?.presentation)
+        guard case .approval(let review) = presentation else {
+            XCTFail("Expected an active native review")
+            throw CocoaError(.coderInvalidValue)
+        }
+        return review
+    }
+
     private func ownedSnapshot(
         _ fixture: Fixture,
         runtime: UUID? = nil,
@@ -4961,7 +5120,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         selectedAccounts: Set<SpecificWalletAccount>,
         coinType: WalletCoin? = nil,
         completion: @escaping ([SpecificWalletAccount]?, EthereumNetwork?) -> Void = { _, _ in }
-    ) -> AccountsListViewController {
+    ) throws -> AccountsListViewController {
         let controller = instantiate(AccountsListViewController.self)
         controller.walletsManager = manager
         if let mode {
@@ -4973,7 +5132,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                     network: Networks.ethereum
                 ),
                 mode: mode,
-                lifetime: NativeApprovalReviewLifetime(),
+                review: try nativeReviewForTesting(),
                 completion: completion
             )
         }

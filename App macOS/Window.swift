@@ -8,14 +8,14 @@ final class WalletWindowController: NSWindowController {
 
     func authenticate(
         reason: AuthenticationReason,
-        reviewLifetime: NativeApprovalReviewLifetime? = nil,
+        review: NativeApprovalReview? = nil,
         dependencies: WindowAuthenticationSession.Dependencies = .init()
     ) async -> Bool {
         guard currentAuthenticationSession == nil, !Task.isCancelled,
-              reviewLifetime?.isActive != false,
+              review?.isActive != false,
               let window, Window.isVisibleContentWindow(window) else { return false }
         let session = WindowAuthenticationSession(
-            owner: window, reason: reason, reviewLifetime: reviewLifetime,
+            owner: window, reason: reason, review: review,
             dependencies: dependencies
         )
         currentAuthenticationSession = session
@@ -34,10 +34,10 @@ struct Window {
     static func authenticate(
         in window: NSWindow?,
         reason: AuthenticationReason,
-        reviewLifetime: NativeApprovalReviewLifetime? = nil
+        review: NativeApprovalReview? = nil
     ) async -> Bool {
         guard let controller = window?.windowController as? WalletWindowController else { return false }
-        return await controller.authenticate(reason: reason, reviewLifetime: reviewLifetime)
+        return await controller.authenticate(reason: reason, review: review)
     }
     
     static func showNew(

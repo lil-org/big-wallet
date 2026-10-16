@@ -223,7 +223,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         let first = makeWindow()
         let second = makeWindow()
         defer { first.close(); second.close() }
-        let review = NativeApprovalReviewLifetime()
+        let review = try nativeReviewForTesting()
         let firstTask = begin(first, fixture: fixture, review: review)
         let secondTask = begin(second, fixture: fixture)
         let (sheet, form) = try await passwordSheet(in: first)
@@ -244,13 +244,13 @@ final class WindowAuthenticationSessionTests: XCTestCase {
             let fixture = AuthenticationKeychainFixture(password: "password")
             let controller = makeWindow()
             defer { controller.close() }
-            let review = NativeApprovalReviewLifetime()
+            let review = try nativeReviewForTesting()
             let gate = BiometricGate()
             let dependencies = WindowAuthenticationSession.Dependencies(
                 keychain: fixture.keychain, attemptBiometrics: { _ in await gate.attempt() }
             )
             let authentication = Task {
-                await controller.authenticate(reason: .sendTransaction, reviewLifetime: review, dependencies: dependencies)
+                await controller.authenticate(reason: .sendTransaction, review: review, dependencies: dependencies)
             }
             await gate.waitForEntry()
             if invalidatesReview { review.invalidate() }
@@ -309,10 +309,10 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         }
     }
 
-    func testAbsentClosedOrRetiredOwnerNeverStartsAuthentication() async {
+    func testAbsentClosedOrRetiredOwnerNeverStartsAuthentication() async throws {
         let controller = makeWindow()
         controller.close()
-        let review = NativeApprovalReviewLifetime()
+        let review = try nativeReviewForTesting()
         review.invalidate()
         var calls = 0
         var dependencies = WindowAuthenticationSession.Dependencies()
@@ -321,7 +321,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         let closed = await controller.authenticate(reason: .removeWallet, dependencies: dependencies)
         let other = makeWindow()
         defer { other.close() }
-        let retired = await other.authenticate(reason: .sendTransaction, reviewLifetime: review, dependencies: dependencies)
+        let retired = await other.authenticate(reason: .sendTransaction, review: review, dependencies: dependencies)
         XCTAssertFalse(absent)
         XCTAssertFalse(closed)
         XCTAssertFalse(retired)
@@ -362,10 +362,10 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         return dependencies
     }
 
-    private func begin(_ controller: WalletWindowController, fixture: AuthenticationKeychainFixture, review: NativeApprovalReviewLifetime? = nil) -> Task<Bool, Never> {
+    private func begin(_ controller: WalletWindowController, fixture: AuthenticationKeychainFixture, review: NativeApprovalReview? = nil) -> Task<Bool, Never> {
         let dependencies = dependencies(fixture)
         return Task {
-            await controller.authenticate(reason: .showPrivateKey, reviewLifetime: review, dependencies: dependencies)
+            await controller.authenticate(reason: .showPrivateKey, review: review, dependencies: dependencies)
         }
     }
 

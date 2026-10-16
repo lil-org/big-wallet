@@ -1353,18 +1353,18 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         let stub = ApprovalOperationsStub()
         let coordinator = makeCoordinator(transaction: transaction, stub: stub)
         await prepareToReady(coordinator, stub: stub)
-        let lifetime = NativeApprovalReviewLifetime()
+        let review = try nativeReviewForTesting()
         let account = WalletAccount(
             address: transaction.from, coin: .ethereum, derivation: .default,
             derivationPath: "m/44'/60'/0'/0/0", publicKey: "", extendedPublicKey: ""
         )
         let controller = ApproveTransactionViewController.with(
             transaction: transaction, chain: Self.makeNetwork(), account: account,
-            walletId: "notice-scroll-test", reviewLifetime: lifetime
+            walletId: "notice-scroll-test", review: review
         ) { _ in XCTFail("Displaying a notice must not approve") }
         _ = controller.view
         controller.invalidateNativeApprovalReview()
-        defer { lifetime.invalidate() }
+        defer { review.invalidate() }
         coordinator.onSnapshot = { [weak controller] in controller?.render($0) }
         controller.render(coordinator.snapshot)
         let textView = try XCTUnwrap(controller.metaTextView)

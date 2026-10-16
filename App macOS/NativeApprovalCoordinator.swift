@@ -2,6 +2,49 @@
 
 import Foundation
 
+@MainActor
+protocol NativeApprovalReviewTeardown: AnyObject {
+    func invalidateNativeApprovalReview()
+}
+
+@MainActor
+final class NativeApprovalReview {
+    private struct Participant {
+        weak var value: (any NativeApprovalReviewTeardown)?
+    }
+
+    fileprivate let approval: ApprovalReview
+    private(set) var isActive = true
+    private var participants = [ObjectIdentifier: Participant]()
+
+    var request: SafariRequest { approval.request }
+    var action: DappRequestAction { approval.action }
+
+    init(intent: BoundApprovalIntent) {
+        approval = ApprovalReview(intent: intent)
+    }
+
+    func register(_ participant: any NativeApprovalReviewTeardown) {
+        guard isActive else {
+            participant.invalidateNativeApprovalReview()
+            return
+        }
+        participants = participants.filter { $0.value.value != nil }
+        participants[ObjectIdentifier(participant)] = Participant(value: participant)
+    }
+
+    func invalidate() {
+        guard isActive else { return }
+        isActive = false
+        approval.invalidate()
+        let activeParticipants = participants.values.compactMap(\.value)
+        participants.removeAll()
+        for participant in activeParticipants {
+            participant.invalidateNativeApprovalReview()
+        }
+    }
+}
+
 protocol NativeDeliveryStore: AnyObject, Sendable {
     func load(
         handle: ExtensionBridge.Handle
@@ -41,7 +84,7 @@ final class NativeApprovalCoordinator {
     }
 
     enum Presentation {
-        case approval(request: SafariRequest, action: DappRequestAction)
+        case approval(NativeApprovalReview)
         case waiting, retryRequired, rejecting, interrupted, finished, superseded
 
         var isTerminal: Bool {
@@ -209,7 +252,7 @@ final class NativeApprovalCoordinator {
         case registered
         case running(RetryableOperation)
         case awaitingAuthentication
-        case reviewing(ApprovalReview)
+        case reviewing(NativeApprovalReview)
         case finalizing(ReviewConsent), waiting
         case interrupting
         case paused(RetryableOperation)
@@ -236,7 +279,7 @@ final class NativeApprovalCoordinator {
             case .running(let operation):
                 operation.presentation
             case .reviewing(let review):
-                .approval(request: review.request, action: review.action)
+                .approval(review)
             case .finalizing, .waiting:
                 .waiting
             case .interrupting:
@@ -379,7 +422,10 @@ final class NativeApprovalCoordinator {
         terminalDeadline = environment.now().addingTimeInterval(ExtensionBridge.requestTTL)
     }
 
-    isolated deinit { activeWork?.task.cancel() }
+    isolated deinit {
+        activeWork?.task.cancel()
+        if case .reviewing(let review) = state { review.invalidate() }
+    }
 
     func start(nativeDeliveryOwner: ExtensionBridge.NativeDeliveryOwner) {
         if runtime == nil { runtime = nativeDeliveryOwner }
@@ -418,12 +464,13 @@ final class NativeApprovalCoordinator {
 
     func approveAccounts(
         _ accounts: [SpecificWalletAccount],
-        ethereumNetwork: EthereumNetwork?
+        ethereumNetwork: EthereumNetwork?,
+        review: NativeApprovalReview
     ) {
         let identities = accounts.map {
             WalletAccountDescriptor(walletID: $0.walletId, account: $0.account)
         }
-        acceptReview { review, approvedAt, receipt in
+        acceptReview(review) { review, approvedAt, receipt in
             review.acceptAccounts(
                 selection: .init(accounts: identities, ethereumChainID: ethereumNetwork?.chainIdHexString),
                 approvedAt: approvedAt,
@@ -432,19 +479,20 @@ final class NativeApprovalCoordinator {
         }
     }
 
-    func approveMessage(solanaCluster: Solana.Cluster?) {
-        guard case .reviewing(let review) = state,
+    func approveMessage(solanaCluster: Solana.Cluster?, review: NativeApprovalReview) {
+        guard isCurrent(review),
               case .approveMessage = review.action else { return }
-        acceptReview { review, approvedAt, receipt in
+        acceptReview(review) { review, approvedAt, receipt in
             review.acceptMessage(cluster: solanaCluster, approvedAt: approvedAt, nativeReceipt: receipt)
         }
     }
 
     func approveTransaction(
         _ transaction: Transaction,
-        reviewedNetwork: ResolvedEthereumNetwork
+        reviewedNetwork: ResolvedEthereumNetwork,
+        review: NativeApprovalReview
     ) {
-        guard case .reviewing(let review) = state,
+        guard isCurrent(review),
               case .approveTransaction(let action) = review.action else { return }
         guard let execution = DappApprovalDecision.TransactionExecution(
             transaction,
@@ -454,19 +502,29 @@ final class NativeApprovalCoordinator {
             failAndReject()
             return
         }
-        acceptReview { review, approvedAt, receipt in
+        acceptReview(review) { review, approvedAt, receipt in
             review.acceptTransaction(execution: execution, approvedAt: approvedAt, nativeReceipt: receipt)
         }
     }
 
-    func approveAddEthereumChain() {
-        acceptReview { review, approvedAt, receipt in
+    func approveAddEthereumChain(review: NativeApprovalReview) {
+        acceptReview(review) { review, approvedAt, receipt in
             review.acceptAddEthereumChain(approvedAt: approvedAt, nativeReceipt: receipt)
         }
     }
 
     func reject() {
         beginRejection(reason: .user)
+    }
+
+    func reject(review: NativeApprovalReview) {
+        guard isCurrent(review) else { return }
+        reject()
+    }
+
+    private func isCurrent(_ review: NativeApprovalReview) -> Bool {
+        guard case .reviewing(let current) = state else { return false }
+        return current === review && review.isActive
     }
 
     private func beginRejection(reason: RejectionReason) {
@@ -479,15 +537,16 @@ final class NativeApprovalCoordinator {
     }
 
     private func acceptReview(
+        _ review: NativeApprovalReview,
         using accept: (ApprovalReview, Date, ExtensionBridge.NativeDeliveryReceipt) -> ReviewConsent?
     ) {
-        guard case .reviewing(let review) = state, let runtime else { return }
+        guard isCurrent(review), let runtime else { return }
         let approvedAt = environment.now()
         let receipt = ExtensionBridge.NativeDeliveryReceipt(
             nativeDeliveryNonce: nativeDeliveryNonce,
             owner: runtime
         )
-        guard let consent = accept(review, approvedAt, receipt) else {
+        guard let consent = accept(review.approval, approvedAt, receipt) else {
             failAndReject()
             return
         }
@@ -497,8 +556,11 @@ final class NativeApprovalCoordinator {
     private func enterState(_ state: State) {
         guard !isFinished else { return }
         let previousPresentation = currentPresentation?.presentation
-        if case .reviewing(let review) = self.state { review.invalidate() }
-        stopWork()
+        let previousReview: NativeApprovalReview?
+        if case .reviewing(let review) = self.state { previousReview = review }
+        else { previousReview = nil }
+        let previousWork = activeWork
+        activeWork = nil
         self.state = state
         switch state {
         case .registered, .paused, .finished:
@@ -510,7 +572,10 @@ final class NativeApprovalCoordinator {
                 task: Task { await Self.perform(state, work: context) }
             )
         }
-        publishPresentationChange(from: previousPresentation)
+        publishPresentationChange(from: previousPresentation) {
+            previousReview?.invalidate()
+            previousWork?.task.cancel()
+        }
     }
 
     private func updateState(_ state: State, within work: Work) {
@@ -520,10 +585,21 @@ final class NativeApprovalCoordinator {
         publishPresentationChange(from: previousPresentation)
     }
 
-    private func publishPresentationChange(from previousPresentation: Presentation?) {
-        if let presentation = state.presentation(hasAuthenticated: hasAuthenticated),
-           Self.presentationChanged(from: previousPresentation, to: presentation) {
+    private func publishPresentationChange(
+        from previousPresentation: Presentation?,
+        beforeNotification: () -> Void = {}
+    ) {
+        let changed = state.presentation(hasAuthenticated: hasAuthenticated).map {
+            Self.presentationChanged(from: previousPresentation, to: $0)
+        } ?? false
+        if changed {
             presentationRevision += 1
+        }
+        let revision = presentationRevision
+        let work = activeWork?.context
+        beforeNotification()
+        guard presentationRevision == revision, activeWork?.context === work else { return }
+        if changed {
             onEvent?(.presentationChanged)
         }
         if case .awaitingAuthentication = state {
@@ -557,12 +633,6 @@ final class NativeApprovalCoordinator {
         case .registered, .paused, .finished:
             break
         }
-    }
-
-    private func stopWork() {
-        let previous = activeWork
-        activeWork = nil
-        previous?.task.cancel()
     }
 
     private func pause() {
@@ -791,7 +861,7 @@ final class NativeApprovalCoordinator {
                             work.update { $0.failAndReject() }
                             return
                         }
-                        let review = ApprovalReview(intent: intent)
+                        let review = NativeApprovalReview(intent: intent)
                         work.update {
                             $0.enterState(.reviewing(review))
                         }

@@ -9,7 +9,7 @@ enum NativeAccountSelectionMode {
 
 @MainActor
 final class NativeAccountSelectionSession {
-    let lifetime: NativeApprovalReviewLifetime
+    let review: NativeApprovalReview
     let coinType: WalletCoin?
     var selectedAccounts: Set<SpecificWalletAccount>
     let initiallyConnectedProviders: Set<InpageProvider>
@@ -25,13 +25,13 @@ final class NativeAccountSelectionSession {
     init(
         action: SelectAccountAction,
         mode: NativeAccountSelectionMode,
-        lifetime: NativeApprovalReviewLifetime,
+        review: NativeApprovalReview,
         completion: @escaping (
             [SpecificWalletAccount]?,
             EthereumNetwork?
         ) -> Void
     ) {
-        self.lifetime = lifetime
+        self.review = review
         coinType = action.coinType
         selectedAccounts = action.selectedAccounts
         initiallyConnectedProviders = action.initiallyConnectedProviders
@@ -60,10 +60,10 @@ final class NativeAccountSelectionSession {
         accounts: [SpecificWalletAccount]?,
         beforeCompletion: () -> Void = {}
     ) {
-        guard lifetime.isActive, !hasCompleted else { return }
+        guard review.isActive, !hasCompleted else { return }
         hasCompleted = true
         beforeCompletion()
-        guard lifetime.isActive else { return }
+        guard review.isActive else { return }
         completion(accounts, network)
     }
 }
@@ -176,7 +176,7 @@ class AccountsListViewController: NSViewController {
     private weak var secretOwnerWindow: NSWindow?
     private var secretPresentation: NativeSecretAlertPresentation?
     private var isClosed = false
-    private var reviewLifetime: NativeApprovalReviewLifetime?
+    private var review: NativeApprovalReview?
     private var isOpeningWalletManagement = false
     var accountSelection: NativeAccountSelectionSession?
     var openWalletManagement: @MainActor () async -> Bool = DockAppLauncher.openDockApp
@@ -252,7 +252,7 @@ class AccountsListViewController: NSViewController {
     }
 
     private var acceptsUserActions: Bool {
-        !isClosed && reviewLifetime?.isActive != false &&
+        !isClosed && review?.isActive != false &&
             accountSelection?.hasCompleted != true
     }
 
@@ -289,8 +289,8 @@ class AccountsListViewController: NSViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        reviewLifetime = accountSelection?.lifetime
-        reviewLifetime?.register(self)
+        review = accountSelection?.review
+        review?.register(self)
         guard acceptsUserActions else { return }
 
         primaryButton.title = Strings.connect
@@ -1424,7 +1424,7 @@ extension AccountsListViewController: NSMenuDelegate {
 extension AccountsListViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
-        guard reviewLifetime == nil, !isClosed else { return }
+        guard review == nil, !isClosed else { return }
         isClosed = true
         invalidateNativeApprovalReview()
     }

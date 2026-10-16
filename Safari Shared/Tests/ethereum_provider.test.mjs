@@ -3015,48 +3015,6 @@ test("Solana send options remain private when generated fields have inherited se
     }
 });
 
-test("Solana rejects adapter messages corrupted by inherited setters before dispatch", async () => {
-    for (const versioned of [false, true]) {
-        for (const field of ["message", "signatures"]) {
-            const authorization = {
-                isConnected: true,
-                publicKey: firstSolanaKey,
-                nativeRevision: 1,
-            };
-            const harness = solanaHarness(authorization);
-            const transaction = versioned
-                ? versionedTransaction(1).transaction
-                : legacyTransaction(1).transaction;
-            const injected = {value: 1};
-            const prototype = vm.runInContext("Object.prototype", harness.context);
-            Object.defineProperty(prototype, field, {
-                configurable: true,
-                set(value) {
-                    Object.defineProperty(this, field, {
-                        configurable: true,
-                        enumerable: true,
-                        value: field === "message" ? injected : value,
-                        writable: true,
-                    });
-                    if (field === "signatures") { this.message = injected; }
-                },
-            });
-            let pending;
-            try {
-                pending = harness.provider.request({method: "signTransaction", params: {transaction}});
-            } finally {
-                delete prototype[field];
-            }
-            await assert.rejects(pending, error => error.code === 4200);
-            applySolanaConfiguration(harness, {
-                publicKey: authorization.publicKey,
-                isConnected: authorization.isConnected,
-                nativeRevision: authorization.nativeRevision,
-            });
-            assert.equal(harness.requests.length, 0);
-        }
-    }
-});
 
 test("Solana rejects non-string encoder results before dispatch", async () => {
     const cases = [
@@ -3357,34 +3315,6 @@ test("Wallet Standard committed connect returns current authorization", async ()
     }
 });
 
-test("Solana signs explicit legacy and versioned transactions", async () => {
-    for (const transaction of [legacyTransaction(1), versionedTransaction(1)]) {
-        const harness = solanaHarness({
-            isConnected: true,
-            publicKey: firstSolanaKey,
-            nativeRevision: 1,
-        });
-        applySolanaConfiguration(harness, {
-            isConnected: true,
-            publicKey: firstSolanaKey,
-            nativeRevision: 1,
-        });
-        const signed = harness.provider.signTransaction(transaction.transaction);
-        harness.applyDecodedEnvelope(harness.provider, {
-            id: harness.requests[0].id,
-            kind: "result",
-            name: "signTransaction",
-            result: validSignature,
-        });
-        assert.equal(await signed, transaction.transaction);
-        if (transaction.entry) {
-            assert.equal(transaction.entry.signature.length, 64);
-        } else {
-            assert.equal(transaction.signatures[0].length, 64);
-        }
-    }
-});
-
 test("Solana preserves SDK transaction identity, cosignatures, and serializable signed bytes", async () => {
     const wallet = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(1));
     const cosigner = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(2));
@@ -3393,6 +3323,7 @@ test("Solana preserves SDK transaction identity, cosignatures, and serializable 
         const fixtures = ["legacy", "v0", "versionedLegacy"].map(kind =>
             sdkTransactionFixture(kind, wallet, cosigner)
         );
+        assert.equal(Object.hasOwn(fixtures[2].transaction.message, "staticAccountKeys"), false);
         const batches = method === "signTransaction"
             ? fixtures.map(fixture => [fixture])
             : [fixtures];
@@ -3433,7 +3364,63 @@ test("Solana preserves SDK transaction identity, cosignatures, and serializable 
     }
 });
 
-test("Solana signAndSendTransaction rejects a supplied message after the transaction changes", async () => {
+test("Solana initializes unsigned legacy SDK signature slots before retaining them", async () => {
+    const wallet = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(1));
+    const cosigner = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(2));
+    const harness = connectedSolanaHarness(wallet.publicKey.toBase58(), {Uint8Array});
+    const fixture = sdkTransactionFixture("legacy", wallet, cosigner);
+    fixture.transaction.signatures = [];
+    const signing = harness.provider.signTransaction(fixture.transaction);
+    const signatures = fixture.transaction.signatures;
+    assert.equal(signatures.length, 2);
+    assert.equal(signatures[1].signature, null);
+    harness.applyDecodedEnvelope(harness.provider, {
+        id: harness.requests[0].id,
+        name: "signTransaction",
+        kind: "result",
+        result: fixture.response,
+    });
+    const transaction = await signing;
+    assert.equal(transaction, fixture.transaction);
+    assert.equal(transaction.signatures, signatures);
+    assert.equal(transaction.signatures[0].signature, null);
+    assert.equal(transaction.verifySignatures(false), true);
+});
+
+test("Solana preserves SDK cosignatures added while approval is pending", async () => {
+    const wallet = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(1));
+    const cosigner = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(2));
+    for (const kind of ["legacy", "v0", "versionedLegacy"]) {
+        const harness = connectedSolanaHarness(wallet.publicKey.toBase58(), {Uint8Array});
+        const fixture = sdkTransactionFixture(kind, wallet, cosigner);
+        if (fixture.legacy) {
+            fixture.signatures[0].signature = null;
+        } else {
+            fixture.signatures[0] = new Uint8Array(64);
+        }
+        const signing = harness.provider.signTransaction(fixture.transaction);
+        if (fixture.legacy) {
+            fixture.transaction.partialSign(cosigner);
+        } else {
+            fixture.transaction.sign([cosigner]);
+        }
+        const cosignature = fixture.legacy
+            ? fixture.signatures[0].signature : fixture.signatures[0];
+        harness.applyDecodedEnvelope(harness.provider, {
+            id: harness.requests[0].id,
+            name: "signTransaction",
+            kind: "result",
+            result: fixture.response,
+        });
+        const transaction = await signing;
+        assert.equal(transaction, fixture.transaction);
+        assert.equal(transaction.signatures, fixture.signatures);
+        assert.equal(fixture.legacy ? transaction.signatures[0].signature : transaction.signatures[0], cosignature);
+        assert.deepEqual(Buffer.from(transaction.serialize()), fixture.expectedBytes);
+    }
+});
+
+test("Solana signAndSendTransaction snapshots SDK bytes and rejects mismatched supplied messages", async () => {
     const wallet = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(1));
     const cosigner = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(2));
     const base58 = moduleHarness(base58Source).exports;
@@ -3441,13 +3428,14 @@ test("Solana signAndSendTransaction rejects a supplied message after the transac
         const harness = connectedSolanaHarness(wallet.publicKey.toBase58(), {Uint8Array});
         const {transaction, legacy} = sdkTransactionFixture(kind, wallet, cosigner);
         const message = legacy ? transaction.serializeMessage() : transaction.message.serialize();
+        const serialized = transaction.serialize({requireAllSignatures: false, verifySignatures: false});
         for (const supplied of [base58.encode(message), message]) {
             const pending = harness.provider.request({
                 method: "signAndSendTransaction",
                 params: {transaction, message: supplied},
             });
             const request = harness.requests.at(-1);
-            assert.ok(request, kind);
+            assert.equal(request.body.object.params.transaction, base58.encode(serialized), kind);
             harness.applyDecodedEnvelope(harness.provider, {
                 id: request.id,
                 kind: "result",
@@ -3476,578 +3464,231 @@ test("Solana signAndSendTransaction rejects a supplied message after the transac
     }
 });
 
-test("Solana response message validation scales linearly with batch size", async () => {
-    for (const makeTransaction of [legacyTransaction, versionedTransaction]) {
+test("Solana serializes each SDK message once during response preflight", async () => {
+    const wallet = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(1));
+    const cosigner = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(2));
+    for (const kind of ["legacy", "v0", "versionedLegacy"]) {
         for (const size of [1, 8, 64]) {
-            const harness = connectedSolanaHarness();
+            const harness = connectedSolanaHarness(wallet.publicKey.toBase58(), {Uint8Array});
             let serializations = 0;
-            const transactions = Array.from({length: size}, (_, index) => {
-                const fixture = makeTransaction(index + 1);
-                const owner = fixture.entry ? fixture.transaction : fixture.transaction.message;
-                const method = fixture.entry ? "serializeMessage" : "serialize";
+            const fixtures = Array.from({length: size}, () => {
+                const fixture = sdkTransactionFixture(kind, wallet, cosigner);
+                const owner = fixture.legacy ? fixture.transaction : fixture.transaction.message;
+                const method = fixture.legacy ? "serializeMessage" : "serialize";
                 const serialize = owner[method];
                 owner[method] = function () {
                     serializations += 1;
                     return serialize.call(this);
                 };
-                return fixture.transaction;
+                return fixture;
             });
-            const signing = harness.provider.signAllTransactions(transactions);
+            const signing = harness.provider.signAllTransactions(fixtures.map(fixture => fixture.transaction));
             const beforeResponse = serializations;
             harness.applyDecodedEnvelope(harness.provider, {
                 id: harness.requests[0].id,
                 kind: "result",
                 name: "signAllTransactions",
-                result: transactions.map(() => validSignature),
+                result: fixtures.map(fixture => fixture.response),
             });
             const result = await signing;
             assert.equal(result.length, size);
-            for (const [index, transaction] of transactions.entries()) {
-                assert.equal(result[index], transaction);
-            }
-            assert.ok(serializations - beforeResponse <= 2 * size,
-                `${size} transactions used ${serializations - beforeResponse} response serializations`);
-        }
-    }
-});
-
-test("Solana supports legacy messages wrapped in versioned transactions", async () => {
-    class LegacyMessage {
-        constructor() {
-            this.header = {numRequiredSignatures: 1};
-            this.accountKeys = [publicKey()];
-        }
-
-        get staticAccountKeys() { return this.accountKeys; }
-        serialize() { return new Uint8Array([1]); }
-    }
-
-    for (const method of ["signTransaction", "signAllTransactions", "signAndSendTransaction"]) {
-        const harness = solanaHarness();
-        applySolanaConfiguration(harness, {
-            isConnected: true,
-            publicKey: firstSolanaKey,
-            nativeRevision: 1,
-        });
-        const transaction = {
-            message: new LegacyMessage(),
-            signatures: [new Uint8Array(64).fill(7)],
-            serialize() { return new Uint8Array([2]); },
-        };
-        const isBatch = method === "signAllTransactions";
-        const signed = harness.provider[method](isBatch ? [transaction] : transaction);
-        signed.catch(() => {});
-        assert.equal(harness.requests.length, 1, method);
-        harness.applyDecodedEnvelope(harness.provider, {
-            id: harness.requests[0].id,
-            kind: "result",
-            name: method,
-            ...(isBatch ? {result: [validSignature]} : {result: validSignature}),
-        });
-        const result = await signed;
-        if (method === "signAndSendTransaction") {
-            assert.equal(result.signature, validSignature);
-        } else {
-            assert.equal(isBatch ? result[0] : result, transaction);
-            assert.deepEqual(Array.from(transaction.signatures[0]), new Array(64).fill(0));
-        }
-    }
-});
-
-test("Solana rejects replacement of a versioned transaction message", async () => {
-    const harness = solanaHarness({
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        nativeRevision: 1,
-    });
-    applySolanaConfiguration(harness, {
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        nativeRevision: 1,
-    });
-    const transaction = versionedTransaction(1);
-    const replacement = versionedTransaction(2);
-    const request = harness.provider.signTransaction(transaction.transaction);
-    transaction.transaction.message = replacement.transaction.message;
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: harness.requests[0].id,
-        kind: "result",
-        name: "signTransaction",
-        result: validSignature,
-    });
-    await assert.rejects(request, error => error.code === 4200);
-    assert.deepEqual([...transaction.signatures[0]], new Array(64).fill(0));
-
-    const reentrant = versionedTransaction(1);
-    const reentrantReplacement = versionedTransaction(2);
-    let replaceMessage = false;
-    reentrant.transaction.message.serialize = () => {
-        if (replaceMessage) {
-            replaceMessage = false;
-            reentrant.transaction.message =
-                reentrantReplacement.transaction.message;
-        }
-        return new Uint8Array([1]);
-    };
-    const reentrantRequest = harness.provider.signTransaction(
-        reentrant.transaction
-    );
-    replaceMessage = true;
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: harness.requests[1].id,
-        kind: "result",
-        name: "signTransaction",
-        result: validSignature,
-    });
-    await assert.rejects(reentrantRequest, error => error.code === 4200);
-    assert.deepEqual([...reentrant.signatures[0]], new Array(64).fill(0));
-});
-
-test("Solana rejects transaction serializer replacement", async () => {
-    for (const transaction of [legacyTransaction(1), versionedTransaction(1)]) {
-        const harness = solanaHarness({
-            isConnected: true,
-            publicKey: firstSolanaKey,
-            nativeRevision: 1,
-        });
-        applySolanaConfiguration(harness, {
-            isConnected: true,
-            publicKey: firstSolanaKey,
-            nativeRevision: 1,
-        });
-        const request = harness.provider.signTransaction(
-            transaction.transaction
-        );
-        if (transaction.entry) {
-            transaction.transaction.serializeMessage = () =>
-                new Uint8Array([2]);
-        } else {
-            transaction.transaction.message.serialize = () =>
-                new Uint8Array([2]);
-        }
-        harness.applyDecodedEnvelope(harness.provider, {
-            id: harness.requests[0].id,
-            kind: "result",
-            name: "signTransaction",
-            result: validSignature,
-        });
-        await assert.rejects(request, error => error.code === 4200);
-    }
-});
-
-test("Solana final message validation rechecks authorization", async () => {
-    const harness = solanaHarness({
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        nativeRevision: 1,
-    });
-    applySolanaConfiguration(harness, {
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        nativeRevision: 1,
-    });
-    const transaction = legacyTransaction(1);
-    let changeAuthorization = false;
-    transaction.transaction.serializeMessage = () => {
-        if (changeAuthorization && transaction.entry.signature !== null) {
-            changeAuthorization = false;
-            applySolanaConfiguration(harness, {
-                isConnected: true,
-                publicKey: secondSolanaKey,
-                nativeRevision: 2,
-            });
-        }
-        return new Uint8Array([1]);
-    };
-    const request = harness.provider.signTransaction(transaction.transaction);
-    changeAuthorization = true;
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: harness.requests[0].id,
-        kind: "result",
-        name: "signTransaction",
-        result: validSignature,
-    });
-    await assert.rejects(request, error => error.code === 4900);
-    assert.deepEqual([...transaction.entry.signature], new Array(64).fill(0));
-});
-
-test("Solana rejects invalid signatures, mutation, custom shapes, and oversized batches", async () => {
-    const harness = solanaHarness({
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        nativeRevision: 1,
-    });
-    applySolanaConfiguration(harness, {
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        nativeRevision: 1,
-    });
-    const mutable = legacyTransaction(1);
-    let byte = 1;
-    mutable.transaction.serializeMessage = () => new Uint8Array([byte]);
-    const changed = harness.provider.signTransaction(mutable.transaction);
-    byte = 2;
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: harness.requests[0].id,
-        kind: "result",
-        name: "signTransaction",
-        result: validSignature,
-    });
-    await assert.rejects(changed, error => error.code === 4200);
-    assert.equal(mutable.entry.signature, null);
-
-    const invalid = legacyTransaction(3);
-    const invalidSignature = harness.provider.signTransaction(invalid.transaction);
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: harness.requests[1].id,
-        kind: "result",
-        name: "signTransaction",
-        result: "1".repeat(63),
-    });
-    await assert.rejects(invalidSignature, error => error.code === 4200);
-
-    await assert.rejects(
-        harness.provider.signTransaction({signatures: []}),
-        error => error.code === 4200
-    );
-    await assert.rejects(
-        harness.provider.request({
-            method: "signAllTransactions",
-            params: {messages: new Array(65).fill("2")},
-        }),
-        error => error.code === 4200
-    );
-});
-
-test("Solana preserves recreated signature slots for subsequent signing", async () => {
-    for (const makeTransaction of [legacyTransaction, versionedTransaction]) {
-        for (const enumerable of [false, true]) {
-            const harness = connectedSolanaHarness();
-            const first = makeTransaction(1);
-            const second = makeTransaction(2);
-            const target = first.entry || first.signatures;
-            const property = first.entry ? "signature" : "0";
-            Object.defineProperty(target, property, {enumerable});
-            const owner = second.entry ? second.transaction : second.transaction.message;
-            const method = second.entry ? "serializeMessage" : "serialize";
-            let deleteSlot = false;
-            owner[method] = () => {
-                if (deleteSlot) {
-                    deleteSlot = false;
-                    delete target[property];
-                }
-                return new Uint8Array([2]);
-            };
-            const signing = harness.provider.signAllTransactions([
-                first.transaction, second.transaction,
-            ]);
-            deleteSlot = true;
-            harness.applyDecodedEnvelope(harness.provider, {
-                id: harness.requests[0].id,
-                kind: "result",
-                name: "signAllTransactions",
-                result: [validSignature, validSignature],
-            });
-            const signed = await signing;
-            assert.equal(signed[0], first.transaction);
-            const descriptor = Object.getOwnPropertyDescriptor(target, property);
-            assert.equal(descriptor.writable, true);
-            assert.equal(descriptor.enumerable, enumerable);
-            assert.equal(descriptor.configurable, true);
-
-            const nextSigning = harness.provider.signTransaction(first.transaction);
-            harness.applyDecodedEnvelope(harness.provider, {
-                id: harness.requests[1].id,
-                kind: "result",
-                name: "signTransaction",
-                result: validSignature,
-            });
-            assert.equal(await nextSigning, first.transaction);
-        }
-    }
-});
-
-test("Solana stops failed signature application without undoing completed writes", async () => {
-    for (const makeTransaction of [legacyTransaction, versionedTransaction]) {
-        for (const failAfterWrite of [false, true]) {
-            const harness = connectedSolanaHarness();
-            const fixtures = [1, 2, 3].map(byte => makeTransaction(byte));
-            const originals = [];
-            const attempted = [];
+            assert.equal(serializations - beforeResponse, size);
             for (const [index, fixture] of fixtures.entries()) {
-                const target = fixture.entry || fixture.signatures;
-                const property = fixture.entry ? "signature" : "0";
-                const original = Object.getOwnPropertyDescriptor(target, property);
-                originals.push({target, property, original});
-                const proxy = new Proxy(target, {
-                    defineProperty(object, name, descriptor) {
-                        if (name === property) {
-                            attempted.push(index);
-                            if (index === 1) {
-                                if (failAfterWrite) {
-                                    Reflect.defineProperty(object, name, descriptor);
-                                }
-                                throw new Error("apply failed");
-                            }
-                        }
-                        return Reflect.defineProperty(object, name, descriptor);
-                    },
-                });
-                if (fixture.entry) {
-                    fixture.transaction.signatures[0] = proxy;
-                } else {
-                    fixture.transaction.signatures = proxy;
-                }
-            }
-            const signing = harness.provider.signAllTransactions(
-                fixtures.map(fixture => fixture.transaction)
-            );
-            harness.applyDecodedEnvelope(harness.provider, {
-                id: harness.requests[0].id,
-                kind: "result",
-                name: "signAllTransactions",
-                result: fixtures.map(() => validSignature),
-            });
-            await assert.rejects(signing, /apply failed/);
-            assert.deepEqual(attempted, [0, 1]);
-            for (const [index, {target, property, original}] of originals.entries()) {
-                const current = Object.getOwnPropertyDescriptor(target, property);
-                if (index === 0 || index === 1 && failAfterWrite) {
-                    assert.notEqual(current.value, original.value);
-                    assert.deepEqual([...current.value], new Array(64).fill(0));
-                    assert.equal(current.writable, original.writable);
-                    assert.equal(current.enumerable, original.enumerable);
-                    assert.equal(current.configurable, original.configurable);
-                } else {
-                    assert.deepEqual(current, original);
-                }
+                assert.equal(result[index], fixture.transaction);
             }
         }
     }
 });
 
-test("Solana rejects a later batch setter that mutates an earlier message", async () => {
-    const harness = solanaHarness({
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        nativeRevision: 1,
-    });
-    applySolanaConfiguration(harness, {
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        nativeRevision: 1,
-    });
-    let firstByte = 1;
-    const first = legacyTransaction(1);
-    first.transaction.serializeMessage = () => new Uint8Array([firstByte]);
-    const secondTarget = {publicKey: publicKey(), signature: null};
-    const secondEntry = new Proxy(secondTarget, {
-        defineProperty(target, name, descriptor) {
-            if (name === "signature" && descriptor.value !== null) {
-                firstByte = 9;
+test("Solana rejects changed SDK message bytes before applying signatures", async () => {
+    const wallet = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(1));
+    const cosigner = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(2));
+    for (const kind of ["legacy", "v0", "versionedLegacy"]) {
+        for (const replacement of kind === "legacy" ? [false] : [false, true]) {
+            const harness = connectedSolanaHarness(wallet.publicKey.toBase58(), {Uint8Array});
+            const fixture = sdkTransactionFixture(kind, wallet, cosigner);
+            const original = fixture.legacy ? fixture.signerEntry.signature : fixture.signatures[1];
+            const signing = harness.provider.signTransaction(fixture.transaction);
+            if (fixture.legacy) {
+                fixture.transaction.recentBlockhash = secondSolanaKey;
+            } else {
+                if (replacement) {
+                    fixture.transaction.message = fixture.deserialize(fixture.transaction.serialize()).message;
+                }
+                fixture.transaction.message.recentBlockhash = secondSolanaKey;
             }
-            return Reflect.defineProperty(target, name, descriptor);
-        },
-    });
-    const second = {
-        signatures: [secondEntry],
-        serializeMessage() { return new Uint8Array([2]); },
-    };
-    const request = harness.provider.signAllTransactions([
-        first.transaction,
-        second,
-    ]);
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: harness.requests[0].id,
-        kind: "result",
-        name: "signAllTransactions",
-        result: [validSignature, validSignature],
-    });
-    await assert.rejects(request, error => error.code === 4200);
-    assert.deepEqual([...first.entry.signature], new Array(64).fill(0));
-    assert.deepEqual([...secondTarget.signature], new Array(64).fill(0));
+            harness.applyDecodedEnvelope(harness.provider, {
+                id: harness.requests[0].id,
+                name: "signTransaction",
+                kind: "result",
+                result: fixture.response,
+            });
+            await assert.rejects(signing, error => error.code === 4200);
+            assert.equal(fixture.transaction.signatures, fixture.signatures);
+            assert.equal(fixture.legacy ? fixture.signerEntry.signature : fixture.signatures[1], original);
+        }
+    }
 });
 
-test("Solana rejects duplicate or aliased signer targets before writing", async () => {
-    for (const makeTransaction of [legacyTransaction, versionedTransaction]) {
+test("Solana accepts byte-equivalent SDK message and serializer replacements", async () => {
+    const wallet = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(1));
+    const cosigner = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(2));
+    for (const kind of ["legacy", "v0", "versionedLegacy"]) {
+        const harness = connectedSolanaHarness(wallet.publicKey.toBase58(), {Uint8Array});
+        const fixture = sdkTransactionFixture(kind, wallet, cosigner);
+        const signing = harness.provider.signTransaction(fixture.transaction);
+        if (!fixture.legacy) {
+            fixture.transaction.message = fixture.deserialize(fixture.transaction.serialize()).message;
+        }
+        const owner = fixture.legacy ? fixture.transaction : fixture.transaction.message;
+        const method = fixture.legacy ? "serializeMessage" : "serialize";
+        const serialize = owner[method];
+        owner[method] = function () { return serialize.call(this); };
+        harness.applyDecodedEnvelope(harness.provider, {
+            id: harness.requests[0].id,
+            name: "signTransaction",
+            kind: "result",
+            result: fixture.response,
+        });
+        assert.equal(await signing, fixture.transaction);
+        assert.equal(fixture.transaction.signatures, fixture.signatures);
+        assert.deepEqual(Buffer.from(fixture.transaction.serialize()), fixture.expectedBytes);
+    }
+});
+
+test("queued Solana SDK transactions retain admission bytes and reject later mutation", async () => {
+    const wallet = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(1));
+    const cosigner = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(2));
+    const base58 = moduleHarness(base58Source).exports;
+    for (const kind of ["legacy", "v0", "versionedLegacy"]) {
+        const publicKey = wallet.publicKey.toBase58();
+        const harness = solanaHarness({isConnected: true, publicKey}, {Uint8Array});
+        const fixture = sdkTransactionFixture(kind, wallet, cosigner);
+        const message = fixture.legacy ? fixture.transaction.serializeMessage() : fixture.transaction.message.serialize();
+        const original = fixture.legacy ? fixture.signerEntry.signature : fixture.signatures[1];
+        const signing = harness.provider.signTransaction(fixture.transaction);
+        assert.equal(harness.requests.length, 0);
+        if (fixture.legacy) {
+            fixture.transaction.recentBlockhash = secondSolanaKey;
+        } else {
+            fixture.transaction.message.recentBlockhash = secondSolanaKey;
+        }
+        applySolanaConfiguration(harness, {publicKey, nativeRevision: 1});
+        assert.equal(harness.requests[0].body.object.params.message, base58.encode(message));
+        harness.applyDecodedEnvelope(harness.provider, {
+            id: harness.requests[0].id,
+            name: "signTransaction",
+            kind: "result",
+            result: fixture.response,
+        });
+        await assert.rejects(signing, error => error.code === 4200);
+        assert.equal(fixture.legacy ? fixture.signerEntry.signature : fixture.signatures[1], original);
+    }
+});
+
+test("Solana rejects malformed transactions and invalid transaction batches", async () => {
+    const wallet = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(1));
+    const cosigner = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(2));
+    const harness = connectedSolanaHarness(wallet.publicKey.toBase58(), {Uint8Array});
+    const fixture = sdkTransactionFixture("legacy", wallet, cosigner);
+    await assert.rejects(harness.provider.signTransaction({signatures: []}), error => error.code === 4200);
+    await assert.rejects(harness.provider.signAllTransactions([]), error => error.code === 4200);
+    await assert.rejects(harness.provider.signAllTransactions([fixture.transaction, {}]), error => error.code === 4200);
+    await assert.rejects(harness.provider.signAllTransactions(new Array(65).fill(fixture.transaction)), error => error.code === 4200);
+    await assert.rejects(harness.provider.request({
+        method: "signAllTransactions",
+        params: {messages: new Array(65).fill("2")},
+    }), error => error.code === 4200);
+    assert.equal(harness.requests.length, 0);
+    assert.equal(fixture.signerEntry.signature, null);
+});
+
+test("Solana rejects duplicate or aliased SDK signer targets before writing", async () => {
+    const wallet = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(1));
+    const cosigner = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(2));
+    for (const kind of ["legacy", "v0", "versionedLegacy"]) {
         for (const alias of ["transaction", "slot"]) {
-            const harness = connectedSolanaHarness();
-            const first = makeTransaction(1);
-            const second = alias === "transaction" ? first : makeTransaction(2);
+            const harness = connectedSolanaHarness(wallet.publicKey.toBase58(), {Uint8Array});
+            const first = sdkTransactionFixture(kind, wallet, cosigner);
+            const second = alias === "transaction" ? first : sdkTransactionFixture(kind, wallet, cosigner);
             if (alias === "slot") {
-                if (first.entry) {
-                    second.transaction.signatures[0] = first.entry;
+                if (first.legacy) {
+                    second.transaction.signatures[1] = first.signerEntry;
                 } else {
                     second.transaction.signatures = first.signatures;
                 }
             }
-            const signatures = first.transaction.signatures;
-            const original = first.entry ? first.entry.signature : signatures[0];
-            const signing = harness.provider.signAllTransactions([
-                first.transaction,
-                second.transaction,
-            ]);
+            const original = first.legacy ? first.signerEntry.signature : first.signatures[1];
+            const signing = harness.provider.signAllTransactions([first.transaction, second.transaction]);
             harness.applyDecodedEnvelope(harness.provider, {
                 id: harness.requests[0].id,
-                kind: "result",
                 name: "signAllTransactions",
-                result: [validSignature, validSignature],
+                kind: "result",
+                result: [first.response, second.response],
             });
             await assert.rejects(signing, error => error.code === 4200);
-            assert.equal(first.transaction.signatures, signatures);
-            assert.equal(first.entry ? first.entry.signature : signatures[0],
-                original);
+            assert.equal(first.transaction.signatures, first.signatures);
+            assert.equal(first.legacy ? first.signerEntry.signature : first.signatures[1], original);
         }
     }
 });
 
-test("Solana preflight leaves a caller-replaced signature array untouched", async () => {
-    for (const makeTransaction of [legacyTransaction, versionedTransaction]) {
-        const harness = connectedSolanaHarness();
-        const original = makeTransaction(1);
-        const signing = harness.provider.signTransaction(original.transaction);
-        const replacementBytes = new Uint8Array(64).fill(9);
-        const replacementSlot = original.entry
-            ? {publicKey: publicKey(), signature: replacementBytes}
+test("Solana preflight leaves a replaced SDK signature array untouched", async () => {
+    const wallet = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(1));
+    const cosigner = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(2));
+    for (const kind of ["legacy", "v0", "versionedLegacy"]) {
+        const harness = connectedSolanaHarness(wallet.publicKey.toBase58(), {Uint8Array});
+        const fixture = sdkTransactionFixture(kind, wallet, cosigner);
+        const signing = harness.provider.signTransaction(fixture.transaction);
+        const replacementBytes = Buffer.alloc(64, 9);
+        const replacementSignatures = fixture.signatures.slice();
+        replacementSignatures[1] = fixture.legacy
+            ? {publicKey: wallet.publicKey, signature: replacementBytes}
             : replacementBytes;
-        const replacementSignatures = [replacementSlot];
-        original.transaction.signatures = replacementSignatures;
+        fixture.transaction.signatures = replacementSignatures;
         harness.applyDecodedEnvelope(harness.provider, {
             id: harness.requests[0].id,
-            kind: "result",
             name: "signTransaction",
-            result: validSignature,
+            kind: "result",
+            result: fixture.response,
         });
         await assert.rejects(signing, error => error.code === 4200);
-        assert.equal(original.transaction.signatures, replacementSignatures);
-        assert.equal(replacementSignatures[0], replacementSlot);
+        assert.equal(fixture.transaction.signatures, replacementSignatures);
+        assert.equal(fixture.legacy ? replacementSignatures[1].signature : replacementSignatures[1], replacementBytes);
         assert.deepEqual([...replacementBytes], new Array(64).fill(9));
     }
 });
 
-test("Solana preflights a whole batch before applying signatures", async () => {
-    const harness = solanaHarness({
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        nativeRevision: 1,
-    });
-    applySolanaConfiguration(harness, {
-        isConnected: true,
-        publicKey: firstSolanaKey,
-        nativeRevision: 1,
-    });
-    const first = legacyTransaction(1);
-    const second = legacyTransaction(2);
-    const request = harness.provider.signAllTransactions([
-        first.transaction,
-        second.transaction,
-    ]);
-    harness.applyDecodedEnvelope(harness.provider, {
-        id: harness.requests[0].id,
-        kind: "result",
-        name: "signAllTransactions",
-        result: [validSignature, "1".repeat(63)],
-    });
-    await assert.rejects(request, error => error.code === 4200);
-    assert.equal(first.entry.signature, null);
-    assert.equal(second.entry.signature, null);
-});
-
-test("Solana preflights every transaction and signer slot before batch writes", async () => {
-    for (const makeTransaction of [legacyTransaction, versionedTransaction]) {
-        for (const failure of ["message", "signer", "readonly", "signature"]) {
-            const harness = connectedSolanaHarness();
-            const first = makeTransaction(1);
-            const second = makeTransaction(2);
-            let secondByte = 2;
-            if (second.entry) {
-                second.transaction.serializeMessage = () => new Uint8Array([secondByte]);
-            } else {
-                second.transaction.message.serialize = () => new Uint8Array([secondByte]);
-            }
-            const original = first.entry ? first.entry.signature : first.signatures[0];
-            const signing = harness.provider.signAllTransactions([
-                first.transaction,
-                second.transaction,
-            ]);
+test("Solana preflights every SDK transaction and signature before batch writes", async () => {
+    const wallet = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(1));
+    const cosigner = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(2));
+    const otherWallet = solanaSDK.Keypair.fromSeed(new Uint8Array(32).fill(4));
+    for (const kind of ["legacy", "v0", "versionedLegacy"]) {
+        for (const failure of ["message", "signer", "readonly", "signature", "count"]) {
+            const harness = connectedSolanaHarness(wallet.publicKey.toBase58(), {Uint8Array});
+            const first = sdkTransactionFixture(kind, wallet, cosigner);
+            const second = sdkTransactionFixture(kind, failure === "signer" ? otherWallet : wallet, cosigner);
+            const original = first.legacy ? first.signerEntry.signature : first.signatures[1];
+            const signing = harness.provider.signAllTransactions([first.transaction, second.transaction]);
             if (failure === "message") {
-                secondByte = 3;
-            } else if (failure === "signer") {
-                if (second.entry) {
-                    second.entry.publicKey = publicKey(secondSolanaKey);
+                if (second.legacy) {
+                    second.transaction.recentBlockhash = secondSolanaKey;
                 } else {
-                    second.transaction.message.staticAccountKeys[0] = publicKey(secondSolanaKey);
+                    second.transaction.message.recentBlockhash = secondSolanaKey;
                 }
             } else if (failure === "readonly") {
-                Object.defineProperty(second.entry || second.signatures,
-                    second.entry ? "signature" : "0", {writable: false});
+                Object.defineProperty(second.legacy ? second.signerEntry : second.signatures,
+                    second.legacy ? "signature" : "1", {writable: false});
             }
             harness.applyDecodedEnvelope(harness.provider, {
                 id: harness.requests[0].id,
-                kind: "result",
                 name: "signAllTransactions",
-                result: [validSignature, failure === "signature" ? "1".repeat(63) : validSignature],
+                kind: "result",
+                result: failure === "count" ? [first.response]
+                    : [first.response, failure === "signature" ? "1".repeat(63) : second.response],
             });
             await assert.rejects(signing, error => error.code === 4200);
-            assert.equal(first.entry ? first.entry.signature : first.signatures[0], original);
-        }
-    }
-});
-
-test("Solana rechecks operation currentness around response callbacks", async () => {
-    for (const phase of ["preflight", "write", "final"]) {
-        for (const change of ["account", "retire"]) {
-            const harness = connectedSolanaHarness();
-            const fixture = legacyTransaction(1);
-            let armed = false;
-            const invalidate = () => {
-                if (!armed) { return; }
-                armed = false;
-                if (change === "retire") {
-                    harness.Solana.retire(harness.provider);
-                } else {
-                    applySolanaConfiguration(harness, {
-                        isConnected: true,
-                        publicKey: secondSolanaKey,
-                        nativeRevision: 2,
-                    });
-                }
-            };
-            if (phase === "preflight") {
-                fixture.entry.publicKey.toString = () => {
-                    invalidate();
-                    return firstSolanaKey;
-                };
-            } else if (phase === "write") {
-                fixture.transaction.signatures[0] = new Proxy(fixture.entry, {
-                    defineProperty(target, name, descriptor) {
-                        const applied = Reflect.defineProperty(target, name, descriptor);
-                        if (name === "signature" && descriptor.value !== null) {
-                            invalidate();
-                        }
-                        return applied;
-                    },
-                });
-            } else {
-                fixture.transaction.serializeMessage = () => {
-                    if (fixture.entry.signature !== null) { invalidate(); }
-                    return new Uint8Array([1]);
-                };
-            }
-            const signing = harness.provider.signTransaction(fixture.transaction);
-            armed = true;
-            harness.applyDecodedEnvelope(harness.provider, {
-                id: harness.requests[0].id,
-                kind: "result",
-                name: "signTransaction",
-                result: validSignature,
-            });
-            await assert.rejects(signing, error => error.code === 4900);
-            if (phase === "preflight") {
-                assert.equal(fixture.entry.signature, null);
-            } else {
-                assert.deepEqual([...fixture.entry.signature], new Array(64).fill(0));
-            }
+            assert.equal(first.legacy ? first.signerEntry.signature : first.signatures[1], original);
         }
     }
 });
