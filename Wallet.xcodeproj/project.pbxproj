@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		69ABA361B8BA9583BCE28739 /* AccountPreviewStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA36AB064B8AEBD6648A1157 /* AccountPreviewStateTests.swift */; };
+		4028B827A1D70E12CF27764D /* AccountPreviewStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA36AB064B8AEBD6648A1157 /* AccountPreviewStateTests.swift */; };
+		F2F2A682389EC2746EF90EC6 /* AccountPreviewStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA36AB064B8AEBD6648A1157 /* AccountPreviewStateTests.swift */; };
+		D4050F4B448B91327C672D88 /* AccountPreviewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 568B98EA09A27D0AF83EA186 /* AccountPreviewState.swift */; };
+		AF2B9A978726DB86600DBE9F /* AccountPreviewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 568B98EA09A27D0AF83EA186 /* AccountPreviewState.swift */; };
+		7A22D7161651202D624C5E26 /* AccountPreviewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 568B98EA09A27D0AF83EA186 /* AccountPreviewState.swift */; };
+		B708E90EEA90A2093A336F5B /* AccountPreviewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 568B98EA09A27D0AF83EA186 /* AccountPreviewState.swift */; };
 		FCE09CD8813E4FFEADF20B96 /* StartupCredentialCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C359A5323A2E444E97DED478 /* StartupCredentialCoordinator.swift */; };
 		3337F2FABF114CC7A7B54579 /* StartupCredentialCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C359A5323A2E444E97DED478 /* StartupCredentialCoordinator.swift */; };
 		694B6F93DCA9419A809F8FD2 /* WindowAuthenticationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B72F05A3BFC42A48FF6D0F4 /* WindowAuthenticationSession.swift */; };
@@ -1117,6 +1124,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		EA36AB064B8AEBD6648A1157 /* AccountPreviewStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountPreviewStateTests.swift; sourceTree = "<group>"; };
+		568B98EA09A27D0AF83EA186 /* AccountPreviewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountPreviewState.swift; sourceTree = "<group>"; };
 		C359A5323A2E444E97DED478 /* StartupCredentialCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupCredentialCoordinator.swift; sourceTree = "<group>"; };
 		7B72F05A3BFC42A48FF6D0F4 /* WindowAuthenticationSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAuthenticationSession.swift; sourceTree = "<group>"; };
 		3F4B3A76A2A0449AA8E83C95 /* WindowAuthenticationSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAuthenticationSessionTests.swift; sourceTree = "<group>"; };
@@ -1464,6 +1473,7 @@
 		2C03EB8E2B06A18700EF61F5 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				EA36AB064B8AEBD6648A1157 /* AccountPreviewStateTests.swift */,
 				D0D9D762A778D6D42FC747A1 /* NativeMessageDispatcherTests.swift */,
 				49639FB766301B747C6439F2 /* ApprovalLifecycle */,
 				9FD0D903F81791CE40249653 /* OnboardingCancellationTests.swift */,
@@ -1895,6 +1905,7 @@
 		2CD0668826B213BB00728C20 /* Wallets */ = {
 			isa = PBXGroup;
 			children = (
+				568B98EA09A27D0AF83EA186 /* AccountPreviewState.swift */,
 				2CD0668926B213E500728C20 /* WalletsManager.swift */,
 				2CE377CB2D3A748D00288FFB /* WalletsMetadataService.swift */,
 				2CD0668B26B2142000728C20 /* WalletContainer.swift */,
@@ -3257,6 +3268,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AF2B9A978726DB86600DBE9F /* AccountPreviewState.swift in Sources */,
 				F1350C67F7A9AB7E2337EAF1 /* NativeMessageDispatcher.swift in Sources */,
 				5E8078B98E67D28C7DB4366B /* SecretAlertPresentation.swift in Sources */,
 				65FE125EDB868C412908EB5C /* SecretPresentationSession.swift in Sources */,
@@ -3369,6 +3381,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B708E90EEA90A2093A336F5B /* AccountPreviewState.swift in Sources */,
 				5D9A687B850ED1E53B4C468D /* NativeMessageDispatcher.swift in Sources */,
 				3E928EDD41EF798B09ECFB79 /* SecretPresentationSession.swift in Sources */,
 				E311C12DD6B8BF2730B708C2 /* SecretClipboard.swift in Sources */,
@@ -3500,6 +3513,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7A22D7161651202D624C5E26 /* AccountPreviewState.swift in Sources */,
 				671FC45254C3D5DB86B3D3B7 /* NativeMessageDispatcher.swift in Sources */,
 				3D21F2836F718C4D85704B47 /* SecretAlertPresentation.swift in Sources */,
 				007F1C5985FEBF705F776AD8 /* SecretPresentationSession.swift in Sources */,
@@ -3705,6 +3719,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4028B827A1D70E12CF27764D /* AccountPreviewStateTests.swift in Sources */,
 				8FAF3DDD6528F23C3EC2771A /* NativeMessageDispatcherTests.swift in Sources */,
 				DEBC408FFA115904C2E37B9E /* PasswordStorageTests.swift in Sources */,
 				30C1FE53E2DDBDE640E59529 /* SecretAlertPresentationTests.swift in Sources */,
@@ -3754,6 +3769,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D4050F4B448B91327C672D88 /* AccountPreviewState.swift in Sources */,
 				61E6CCEDE0281FAC1199C800 /* NativeMessageDispatcher.swift in Sources */,
 				40343842C622D71519A25A55 /* SecretPresentationSession.swift in Sources */,
 				B02AE20901AF708B51837229 /* SecretClipboard.swift in Sources */,
@@ -3974,6 +3990,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F2F2A682389EC2746EF90EC6 /* AccountPreviewStateTests.swift in Sources */,
 				E22338598B6A2F5FE5598880 /* NativeMessageDispatcherTests.swift in Sources */,
 				2A041DA7B5322FEE7D8068FD /* OnboardingCancellationTests.swift in Sources */,
 				485AE8E32BAF4FACBC5772D6 /* WindowAuthenticationSessionTests.swift in Sources */,
@@ -4026,6 +4043,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				69ABA361B8BA9583BCE28739 /* AccountPreviewStateTests.swift in Sources */,
 				75DF6A7B7B194C42E799E7A2 /* NativeMessageDispatcherTests.swift in Sources */,
 				5437CD9FC0D7C097A8830E54 /* PasswordStorageTests.swift in Sources */,
 				6B819B9E76242B268EEB3AE1 /* SecretAlertPresentationTests.swift in Sources */,

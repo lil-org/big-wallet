@@ -1,7 +1,7 @@
 import {isAbsolute, join, resolve, sep} from "node:path";
 
 export const SELECTORS = ["build", "test", "performance", "tsan", "fuzz", "approval", "repository", "worker"];
-export const RUNNER_TOOL_NAMES = ["VMGuestAgent", "guest_runner", "guest.mjs", "test_manifest.mjs", "result_audit.mjs"];
+export const BOOTSTRAP_TOOL_NAMES = ["VMGuestAgent", "guest_runner", "guest_bootstrap.mjs"];
 export const PLATFORMS = [
     {id: "macos", target: "Tests macOS", scheme: "Wallet", generic: "generic/platform=macOS", requirement: "macos"},
     {id: "ios", target: "Tests iOS", scheme: "Wallet iOS", generic: "generic/platform=iOS", requirement: "ios"},
@@ -21,7 +21,7 @@ export const PERFORMANCE_TESTS = [
 export const TSAN_TESTS = [
     "AsyncTestSupportTests", "AlchemyJWTProviderTests", "SolanaOptionsTests", "ApprovalResolutionTests",
     "WalletSigningSessionTests", "WalletSigningScopeTests", "NativeApprovalServiceTests", "TransactionInspectorTests",
-    "WalletsManagerPreviewTests", "WalletCoreProxyParallelDerivationTests",
+    "WalletsManagerPreviewTests", "AccountPreviewStateTests", "WalletCoreProxyParallelDerivationTests",
 ];
 export const EXTENDED_TSAN_TESTS = [
     "ExtensionBridgeStoredRequestTests", "PopupRequestSessionsTests", "DurableProfilePersistenceTests",
@@ -36,13 +36,13 @@ export const SHELL_TESTS = [
 
 export function validateJob(value) {
     if (!value || typeof value !== "object" || Array.isArray(value)) { throw new Error("Job must be an object"); }
-    const allowed = new Set(["version", "runId", "vmId", "kind", "profile", "stages", "onlyTesting", "source", "configuration", "approvalArgs", "runnerTools"]);
+    const allowed = new Set(["version", "runId", "vmId", "kind", "profile", "stages", "onlyTesting", "source", "configuration", "approvalArgs", "bootstrapTools"]);
     if (Object.keys(value).some(key => !allowed.has(key)) || value.version !== 1) { throw new Error("Unsupported job schema"); }
     if (typeof value.runId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.runId) || value.runId.includes("..")) {
         throw new Error("Invalid run identifier");
     }
     if (typeof value.vmId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/.test(value.vmId)) { throw new Error("Invalid VM identifier"); }
-    if (!["run", "doctor", "prepare"].includes(value.kind) || !["all", "extended"].includes(value.profile)) { throw new Error("Invalid job kind or profile"); }
+    if (!["run", "doctor"].includes(value.kind) || !["all", "extended"].includes(value.profile)) { throw new Error("Invalid job kind or profile"); }
     if (!Array.isArray(value.stages) || value.stages.some(stage => !SELECTORS.includes(stage)) || new Set(value.stages).size !== value.stages.length) {
         throw new Error("Invalid stage selection");
     }
@@ -52,18 +52,16 @@ export function validateJob(value) {
         throw new Error("Invalid XCTest selection");
     }
     if (value.configuration !== undefined && !["Debug", "Release"].includes(value.configuration)) { throw new Error("Invalid configuration"); }
-    if (!value.runnerTools || typeof value.runnerTools !== "object" || Array.isArray(value.runnerTools) ||
-        Object.keys(value.runnerTools).length !== RUNNER_TOOL_NAMES.length || RUNNER_TOOL_NAMES.some(name => !/^[a-f0-9]{64}$/.test(value.runnerTools[name]))) {
-        throw new Error("Invalid runner tool identity");
+    if (!value.bootstrapTools || typeof value.bootstrapTools !== "object" || Array.isArray(value.bootstrapTools) ||
+        Object.keys(value.bootstrapTools).length !== BOOTSTRAP_TOOL_NAMES.length || BOOTSTRAP_TOOL_NAMES.some(name => !/^[a-f0-9]{64}$/.test(value.bootstrapTools[name]))) {
+        throw new Error("Invalid bootstrap tool identity");
     }
-    if (value.kind === "run" || value.source !== undefined) {
-        if (!value.source || typeof value.source !== "object" || Object.keys(value.source).some(key => !["sha256", "commit", "fileCount", "bytes"].includes(key)) ||
-            !/^[a-f0-9]{64}$/.test(value.source.sha256) || typeof value.source.commit !== "string" || !/^[a-f0-9]{40,64}$/.test(value.source.commit)) {
-            throw new Error("Invalid source identity");
-        }
-        for (const key of ["fileCount", "bytes"]) {
-            if (value.source[key] !== undefined && (!Number.isSafeInteger(value.source[key]) || value.source[key] < 0)) { throw new Error("Invalid source inventory"); }
-        }
+    if (!value.source || typeof value.source !== "object" || Array.isArray(value.source) || Object.keys(value.source).some(key => !["sha256", "commit", "fileCount", "bytes"].includes(key)) ||
+        !/^[a-f0-9]{64}$/.test(value.source.sha256) || typeof value.source.commit !== "string" || !/^[a-f0-9]{40,64}$/.test(value.source.commit)) {
+        throw new Error("Invalid source identity");
+    }
+    for (const key of ["fileCount", "bytes"]) {
+        if (value.source[key] !== undefined && (!Number.isSafeInteger(value.source[key]) || value.source[key] < 0)) { throw new Error("Invalid source inventory"); }
     }
     validateApprovalArguments(value.approvalArgs ?? []);
     return structuredClone(value);
@@ -214,7 +212,7 @@ export function createManifest(job) {
     const byID = new Map(stages.map(stage => [stage.id, stage]));
     const include = id => { for (const dependency of byID.get(id).dependencies) { if (!selected.has(dependency)) { selected.add(dependency); include(dependency); } } };
     for (const id of selected) { include(id); }
-    return stages.filter(stage => selected.has(stage.id)).map(stage => ({...stage, requirements: [...new Set(["runnerTools", ...stage.requirements])]}));
+    return stages.filter(stage => selected.has(stage.id)).map(stage => ({...stage, requirements: [...new Set(["bootstrap", ...stage.requirements])]}));
 }
 
 export function commandForStage(stage, {destinations, artifacts, scratch}) {

@@ -27,7 +27,7 @@ class SetupFixture:
         self.make_vm(self.original, b'original')
         self.args = host.parser().parse_args(['--vm', str(self.original), 'setup'])
         self.environment = {'minimumHostFreeBytes': 1, 'buildData': {'bytes': 1024}}
-        self.tools = {'guest.mjs': 'fixture-tools'}
+        self.tools = {'guest_bootstrap.mjs': 'fixture-tools'}
         self.launches = []
         self.stop_exchange = None
         self.snapshot_count = 0
@@ -35,8 +35,8 @@ class SetupFixture:
             self.make_vm(self.baseline, b'old-baseline')
             host.atomic_json(self.state / 'baseline.json', {'version': 1, 'vmId': 'fixture-vm',
                 'sourceVM': str(self.original), 'consoleUser': 'wallet-test', 'environment': self.environment,
-                'runnerTools': self.tools, 'runnerSourceDigest': 'outdated'})
-        for name, value in [('check_capacity', None), ('guest_tool_hashes', self.tools),
+                'bootstrapTools': self.tools, 'bootstrapSourceDigest': 'outdated'})
+        for name, value in [('check_capacity', None), ('bootstrap_tool_hashes', self.tools),
                             ('ensure_disk_idle', None), ('environment_attested', True), ('verify_setup_sources', None)]:
             self.stack.enter_context(patch.object(host, name, return_value=value))
         for name, action in [('build_tools', self.build_tools), ('clone_vm', self.clone),
@@ -113,8 +113,8 @@ class SetupFixture:
             host.atomic_json(self.doctor_control[0] / 'stop.json', {'runId': self.doctor_control[1]})
         report = {'version': 1, 'runId': job['runId'], 'status': 'passed', 'finishedAt': 'fixture',
                   'identity': {'vmId': job['vmId'], 'consoleUser': 'wallet-test'}, 'source': job['source'],
-                  'preflight': {'runnerTools': {'available': True, 'hashes': self.tools},
-                    'checks': {name: True for name in ('runnerTools', 'node', 'python', 'jq', 'xcode', 'macos', 'ios', 'visionos')}}}
+                  'preflight': {'bootstrap': {'available': True, 'hashes': self.tools},
+                    'checks': {name: True for name in ('bootstrap', 'node', 'python', 'jq', 'xcode', 'macos', 'ios', 'visionos')}}}
         host.atomic_json(exchange / 'artifacts/result.json', report)
         fixture = self
         class Child:
@@ -133,11 +133,11 @@ class SetupFixture:
         return Child()
 
     def doctor(self, args, state, candidate, environment, operation, record, configuration,
-               binaries, runner_tools, source, password, source_digest):
+               binaries, bootstrap_tools, source, password, source_digest):
         run_id, exchange = operation['runId'], operation['exchange']
         host.atomic_json(exchange / 'job.json', {'version': 1, 'runId': run_id, 'vmId': record['vmId'],
             'kind': 'doctor', 'profile': 'all', 'stages': [], 'onlyTesting': [], 'source': source,
-            'runnerTools': runner_tools})
+            'bootstrapTools': bootstrap_tools})
         operation['monitorCalled'] = True
         return host.monitor_vm(args, state, candidate, exchange, run_id, binaries, environment,
             args.timeout or 120, password, keep_operation=True, previous_stops=operation['previousStops']), exchange
@@ -181,26 +181,26 @@ class SetupPreparationTests(unittest.TestCase):
                         installer.write_bytes(installer.read_bytes() + b'\nfixture installer edit\n')
                     return child
                 with patch.object(host, 'TOOLS', sources), patch.object(host.subprocess, 'Popen', side_effect=edit_after_report):
-                    captured = host.runner_source_digest()
+                    captured = host.bootstrap_source_digest()
                     with self.assertRaisesRegex(host.RunnerError, 'sources changed during setup'):
                         fixture.run()
-                    current = host.runner_source_digest()
+                    current = host.bootstrap_source_digest()
                 record = host.read_json(fixture.state / 'candidate.json')
                 self.assertNotEqual(current, captured)
-                self.assertNotEqual(record.get('runnerSourceDigest'), current)
+                self.assertNotEqual(record.get('bootstrapSourceDigest'), current)
                 if phase == 'doctor':
                     self.assertNotIn('baseVerifiedAt', record)
                 else:
-                    self.assertEqual(record['runnerSourceDigest'], captured)
+                    self.assertEqual(record['bootstrapSourceDigest'], captured)
                 self.assertNotIn('promotionPending', record)
                 self.assertFalse((fixture.state / 'baseline.json').exists())
                 self.assertFalse((fixture.state / 'active.json').exists())
 
     def test_unchanged_setup_records_its_verified_identity_and_reuses_the_baseline(self):
         with SetupFixture(self) as fixture:
-            captured = host.runner_source_digest()
+            captured = host.bootstrap_source_digest()
             self.assertEqual(fixture.run(), 0)
-            self.assertEqual(host.read_json(fixture.state / 'baseline.json')['runnerSourceDigest'], captured)
+            self.assertEqual(host.read_json(fixture.state / 'baseline.json')['bootstrapSourceDigest'], captured)
             self.assertEqual(fixture.launches, ['doctor', 'run'])
             fixture.launches.clear()
             self.assertEqual(fixture.run(), 0)

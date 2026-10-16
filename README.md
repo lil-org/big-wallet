@@ -23,6 +23,12 @@ snapshots and returns logs and test results without opening viewers. See
 [VM setup, signing, and test coverage](Scripts/vm/README.md) for the one-time
 guest bootstrap and targeted test commands.
 
+The installed guest bootstrap verifies the VM, session, and source snapshot before
+loading that snapshot's test harness. Changes to the harness, stage manifest, or
+result auditor run with the next snapshot without repeating setup. Changes to the
+installed bootstrap, provisioning scripts, or pinned environment require setup
+again. Existing development baselines need one setup refresh for this separation.
+
 Use Xcode 27 or newer with Swift 6.4. All native targets use Swift 6 language mode. Minimum supported versions are iOS 26, macOS 15, and visionOS 2.
 
 Default actor isolation is `nonisolated`, with `NonisolatedNonsendingByDefault` and `InferIsolatedConformances` enabled. UI and wallet presentation state belong to `MainActor`; shared storage and service state use actors or `Synchronization.Mutex`. Unannotated async functions stay on their caller's actor, and CPU-intensive work uses `@concurrent`. Values crossing actors must be `Sendable`. Synchronous cancellation, secret invalidation, and lease release use synchronized ownership. File locks continue to coordinate the app, Safari extensions, and approval helper across processes. Never suspend while holding an in-process mutex.
@@ -81,6 +87,11 @@ Actual task cancellation stops uncommitted work on both native and popup approva
 The final cancellation check precedes synchronous durable publication. Once a checkpoint or terminal write starts, its outcome wins: a successful broadcast checkpoint may dispatch once even if cancellation arrives during the write. An uncertain checkpoint never dispatches from that attempt and is resolved through durable observation or recovery. Confirmed checkpoints and completed results survive caller cancellation; recovery cannot repeat signing, restore consumed consent, or send the transaction again.
 
 Each signing session owns one source that binds the account, signing material, freshness checks, and any commit lease. Retiring a vault source's key leaves its captured identity available for result publication; invalidating the source prevents further use. A commit lease arriving after cancellation is released instead of transferred.
+
+The execution lifecycle alone admits and consumes signing attempts; the session
+owns key retirement and commit-lease cleanup. Signing produces execution-bound
+completions or prepared broadcasts directly. Copies of a prepared broadcast share
+its identity and still require the same one-use durable dispatch permit.
 
 On iOS and visionOS, the approval vault encrypts each enabled account's private key in a separate record bound to its identity, catalog, and publication generation. Each record uses an independent random encryption key protected by Keychain user presence. An approval reads only the selected account's encryption key and decrypts only its record. The vault payload excludes passwords, mnemonics, and stored-wallet JSON. A disclosed encryption key decrypts only its matching record, though the shared Keychain access group and authentication context do not isolate accounts from compromised extension code.
 

@@ -1020,7 +1020,7 @@ function provisionGuest() {
         appliedProvisioningRequestID: appliedProvisioningRequest(config, previous, optional.appliedCapabilities),
         ...optional.fields, missingSigning: optional.missingSigning, workspacePath, node: config.node, jq: config.jq,
         xcode: config.xcode, runtimes: config.runtimes.map(({platform, version, buildVersion}) => ({platform, version, buildVersion}))};
-    const replacements = ['VMGuestAgent', 'guest_runner', 'guest.mjs', 'test_manifest.mjs', 'result_audit.mjs'].map(filename => ({
+    const replacements = ['VMGuestAgent', 'guest_runner', 'guest_bootstrap.mjs'].map(filename => ({
         path: `${library}/${filename}`, source: staged(filename, filename), uid: 0, gid: 0,
         mode: filename === 'VMGuestAgent' || filename === 'guest_runner' ? 0o755 : 0o644,
     }));
@@ -1044,6 +1044,14 @@ function provisionGuest() {
             run('Load the guest test agent', '/bin/launchctl', ['bootstrap', `gui/${uid}`, agentPlist], serviceOptions);
         },
     });
+    for (const filename of ['guest.mjs', 'test_manifest.mjs', 'result_audit.mjs']) {
+        const obsolete = path.join(library, filename);
+        const metadata = fs.lstatSync(obsolete, {throwIfNoEntry: false});
+        if (!metadata) continue;
+        check(metadata.isFile() && !metadata.isSymbolicLink() && metadata.uid === 0 && (metadata.mode & 0o022) === 0,
+            'An obsolete installed harness file is not protected; it was preserved.');
+        fs.rmSync(obsolete);
+    }
     console.log(`Guest ${config.vmId} base is ready for ${config.consoleUser}. No account, password, or existing VM installation was reset.`);
     if (optional.missingSigning.length) {
         console.log(`Signed native coverage is unavailable: ${optional.missingSigning.join('; ')}`);

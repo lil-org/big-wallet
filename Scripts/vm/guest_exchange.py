@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import json
 import os
@@ -557,6 +558,30 @@ class GuestExchange:
         report = _report(_json(self.export_directory / 'validated-result.json'), self.run_id, self.vm_id, final=True)
         incoming = self.export_directory / 'artifacts'
         artifacts = access._private_directory(self.exchange / 'artifacts')
+        if report.get('kind') == 'run' and report['status'] in ('failed', 'cancelled') and report.get('stages') == []:
+            plan = _json(artifacts / 'planned-result.json')
+            job_data, _ = access._read(self.exchange / 'job.json', maximum=65536)
+            snapshot_data, _ = access._read(self.exchange / 'snapshot-manifest.json', maximum=MAX_REPORT_BYTES)
+            source = self.job.get('source')
+            if (not isinstance(source, dict) or self.job.get('kind') != 'run' or json.loads(job_data) != self.job or
+                    plan.get('origin') != 'host-plan' or plan.get('status') != 'planned' or
+                    plan.get('runId') != self.run_id or plan.get('vmId') != self.vm_id or plan.get('source') != source or
+                    not isinstance(report.get('source'), dict) or any(report['source'].get(key) != value for key, value in source.items()) or
+                    plan.get('jobSHA256') != hashlib.sha256(job_data).hexdigest() or
+                    source.get('sha256') != hashlib.sha256(snapshot_data).hexdigest() or
+                    not isinstance(plan.get('stages'), list) or not plan['stages'] or
+                    any(not isinstance(stage, dict) or not isinstance(stage.get('id'), str) or stage.get('status') != 'pending'
+                        for stage in plan['stages'])):
+                raise GuestExchangeError('The planned inventory does not match the failed guest job and source snapshot')
+            stage_status = 'cancelled' if report['status'] == 'cancelled' else 'blocked'
+            report['stages'] = [{**stage, 'status': stage_status, 'reason': report.get('error', 'Guest bootstrap did not complete'),
+                                 'finishedAt': report['finishedAt']} for stage in plan['stages']]
+            report['plannedResult'] = 'planned-result.json'
+            report.setdefault('summary', {}).update({'status': report['status'],
+                'counts': {status: len(report['stages']) if status == stage_status else 0
+                           for status in ('passed', 'failed', 'blocked', 'cancelled')}})
+            report.setdefault('coverage', {}).update({'status': 'partial', 'fullSuiteVerified': False,
+                'incompleteStages': [{'id': stage['id'], 'status': stage_status} for stage in report['stages']]})
         outputs = [(path, artifacts / path.name) for path in incoming.iterdir() if path.name != 'result.json']
         log = self.export_directory / 'guest-runner.log'
         if log.exists():

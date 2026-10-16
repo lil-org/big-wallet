@@ -272,8 +272,11 @@ final class HarnessObservedSigner: WalletSigning {
                         outcome["signedTransaction"] = .string(signed)
                         outcome["encoding"] = .string("base64")
                     }
-                case .response(let response):
-                    outcome["response"] = try HarnessValue.convert(response.response.json)
+                case .response(let completion):
+                    guard let response = completion.response(for: permit) else {
+                        return .failure(.authorizationUnavailable)
+                    }
+                    outcome["response"] = try HarnessValue.convert(response.json)
                 }
             }
             try await ipc.checkpoint("signer.after", details: details.merging(outcome))

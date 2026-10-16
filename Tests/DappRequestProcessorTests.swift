@@ -572,18 +572,17 @@ final class DappRequestProcessorTests: XCTestCase {
             let permit = try processorPermit(request: request, approval: approval)
             defer { permit.releaseLease() }
             XCTAssertTrue(permit.consumeExecution())
-            guard case .response(let signed) = try await walletSigningOutputForTesting(permit: permit) else {
+            guard case .response(let completion) = try await walletSigningOutputForTesting(permit: permit) else {
                 return XCTFail("Expected an operation-bound signature response")
             }
-            let completion = ApprovedCompletion(signed: signed)
-            XCTAssertNotNil(completion.response(for: permit))
+            let response = try XCTUnwrap(completion.response(for: permit))
             let other = try processorPermit(request: request, approval: approval)
             defer { other.releaseLease() }
             XCTAssertTrue(other.consumeExecution())
             XCTAssertNil(completion.response(for: other))
-            XCTAssertEqual(signed.executionID, permit.executionID)
+            XCTAssertEqual(completion.executionID, permit.executionID)
             if coin == .solana {
-                XCTAssertEqual((signed.response.json["result"] as? [String])?.count, 3)
+                XCTAssertEqual((response.json["result"] as? [String])?.count, 3)
             }
         }
     }
@@ -882,10 +881,10 @@ final class DappRequestProcessorTests: XCTestCase {
             )
             defer { permit.releaseLease() }
             XCTAssertTrue(permit.consumeExecution())
-            guard case .broadcast(let signed) = try await walletSigningOutputForTesting(permit: permit, privateKey: key) else {
+            guard case .broadcast(let checkpointed) = try await walletSigningOutputForTesting(permit: permit, privateKey: key) else {
                 return XCTFail("Expected a validated signed broadcast")
             }
-            guard case .solana(let validatedBytes, let validatedSignature, _, _) = signed.transaction else {
+            guard case .solana(let validatedBytes, let validatedSignature, _, _) = checkpointed.transaction else {
                 return XCTFail("Expected a Solana broadcast")
             }
             let signatureBytes = try XCTUnwrap(WalletCrypto.base58Decode(string: validatedSignature))
@@ -894,20 +893,27 @@ final class DappRequestProcessorTests: XCTestCase {
             XCTAssertTrue(publicKey.isValidSignature(signatureBytes, for: message))
             XCTAssertEqual(transactionBytes, Data([1]) + signatureBytes + message)
             XCTAssertEqual(Solana.transactionSignature(signedTransaction: validatedBytes), validatedSignature)
-            let checkpointed = PreparedBroadcast(signed: signed)
-            let other = PreparedBroadcast(signed: signed)
+            let copy = checkpointed
+            XCTAssertTrue(copy.hasSameIdentity(as: checkpointed))
             let unrelated = try processorPermit(request: permit.request, approval: permit.approval.kind)
             defer { unrelated.releaseLease() }
             XCTAssertNil(checkpointed.recoveryCompletion(for: unrelated))
             let substitutedResult = await DappRequestProcessor().execute(
                 permit: unrelated,
-                signer: ProcessorWalletSigner(result: .success(.broadcast(signed)))
+                signer: ProcessorWalletSigner(result: .success(.broadcast(checkpointed)))
             )
             guard case .completed(let rejected) = substitutedResult else {
                 return XCTFail("A signed broadcast cannot be applied to another execution")
             }
             let rejection = try XCTUnwrap(rejected.response(for: unrelated))
             XCTAssertEqual((rejection.json["error"] as? [String: Any])?["code"] as? Int, -32603)
+            let otherPermit = try processorPermit(request: permit.request, approval: permit.approval.kind)
+            defer { otherPermit.releaseLease() }
+            XCTAssertTrue(otherPermit.consumeExecution())
+            guard case .broadcast(let other) = try await walletSigningOutputForTesting(permit: otherPermit, privateKey: key) else {
+                return XCTFail("Expected a broadcast bound to the other execution")
+            }
+            XCTAssertFalse(other.hasSameIdentity(as: checkpointed))
             guard case .prepared(let dispatch) = fixture.store.prepareBroadcast(permit: permit, broadcast: checkpointed) else {
                 return XCTFail("Expected a durable broadcast checkpoint")
             }
@@ -915,7 +921,7 @@ final class DappRequestProcessorTests: XCTestCase {
             let substituted = await other.dispatch(using: dispatch, sender: sender)
             XCTAssertNil(substituted)
             XCTAssertEqual(sender.sends, 0)
-            let completed = await checkpointed.dispatch(using: dispatch, sender: sender)
+            let completed = await copy.dispatch(using: dispatch, sender: sender)
             XCTAssertEqual(try XCTUnwrap(completed?.response(for: permit)).json["result"] as? String, validatedSignature)
             let sent = try XCTUnwrap(sender.solanaSettings)
             XCTAssertEqual(sent.cluster, .testnet)

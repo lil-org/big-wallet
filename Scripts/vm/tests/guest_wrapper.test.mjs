@@ -62,14 +62,14 @@ esac`,
 test('normal verified guest jobs hold awake assertions only for the Node utility lifetime', () => fixture(({run, calls}) => {
     const result = run();
     assert.equal(result.status, 0, result.stderr);
-    assert.match(calls(), /^caffeinate <-dimsu> <[^>]+\/bin\/node> <\/usr\/local\/libexec\/big-wallet-vm\/guest.mjs> <--exchange>/);
+    assert.match(calls(), /^caffeinate <-dimsu> <[^>]+\/bin\/node> <\/usr\/local\/libexec\/big-wallet-vm\/guest_bootstrap.mjs> <--exchange>/);
     assert.doesNotMatch(calls(), /^node/m);
 }));
 
 test('read-only session verification does not establish a second caffeine assertion', () => fixture(({run, calls}) => {
     const result = run('--verify-session');
     assert.equal(result.status, 0, result.stderr);
-    assert.match(calls(), /^node <\/usr\/local\/libexec\/big-wallet-vm\/guest.mjs> <--verify-session>/);
+    assert.match(calls(), /^node <\/usr\/local\/libexec\/big-wallet-vm\/guest_bootstrap.mjs> <--verify-session>/);
     assert.doesNotMatch(calls(), /caffeinate/);
 }));
 

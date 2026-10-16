@@ -115,10 +115,10 @@ struct DappRequestProcessor: DappRequestProcessing {
                     return Self.approvedFailure(.internalError, permit: permit)
                 }
                 switch output {
-                case .response(let response):
-                    return .completed(ApprovedCompletion(signed: response))
+                case .response(let completion):
+                    return .completed(completion)
                 case .broadcast(let broadcast):
-                    return .broadcast(PreparedBroadcast(signed: broadcast))
+                    return .broadcast(broadcast)
                 }
             case .failure(.authorizationUnavailable):
                 return .rollback

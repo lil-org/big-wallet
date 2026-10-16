@@ -77,8 +77,8 @@ class ProvisioningPackageTests(unittest.TestCase):
         current, configuration = self.stage(self.args(), 'setup-binding-current')
         original, requested = self.explicit_package()
         retry, reused = self.stage(self.args(), 'setup-binding-retry')
-        captured = host.runner_source_digest()
-        tools = host.guest_tool_hashes(self.binaries)
+        captured = host.bootstrap_source_digest()
+        tools = host.bootstrap_tool_hashes(self.binaries)
         for exchange, config in ((current, configuration), (original, requested), (retry, reused)):
             with self.subTest(exchange=exchange.name):
                 self.source_snapshot(exchange)
@@ -91,19 +91,19 @@ class ProvisioningPackageTests(unittest.TestCase):
             with self.subTest(change=change):
                 exchange, configuration = self.stage(self.args(), 'setup-binding-' + change)
                 snapshot = self.source_snapshot(exchange)
-                captured = host.runner_source_digest()
-                tools = host.guest_tool_hashes(self.binaries)
+                captured = host.bootstrap_source_digest()
+                tools = host.bootstrap_tool_hashes(self.binaries)
                 if change == 'snapshot':
                     (snapshot / 'provision_guest.sh').write_text('changed during snapshot')
                 elif change in ('installer', 'runner', 'agent'):
-                    filename = {'installer': 'provision_guest.sh', 'runner': 'guest.mjs', 'agent': 'VMGuestAgent'}[change]
+                    filename = {'installer': 'provision_guest.sh', 'runner': 'guest_bootstrap.mjs', 'agent': 'VMGuestAgent'}[change]
                     (exchange / 'provision' / filename).write_text('changed during staging')
                 elif change == 'configuration':
                     staged = host.read_json(exchange / 'provision/config.json')
                     staged['xcode']['buildVersion'] = 'different'
                     host.atomic_json(exchange / 'provision/config.json', staged)
                 else:
-                    tools['guest.mjs'] = '0' * 64
+                    tools['guest_bootstrap.mjs'] = '0' * 64
                 with self.assertRaisesRegex(host.RunnerError, 'does not match'):
                     host.verify_setup_sources(exchange, captured, self.environment, configuration, tools)
 
@@ -112,8 +112,8 @@ class ProvisioningPackageTests(unittest.TestCase):
         self.source_snapshot(exchange)
         environment = {**self.environment, 'minimumHostFreeBytes': self.environment['minimumHostFreeBytes'] + 1}
         with self.assertRaisesRegex(host.RunnerError, 'snapshot does not match'):
-            host.verify_setup_sources(exchange, host.runner_source_digest(), environment, configuration,
-                                      host.guest_tool_hashes(self.binaries))
+            host.verify_setup_sources(exchange, host.bootstrap_source_digest(), environment, configuration,
+                                      host.bootstrap_tool_hashes(self.binaries))
 
     def test_plain_setup_validates_the_recorded_account_without_a_new_receipt(self):
         _, configuration = self.stage(self.args(), 'setup-readiness')
@@ -202,12 +202,12 @@ process.stdout.write(receipt(configuration, undefined, ['request-proof key']));
         for stale in (False, True):
             with self.subTest(stale=stale):
                 if stale:
-                    (original / 'provision/guest.mjs').write_text('stale fixture tool')
+                    (original / 'provision/guest_bootstrap.mjs').write_text('stale fixture tool')
                 preserved = {file.name: file.read_bytes() for file in (original / 'provision').iterdir()}
                 with patch.object(host, 'cached_xcode_archive') as archive, \
                         patch.object(host, 'copy_provision_input') as copy_inputs, \
                         patch.object(host, 'checked') as commands, \
-                        patch.object(host, 'guest_tool_hashes') as tools:
+                        patch.object(host, 'bootstrap_tool_hashes') as tools:
                     with self.assertRaisesRegex(host.RunnerError, 'autologin.passwordFile'):
                         self.stage(self.args(), 'setup-conflict-retry-' + str(stale))
                 archive.assert_not_called()
@@ -235,7 +235,7 @@ process.stdout.write(receipt(configuration, undefined, ['request-proof key']));
                     'environment': self.environment})
                 with contextlib.ExitStack() as stack:
                     for name, value in [('validate_vm', {}), ('check_capacity', None), ('build_tools', self.binaries),
-                                        ('guest_tool_hashes', {}), ('ensure_disk_idle', None), ('configure_build_storage', False)]:
+                                        ('bootstrap_tool_hashes', {}), ('ensure_disk_idle', None), ('configure_build_storage', False)]:
                         stack.enter_context(patch.object(host, name, return_value=value))
                     blocked = [stack.enter_context(patch.object(host, name, side_effect=AssertionError('Guest work started')))
                                for name in ('guest_access_module', 'run_setup_doctor', 'monitor_vm', 'snapshot_source')]
@@ -252,16 +252,16 @@ process.stdout.write(receipt(configuration, undefined, ['request-proof key']));
 
     def test_stale_pending_tools_and_environment_restage_retained_inputs(self):
         original, requested = self.explicit_package()
-        (original / 'provision/guest.mjs').write_text('stale guest tool')
+        (original / 'provision/guest_bootstrap.mjs').write_text('stale guest tool')
         updated, refreshed = self.stage(self.args(), 'setup-stale-tools')
         self.assertNotEqual(refreshed['provisioningRequestID'], requested['provisioningRequestID'])
         self.assertEqual((updated / 'provision/autologin-passwordFile').read_bytes(), b'fixture password')
-        self.assertEqual((updated / 'provision/guest.mjs').read_bytes(), (host.TOOLS / 'guest.mjs').read_bytes())
+        self.assertEqual((updated / 'provision/guest_bootstrap.mjs').read_bytes(), (host.TOOLS / 'guest_bootstrap.mjs').read_bytes())
         self.assertEqual(host.read_json(original / 'provision/config.json'), requested)
         _, restaged = self.stage(self.args('--provision-config', original / 'provision/config.json'), 'setup-restaged')
         self.assertNotEqual(restaged['provisioningRequestID'], requested['provisioningRequestID'])
         self.assertEqual(restaged['autologin'], requested['autologin'])
-        shutil.copyfile(host.TOOLS / 'guest.mjs', original / 'provision/guest.mjs')
+        shutil.copyfile(host.TOOLS / 'guest_bootstrap.mjs', original / 'provision/guest_bootstrap.mjs')
         self.environment['node'] = {'version': 'different', 'npmVersion': 'different'}
         _, repinned = self.stage(self.args(), 'setup-stale-environment')
         self.assertEqual(repinned['node'], self.environment['node'])
@@ -319,15 +319,15 @@ class SetupReceiptTests(unittest.TestCase):
                        'sourceVM': str(self.args.vm), 'environment': self.environment}
         host.atomic_json(self.state / 'candidate.json', self.record)
         self.request_id = str(uuid.uuid4())
-        self.tools = {name: 'a' * 64 for name in ('VMGuestAgent', 'guest_runner', 'guest.mjs', 'test_manifest.mjs', 'result_audit.mjs')}
+        self.tools = {name: 'a' * 64 for name in ('VMGuestAgent', 'guest_runner', 'guest_bootstrap.mjs')}
         self.calls = []
         self.exchanges = []
         self.passwords = []
 
     def result(self, status='passed', user='selected-user', receipt=None):
         return {'status': status, 'identity': {'vmId': 'fixture-vm', 'consoleUser': user}, 'preflight': {
-            'runnerTools': {'available': True, 'hashes': self.tools},
-            'checks': {name: True for name in ('runnerTools', 'node', 'python', 'jq', 'xcode', 'macos', 'ios', 'visionos')},
+            'bootstrap': {'available': True, 'hashes': self.tools},
+            'checks': {name: True for name in ('bootstrap', 'node', 'python', 'jq', 'xcode', 'macos', 'ios', 'visionos')},
             'provisioning': {'vmId': 'fixture-vm', 'consoleUser': user, 'appliedRequestID': receipt},
         }}
 
@@ -350,17 +350,17 @@ class SetupReceiptTests(unittest.TestCase):
             self.passwords.append(password)
             return results[len(self.calls) - 1]
         def doctor(args, state, candidate, environment, operation, record, configuration,
-                   binaries, runner_tools, source, password, source_digest):
+                   binaries, bootstrap_tools, source, password, source_digest):
             run_id, exchange = operation['runId'], operation['exchange']
             host.atomic_json(exchange / 'job.json', {'version': 1, 'runId': run_id, 'vmId': record['vmId'],
                 'kind': 'doctor', 'profile': 'all', 'stages': [], 'onlyTesting': [], 'source': source,
-                'runnerTools': runner_tools})
+                'bootstrapTools': bootstrap_tools})
             operation['monitorCalled'] = True
             return host.monitor_vm(args, state, candidate, exchange, run_id, binaries, environment,
                 args.timeout or 120, password, keep_operation=True, previous_stops=operation['previousStops']), exchange
         with contextlib.ExitStack() as stack:
             for name, value in [('validate_vm', {}), ('check_capacity', None), ('build_tools', self.state / 'tools'),
-                                ('guest_tool_hashes', self.tools), ('configure_build_storage', False),
+                                ('bootstrap_tool_hashes', self.tools), ('configure_build_storage', False),
                                 ('ensure_disk_idle', None), ('configure_guest_hardware', None), ('prepared_guest_hook', None),
                                 ('snapshot_source', {'sha256': 'b' * 64, 'commit': 'c' * 40}),
                                 ('environment_attested', True), ('stage_planned_result', None), ('verify_setup_sources', None)]:
@@ -467,11 +467,11 @@ class SetupReceiptTests(unittest.TestCase):
         shutil.rmtree(self.candidate)
         (self.state / 'candidate.json').unlink()
         (self.state / 'baseline.vbvm').mkdir()
-        host.atomic_json(self.state / 'baseline.json', {**self.record, 'runnerTools': self.tools,
-                        'runnerSourceDigest': host.runner_source_digest()})
+        host.atomic_json(self.state / 'baseline.json', {**self.record, 'bootstrapTools': self.tools,
+                        'bootstrapSourceDigest': host.bootstrap_source_digest()})
         with patch.object(host, 'validate_vm', return_value={}), patch.object(host, 'check_capacity'), \
                 patch.object(host, 'build_tools', return_value=self.state / 'tools'), \
-                patch.object(host, 'guest_tool_hashes', return_value=self.tools), \
+                patch.object(host, 'bootstrap_tool_hashes', return_value=self.tools), \
                 patch.object(host, 'monitor_vm') as monitor, patch('sys.stdout', new=io.StringIO()):
             self.assertEqual(host.setup(self.args, self.state, self.environment), 0)
             monitor.assert_not_called()

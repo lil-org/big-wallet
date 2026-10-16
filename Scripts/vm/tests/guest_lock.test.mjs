@@ -3,14 +3,15 @@ import {spawn} from "node:child_process";
 import {once} from "node:events";
 import {chmod, link, lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
-import {isAbsolute, join} from "node:path";
+import {join} from "node:path";
+import {pathToFileURL} from "node:url";
 import {setTimeout as delay} from "node:timers/promises";
 import test from "node:test";
 import vm from "node:vm";
-import {acquireRunLock} from "../guest.mjs";
+import {acquireRunLock} from "../guest_bootstrap.mjs";
 
 const macOS = {skip: process.platform !== "darwin", timeout: 20000};
-const guestURL = new URL("../guest.mjs", import.meta.url).href;
+const guestURL = new URL("../guest_bootstrap.mjs", import.meta.url).href;
 
 async function fixture(operation) {
     const root = await realpath(await mkdtemp(join(tmpdir(), "big-wallet-guest-lock-")));
@@ -144,23 +145,29 @@ test("owner process exit releases the lock while its stage subprocess is still a
     }
 }));
 
-test("failure publishing the final report still releases the guest lock", macOS, async () => fixture(async root => {
+test("failure publishing the harness final report still releases the bootstrap lock", macOS, async () => fixture(async root => {
     const exchange = join(root, "exchange");
+    const workspace = join(root, "workspace");
     await mkdir(exchange);
+    await mkdir(join(workspace, "Scripts/vm"), {recursive: true});
+    await writeFile(join(workspace, "Scripts/vm/guest.mjs"), "fixture harness");
     await writeFile(join(exchange, "job.json"), JSON.stringify({runId: "report-failure", vmId: "fixture", kind: "doctor", profile: "all"}));
-    const definition = (await readFile(new URL("../guest.mjs", import.meta.url), "utf8"))
-        .match(/^export async function main\([^]*?^}/m)[0].replace(/^export /, "");
-    let publications = 0;
+    const definition = (await readFile(new URL("../guest_bootstrap.mjs", import.meta.url), "utf8"))
+        .match(/^export async function main\([^]*?^}/m)[0].replace(/^export /, "")
+        .replace("import(pathToFileURL(entry).href)", "loadHarness(pathToFileURL(entry).href)");
     const run = vm.runInNewContext(`(${definition})`, {
-        process, isAbsolute, EXCHANGE_PATH: exchange, realpath, verifyExchangeDirectory: async () => exchange,
+        process, EXCHANGE_PATH: exchange, realpath, verifyExchangeDirectory: async () => exchange,
         regularFile: filename => readFile(filename),
-        validateJob: value => value, verifyGuest: async () => ({vmId: "fixture"}), join, mkdir,
-        userInfo: () => ({homedir: root}), createManifest: () => [], pendingStageResults: () => [], acquireRunLock,
-        timestamp: () => "fixture", resourceSnapshot: () => ({}), coverageReport: () => ({}),
-        readGuestProvision: async () => { throw new Error("fixture prerequisite failure"); },
-        atomicJSON: async () => { if (++publications === 2) throw new Error("fixture final report failed"); },
+        validateJobEnvelope: value => value, verifyGuest: async () => ({vmId: "fixture"}), join, mkdir, pathToFileURL,
+        userInfo: () => ({homedir: root}), acquireRunLock,
+        bootstrapToolsEvidence: async () => ({available: true}),
+        readGuestProvision: async () => ({workspacePath: workspace}), verifyBuildVolume: async () => ({}),
+        materializeSource: async () => ({}), atomicJSON: async () => {}, hashFile: async () => "",
+        loadHarness: async () => ({runJob: async () => { throw new Error("fixture final report failed"); }}),
     });
-    await assert.rejects(run(["--exchange", exchange]), /final report failed/);
+    const report = await run(["--exchange", exchange]);
+    assert.equal(report.status, "failed");
+    assert.match(report.error, /final report failed/);
     const release = await acquireRunLock(join(root, "Library/Application Support/BigWalletTestVM/run.lock"), "report-retry");
     await release();
 }));

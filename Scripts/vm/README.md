@@ -243,10 +243,19 @@ An interrupted initial copy is rebuilt on the next setup attempt; prepared
 candidates and interrupted test logs are retained.
 An older baseline remains available after successful replacement.
 
-Changes to installed guest scripts, the guest agent, or environment pins require
+The installed bootstrap consists of `VMGuestAgent`, `guest_runner`, and
+`guest_bootstrap.mjs`. It verifies the guest session, storage, and complete source
+snapshot before importing `guest.mjs` from the materialized checkout. The test
+manifest, stage execution, and result auditor run from that same captured source.
+Editing those harness files or their tests does not require baseline provisioning;
+the reported source hash identifies their tested bytes. Direct `guest.mjs`
+invocations are rejected; submit jobs through `Scripts/test_vm.sh`.
+
+Changes to the installed bootstrap, its installer, or environment pins require
 setup again. Setup applies the update headlessly using the retained guest account
-access, then checks installed tool hashes before tests and baseline promotion.
-Interrupted promotion resumes from its recorded state on the next setup attempt.
+access, then checks installed bootstrap hashes before tests and baseline promotion.
+An older prepared VM needs one setup refresh to install this boundary. Interrupted
+promotion resumes from its recorded state on the next setup attempt.
 
 Live Safari UI automation, production publishing/deployment, and live paid RPC
 probes are outside this runner's suite. Simulator and fixture results do not

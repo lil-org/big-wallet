@@ -1,20 +1,16 @@
 #!/usr/bin/env node
 
 import {spawn} from "node:child_process";
-import {createHash, randomUUID} from "node:crypto";
-import {constants, createReadStream, createWriteStream} from "node:fs";
-import {chmod, copyFile, lstat, mkdir, open, readFile, readlink, realpath, rename, rm, stat, symlink} from "node:fs/promises";
+import {createHash} from "node:crypto";
+import {createWriteStream} from "node:fs";
+import {lstat, mkdir, realpath} from "node:fs/promises";
 import {availableParallelism, cpus, freemem, loadavg, totalmem, userInfo} from "node:os";
-import {basename, dirname, isAbsolute, join, relative, resolve, sep} from "node:path";
+import {dirname, isAbsolute, join, resolve, sep} from "node:path";
 import {pathToFileURL} from "node:url";
-import {createManifest, validateJob, commandForStage, RUNNER_TOOL_NAMES} from "./test_manifest.mjs";
+import {createManifest, validateJob, commandForStage} from "./test_manifest.mjs";
 import {auditNativeResult, auditResults} from "./result_audit.mjs";
 
-export const IDENTITY_PATH = "/Library/Application Support/BigWalletTestVM/identity.json";
-export const PROVISIONING_PATH = "/Library/Application Support/BigWalletTestVM/provisioning.json";
-export const EXCHANGE_PATH = "/Volumes/BigWalletBuild/Exchange";
-export const INSTALLED_RUNNER_DIRECTORY = "/usr/local/libexec/big-wallet-vm";
-export const BUILD_VOLUME = "/Volumes/BigWalletBuild";
+const EXCHANGE_PATH = "/Volumes/BigWalletBuild/Exchange";
 const MAX_JSON_BYTES = 16 * 1024 * 1024;
 const timestamp = () => new Date().toISOString();
 const sha256 = value => createHash("sha256").update(value).digest("hex");
@@ -37,32 +33,6 @@ export function resourceSnapshot({now = timestamp, cpuCount = () => cpus().lengt
         return {recordedAt, available: true, logicalCPUCount, availableCPUCount, totalMemoryBytes, freeMemoryBytes,
             loadAverage: {oneMinute: load[0], fiveMinutes: load[1], fifteenMinutes: load[2]}, oneMinuteLoadPerCPU: load[0] / logicalCPUCount};
     } catch { return {recordedAt, available: false}; }
-}
-
-export async function atomicJSON(path, value) {
-    await mkdir(dirname(path), {recursive: true});
-    const temporary = `${path}.${randomUUID()}.tmp`;
-    const file = await open(temporary, "wx", 0o600);
-    try { await file.writeFile(`${JSON.stringify(value, null, 2)}\n`); await file.sync(); }
-    finally { await file.close(); }
-    await rename(temporary, path);
-}
-
-async function regularFile(path, maximum = MAX_JSON_BYTES) {
-    const info = await lstat(path);
-    if (!info.isFile() || info.isSymbolicLink() || info.size > maximum) { throw new Error(`Invalid file: ${basename(path)}`); }
-    return readFile(path);
-}
-
-export function validateGuestEvidence(evidence, vmId) {
-    const {identity, identityOwner, identityMode, platform, uid, consoleUid, model, hypervisor, aqua, username} = evidence;
-    if (platform !== "darwin" || identityOwner !== 0 || (identityMode & 0o022) !== 0 ||
-        !identity || identity.version !== 1 || identity.vmId !== vmId || identity.consoleUser !== username ||
-        !Number.isInteger(uid) || uid === 0 || uid !== consoleUid || !aqua ||
-        !/^VirtualMac[0-9,]*$/.test(model)) {
-        throw new Error("Guest identity, virtual hardware, or active Aqua session could not be verified; execution refused");
-    }
-    return {vmId, consoleUser: username, uid, model, hypervisor: hypervisor === "1", aqua: true};
 }
 
 export function cleanEnvironment(environment = process.env) {
@@ -145,140 +115,6 @@ export async function runProcess(command, args, {cwd, env = cleanEnvironment(), 
     return {...outcome, output, stdout, stderr, timedOut, cancelled, outputDrainTimedOut, ...(launchError ? {error: launchError} : {})};
 }
 
-export async function verifyGuest(vmId, {execute = runProcess, identityPath = IDENTITY_PATH} = {}) {
-    const parent = await lstat(dirname(identityPath));
-    if (!parent.isDirectory() || parent.isSymbolicLink() || parent.uid !== 0 || (parent.mode & 0o022) !== 0) {
-        throw new Error("Guest sentinel directory is not protected");
-    }
-    const metadata = await lstat(identityPath);
-    if (!metadata.isFile() || metadata.isSymbolicLink()) { throw new Error("Guest sentinel is not a regular file"); }
-    const identity = JSON.parse(await regularFile(identityPath, 4096));
-    const uid = process.getuid?.();
-    const values = await Promise.all([
-        execute("/usr/sbin/sysctl", ["-n", "hw.model"]),
-        execute("/usr/sbin/sysctl", ["-n", "kern.hv_vmm_present"]),
-        execute("/usr/bin/stat", ["-f", "%u", "/dev/console"]),
-        execute("/bin/launchctl", ["print", `gui/${uid}`]),
-        execute("/usr/bin/id", ["-un"]),
-    ]);
-    return validateGuestEvidence({
-        identity, identityOwner: metadata.uid, identityMode: metadata.mode,
-        platform: process.platform, uid, consoleUid: Number(values[2].output.trim()),
-        model: values[0].output.trim(), hypervisor: values[1].output.trim(), aqua: values[3].code === 0,
-        username: values[4].output.trim(),
-    }, vmId);
-}
-
-function sourcePath(value) {
-    return typeof value === "string" && value.length > 0 && value.length <= 4096 && !isAbsolute(value) &&
-        !value.includes("\0") && !value.includes("\\") && value.split("/").every(part => part && part !== "." && part !== "..");
-}
-
-export function validateSnapshotManifest(manifest) {
-    if (!manifest || manifest.version !== 1 || !Array.isArray(manifest.files) || manifest.files.length > 100000) { throw new Error("Invalid snapshot manifest"); }
-    const paths = new Set();
-    const symlinks = new Map();
-    for (const file of manifest.files) {
-        if (!file || !sourcePath(file.path) || paths.has(file.path) || file.path === ".big-wallet-vm-workspace.json" ||
-            !/^[a-f0-9]{64}$/.test(file.sha256) || !["file", "symlink"].includes(file.type) ||
-            !Number.isInteger(file.mode) || file.mode < 0 || file.mode > 0o777) { throw new Error("Invalid snapshot entry"); }
-        if (file.type === "symlink") {
-            if (typeof file.target !== "string" || !file.target || isAbsolute(file.target) || file.target.includes("\0") ||
-                !inside("/snapshot", resolve("/snapshot", dirname(file.path), file.target)) || sha256(file.target) !== file.sha256) {
-                throw new Error(`Unsafe snapshot symlink: ${file.path}`);
-            }
-            symlinks.set(file.path, file.target);
-        }
-        paths.add(file.path);
-    }
-    for (const file of manifest.files) {
-        let parent = dirname(file.path);
-        while (parent !== ".") {
-            if (paths.has(parent)) { throw new Error(`Snapshot entry has a nondirectory parent: ${file.path}`); }
-            parent = dirname(parent);
-        }
-    }
-    const walk = (path, visited = new Set()) => {
-        let current = path;
-        const components = current.split("/");
-        for (let index = 1; index <= components.length; index += 1) {
-            const ancestor = components.slice(0, index).join("/");
-            if (!symlinks.has(ancestor)) { continue; }
-            if (visited.has(ancestor)) { throw new Error("Snapshot symlink cycle"); }
-            visited.add(ancestor);
-            const target = resolve("/snapshot", dirname(ancestor), symlinks.get(ancestor), ...components.slice(index));
-            if (!inside("/snapshot", target)) { throw new Error("Snapshot symlink escapes source"); }
-            current = relative("/snapshot", target);
-            return walk(current, visited);
-        }
-        return current;
-    };
-    for (const path of symlinks.keys()) { walk(path); }
-    return manifest;
-}
-
-async function hashFile(path) {
-    const hash = createHash("sha256");
-    for await (const chunk of createReadStream(path)) { hash.update(chunk); }
-    return hash.digest("hex");
-}
-
-export async function materializeSource(exchange, job, workspace, {stopRequested = async () => false} = {}) {
-    const manifestData = await regularFile(join(exchange, "snapshot-manifest.json"));
-    if (sha256(manifestData) !== job.source.sha256) { throw new Error("Source manifest hash does not match submitted job"); }
-    const manifest = validateSnapshotManifest(JSON.parse(manifestData));
-    if (job.source.fileCount !== undefined && job.source.fileCount !== manifest.files.length) { throw new Error("Source file inventory does not match job"); }
-    const source = join(exchange, "source");
-    const sourceMetadata = await lstat(source);
-    if (!sourceMetadata.isDirectory() || sourceMetadata.isSymbolicLink() || await realpath(source) !== source) { throw new Error("Source directory may not traverse symlinks"); }
-    const parent = dirname(workspace);
-    await mkdir(parent, {recursive: true});
-    if (await realpath(parent) !== parent) { throw new Error("Workspace parent may not traverse symlinks"); }
-    try {
-        const existing = await lstat(workspace);
-        if (!existing.isDirectory() || existing.isSymbolicLink()) { throw new Error("Guest workspace is not a directory"); }
-        const marker = JSON.parse(await regularFile(join(workspace, ".big-wallet-vm-workspace.json"), 4096));
-        if (marker.version !== 1 || marker.vmId !== job.vmId) { throw new Error("Refusing to replace an unowned guest checkout"); }
-    } catch (error) {
-        if (error.code !== "ENOENT") { throw error; }
-        if (await stat(workspace).then(() => true, () => false)) { throw new Error("Refusing to replace an unmarked guest checkout"); }
-    }
-    const staging = join(parent, `.big-wallet-vm-source-${job.runId}`);
-    await mkdir(staging, {mode: 0o700});
-    try {
-        let bytes = 0;
-        for (const file of manifest.files) {
-            if (await stopRequested()) { throw new Error("Source transfer cancelled"); }
-            const input = join(source, file.path);
-            const output = join(staging, file.path);
-            const metadata = await lstat(input);
-            await mkdir(dirname(output), {recursive: true});
-            if (file.type === "symlink") {
-                if (!metadata.isSymbolicLink() || await readlink(input) !== file.target) { throw new Error(`Snapshot symlink mismatch: ${file.path}`); }
-                await symlink(file.target, output);
-            } else {
-                if (!metadata.isFile() || metadata.isSymbolicLink() || !inside(source, await realpath(input)) || metadata.size > 1024 * 1024 * 1024) {
-                    throw new Error(`Unsafe snapshot file: ${file.path}`);
-                }
-                await copyFile(input, output);
-                bytes += metadata.size;
-                if (bytes > 1024 * 1024 * 1024) { throw new Error("Source snapshot exceeds 1 GiB"); }
-                if (await hashFile(output) !== file.sha256) { throw new Error(`Source hash mismatch: ${file.path}`); }
-                await chmod(output, file.mode);
-            }
-        }
-        if (job.source.bytes !== undefined && job.source.bytes !== bytes) { throw new Error("Source byte inventory does not match job"); }
-        await atomicJSON(join(staging, ".big-wallet-vm-workspace.json"), {version: 1, vmId: job.vmId, source: job.source, runId: job.runId});
-        const previous = join(parent, `.big-wallet-vm-previous-${job.runId}`);
-        let movedPrevious = false;
-        try { await rename(workspace, previous); movedPrevious = true; } catch (error) { if (error.code !== "ENOENT") { throw error; } }
-        try { await rename(staging, workspace); }
-        catch (error) { if (movedPrevious) { await rename(previous, workspace); } throw error; }
-        if (movedPrevious) { await rm(previous, {recursive: true}); }
-        return {files: manifest.files.length, ...job.source};
-    } catch (error) { await rm(staging, {recursive: true, force: true}); throw error; }
-}
-
 export function chooseDestinations(simulators) {
     const destinations = {macos: "platform=macOS,arch=arm64"};
     const choices = {};
@@ -317,104 +153,10 @@ export function pinnedEnvironmentEvidence(xcodeOutput, runtimeData, provisioning
     return {xcode: {available: xcodeMatches, expected: {version: expectedXcode?.version, buildVersion: expectedXcode?.buildVersion}, actual: liveXcode}, runtimes};
 }
 
-export async function readGuestProvision(identity, path = PROVISIONING_PATH, {inspect = lstat, read = regularFile} = {}) {
-    const directory = await inspect(dirname(path));
-    if (!directory.isDirectory() || directory.isSymbolicLink() || directory.uid !== 0 || (directory.mode & 0o077) !== 0) {
-        throw new Error("Guest provisioning directory is not private");
-    }
-    const metadata = await inspect(path);
-    if (metadata.uid !== 0 || (metadata.mode & 0o007) !== 0 || (metadata.mode & 0o022) !== 0) { throw new Error("Guest provisioning permissions are not private"); }
-    let provision;
-    try { provision = JSON.parse(await read(path, 16384)); }
-    catch { throw new Error("Guest provisioning JSON is unavailable or invalid"); }
-    if (provision.version !== 1 || provision.vmId !== identity.vmId || provision.consoleUser !== identity.consoleUser) { throw new Error("Guest provisioning identity does not match this VM"); }
-    provisioningEvidence(provision);
-    const expectedWorkspace = join(BUILD_VOLUME, "Workspaces", identity.consoleUser, "big-wallet");
-    if (provision.workspacePath !== expectedWorkspace) { throw new Error("Guest workspace is not on the configured build volume"); }
-    return provision;
-}
-
-export function provisioningEvidence(provision) {
-    const appliedRequestID = provision.appliedProvisioningRequestID;
-    if (appliedRequestID !== undefined && (typeof appliedRequestID !== "string" ||
-        !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(appliedRequestID))) {
-        throw new Error("Guest provisioning receipt is invalid");
-    }
-    return {vmId: provision.vmId, consoleUser: provision.consoleUser, appliedRequestID: appliedRequestID ?? null};
-}
-
-async function readBuildVolumeIdentity() {
-    const path = join(BUILD_VOLUME, ".big-wallet-vm.json");
-    const metadata = await lstat(path);
-    if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.uid !== 0 || (metadata.mode & 0o022) !== 0) {
-        throw new Error("The guest build-volume identity is not protected");
-    }
-    return JSON.parse(await regularFile(path, 4096));
-}
-
-export async function verifyExchangeDirectory({inspect = lstat, canonicalPath = realpath,
-    currentUID = () => process.getuid(), currentGID = () => process.getgid()} = {}) {
-    const parent = await inspect(BUILD_VOLUME);
-    if (!parent.isDirectory() || parent.isSymbolicLink() || parent.uid !== 0 || (parent.mode & 0o022) !== 0 ||
-        await canonicalPath(BUILD_VOLUME) !== BUILD_VOLUME) {
-        throw new Error("The local exchange parent must be a protected root-owned directory");
-    }
-    const directory = await inspect(EXCHANGE_PATH);
-    if (!directory.isDirectory() || directory.isSymbolicLink() || directory.uid !== currentUID() || directory.gid !== currentGID() ||
-        (directory.mode & 0o7777) !== 0o700 || await canonicalPath(EXCHANGE_PATH) !== EXCHANGE_PATH) {
-        throw new Error("The local exchange must be a private directory owned by the selected guest account");
-    }
-    return EXCHANGE_PATH;
-}
-
-export async function verifyBuildVolume({execute = runProcess, vmId, stopRequested = async () => false,
-    readIdentity = readBuildVolumeIdentity, canonicalPath = realpath, now = Date.now,
-    wait = milliseconds => new Promise(resolveWait => setTimeout(resolveWait, milliseconds)), timeoutMilliseconds = 30000} = {}) {
-    const deadline = now() + timeoutMilliseconds;
-    while (true) {
-        if (await stopRequested()) { throw new Error("Run cancelled while waiting for the build volume"); }
-        const result = await execute("/sbin/mount", [], {timeoutSeconds: 5, stopRequested});
-        if (result.code === 0 && result.output.split("\n").some(line => {
-            const mount = /^\/dev\/disk\d+s\d+ on (\S+) \(([^)]+)\)$/.exec(line);
-            return mount?.[1] === BUILD_VOLUME && mount[2].split(", ")[0] === "apfs" && mount[2].split(", ").includes("local");
-        })) {
-            if (await canonicalPath(BUILD_VOLUME) !== BUILD_VOLUME) { throw new Error("The guest build volume is not a direct mount"); }
-            try {
-                const identity = await readIdentity();
-                if (identity.version !== 1 || identity.vmId !== vmId || typeof identity.volumeUUID !== "string" ||
-                    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identity.volumeUUID)) {
-                    throw new Error("The guest build volume belongs to another VM or has an invalid identity");
-                }
-                return identity;
-            } catch (error) { if (error.code !== "ENOENT") { throw error; } }
-        }
-        if (now() >= deadline) { throw new Error("The managed guest APFS build volume did not become available"); }
-        await wait(Math.min(1000, Math.max(0, deadline - now())));
-    }
-}
-
-export async function runnerToolsEvidence(expected, {directory = INSTALLED_RUNNER_DIRECTORY, inspect = lstat, hash = hashFile} = {}) {
-    const hashes = {};
-    const missing = [];
-    const mismatched = [];
-    for (const name of RUNNER_TOOL_NAMES) {
-        try {
-            const path = join(directory, name);
-            const metadata = await inspect(path);
-            if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.uid !== 0 || (metadata.mode & 0o022) !== 0) { throw new Error("Unprotected installed tool"); }
-            hashes[name] = await hash(path);
-            if (hashes[name] !== expected?.[name]) { mismatched.push(name); }
-        } catch { missing.push(name); }
-    }
-    return {available: missing.length === 0 && mismatched.length === 0, hashes, missing, mismatched};
-}
-
-export async function preflight({workspace, identity, expectedRunnerTools, execute = runProcess, provisioningPath = PROVISIONING_PATH,
-    provision: suppliedProvision, stopRequested = async () => false}) {
+export async function preflight({workspace, identity, bootstrapEvidence, provision, readSnapshotFile, execute = runProcess, stopRequested = async () => false}) {
     const checks = {};
     const versions = {};
-    const runnerTools = await runnerToolsEvidence(expectedRunnerTools);
-    checks.runnerTools = runnerTools.available;
+    checks.bootstrap = bootstrapEvidence.available;
     const query = async (name, command, args) => {
         const result = await execute(command, args, {timeoutSeconds: 120, stopRequested});
         versions[name] = result.output.trim().slice(0, 2000);
@@ -452,8 +194,7 @@ export async function preflight({workspace, identity, expectedRunnerTools, execu
     let missingSigning;
     let provisioning;
     try {
-        const provision = suppliedProvision ?? await readGuestProvision(identity, provisioningPath);
-        provisioning = provisioningEvidence(provision);
+        provisioning = {vmId: provision.vmId, consoleUser: provision.consoleUser, appliedRequestID: provision.appliedProvisioningRequestID ?? null};
         if (Array.isArray(provision.missingSigning)) {
             missingSigning = provision.missingSigning.filter(value => typeof value === "string").map(value => value.slice(0, 1024)).slice(0, 20);
         }
@@ -477,12 +218,12 @@ export async function preflight({workspace, identity, expectedRunnerTools, execu
         }
         if (!checks.signing) { signingIssue = "The dedicated guest signing keychain could not be unlocked or contains no valid signing identity"; }
         if (typeof provision.proofKey !== "string" || !/^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/.test(provision.proofKey)) { throw new Error("Guest proof key is missing or malformed"); }
-        const fingerprint = (await regularFile(join(workspace, "Scripts/alchemy_jwt_request_proof_key.sha256"), 100)).toString().trim();
+        const fingerprint = (await readSnapshotFile(join(workspace, "Scripts/alchemy_jwt_request_proof_key.sha256"), 100)).toString().trim();
         if (sha256(provision.proofKey) !== fingerprint) { throw new Error("Guest proof key does not match the source fingerprint"); }
         proofKey = provision.proofKey;
     } catch (error) { proofKeyIssue = error.message; }
     checks.proofKey = Boolean(proofKey);
-    return {report: {checks, versions, destinations, simulators: choices, runnerTools, pinnedEnvironment, provisioning,
+    return {report: {checks, versions, destinations, simulators: choices, bootstrap: bootstrapEvidence, pinnedEnvironment, provisioning,
         ...(proofKeyIssue ? {proofKeyIssue} : {}), ...(signingIssue ? {signingIssue} : {}), ...(missingSigning ? {missingSigning} : {})}, proofKey, unlockSigning};
 }
 
@@ -525,7 +266,7 @@ export async function prepareStageScratch(workspace, runId, stageId) {
     return directory;
 }
 
-export async function prepareNativeSimulators(platform, {destinations, artifacts, stageId, execute, stopRequested = async () => false}) {
+export async function prepareNativeSimulators(platform, {destinations, artifacts, stageId, execute, writeJSON, stopRequested = async () => false}) {
     const preparation = {platform, status: "running", artifact: `${stageId}.simulators.json`, startedAt: timestamp(), steps: []};
     const invoke = async (args, timeoutSeconds) => {
         if (await stopRequested()) { preparation.status = "cancelled"; throw new Error("Stop requested during simulator preparation"); }
@@ -577,7 +318,7 @@ export async function prepareNativeSimulators(platform, {destinations, artifacts
         preparation.reason = error.message;
     }
     preparation.finishedAt = timestamp();
-    await atomicJSON(join(artifacts, preparation.artifact), preparation);
+    await writeJSON(join(artifacts, preparation.artifact), preparation);
     return preparation;
 }
 
@@ -587,7 +328,7 @@ export function pendingStageResults(manifest) {
 }
 
 export async function executeStages(manifest, {workspace, artifacts, preflight: checked, proofKey, execute = runProcess,
-    stopRequested = async () => false, publish = async () => {}, runId, exchange, unlockSigning, measureResources = resourceSnapshot}) {
+    stopRequested = async () => false, publish = async () => {}, runId, exchange, unlockSigning, writeJSON, hashFile, measureResources = resourceSnapshot}) {
     const results = pendingStageResults(manifest);
     const byID = new Map(results.map(result => [result.id, result]));
     await publish(results);
@@ -617,7 +358,7 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
             if (stage.requirements.includes("signing") && (!unlockSigning || !await unlockSigning())) { throw new Error("Guest signing keychain could not be unlocked"); }
             if (stage.nativeAudit) {
                 result.simulatorPreparation = await prepareNativeSimulators(stage.nativeAudit.platform, {
-                    destinations: checked.destinations, artifacts, stageId: stage.id, execute, stopRequested,
+                    destinations: checked.destinations, artifacts, stageId: stage.id, execute, writeJSON, stopRequested,
                 });
                 if (result.simulatorPreparation.status !== "passed") {
                     throw Object.assign(new Error(result.simulatorPreparation.reason), {cancelled: result.simulatorPreparation.status === "cancelled"});
@@ -649,8 +390,8 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
                 if (summaryResult.code !== 0 || treeResult.code !== 0) { throw new Error("Could not audit XCTest result bundle"); }
                 const summary = JSON.parse(summaryResult.stdout ?? summaryResult.output);
                 const tree = JSON.parse(treeResult.stdout ?? treeResult.output);
-                await atomicJSON(join(artifacts, `${stage.id}.summary.json`), summary);
-                await atomicJSON(join(artifacts, `${stage.id}.tests.json`), tree);
+                await writeJSON(join(artifacts, `${stage.id}.summary.json`), summary);
+                await writeJSON(join(artifacts, `${stage.id}.tests.json`), tree);
                 result.audit = auditNativeResult(summary, tree, stage.nativeAudit);
                 if (!result.audit.ok) { result.status = "failed"; result.reason = result.audit.issues; }
             }
@@ -665,98 +406,19 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
     return results;
 }
 
-async function publishLockOwner(file, runId) {
-    await file.truncate(0);
-    await file.writeFile(`${JSON.stringify({version: 1, runId, pid: process.pid})}\n`);
-    await file.sync();
-}
-
-export async function acquireRunLock(filename, runId, {publishOwner = publishLockOwner} = {}) {
-    if (!isAbsolute(filename) || resolve(filename) !== filename) { throw new Error("Guest lock path must be absolute and canonical"); }
-    const parentPath = dirname(filename);
-    await mkdir(parentPath, {recursive: true, mode: 0o700});
-    const parent = await lstat(parentPath);
-    if (!parent.isDirectory() || parent.isSymbolicLink() || parent.uid !== process.getuid() ||
-        (parent.mode & 0o022) !== 0 || await realpath(parentPath) !== parentPath) { throw new Error("Guest lock directory is not protected"); }
-    const validate = metadata => {
-        if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.uid !== BigInt(process.getuid()) ||
-            (metadata.mode & 0o077n) !== 0n || metadata.nlink !== 1n) { throw new Error("Guest lock must be a private owned regular file"); }
-    };
-    try { validate(await lstat(filename, {bigint: true})); }
-    catch (error) { if (error.code !== "ENOENT") { throw error; } }
-    const file = await open(filename, constants.O_RDWR | constants.O_CREAT | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o600);
-    try {
-        const identity = await file.stat({bigint: true});
-        validate(identity);
-        await new Promise((resolveLock, rejectLock) => {
-            const child = spawn("/usr/bin/lockf", ["-s", "-t", "0", "3"], {
-                env: cleanEnvironment(), stdio: ["ignore", "ignore", "ignore", file.fd], timeout: 10000,
-            });
-            child.once("error", rejectLock);
-            child.once("close", code => code === 0 ? resolveLock() : rejectLock(new Error(code === 75 ?
-                "Another guest run is already active" : "The guest execution lock could not be acquired")));
-        });
-        const current = await lstat(filename, {bigint: true});
-        validate(current);
-        if (current.dev !== identity.dev || current.ino !== identity.ino) { throw new Error("Guest lock changed during acquisition"); }
-        await publishOwner(file, runId);
-    } catch (error) {
-        await file.close();
-        throw error;
-    }
-    let released = false;
-    return async () => {
-        if (!released) { released = true; await file.close(); }
-    };
-}
-
-export async function verifySession(args, {environment = process.env, verify = verifyGuest} = {}) {
-    const exchange = args.length === 1 ? EXCHANGE_PATH : args.length === 3 && args[1] === "--exchange" ? args[2] : null;
-    if (args[0] !== "--verify-session" || exchange !== EXCHANGE_PATH || environment.BW_TEST_VM_EXCHANGE !== EXCHANGE_PATH ||
-        typeof environment.BW_TEST_VM_RUN_ID !== "string") { throw new Error("A current guest run is required"); }
-    await verifyExchangeDirectory();
-    const job = validateJob(JSON.parse(await regularFile(join(exchange, "job.json"), 65536)));
-    if (job.kind !== "run" || job.runId !== environment.BW_TEST_VM_RUN_ID) { throw new Error("Guest run identity is stale"); }
-    await verify(job.vmId);
-    return {runId: job.runId, status: "passed"};
-}
-
-export async function main(args = process.argv.slice(2)) {
-    if (args[0] === "--verify-session") { return verifySession(args); }
-    if (args.length !== 2 || args[0] !== "--exchange" || !isAbsolute(args[1])) { throw new Error("Usage: guest.mjs --exchange /absolute/exchange"); }
-    if (args[1] !== EXCHANGE_PATH) { throw new Error("Guest execution requires the fixed local exchange"); }
-    const exchange = await verifyExchangeDirectory();
-    const job = validateJob(JSON.parse(await regularFile(join(exchange, "job.json"), 65536)));
-    if (job.kind === "prepare") { throw new Error("Prepare jobs belong to the guest provisioning helper"); }
-    const identity = await verifyGuest(job.vmId);
-    const artifacts = join(exchange, "artifacts");
-    await mkdir(artifacts, {recursive: true, mode: 0o700});
-    if (await realpath(artifacts) !== artifacts) { throw new Error("Artifact directory may not traverse symlinks"); }
-    const reportPath = join(artifacts, "result.json");
-    try {
-        const previous = JSON.parse(await regularFile(reportPath));
-        if (previous.runId === job.runId && ["passed", "failed", "cancelled"].includes(previous.status)) { return previous; }
-    } catch (error) { if (error.code !== "ENOENT") { throw error; } }
+export async function runJob({job: input, identity, provision, workspace, exchange, artifacts, source, buildVolume,
+    bootstrapEvidence, stopRequested, writeJSON, readSnapshotFile, hashFile}) {
+    const job = validateJob(input);
     const manifest = job.kind === "run" ? createManifest(job) : [];
+    const reportPath = join(artifacts, "result.json");
     const report = {version: 1, runId: job.runId, vmId: job.vmId, kind: job.kind, profile: job.profile, status: "running", startedAt: timestamp(),
-        resources: {started: resourceSnapshot()}, identity, source: job.source, stages: pendingStageResults(manifest)};
-    const stopRequested = async () => {
-        try {
-            const stop = JSON.parse(await regularFile(join(exchange, "stop.json"), 4096));
-            return stop.runId === job.runId;
-        } catch (error) { return error.code !== "ENOENT"; }
-    };
-    const release = await acquireRunLock(join(userInfo().homedir, "Library/Application Support/BigWalletTestVM/run.lock"), job.runId);
+        resources: {started: resourceSnapshot()}, identity, source, buildVolume, stages: pendingStageResults(manifest)};
     try {
-        await atomicJSON(reportPath, report);
-        const provision = await readGuestProvision(identity);
-        const workspace = provision.workspacePath;
-        report.buildVolume = await verifyBuildVolume({vmId: job.vmId, stopRequested});
-        if (job.source) { report.source = await materializeSource(exchange, job, workspace, {stopRequested}); }
+        await writeJSON(reportPath, report);
         if (await stopRequested()) { throw new Error("Run cancelled"); }
-        const checked = await preflight({workspace, identity, provision, expectedRunnerTools: job.runnerTools, stopRequested});
+        const checked = await preflight({workspace, identity, provision, bootstrapEvidence, readSnapshotFile, stopRequested});
         report.preflight = checked.report;
-        await atomicJSON(reportPath, report);
+        await writeJSON(reportPath, report);
         if (await stopRequested()) { throw new Error("Run cancelled"); }
         if (job.kind === "doctor") {
             report.status = Object.values(checked.report.checks).every(value => value === true) ? "passed" : "failed";
@@ -764,7 +426,7 @@ export async function main(args = process.argv.slice(2)) {
         } else {
             report.stages = await executeStages(manifest, {
                 workspace, artifacts, preflight: checked.report, proofKey: checked.proofKey, unlockSigning: checked.unlockSigning, stopRequested, runId: job.runId, exchange,
-                publish: async stages => { report.stages = structuredClone(stages); await atomicJSON(reportPath, report); },
+                writeJSON, hashFile, publish: async stages => { report.stages = structuredClone(stages); await writeJSON(reportPath, report); },
             });
             report.summary = auditResults(report.stages);
             report.status = report.summary.status;
@@ -779,19 +441,16 @@ export async function main(args = process.argv.slice(2)) {
             stage.finishedAt = timestamp();
         }
         if (manifest.length) { report.summary = auditResults(report.stages); }
-    }
-    finally {
-        try {
-            report.finishedAt = timestamp();
-            report.resources.finished = resourceSnapshot();
-            report.coverage = coverageReport(job, report.stages, report.preflight);
-            await atomicJSON(reportPath, report);
-        } finally { await release(); }
+    } finally {
+        report.finishedAt = timestamp();
+        report.resources.finished = resourceSnapshot();
+        report.coverage = coverageReport(job, report.stages, report.preflight);
+        await writeJSON(reportPath, report);
     }
     return report;
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-    main().then(report => { process.stdout.write(`${JSON.stringify({runId: report.runId, status: report.status})}\n`); process.exitCode = report.status === "passed" ? 0 : 1; })
-        .catch(error => { process.stderr.write(`Guest runner refused: ${error.message}\n`); process.exitCode = 1; });
+    process.stderr.write("Submit guest jobs with Scripts/test_vm.sh; the installed bootstrap owns guest execution.\n");
+    process.exitCode = 2;
 }

@@ -523,28 +523,28 @@ def cached_xcode_archive(state, xcode, environment):
         temporary.unlink(missing_ok=True)
 
 
-def guest_tool_hashes(binaries):
+def bootstrap_tool_hashes(binaries):
     return {name: hashlib.sha256((binaries / name if name == 'VMGuestAgent' else TOOLS / name).read_bytes()).hexdigest()
-            for name in ('VMGuestAgent', 'guest_runner', 'guest.mjs', 'test_manifest.mjs', 'result_audit.mjs')}
+            for name in ('VMGuestAgent', 'guest_runner', 'guest_bootstrap.mjs')}
 
 
-def runner_source_digest(directory=None):
+def bootstrap_source_digest(directory=None):
     directory = TOOLS if directory is None else Path(directory)
-    names = ('VMGuestAgent.swift', 'guest_runner', 'guest.mjs', 'test_manifest.mjs', 'result_audit.mjs',
+    names = ('VMGuestAgent.swift', 'guest_runner', 'guest_bootstrap.mjs',
              'provision_guest.sh', 'environment.json')
     return hashlib.sha256(b''.join(name.encode() + b'\0' + (directory / name).read_bytes() for name in names)).hexdigest()
 
 
-def require_current_runner_sources(expected):
-    if runner_source_digest() != expected:
-        raise RunnerError('Guest setup sources changed during setup; rerun setup before verifying this candidate')
+def require_current_bootstrap_sources(expected):
+    if bootstrap_source_digest() != expected:
+        raise RunnerError('Guest bootstrap sources changed during setup; rerun setup before verifying this candidate')
 
 
-def verify_setup_sources(exchange, expected, environment, configuration=None, runner_tools=None):
+def verify_setup_sources(exchange, expected, environment, configuration=None, bootstrap_tools=None):
     snapshot = exchange / 'source/Scripts/vm'
-    require_current_runner_sources(expected)
-    if runner_source_digest(snapshot) != expected or read_json(snapshot / 'environment.json') != environment:
-        raise RunnerError('The setup source snapshot does not match the captured guest tools and environment')
+    require_current_bootstrap_sources(expected)
+    if bootstrap_source_digest(snapshot) != expected or read_json(snapshot / 'environment.json') != environment:
+        raise RunnerError('The setup source snapshot does not match the captured guest bootstrap and environment')
     if configuration is None:
         return
     provision = exchange / 'provision'
@@ -554,12 +554,12 @@ def verify_setup_sources(exchange, expected, environment, configuration=None, ru
                                     for runtime in staged.get('runtimes', [])]
     if staged != configuration or staged_environment != environment:
         raise RunnerError('The staged setup configuration does not match the requested guest environment')
-    for name in ('guest_runner', 'guest.mjs', 'test_manifest.mjs', 'result_audit.mjs', 'provision_guest.sh'):
+    for name in ('guest_runner', 'guest_bootstrap.mjs', 'provision_guest.sh'):
         digest = hash_regular_file(snapshot / name)
-        if hash_regular_file(provision / name) != digest or name in runner_tools and runner_tools[name] != digest:
+        if hash_regular_file(provision / name) != digest or name in bootstrap_tools and bootstrap_tools[name] != digest:
             raise RunnerError('The staged guest installer does not match the captured setup source')
-    if hash_regular_file(provision / 'VMGuestAgent') != runner_tools['VMGuestAgent']:
-        raise RunnerError('The staged guest agent does not match the captured runner tools')
+    if hash_regular_file(provision / 'VMGuestAgent') != bootstrap_tools['VMGuestAgent']:
+        raise RunnerError('The staged guest agent does not match the captured bootstrap tools')
 
 
 def node_planning_environment():
@@ -584,8 +584,11 @@ def stage_planned_result(exchange, job):
     manifest_path = exchange / 'source/Scripts/vm/test_manifest.mjs'
     if hash_regular_file(exchange / 'snapshot-manifest.json') != job['source']['sha256']:
         raise RunnerError('The staged source snapshot does not match the planned job')
-    if hash_regular_file(manifest_path) != job['runnerTools']['test_manifest.mjs']:
-        raise RunnerError('The snapshotted test manifest does not match the installed guest runner')
+    snapshot = read_json(exchange / 'snapshot-manifest.json')
+    entries = [entry for entry in snapshot['files'] if entry.get('path') == 'Scripts/vm/test_manifest.mjs']
+    if (len(entries) != 1 or entries[0].get('type') != 'file' or
+            hash_regular_file(manifest_path) != entries[0].get('sha256')):
+        raise RunnerError('The snapshotted test manifest does not match the source identity')
     job_path = exchange / 'job.json'
     if read_json(job_path) != job:
         raise RunnerError('The staged job does not match the requested test plan')
@@ -626,8 +629,8 @@ def host_doctor(args, state, environment):
     check('xcode', xcode)
     def baseline():
         record = read_json(state / 'baseline.json')
-        if record.get('environment') != environment or record.get('runnerSourceDigest') != runner_source_digest():
-            raise RunnerError('Prepared baseline needs the current guest tools/environment; run setup')
+        if record.get('environment') != environment or record.get('bootstrapSourceDigest') != bootstrap_source_digest():
+            raise RunnerError('Prepared baseline needs the current guest bootstrap/environment; run setup')
         if not matches_source_vm(record, args.vm):
             raise RunnerError('Prepared baseline belongs to another source VM')
         return {'verifiedAt': record.get('verifiedAt'), 'vmId': record['vmId']}
@@ -730,7 +733,7 @@ def stage_provisioning(args, state, exchange, environment, record, binaries):
         if 'runtimes' in staged_environment:
             staged_environment['runtimes'] = [{key: runtime.get(key) for key in ('platform', 'version', 'buildVersion')}
                                                for runtime in configuration.get('runtimes', [])]
-        expected_tools = guest_tool_hashes(binaries)
+        expected_tools = bootstrap_tool_hashes(binaries)
         expected_tools['provision_guest.sh'] = hash_regular_file(TOOLS / 'provision_guest.sh')
         if (staged_environment != environment or any(not (source / name).is_file() or
                 hash_regular_file(source / name) != digest for name, digest in expected_tools.items())):
@@ -775,7 +778,7 @@ def stage_provisioning(args, state, exchange, environment, record, binaries):
         (destination / 'proof-key').write_bytes(proof)
         (destination / 'proof-key').chmod(0o600)
         configuration.setdefault('signing', {})['proofKeyFile'] = 'proof-key'
-    for name in ('provision_guest.sh', 'guest_runner', 'guest.mjs', 'test_manifest.mjs', 'result_audit.mjs'):
+    for name in ('provision_guest.sh', 'guest_runner', 'guest_bootstrap.mjs'):
         shutil.copyfile(TOOLS / name, destination / name)
     shutil.copyfile(binaries / 'VMGuestAgent', destination / 'VMGuestAgent')
     shutil.copyfile(ROOT / 'Scripts/alchemy_jwt_request_proof_key.sha256',
@@ -1519,11 +1522,11 @@ def next_setup_exchange(state, candidate, operation, record):
 
 
 def run_setup_doctor(args, state, candidate, environment, operation, record, configuration,
-                     binaries, runner_tools, source, initial_password, source_digest):
+                     binaries, bootstrap_tools, source, initial_password, source_digest):
     run_id, exchange = operation['runId'], operation['exchange']
     needs_install = (configuration.get('provisioningRequestID') is not None or
-                     record.get('runnerTools') != runner_tools or
-                     record.get('runnerSourceDigest') != source_digest or
+                     record.get('bootstrapTools') != bootstrap_tools or
+                     record.get('bootstrapSourceDigest') != source_digest or
                      not record.get('baseVerifiedAt'))
     module = guest_access_module()
     try:
@@ -1554,7 +1557,7 @@ def run_setup_doctor(args, state, candidate, environment, operation, record, con
     check_setup_stop(operation)
     for attempt in range(2):
         job = {'version': 1, 'runId': run_id, 'vmId': record['vmId'], 'kind': 'doctor', 'profile': 'all',
-               'stages': [], 'onlyTesting': [], 'source': source, 'runnerTools': runner_tools}
+               'stages': [], 'onlyTesting': [], 'source': source, 'bootstrapTools': bootstrap_tools}
         if needs_install:
             print('Applying guest provisioning over pinned SSH with the existing guest account.', flush=True)
         hook = GuestSetupHook(module, access, configuration['consoleUser'], password, directory, exchange, job,
@@ -1615,20 +1618,20 @@ def prepare_setup(args, state, environment, operation):
                 raise RunnerError('Pending promotion belongs to another source VM')
             check_setup_stop(operation)
             finish_baseline_promotion(state, pending)
-    source_digest = runner_source_digest()
+    source_digest = bootstrap_source_digest()
     binaries = build_tools(state, args.xcode)
-    runner_tools = guest_tool_hashes(binaries)
-    require_current_runner_sources(source_digest)
+    bootstrap_tools = bootstrap_tool_hashes(binaries)
+    require_current_bootstrap_sources(source_digest)
     check_setup_stop(operation)
     candidate = state / 'candidate.vbvm'
     if ((state / 'baseline.json').exists() and not record_path.exists() and not candidate.exists() and not args.provision_config and
             not args.proof_key_bundle and not args.provision_new_account and not args.interactive):
         existing = read_json(state / 'baseline.json')
         if (matches_source_vm(existing, args.vm) and existing.get('environment') == environment and
-                existing.get('runnerTools') == runner_tools and existing.get('runnerSourceDigest') == source_digest and
+                existing.get('bootstrapTools') == bootstrap_tools and existing.get('bootstrapSourceDigest') == source_digest and
                 existing.get('consoleUser') == selected_console_user(args, existing)):
             validate_vm(state / 'baseline.vbvm')
-            print('The prepared baseline already matches the pinned environment and guest tools.')
+            print('The prepared baseline already matches the pinned environment and guest bootstrap.')
             print('Run Scripts/test_vm.sh run all; each run checks live guest readiness again.')
             return 0
     record = read_json(record_path) if record_path.exists() else None
@@ -1701,7 +1704,7 @@ def prepare_setup(args, state, environment, operation):
     ensure_disk_idle(candidate)
     configure_guest_hardware(candidate, record['vmId'])
     source = snapshot_source(ROOT, exchange)
-    verify_setup_sources(exchange, source_digest, environment, configuration, runner_tools)
+    verify_setup_sources(exchange, source_digest, environment, configuration, bootstrap_tools)
     check_setup_stop(operation)
     password = None
     if configuration.get('provisionNewAccount'):
@@ -1717,11 +1720,11 @@ def prepare_setup(args, state, environment, operation):
         atomic_json(exchange / 'artifacts/result.json', result)
     else:
         result, exchange = run_setup_doctor(args, state, candidate, environment, operation, record,
-            configuration, binaries, runner_tools, source, password, source_digest)
-    require_current_runner_sources(source_digest)
+            configuration, binaries, bootstrap_tools, source, password, source_digest)
+    require_current_bootstrap_sources(source_digest)
     if result['status'] == 'passed':
         check_setup_stop(operation)
-    reported_tools = result.get('preflight', {}).get('runnerTools', {})
+    reported_tools = result.get('preflight', {}).get('bootstrap', {})
     pinned_environment_matches = environment_attested(result.get('preflight', {}), environment)
     provisioning_issue = setup_provisioning_issue(result, record['vmId'], console_user, request_id)
     if provisioning_issue and (result.get('identity') or result['status'] == 'passed'):
@@ -1730,20 +1733,20 @@ def prepare_setup(args, state, environment, operation):
         record.pop('baseVerifiedAt', None)
         atomic_json(record_path, record)
     if (not provisioning_issue and reported_tools.get('available') and
-            reported_tools.get('hashes') == runner_tools and pinned_environment_matches):
+            reported_tools.get('hashes') == bootstrap_tools and pinned_environment_matches):
         base_checks = result.get('preflight', {}).get('checks', {})
-        required_base = ('runnerTools', 'node', 'python', 'jq', 'xcode', 'macos', 'ios', 'visionos')
+        required_base = ('bootstrap', 'node', 'python', 'jq', 'xcode', 'macos', 'ios', 'visionos')
         if all(base_checks.get(name) is True for name in required_base):
             record.update({'baseVerifiedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                            'consoleUser': console_user,
-                           'runnerTools': runner_tools, 'runnerSourceDigest': source_digest})
+                           'bootstrapTools': bootstrap_tools, 'bootstrapSourceDigest': source_digest})
             atomic_json(record_path, record)
     if result['status'] == 'passed' and not pinned_environment_matches:
         result.update({'status': 'blocked', 'reason': 'guest_environment_does_not_match_host_pins'})
         atomic_json(exchange / 'artifacts/result.json', result)
     if result['status'] == 'passed':
-        if not reported_tools.get('available') or reported_tools.get('hashes') != runner_tools:
-            raise RunnerError('Guest did not attest the current installed runner tools; rerun the guest installer')
+        if not reported_tools.get('available') or reported_tools.get('hashes') != bootstrap_tools:
+            raise RunnerError('Guest did not attest the current installed bootstrap tools; rerun the guest installer')
         verification_id, verification_exchange = new_exchange(state, 'setup-validation')
         handoff_setup_operation(state, candidate, operation, verification_id, verification_exchange)
         source = snapshot_source(ROOT, verification_exchange)
@@ -1751,7 +1754,7 @@ def prepare_setup(args, state, environment, operation):
         verification_job = {'version': 1, 'runId': verification_id,
                     'vmId': record['vmId'], 'kind': 'run', 'profile': 'all', 'stages': ['test'],
                     'configuration': 'Debug', 'onlyTesting': ['WindowAuthenticationSessionTests',
-                    'PasswordStorageTests', 'SecretHandlingTests'], 'source': source, 'runnerTools': runner_tools}
+                    'PasswordStorageTests', 'SecretHandlingTests'], 'source': source, 'bootstrapTools': bootstrap_tools}
         atomic_json(verification_exchange / 'job.json', verification_job)
         stage_planned_result(verification_exchange, verification_job)
         check_setup_stop(operation)
@@ -1760,7 +1763,7 @@ def prepare_setup(args, state, environment, operation):
                             environment, args.timeout or 7200, keep_operation=True,
                             previous_stops=operation['previousStops'], setup_hook=hook)
         exchange = verification_exchange
-        require_current_runner_sources(source_digest)
+        require_current_bootstrap_sources(source_digest)
         if result['status'] == 'passed':
             check_setup_stop(operation)
         provisioning_issue = setup_provisioning_issue(result, record['vmId'], console_user, request_id)
@@ -1776,8 +1779,8 @@ def prepare_setup(args, state, environment, operation):
             metadata = candidate.lstat()
             record.update({'verifiedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                            'buildDataInitializationAllowed': False,
-                           'runnerTools': runner_tools,
-                           'runnerSourceDigest': source_digest,
+                           'bootstrapTools': bootstrap_tools,
+                           'bootstrapSourceDigest': source_digest,
                            'validationResult': str(exchange / 'artifacts/result.json'),
                            'promotionPending': {'backup': 'previous-baseline-' + uuid.uuid4().hex + '.vbvm',
                                                 'candidateFileID': [metadata.st_dev, metadata.st_ino]}})
@@ -1808,8 +1811,8 @@ def run_tests(args, state, environment):
         raise RunnerError('Candidate base setup has not been verified. Run setup first; no host tests were started.')
     if record.get('environment') != environment:
         raise RunnerError('Pinned environment changed. Re-run setup to validate a new baseline.')
-    if record.get('runnerSourceDigest') != runner_source_digest():
-        raise RunnerError('Guest setup/tools changed. Re-run setup and update the guest before testing.')
+    if record.get('bootstrapSourceDigest') != bootstrap_source_digest():
+        raise RunnerError('Guest bootstrap/environment changed. Re-run setup before testing.')
     check_capacity(state, environment['minimumHostFreeBytes'])
     run_id, exchange = new_exchange(state, 'run')
     clone = state / 'runs' / (run_id + '.vbvm')
@@ -1822,15 +1825,15 @@ def run_tests(args, state, environment):
         try:
             with clone_cancellation_signals():
                 binaries = build_tools(state, args.xcode)
-                runner_tools = guest_tool_hashes(binaries)
-                if record.get('runnerTools') != runner_tools:
-                    raise RunnerError('Guest runner tools changed. Re-run setup and update the guest installation before testing.')
+                bootstrap_tools = bootstrap_tool_hashes(binaries)
+                if record.get('bootstrapTools') != bootstrap_tools:
+                    raise RunnerError('Guest bootstrap tools changed. Re-run setup before testing.')
                 source = snapshot_source(ROOT, exchange)
-                if runner_source_digest(exchange / 'source/Scripts/vm') != record['runnerSourceDigest']:
-                    raise RunnerError('The snapshotted guest setup/tools do not match the verified VM. Re-run setup before testing.')
+                if bootstrap_source_digest(exchange / 'source/Scripts/vm') != record['bootstrapSourceDigest']:
+                    raise RunnerError('The snapshotted guest bootstrap/environment does not match the verified VM. Re-run setup before testing.')
                 job = {'version': 1, 'runId': run_id, 'vmId': record['vmId'], 'kind': 'run',
                        'profile': args.profile, 'stages': args.stage, 'onlyTesting': args.only_testing, 'source': source,
-                       'runnerTools': runner_tools}
+                       'bootstrapTools': bootstrap_tools}
                 if args.configuration:
                     job['configuration'] = args.configuration
                 if args.approval_arg:

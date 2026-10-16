@@ -19,8 +19,8 @@ spec.loader.exec_module(host)
 
 
 class RunSnapshotBindingTests(unittest.TestCase):
-    sources = ('VMGuestAgent.swift', 'guest_runner', 'guest.mjs', 'test_manifest.mjs',
-               'result_audit.mjs', 'provision_guest.sh', 'environment.json')
+    sources = ('VMGuestAgent.swift', 'guest_runner', 'guest_bootstrap.mjs', 'provision_guest.sh', 'environment.json')
+    harness = ('guest.mjs', 'test_manifest.mjs', 'result_audit.mjs')
 
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -29,7 +29,7 @@ class RunSnapshotBindingTests(unittest.TestCase):
         self.repository = self.root / 'repository'
         self.tools = self.repository / 'Scripts/vm'
         self.tools.mkdir(parents=True)
-        for name in (*self.sources, 'plan_manifest.mjs'):
+        for name in (*self.sources, *self.harness, 'plan_manifest.mjs'):
             shutil.copyfile(host.TOOLS / name, self.tools / name)
         for arguments in (('init', '-q'), ('config', 'user.email', 'fixture@example.invalid'),
                           ('config', 'user.name', 'Fixture'), ('add', '.'), ('commit', '-qm', 'fixture')):
@@ -46,8 +46,8 @@ class RunSnapshotBindingTests(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
         host.atomic_json(self.state / 'baseline.json', {'vmId': 'fixture-vm', 'sourceVM': str(self.args.vm),
-            'environment': self.environment, 'runnerSourceDigest': host.runner_source_digest(),
-            'runnerTools': host.guest_tool_hashes(binaries)})
+            'environment': self.environment, 'bootstrapSourceDigest': host.bootstrap_source_digest(),
+            'bootstrapTools': host.bootstrap_tool_hashes(binaries)})
         for name, options in (
                 ('check_capacity', {}), ('build_tools', {'return_value': binaries}),
                 ('prepared_guest_hook', {'return_value': None}), ('ensure_disk_idle', {}),
@@ -86,16 +86,71 @@ class RunSnapshotBindingTests(unittest.TestCase):
                         self.assertEqual(host.run_tests(self.args, self.state, self.environment), 1)
                     report = host.read_json(exchanges[0] / 'artifacts/result.json')
                     self.assertEqual(report['reason'], 'host_preparation_failed')
-                    self.assertIn('snapshotted guest setup/tools', report['hostTermination']['error'])
+                    self.assertIn('snapshotted guest bootstrap/environment', report['hostTermination']['error'])
                     self.clone_vm.assert_not_called()
                     self.monitor_vm.assert_not_called()
                     self.assertFalse((self.state / 'active.json').exists())
                 finally:
                     path.write_bytes(original)
 
+    def test_missing_bootstrap_identity_requires_setup_before_snapshot_or_clone(self):
+        record = host.read_json(self.state / 'baseline.json')
+        record.pop('bootstrapSourceDigest')
+        host.atomic_json(self.state / 'baseline.json', record)
+        with patch.object(host, 'snapshot_source') as snapshot:
+            with self.assertRaisesRegex(host.RunnerError, 'Re-run setup'):
+                host.run_tests(self.args, self.state, self.environment)
+        snapshot.assert_not_called()
+        self.clone_vm.assert_not_called()
+        self.monitor_vm.assert_not_called()
+
+    def test_harness_edits_reuse_the_baseline_and_are_captured_without_provisioning(self):
+        baseline = host.read_json(self.state / 'baseline.json')
+        snapshot = host.snapshot_source
+        for name in self.harness:
+            with self.subTest(source=name):
+                path = self.tools / name
+                original = path.read_bytes()
+                changed = original + b'\nexport const fixtureHarnessRevision = "current snapshot";\n'
+                exchanges = []
+                def capture(repository, exchange):
+                    exchanges.append(exchange)
+                    return snapshot(repository, exchange)
+                try:
+                    path.write_bytes(changed)
+                    self.assertEqual(host.bootstrap_source_digest(), baseline['bootstrapSourceDigest'])
+                    with patch.object(host, 'snapshot_source', side_effect=capture), \
+                            patch.object(host, 'stage_provisioning') as provisioning:
+                        self.assertEqual(host.run_tests(self.args, self.state, self.environment), 0)
+                    provisioning.assert_not_called()
+                    self.assertEqual((exchanges[0] / 'source/Scripts/vm' / name).read_bytes(), changed)
+                    self.assertEqual(host.read_json(self.state / 'baseline.json'), baseline)
+                finally:
+                    path.write_bytes(original)
+        self.assertEqual(self.clone_vm.call_count, len(self.harness))
+        self.assertEqual(self.monitor_vm.call_count, len(self.harness))
+
+    def test_host_plan_uses_the_changed_snapshot_manifest_without_a_bootstrap_update(self):
+        path = self.tools / 'test_manifest.mjs'
+        original = path.read_text()
+        path.write_text(original.replace('["check", "check", []]', '["current-check", "check", []]'))
+        self.assertNotEqual(path.read_text(), original)
+        exchanges = []
+        snapshot = host.snapshot_source
+        def capture(repository, exchange):
+            exchanges.append(exchange)
+            return snapshot(repository, exchange)
+        with patch.object(host, 'snapshot_source', side_effect=capture), \
+                patch.object(host, 'stage_provisioning') as provisioning:
+            self.assertEqual(host.run_tests(self.args, self.state, self.environment), 0)
+        provisioning.assert_not_called()
+        plan = host.read_json(exchanges[0] / 'artifacts/planned-result.json')
+        self.assertIn('worker.current-check', [stage['id'] for stage in plan['stages']])
+        self.assertNotIn('worker.check', [stage['id'] for stage in plan['stages']])
+
     def test_later_workspace_edits_do_not_invalidate_the_verified_frozen_snapshot(self):
         snapshot = host.snapshot_source
-        originals = {name: (self.tools / name).read_bytes() for name in self.sources}
+        originals = {name: (self.tools / name).read_bytes() for name in (*self.sources, *self.harness)}
         exchanges = []
         def snapshot_before_edits(repository, exchange):
             source = snapshot(repository, exchange)
@@ -132,9 +187,8 @@ class PlannedInventoryTests(unittest.TestCase):
         self.job = {'version': 1, 'runId': 'plan-fixture', 'vmId': 'fixture-vm', 'kind': 'run',
                     'profile': 'all', 'stages': [], 'onlyTesting': [],
                     'source': {'sha256': host.hash_regular_file(self.exchange / 'snapshot-manifest.json'), 'commit': 'b' * 40},
-                    'runnerTools': {name: 'a' * 64 for name in
-                                    ('VMGuestAgent', 'guest_runner', 'guest.mjs', 'test_manifest.mjs', 'result_audit.mjs')}}
-        self.job['runnerTools']['test_manifest.mjs'] = digest
+                    'bootstrapTools': {name: 'a' * 64 for name in
+                                    ('VMGuestAgent', 'guest_runner', 'guest_bootstrap.mjs')}}
         host.atomic_json(self.exchange / 'job.json', self.job)
 
     def plan(self, **overrides):
@@ -160,10 +214,10 @@ class PlannedInventoryTests(unittest.TestCase):
         args = host.parser().parse_args(['run', 'all', '--stage', 'test', '--configuration', 'Debug',
                                          '--only-testing', 'Tests visionOS'])
         host.atomic_json(self.root / 'baseline.json', {'vmId': self.job['vmId'], 'environment': self.environment,
-                         'sourceVM': str(args.vm), 'runnerSourceDigest': 'digest', 'runnerTools': self.job['runnerTools']})
-        with patch.object(host, 'runner_source_digest', return_value='digest'), \
+                         'sourceVM': str(args.vm), 'bootstrapSourceDigest': 'digest', 'bootstrapTools': self.job['bootstrapTools']})
+        with patch.object(host, 'bootstrap_source_digest', return_value='digest'), \
                 patch.object(host, 'check_capacity'), patch.object(host, 'build_tools', return_value=self.root / 'tools'), \
-                patch.object(host, 'guest_tool_hashes', return_value=self.job['runnerTools']), \
+                patch.object(host, 'bootstrap_tool_hashes', return_value=self.job['bootstrapTools']), \
                 patch.object(host, 'new_exchange', return_value=(self.job['runId'], self.exchange)), \
                 patch.object(host, 'snapshot_source', return_value=self.job['source']), \
                 patch.object(host, 'clone_vm', side_effect=clone) as copy, \
@@ -286,7 +340,7 @@ class PlannedInventoryTests(unittest.TestCase):
         args = host.parser().parse_args(['run', 'all', '--stage', 'test', '--configuration', 'Debug',
                                          '--only-testing', 'Tests visionOS'])
         host.atomic_json(self.root / 'baseline.json', {'vmId': self.job['vmId'], 'environment': self.environment,
-                         'sourceVM': str(args.vm), 'runnerSourceDigest': 'digest', 'runnerTools': self.job['runnerTools']})
+                         'sourceVM': str(args.vm), 'bootstrapSourceDigest': 'digest', 'bootstrapTools': self.job['bootstrapTools']})
         events = []
         def clone(source, destination):
             self.assertTrue((self.exchange / 'artifacts/planned-result.json').exists())
@@ -301,9 +355,9 @@ class PlannedInventoryTests(unittest.TestCase):
             host.register_operation(self.root, self.root / 'runs/plan-fixture.vbvm',
                 self.exchange, self.job['runId'], 'starting')
             return host.finalize_interrupted_result(self.exchange, self.job['runId'], 'guest_launch_failed')
-        with patch.object(host, 'runner_source_digest', return_value='digest'), \
+        with patch.object(host, 'bootstrap_source_digest', return_value='digest'), \
                 patch.object(host, 'check_capacity'), patch.object(host, 'build_tools', return_value=self.root / 'tools'), \
-                patch.object(host, 'guest_tool_hashes', return_value=self.job['runnerTools']), \
+                patch.object(host, 'bootstrap_tool_hashes', return_value=self.job['bootstrapTools']), \
                 patch.object(host, 'new_exchange', return_value=(self.job['runId'], self.exchange)), \
                 patch.object(host, 'snapshot_source', return_value=self.job['source']), \
                 patch.object(host, 'clone_vm', side_effect=clone), patch.object(host, 'monitor_vm', side_effect=boot), \

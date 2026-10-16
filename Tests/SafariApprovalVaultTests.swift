@@ -184,18 +184,19 @@ final class SafariApprovalVaultTests: XCTestCase {
             XCTAssertFalse(expectedSuccess, "Expected authorization to attach", file: file, line: line)
             return
         }
-        try assertSigningResultForTesting(await access.sign(), account: account, expectedSuccess: expectedSuccess, file: file, line: line)
+        try assertSigningResultForTesting(await access.sign(), permit: permit, account: account, expectedSuccess: expectedSuccess, file: file, line: line)
     }
 
     private func assertSigningResultForTesting(
         _ result: Result<WalletSigningOutput, WalletSigningFailure>,
+        permit: ExtensionBridge.ApprovedExecutionPermit,
         account: WalletAccount,
         expectedSuccess: Bool,
         file: StaticString,
         line: UInt
     ) throws {
         if expectedSuccess {
-            try assertWalletSigningSuccessForTesting(result, account: account, file: file, line: line)
+            try assertWalletSigningSuccessForTesting(result, permit: permit, account: account, file: file, line: line)
         } else if case .success = result {
             XCTFail("Unexpected signing authorization", file: file, line: line)
         }

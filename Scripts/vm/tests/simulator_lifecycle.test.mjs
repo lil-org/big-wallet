@@ -3,8 +3,9 @@ import {mkdtemp, readFile, realpath, rm} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import test from "node:test";
+import {atomicJSON, hashFile} from "../guest_bootstrap.mjs";
 import {coverageReport, executeStages, prepareNativeSimulators} from "../guest.mjs";
-import {createManifest, PERFORMANCE_ENV, PERFORMANCE_TESTS, PLATFORMS, RUNNER_TOOL_NAMES, validateJob} from "../test_manifest.mjs";
+import {createManifest, PERFORMANCE_ENV, PERFORMANCE_TESTS, PLATFORMS, BOOTSTRAP_TOOL_NAMES, validateJob} from "../test_manifest.mjs";
 
 const ios = "11111111-1111-1111-1111-111111111111";
 const visionos = "22222222-2222-2222-2222-222222222222";
@@ -20,7 +21,7 @@ const fixture = async fn => {
     try { return await fn(root); } finally { await rm(root, {recursive: true, force: true}); }
 };
 const job = overrides => ({version: 1, runId: "simulator-fixture", vmId: "fixture-vm", kind: "run", profile: "all", stages: [], onlyTesting: [],
-    runnerTools: Object.fromEntries(RUNNER_TOOL_NAMES.map(name => [name, "a".repeat(64)])),
+    bootstrapTools: Object.fromEntries(BOOTSTRAP_TOOL_NAMES.map(name => [name, "a".repeat(64)])),
     source: {sha256: "b".repeat(64), commit: "c".repeat(40)}, ...overrides});
 const nativeStage = {id: "test.visionos.debug", group: "test", command: "xcodebuild", args: ["test-without-building"],
     cwd: ".", dependencies: [], requirements: [], timeoutSeconds: 60, resultBundle: true,
@@ -29,7 +30,7 @@ const nativeStage = {id: "test.visionos.debug", group: "test", command: "xcodebu
 test("simulator preparation shuts down only another selected device before booting and waiting for the target", async () => fixture(async root => {
     const calls = [];
     const stopRequested = async () => false;
-    const preparation = await prepareNativeSimulators("visionos", {destinations, artifacts: root, stageId: nativeStage.id, stopRequested,
+    const preparation = await prepareNativeSimulators("visionos", {writeJSON: atomicJSON, destinations, artifacts: root, stageId: nativeStage.id, stopRequested,
         execute: async (command, args, options) => {
             calls.push(args);
             assert.equal(command, "xcrun");
@@ -48,7 +49,7 @@ test("simulator preparation shuts down only another selected device before booti
 
 test("an already booted target still waits for readiness without issuing boot again", async () => fixture(async root => {
     const calls = [];
-    const preparation = await prepareNativeSimulators("visionos", {destinations, artifacts: root, stageId: nativeStage.id,
+    const preparation = await prepareNativeSimulators("visionos", {writeJSON: atomicJSON, destinations, artifacts: root, stageId: nativeStage.id,
         execute: async (_command, args) => { calls.push(args); return success(args[1] === "list" ? inventory("Shutdown", "Booted") : ""); }});
     assert.equal(preparation.status, "passed");
     assert.deepEqual(calls, [["simctl", "list", "devices", "--json"], ["simctl", "bootstatus", visionos, "-b"]]);
@@ -56,7 +57,7 @@ test("an already booted target still waits for readiness without issuing boot ag
 
 test("macOS tests shut down both selected booted simulators and preserve unrelated devices", async () => fixture(async root => {
     const calls = [];
-    const preparation = await prepareNativeSimulators("macos", {destinations, artifacts: root, stageId: "test.macos.debug",
+    const preparation = await prepareNativeSimulators("macos", {writeJSON: atomicJSON, destinations, artifacts: root, stageId: "test.macos.debug",
         execute: async (_command, args) => { calls.push(args); return success(args[1] === "list" ? inventory("Booted", "Booted") : ""); }});
     assert.equal(preparation.status, "passed");
     assert.equal(preparation.target, null);
@@ -64,7 +65,7 @@ test("macOS tests shut down both selected booted simulators and preserve unrelat
 }));
 
 test("macOS tests with no selected simulators need no simulator commands", async () => fixture(async root => {
-    const preparation = await prepareNativeSimulators("macos", {destinations: {macos: destinations.macos}, artifacts: root, stageId: "test.macos.debug",
+    const preparation = await prepareNativeSimulators("macos", {writeJSON: atomicJSON, destinations: {macos: destinations.macos}, artifacts: root, stageId: "test.macos.debug",
         execute: async () => { throw new Error("Unexpected simulator command"); }});
     assert.equal(preparation.status, "passed");
     assert.deepEqual(preparation.steps, []);
@@ -78,7 +79,7 @@ for (const [label, outcome, expected] of [
     test(`bootstatus ${label} is retained and prevents XCTest without retrying or blocking independent work`, async () => fixture(async root => {
         const calls = [];
         const later = {id: "later", group: "repository", command: "fixture-command", args: [], cwd: ".", dependencies: [], requirements: [], timeoutSeconds: 1};
-        const results = await executeStages([nativeStage, later], {workspace: root, artifacts: root, preflight: {checks: {}, destinations},
+        const results = await executeStages([nativeStage, later], {writeJSON: atomicJSON, hashFile, workspace: root, artifacts: root, preflight: {checks: {}, destinations},
             execute: async (command, args) => {
                 calls.push([command, ...args]);
                 assert.notEqual(command, "xcodebuild");
@@ -98,7 +99,7 @@ for (const [label, outcome, expected] of [
 
 test("a stop between preparation commands prevents the next mutation", async () => fixture(async root => {
     const calls = [];
-    const preparation = await prepareNativeSimulators("visionos", {destinations, artifacts: root, stageId: nativeStage.id,
+    const preparation = await prepareNativeSimulators("visionos", {writeJSON: atomicJSON, destinations, artifacts: root, stageId: nativeStage.id,
         stopRequested: async () => calls.length === 1,
         execute: async (_command, args) => { calls.push(args); return success(inventory()); }});
     assert.equal(preparation.status, "cancelled");
@@ -106,7 +107,7 @@ test("a stop between preparation commands prevents the next mutation", async () 
 }));
 
 test("malformed simulator destinations are rejected before invoking simctl", async () => fixture(async root => {
-    const preparation = await prepareNativeSimulators("visionos", {destinations: {...destinations, ios: "platform=iOS Simulator,id=all"},
+    const preparation = await prepareNativeSimulators("visionos", {writeJSON: atomicJSON, destinations: {...destinations, ios: "platform=iOS Simulator,id=all"},
         artifacts: root, stageId: nativeStage.id, execute: async () => { throw new Error("Unexpected simulator command"); }});
     assert.equal(preparation.status, "failed");
     assert.match(preparation.reason, /Invalid selected ios/);
@@ -116,7 +117,7 @@ test("malformed simulator destinations are rejected before invoking simctl", asy
 test("build stages stay untouched and successful simulator preparation runs immediately before XCTest", async () => fixture(async root => {
     const build = {...nativeStage, id: "build-tests.visionos.debug", group: "build", args: ["build-for-testing"], nativeAudit: undefined, resultBundle: false};
     const calls = [];
-    const results = await executeStages([build, nativeStage], {workspace: root, artifacts: root, preflight: {checks: {}, destinations},
+    const results = await executeStages([build, nativeStage], {writeJSON: atomicJSON, hashFile, workspace: root, artifacts: root, preflight: {checks: {}, destinations},
         execute: async (command, args) => {
             calls.push([command, ...args]);
             if (args[0] === "simctl") { return success(args[1] === "list" ? inventory("Shutdown", "Booted") : ""); }

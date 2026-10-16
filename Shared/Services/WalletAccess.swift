@@ -223,33 +223,8 @@ enum WalletSigningFailure: Error, Equatable, Sendable {
 }
 
 enum WalletSigningOutput: Sendable {
-    struct SignedResponse: Sendable {
-        let executionID: UUID
-        let response: ResponseToExtension
-
-        fileprivate init(permit: ExtensionBridge.ApprovedExecutionPermit, result: ResponseToExtension.Result) {
-            executionID = permit.executionID
-            response = ResponseToExtension(for: permit.request, payload: .result(result))
-        }
-    }
-
-    struct SignedBroadcast: Sendable {
-        enum Transaction: Sendable {
-            case ethereum(String, String, ResolvedEthereumNetwork)
-            case solana(String, String, Solana.Cluster, Solana.PreparedSendOptions)
-        }
-
-        let executionID: UUID
-        let transaction: Transaction
-
-        fileprivate init(permit: ExtensionBridge.ApprovedExecutionPermit, transaction: Transaction) {
-            executionID = permit.executionID
-            self.transaction = transaction
-        }
-    }
-
-    case response(SignedResponse)
-    case broadcast(SignedBroadcast)
+    case response(ApprovedCompletion)
+    case broadcast(PreparedBroadcast)
 
     var executionID: UUID {
         switch self {
@@ -279,6 +254,142 @@ extension WalletSigningAuthorization {
             handle: permit.handle, approvedAccount: approvedAccount,
             signingDeadline: permit.signingDeadline
         )
+    }
+}
+
+struct ApprovedCompletion: Sendable {
+    let executionID: UUID
+    private let value: ResponseToExtension
+
+    private init(permit: ExtensionBridge.ApprovedExecutionPermit, response: ResponseToExtension) {
+        executionID = permit.executionID
+        value = response.markingApprovalCommitted()
+    }
+
+    func response(for permit: ExtensionBridge.ApprovedExecutionPermit) -> ResponseToExtension? {
+        executionID == permit.executionID ? value : nil
+    }
+
+    static func failure(
+        _ error: ProviderResponseError,
+        permit: ExtensionBridge.ApprovedExecutionPermit
+    ) -> ApprovedCompletion? {
+        guard permit.isExecuting else { return nil }
+        return ApprovedCompletion(
+            permit: permit, response: ResponseToExtension(for: permit.request, payload: .error(error))
+        )
+    }
+
+    static func accountSelection(
+        permit: ExtensionBridge.ApprovedExecutionPermit,
+        fallbackNetwork: () -> EthereumNetwork? = { Networks.ethereum }
+    ) -> ApprovedCompletion? {
+        guard permit.isExecuting,
+              case .accountSelection(let action, let selection) = permit.approval.kind else { return nil }
+        return ApprovedCompletion(
+            permit: permit,
+            response: DappRequestProcessor.accountSelectionResponse(
+                request: permit.request, action: action, selection: selection,
+                fallbackNetwork: fallbackNetwork
+            )
+        )
+    }
+
+    fileprivate init(permit: ExtensionBridge.ApprovedExecutionPermit, result: ResponseToExtension.Result) {
+        self.init(permit: permit, response: ResponseToExtension(for: permit.request, payload: .result(result)))
+    }
+
+    static func chainAdded(
+        permit: ExtensionBridge.ApprovedExecutionPermit
+    ) -> ApprovedCompletion? {
+        guard permit.isExecuting,
+              case .addEthereumChain(let action) = permit.approval.kind,
+              case .ethereum(let body) = permit.request.body,
+              body.method == .addEthereumChain,
+              let chainID = Int(hexString: action.chainToAdd.chainId), chainID > 0 else { return nil }
+        return ApprovedCompletion(
+            permit: permit,
+            response: ResponseToExtension(
+                for: permit.request, payload: .result(.null),
+                mutation: .ethereumChain(String.hex(chainID, withPrefix: true))
+            )
+        )
+    }
+
+    fileprivate static func broadcastResponse(
+        _ response: ResponseToExtension,
+        permit: ExtensionBridge.ApprovedExecutionPermit
+    ) -> ApprovedCompletion {
+        ApprovedCompletion(permit: permit, response: response)
+    }
+}
+
+struct PreparedBroadcast: Sendable {
+    enum Transaction: Sendable {
+        case ethereum(String, String, ResolvedEthereumNetwork)
+        case solana(String, String, Solana.Cluster, Solana.PreparedSendOptions)
+    }
+
+    let executionID: UUID
+    let transaction: Transaction
+    private let identity = UUID()
+
+    fileprivate init(permit: ExtensionBridge.ApprovedExecutionPermit, transaction: Transaction) {
+        executionID = permit.executionID
+        self.transaction = transaction
+    }
+
+    func hasSameIdentity(as other: Self) -> Bool {
+        executionID == other.executionID && identity == other.identity
+    }
+
+    func recoveryCompletion(
+        for permit: ExtensionBridge.ApprovedExecutionPermit
+    ) -> ApprovedCompletion? {
+        guard executionID == permit.executionID else { return nil }
+        let response: ResponseToExtension
+        switch transaction {
+        case .ethereum(_, let hash, _):
+            response = EthereumDappRequestProcessor.transactionSubmissionUnknownResponse(
+                to: permit.request, transactionHash: hash
+            )
+        case .solana(_, let signature, _, _):
+            response = SolanaDappRequestProcessor.transactionSubmissionUnknownResponse(
+                to: permit.request, signature: signature
+            )
+        }
+        return .broadcastResponse(response, permit: permit)
+    }
+
+    @MainActor
+    func dispatch(
+        using dispatch: ExtensionBridge.BroadcastDispatchPermit,
+        sender: any ApprovedBroadcastSending = DappBroadcastSender()
+    ) async -> ApprovedCompletion? {
+        let permit = dispatch.approvedPermit
+        guard executionID == permit.executionID,
+              executionID == dispatch.broadcast.executionID,
+              identity == dispatch.broadcast.identity,
+              dispatch.consume(), let recovery = recoveryCompletion(for: permit),
+              let recoveryResponse = recovery.response(for: permit) else { return nil }
+        let response: ResponseToExtension
+        switch transaction {
+        case .ethereum(let signed, let expectedHash, let network):
+            guard !Task.isCancelled else { return recovery }
+            let result = await sender.sendEthereum(signedTransaction: signed, network: network)
+            response = EthereumDappRequestProcessor.transactionBroadcastResponse(
+                to: permit.request, expectedHash: expectedHash,
+                recoveryResponse: recoveryResponse, result: result
+            )
+        case .solana(let signed, let expectedSignature, let cluster, let options):
+            guard !Task.isCancelled else { return recovery }
+            let result = await sender.sendSolana(signedTransaction: signed, cluster: cluster, options: options)
+            response = SolanaDappRequestProcessor.transactionBroadcastResponse(
+                to: permit.request, expectedSignature: expectedSignature,
+                recoveryResponse: recoveryResponse, result: result
+            )
+        }
+        return .broadcastResponse(response, permit: permit)
     }
 }
 
@@ -328,8 +439,7 @@ struct ApprovedWalletSigningOperation: Sendable {
         permit: ExtensionBridge.ApprovedExecutionPermit,
         authorization: WalletSigningAuthorization
     ) {
-        guard WalletSigningAuthorization(permit: permit) == authorization,
-              case .signing(_, let payload) = permit.approval.kind,
+        guard case .signing(_, let payload) = permit.approval.kind,
               permit.issueSigningOperation() else { return nil }
         self.permit = permit
         self.authorization = authorization
@@ -358,7 +468,7 @@ struct ApprovedWalletSigningOperation: Sendable {
 
     private func performSigning(with privateKey: WalletPrivateKey) ->
         Result<WalletSigningOutput, WalletSigningFailure> {
-        guard !Task.isCancelled, isAuthorizedToSign, permit.consumeSigningUse() else {
+        guard !Task.isCancelled, permit.consumeSigningUse() else {
             return .failure(.authorizationUnavailable)
         }
         switch payload {
@@ -719,23 +829,23 @@ final class UnlockedAccountSigner: Sendable {
 
 @MainActor
 final class WalletSigningSession: WalletSigning {
-    private enum Phase: Sendable {
-        case signingAvailable
-        case signingRetired
+    private enum ResourcePhase: Sendable {
+        case materialAvailable
+        case materialRetired
         case acquiringCommitLease
         case leaseTransferred
         case invalidated
 
         var permitsCommit: Bool {
             switch self {
-            case .signingAvailable, .signingRetired: true
+            case .materialAvailable, .materialRetired: true
             case .acquiringCommitLease, .leaseTransferred, .invalidated: false
             }
         }
     }
 
     private struct State: Sendable {
-        var phase = Phase.signingAvailable
+        var phase = ResourcePhase.materialAvailable
         var operation: ApprovedWalletSigningOperation?
     }
 
@@ -780,7 +890,7 @@ final class WalletSigningSession: WalletSigning {
         guard WalletSigningAuthorization(permit: permit) == authorization,
               clock() < authorization.signingDeadline, validateCurrent() else { return false }
         return state.withLock { state in
-            guard state.operation == nil, case .signingAvailable = state.phase,
+            guard state.operation == nil, case .materialAvailable = state.phase,
                   let operation = ApprovedWalletSigningOperation(
                     permit: permit, authorization: authorization
                   ) else { return false }
@@ -791,8 +901,7 @@ final class WalletSigningSession: WalletSigning {
 
     func sign() async -> Result<WalletSigningOutput, WalletSigningFailure> {
         let binding = state.withLock { state -> ApprovedWalletSigningOperation? in
-            guard let operation = state.operation, case .signingAvailable = state.phase,
-                  operation.beginAttempt() else { return nil }
+            guard let operation = state.operation, operation.beginAttempt() else { return nil }
             return operation
         }
         guard let binding else { return .failure(.authorizationUnavailable) }
@@ -824,8 +933,8 @@ final class WalletSigningSession: WalletSigning {
     private nonisolated func finishSigningAttempt(_ binding: ApprovedWalletSigningOperation) {
         let retiresMaterial = state.withLock { state in
             binding.finishAttempt()
-            guard case .signingAvailable = state.phase else { return false }
-            state.phase = .signingRetired
+            guard case .materialAvailable = state.phase else { return false }
+            state.phase = .materialRetired
             return true
         }
         if retiresMaterial { source.retireSigningMaterial() }
@@ -833,7 +942,7 @@ final class WalletSigningSession: WalletSigning {
 
     func takeCommitLease() async -> WalletExecutionLease? {
         guard source.approvedAccount == approvedAccount, source.requiresCommitLease else { return nil }
-        let retired = state.withLock { state -> (operation: ApprovedWalletSigningOperation?, phase: Phase)? in
+        let retired = state.withLock { state -> (operation: ApprovedWalletSigningOperation?, phase: ResourcePhase)? in
             guard state.phase.permitsCommit else { return nil }
             let operation = state.operation
             operation?.finishAttempt()
@@ -844,7 +953,7 @@ final class WalletSigningSession: WalletSigning {
         }
         guard let retired else { return nil }
         withExtendedLifetime(retired.operation) {
-            if case .signingAvailable = retired.phase { source.retireSigningMaterial() }
+            if case .materialAvailable = retired.phase { source.retireSigningMaterial() }
         }
         return await withTaskCancellationHandler {
             let lease = await source.acquireCommitLease()

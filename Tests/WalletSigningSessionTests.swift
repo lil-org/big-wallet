@@ -621,7 +621,7 @@ final class UnlockedAccountSignerTests: XCTestCase {
             }
 
             let permit = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
-            try assertWalletSigningSuccessForTesting(await sign(permit, using: signer), account: approved.account)
+            try assertWalletSigningSuccessForTesting(await sign(permit, using: signer), permit: permit, account: approved.account)
             assertUnavailable(await sign(permit, using: signer))
         }
     }
@@ -682,7 +682,7 @@ final class UnlockedAccountSignerTests: XCTestCase {
             switch result {
             case .success:
                 signatures += 1
-                try assertWalletSigningSuccessForTesting(result, account: approved.account)
+                try assertWalletSigningSuccessForTesting(result, permit: permit, account: approved.account)
             case .failure:
                 assertUnavailable(result)
             }
@@ -705,7 +705,7 @@ final class UnlockedAccountSignerTests: XCTestCase {
                 secondResult = await second.sign(copiedOperation, validating: source)
                 return firstResult
             }
-            try assertWalletSigningSuccessForTesting(result, account: approved.account)
+            try assertWalletSigningSuccessForTesting(result, permit: permit, account: approved.account)
             assertUnavailable(try XCTUnwrap(secondResult))
         }
     }
@@ -767,7 +767,7 @@ final class UnlockedAccountSignerTests: XCTestCase {
                 }
                 XCTAssertNil(releasedWallet)
                 let permit = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
-                try assertWalletSigningSuccessForTesting(await sign(permit, using: signer), account: approved.account)
+                try assertWalletSigningSuccessForTesting(await sign(permit, using: signer), permit: permit, account: approved.account)
                 assertUnavailable(await sign(permit, using: signer))
             }
         }

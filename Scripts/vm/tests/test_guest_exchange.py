@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import io
 import json
@@ -136,6 +137,124 @@ os.execv(sys.argv[2], [sys.argv[2], '-e', shim + script, *arguments[3:]])
         directory = Path(tempfile.mkdtemp(dir=self.root))
         exchange_module.extract_export(archive, directory, 'fixture-run', 'fixture-vm')
         return directory
+
+    def planned_failure(self, status='failed'):
+        self.job.update(version=1, profile='all', source={
+            'sha256': hashlib.sha256((self.exchange / 'snapshot-manifest.json').read_bytes()).hexdigest(),
+            'commit': 'a' * 40})
+        (self.exchange / 'job.json').write_text(json.dumps(self.job))
+        artifacts = self.exchange / 'artifacts'
+        artifacts.mkdir(exist_ok=True, mode=0o700)
+        plan = {**self.job, 'origin': 'host-plan', 'status': 'planned',
+                'jobSHA256': hashlib.sha256((self.exchange / 'job.json').read_bytes()).hexdigest(),
+                'stages': [{'id': 'repository.fixture', 'group': 'repository', 'status': 'pending'},
+                           {'id': 'test.fixture', 'group': 'test', 'status': 'pending',
+                            'nativeAudit': {'platform': 'macos', 'configuration': 'Debug', 'kind': 'full'}}]}
+        (artifacts / 'planned-result.json').write_text(json.dumps(plan))
+        report = {**self.job, 'status': status, 'error': 'fixture harness import failed', 'finishedAt': 'fixture completion',
+                  'stages': [], 'coverage': {'status': 'partial', 'fullSuiteVerified': False},
+                  'summary': {'status': status, 'issues': ['fixture harness import failed']}}
+        return plan, report
+
+    def publish_fixture(self, report):
+        exported = self.root / 'exported'
+        (exported / 'artifacts').mkdir(parents=True)
+        (exported / 'validated-result.json').write_text(json.dumps(report))
+        (exported / 'artifacts/result.json').write_text(json.dumps(report))
+        (exported / 'guest-runner.log').write_text('specific bootstrap diagnostic')
+        transport = object.__new__(exchange_module.GuestExchange)
+        transport.exchange, transport.export_directory = self.exchange, exported
+        transport.run_id, transport.vm_id, transport.job = self.job['runId'], self.job['vmId'], self.job.copy()
+        return transport
+
+    def export_failure(self, status):
+        plan, report = self.planned_failure(status)
+        transport = self.start()
+        self.uploaded()
+        artifacts = self.guest / 'artifacts'
+        artifacts.mkdir(mode=0o700)
+        (artifacts / 'result.json').write_text(json.dumps(report))
+        (self.guest / 'guest-runner.log').write_text('fixture harness import failed\n')
+        transport.next_poll = 0
+        self.assertEqual(self.drive(lambda value: value is not None), {'status': 'passed', 'phase': 'exchange-complete'})
+        actual = json.loads((self.exchange / 'artifacts/result.json').read_text())
+        expected_stage_status = 'cancelled' if status == 'cancelled' else 'blocked'
+        self.assertEqual(actual['status'], status)
+        self.assertEqual(actual['error'], report['error'])
+        self.assertEqual(actual['plannedResult'], 'planned-result.json')
+        self.assertEqual([stage['id'] for stage in actual['stages']], [stage['id'] for stage in plan['stages']])
+        self.assertTrue(all(stage['status'] == expected_stage_status for stage in actual['stages']))
+        self.assertEqual(actual['stages'][1]['nativeAudit'], plan['stages'][1]['nativeAudit'])
+        self.assertEqual(actual['summary']['counts'][expected_stage_status], 2)
+        self.assertEqual(actual['coverage']['status'], 'partial')
+        self.assertFalse(actual['coverage']['fullSuiteVerified'])
+        self.assertEqual(len(actual['coverage']['incompleteStages']), 2)
+        self.assertEqual(json.loads((self.exchange / 'artifacts/planned-result.json').read_text()), plan)
+        self.assertEqual((self.exchange / 'guest-runner.log').read_text(), 'fixture harness import failed\n')
+
+    def test_failed_bootstrap_exports_its_diagnostic_and_blocks_every_planned_stage(self):
+        self.export_failure('failed')
+
+    def test_cancelled_bootstrap_exports_its_diagnostic_and_cancels_every_planned_stage(self):
+        self.export_failure('cancelled')
+
+    def test_bootstrap_failure_cannot_use_an_unbound_or_malformed_host_plan(self):
+        plan, report = self.planned_failure()
+        transport = self.publish_fixture(report)
+        plan_path = self.exchange / 'artifacts/planned-result.json'
+        for change in ({'runId': 'other'}, {'vmId': 'other'}, {'source': {'sha256': 'b' * 64}},
+                       {'jobSHA256': 'b' * 64}, {'origin': 'guest'}, {'status': 'passed'},
+                       {'stages': []}, {'stages': [{'id': 'fixture', 'status': 'passed'}]}, []):
+            with self.subTest(change=change):
+                plan_path.write_text(json.dumps({**plan, **change} if isinstance(change, dict) else change))
+                with self.assertRaises(exchange_module.GuestExchangeError):
+                    transport._publish_export()
+                self.assertFalse((self.exchange / 'artifacts/result.json').exists())
+                self.assertFalse((self.exchange / 'guest-runner.log').exists())
+        plan_path.write_text(json.dumps(plan))
+        (self.exchange / 'snapshot-manifest.json').write_text('changed snapshot manifest')
+        with self.assertRaisesRegex(exchange_module.GuestExchangeError, 'source snapshot'):
+            transport._publish_export()
+        self.assertFalse((self.exchange / 'artifacts/result.json').exists())
+
+    def test_failed_export_checks_the_captured_job_and_report_source(self):
+        _, report = self.planned_failure()
+        transport = self.publish_fixture(report)
+        job_path = self.exchange / 'job.json'
+        original = job_path.read_bytes()
+        job_path.write_text(json.dumps({**self.job, 'profile': 'extended'}))
+        with self.assertRaisesRegex(exchange_module.GuestExchangeError, 'failed guest job'):
+            transport._publish_export()
+        job_path.write_bytes(original)
+        report['source'] = {**report['source'], 'sha256': 'b' * 64}
+        (transport.export_directory / 'validated-result.json').write_text(json.dumps(report))
+        with self.assertRaisesRegex(exchange_module.GuestExchangeError, 'source snapshot'):
+            transport._publish_export()
+        self.assertFalse((self.exchange / 'artifacts/result.json').exists())
+
+    def test_failed_export_accepts_a_snapshot_manifest_larger_than_one_mebibyte(self):
+        (self.exchange / 'snapshot-manifest.json').write_text(json.dumps({'version': 1, 'files': [], 'padding': 'x' * (1024 ** 2)}))
+        _, report = self.planned_failure()
+        transport = self.publish_fixture(report)
+        transport._publish_export()
+        actual = json.loads((self.exchange / 'artifacts/result.json').read_text())
+        self.assertEqual(actual['status'], 'failed')
+        self.assertEqual(len(actual['stages']), 2)
+
+    def test_doctor_failure_and_completed_stage_outcomes_do_not_use_the_host_plan(self):
+        for kind in ('doctor', 'run'):
+            with self.subTest(kind=kind):
+                self.job['kind'] = kind
+                _, report = self.planned_failure()
+                if kind == 'run':
+                    report['stages'] = [{'id': 'already-passed', 'status': 'passed'}, {'id': 'already-blocked', 'status': 'blocked'}]
+                transport = self.publish_fixture(report)
+                (self.exchange / 'artifacts/planned-result.json').unlink()
+                transport._publish_export()
+                self.assertEqual(json.loads((self.exchange / 'artifacts/result.json').read_text()), report)
+                (self.exchange / 'artifacts/result.json').unlink()
+                (self.exchange / 'guest-runner.log').unlink()
+                shutil.rmtree(transport.export_directory)
 
     def test_input_archive_contains_only_job_snapshot_and_optional_inputs(self):
         (self.exchange / 'provision').mkdir()

@@ -120,7 +120,7 @@ class CloneRetentionTests(unittest.TestCase):
         args = host.parser().parse_args(['--vm', str(self.root / 'original.vbvm'), 'run', '--stage', 'worker'])
         environment = {'minimumHostFreeBytes': 1}
         host.atomic_json(self.root / 'baseline.json', {'vmId': 'fixture-vm', 'sourceVM': str(args.vm),
-            'environment': environment, 'runnerSourceDigest': 'fixture-digest', 'runnerTools': {}})
+            'environment': environment, 'bootstrapSourceDigest': 'fixture-digest', 'bootstrapTools': {}})
         def clone(source, destination):
             self.assertEqual(destination, self.clone)
             self.make_clone()
@@ -137,9 +137,9 @@ class CloneRetentionTests(unittest.TestCase):
             host.atomic_json(self.active_path, active)
             return result
         with contextlib.ExitStack() as stack:
-            replacements = {'runner_source_digest': {'return_value': 'fixture-digest'},
+            replacements = {'bootstrap_source_digest': {'return_value': 'fixture-digest'},
                 'check_capacity': {}, 'build_tools': {'return_value': self.root / 'tools'},
-                'guest_tool_hashes': {'return_value': {}}, 'new_exchange': {'return_value': (self.run_id, self.exchange)},
+                'bootstrap_tool_hashes': {'return_value': {}}, 'new_exchange': {'return_value': (self.run_id, self.exchange)},
                 'snapshot_source': {'return_value': {'sha256': 'a' * 64}}, 'stage_planned_result': {},
                 'clone_vm': {'side_effect': clone}, 'prepared_guest_hook': {'return_value': None},
                 'monitor_vm': {'side_effect': monitor}, 'ensure_disk_idle': {}}

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
 import {auditNativeResult, auditResults, performanceTestName, testCases} from "../result_audit.mjs";
-import {createManifest, PERFORMANCE_TESTS, PLATFORMS, RUNNER_TOOL_NAMES} from "../test_manifest.mjs";
+import {createManifest, PERFORMANCE_TESTS, PLATFORMS, BOOTSTRAP_TOOL_NAMES} from "../test_manifest.mjs";
 
 const captured = JSON.parse(await readFile(new URL("./fixtures/xcresult_xcode27_performance_debug.json", import.meta.url), "utf8"));
 const debugPolicy = {configuration: "Debug", kind: "full", platform: "ios"};
@@ -65,7 +65,7 @@ test("filtered Debug manifests pass captured skip audits only when their schedul
             const selector = `${target ? `${target}/` : ""}WalletCoreProxyPerformanceGateTests${method ? `/${method}()` : ""}`;
             const manifest = createManifest({version: 1, runId: "filtered-gates", vmId: "fixture-vm", kind: "run", profile: "all",
                 stages: ["test"], configuration: "Debug", onlyTesting: [selector],
-                runnerTools: Object.fromEntries(RUNNER_TOOL_NAMES.map(name => [name, "a".repeat(64)])),
+                bootstrapTools: Object.fromEntries(BOOTSTRAP_TOOL_NAMES.map(name => [name, "a".repeat(64)])),
                 source: {sha256: "b".repeat(64), commit: "c".repeat(40)},
             });
             const debug = structuredClone(captured);

@@ -9965,7 +9965,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             calls += 1
             if broadcasts {
                 guard let signer, case .success(.broadcast(let signed)) = await signer.sign() else { return .rollback }
-                return .broadcast(PreparedBroadcast(signed: signed))
+                return .broadcast(signed)
             }
             guard let completion = ApprovedCompletion.failure(.userRejected, permit: permit) else { return .rollback }
             return .completed(completion)
@@ -10163,9 +10163,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         case .signing:
             switch try await walletSigningOutputForTesting(permit: permit, clock: { [clock = clock!] in clock.date }) {
             case .response(let signed):
-                completion = ApprovedCompletion(signed: signed)
+                completion = signed
             case .broadcast(let signed):
-                broadcast = PreparedBroadcast(signed: signed)
+                broadcast = signed
                 completion = try XCTUnwrap(broadcast?.recoveryCompletion(for: permit))
             }
         }

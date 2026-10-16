@@ -23,9 +23,8 @@ class SetupValidationInventoryTests(unittest.TestCase):
         self.environment = {'minimumHostFreeBytes': 1, 'buildData': {'bytes': 96 * 1024 ** 3}}
         host.atomic_json(self.state / 'candidate.json', {'version': 1, 'vmId': 'fixture-vm',
                          'sourceVM': str(self.args.vm), 'environment': self.environment})
-        self.runner_tools = {name: 'a' * 64 for name in
-                             ('VMGuestAgent', 'guest_runner', 'guest.mjs', 'test_manifest.mjs', 'result_audit.mjs')}
-        self.runner_tools['test_manifest.mjs'] = host.hash_regular_file(host.TOOLS / 'test_manifest.mjs')
+        self.bootstrap_tools = {name: 'a' * 64 for name in
+                             ('VMGuestAgent', 'guest_runner', 'guest_bootstrap.mjs')}
 
     def snapshot(self, repository, exchange):
         manifest = exchange / 'source/Scripts/vm/test_manifest.mjs'
@@ -33,7 +32,7 @@ class SetupValidationInventoryTests(unittest.TestCase):
         shutil.copyfile(host.TOOLS / 'test_manifest.mjs', manifest)
         host.atomic_json(exchange / 'snapshot-manifest.json', {'version': 1, 'files': [
             {'path': 'Scripts/vm/test_manifest.mjs', 'type': 'file', 'mode': 0o644,
-             'sha256': self.runner_tools['test_manifest.mjs']}]})
+             'sha256': host.hash_regular_file(manifest)}]})
         return {'sha256': host.hash_regular_file(exchange / 'snapshot-manifest.json'), 'commit': 'b' * 40}
 
     def test_validation_launch_failure_keeps_selected_inventory_and_cannot_promote_baseline(self):
@@ -46,8 +45,8 @@ class SetupValidationInventoryTests(unittest.TestCase):
             if job['kind'] == 'doctor':
                 self.assertFalse((exchange / 'artifacts/planned-result.json').exists())
                 return {'status': 'passed', 'identity': {'vmId': 'fixture-vm', 'consoleUser': 'wallet-test'}, 'preflight': {
-                    'runnerTools': {'available': True, 'hashes': self.runner_tools},
-                    'checks': {name: True for name in ('runnerTools', 'node', 'python', 'jq', 'xcode', 'macos', 'ios', 'visionos')},
+                    'bootstrap': {'available': True, 'hashes': self.bootstrap_tools},
+                    'checks': {name: True for name in ('bootstrap', 'node', 'python', 'jq', 'xcode', 'macos', 'ios', 'visionos')},
                 }}
             self.assertEqual(job['kind'], 'run')
             self.assertTrue(run_id.startswith('setup-validation-'))
@@ -64,17 +63,17 @@ class SetupValidationInventoryTests(unittest.TestCase):
             validation.update(exchange=exchange, job=job, planned=planned, result=result)
             return result
         def doctor(args, state, candidate, environment, operation, record, configuration,
-                   binaries, runner_tools, source, password, source_digest):
+                   binaries, bootstrap_tools, source, password, source_digest):
             run_id, exchange = operation['runId'], operation['exchange']
             host.atomic_json(exchange / 'job.json', {'version': 1, 'runId': run_id, 'vmId': record['vmId'],
                 'kind': 'doctor', 'profile': 'all', 'stages': [], 'onlyTesting': [], 'source': source,
-                'runnerTools': runner_tools})
+                'bootstrapTools': bootstrap_tools})
             operation['monitorCalled'] = True
             return host.monitor_vm(args, state, candidate, exchange, run_id, binaries, environment,
                 args.timeout or 120, password, keep_operation=True, previous_stops=operation['previousStops']), exchange
         with patch.object(host, 'validate_vm', return_value={}), patch.object(host, 'check_capacity'), \
                 patch.object(host, 'build_tools', return_value=self.state / 'tools'), \
-                patch.object(host, 'guest_tool_hashes', return_value=self.runner_tools), \
+                patch.object(host, 'bootstrap_tool_hashes', return_value=self.bootstrap_tools), \
                 patch.object(host, 'configure_build_storage', return_value=False), \
                 patch.object(host, 'ensure_disk_idle'), patch.object(host, 'configure_guest_hardware'), \
                 patch.object(host, 'stage_provisioning', return_value={'consoleUser': 'wallet-test'}), \

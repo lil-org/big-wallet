@@ -4922,7 +4922,7 @@ extension PopupRequestSessionsTests {
             XCTAssertTrue(access.validateCurrent())
             XCTAssertTrue(leaseState.isReleased)
             await store.record("signed")
-            return .broadcast(PreparedBroadcast(signed: signed))
+            return .broadcast(signed)
         }) { _, _ in
             .approval(popupTransactionAction())
         }
@@ -7850,7 +7850,7 @@ extension PopupRequestSessionsTests {
                         XCTFail("The original attempt must retain its signing authorization")
                         return .rollback
                     }
-                    return .completed(ApprovedCompletion(signed: signed))
+                    return .completed(signed)
                 })
             ),
             refreshWalletCatalog: {
@@ -8410,7 +8410,7 @@ extension PopupRequestSessionsTests {
                             XCTFail("Expected signing before the checkpoint attempt")
                             return .rollback
                         }
-                        return .broadcast(PreparedBroadcast(signed: signed))
+                        return .broadcast(signed)
                     }) { _ in
                         .approval(popupTransactionAction())
                     },
@@ -9874,7 +9874,7 @@ private func popupPreparedBroadcast(
         if !Task.isCancelled { XCTFail("Expected a live approved transaction broadcast") }
         return .rollback
     }
-    return .broadcast(PreparedBroadcast(signed: signed))
+    return .broadcast(signed)
 }
 
 private extension WalletReviewCatalog {

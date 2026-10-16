@@ -1310,7 +1310,7 @@ final class WalletSigningScopeTests: XCTestCase {
         XCTAssertEqual(reader.walletReadCount, initialWalletReads)
         XCTAssertEqual(reader.passwordReadCount, 0)
         XCTAssertTrue(signer.attach(permit: permit))
-        try assertWalletSigningSuccessForTesting(await signer.sign(), account: account)
+        try assertWalletSigningSuccessForTesting(await signer.sign(), permit: permit, account: account)
         XCTAssertGreaterThan(reader.walletReadCount, initialWalletReads)
         XCTAssertGreaterThan(reader.passwordReadCount, 0)
         let completedReads = reader.walletReadCount
@@ -1483,7 +1483,7 @@ final class WalletSigningScopeTests: XCTestCase {
                 requiresCommitLease: false
             )
             XCTAssertTrue(signer.attach(permit: permit))
-            let response = try walletSigningResponseForTesting(await signer.sign().get())
+            let response = try walletSigningResponseForTesting(await signer.sign().get(), permit: permit)
             let signature = try XCTUnwrap(response.json["result"] as? String)
             XCTAssertEqual(signature, expectedSignature)
             assertUnavailable(await signer.sign())
@@ -1612,7 +1612,7 @@ final class WalletSigningScopeTests: XCTestCase {
             )
             XCTAssertTrue(signer.attach(permit: permit))
             let signatures: [String]
-            let value = try walletSigningResponseForTesting(await signer.sign().get()).json["result"]
+            let value = try walletSigningResponseForTesting(await signer.sign().get(), permit: permit).json["result"]
             if let single = value as? String { signatures = [single] }
             else { signatures = try XCTUnwrap(value as? [String]) }
             XCTAssertEqual(signatures.count, expectedMessages.count)

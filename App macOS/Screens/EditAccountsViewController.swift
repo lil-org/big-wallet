@@ -4,21 +4,12 @@ import Cocoa
 
 class EditAccountsViewController: NSViewController {
 
-    private struct PreviewAccountCellModel {
-        let account: WalletAccount
-        var isEnabled: Bool
-    }
-    
     var wallet: WalletSnapshot!
     var getBackToRect: CGRect?
 
     private let walletsManager = WalletsManager.shared
-    private var cellModels = [PreviewAccountCellModel]()
+    private var previewState: AccountPreviewState!
     private let previewAccountsPreloadThreshold = 4
-    private var toggledIndexes = Set<Int>()
-    private var enabledUndiscoveredAccountKeys = Set<WalletPreviewAccountKey>()
-    private var previewPager: WalletsManager.PreviewAccountsPager?
-    private var previewTask: Task<Void, Never>?
     private var previewLayoutTask: Task<Void, Never>?
     private var mutationTask: Task<Void, Never>?
     private var didAppear = false
@@ -42,7 +33,12 @@ class EditAccountsViewController: NSViewController {
         cancelButton.title = Strings.cancel
         titleLabel.stringValue = Strings.editAccounts.replacingOccurrences(of: " ", with: "\n")
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
-        resetPreviewAccounts()
+        previewState = AccountPreviewState(
+            wallet: wallet,
+            makePager: { [walletsManager] in walletsManager.previewAccountsPager(wallet: $0) },
+            didChange: { [weak self] in self?.previewDidChange($0) }
+        )
+        previewState.reset()
     }
 
     override func viewDidAppear() {
@@ -54,28 +50,8 @@ class EditAccountsViewController: NSViewController {
     isolated deinit {
         previewLayoutTask?.cancel()
         mutationTask?.cancel()
-        previewTask?.cancel()
-        previewPager?.invalidate()
+        previewState?.invalidate()
         NotificationCenter.default.removeObserver(self)
-    }
-    
-    private func appendPreviewAccounts(_ previewAccounts: [WalletAccount]) {
-        let newCellModels = previewAccounts.map { account in
-            let isEnabled = enabledUndiscoveredAccountKeys.remove(account.previewAccountKey) != nil
-            return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
-        }
-        cellModels.append(contentsOf: newCellModels)
-        updateOkButtonState()
-    }
-
-    static func insertionRange(
-        previousCount: Int,
-        currentCount: Int
-    ) -> Range<Int>? {
-        guard previousCount >= 0, currentCount > previousCount else {
-            return nil
-        }
-        return previousCount..<currentCount
     }
     
     @IBAction func cancelButtonTapped(_ sender: Any) {
@@ -83,14 +59,14 @@ class EditAccountsViewController: NSViewController {
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
-        guard !isSaving, let wallet else { return }
-        guard !toggledIndexes.isEmpty else {
+        guard !isSaving, let previewState else { return }
+        guard previewState.hasChanges else {
             showAccountsList()
             return
         }
         
-        let remainingEnabledAccounts = wallet.accounts.filter { enabledUndiscoveredAccountKeys.contains($0.previewAccountKey) }
-        let newAccounts: [WalletAccount] = (cellModels.compactMap { $0.isEnabled ? $0.account : nil }) + remainingEnabledAccounts
+        let wallet = previewState.wallet
+        let newAccounts = previewState.enabledAccounts
         isSaving = true
         updateOkButtonState()
         cancelButton.isEnabled = false
@@ -131,68 +107,40 @@ class EditAccountsViewController: NSViewController {
     
     private func toggleAccount(at row: Int) {
         guard !isSaving else { return }
-        cellModels[row].isEnabled.toggle()
-        updateOkButtonState()
-        if toggledIndexes.contains(row) {
-            toggledIndexes.remove(row)
-        } else {
-            toggledIndexes.insert(row)
-        }
+        previewState.toggle(at: row)
     }
 
     private func updateOkButtonState() {
-        let hasVisibleEnabledAccount = cellModels.contains(where: { $0.isEnabled })
-        let hasHiddenEnabledAccount = !enabledUndiscoveredAccountKeys.isEmpty
-        okButton.isEnabled = !isSaving && (hasVisibleEnabledAccount || hasHiddenEnabledAccount)
-    }
-
-    private func resetPreviewAccounts() {
-        previewLayoutTask?.cancel()
-        previewTask?.cancel()
-        previewTask = nil
-        previewPager?.invalidate()
-        let previewPager = walletsManager.previewAccountsPager(wallet: wallet)
-        self.previewPager = previewPager
-        toggledIndexes.removeAll()
-        cellModels.removeAll()
-        enabledUndiscoveredAccountKeys = Set(wallet.accounts.map { $0.previewAccountKey })
-        updateOkButtonState()
-        tableView.reloadData()
-        loadInitialPreviewAccounts(with: previewPager)
+        okButton.isEnabled = !isSaving && previewState.hasEnabledAccounts
     }
 
     private func invalidatePreviewAccounts() {
         previewLayoutTask?.cancel()
         previewLayoutTask = nil
-        previewTask?.cancel()
-        previewTask = nil
-        previewPager?.invalidate()
-        previewPager = nil
+        previewState.invalidate()
     }
 
-    private func loadInitialPreviewAccounts(with previewPager: WalletsManager.PreviewAccountsPager) {
-        previewTask = Task { [weak self] in
-            let previewAccounts = await previewPager.reset()
-            guard let self, !Task.isCancelled, self.previewPager === previewPager else { return }
-            self.previewTask = nil
-
-            guard let previewAccounts else {
-                self.updateOkButtonState()
-                return
-            }
-
-            self.appendPreviewAccounts(previewAccounts)
-            self.tableView.reloadData()
-            self.enablePreviewMoreAccountsAfterCurrentLayout(for: previewPager)
+    private func previewDidChange(_ change: AccountPreviewState.Change) {
+        updateOkButtonState()
+        switch change {
+        case .reload:
+            tableView.reloadData()
+        case .initialPage(let generation):
+            tableView.reloadData()
+            enablePreviewMoreAccountsAfterCurrentLayout(for: generation)
+        case .append(let range):
+            tableView.insertRows(at: IndexSet(integersIn: range))
+        case .selection:
+            break
         }
     }
 
-    private func enablePreviewMoreAccountsAfterCurrentLayout(for previewPager: WalletsManager.PreviewAccountsPager) {
+    private func enablePreviewMoreAccountsAfterCurrentLayout(for generation: UInt64) {
         previewLayoutTask?.cancel()
         previewLayoutTask = Task { [weak self] in
             await Task.yield()
-            guard let self, !Task.isCancelled, self.previewPager === previewPager else { return }
-            previewPager.enablePaging()
+            guard let self, !Task.isCancelled,
+                  previewState.activatePaging(for: generation) else { return }
             guard self.didAppear else { return }
             self.previewMoreAccountsIfNeededForCurrentViewport()
         }
@@ -200,14 +148,14 @@ class EditAccountsViewController: NSViewController {
 
     private func previewMoreAccountsIfNeededForCurrentViewport() {
         guard shouldPreviewMoreAccountsForCurrentViewport() else { return }
-        previewMoreAccountsIfNeeded()
+        previewState.loadMore()
     }
 
     private func shouldPreviewMoreAccountsForCurrentViewport() -> Bool {
-        guard !cellModels.isEmpty else { return false }
+        guard !previewState.accounts.isEmpty else { return false }
 
         tableView.layoutSubtreeIfNeeded()
-        let triggerRow = max(cellModels.count - previewAccountsPreloadThreshold, 0)
+        let triggerRow = max(previewState.accounts.count - previewAccountsPreloadThreshold, 0)
         let visibleRows = tableView.rows(in: tableView.visibleRect)
         if visibleRows.length > 0, visibleRows.location + visibleRows.length - 1 >= triggerRow {
             return true
@@ -218,43 +166,9 @@ class EditAccountsViewController: NSViewController {
     }
 
     @objc private func walletsChanged() {
-        guard let currentWallet = walletsManager.currentWallet(id: wallet.id) else {
+        let currentWallet = walletsManager.currentWallet(id: previewState.wallet.id)
+        if case .close = previewState.refresh(wallet: currentWallet) {
             showAccountsList()
-            return
-        }
-
-        let previousAccountKeys = Set(wallet.accounts.map { $0.previewAccountKey })
-        let currentAccountKeys = Set(currentWallet.accounts.map { $0.previewAccountKey })
-        wallet = currentWallet
-
-        guard previousAccountKeys != currentAccountKeys else {
-            tableView.reloadData()
-            return
-        }
-
-        if toggledIndexes.isEmpty {
-            resetPreviewAccounts()
-        } else {
-            showAccountsList()
-        }
-    }
-    
-    private func previewMoreAccountsIfNeeded() {
-        guard let previewPager, previewTask == nil else { return }
-        previewTask = Task { [weak self] in
-            let page = await previewPager.previewMoreIfNeeded()
-            guard let self, !Task.isCancelled, self.previewPager === previewPager else { return }
-            self.previewTask = nil
-            guard let (previewAccounts, _) = page else { return }
-
-            let previousCount = self.cellModels.count
-            self.appendPreviewAccounts(previewAccounts)
-            if let range = Self.insertionRange(
-                previousCount: previousCount,
-                currentCount: self.cellModels.count
-            ) {
-                self.tableView.insertRows(at: IndexSet(integersIn: range))
-            }
         }
     }
     
@@ -286,24 +200,24 @@ extension EditAccountsViewController: NSTableViewDelegate {
 extension EditAccountsViewController: NSTableViewDataSource {
     
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        let model = cellModels[row]
+        let account = previewState.accounts[row]
         let rowView = tableView.makeViewOfType(PreviewAccountCellView.self)
-        rowView.setup(title: model.account.nameOrCroppedAddress(walletId: wallet.id),
-                      index: model.account.previewDerivationIndex,
-                      image: model.account.image,
-                      isEnabled: model.isEnabled,
+        rowView.setup(title: account.nameOrCroppedAddress(walletId: previewState.wallet.id),
+                      index: account.previewDerivationIndex,
+                      image: account.image,
+                      isEnabled: previewState.isEnabled(account),
                       delegate: self)
         rowView.checkBox.isEnabled = !isSaving
         
-        if row >= cellModels.count - previewAccountsPreloadThreshold {
-            previewMoreAccountsIfNeeded()
+        if row >= previewState.accounts.count - previewAccountsPreloadThreshold {
+            previewState.loadMore()
         }
         
         return rowView
     }
     
     func numberOfRows(in tableView: NSTableView) -> Int {
-        return cellModels.count
+        return previewState?.accounts.count ?? 0
     }
     
 }

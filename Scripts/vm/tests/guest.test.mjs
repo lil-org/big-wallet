@@ -5,12 +5,13 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import test from "node:test";
 import {auditNativeResult, auditResults, performanceTestName} from "../result_audit.mjs";
-import {BUILD_VOLUME, EXCHANGE_PATH, chooseDestinations, cleanEnvironment, coverageReport, executeStages, materializeSource, pendingStageResults, pinnedEnvironmentEvidence, prepareStageScratch, provisioningEvidence, readGuestProvision, resourceSnapshot, runnerToolsEvidence, validateGuestEvidence, validateSnapshotManifest, verifyBuildVolume, verifyExchangeDirectory} from "../guest.mjs";
-import {commandForStage, createManifest, PERFORMANCE_ENV, PERFORMANCE_TESTS, PLATFORMS, SHELL_TESTS, TSAN_TESTS, EXTENDED_TSAN_TESTS, RUNNER_TOOL_NAMES, validateJob} from "../test_manifest.mjs";
+import {chooseDestinations, cleanEnvironment, coverageReport, executeStages, pendingStageResults, pinnedEnvironmentEvidence, prepareStageScratch, resourceSnapshot} from "../guest.mjs";
+import {atomicJSON, hashFile, BUILD_VOLUME, EXCHANGE_PATH, materializeSource, provisioningEvidence, readGuestProvision, bootstrapToolsEvidence, validateGuestEvidence, validateSnapshotManifest, verifyBuildVolume, verifyExchangeDirectory} from "../guest_bootstrap.mjs";
+import {commandForStage, createManifest, PERFORMANCE_ENV, PERFORMANCE_TESTS, PLATFORMS, SHELL_TESTS, TSAN_TESTS, EXTENDED_TSAN_TESTS, BOOTSTRAP_TOOL_NAMES, validateJob} from "../test_manifest.mjs";
 
 const digest = data => createHash("sha256").update(data).digest("hex");
 const job = overrides => ({version: 1, runId: "2026-10-13-test", vmId: "fixture-vm", kind: "run", profile: "all", stages: [], onlyTesting: [],
-    runnerTools: Object.fromEntries(RUNNER_TOOL_NAMES.map(name => [name, "c".repeat(64)])),
+    bootstrapTools: Object.fromEntries(BOOTSTRAP_TOOL_NAMES.map(name => [name, "c".repeat(64)])),
     source: {sha256: "a".repeat(64), commit: "b".repeat(40)}, ...overrides});
 const fixture = async fn => {
     const root = await realpath(await mkdtemp(join(tmpdir(), "big-wallet-guest-unit-")));
@@ -54,9 +55,9 @@ const success = output => ({code: 0, signal: null, output: output ?? "", timedOu
 
 test("job validation admits the host snapshot contract and rejects execution injection", () => {
     assert.deepEqual(validateJob(job({source: {...job().source, fileCount: 4, bytes: 100}})).source.fileCount, 4);
-    assert.doesNotThrow(() => validateJob(job({kind: "doctor", source: undefined})));
+    assert.throws(() => validateJob(job({kind: "doctor", source: undefined})));
     for (const invalid of [
-        {version: 2}, {kind: "deploy"}, {profile: "fast"}, {runId: "../escape"}, {vmId: ""}, {runnerTools: {}},
+        {version: 2}, {kind: "deploy"}, {profile: "fast"}, {runId: "../escape"}, {vmId: ""}, {bootstrapTools: {}},
         {stages: ["deploy"]}, {stages: ["test", "test"]}, {configuration: "AdHoc"}, {unknown: true},
         {onlyTesting: ["Class/test;rm"]}, {onlyTesting: ["-skip-testing:Class"]}, {source: {sha256: "a", commit: "b"}},
         {approvalArgs: ["--worker", "/bin/sh"]}, {approvalArgs: ["--failure-dir", "/tmp/elsewhere"]}, {approvalArgs: ["--seed", "no"]},
@@ -119,7 +120,7 @@ test("all matrix includes every native configuration/platform and all repository
 
 test("credential-independent candidate runs report partial coverage even if selected stages pass", () => {
     const stages = [{id: "worker.test", status: "passed"}];
-    const preflight = {checks: {node: true, runnerTools: true, xcode: true, proofKey: false, signing: false}};
+    const preflight = {checks: {node: true, bootstrap: true, xcode: true, proofKey: false, signing: false}};
     const selected = coverageReport(job({stages: ["worker"]}), stages, preflight);
     assert.equal(selected.scope, "selected");
     assert.equal(selected.status, "partial");
@@ -139,7 +140,7 @@ test("credential-independent candidate runs report partial coverage even if sele
 
 test("all matrix never invokes live deployment, account mutation, or custom DerivedData", () => {
     for (const stage of createManifest(job({profile: "extended"}))) {
-        assert.ok(stage.requirements.includes("runnerTools"));
+        assert.ok(stage.requirements.includes("bootstrap"));
         const text = JSON.stringify([stage.command, stage.args]);
         assert.doesNotMatch(text, /derivedDataPath|allowProvisioningUpdates|Scripts\/asc\/(?:publish|bump|submit)|"rollout"|"upload:validated"|"verify:release"|"validate:keypair"/);
         if (stage.args.includes("validate:live")) { assert.ok(stage.args.includes("--dry-run")); }
@@ -150,20 +151,20 @@ test("all matrix never invokes live deployment, account mutation, or custom Deri
 
 test("runner fixtures declare their helper compiler and manifest interpreter", () => {
     const stages = createManifest(job({stages: ["repository"]}));
-    assert.deepEqual(stages.find(stage => stage.id === "runner.node-tests").requirements, ["runnerTools", "node", "xcode"]);
-    assert.deepEqual(stages.find(stage => stage.id === "runner.python-tests").requirements, ["runnerTools", "python", "node"]);
+    assert.deepEqual(stages.find(stage => stage.id === "runner.node-tests").requirements, ["bootstrap", "node", "xcode"]);
+    assert.deepEqual(stages.find(stage => stage.id === "runner.python-tests").requirements, ["bootstrap", "python", "node"]);
 });
 
 test("installed runner evidence fails stale, missing, or user-writable guest tools", async () => {
-    const expected = job().runnerTools;
+    const expected = job().bootstrapTools;
     const inspect = async () => ({uid: 0, mode: 0o755, isFile: () => true, isSymbolicLink: () => false});
-    assert.equal((await runnerToolsEvidence(expected, {inspect, hash: async () => "c".repeat(64)})).available, true);
-    const stale = await runnerToolsEvidence(expected, {inspect, hash: async path => path.endsWith("guest.mjs") ? "d".repeat(64) : "c".repeat(64)});
+    assert.equal((await bootstrapToolsEvidence(expected, {inspect, hash: async () => "c".repeat(64)})).available, true);
+    const stale = await bootstrapToolsEvidence(expected, {inspect, hash: async path => path.endsWith("guest_bootstrap.mjs") ? "d".repeat(64) : "c".repeat(64)});
     assert.equal(stale.available, false);
-    assert.deepEqual(stale.mismatched, ["guest.mjs"]);
-    const writable = await runnerToolsEvidence(expected, {inspect: async () => ({...await inspect(), mode: 0o777}), hash: async () => "c".repeat(64)});
+    assert.deepEqual(stale.mismatched, ["guest_bootstrap.mjs"]);
+    const writable = await bootstrapToolsEvidence(expected, {inspect: async () => ({...await inspect(), mode: 0o777}), hash: async () => "c".repeat(64)});
     assert.equal(writable.available, false);
-    assert.equal(writable.missing.length, RUNNER_TOOL_NAMES.length);
+    assert.equal(writable.missing.length, BOOTSTRAP_TOOL_NAMES.length);
 });
 
 test("extended matrix retains baseline checks and adds bounded seeds, soak, and broader TSan", () => {
@@ -446,7 +447,7 @@ test("stage executor aggregates independent failures and blocks only unmet depen
     const executed = [];
     const snapshots = [];
     let measurement = 0;
-    const results = await executeStages(manifest, {workspace: root, artifacts: root, preflight: {checks: {}, destinations: {}},
+    const results = await executeStages(manifest, {writeJSON: atomicJSON, hashFile, workspace: root, artifacts: root, preflight: {checks: {}, destinations: {}},
         execute: async (_command, _args, options) => { executed.push(options.logPath); return executed.length === 1 ? {...success(), code: 1} : success(); },
         publish: async stages => snapshots.push(structuredClone(stages)),
         measureResources: () => ({sequence: measurement++}),
@@ -467,7 +468,7 @@ test("stage executor aggregates independent failures and blocks only unmet depen
 test("a transport failure retains the complete planned inventory before any command starts", async () => fixture(async root => {
     const manifest = createManifest(job({profile: "extended"}));
     let retained;
-    await assert.rejects(executeStages(manifest, {workspace: root, artifacts: root, preflight: {checks: {}, destinations: {}},
+    await assert.rejects(executeStages(manifest, {writeJSON: atomicJSON, hashFile, workspace: root, artifacts: root, preflight: {checks: {}, destinations: {}},
         execute: async () => { throw new Error("must not execute"); },
         publish: async stages => { retained = structuredClone(stages); throw new Error("transport interrupted"); },
     }), /transport interrupted/);
@@ -480,7 +481,7 @@ test("a transport failure retains the complete planned inventory before any comm
 test("native result bundles are audited and totals retained even when a native command exits zero", async () => fixture(async root => {
     const stage = {id: "test.fixture", group: "test", command: "xcodebuild", args: ["test"], cwd: ".", dependencies: [], requirements: [], timeoutSeconds: 1,
         resultBundle: true, nativeAudit: {configuration: "Debug", kind: "full", platform: "macos"}};
-    const results = await executeStages([stage], {workspace: root, artifacts: root, preflight: {checks: {}, destinations: {}}, execute: async (command, args) => {
+    const results = await executeStages([stage], {writeJSON: atomicJSON, hashFile, workspace: root, artifacts: root, preflight: {checks: {}, destinations: {}}, execute: async (command, args) => {
         if (command === "xcodebuild") { return success(); }
         return success(JSON.stringify(args.includes("summary") ? summary(0, 1) : nativeTree([["Class/testSkipped", "Skipped"]])));
     }});
@@ -495,13 +496,13 @@ test("stop cancels future stages and secrets are supplied only to the native pro
         {id: "worker", group: "worker", command: "npm", args: ["test"], cwd: ".", dependencies: [], requirements: [], timeoutSeconds: 1},
     ];
     const calls = [];
-    const results = await executeStages(stages, {workspace: root, artifacts: root, preflight: {checks: {}, destinations: {}}, proofKey: "private-fixture",
+    const results = await executeStages(stages, {writeJSON: atomicJSON, hashFile, workspace: root, artifacts: root, preflight: {checks: {}, destinations: {}}, proofKey: "private-fixture",
         runId: "run", exchange: EXCHANGE_PATH, execute: async (command, args, options) => { calls.push({command, args, env: options.env}); return success(); }});
     assert.equal(calls[0].env.ALCHEMY_JWT_REQUEST_PROOF_KEY, "private-fixture");
     assert.equal(calls[1].env.ALCHEMY_JWT_REQUEST_PROOF_KEY, undefined);
     assert.equal(calls[1].env.BW_TEST_VM_RUN_ID, "run");
     assert.doesNotMatch(JSON.stringify(results), /private-fixture/);
-    const stopped = await executeStages(stages, {workspace: root, artifacts: root, preflight: {checks: {}, destinations: {}}, stopRequested: async () => true,
+    const stopped = await executeStages(stages, {writeJSON: atomicJSON, hashFile, workspace: root, artifacts: root, preflight: {checks: {}, destinations: {}}, stopRequested: async () => true,
         execute: async () => { throw new Error("must not execute"); }});
     assert.deepEqual(stopped.map(stage => stage.status), ["cancelled", "cancelled"]);
     assert.equal(auditResults(stopped).status, "cancelled");
@@ -509,7 +510,7 @@ test("stop cancels future stages and secrets are supplied only to the native pro
 
 test("timeouts remain failures and do not suppress unrelated stages", async () => fixture(async root => {
     const stage = id => ({id, group: "test", command: "fake", args: [], cwd: ".", dependencies: [], requirements: [], timeoutSeconds: 7});
-    const results = await executeStages([stage("timed-out"), stage("later")], {workspace: root, artifacts: root, preflight: {checks: {}, destinations: {}},
+    const results = await executeStages([stage("timed-out"), stage("later")], {writeJSON: atomicJSON, hashFile, workspace: root, artifacts: root, preflight: {checks: {}, destinations: {}},
         execute: async (_command, _args, options) => options.logPath.includes("timed-out") ? {...success(), timedOut: true, code: null} : success()});
     assert.deepEqual(results.map(result => result.status), ["failed", "passed"]);
     assert.match(results[0].reason, /7s/);
@@ -524,7 +525,7 @@ for (const code of ["EEXIST", "EACCES"]) {
         try {
             const stage = {id: "fixture", group: "repository", command: process.execPath, args: ["-e", "setTimeout(() => {}, 10000)"],
                 cwd: ".", dependencies: [], requirements: [], timeoutSeconds: 10};
-            const results = await executeStages([stage], {workspace: root, artifacts, preflight: {checks: {}, destinations: {}},
+            const results = await executeStages([stage], {writeJSON: atomicJSON, hashFile, workspace: root, artifacts, preflight: {checks: {}, destinations: {}},
                 stopRequested: async () => false});
             assert.equal(results[0].status, "failed");
             assert.match(results[0].reason, new RegExp(`Stage log failed: ${code}`));
@@ -560,7 +561,7 @@ test("approval stages pass local scratch separately from shared failure artifact
     const stage = {id: "approval.fixture", group: "approval", command: "fake", args: [], cwd: ".", dependencies: [],
         requirements: [], timeoutSeconds: 1, scratchDirectory: true, failureDirectory: true};
     let actual;
-    const results = await executeStages([stage], {workspace, artifacts, runId: "run-fixture", preflight: {checks: {}, destinations: {}},
+    const results = await executeStages([stage], {writeJSON: atomicJSON, hashFile, workspace, artifacts, runId: "run-fixture", preflight: {checks: {}, destinations: {}},
         execute: async (_command, args) => { actual = args; return success(); }});
     assert.equal(results[0].status, "passed");
     assert.equal(actual[actual.indexOf("--scratch-dir") + 1], join(root, ".big-wallet-vm-scratch/run-fixture/approval.fixture"));

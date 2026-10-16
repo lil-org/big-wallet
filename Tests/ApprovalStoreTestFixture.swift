@@ -679,12 +679,14 @@ func walletSigningOutputForTesting(
 }
 
 func walletSigningResponseForTesting(
-    _ output: WalletSigningOutput
+    _ output: WalletSigningOutput,
+    permit: ExtensionBridge.ApprovedExecutionPermit
 ) throws -> ResponseToExtension {
-    guard case .response(let signed) = output else {
+    guard case .response(let completion) = output,
+          let response = completion.response(for: permit) else {
         throw WalletSigningFailure.invalidTransaction
     }
-    return signed.response
+    return response
 }
 
 @MainActor
@@ -695,7 +697,7 @@ func preparedBroadcastForTesting(
     guard case .broadcast(let signed) = try await walletSigningOutputForTesting(permit: permit, clock: clock) else {
         throw WalletSigningFailure.invalidTransaction
     }
-    return PreparedBroadcast(signed: signed)
+    return signed
 }
 
 @MainActor
@@ -798,11 +800,12 @@ private func signingOptionsForTesting(_ options: Solana.PreparedSendOptions) -> 
 
 func assertWalletSigningSuccessForTesting(
     _ result: Result<WalletSigningOutput, WalletSigningFailure>,
+    permit: ExtensionBridge.ApprovedExecutionPermit,
     account: WalletAccount,
     file: StaticString = #filePath,
     line: UInt = #line
 ) throws {
-    let response = try walletSigningResponseForTesting(result.get())
+    let response = try walletSigningResponseForTesting(result.get(), permit: permit)
     let signature = try XCTUnwrap(response.json["result"] as? String, file: file, line: line)
     switch account.coin {
     case .ethereum:

@@ -29,7 +29,7 @@ class SetupConstructionTests(unittest.TestCase):
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         for name, result in [('validate_vm', {}), ('check_capacity', None), ('build_tools', self.state / 'tools'),
-                             ('guest_tool_hashes', {}), ('configure_guest_hardware', None),
+                             ('bootstrap_tool_hashes', {}), ('configure_guest_hardware', None),
                              ('snapshot_source', {'sha256': 'a' * 64, 'commit': 'b' * 40}),
                              ('environment_attested', False), ('verify_setup_sources', None)]:
             self.stack.enter_context(patch.object(host, name, return_value=result))

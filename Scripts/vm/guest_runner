@@ -51,6 +51,6 @@ export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 if [ "$1" = --verify-session ]; then
     [ "${BW_TEST_VM_EXCHANGE:-}" = "$exchange" ] || fail 'A verified guest test invocation is required.'
     [ -n "${BW_TEST_VM_RUN_ID:-}" ] && [ "$BW_TEST_VM_RUN_ID" = "$(/usr/bin/plutil -extract runId raw -o - "$job")" ] || fail 'The active run identity does not match the staged job.'
-    exec /usr/local/bin/node /usr/local/libexec/big-wallet-vm/guest.mjs --verify-session --exchange "$exchange"
+    exec /usr/local/bin/node /usr/local/libexec/big-wallet-vm/guest_bootstrap.mjs --verify-session --exchange "$exchange"
 fi
-exec /usr/bin/caffeinate -dimsu /usr/local/bin/node /usr/local/libexec/big-wallet-vm/guest.mjs --exchange "$exchange"
+exec /usr/bin/caffeinate -dimsu /usr/local/bin/node /usr/local/libexec/big-wallet-vm/guest_bootstrap.mjs --exchange "$exchange"

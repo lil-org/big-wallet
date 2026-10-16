@@ -23,7 +23,7 @@ class SetupAccessTests(unittest.TestCase):
         self.run_id, self.exchange = host.new_exchange(self.state, 'setup')
         self.operation = {'runId': self.run_id, 'exchange': self.exchange, 'previousStops': [], 'monitorCalled': False}
         host.register_operation(self.state, self.vm, self.exchange, self.run_id, 'preparing')
-        self.tools = {'test_manifest.mjs': 'a' * 64}
+        self.tools = {'guest_bootstrap.mjs': 'a' * 64}
         self.record = {'vmId': 'fixture-vm', 'consoleUser': 'wallet-test'}
         self.request_id = '12345678-1234-1234-1234-123456789abc'
         self.config = {'consoleUser': 'wallet-test', 'autologin': {'passwordFile': 'account-password'},
@@ -95,7 +95,7 @@ class SetupAccessTests(unittest.TestCase):
                 patch.object(host, 'monitor_vm', side_effect=monitor or self.drive), \
                 patch.object(host, 'configure_guest_hardware'), patch.object(host, 'ensure_disk_idle'):
             return host.run_setup_doctor(self.args, self.state, self.vm, {}, self.operation, self.record,
-                self.config, self.state / 'tools', self.tools, self.source, None, host.runner_source_digest())
+                self.config, self.state / 'tools', self.tools, self.source, None, host.bootstrap_source_digest())
 
     def test_existing_keys_install_before_publishing_readiness_job(self):
         result, exchange = self.run_doctor()
@@ -255,7 +255,7 @@ class SetupAccessTests(unittest.TestCase):
                 self.assertNotIn('guestAccessID', self.record)
 
     def test_healthy_setup_refreshes_pinned_access_and_exchanges_without_reinstalling(self):
-        self.record.update({'runnerTools': self.tools, 'runnerSourceDigest': host.runner_source_digest(),
+        self.record.update({'bootstrapTools': self.tools, 'bootstrapSourceDigest': host.bootstrap_source_digest(),
                             'baseVerifiedAt': 'verified'})
         directory, password = host.guest_setup_password(self.module, self.state, self.record,
             self.config, self.exchange, None)

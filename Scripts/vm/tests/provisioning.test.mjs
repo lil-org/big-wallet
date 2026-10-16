@@ -1734,10 +1734,18 @@ test('installed Aqua supervisor remains idle until an explicit job launch', () =
     const serviceStart = source.indexOf('    const service = `gui/${uid}/${agentLabel}`;');
     const serviceEnd = source.indexOf('    console.log(', serviceStart);
     const commands = [];
-    vm.runInNewContext(source.slice(serviceStart, serviceEnd), {
+    const removed = [];
+    const install = replaceGuestAgentInstallation => vm.runInNewContext(source.slice(serviceStart, serviceEnd), {
         uid: 501, agentLabel: 'fixture-agent', agentPlist: '/fixture/agent.plist', replacements: [], check,
+        library: '/fixture/tools', path,
+        fs: {lstatSync: () => ({uid: 0, mode: 0o644, isFile: () => true, isSymbolicLink: () => false}),
+            rmSync: filename => { assert.equal(commands.length, 1); removed.push(filename); }},
         spawnSync: () => ({status: 1}), run: (_label, command, args) => commands.push([command, ...args]),
-        replaceGuestAgentInstallation: (_replacements, service) => service.start(),
+        replaceGuestAgentInstallation,
     });
+    assert.throws(() => install(() => { throw new Error('fixture installation failed'); }), /installation failed/);
+    assert.deepEqual(removed, []);
+    install((_replacements, service) => service.start());
     assert.deepEqual(commands, [['/bin/launchctl', 'bootstrap', 'gui/501', '/fixture/agent.plist']]);
+    assert.deepEqual(removed, ['guest.mjs', 'test_manifest.mjs', 'result_audit.mjs'].map(name => path.join('/fixture/tools', name)));
 });

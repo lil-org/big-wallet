@@ -311,8 +311,8 @@ class LifecycleTests(unittest.TestCase):
                                                (['--candidate'] if candidate else []))
                 host.atomic_json(self.root / ('candidate.json' if candidate else 'baseline.json'),
                                  {'sourceVM': recorded, 'baseVerifiedAt': 'fixture', 'environment': environment,
-                                  'runnerSourceDigest': 'fixture'})
-                with patch.object(host, 'runner_source_digest', return_value='fixture'), \
+                                  'bootstrapSourceDigest': 'fixture'})
+                with patch.object(host, 'bootstrap_source_digest', return_value='fixture'), \
                         patch.object(host, 'check_capacity', side_effect=host.RunnerError('fixture preparation reached')) as capacity:
                     with self.assertRaisesRegex(host.RunnerError, 'fixture preparation reached'):
                         host.run_tests(args, self.root, environment)

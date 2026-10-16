@@ -277,9 +277,7 @@ final class WalletsManager: NSObject {
         private var session: WalletPreviewSession?
         private var page = 0
         private var isLoading = false
-        private var isPagingEnabled = false
         private var hasLoadedAllPages = false
-        private var loadedCount = 0
         private var generation = 0
         private var lastPreview = ContinuousClock.now
         private var cancelWork: (@Sendable () -> Void)?
@@ -320,7 +318,6 @@ final class WalletsManager: NSObject {
             lastPreview = .now
             guard let (session, accounts) = result else { return nil }
             self.session = session
-            loadedCount = accounts.count
             page = 1
             return accounts
         }
@@ -331,18 +328,12 @@ final class WalletsManager: NSObject {
             cancelWork = nil
             page = 0
             isLoading = false
-            isPagingEnabled = false
             hasLoadedAllPages = false
             session = nil
-            loadedCount = 0
         }
 
-        func enablePaging() {
-            isPagingEnabled = true
-        }
-
-        func previewMoreIfNeeded() async -> (accounts: [WalletAccount], range: Range<Int>)? {
-            guard isPagingEnabled, let session, !isLoading, !hasLoadedAllPages else { return nil }
+        func previewMoreIfNeeded() async -> [WalletAccount]? {
+            guard let session, !isLoading, !hasLoadedAllPages else { return nil }
             isLoading = true
             let generation = generation
             let requestedPage = page
@@ -369,11 +360,9 @@ final class WalletsManager: NSObject {
             guard !Task.isCancelled else { return nil }
             guard let accounts else { return nil }
             lastPreview = .now
-            let previousCount = loadedCount
-            loadedCount += accounts.count
             hasLoadedAllPages = accounts.isEmpty
             page = requestedPage + 1
-            return (accounts, previousCount..<loadedCount)
+            return accounts
         }
     }
 }
