@@ -82,6 +82,118 @@ final class WireProtocolTests: XCTestCase {
         XCTAssertEqual(result["items"] as? [[String: String]], [["value": "original"]])
     }
 
+    func testNativeContextDetachesBrowserMetadataAndKeepsTheOSProfile() throws {
+        let profile = UUID()
+        let site = NSMutableDictionary(dictionary: ["host": "wallet.example", "configurationKey": "https://wallet.example"])
+        let document = NSMutableDictionary(dictionary: ["tabId": 9, "frameId": 0, "documentId": "browser-document"])
+        let context = NSMutableDictionary(dictionary: [
+            "source": "site", "privateBrowsing": false, "site": site, "document": document,
+        ])
+        let source = NSMutableDictionary(dictionary: [
+            "id": 1, "subject": "rpc", "workflowVersion": WireProtocol.workflowVersion,
+            "chainId": "0x1", "body": "{}", WireProtocol.nativeContextKey: context,
+        ])
+        let ingress = try XCTUnwrap(NativeRequestContext.extract(from: source, profileIdentifier: profile))
+        context["privateBrowsing"] = true
+        site["configurationKey"] = "https://other.example"
+        document["documentId"] = "different-document"
+        source["body"] = "changed"
+
+        XCTAssertFalse(ingress.context.privateBrowsing)
+        XCTAssertEqual(ingress.context.profileIdentifier, profile)
+        guard case .site(let identity, let browserDocument) = ingress.context.source else {
+            return XCTFail("Expected browser site context")
+        }
+        XCTAssertEqual(identity.host, "wallet.example")
+        XCTAssertEqual(identity.configurationKey, "https://wallet.example")
+        XCTAssertEqual(browserDocument.tabID, 9)
+        XCTAssertEqual(browserDocument.frameID, 0)
+        XCTAssertEqual(browserDocument.documentID, "browser-document")
+        XCTAssertEqual(ingress.message["body"] as? String, "{}")
+        XCTAssertNil(ingress.message[WireProtocol.nativeContextKey])
+        XCTAssertNotNil(WireProtocol.object(.nativeCommand, value: ingress.message.json))
+    }
+
+    func testNativeContextRejectsUnknownPrivacyAndWireProfileOverrides() throws {
+        XCTAssertNil(NativeRequestContext.extract(from: ["id": 1], profileIdentifier: nil))
+        for source in ["popup", "worker"] {
+            let missing: [String: Any] = ["source": source]
+            XCTAssertNil(NativeRequestContext.extract(from: [WireProtocol.nativeContextKey: missing], profileIdentifier: nil))
+            for invalid in [1, 0, "false", "unknown", NSNull()] as [Any] {
+                let context: [String: Any] = ["source": source, "privateBrowsing": invalid]
+                XCTAssertNil(NativeRequestContext.extract(from: [WireProtocol.nativeContextKey: context], profileIdentifier: nil))
+            }
+            for privacy in [true, false] {
+                let context: [String: Any] = ["source": source, "privateBrowsing": privacy]
+                let ingress = try XCTUnwrap(NativeRequestContext.extract(from: [WireProtocol.nativeContextKey: context], profileIdentifier: nil))
+                XCTAssertEqual(ingress.context.privateBrowsing, privacy)
+                XCTAssertEqual(ingress.context.source, source == "popup" ? .popup : .worker)
+                XCTAssertNil(ingress.context.profileIdentifier)
+                for field in ["profileIdentifier", "site", "document", "unexpected"] {
+                    var injected = context
+                    injected[field] = "untrusted"
+                    XCTAssertNil(NativeRequestContext.extract(from: [WireProtocol.nativeContextKey: injected], profileIdentifier: UUID()))
+                }
+            }
+        }
+    }
+
+    func testNativeSiteContextRequiresAConsistentSiteAndTopLevelDocument() throws {
+        let site: [String: Any] = ["host": "wallet.example", "configurationKey": "https://wallet.example"]
+        let context: [String: Any] = [
+            "source": "site", "privateBrowsing": false, "site": site,
+            "document": ["tabId": 9_007_199_254_740_991, "frameId": 0, "documentId": String(repeating: "a", count: 128)],
+        ]
+        XCTAssertNotNil(NativeRequestContext.extract(from: [WireProtocol.nativeContextKey: context], profileIdentifier: nil))
+        for field in ["site", "document", "privateBrowsing"] {
+            var missing = context
+            missing.removeValue(forKey: field)
+            XCTAssertNil(NativeRequestContext.extract(from: [WireProtocol.nativeContextKey: missing], profileIdentifier: nil))
+        }
+        for document: [String: Any] in [
+            ["tabId": -1, "frameId": 0], ["tabId": true, "frameId": 0],
+            ["tabId": 1.5, "frameId": 0], ["tabId": 9_007_199_254_740_992, "frameId": 0],
+            ["tabId": 1, "frameId": 1], ["tabId": 1, "frameId": false],
+            ["tabId": 1, "frameId": 0, "documentId": ""],
+            ["tabId": 1, "frameId": 0, "documentId": NSNull()],
+            ["tabId": 1, "frameId": 0, "documentId": String(repeating: "a", count: 129)],
+        ] {
+            var invalid = context
+            invalid["document"] = document
+            XCTAssertNil(NativeRequestContext.extract(from: [WireProtocol.nativeContextKey: invalid], profileIdentifier: nil))
+        }
+        for site: [String: Any] in [
+            ["host": "other.example", "configurationKey": "https://wallet.example"],
+            ["host": "wallet.example", "configurationKey": "https://wallet.example/path"],
+            ["host": "wallet.example", "configurationKey": "javascript:wallet.example"],
+        ] {
+            var invalid = context
+            invalid["site"] = site
+            XCTAssertNil(NativeRequestContext.extract(from: [WireProtocol.nativeContextKey: invalid], profileIdentifier: nil))
+        }
+    }
+
+    func testNativeContextExtractionPreservesOriginalFoundationKeyValidation() throws {
+        for fields in [
+            "\"configurationKey\":\"https://wallet.example\",\"configurationKey\":\"https://other.example\"",
+            "\"configurationKey\":\"https://other.example\",\"configurationKey\":\"https://wallet.example\"",
+        ] {
+            let data = Data("{\"__bwContext\":{\"source\":\"site\",\"privateBrowsing\":false,\"site\":{\"host\":\"wallet.example\",\(fields)},\"document\":{\"tabId\":1,\"frameId\":0}}}".utf8)
+            let source = try JSONSerialization.jsonObject(with: data)
+            XCTAssertNil(NativeRequestContext.extract(from: source, profileIdentifier: nil))
+        }
+    }
+
+    func testFlatNativeContextPreservesThePayloadDepthBudget() throws {
+        for depth in [WireProtocol.maximumJSONDepth, WireProtocol.maximumJSONDepth + 1] {
+            let payload = String(repeating: "[", count: depth - 1) + "null" + String(repeating: "]", count: depth - 1)
+            let data = Data("{\"__bwContext\":{\"source\":\"worker\",\"privateBrowsing\":false},\"payload\":\(payload)}".utf8)
+            let source = try JSONSerialization.jsonObject(with: data)
+            XCTAssertEqual(NativeRequestContext.extract(from: source, profileIdentifier: nil) != nil,
+                           depth <= WireProtocol.maximumJSONDepth)
+        }
+    }
+
     func testEveryNativeCommandFixtureAdaptsToItsDomainRequest() throws {
         for fixture in try fixtures() where fixture.message == .nativeCommand {
             let data = try JSONSerialization.data(withJSONObject: fixture.value)

@@ -277,7 +277,7 @@ export function generateCases({definition, fixtures, seed = 0xb16b00b5, iteratio
     }
     for (const [type, key, equivalent] of [
         ["SolanaConfiguration", "publicKey", "publicKey"],
-        ["RuntimeResponseRequest", "configurationKey", "configurationKey"],
+        ["TransportSiteIdentity", "configurationKey", "configurationKey"],
     ]) {
         const fixture = validFixtures.find(value => value.type === type);
         if (!fixture) { continue; }

@@ -45,8 +45,8 @@ test("configuration reads carry trusted tab identity", async () => {
         message.subject === "getLatestConfiguration"
     ), [{
         subject: "getLatestConfiguration",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
+        target: {tabId: 3, configurationKey: "https://wallet.example"},
+        __bwContext: {source: "popup", privateBrowsing: false},
         workflowVersion: 4,
     }]);
 });
@@ -69,9 +69,9 @@ test("popup approval and rejection use native directly", async () => {
     assert.deepEqual(harness.nativeMessages, [{
         subject: "approveRequest", id: 7, requestToken: request.requestToken,
         reviewToken: requestToken(101), payload: {cluster: "devnet"}, workflowVersion: 4,
-        __bwPrivateBrowsing: false,
+        __bwContext: {source: "popup", privateBrowsing: false},
     }, {subject: "rejectRequest", id: 7, requestToken: request.requestToken,
-        workflowVersion: 4, __bwPrivateBrowsing: false}]);
+        workflowVersion: 4, __bwContext: {source: "popup", privateBrowsing: false}}]);
 });
 
 test("pending and completed queue entries require exact trusted identities", () => {
@@ -267,7 +267,7 @@ test("update recovery reloads only the active tab on explicit Refresh", async ()
     await unknownQueue.get("idle-check-status").click();
     assert.deepEqual(unknownQueue.reloaded, []);
     assert.deepEqual(unknownQueue.tabMessages, []);
-    assert.equal(unknownQueue.lookups(), 0);
+    assert.equal(unknownQueue.lookups(), 1);
     assert.equal(unknownQueue.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 1);
 });
 
@@ -282,7 +282,7 @@ test("update recovery requires the exact stored tab identity at click", async ()
         await changed.get("idle-check-status").click();
         assert.deepEqual(changed.reloaded, []);
         assert.deepEqual(changed.tabMessages, []);
-        assert.equal(changed.lookups(), 1);
+        assert.equal(changed.lookups(), overrides.incognito === true ? 2 : 3);
         assert.equal(changed.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 1);
         assert.equal(changed.queue.tab.activeTab.id, changed.tab.id);
         assert.equal(changed.queue.tab.activeTab.url, changed.tab.url);
@@ -317,7 +317,7 @@ test("queue notifications win the click probe without clearing recovery", async 
     });
     await refresh;
     assert.deepEqual(raced.reloaded, []);
-    assert.equal(raced.lookups(), 1);
+    assert.equal(raced.lookups(), 2);
     assert.equal(raced.tabMessages.length, 1);
     assert.equal(raced.queue.tab.recoveryTab, recoveryTab);
     assert.equal(raced.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 1);
@@ -344,9 +344,97 @@ test("completed-response apply uses the exact worker contract", async () => {
     assert.equal(await harness.call("applyCompletedResponse", request), "failure");
     assert.deepEqual(harness.workerMessages[0], {
         subject: "applyCompletedResponse",
-        ...request,
+        id: request.id, configurationKey: request.configurationKey, requestToken: request.requestToken,
+        __bwContext: {source: "popup", privateBrowsing: false},
         workflowVersion: 4,
     });
+});
+
+test("popup wallet operations recheck privacy after a normal boot", async () => {
+    for (const change of [harness => { harness.tab.incognito = true; },
+        harness => { harness.browser.extension.inIncognitoContext = true; }]) {
+        const harness = popupHarness();
+        await harness.boot();
+        harness.clearMessages();
+        change(harness);
+        await harness.call("nativeMessage", "getPendingRequests", 7);
+        assert.deepEqual(harness.nativeMessages[0].__bwContext, {source: "popup", privateBrowsing: true});
+        assert.equal(harness.nativeMessages.length, 1);
+    }
+});
+
+test("unknown popup privacy blocks wallet transport without a window fallback", async () => {
+    const harness = popupHarness();
+    await harness.boot();
+    harness.clearMessages();
+    delete harness.tab.incognito;
+    harness.browser.windows = {getCurrent() { assert.fail("Unknown privacy must not trigger a fallback lookup"); }};
+    await assert.rejects(harness.call("nativeMessage", "getPendingRequests", 7), /context is unavailable/);
+    assert.equal(await harness.call("readLatestConfiguration", harness.tab), null);
+    assert.equal(await harness.call("applyCompletedResponse", completedResponse(7)), "failure");
+    assert.deepEqual(harness.nativeMessages, []);
+    assert.deepEqual(harness.workerMessages, []);
+});
+
+test("a private popup without an active tab keeps its explicit private context", async () => {
+    const harness = popupHarness();
+    harness.browser.extension.inIncognitoContext = true;
+    harness.browser.tabs.query = async () => [];
+    await harness.call("nativeMessage", "getPendingRequests", 7);
+    assert.deepEqual(harness.nativeMessages[0].__bwContext, {source: "popup", privateBrowsing: true});
+});
+
+test("popup commands and targets are captured before the privacy lookup", async () => {
+    const harness = popupHarness();
+    const lookup = deferred();
+    harness.browser.tabs.query = () => lookup.promise;
+    const payload = {cluster: "devnet"};
+    const target = {id: 3, configurationKey: "https://wallet.example"};
+    const completed = completedResponse(7);
+    const expectedCompleted = {...completed};
+    const approval = harness.call("nativeMessage", "approveRequest", 7, payload, requestToken(7), requestToken(101));
+    const configuration = harness.call("readLatestConfiguration", target);
+    const completion = harness.call("applyCompletedResponse", completed);
+    payload.cluster = "testnet";
+    target.configurationKey = "https://changed.example";
+    completed.id = 99;
+    completed.configurationKey = "https://changed.example";
+    completed.requestToken = requestToken(99);
+    lookup.resolve([harness.tab]);
+    await Promise.all([approval, configuration, completion]);
+    assert.deepEqual(harness.nativeMessages[0].payload, {cluster: "devnet"});
+    assert.deepEqual(harness.workerMessages.find(message => message.subject === "getLatestConfiguration").target,
+        {tabId: 3, configurationKey: "https://wallet.example"});
+    const applied = harness.workerMessages.find(message => message.subject === "applyCompletedResponse");
+    assert.equal(applied.id, expectedCompleted.id);
+    assert.equal(applied.configurationKey, expectedCompleted.configurationKey);
+    assert.equal(applied.requestToken, expectedCompleted.requestToken);
+});
+
+test("popup privacy is captured once after the current browser lookup", async () => {
+    const harness = popupHarness();
+    const lookup = deferred();
+    harness.browser.tabs.query = () => lookup.promise;
+    let reads = 0;
+    Object.defineProperty(harness.browser.extension, "inIncognitoContext", {
+        get() { reads += 1; return true; },
+    });
+    const pending = harness.call("nativeMessage", "getPendingRequests", 7);
+    assert.equal(reads, 0);
+    lookup.resolve([harness.tab]);
+    await pending;
+    assert.equal(reads, 1);
+    assert.deepEqual(harness.nativeMessages[0].__bwContext, {source: "popup", privateBrowsing: true});
+});
+
+test("known normal privacy permits the queue on an unsupported active URL", async () => {
+    const request = pendingRequest();
+    const harness = popupHarness({requests: [request]});
+    harness.tab.url = "about:blank";
+    await harness.boot();
+    assert.equal(harness.queue.tab.activeTab, null);
+    assert.equal(harness.controller.request.requestToken, request.requestToken);
+    assert.ok(harness.nativeMessages.every(message => message.__bwContext.privateBrowsing === false));
 });
 
 test("completed-response apply waits for the full native delivery round trip", async () => {
@@ -673,13 +761,13 @@ test("an invalidation before the empty-result close check prevents closure", asy
     const controller = harness.controller;
     harness.model.requests = [];
     let invalidated = false;
-    harness.handlers.worker = (message, fallback) => {
-        if (message.subject === "getLatestConfiguration" && !invalidated) {
+    harness.browser.tabs.query = () => {
+        if (harness.queue.presentation.kind === "idle" && !invalidated) {
             assert.equal(harness.queue.isEmpty, true);
             invalidated = true;
             harness.notify();
         }
-        return fallback(message);
+        return Promise.resolve([harness.tab]);
     };
     await controller.reconcile();
     await flushPopup();
@@ -1107,7 +1195,7 @@ test("full popup boot renders FIFO requests through the production controller", 
     assert.deepEqual(harness.nativeMessages.map(message => message.subject), [
         "getPendingRequests", "getApprovalState",
     ]);
-    assert.ok(harness.nativeMessages.every(message => message.__bwPrivateBrowsing === false));
+    assert.ok(harness.nativeMessages.every(message => message.__bwContext.source === "popup" && message.__bwContext.privateBrowsing === false));
 });
 
 test("malformed queue metadata fails closed without draining completed responses", async () => {
@@ -1303,7 +1391,7 @@ test("controller approval strips caller revisions and passwords at the native bo
             requestToken: request.requestToken,
             reviewToken: requestToken(101),
             payload: {},
-            __bwPrivateBrowsing: false,
+            __bwContext: {source: "popup", privateBrowsing: false},
             workflowVersion: 4,
         }]);
         assert.equal(harness.followUpTimerId(), null);
@@ -1327,7 +1415,7 @@ test("controller errors explicitly retry the visible request without entering th
         id: controller.request.id,
         workflowVersion: 4,
         requestToken: controller.request.requestToken,
-        __bwPrivateBrowsing: false,
+        __bwContext: {source: "popup", privateBrowsing: false},
     }]);
     assert.equal(controller.state.state, "review");
     assert.equal(harness.get("working-overlay").classList.contains("hidden"), true);
@@ -1503,7 +1591,7 @@ test("rejectable errors submit tokenless Reject without a refresh", async () => 
         id: controller.request.id,
         workflowVersion: 4,
         requestToken: controller.request.requestToken,
-        __bwPrivateBrowsing: false,
+        __bwContext: {source: "popup", privateBrowsing: false},
     }]);
     assert.equal(harness.followUpTimerId(), null);
     assert.equal(controller.state.state, "review");
@@ -1792,7 +1880,7 @@ test("keyboard slider input stays local and one terminal command adopts its rota
         requestToken: controller.request.requestToken,
         reviewToken: requestToken(101),
         payload: {interaction: "ended", value: 145},
-        __bwPrivateBrowsing: false,
+        __bwContext: {source: "popup", privateBrowsing: false},
     }]);
 
     gate.resolve(commandReply(transactionState(controller.request, {
@@ -2116,7 +2204,7 @@ test("transaction Retry sends one payload-free command bound to the visible revi
         workflowVersion: 4,
         requestToken: controller.request.requestToken,
         reviewToken: requestToken(101),
-        __bwPrivateBrowsing: false,
+        __bwContext: {source: "popup", privateBrowsing: false},
     }]);
 
     gate.resolve(commandReply(transactionState(controller.request, {
@@ -2297,7 +2385,7 @@ test("approval reads have one token-only shape for refresh and polling", async (
         id: controller.request.id,
         workflowVersion: 4,
         requestToken: controller.request.requestToken,
-        __bwPrivateBrowsing: false,
+        __bwContext: {source: "popup", privateBrowsing: false},
     })));
 });
 
@@ -2309,7 +2397,7 @@ test("an empty required account selection refreshes without retrying", async () 
     await harness.get("button-approve").click();
     assert.deepEqual(harness.nativeMessages, [{
         subject: "getApprovalState", id: request.id, workflowVersion: 4,
-        requestToken: request.requestToken, __bwPrivateBrowsing: false,
+        requestToken: request.requestToken, __bwContext: {source: "popup", privateBrowsing: false},
     }]);
     assert.deepEqual(harness.workerMessages, []);
 });
@@ -2662,7 +2750,14 @@ test("late idle status lookups probes and reloads cannot replace an active reque
                 reloads += 1;
                 return stage === "reload" ? gate.promise : Promise.resolve();
             };
-            if (stage === "query") { harness.browser.tabs.query = () => gate.promise; }
+            if (stage === "query") {
+                let firstQuery = true;
+                harness.browser.tabs.query = () => {
+                    if (!firstQuery) { return Promise.resolve([harness.tab]); }
+                    firstQuery = false;
+                    return gate.promise;
+                };
+            }
             if (stage === "probe") { harness.handlers.tab = () => gate.promise; }
             const refreshing = harness.queue.refreshIdleStatus();
             await flushPopup();
@@ -2719,7 +2814,14 @@ test("a new empty idle presentation releases Refresh without disturbing its next
                 reloads += 1;
                 return oldGate.promise;
             };
-            if (stage === "query") { harness.browser.tabs.query = () => oldGate.promise; }
+            if (stage === "query") {
+                let firstQuery = true;
+                harness.browser.tabs.query = () => {
+                    if (!firstQuery) { return Promise.resolve([harness.tab]); }
+                    firstQuery = false;
+                    return oldGate.promise;
+                };
+            }
             if (stage === "probe") { harness.handlers.tab = () => oldGate.promise; }
             const oldRefresh = harness.queue.refreshIdleStatus();
             await flushPopup();

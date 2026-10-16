@@ -53,7 +53,7 @@ class PopupQueueController {
     constructor() {
         this.tab = {
             activeTab: null,
-            privateBrowsing: extensionPrivateBrowsing(),
+            privateBrowsing: null,
             recoveryTab: null,
         };
         this.revision = 0;
@@ -87,7 +87,9 @@ class PopupQueueController {
     }
 
     get privateBrowsing() {
-        return this.tab.activeTab?.incognito ?? this.tab.privateBrowsing;
+        return BigWalletBridgeWire.popupNativeContext(
+            {incognito: this.tab.privateBrowsing}, extensionPrivateBrowsing()
+        )?.privateBrowsing ?? null;
     }
 
     get isFresh() { return this.snapshot.revision === this.revision; }
@@ -104,7 +106,7 @@ class PopupQueueController {
 
     get canSwitchAccount() {
         return this.presentation.kind === "idle" && this.presentation.operation === null &&
-            !this.privateBrowsing && this.tab.activeTab !== null &&
+            this.privateBrowsing === false && this.tab.activeTab !== null &&
             this.tab.recoveryTab === null && this.isEmpty && this.refresh.kind === "idle";
     }
 
@@ -1023,11 +1025,16 @@ class PopupRequestController {
 }
 
 function extensionPrivateBrowsing() {
-    return browser.extension?.inIncognitoContext === true;
+    return browser.extension?.inIncognitoContext;
 }
 
 function currentPrivateBrowsing() {
-    return popupQueue?.privateBrowsing ?? extensionPrivateBrowsing();
+    return popupQueue?.privateBrowsing ?? (extensionPrivateBrowsing() === true ? true : null);
+}
+
+async function captureNativeContext() {
+    const tab = await readActiveTab();
+    return BigWalletBridgeWire.popupNativeContext(tab, extensionPrivateBrowsing());
 }
 
 function sendRawNativeMessage(message) {
@@ -1039,7 +1046,7 @@ var sendTrustedNativeMessage =
         sendRawNativeMessage,
     });
 
-function nativeMessage(
+async function nativeMessage(
     subject,
     id,
     payload,
@@ -1069,7 +1076,11 @@ function nativeMessage(
     if (typeof payload !== "undefined") {
         message.payload = payload;
     }
-    return sendTrustedNativeMessage(message, currentPrivateBrowsing());
+    const command = decodeWireMessage("NativeCommand", message);
+    if (!command) { return Promise.reject(new TypeError("Invalid native request")); }
+    const context = await captureNativeContext();
+    if (!context) { return Promise.reject(new TypeError("Native request context is unavailable")); }
+    return sendTrustedNativeMessage(command, context);
 }
 
 async function settleNativeMessage(pendingResponse, nativeOperation = false) {
@@ -1154,64 +1165,32 @@ function applyLayoutDirection(direction) {
     }
 }
 
-function privateBrowsingForTab(tab, windowIncognito) {
-    return typeof tab?.incognito === "boolean"
-        ? tab.incognito
-        : typeof windowIncognito === "boolean"
-            ? windowIncognito
-            : true;
-}
-
-function tabIdentity(tab, windowIncognito) {
+function tabIdentity(tab, privateContext) {
     if (!tab || tab.id == null || typeof tab.url !== "string") { return null; }
     const identity = configurationIdentityForURL(tab.url);
-    const incognito = privateBrowsingForTab(tab, windowIncognito);
+    const privacy = BigWalletBridgeWire.privacyForTab(tab, privateContext);
+    const incognito = privacy === "unknown" ? null : privacy === "private";
     return identity ? { id: tab.id, incognito, url: tab.url, ...identity } : null;
 }
 
-async function currentActiveTab() {
-    const lookupDeadline = Date.now() + NATIVE_MESSAGE_TIMEOUT;
+async function readActiveTab() {
     let tabs;
     let pendingTabs;
-    let tabsLookupTimedOut = false;
     try {
         pendingTabs = browser.tabs.query({ active: true, currentWindow: true });
     } catch {}
     if (pendingTabs) {
-        const outcome = await settleExtensionMessage(
-            pendingTabs,
-            Math.max(0, lookupDeadline - Date.now())
-        );
-        tabsLookupTimedOut = outcome.status === "timeout";
+        const outcome = await settleExtensionMessage(pendingTabs);
         tabs = outcome.status === "response" ? outcome.response : null;
     }
-    const tab = Array.isArray(tabs) ? tabs[0] : null;
-    if (typeof tab?.incognito === "boolean") {
-        return {activeTab: tabIdentity(tab), privateBrowsing: tab.incognito};
-    }
-    let windowIncognito;
-    if (!tabsLookupTimedOut && browser.windows &&
-        typeof browser.windows.getCurrent === "function") {
-        let pendingWindow;
-        try {
-            pendingWindow = browser.windows.getCurrent();
-        } catch {
-            windowIncognito = true;
-        }
-        if (typeof windowIncognito !== "boolean") {
-            const outcome = await settleExtensionMessage(
-                pendingWindow,
-                Math.max(0, lookupDeadline - Date.now())
-            );
-            windowIncognito = outcome.status === "response" &&
-                typeof outcome.response?.incognito === "boolean"
-                ? outcome.response.incognito
-                : true;
-        }
-    }
+    return Array.isArray(tabs) ? tabs[0] : null;
+}
+
+async function currentActiveTab() {
+    const tab = await readActiveTab();
     return {
-        activeTab: tabIdentity(tab, windowIncognito),
-        privateBrowsing: privateBrowsingForTab(tab, windowIncognito),
+        activeTab: tabIdentity(tab, extensionPrivateBrowsing()),
+        privateBrowsing: typeof tab?.incognito === "boolean" ? tab.incognito : null,
     };
 }
 
@@ -1302,12 +1281,16 @@ function notifyResponseReadyIds(ids) {
 }
 
 async function readLatestConfiguration(tab) {
+    const target = decodeWireMessage("PopupTabTarget", {tabId: tab.id, configurationKey: tab.configurationKey});
+    if (!target) { return null; }
+    const nativeContext = await captureNativeContext();
+    if (!nativeContext) { return null; }
     let pending;
     try {
         pending = browser.runtime.sendMessage({
             subject: "getLatestConfiguration",
-            host: tab.host,
-            configurationKey: tab.configurationKey,
+            target,
+            [BigWalletBridgeWire.NATIVE_CONTEXT_KEY]: nativeContext,
             workflowVersion: WORKFLOW_VERSION,
         });
     } catch {
@@ -1429,14 +1412,17 @@ function canSubmitDecision(subject, state) {
 }
 
 async function applyCompletedResponse(request) {
+    const {id, configurationKey, requestToken} = request;
+    const nativeContext = await captureNativeContext();
+    if (!nativeContext) { return "failure"; }
     let pending;
     try {
         pending = browser.runtime.sendMessage({
             subject: "applyCompletedResponse",
-            id: request.id,
-            host: request.host,
-            configurationKey: request.configurationKey,
-            requestToken: request.requestToken,
+            id,
+            configurationKey,
+            requestToken,
+            [BigWalletBridgeWire.NATIVE_CONTEXT_KEY]: nativeContext,
             workflowVersion: WORKFLOW_VERSION,
         });
     } catch {
@@ -1446,7 +1432,7 @@ async function applyCompletedResponse(request) {
     if (outcome.status !== "response") { return "failure"; }
     const reply = decodeWireMessage("RuntimeApplyCompletedReply", outcome.response);
     if (reply?.applied === true) { return "applied"; }
-    if (reply?.id === request.id && reply.missing === true) { return "missing"; }
+    if (reply?.id === id && reply.missing === true) { return "missing"; }
     return "failure";
 }
 

@@ -76,6 +76,7 @@ test("production startup fails when a bound control is absent from the actual ma
 
 test("markup script order boots and localizes both named and unnamed controls", async () => {
     const harness = createPopupHarness({
+        tab: {id: 3, url: "https://wallet.example/path", incognito: false},
         native: () => ({
             requests: [], completedResponses: [],
             strings: {gasPrice: "Localized gas price", ok: "Localized OK"},

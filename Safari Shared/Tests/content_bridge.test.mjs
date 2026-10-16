@@ -1033,8 +1033,8 @@ test("enqueues a trusted transient request with one generated attempt", async ()
     const enqueue = harness.runtimeMessages.find(message => {
         return message.subject === "message-to-wallet";
     });
-    assert.equal(enqueue.host, "wallet.example");
-    assert.equal(enqueue.configurationKey, "https://wallet.example");
+    assert.equal(Object.hasOwn(enqueue, "host"), false);
+    assert.equal(Object.hasOwn(enqueue, "configurationKey"), false);
     assert.match(enqueue.enqueueAttempt, /^[0-9a-f]{32}$/);
     assert.equal(
         enqueue.admissionDeadline - harness.now(),
@@ -1928,8 +1928,8 @@ test("relays correlated disconnects with trusted page identity", async () => {
     const disconnect = harness.runtimeMessages.find(message => {
         return message.subject === "disconnect";
     });
-    assert.equal(disconnect.host, "wallet.example");
-    assert.equal(disconnect.configurationKey, "https://wallet.example");
+    assert.equal(Object.hasOwn(disconnect, "host"), false);
+    assert.equal(Object.hasOwn(disconnect, "configurationKey"), false);
     assert.equal(harness.postedMessages.at(-1).message.response.result, null);
     const before = harness.postedMessages.length;
     harness.context.bigWalletPublishConfiguration({context: "a".repeat(64), revisions: {ethereum: 0, solana: 0}, ethereum: {address: "0x0000000000000000000000000000000000000001", chainId: "0x1"}, solana: null}, "https://wallet.example", harness.generation());
@@ -2088,8 +2088,6 @@ test("manual switch intent forwards exact trusted identity and worker status", a
         assert.deepEqual(harness.runtimeMessages.filter(message =>
             message.subject === "manualSwitchIntent"
         ), [{
-            configurationKey: "https://wallet.example",
-            host: "wallet.example",
             subject: "manualSwitchIntent",
             workflowVersion: 4,
         }]);
@@ -2192,7 +2190,7 @@ test("file pages use a query-and-fragment-free configuration identity", async ()
     const enqueue = harness.runtimeMessages.find(message => {
         return message.subject === "message-to-wallet";
     });
-    assert.equal(enqueue.configurationKey, "file:///tmp/dapp.html");
+    assert.equal(Object.hasOwn(enqueue, "configurationKey"), false);
 });
 
 test("response polling delivers a terminal payload without another worker operation", async () => {
@@ -2220,7 +2218,7 @@ test("response polling delivers a terminal payload without another worker operat
     assert.equal(harness.pendingTimers(), 0);
     const query = harness.runtimeMessages.at(-1);
     assert.deepEqual(Object.keys(query).sort(), [
-        "configurationKey", "id", "requestToken", "subject", "workflowVersion",
+        "id", "requestToken", "subject", "workflowVersion",
     ]);
 });
 
@@ -2248,7 +2246,7 @@ test("response polling retries the same identity and waits for the explicit deli
     assert.equal(harness.runtimeMessages.filter(value => value.subject === "getResponse").length, 2);
     for (const completion of harness.runtimeMessages.filter(value => value.subject === "getResponse")) {
         assert.equal(completion.requestToken, requestToken);
-        assert.equal(completion.configurationKey, "https://wallet.example");
+        assert.equal(Object.hasOwn(completion, "configurationKey"), false);
         assert.equal("revisions" in completion, false);
     }
     await harness.dispatchRuntime({subject: "responseReady", id: 7, workflowVersion: 4});

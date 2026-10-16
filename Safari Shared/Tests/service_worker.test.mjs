@@ -59,6 +59,7 @@ function makeHarness({
     openPopupRejects = false,
     privateBrowsing = false,
     queryTabs,
+    getTab = id => ({id, url: "https://wallet.example/dapp", incognito: false}),
     runtimeSendMessage,
     scheduleTimeout,
     sendTabMessage,
@@ -220,6 +221,7 @@ function makeHarness({
             },
         },
         tabs: {
+            get(id) { return Promise.resolve(getTab(id)); },
             onUpdated: {addListener(value) { tabUpdatedListener = value; }},
             onRemoved: {addListener(value) { tabRemovedListener = value; }},
             query() {
@@ -373,8 +375,6 @@ function request(id = 7, overrides = {}) {
             body: {address: "", chainId: "0x1"},
             ...messageOverrides,
         },
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
         enqueueAttempt: attempt,
         workflowVersion: 4,
         ...requestOverrides,
@@ -384,8 +384,6 @@ function request(id = 7, overrides = {}) {
 function manualSwitchIntent(overrides = {}) {
     return {
         subject: "manualSwitchIntent",
-        host: "wallet.example",
-        configurationKey: "https://wallet.example",
         workflowVersion: 4,
         ...overrides,
     };
@@ -428,10 +426,16 @@ function popupSender(overrides = {}) {
     return {id: "extension-id", url: "safari-web-extension://extension-id/popup.html", ...overrides};
 }
 function configurationRequest() {
-    return {subject: "getLatestConfiguration", host: "wallet.example", configurationKey: "https://wallet.example", workflowVersion: 4};
+    return {subject: "getLatestConfiguration", workflowVersion: 4};
+}
+function popupConfigurationRequest(tabId = 9, configurationKey = "https://wallet.example") {
+    return {...configurationRequest(), target: {tabId, configurationKey},
+        __bwContext: {source: "popup", privateBrowsing: false}};
 }
 function responseRequest(subject = "getResponse") {
-    return {subject, id: 7, configurationKey: "https://wallet.example", requestToken, workflowVersion: 4};
+    return {subject, id: 7, requestToken, workflowVersion: 4,
+        ...(subject === "applyCompletedResponse" ? {configurationKey: "https://wallet.example",
+            __bwContext: {source: "popup", privateBrowsing: false}} : {})};
 }
 function delivery(id = 7, state = snapshot(), result = []) {
     return {id, state, response: nativeResult({id, name: "requestAccounts", provider: "ethereum", result})};
@@ -472,6 +476,7 @@ test("unreadable browser records cannot block configuration or account switching
     }]));
     for (let restart = 0; restart < 2; restart += 1) {
         const harness = makeHarness({storage,
+            getTab: id => ({id, url: `${origins[id - 9]}/dapp`, incognito: false}),
             storageGet: (keys, values) => {
                 assert.equal(keys, "workflowUpdateRecoveryNeeded");
                 return values;
@@ -489,13 +494,14 @@ test("unreadable browser records cannot block configuration or account switching
         });
         await settle();
         for (const [index, origin] of origins.entries()) {
-            const identity = {configurationKey: origin, host: new URL(origin).host};
             const sender = contentSender({id: index + 9, url: `${origin}/dapp`});
             for (const configurationSender of [sender, popupSender()]) {
-                assert.deepEqual(clone(await harness.dispatch({...configurationRequest(), ...identity}, configurationSender)),
+                const command = configurationSender === sender ? configurationRequest()
+                    : popupConfigurationRequest(index + 9, origin);
+                assert.deepEqual(clone(await harness.dispatch(command, configurationSender)),
                     {kind: "configuration", state: states.get(origin)});
             }
-            const response = await harness.dispatch(manualSwitchIntent(identity), sender);
+            const response = await harness.dispatch(manualSwitchIntent(), sender);
             assert.equal(response.subject, "manualSwitchAcknowledged");
             assert.equal(response.configurationKey, origin);
             assert.equal(response.approvalRequired, true);
@@ -520,6 +526,88 @@ test("every bootstrap reaches native, including same-origin callers sharing a wo
     assert.equal(second.state.context, "b".repeat(64));
 });
 
+test("RPC carries immutable browser-derived site and document provenance", async () => {
+    const harness = makeHarness({native: message => ({id: message.id, result: "0x1"})});
+    const sender = {...contentSender(), origin: "https://wallet.example", documentId: "document-one"};
+    const pending = harness.dispatch({subject: "rpc", id: 7, body: "{}", chainId: "0x1", workflowVersion: 4}, sender);
+    sender.url = "https://changed.example";
+    sender.tab.id = 99;
+    sender.tab.incognito = true;
+    sender.documentId = "document-two";
+    assert.equal((await pending).kind, "result");
+    assert.deepEqual(harness.nativeMessages[0].message.__bwContext, {
+        source: "site", privateBrowsing: false,
+        site: {host: "wallet.example", configurationKey: "https://wallet.example"},
+        document: {tabId: 9, frameId: 0, documentId: "document-one"},
+    });
+});
+
+test("unknown content privacy never reaches native wallet operations", async () => {
+    for (const incognito of [undefined, null, "false"]) {
+        const harness = makeHarness({native: () => assert.fail("Unknown content privacy reached native")});
+        const sender = contentSender({incognito});
+        assert.equal((await harness.dispatch(configurationRequest(), sender)).kind, "configurationError");
+        assert.equal((await harness.dispatch(request(), sender)).kind, "error");
+        assert.equal((await harness.dispatch({subject: "rpc", id: 7, body: "{}", chainId: "0x1", workflowVersion: 4}, sender)).kind, "error");
+        assert.equal(await harness.dispatch(responseRequest(), sender), undefined);
+        assert.equal(await harness.dispatch(manualSwitchIntent(), sender), undefined);
+        assert.equal(await harness.dispatch({subject: "disconnect", id: 7, provider: "ethereum", attempt,
+            authority: request().authority, workflowVersion: 4}, sender), undefined);
+        assert.deepEqual(harness.nativeMessages, []);
+    }
+    const harness = makeHarness();
+    const sender = {...contentSender(), incognito: "false"};
+    assert.equal(await harness.dispatch(configurationRequest(), sender), undefined);
+    assert.deepEqual(harness.nativeMessages, []);
+});
+
+test("content cannot provide native provenance or duplicate site identity", async () => {
+    const harness = makeHarness();
+    for (const fields of [
+        {host: "wallet.example"}, {configurationKey: "https://wallet.example"},
+        {__bwContext: {source: "popup", privateBrowsing: false}},
+    ]) {
+        assert.equal(await harness.dispatch({...configurationRequest(), ...fields}), undefined);
+        assert.equal(await harness.dispatch(request(7, fields)), undefined);
+    }
+    assert.deepEqual(harness.nativeMessages, []);
+});
+
+test("popup configuration revalidates its selected target without impersonating the site", async () => {
+    const harness = makeHarness();
+    assert.equal((await harness.dispatch(popupConfigurationRequest(), popupSender())).kind, "configuration");
+    assert.deepEqual(harness.nativeMessages[0].message.__bwContext, {source: "popup", privateBrowsing: false});
+    assert.equal(harness.nativeMessages[0].message.configurationKey, "https://wallet.example");
+    for (const tab of [
+        {id: 9, url: "https://changed.example", incognito: false},
+        {id: 9, url: "https://wallet.example", incognito: true},
+        {id: 9, url: "https://wallet.example"},
+        {id: 8, url: "https://wallet.example", incognito: false},
+        null,
+    ]) {
+        const invalid = makeHarness({getTab: () => tab});
+        assert.equal((await invalid.dispatch(popupConfigurationRequest(), popupSender())).kind, "configurationError");
+        assert.deepEqual(invalid.nativeMessages, []);
+    }
+    for (const context of [undefined, {source: "worker", privateBrowsing: false}]) {
+        const invalid = makeHarness();
+        assert.equal(await invalid.dispatch({...popupConfigurationRequest(), __bwContext: context}, popupSender()), undefined);
+        assert.deepEqual(invalid.nativeMessages, []);
+    }
+});
+
+test("worker recovery uses its own known privacy independently of tabs", async () => {
+    const normal = makeHarness({tabs: [], queryTabs: () => assert.fail("Empty recovery must not inspect tabs")});
+    await settle();
+    assert.deepEqual(normal.recoveryMessages[0].message.__bwContext, {source: "worker", privateBrowsing: false});
+    for (const workerPrivateBrowsing of [true, null, "false"]) {
+        const blocked = makeHarness({workerPrivateBrowsing});
+        await settle();
+        assert.deepEqual(blocked.recoveryMessages, []);
+        assert.deepEqual(blocked.nativeMessages, []);
+    }
+});
+
 test("cold native unavailability never becomes an empty grant", async () => {
     for (const native of [() => undefined, () => { throw new Error("offline"); }, message => ({id: message.id, unavailable: true})]) {
         const harness = makeHarness({native});
@@ -536,7 +624,8 @@ test("admission relays native authority preconditions and obtains native ACK", a
     assert.deepEqual(message.authority, request().authority);
     assert.equal(message.host, "wallet.example");
     assert.equal(message.configurationKey, "https://wallet.example");
-    assert.equal(message.__bwPrivateBrowsing, false);
+    assert.deepEqual(message.__bwContext, {source: "site", privateBrowsing: false,
+        site: {host: "wallet.example", configurationKey: "https://wallet.example"}, document: {tabId: 9, frameId: 0}});
     assert.equal(Object.hasOwn(message, "revisions"), false);
     assert.equal(Object.hasOwn(message, "replayOnly"), false);
     assert.equal(harness.popupCalls.length, 1);
@@ -815,7 +904,7 @@ test("disconnect relays the exact idempotent native CAS and invalidates only on 
     const state = snapshot({revisions: {ethereum: 2, solana: 0}});
     const harness = makeHarness({native: message => ({id: message.id, state, revoked: true})});
     const response = await harness.dispatch({subject: "disconnect", id: 7, provider: "ethereum", attempt,
-        authority: request().authority, host: "wallet.example", configurationKey: "https://wallet.example", workflowVersion: 4});
+        authority: request().authority, workflowVersion: 4});
     assert.equal(response.kind, "result");
     assert.equal(harness.nativeMessages.at(-1).message.attempt, attempt);
     assert.deepEqual(harness.nativeMessages.at(-1).message.authority, request().authority);
@@ -827,7 +916,7 @@ test("stale native disconnect returns current state without inventing authority"
     const state = snapshot({revisions: {ethereum: 2, solana: 0}});
     const harness = makeHarness({native: message => ({id: message.id, state, stale: true})});
     const response = await harness.dispatch({subject: "disconnect", id: 7, provider: "ethereum", attempt,
-        authority: request().authority, host: "wallet.example", configurationKey: "https://wallet.example", workflowVersion: 4});
+        authority: request().authority, workflowVersion: 4});
     assert.equal(response.error.code, 4100);
     assert.deepEqual(clone(response.state), state);
     assert.equal(harness.nativeMessages.length, 1);
@@ -835,7 +924,7 @@ test("stale native disconnect returns current state without inventing authority"
 
 test("popup completion does not accept browser revision or deadline authority", async () => {
     const harness = makeHarness({native: () => delivery()});
-    const command = {...responseRequest("applyCompletedResponse"), host: "wallet.example"};
+    const command = responseRequest("applyCompletedResponse");
     assert.deepEqual(clone(await harness.dispatch(command, popupSender())), {applied: true});
     assert.equal(harness.pollMessages[0].message.maintenance, "none");
     assert.deepEqual(harness.nativeMessages.map(value => value.message.subject), ["pollResponse", "acknowledgeResponse"]);
@@ -953,7 +1042,8 @@ test("live content polls permit exact native redelivery at most once every thirt
     assert.deepEqual(harness.pollMessages[1].message, {
         subject: "pollResponse", id: descriptor.id, requestToken: descriptor.requestToken,
         configurationKey: descriptor.configurationKey, workflowVersion: 4,
-        maintenance: "interactive", __bwPrivateBrowsing: false,
+        maintenance: "interactive", __bwContext: {source: "site", privateBrowsing: false,
+            site: {host: "wallet.example", configurationKey: "https://wallet.example"}, document: {tabId: 9, frameId: 0}},
     });
     now += 29_999;
     assert.deepEqual(clone(await harness.dispatch(responseRequest("getResponse"))), {id: 7, pending: true});
@@ -968,7 +1058,7 @@ test("live content polls permit exact native redelivery at most once every thirt
 test("unauthorized and malformed status polls never enable native redelivery", async () => {
     for (const [command, sender] of [
         [responseRequest("getResponse"), popupSender()],
-        [responseRequest("getResponse"), contentSender({url: "https://other.example"})],
+        [{...responseRequest("getResponse"), configurationKey: "https://other.example"}, contentSender()],
         [responseRequest("getResponse"), contentSender({incognito: true})],
         [{...responseRequest("getResponse"), requestToken: "invalid"}, contentSender()],
         ...["none", "quiet", "interactive"].map(maintenance => [
@@ -1224,7 +1314,7 @@ test("released pages get a reload error without reading old grants", async () =>
 
 test("toolbar does not dispatch when the platform uses its configured popup", async () => {
     const harness = makeHarness({native: () => assert.fail("popup owns the toolbar")});
-    await harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/dapp"})');
+    await harness.read('handleToolbarClick({id: 3, incognito: false, url: "https://wallet.example/dapp"})');
     assert.deepEqual(harness.tabMessages, []);
     assert.deepEqual(harness.nativeMessages, []);
     assert.deepEqual(harness.titles, []);
@@ -1241,7 +1331,7 @@ test("all runtime routes enforce their sender matrix before effects", async () =
     const commands = [
         [request(), ["content"]], [configurationRequest(), ["content", "popup"]],
         [responseRequest(), ["content"]], [responseRequest("consumeResponse"), []],
-        [{...responseRequest("applyCompletedResponse"), host: "wallet.example"}, ["popup"]],
+        [responseRequest("applyCompletedResponse"), ["popup"]],
         [{subject: "responseReady", ids: [7], workflowVersion: 4}, ["popup"]],
         [{subject: "updatePendingRequestBadge", hasPendingRequests: true, workflowVersion: 4}, ["popup"]],
         [manualSwitchIntent(), ["content"]],
@@ -1322,7 +1412,7 @@ test("toolbar opens account selection without depending on page content or its i
             assert.equal(message.configurationKey, "https://wallet.example");
             return {id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state: snapshot()};
         }});
-        await harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/path"})');
+        await harness.read('handleToolbarClick({id: 3, incognito: false, url: "https://wallet.example/path"})');
         assert.deepEqual(harness.tabMessages, []);
         assert.deepEqual(harness.nativeMessages.map(value => value.message.subject || value.message.name), [
             "getLatestConfiguration", "switchAccount", "showApproval",
@@ -1335,11 +1425,20 @@ test("toolbar private and unidentifiable tabs never ask content for an account",
     for (const tab of [{id: 3, url: "https://wallet.example", incognito: true}, {id: 3, url: "about:blank"},
         {url: "https://wallet.example"}, {id: -1, url: "https://wallet.example"}]) {
         const harness = makeHarness({configuredPopup: false});
-        harness.clickToolbar(tab);
+        harness.clickToolbar({incognito: false, ...tab});
         await settle();
         assert.equal(harness.tabMessages.length, 0);
         assert.equal(harness.nativeMessages.at(-1).message.subject, "openApp");
-        assert.equal(harness.nativeMessages.at(-1).message.__bwPrivateBrowsing, tab.incognito === true);
+        assert.equal(harness.nativeMessages.at(-1).message.__bwContext.privateBrowsing, tab.incognito === true);
+    }
+});
+
+test("toolbar unknown privacy fails before configuration or app launch", async () => {
+    for (const incognito of [undefined, null, "false"]) {
+        const harness = makeHarness({configuredPopup: false});
+        await harness.read(`handleToolbarClick(${JSON.stringify({id: 3, url: "https://wallet.example", incognito})})`);
+        assert.deepEqual(harness.nativeMessages, []);
+        assert.equal(harness.badgeDetails.at(-1).text, "!");
     }
 });
 
@@ -1354,7 +1453,7 @@ test("toolbar derives the request identity from the tab URL", async () => {
             assert.equal(message.configurationKey, configurationKey);
             return {id: message.id, admissionKind: "new", approvalRequired: false, requestToken, state: snapshot()};
         }});
-        await harness.read(`handleToolbarClick(${JSON.stringify(tab)})`);
+        await harness.read(`handleToolbarClick(${JSON.stringify({incognito: false, ...tab})})`);
         assert.deepEqual(harness.badgeDetails.at(-1), {tabId: 3, text: null});
     }
 });
@@ -1555,7 +1654,7 @@ test("toolbar reports changed authority without readmitting or opening the gener
             return manualSwitchDenial(message.id, current);
         },
     });
-    await harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/dapp"})');
+    await harness.read('handleToolbarClick({id: 3, incognito: false, url: "https://wallet.example/dapp"})');
     assert.equal(admissions.length, 1);
     assert.equal(admissions[0].admissionDeadline, admissionDeadline);
     assert.deepEqual(harness.nativeMessages.map(value => value.message.subject || value.message.name), [
@@ -1584,7 +1683,7 @@ test("toolbar waits for native launch overhead beyond the five-second native lau
             }), 6_000));
         },
     });
-    const pending = harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/dapp"})');
+    const pending = harness.read('handleToolbarClick({id: 3, incognito: false, url: "https://wallet.example/dapp"})');
     await settle();
     const [id, timer] = [...timers].sort((left, right) => left[1].delay - right[1].delay)[0];
     timers.delete(id);
@@ -1614,7 +1713,7 @@ test("toolbar retries failed presentation using the exact admitted handle", asyn
             assert.equal(message.name, "switchAccount");
             return {id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state: snapshot()};
         }});
-        await harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/dapp"})');
+        await harness.read('handleToolbarClick({id: 3, incognito: false, url: "https://wallet.example/dapp"})');
         assert.equal(presentations.length, 2);
         assert.deepEqual(presentations[0], presentations[1]);
         assert.equal(harness.nativeMessages.filter(value => value.message.name === "switchAccount").length, 1);
@@ -1644,7 +1743,7 @@ test("toolbar presentation accepts an exact request already executing or complet
                 assert.equal(message.name, "switchAccount");
                 return {id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state: snapshot()};
             }});
-            await harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/dapp"})');
+            await harness.read('handleToolbarClick({id: 3, incognito: false, url: "https://wallet.example/dapp"})');
             await settle();
             assert.equal(harness.nativeMessages.filter(value => value.message.subject === "showApproval").length, 1);
             assert.equal(harness.nativeMessages.some(value => value.message.subject === "pollResponse"), status === "ready");
@@ -1665,7 +1764,7 @@ test("toolbar reports exhausted presentation failure per tab and a subsequent cl
             return {id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state: snapshot()};
         },
     });
-    await harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/dapp"})');
+    await harness.read('handleToolbarClick({id: 3, incognito: false, url: "https://wallet.example/dapp"})');
     assert.equal(harness.nativeMessages.filter(value => value.message.subject === "showApproval").length, 2);
     assert.equal(harness.nativeMessages.some(value => value.message.subject === "openApp"), false);
     assert.deepEqual(harness.badgeDetails.filter(value => value.tabId === 3).at(-1), {tabId: 3, text: "!"});
@@ -1675,7 +1774,7 @@ test("toolbar reports exhausted presentation failure per tab and a subsequent cl
     await settle();
     assert.deepEqual(harness.badgeDetails.filter(value => value.tabId === 3).at(-1), {tabId: 3, text: "!"});
     opened = true;
-    const nextClick = harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/dapp"})');
+    const nextClick = harness.read('handleToolbarClick({id: 3, incognito: false, url: "https://wallet.example/dapp"})');
     assert.deepEqual(harness.badgeDetails.at(-1), {tabId: 3, text: null});
     assert.deepEqual(harness.titles.at(-1), {tabId: 3, title: null});
     await nextClick;
@@ -1707,10 +1806,10 @@ test("toolbar opens a fresh selection after cancellation while the old presentat
             : {id: message.id, admissionKind: "new", approvalRequired: true,
                 requestToken: admissions.length === 1 ? requestToken : "123e4567-e89b-12d3-a456-426614174001", state: snapshot()};
     }});
-    const first = harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/dapp"})');
+    const first = harness.read('handleToolbarClick({id: 3, incognito: false, url: "https://wallet.example/dapp"})');
     await settle();
     assert.equal(presentations.length, 1);
-    const second = harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/dapp"})');
+    const second = harness.read('handleToolbarClick({id: 3, incognito: false, url: "https://wallet.example/dapp"})');
     await settle();
     assert.equal(admissions.length, 3);
     assert.equal(presentations.length, 2);
@@ -1732,9 +1831,9 @@ test("a newer toolbar click ignores the old intent's late failure", async () => 
         }
         return {id: message.id, admissionKind: "new", approvalRequired: true, requestToken, state: snapshot()};
     }});
-    const old = harness.read('handleToolbarClick({id: 3, url: "https://old.example"})');
+    const old = harness.read('handleToolbarClick({id: 3, incognito: false, url: "https://old.example"})');
     await settle();
-    await harness.read('handleToolbarClick({id: 3, url: "https://new.example"})');
+    await harness.read('handleToolbarClick({id: 3, incognito: false, url: "https://new.example"})');
     assert.equal(harness.nativeMessages.filter(value => value.message.name === "switchAccount").length, 2);
     const badges = harness.badgeDetails.filter(value => value.tabId === 3);
     assert.deepEqual(badges.at(-1), {tabId: 3, text: null});
@@ -1758,7 +1857,7 @@ for (const [name, update, invalidates] of [
             if (message.subject === "getLatestConfiguration") { return {id: message.id, state: snapshot()}; }
             return new Promise(resolve => { finishAdmission = () => resolve(undefined); });
         }});
-        const pending = harness.read('handleToolbarClick({id: 3, url: "https://old.example"})');
+        const pending = harness.read('handleToolbarClick({id: 3, incognito: false, url: "https://old.example"})');
         await settle();
         update(harness);
         const badges = clone(harness.badgeDetails);
@@ -1887,8 +1986,8 @@ test("a lost coalesced reply cannot reopen a canceled selector without another c
             return {...retained, admissionKind: "coalesced", approvalRequired: !completed, state: snapshot()};
         },
     });
-    await harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/dapp"})');
-    const second = harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/dapp"})');
+    await harness.read('handleToolbarClick({id: 3, incognito: false, url: "https://wallet.example/dapp"})');
+    const second = harness.read('handleToolbarClick({id: 3, incognito: false, url: "https://wallet.example/dapp"})');
     await settle();
     loseCoalescedReply();
     await second;
@@ -1896,7 +1995,7 @@ test("a lost coalesced reply cannot reopen a canceled selector without another c
     assert.equal(openedSelections, 1);
     assert.deepEqual(harness.badgeDetails.at(-1), {tabId: 3, text: "!"});
 
-    await harness.read('handleToolbarClick({id: 3, url: "https://wallet.example/dapp"})');
+    await harness.read('handleToolbarClick({id: 3, incognito: false, url: "https://wallet.example/dapp"})');
     assert.equal(admissions.length, 4);
     assert.equal(openedSelections, 2);
     assert.deepEqual(harness.badgeDetails.at(-1), {tabId: 3, text: null});

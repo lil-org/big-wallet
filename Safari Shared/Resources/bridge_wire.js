@@ -12,7 +12,7 @@
     const BUILD_VERSION = "1.0.99+148";
     const {
         WORKFLOW_VERSION, PAGE_TO_CONTENT_DIRECTION, CONTENT_TO_PAGE_DIRECTION,
-        PROVIDER_REPLACED_ERROR_CODE, PROVIDER_REPLACED_MESSAGE, PRIVATE_BROWSING_KEY,
+        PROVIDER_REPLACED_ERROR_CODE, PROVIDER_REPLACED_MESSAGE, NATIVE_CONTEXT_KEY,
         MAX_RESPONSE_READY_IDS, MANUAL_SWITCH_INTENT_SUBJECT,
         MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT, MAX_MANUAL_SWITCH_JSON_LENGTH,
         WORKFLOW_POLICY, RUNTIME_MESSAGE_SUBJECTS,
@@ -30,6 +30,10 @@
             throw new Error("Invalid page response");
         }
         return descriptor.value;
+    }
+
+    function optionalPageValue(value, key) {
+        return ownDescriptor(value, key) ? pageValue(value, key) : undefined;
     }
 
     function decodeConfigurationSnapshot(value) {
@@ -113,6 +117,46 @@
         return null;
     }
 
+    function privacyForTab(tab, privateContext) {
+        if (privateContext === true || tab?.incognito === true) { return "private"; }
+        if (privateContext !== undefined && typeof privateContext !== "boolean") { return "unknown"; }
+        return typeof tab?.incognito === "boolean" ? "normal" : "unknown";
+    }
+
+    function makeNativeContext(source, privateBrowsing, metadata = {}) {
+        if (typeof privateBrowsing !== "boolean") { return null; }
+        const context = decodeMessage("NativeTransportContext", {source, privateBrowsing, ...metadata});
+        if (!context || source === "site" && (
+            configurationIdentityForURL(context.site.configurationKey)?.configurationKey !== context.site.configurationKey ||
+            configurationIdentityForURL(context.site.configurationKey)?.host !== context.site.host
+        )) { return null; }
+        return context;
+    }
+
+    function popupNativeContext(tab, privateContext) {
+        const privacy = privacyForTab(tab, privateContext);
+        return makeNativeContext("popup", privacy === "unknown" ? undefined : privacy === "private");
+    }
+
+    function workerNativeContext(privateBrowsing) {
+        return makeNativeContext("worker", privateBrowsing);
+    }
+
+    function runtimeNativeContext(context, request) {
+        if (context?.kind === "content") {
+            return makeNativeContext("site", context.privacy === "unknown" ? undefined : context.privacy === "private", {
+                site: context.identity,
+                document: context.document,
+            });
+        }
+        if (context?.kind === "popup") {
+            const asserted = decodeMessage("NativePopupContext", request?.[NATIVE_CONTEXT_KEY]);
+            if (!asserted) { return null; }
+            return context.privacy === "private" ? makeNativeContext("popup", true) : asserted;
+        }
+        return null;
+    }
+
     function authorizeRuntimeMessage(receiver, request, sender, runtime) {
         try {
             if (typeof receiver !== "string" || !isRecord(request) || !isRecord(sender)) {
@@ -126,10 +170,14 @@
                 typeof url !== "string") {
                 return null;
             }
-            const tab = sender.tab;
+            const tab = optionalPageValue(sender, "tab");
+            const privateContext = optionalPageValue(sender, "incognito");
+            if (privateContext !== undefined && typeof privateContext !== "boolean") { return null; }
             let kind;
             let identity = null;
             let tabId = null;
+            let document = null;
+            let privacy = privateContext === true ? "private" : "unknown";
             if (tab !== undefined) {
                 if (!hasOwn(sender, "tab") || !isRecord(tab)) { return null; }
                 tabId = pageValue(tab, "id");
@@ -138,6 +186,15 @@
                 }
                 identity = configurationIdentityForURL(url);
                 if (!identity) { return null; }
+                const origin = optionalPageValue(sender, "origin");
+                if (!identity.configurationKey.startsWith("file:") && origin !== undefined && origin !== identity.configurationKey) {
+                    return null;
+                }
+                const documentId = optionalPageValue(sender, "documentId");
+                if (documentId !== undefined && (typeof documentId !== "string" ||
+                    documentId.length === 0 || documentId.length > 128)) { return null; }
+                document = freeze({tabId, frameId: 0, ...(documentId === undefined ? {} : {documentId})});
+                privacy = privacyForTab({incognito: optionalPageValue(tab, "incognito")}, privateContext);
                 kind = "content";
                 freeze(identity);
             } else if (url === runtime.getURL("popup.html")) {
@@ -154,7 +211,8 @@
             return freeze({
                 kind,
                 identity,
-                privateBrowsing: tab?.incognito === true || sender.incognito === true,
+                document,
+                privacy,
                 tabId,
             });
         } catch {
@@ -224,14 +282,29 @@
     }
 
     function createTrustedNativeMessageSender({sendRawNativeMessage}) {
-        return function sendTrustedNativeMessage(message, privateBrowsing) {
+        return function sendTrustedNativeMessage(message, context) {
+            const supplied = decodeMessage("NativeTransportContext", context);
+            const trusted = supplied && makeNativeContext(supplied.source, supplied.privateBrowsing,
+                supplied.source === "site" ? {site: supplied.site, document: supplied.document} : {});
+            if (!trusted) { throw new TypeError("Native request context is unavailable"); }
             const payload = {...message};
-            delete payload[PRIVATE_BROWSING_KEY];
+            if (hasOwn(payload, NATIVE_CONTEXT_KEY)) { throw new TypeError("Native request context must be supplied separately"); }
             const type = Object.prototype.hasOwnProperty.call(payload, "subject") ? "NativeCommand" : "DappRequest";
+            if (trusted.source === "site") {
+                for (const name of ["host", "configurationKey"]) {
+                    if (hasOwn(payload, name) && payload[name] !== trusted.site[name]) {
+                        throw new TypeError("Native request identity changed");
+                    }
+                }
+                if (type === "DappRequest") { payload.host = trusted.site.host; }
+                if (type === "DappRequest" || ["getLatestConfiguration", "disconnect", "pollResponse", "acknowledgeResponse", "showApproval"].includes(payload.subject)) {
+                    payload.configurationKey = trusted.site.configurationKey;
+                }
+            }
             const checked = protocol.build(type, payload);
             return sendRawNativeMessage({
                 ...checked,
-                [PRIVATE_BROWSING_KEY]: privateBrowsing === true,
+                [NATIVE_CONTEXT_KEY]: trusted,
             });
         };
     }
@@ -243,7 +316,7 @@
         MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT,
         MANUAL_SWITCH_INTENT_SUBJECT,
         PAGE_TO_CONTENT_DIRECTION,
-        PRIVATE_BROWSING_KEY,
+        NATIVE_CONTEXT_KEY,
         PROVIDER_REPLACED_ERROR_CODE,
         PROVIDER_REPLACED_MESSAGE,
         WORKFLOW_POLICY,
@@ -256,6 +329,10 @@
         decodePageResponse,
         decodeNativeResponse,
         createTrustedNativeMessageSender,
+        popupNativeContext,
+        privacyForTab,
+        runtimeNativeContext,
+        workerNativeContext,
         genId,
         genPrivateToken,
         hasExactKeys,

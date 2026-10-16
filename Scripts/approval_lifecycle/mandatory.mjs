@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {rename} from "node:fs/promises";
 import {join} from "node:path";
 import vm from "node:vm";
+import {nativeSiteContext} from "./browser.mjs";
 import {LifecycleFailure} from "./scheduler.mjs";
 import {handleKey} from "./oracle.mjs";
 import {profiles} from "./scenarios.mjs";
@@ -259,7 +260,8 @@ async function consentReplay(session) {
         await session.restart("bridge");
         const reply = await session.child("bridge").command("native", {profileIdentifier: saved.handle.profileIdentifier,
             message: {subject: "approveRequest", id: saved.handle.id, requestToken: saved.handle.token,
-                reviewToken: saved.reviewToken, payload: saved.payload || {}, workflowVersion: 4, __bwPrivateBrowsing: false}});
+                reviewToken: saved.reviewToken, payload: saved.payload || {}, workflowVersion: 4,
+                __bwContext: {source: "popup", privateBrowsing: false}}});
         assert.equal(reply.status, "ignored", "A previous-process review must not become active again");
     }
     await session.pump();
@@ -280,7 +282,7 @@ async function revocationCrash(session) {
     await session.restart("bridge");
     const reply = await session.child("bridge").command("native", {profileIdentifier: profiles[0],
         message: {subject: "getLatestConfiguration", id: 100, workflowVersion: 4,
-            configurationKey: new URL(session.tabs[0].url).origin, __bwPrivateBrowsing: false}});
+            configurationKey: new URL(session.tabs[0].url).origin, __bwContext: nativeSiteContext(session.tabs[0])}});
     assert.equal(reply.state?.ethereum?.address, "",
         "Published revocation must survive a crash before wallet mutation completes");
     await session.quiesce();
@@ -396,7 +398,8 @@ async function retryRequiredFocus(session) {
     const bridge = session.child("bridge");
     const focused = await bridge.command("native", {profileIdentifier: request.handle.profileIdentifier, message: {
         subject: "showApproval", id: request.handle.id, requestToken: request.handle.token,
-        configurationKey: request.configurationKey, workflowVersion: bridge.ready.workflowVersion, __bwPrivateBrowsing: false,
+        configurationKey: request.configurationKey, workflowVersion: bridge.ready.workflowVersion,
+        __bwContext: {source: "worker", privateBrowsing: false},
     }});
     assert.equal(focused.opened, true, "Focusing a paused request must redeliver its native route");
     await session.pump();
@@ -426,7 +429,8 @@ async function editedReview(session) {
     }, {advance: true});
     await session.child("bridge").command("native", {profileIdentifier: profiles[0], message: {
         subject: "approveRequest", id: request.handle.id, requestToken: request.handle.token,
-        reviewToken: original.review.reviewToken, payload: {}, workflowVersion: 4, __bwPrivateBrowsing: false,
+        reviewToken: original.review.reviewToken, payload: {}, workflowVersion: 4,
+        __bwContext: {source: "popup", privateBrowsing: false},
     }});
     await session.pump();
     assert.equal(countEffects(session).signing, 0, "Old review tokens must not approve edited fees");

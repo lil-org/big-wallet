@@ -5718,8 +5718,6 @@
           }
         }
       },
-      "host": "wallet.example",
-      "configurationKey": "https://wallet.example",
       "enqueueAttempt": "0123456789abcdef0123456789abcdef",
       "admissionDeadline": 2000000900000,
       "authority": {
@@ -5763,8 +5761,6 @@
           }
         }
       },
-      "host": "wallet.example",
-      "configurationKey": "https://wallet.example",
       "enqueueAttempt": "0123456789abcdef0123456789abcdef",
       "admissionDeadline": 2000000900000,
       "authority": {
@@ -5784,8 +5780,6 @@
       "id": 91,
       "workflowVersion": 4,
       "subject": "disconnect",
-      "host": "wallet.example",
-      "configurationKey": "https://wallet.example",
       "provider": "ethereum",
       "attempt": "0123456789abcdef0123456789abcdef",
       "authority": {
@@ -5805,8 +5799,6 @@
       "id": 91,
       "workflowVersion": 4,
       "subject": "disconnect",
-      "host": "wallet.example",
-      "configurationKey": "https://wallet.example",
       "provider": "ethereum",
       "attempt": "0123456789abcdef0123456789abcdef",
       "authority": {
@@ -5850,7 +5842,6 @@
       "id": 91,
       "workflowVersion": 4,
       "subject": "getResponse",
-      "configurationKey": "https://wallet.example",
       "requestToken": "00000000-0000-4000-8000-000000000091"
     }
   },
@@ -5862,7 +5853,6 @@
       "id": 91,
       "workflowVersion": 4,
       "subject": "getResponse",
-      "configurationKey": "https://wallet.example",
       "requestToken": "00000000-0000-4000-8000-000000000091"
     }
   },
@@ -5872,9 +5862,7 @@
     "valid": true,
     "value": {
       "subject": "getLatestConfiguration",
-      "workflowVersion": 4,
-      "host": "wallet.example",
-      "configurationKey": "https://wallet.example"
+      "workflowVersion": 4
     }
   },
   {
@@ -5883,9 +5871,7 @@
     "valid": true,
     "value": {
       "subject": "getLatestConfiguration",
-      "workflowVersion": 4,
-      "host": "wallet.example",
-      "configurationKey": "https://wallet.example"
+      "workflowVersion": 4
     }
   },
   {
@@ -5894,9 +5880,7 @@
     "valid": true,
     "value": {
       "subject": "manualSwitchIntent",
-      "workflowVersion": 4,
-      "host": "wallet.example",
-      "configurationKey": "https://wallet.example"
+      "workflowVersion": 4
     }
   },
   {
@@ -5905,9 +5889,7 @@
     "valid": true,
     "value": {
       "subject": "manualSwitchIntent",
-      "workflowVersion": 4,
-      "host": "wallet.example",
-      "configurationKey": "https://wallet.example"
+      "workflowVersion": 4
     }
   },
   {
@@ -5918,9 +5900,12 @@
       "id": 91,
       "workflowVersion": 4,
       "subject": "applyCompletedResponse",
-      "host": "wallet.example",
       "configurationKey": "https://wallet.example",
-      "requestToken": "00000000-0000-4000-8000-000000000091"
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "__bwContext": {
+        "source": "popup",
+        "privateBrowsing": false
+      }
     }
   },
   {
@@ -5931,9 +5916,12 @@
       "id": 91,
       "workflowVersion": 4,
       "subject": "applyCompletedResponse",
-      "host": "wallet.example",
       "configurationKey": "https://wallet.example",
-      "requestToken": "00000000-0000-4000-8000-000000000091"
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "__bwContext": {
+        "source": "popup",
+        "privateBrowsing": false
+      }
     }
   },
   {
@@ -5957,25 +5945,37 @@
     }
   },
   {
-    "name": "popup RuntimeConfigurationRequest",
-    "type": "RuntimeConfigurationRequest",
+    "name": "popup RuntimePopupConfigurationRequest",
+    "type": "RuntimePopupConfigurationRequest",
     "valid": true,
     "value": {
       "subject": "getLatestConfiguration",
       "workflowVersion": 4,
-      "host": "wallet.example",
-      "configurationKey": "https://wallet.example"
+      "target": {
+        "tabId": 1,
+        "configurationKey": "https://wallet.example"
+      },
+      "__bwContext": {
+        "source": "popup",
+        "privateBrowsing": false
+      }
     }
   },
   {
-    "name": "popup hop RuntimeConfigurationRequest",
+    "name": "popup hop RuntimePopupConfigurationRequest",
     "type": "PopupToWorker",
     "valid": true,
     "value": {
       "subject": "getLatestConfiguration",
       "workflowVersion": 4,
-      "host": "wallet.example",
-      "configurationKey": "https://wallet.example"
+      "target": {
+        "tabId": 1,
+        "configurationKey": "https://wallet.example"
+      },
+      "__bwContext": {
+        "source": "popup",
+        "privateBrowsing": false
+      }
     }
   },
   {
@@ -6626,8 +6626,6 @@
           }
         }
       },
-      "host": "wallet.example",
-      "configurationKey": "https://wallet.example",
       "enqueueAttempt": "0123456789abcdef0123456789abcdef",
       "admissionDeadline": 2000000900000,
       "authority": {
@@ -6647,8 +6645,6 @@
       "id": 91,
       "workflowVersion": 4,
       "subject": "disconnect",
-      "host": "wallet.example",
-      "configurationKey": "https://wallet.example",
       "provider": "ethereum",
       "attempt": "0123456789abcdef0123456789abcdef",
       "authority": {
@@ -6680,7 +6676,6 @@
       "id": 91,
       "workflowVersion": 4,
       "subject": "getResponse",
-      "configurationKey": "https://wallet.example",
       "requestToken": "00000000-0000-4000-8000-000000000091"
     }
   },
@@ -6690,9 +6685,7 @@
     "valid": true,
     "value": {
       "subject": "getLatestConfiguration",
-      "workflowVersion": 4,
-      "host": "wallet.example",
-      "configurationKey": "https://wallet.example"
+      "workflowVersion": 4
     }
   },
   {
@@ -6701,9 +6694,7 @@
     "valid": true,
     "value": {
       "subject": "manualSwitchIntent",
-      "workflowVersion": 4,
-      "host": "wallet.example",
-      "configurationKey": "https://wallet.example"
+      "workflowVersion": 4
     }
   },
   {
@@ -6714,9 +6705,12 @@
       "id": 91,
       "workflowVersion": 4,
       "subject": "applyCompletedResponse",
-      "host": "wallet.example",
       "configurationKey": "https://wallet.example",
-      "requestToken": "00000000-0000-4000-8000-000000000091"
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "__bwContext": {
+        "source": "popup",
+        "privateBrowsing": false
+      }
     }
   },
   {
@@ -6730,14 +6724,20 @@
     }
   },
   {
-    "name": "WorkerRequest popup hop RuntimeConfigurationRequest",
+    "name": "WorkerRequest popup hop RuntimePopupConfigurationRequest",
     "type": "WorkerRequest",
     "valid": true,
     "value": {
       "subject": "getLatestConfiguration",
       "workflowVersion": 4,
-      "host": "wallet.example",
-      "configurationKey": "https://wallet.example"
+      "target": {
+        "tabId": 1,
+        "configurationKey": "https://wallet.example"
+      },
+      "__bwContext": {
+        "source": "popup",
+        "privateBrowsing": false
+      }
     }
   },
   {
@@ -7450,5 +7450,652 @@
       "reviewToken": "00000000-0000-4000-8000-000000000092",
       "payload": {}
     }
+  },
+  {
+    "name": "TransportSiteIdentity",
+    "type": "TransportSiteIdentity",
+    "value": {
+      "host": "wallet.example",
+      "configurationKey": "https://wallet.example"
+    },
+    "valid": true
+  },
+  {
+    "name": "TransportDocumentIdentity",
+    "type": "TransportDocumentIdentity",
+    "value": {
+      "tabId": 1,
+      "frameId": 0
+    },
+    "valid": true
+  },
+  {
+    "name": "NativeSiteContext",
+    "type": "NativeSiteContext",
+    "value": {
+      "source": "site",
+      "privateBrowsing": false,
+      "site": {
+        "host": "wallet.example",
+        "configurationKey": "https://wallet.example"
+      },
+      "document": {
+        "tabId": 1,
+        "frameId": 0
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "NativePopupContext",
+    "type": "NativePopupContext",
+    "value": {
+      "source": "popup",
+      "privateBrowsing": false
+    },
+    "valid": true
+  },
+  {
+    "name": "NativeWorkerContext",
+    "type": "NativeWorkerContext",
+    "value": {
+      "source": "worker",
+      "privateBrowsing": false
+    },
+    "valid": true
+  },
+  {
+    "name": "PopupTabTarget",
+    "type": "PopupTabTarget",
+    "value": {
+      "tabId": 1,
+      "configurationKey": "https://wallet.example"
+    },
+    "valid": true
+  },
+  {
+    "name": "native context site",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "site",
+      "privateBrowsing": false,
+      "site": {
+        "host": "wallet.example",
+        "configurationKey": "https://wallet.example"
+      },
+      "document": {
+        "tabId": 1,
+        "frameId": 0
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "private native context site",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "site",
+      "privateBrowsing": true,
+      "site": {
+        "host": "wallet.example",
+        "configurationKey": "https://wallet.example"
+      },
+      "document": {
+        "tabId": 1,
+        "frameId": 0
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "native site missing source",
+    "type": "NativeTransportContext",
+    "value": {
+      "privateBrowsing": false,
+      "site": {
+        "host": "wallet.example",
+        "configurationKey": "https://wallet.example"
+      },
+      "document": {
+        "tabId": 1,
+        "frameId": 0
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "native site missing privateBrowsing",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "site",
+      "site": {
+        "host": "wallet.example",
+        "configurationKey": "https://wallet.example"
+      },
+      "document": {
+        "tabId": 1,
+        "frameId": 0
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "native site malformed privacy None",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "site",
+      "privateBrowsing": null,
+      "site": {
+        "host": "wallet.example",
+        "configurationKey": "https://wallet.example"
+      },
+      "document": {
+        "tabId": 1,
+        "frameId": 0
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "native site malformed privacy 0",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "site",
+      "privateBrowsing": 0,
+      "site": {
+        "host": "wallet.example",
+        "configurationKey": "https://wallet.example"
+      },
+      "document": {
+        "tabId": 1,
+        "frameId": 0
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "native site malformed privacy 1",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "site",
+      "privateBrowsing": 1,
+      "site": {
+        "host": "wallet.example",
+        "configurationKey": "https://wallet.example"
+      },
+      "document": {
+        "tabId": 1,
+        "frameId": 0
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "native site malformed privacy false",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "site",
+      "privateBrowsing": "false",
+      "site": {
+        "host": "wallet.example",
+        "configurationKey": "https://wallet.example"
+      },
+      "document": {
+        "tabId": 1,
+        "frameId": 0
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "native site malformed privacy unknown",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "site",
+      "privateBrowsing": "unknown",
+      "site": {
+        "host": "wallet.example",
+        "configurationKey": "https://wallet.example"
+      },
+      "document": {
+        "tabId": 1,
+        "frameId": 0
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "native site rejects profile identity",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "site",
+      "privateBrowsing": false,
+      "site": {
+        "host": "wallet.example",
+        "configurationKey": "https://wallet.example"
+      },
+      "document": {
+        "tabId": 1,
+        "frameId": 0
+      },
+      "profileIdentifier": "00000000-0000-4000-8000-000000000001"
+    },
+    "valid": false
+  },
+  {
+    "name": "native context popup",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "popup",
+      "privateBrowsing": false
+    },
+    "valid": true
+  },
+  {
+    "name": "private native context popup",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "popup",
+      "privateBrowsing": true
+    },
+    "valid": true
+  },
+  {
+    "name": "native popup missing source",
+    "type": "NativeTransportContext",
+    "value": {
+      "privateBrowsing": false
+    },
+    "valid": false
+  },
+  {
+    "name": "native popup missing privateBrowsing",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "popup"
+    },
+    "valid": false
+  },
+  {
+    "name": "native popup malformed privacy None",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "popup",
+      "privateBrowsing": null
+    },
+    "valid": false
+  },
+  {
+    "name": "native popup malformed privacy 0",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "popup",
+      "privateBrowsing": 0
+    },
+    "valid": false
+  },
+  {
+    "name": "native popup malformed privacy 1",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "popup",
+      "privateBrowsing": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "native popup malformed privacy false",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "popup",
+      "privateBrowsing": "false"
+    },
+    "valid": false
+  },
+  {
+    "name": "native popup malformed privacy unknown",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "popup",
+      "privateBrowsing": "unknown"
+    },
+    "valid": false
+  },
+  {
+    "name": "native popup rejects profile identity",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "popup",
+      "privateBrowsing": false,
+      "profileIdentifier": "00000000-0000-4000-8000-000000000001"
+    },
+    "valid": false
+  },
+  {
+    "name": "native context worker",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "worker",
+      "privateBrowsing": false
+    },
+    "valid": true
+  },
+  {
+    "name": "private native context worker",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "worker",
+      "privateBrowsing": true
+    },
+    "valid": true
+  },
+  {
+    "name": "native worker missing source",
+    "type": "NativeTransportContext",
+    "value": {
+      "privateBrowsing": false
+    },
+    "valid": false
+  },
+  {
+    "name": "native worker missing privateBrowsing",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "worker"
+    },
+    "valid": false
+  },
+  {
+    "name": "native worker malformed privacy None",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "worker",
+      "privateBrowsing": null
+    },
+    "valid": false
+  },
+  {
+    "name": "native worker malformed privacy 0",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "worker",
+      "privateBrowsing": 0
+    },
+    "valid": false
+  },
+  {
+    "name": "native worker malformed privacy 1",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "worker",
+      "privateBrowsing": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "native worker malformed privacy false",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "worker",
+      "privateBrowsing": "false"
+    },
+    "valid": false
+  },
+  {
+    "name": "native worker malformed privacy unknown",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "worker",
+      "privateBrowsing": "unknown"
+    },
+    "valid": false
+  },
+  {
+    "name": "native worker rejects profile identity",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "worker",
+      "privateBrowsing": false,
+      "profileIdentifier": "00000000-0000-4000-8000-000000000001"
+    },
+    "valid": false
+  },
+  {
+    "name": "browser document id",
+    "type": "TransportDocumentIdentity",
+    "value": {
+      "tabId": 1,
+      "frameId": 0,
+      "documentId": "00000000-0000-4000-8000-000000000091"
+    },
+    "valid": true
+  },
+  {
+    "name": "empty document id",
+    "type": "TransportDocumentIdentity",
+    "value": {
+      "tabId": 1,
+      "frameId": 0,
+      "documentId": ""
+    },
+    "valid": false
+  },
+  {
+    "name": "oversized document id",
+    "type": "TransportDocumentIdentity",
+    "value": {
+      "tabId": 1,
+      "frameId": 0,
+      "documentId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "valid": false
+  },
+  {
+    "name": "subframe document",
+    "type": "TransportDocumentIdentity",
+    "value": {
+      "tabId": 1,
+      "frameId": 1
+    },
+    "valid": false
+  },
+  {
+    "name": "negative tab",
+    "type": "TransportDocumentIdentity",
+    "value": {
+      "tabId": -1,
+      "frameId": 0
+    },
+    "valid": false
+  },
+  {
+    "name": "claimed document generation",
+    "type": "TransportDocumentIdentity",
+    "value": {
+      "tabId": 1,
+      "frameId": 0,
+      "providerGeneration": "forged"
+    },
+    "valid": false
+  },
+  {
+    "name": "ContentToWorker rejects supplied context",
+    "type": "ContentToWorker",
+    "value": {
+      "subject": "rpc",
+      "id": 1,
+      "workflowVersion": 4,
+      "chainId": "0x1",
+      "body": "{}",
+      "__bwContext": {
+        "source": "site",
+        "privateBrowsing": false,
+        "site": {
+          "host": "wallet.example",
+          "configurationKey": "https://wallet.example"
+        },
+        "document": {
+          "tabId": 1,
+          "frameId": 0
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "WorkerRequest rejects supplied context",
+    "type": "WorkerRequest",
+    "value": {
+      "subject": "rpc",
+      "id": 1,
+      "workflowVersion": 4,
+      "chainId": "0x1",
+      "body": "{}",
+      "__bwContext": {
+        "source": "site",
+        "privateBrowsing": false,
+        "site": {
+          "host": "wallet.example",
+          "configurationKey": "https://wallet.example"
+        },
+        "document": {
+          "tabId": 1,
+          "frameId": 0
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "content rejects supplied host",
+    "type": "ContentToWorker",
+    "value": {
+      "subject": "getLatestConfiguration",
+      "workflowVersion": 4,
+      "host": "attacker.example"
+    },
+    "valid": false
+  },
+  {
+    "name": "content rejects supplied configurationKey",
+    "type": "ContentToWorker",
+    "value": {
+      "subject": "getLatestConfiguration",
+      "workflowVersion": 4,
+      "configurationKey": "https://attacker.example"
+    },
+    "valid": false
+  },
+  {
+    "name": "site context missing site",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "site",
+      "privateBrowsing": false,
+      "document": {
+        "tabId": 1,
+        "frameId": 0
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "site context missing document",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "site",
+      "privateBrowsing": false,
+      "site": {
+        "host": "wallet.example",
+        "configurationKey": "https://wallet.example"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "popup cannot claim site",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "popup",
+      "privateBrowsing": false,
+      "site": {
+        "host": "wallet.example",
+        "configurationKey": "https://wallet.example"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "worker cannot claim document",
+    "type": "NativeTransportContext",
+    "value": {
+      "source": "worker",
+      "privateBrowsing": false,
+      "document": {
+        "tabId": 1,
+        "frameId": 0
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "RuntimePopupConfigurationRequest missing context",
+    "type": "RuntimePopupConfigurationRequest",
+    "value": {
+      "subject": "getLatestConfiguration",
+      "workflowVersion": 4,
+      "target": {
+        "tabId": 1,
+        "configurationKey": "https://wallet.example"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "RuntimePopupConfigurationRequest wrong caller",
+    "type": "RuntimePopupConfigurationRequest",
+    "value": {
+      "subject": "getLatestConfiguration",
+      "workflowVersion": 4,
+      "target": {
+        "tabId": 1,
+        "configurationKey": "https://wallet.example"
+      },
+      "__bwContext": {
+        "source": "worker",
+        "privateBrowsing": false
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "PopupToWorker missing context",
+    "type": "PopupToWorker",
+    "value": {
+      "subject": "getLatestConfiguration",
+      "workflowVersion": 4,
+      "target": {
+        "tabId": 1,
+        "configurationKey": "https://wallet.example"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "PopupToWorker wrong caller",
+    "type": "PopupToWorker",
+    "value": {
+      "subject": "getLatestConfiguration",
+      "workflowVersion": 4,
+      "target": {
+        "tabId": 1,
+        "configurationKey": "https://wallet.example"
+      },
+      "__bwContext": {
+        "source": "worker",
+        "privateBrowsing": false
+      }
+    },
+    "valid": false
   }
 ]

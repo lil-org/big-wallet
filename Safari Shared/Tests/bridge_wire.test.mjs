@@ -333,7 +333,7 @@ const runtimeSenders = {
         id: runtime.id,
         url: "https://wallet.example/path",
         frameId: 0,
-        tab: {id: 4, url: "https://other.example"},
+        tab: {id: 4, url: "https://other.example", incognito: false},
     },
     popup: {id: runtime.id, url: runtime.getURL("popup.html")},
     worker: {id: runtime.id, url: runtime.getURL("")},
@@ -429,7 +429,8 @@ test("runtime authorization snapshots identity exclusively from the content send
         const request = {subject: "getResponse", origin: "https://spoofed.example", configurationKey: "https://spoofed.example"};
         const result = wire.authorizeRuntimeMessage("worker", request, sender, runtime);
         assert.deepEqual(normalized(result), {
-            kind: "content", identity: expected, privateBrowsing: false, tabId: 4,
+            kind: "content", identity: expected, privacy: "normal", tabId: 4,
+            document: {tabId: 4, frameId: 0},
         });
         assert.equal(Object.isFrozen(result), true);
         assert.equal(Object.isFrozen(result.identity), true);
@@ -446,9 +447,19 @@ test("runtime authorization retains only browser supplied privacy", () => {
         for (const incognito of [undefined, false, true, "true"]) {
             const sender = {...runtimeSenders.content, incognito, tab: {id: 0, incognito: tabIncognito}};
             const result = wire.authorizeRuntimeMessage("worker", {
-                subject: "getLatestConfiguration", incognito: true, __bwPrivateBrowsing: true,
+                subject: "getLatestConfiguration", incognito: true,
+                __bwContext: {source: "site", privateBrowsing: true},
             }, sender, runtime);
-            assert.equal(result.privateBrowsing, tabIncognito === true || incognito === true);
+            if (incognito !== undefined && typeof incognito !== "boolean") {
+                assert.equal(result, null);
+                continue;
+            }
+            const expected = tabIncognito === true || incognito === true ? "private"
+                : tabIncognito === false && (incognito === undefined || incognito === false) ? "normal" : "unknown";
+            assert.equal(result.privacy, expected);
+            const native = wire.runtimeNativeContext(result, {});
+            assert.equal(native === null, expected === "unknown");
+            if (native) { assert.equal(native.privateBrowsing, expected === "private"); }
             assert.equal(result.tabId, 0);
         }
     }
@@ -458,8 +469,14 @@ test("runtime authorization retains only browser supplied privacy", () => {
         const result = wire.authorizeRuntimeMessage(receiver, {subject}, {
             ...runtimeSenders[kind], incognito: true,
         }, runtime);
-        assert.deepEqual(normalized(result), {kind, identity: null, privateBrowsing: true, tabId: null});
+        assert.deepEqual(normalized(result), {kind, identity: null, document: null, privacy: "private", tabId: null});
         assert.equal(Object.isFrozen(result), true);
+    }
+    for (const incognito of [null, "false", 0]) {
+        assert.equal(wire.authorizeRuntimeMessage("worker", {
+            subject: "getLatestConfiguration",
+            __bwContext: {source: "popup", privateBrowsing: false},
+        }, {...runtimeSenders.popup, incognito}, runtime), null);
     }
 });
 
@@ -566,7 +583,7 @@ test("validates exact passive configuration notifications", () => {
     }), false);
 });
 
-test("stamps private context on the real first native message", async () => {
+test("stamps validated context on the real first native message", async () => {
     const messages = [];
     const send = wire.createTrustedNativeMessageSender({
         sendRawNativeMessage(message) {
@@ -574,12 +591,96 @@ test("stamps private context on the real first native message", async () => {
             return {id: message.id, result: true};
         },
     });
-    await send({subject: "rpc", id: 1, body: "{}", chainId: "0x1", workflowVersion: 4}, false);
-    await send({subject: "rpc", id: 2, body: "{}", chainId: "0x1", workflowVersion: 4}, true);
+    const context = wire.runtimeNativeContext(wire.authorizeRuntimeMessage(
+        "worker", {subject: "rpc"}, runtimeSenders.content, runtime
+    ), {});
+    await send({subject: "rpc", id: 1, body: "{}", chainId: "0x1", workflowVersion: 4}, context);
+    await send({subject: "rpc", id: 2, body: "{}", chainId: "0x1", workflowVersion: 4}, {...context, privateBrowsing: true});
     assert.equal(messages.length, 2);
     assert.equal(messages[0].subject, "rpc");
-    assert.equal(messages[0].__bwPrivateBrowsing, false);
-    assert.equal(messages[1].__bwPrivateBrowsing, true);
+    assert.deepEqual(messages[0].__bwContext, normalized(context));
+    assert.equal(messages[1].__bwContext.privateBrowsing, true);
+});
+
+test("source contexts preserve optional document metadata and reject conflicting origins", () => {
+    const request = {subject: "rpc"};
+    const sender = {...runtimeSenders.content, origin: "https://wallet.example", documentId: "document-one"};
+    const authorized = wire.authorizeRuntimeMessage("worker", request, sender, runtime);
+    const context = wire.runtimeNativeContext(authorized, request);
+    assert.deepEqual(normalized(context), {
+        source: "site", privateBrowsing: false,
+        site: {host: "wallet.example", configurationKey: "https://wallet.example"},
+        document: {tabId: 4, frameId: 0, documentId: "document-one"},
+    });
+    for (const origin of ["null", "https://other.example", "https://wallet.example/path", null]) {
+        assert.equal(wire.authorizeRuntimeMessage("worker", request, {...sender, origin}, runtime), null);
+    }
+    for (const documentId of ["", null, 1, "x".repeat(129)]) {
+        assert.equal(wire.authorizeRuntimeMessage("worker", request, {...sender, documentId}, runtime), null);
+    }
+    const file = wire.authorizeRuntimeMessage("worker", request, {
+        ...sender, url: "file:///tmp/dapp.html?query#fragment", origin: "null",
+    }, runtime);
+    assert.equal(file.identity.configurationKey, "file:///tmp/dapp.html");
+});
+
+test("popup and worker contexts fail closed without their own privacy evidence", () => {
+    assert.equal(wire.popupNativeContext(null, false), null);
+    assert.equal(wire.popupNativeContext({incognito: "false"}, false), null);
+    assert.equal(wire.popupNativeContext({incognito: false}, "false"), null);
+    assert.deepEqual(normalized(wire.popupNativeContext(null, true)), {source: "popup", privateBrowsing: true});
+    assert.deepEqual(normalized(wire.popupNativeContext({incognito: false}, true)), {source: "popup", privateBrowsing: true});
+    for (const value of [undefined, null, "false"]) { assert.equal(wire.workerNativeContext(value), null); }
+    assert.deepEqual(normalized(wire.workerNativeContext(false)), {source: "worker", privateBrowsing: false});
+    const popup = wire.authorizeRuntimeMessage("worker", {subject: "getLatestConfiguration"}, runtimeSenders.popup, runtime);
+    assert.equal(wire.runtimeNativeContext(popup, {}), null);
+    assert.equal(wire.runtimeNativeContext(popup, {__bwContext: {source: "worker", privateBrowsing: false}}), null);
+    assert.deepEqual(normalized(wire.runtimeNativeContext(popup, {
+        __bwContext: {source: "popup", privateBrowsing: false},
+    })), {source: "popup", privateBrowsing: false});
+});
+
+test("native sender derives site identity and rejects injected or conflicting contexts", () => {
+    const messages = [];
+    const send = wire.createTrustedNativeMessageSender({sendRawNativeMessage: message => messages.push(message)});
+    const context = wire.runtimeNativeContext(wire.authorizeRuntimeMessage(
+        "worker", {subject: "rpc"}, runtimeSenders.content, runtime
+    ), {});
+    const request = {subject: "getLatestConfiguration", id: 1, workflowVersion: 4};
+    send(request, context);
+    assert.equal(messages[0].configurationKey, "https://wallet.example");
+    for (const invalid of [null, undefined, false, {...context, privateBrowsing: undefined}]) {
+        assert.throws(() => send(request, invalid), /context is unavailable/);
+    }
+    assert.throws(() => send({...request, __bwContext: context}, context), /supplied separately/);
+    assert.throws(() => send({...request, configurationKey: "https://other.example"}, context), /identity changed/);
+    assert.throws(() => send(request, {...context, site: {...context.site, host: "other.example"}}), /context is unavailable/);
+    assert.equal(messages.length, 1);
+});
+
+test("flat native transport preserves the full domain nesting budget", () => {
+    const context = wire.runtimeNativeContext(wire.authorizeRuntimeMessage(
+        "worker", {subject: "rpc"}, runtimeSenders.content, runtime
+    ), {});
+    const send = wire.createTrustedNativeMessageSender({sendRawNativeMessage: message => message});
+    const request = {
+        id: 1, provider: "ethereum", name: "signTypedMessage",
+        body: {address: "", chainId: "0x1", object: {raw: null}},
+        host: "wallet.example", configurationKey: "https://wallet.example",
+        authority: {context: "a".repeat(64), revisions: {ethereum: 0, solana: 0}},
+        admissionDeadline: 1_700_000_900_000, enqueueAttempt: attempt, workflowVersion: 4,
+    };
+    let nested = null;
+    for (let depth = 0; depth < 61; depth += 1) { nested = {value: nested}; }
+    request.body.object.raw = nested;
+    assert.ok(wire.decodeMessage("DappRequest", request));
+    const sent = send(request, context);
+    assert.equal(sent.body.object.raw.value !== undefined, true);
+    const domain = {...sent};
+    delete domain.__bwContext;
+    assert.ok(wire.decodeMessage("DappRequest", domain));
+    request.body.object.raw = {value: nested};
+    assert.equal(wire.decodeMessage("DappRequest", request), null);
 });
 
 test("keeps the real platform manifests on their intended MV3 routes", async () => {

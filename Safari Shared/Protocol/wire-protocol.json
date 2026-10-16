@@ -6,7 +6,7 @@
     "CONTENT_TO_PAGE_DIRECTION": "big-wallet-content-v1",
     "PROVIDER_REPLACED_ERROR_CODE": 4900,
     "PROVIDER_REPLACED_MESSAGE": "Big Wallet provider was replaced",
-    "PRIVATE_BROWSING_KEY": "__bwPrivateBrowsing",
+    "NATIVE_CONTEXT_KEY": "__bwContext",
     "MAX_RESPONSE_READY_IDS": 16,
     "MANUAL_SWITCH_INTENT_SUBJECT": "manualSwitchIntent",
     "MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT": "manualSwitchAcknowledged",
@@ -2431,14 +2431,6 @@
         },
         "subject": {
           "constant": "MANUAL_SWITCH_INTENT_SUBJECT"
-        },
-        "host": {
-          "type": "string",
-          "minLength": 1
-        },
-        "configurationKey": {
-          "type": "string",
-          "minLength": 1
         }
       },
       "optional": {}
@@ -2451,12 +2443,6 @@
         },
         "subject": {
           "const": "getLatestConfiguration"
-        },
-        "host": {
-          "type": "string"
-        },
-        "configurationKey": {
-          "type": "string"
         }
       },
       "optional": {}
@@ -2472,14 +2458,6 @@
         },
         "message": {
           "ref": "ProviderRequest"
-        },
-        "host": {
-          "type": "string",
-          "minLength": 1
-        },
-        "configurationKey": {
-          "type": "string",
-          "minLength": 1
         },
         "enqueueAttempt": {
           "ref": "PrivateToken"
@@ -2507,14 +2485,6 @@
         },
         "provider": {
           "ref": "Provider"
-        },
-        "host": {
-          "type": "string",
-          "minLength": 1
-        },
-        "configurationKey": {
-          "type": "string",
-          "minLength": 1
         },
         "attempt": {
           "ref": "PrivateToken"
@@ -2558,10 +2528,6 @@
         "id": {
           "ref": "RequestID"
         },
-        "configurationKey": {
-          "type": "string",
-          "minLength": 1
-        },
         "requestToken": {
           "ref": "RequestToken"
         }
@@ -2602,9 +2568,8 @@
         "requestToken": {
           "ref": "RequestToken"
         },
-        "host": {
-          "type": "string",
-          "minLength": 1
+        "__bwContext": {
+          "ref": "NativePopupContext"
         }
       },
       "optional": {}
@@ -2637,7 +2602,7 @@
           "ref": "RuntimeApplyCompletedResponse"
         },
         {
-          "ref": "RuntimeConfigurationRequest"
+          "ref": "RuntimePopupConfigurationRequest"
         },
         {
           "ref": "RuntimeBadgeUpdate"
@@ -2740,6 +2705,124 @@
           "optional": {}
         }
       ]
+    },
+    "TransportSiteIdentity": {
+      "type": "object",
+      "required": {
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configurationKey": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "optional": {}
+    },
+    "TransportDocumentIdentity": {
+      "type": "object",
+      "required": {
+        "tabId": {
+          "ref": "NonnegativeInteger"
+        },
+        "frameId": {
+          "const": 0
+        }
+      },
+      "optional": {
+        "documentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "NativeSiteContext": {
+      "type": "object",
+      "required": {
+        "source": {
+          "const": "site"
+        },
+        "privateBrowsing": {
+          "type": "boolean"
+        },
+        "site": {
+          "ref": "TransportSiteIdentity"
+        },
+        "document": {
+          "ref": "TransportDocumentIdentity"
+        }
+      },
+      "optional": {}
+    },
+    "NativePopupContext": {
+      "type": "object",
+      "required": {
+        "source": {
+          "const": "popup"
+        },
+        "privateBrowsing": {
+          "type": "boolean"
+        }
+      },
+      "optional": {}
+    },
+    "NativeWorkerContext": {
+      "type": "object",
+      "required": {
+        "source": {
+          "const": "worker"
+        },
+        "privateBrowsing": {
+          "type": "boolean"
+        }
+      },
+      "optional": {}
+    },
+    "NativeTransportContext": {
+      "oneOf": [
+        {
+          "ref": "NativeSiteContext"
+        },
+        {
+          "ref": "NativePopupContext"
+        },
+        {
+          "ref": "NativeWorkerContext"
+        }
+      ]
+    },
+    "PopupTabTarget": {
+      "type": "object",
+      "required": {
+        "tabId": {
+          "ref": "NonnegativeInteger"
+        },
+        "configurationKey": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "optional": {}
+    },
+    "RuntimePopupConfigurationRequest": {
+      "type": "object",
+      "required": {
+        "workflowVersion": {
+          "ref": "WorkflowVersion"
+        },
+        "subject": {
+          "const": "getLatestConfiguration"
+        },
+        "target": {
+          "ref": "PopupTabTarget"
+        },
+        "__bwContext": {
+          "ref": "NativePopupContext"
+        }
+      },
+      "optional": {}
     }
   },
   "depthReservations": {

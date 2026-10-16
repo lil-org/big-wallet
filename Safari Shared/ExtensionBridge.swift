@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import CryptoKit
-import CoreFoundation
 import Foundation
 import Synchronization
 
@@ -46,9 +45,6 @@ enum NativeApprovalTiming: Sendable {
 }
 
 actor ExtensionBridge {
-    enum PrivateBrowsingContextExtraction: Equatable, Sendable {
-        case missing, value(Bool), malformed
-    }
     
     struct RequestToken: Hashable, Codable, Sendable {
         let value: UUID
@@ -537,7 +533,6 @@ actor ExtensionBridge {
     static let requestTTL: TimeInterval = TimeInterval(WireProtocol.requestTTLMilliseconds) / 1_000
     static let admissionDeadlineFutureSkew: TimeInterval = 60
     static let responseExpiry: TimeInterval = TimeInterval(WireProtocol.responseExpiryMilliseconds) / 1_000
-    static let privateBrowsingKey = WireProtocol.privateBrowsingKey
 
     static let shared = ExtensionBridge(store: ExtensionRequestFileStore(
         containerURL: FileManager.default.containerURL(
@@ -678,17 +673,6 @@ actor ExtensionBridge {
         guard WireProtocol.validate(.requestToken, value: rawValue),
               let value = UUID(uuidString: rawValue) else { return nil }
         return value
-    }
-
-    static func takePrivateBrowsing(
-        from message: inout [String: Any]
-    ) -> PrivateBrowsingContextExtraction {
-        guard let value = message.removeValue(forKey: privateBrowsingKey) else {
-            return .missing
-        }
-        guard CFGetTypeID(value as CFTypeRef) == CFBooleanGetTypeID(),
-              let privateBrowsing = value as? Bool else { return .malformed }
-        return .value(privateBrowsing)
     }
 
     func enqueue(

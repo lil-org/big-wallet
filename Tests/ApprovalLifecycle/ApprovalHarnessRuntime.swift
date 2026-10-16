@@ -360,14 +360,12 @@ final class HarnessRuntime {
     private func command(_ operation: String, payload: HarnessValue) async throws -> HarnessValue {
         switch operation {
         case "native":
-            guard let input = WireProtocol.JSONObject(payload["message"].foundation) else { throw HarnessError.invalid("Invalid native message") }
-            var json = input.json
-            guard case .value(let privateBrowsing) = ExtensionBridge.takePrivateBrowsing(from: &json),
-                  payload["privateBrowsing"].bool == nil || payload["privateBrowsing"].bool == privateBrowsing,
-                  let message = WireProtocol.JSONObject(json) else { throw HarnessError.invalid("Invalid private-browsing metadata") }
+            guard let ingress = NativeRequestContext.extract(from: payload["message"].foundation,
+                profileIdentifier: payload["profileIdentifier"].string.flatMap(UUID.init(uuidString:))) else {
+                throw HarnessError.invalid("Invalid native transport context")
+            }
             if let key = payload["message"]["configurationKey"].string { configurationKeys.insert(key) }
-            let reply = try await dispatcher.dispatch(message: message,
-                profileIdentifier: payload["profileIdentifier"].string.flatMap(UUID.init(uuidString:)), privateBrowsing: privateBrowsing)
+            let reply = try await dispatcher.dispatch(message: ingress.message, context: ingress.context)
             return try HarnessValue.convert(reply.json)
         case "inspect": return try await inspect(profile: payload["profileIdentifier"].string.flatMap(UUID.init(uuidString:)))
         case "route":

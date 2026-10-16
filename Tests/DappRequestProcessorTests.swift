@@ -1840,32 +1840,21 @@ final class DappRequestProcessorTests: XCTestCase {
         )
     }
 
-    func testPrivateBrowsingContextExtractionDistinguishesMissingAndMalformed() {
-        var missing: [String: Any] = ["subject": "rpc"]
-        XCTAssertEqual(
-            ExtensionBridge.takePrivateBrowsing(from: &missing),
-            .missing
-        )
-
-        var regular: [String: Any] = ["__bwPrivateBrowsing": false]
-        XCTAssertEqual(
-            ExtensionBridge.takePrivateBrowsing(from: &regular),
-            .value(false)
-        )
-        XCTAssertNil(regular["__bwPrivateBrowsing"])
-
-        var privateMessage: [String: Any] = ["__bwPrivateBrowsing": true]
-        XCTAssertEqual(
-            ExtensionBridge.takePrivateBrowsing(from: &privateMessage),
-            .value(true)
-        )
-
-        for invalid in [1, "true", NSNull()] as [Any] {
-            var malformed: [String: Any] = ["__bwPrivateBrowsing": invalid]
-            XCTAssertEqual(
-                ExtensionBridge.takePrivateBrowsing(from: &malformed),
-                .malformed
-            )
+    func testNativeIngressRequiresTheExplicitTransportContext() {
+        for message: [String: Any] in [
+            ["subject": "rpc"],
+            [WireProtocol.nativeContextKey: ["source": "worker"]],
+            [WireProtocol.nativeContextKey: ["source": "worker", "privateBrowsing": "false"]],
+        ] {
+            XCTAssertNil(NativeRequestContext.extract(from: message, profileIdentifier: nil))
+        }
+        for privateBrowsing in [true, false] {
+            let message: [String: Any] = [
+                WireProtocol.nativeContextKey: ["source": "worker", "privateBrowsing": privateBrowsing],
+            ]
+            let ingress = NativeRequestContext.extract(from: message, profileIdentifier: nil)
+            XCTAssertEqual(ingress?.context.privateBrowsing, privateBrowsing)
+            XCTAssertNil(ingress?.message[WireProtocol.nativeContextKey])
         }
     }
 

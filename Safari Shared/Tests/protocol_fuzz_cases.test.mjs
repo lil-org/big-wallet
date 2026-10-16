@@ -129,7 +129,7 @@ test("mandatory protocol-field mutations include canonically equivalent Kelvin s
     const cases = generate({iterations: 0});
     for (const [type, key, equivalent] of [
         ["SolanaConfiguration", "publicKey", "publicKey"],
-        ["RuntimeResponseRequest", "configurationKey", "configurationKey"],
+        ["TransportSiteIdentity", "configurationKey", "configurationKey"],
     ]) {
         for (const mode of ["renamed", "collision"]) {
             const candidate = cases.find(value => value.name === `boundary:unicode-field:${type}:${key}:${mode}`);

@@ -92,22 +92,21 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     func beginRequest(with context: NSExtensionContext) {
         guard let item = context.inputItems.first as? NSExtensionItem,
               let message = item.userInfo?[SFExtensionMessageKey],
-              var json = WireProtocol.JSONObject(message)?.json,
-              case .value(let privateBrowsing) = ExtensionBridge.takePrivateBrowsing(from: &json),
-              let object = WireProtocol.JSONObject(json) else {
+              let ingress = NativeRequestContext.extract(
+                  from: message,
+                  profileIdentifier: item.userInfo?[SFExtensionProfileKey] as? UUID
+              ) else {
             context.cancelRequest(withError: NativeMessageDispatcher.Error.invalidMessage)
             return
         }
-        let profileIdentifier = item.userInfo?[SFExtensionProfileKey] as? UUID
         // Foundation's borrowed context is handed exclusively to one terminal responder.
         nonisolated(unsafe) let transferredContext = context
         let responder = ExtensionRequestResponder(context: transferredContext)
         Task {
             do {
                 responder.complete(with: try await Self.dispatcher.dispatch(
-                    message: object,
-                    profileIdentifier: profileIdentifier,
-                    privateBrowsing: privateBrowsing
+                    message: ingress.message,
+                    context: ingress.context
                 ))
             } catch {
                 responder.cancelRequest(withError: error)

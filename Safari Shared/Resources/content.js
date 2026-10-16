@@ -274,7 +274,6 @@ function bigWalletEnqueue({message, providerGeneration: generation, observedRevi
         admissionDeadline,
         delivered: false,
         generation,
-        host: identity.host,
         key,
         message: {
             body: {...message.body},
@@ -340,8 +339,6 @@ async function bigWalletSendEnqueue(state) {
             authority: state.authority,
             subject: "message-to-wallet",
             message: state.message,
-            host: state.host,
-            configurationKey: state.configurationKey,
             enqueueAttempt: state.enqueueAttempt,
             workflowVersion: bigWalletWorkflowVersion,
         }), Math.min(bigWalletTransportTimeout, remaining));
@@ -375,7 +372,6 @@ async function bigWalletReadResponse(state) {
         response = await bigWalletWire.withTimeout(browser.runtime.sendMessage({
             subject: "getResponse",
             id: state.message.id,
-            configurationKey: state.configurationKey,
             requestToken: state.requestToken,
             workflowVersion: bigWalletWorkflowVersion,
         }), bigWalletResponsePollTimeout);
@@ -495,7 +491,6 @@ function bigWalletDisconnect({message, providerGeneration: generation, observedR
     const id = typeof message.id === "undefined" ? bigWalletWire.genId() : message.id;
     const request = {
         subject: "disconnect", id, provider: message.provider,
-        host: identity.host, configurationKey: identity.configurationKey,
         attempt: bigWalletWire.genPrivateToken(),
         authority: {context: cached.state.context,
             revisions: {...cached.state.revisions, [message.provider]: observedRevision}},
@@ -579,8 +574,7 @@ async function bigWalletReadConfiguration(generation, attempt, serial) {
     let response;
     try {
         response = await bigWalletWire.withTimeout(browser.runtime.sendMessage({
-            subject: "getLatestConfiguration", host: identity?.host || "",
-            configurationKey: identity?.configurationKey || "", workflowVersion: bigWalletWorkflowVersion,
+            subject: "getLatestConfiguration", workflowVersion: bigWalletWorkflowVersion,
         }), bigWalletTransportTimeout);
     } catch {}
     if (!bigWalletMatchesGeneration(generation)) { return; }
@@ -649,8 +643,6 @@ function bigWalletRuntimeMessage(
         let pending;
         try {
             pending = browser.runtime.sendMessage({
-                configurationKey: identity.configurationKey,
-                host: identity.host,
                 subject: bigWalletWire.MANUAL_SWITCH_INTENT_SUBJECT,
                 workflowVersion: bigWalletWorkflowVersion,
             });

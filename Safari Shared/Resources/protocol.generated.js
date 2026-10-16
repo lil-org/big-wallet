@@ -428,7 +428,7 @@
     }
 
     function n44(value, context) {
-        return n307(value, context);
+        return n309(value, context);
     }
 
     function n45(value, context) {
@@ -987,7 +987,7 @@
     }
 
     function n115(value, context) {
-        return n309(value, context);
+        return n311(value, context);
     }
 
     function n116(value, context) {
@@ -1967,7 +1967,7 @@
     }
 
     function n237(value, context) {
-        return n308(value, context);
+        return n310(value, context);
     }
 
     function n238(value, context) {
@@ -2242,41 +2242,35 @@
     }
 
     function n271(value, context) {
-        record(value, ["workflowVersion","subject","host","configurationKey"], []);
+        record(value, ["workflowVersion","subject"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n44(read(value, "workflowVersion"), context));
             put(result, "subject", n270(read(value, "subject"), context));
-            put(result, "host", n28(read(value, "host"), context));
-            put(result, "configurationKey", n28(read(value, "configurationKey"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
     function n272(value, context) {
-        record(value, ["workflowVersion","subject","host","configurationKey"], []);
+        record(value, ["workflowVersion","subject"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n44(read(value, "workflowVersion"), context));
             put(result, "subject", n53(read(value, "subject"), context));
-            put(result, "host", n17(read(value, "host"), context));
-            put(result, "configurationKey", n17(read(value, "configurationKey"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
     function n273(value, context) {
-        record(value, ["workflowVersion","subject","message","host","configurationKey","enqueueAttempt","admissionDeadline","authority"], []);
+        record(value, ["workflowVersion","subject","message","enqueueAttempt","admissionDeadline","authority"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n44(read(value, "workflowVersion"), context));
             put(result, "subject", n274(read(value, "subject"), context));
             put(result, "message", n246(read(value, "message"), context));
-            put(result, "host", n28(read(value, "host"), context));
-            put(result, "configurationKey", n28(read(value, "configurationKey"), context));
             put(result, "enqueueAttempt", n56(read(value, "enqueueAttempt"), context));
             put(result, "admissionDeadline", n107(read(value, "admissionDeadline"), context));
             put(result, "authority", n57(read(value, "authority"), context));
@@ -2289,7 +2283,7 @@
     }
 
     function n275(value, context) {
-        record(value, ["workflowVersion","subject","id","provider","host","configurationKey","attempt","authority"], []);
+        record(value, ["workflowVersion","subject","id","provider","attempt","authority"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
@@ -2297,8 +2291,6 @@
             put(result, "subject", n55(read(value, "subject"), context));
             put(result, "id", n43(read(value, "id"), context));
             put(result, "provider", n27(read(value, "provider"), context));
-            put(result, "host", n28(read(value, "host"), context));
-            put(result, "configurationKey", n28(read(value, "configurationKey"), context));
             put(result, "attempt", n56(read(value, "attempt"), context));
             put(result, "authority", n57(read(value, "authority"), context));
             return freeze(result);
@@ -2320,14 +2312,13 @@
     }
 
     function n277(value, context) {
-        record(value, ["workflowVersion","subject","id","configurationKey","requestToken"], []);
+        record(value, ["workflowVersion","subject","id","requestToken"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n44(read(value, "workflowVersion"), context));
             put(result, "subject", n278(read(value, "subject"), context));
             put(result, "id", n43(read(value, "id"), context));
-            put(result, "configurationKey", n28(read(value, "configurationKey"), context));
             put(result, "requestToken", n60(read(value, "requestToken"), context));
             return freeze(result);
         } finally { context.path = previous; }
@@ -2354,7 +2345,7 @@
     }
 
     function n281(value, context) {
-        record(value, ["workflowVersion","subject","id","configurationKey","requestToken","host"], []);
+        record(value, ["workflowVersion","subject","id","configurationKey","requestToken","__bwContext"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
@@ -2363,7 +2354,7 @@
             put(result, "id", n43(read(value, "id"), context));
             put(result, "configurationKey", n28(read(value, "configurationKey"), context));
             put(result, "requestToken", n60(read(value, "requestToken"), context));
-            put(result, "host", n28(read(value, "host"), context));
+            put(result, "__bwContext", n283(read(value, "__bwContext"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
@@ -2373,126 +2364,134 @@
     }
 
     function n283(value, context) {
-        try { return n284(value, context); } catch {}
+        return n322(value, context);
+    }
+
+    function n284(value, context) {
         try { return n285(value, context); } catch {}
         try { return n286(value, context); } catch {}
         try { return n287(value, context); } catch {}
         try { return n288(value, context); } catch {}
         try { return n289(value, context); } catch {}
+        try { return n290(value, context); } catch {}
         return invalid();
-    }
-
-    function n284(value, context) {
-        return n276(value, context);
     }
 
     function n285(value, context) {
-        return n273(value, context);
+        return n276(value, context);
     }
 
     function n286(value, context) {
-        return n271(value, context);
+        return n273(value, context);
     }
 
     function n287(value, context) {
-        return n277(value, context);
+        return n271(value, context);
     }
 
     function n288(value, context) {
-        return n272(value, context);
+        return n277(value, context);
     }
 
     function n289(value, context) {
-        return n275(value, context);
+        return n272(value, context);
     }
 
     function n290(value, context) {
-        try { return n291(value, context); } catch {}
-        try { return n288(value, context); } catch {}
-        try { return n292(value, context); } catch {}
-        try { return n293(value, context); } catch {}
-        return invalid();
+        return n275(value, context);
     }
 
     function n291(value, context) {
-        return n281(value, context);
+        try { return n292(value, context); } catch {}
+        try { return n293(value, context); } catch {}
+        try { return n294(value, context); } catch {}
+        try { return n295(value, context); } catch {}
+        return invalid();
     }
 
     function n292(value, context) {
-        return n279(value, context);
+        return n281(value, context);
     }
 
     function n293(value, context) {
-        return n255(value, context);
+        return n330(value, context);
     }
 
     function n294(value, context) {
-        try { return n295(value, context); } catch {}
-        try { return n296(value, context); } catch {}
-        try { return n297(value, context); } catch {}
-        try { return n293(value, context); } catch {}
-        return invalid();
+        return n279(value, context);
     }
 
     function n295(value, context) {
-        return n266(value, context);
+        return n255(value, context);
     }
 
     function n296(value, context) {
-        return n269(value, context);
-    }
-
-    function n297(value, context) {
-        return n262(value, context);
-    }
-
-    function n298(value, context) {
+        try { return n297(value, context); } catch {}
+        try { return n298(value, context); } catch {}
+        try { return n299(value, context); } catch {}
         try { return n295(value, context); } catch {}
-        try { return n296(value, context); } catch {}
         return invalid();
     }
 
+    function n297(value, context) {
+        return n266(value, context);
+    }
+
+    function n298(value, context) {
+        return n269(value, context);
+    }
+
     function n299(value, context) {
-        return n260(value, context);
+        return n262(value, context);
     }
 
     function n300(value, context) {
-        try { return n301(value, context); } catch {}
-        try { return n302(value, context); } catch {}
+        try { return n297(value, context); } catch {}
+        try { return n298(value, context); } catch {}
         return invalid();
     }
 
     function n301(value, context) {
-        return n283(value, context);
+        return n260(value, context);
     }
 
     function n302(value, context) {
-        return n290(value, context);
-    }
-
-    function n303(value, context) {
-        return n242(value, context);
-    }
-
-    function n304(value, context) {
-        try { return n305(value, context); } catch {}
-        try { return n306(value, context); } catch {}
+        try { return n303(value, context); } catch {}
+        try { return n304(value, context); } catch {}
         return invalid();
     }
 
+    function n303(value, context) {
+        return n284(value, context);
+    }
+
+    function n304(value, context) {
+        return n291(value, context);
+    }
+
     function n305(value, context) {
-        return n294(value, context);
+        return n242(value, context);
     }
 
     function n306(value, context) {
-        return n298(value, context);
+        try { return n307(value, context); } catch {}
+        try { return n308(value, context); } catch {}
+        return invalid();
     }
 
     function n307(value, context) {
-        if (value !== 4) { invalid(); } return value;
+        return n296(value, context);
     }
 
     function n308(value, context) {
+        return n300(value, context);
+    }
+
+    function n309(value, context) {
+        if (value !== 4) { invalid(); } return value;
+    }
+
+    function n310(value, context) {
         record(value, ["status"], []);
         const previous = enter(value, context);
         try {
@@ -2502,17 +2501,17 @@
         } finally { context.path = previous; }
     }
 
-    function n309(value, context) {
+    function n311(value, context) {
         if (!wholeNumber(value) || value < -9223372036854776000 || value > 9223372036854776000) { invalid(); } return value;
     }
 
-    function n310(value, context) {
-        try { return n311(value, context); } catch {}
+    function n312(value, context) {
+        try { return n313(value, context); } catch {}
         try { return n149(value, context); } catch {}
         return invalid();
     }
 
-    function n311(value, context) {
+    function n313(value, context) {
         record(value, ["applied"], []);
         const previous = enter(value, context);
         try {
@@ -2522,7 +2521,136 @@
         } finally { context.path = previous; }
     }
 
-    const constants = json({"WORKFLOW_VERSION":4,"PAGE_TO_CONTENT_DIRECTION":"big-wallet-provider-v1","CONTENT_TO_PAGE_DIRECTION":"big-wallet-content-v1","PROVIDER_REPLACED_ERROR_CODE":4900,"PROVIDER_REPLACED_MESSAGE":"Big Wallet provider was replaced","PRIVATE_BROWSING_KEY":"__bwPrivateBrowsing","MAX_RESPONSE_READY_IDS":16,"MANUAL_SWITCH_INTENT_SUBJECT":"manualSwitchIntent","MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT":"manualSwitchAcknowledged","MAX_MANUAL_SWITCH_JSON_LENGTH":262144,"MAX_PAYLOAD_BYTES":262144,"MAX_POPUP_RESPONSE_BYTES":524288,"WORKFLOW_POLICY":{"maximumNativeChainIdHex":"7fffffffffffffff","maximumRequests":8,"maximumRequestsPerHost":4,"maximumRetainedRequests":16,"requestTTLMilliseconds":900000,"responseExpiryMilliseconds":3600000,"selectionAccountCoins":["ethereum","solana"],"solanaClusterValues":["mainnetBeta","devnet","testnet"]},"RUNTIME_MESSAGE_SUBJECTS":{"worker":{"content":["rpc","message-to-wallet","manualSwitchIntent","getResponse","getLatestConfiguration","disconnect"],"popup":["applyCompletedResponse","getLatestConfiguration","updatePendingRequestBadge","responseReady"]},"content":{"worker":["workflowProbe","manualSwitchIntent","configurationInvalidated","responseReady"],"popup":["workflowProbe","manualSwitchIntent"]},"popup":{"worker":["pendingRequestAvailable"]}},"MAX_JSON_DEPTH":64}, {path: null, nodes: 0, maximumDepth: 64});
+    function n314(value, context) {
+        record(value, ["host","configurationKey"], []);
+        const previous = enter(value, context);
+        try {
+            const result = create(null);
+            put(result, "host", n28(read(value, "host"), context));
+            put(result, "configurationKey", n28(read(value, "configurationKey"), context));
+            return freeze(result);
+        } finally { context.path = previous; }
+    }
+
+    function n315(value, context) {
+        record(value, ["tabId","frameId"], ["documentId"]);
+        const previous = enter(value, context);
+        try {
+            const result = create(null);
+            put(result, "tabId", n12(read(value, "tabId"), context));
+            put(result, "frameId", n316(read(value, "frameId"), context));
+            if (descriptor(value, "documentId")) { put(result, "documentId", n317(read(value, "documentId"), context)); }
+            return freeze(result);
+        } finally { context.path = previous; }
+    }
+
+    function n316(value, context) {
+        if (value !== 0) { invalid(); } return value;
+    }
+
+    function n317(value, context) {
+        if (typeof value !== "string" || value.length < 1 || value.length > 128) { invalid(); } return value;
+    }
+
+    function n318(value, context) {
+        record(value, ["source","privateBrowsing","site","document"], []);
+        const previous = enter(value, context);
+        try {
+            const result = create(null);
+            put(result, "source", n319(read(value, "source"), context));
+            put(result, "privateBrowsing", n108(read(value, "privateBrowsing"), context));
+            put(result, "site", n320(read(value, "site"), context));
+            put(result, "document", n321(read(value, "document"), context));
+            return freeze(result);
+        } finally { context.path = previous; }
+    }
+
+    function n319(value, context) {
+        if (value !== "site") { invalid(); } return value;
+    }
+
+    function n320(value, context) {
+        return n314(value, context);
+    }
+
+    function n321(value, context) {
+        return n315(value, context);
+    }
+
+    function n322(value, context) {
+        record(value, ["source","privateBrowsing"], []);
+        const previous = enter(value, context);
+        try {
+            const result = create(null);
+            put(result, "source", n323(read(value, "source"), context));
+            put(result, "privateBrowsing", n108(read(value, "privateBrowsing"), context));
+            return freeze(result);
+        } finally { context.path = previous; }
+    }
+
+    function n323(value, context) {
+        if (value !== "popup") { invalid(); } return value;
+    }
+
+    function n324(value, context) {
+        record(value, ["source","privateBrowsing"], []);
+        const previous = enter(value, context);
+        try {
+            const result = create(null);
+            put(result, "source", n325(read(value, "source"), context));
+            put(result, "privateBrowsing", n108(read(value, "privateBrowsing"), context));
+            return freeze(result);
+        } finally { context.path = previous; }
+    }
+
+    function n325(value, context) {
+        if (value !== "worker") { invalid(); } return value;
+    }
+
+    function n326(value, context) {
+        try { return n327(value, context); } catch {}
+        try { return n283(value, context); } catch {}
+        try { return n328(value, context); } catch {}
+        return invalid();
+    }
+
+    function n327(value, context) {
+        return n318(value, context);
+    }
+
+    function n328(value, context) {
+        return n324(value, context);
+    }
+
+    function n329(value, context) {
+        record(value, ["tabId","configurationKey"], []);
+        const previous = enter(value, context);
+        try {
+            const result = create(null);
+            put(result, "tabId", n12(read(value, "tabId"), context));
+            put(result, "configurationKey", n28(read(value, "configurationKey"), context));
+            return freeze(result);
+        } finally { context.path = previous; }
+    }
+
+    function n330(value, context) {
+        record(value, ["workflowVersion","subject","target","__bwContext"], []);
+        const previous = enter(value, context);
+        try {
+            const result = create(null);
+            put(result, "workflowVersion", n44(read(value, "workflowVersion"), context));
+            put(result, "subject", n53(read(value, "subject"), context));
+            put(result, "target", n331(read(value, "target"), context));
+            put(result, "__bwContext", n283(read(value, "__bwContext"), context));
+            return freeze(result);
+        } finally { context.path = previous; }
+    }
+
+    function n331(value, context) {
+        return n329(value, context);
+    }
+
+    const constants = json({"WORKFLOW_VERSION":4,"PAGE_TO_CONTENT_DIRECTION":"big-wallet-provider-v1","CONTENT_TO_PAGE_DIRECTION":"big-wallet-content-v1","PROVIDER_REPLACED_ERROR_CODE":4900,"PROVIDER_REPLACED_MESSAGE":"Big Wallet provider was replaced","NATIVE_CONTEXT_KEY":"__bwContext","MAX_RESPONSE_READY_IDS":16,"MANUAL_SWITCH_INTENT_SUBJECT":"manualSwitchIntent","MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT":"manualSwitchAcknowledged","MAX_MANUAL_SWITCH_JSON_LENGTH":262144,"MAX_PAYLOAD_BYTES":262144,"MAX_POPUP_RESPONSE_BYTES":524288,"WORKFLOW_POLICY":{"maximumNativeChainIdHex":"7fffffffffffffff","maximumRequests":8,"maximumRequestsPerHost":4,"maximumRetainedRequests":16,"requestTTLMilliseconds":900000,"responseExpiryMilliseconds":3600000,"selectionAccountCoins":["ethereum","solana"],"solanaClusterValues":["mainnetBeta","devnet","testnet"]},"RUNTIME_MESSAGE_SUBJECTS":{"worker":{"content":["rpc","message-to-wallet","manualSwitchIntent","getResponse","getLatestConfiguration","disconnect"],"popup":["applyCompletedResponse","getLatestConfiguration","updatePendingRequestBadge","responseReady"]},"content":{"worker":["workflowProbe","manualSwitchIntent","configurationInvalidated","responseReady"],"popup":["workflowProbe","manualSwitchIntent"]},"popup":{"worker":["pendingRequestAvailable"]}},"MAX_JSON_DEPTH":64}, {path: null, nodes: 0, maximumDepth: 64});
     /** @typedef {null|boolean|number|string|Array<ProtocolJSONValue>|Object<string, ProtocolJSONValue>} ProtocolJSONValue */
     /** @typedef {number} RequestID */
     /** @typedef {number} NonnegativeInteger */
@@ -2594,16 +2722,16 @@
     /** @typedef {{workflowVersion: WorkflowVersion, subject: "workflowProbe", nonce: PrivateToken}} WorkflowProbe */
     /** @typedef {{workflowVersion: WorkflowVersion, subject: "workflowProbe", nonce: PrivateToken, buildVersion: string}} WorkflowProbeReply */
     /** @typedef {{workflowVersion: WorkflowVersion, subject: "manualSwitchIntent", configurationKey: string}} ManualSwitchIntent */
-    /** @typedef {{workflowVersion: WorkflowVersion, subject: "manualSwitchIntent", host: string, configurationKey: string}} RuntimeManualSwitchIntent */
-    /** @typedef {{workflowVersion: WorkflowVersion, subject: "getLatestConfiguration", host: string, configurationKey: string}} RuntimeConfigurationRequest */
-    /** @typedef {{workflowVersion: WorkflowVersion, subject: "message-to-wallet", message: ProviderRequest, host: string, configurationKey: string, enqueueAttempt: PrivateToken, admissionDeadline: PositiveInteger, authority: AuthorityVersion}} RuntimeDappRequest */
-    /** @typedef {{workflowVersion: WorkflowVersion, subject: "disconnect", id: RequestID, provider: Provider, host: string, configurationKey: string, attempt: PrivateToken, authority: AuthorityVersion}} RuntimeDisconnect */
+    /** @typedef {{workflowVersion: WorkflowVersion, subject: "manualSwitchIntent"}} RuntimeManualSwitchIntent */
+    /** @typedef {{workflowVersion: WorkflowVersion, subject: "getLatestConfiguration"}} RuntimeConfigurationRequest */
+    /** @typedef {{workflowVersion: WorkflowVersion, subject: "message-to-wallet", message: ProviderRequest, enqueueAttempt: PrivateToken, admissionDeadline: PositiveInteger, authority: AuthorityVersion}} RuntimeDappRequest */
+    /** @typedef {{workflowVersion: WorkflowVersion, subject: "disconnect", id: RequestID, provider: Provider, attempt: PrivateToken, authority: AuthorityVersion}} RuntimeDisconnect */
     /** @typedef {{workflowVersion: WorkflowVersion, subject: "rpc", id: RequestID, body: string, chainId: EthereumChainID}} RuntimeRPC */
-    /** @typedef {{workflowVersion: WorkflowVersion, subject: "getResponse", id: RequestID, configurationKey: string, requestToken: RequestToken}} RuntimeResponseRequest */
+    /** @typedef {{workflowVersion: WorkflowVersion, subject: "getResponse", id: RequestID, requestToken: RequestToken}} RuntimeResponseRequest */
     /** @typedef {{workflowVersion: WorkflowVersion, subject: "updatePendingRequestBadge", hasPendingRequests: boolean}} RuntimeBadgeUpdate */
-    /** @typedef {{workflowVersion: WorkflowVersion, subject: "applyCompletedResponse", id: RequestID, configurationKey: string, requestToken: RequestToken, host: string}} RuntimeApplyCompletedResponse */
+    /** @typedef {{workflowVersion: WorkflowVersion, subject: "applyCompletedResponse", id: RequestID, configurationKey: string, requestToken: RequestToken, __bwContext: NativePopupContext}} RuntimeApplyCompletedResponse */
     /** @typedef {(RuntimeRPC|RuntimeDappRequest|RuntimeManualSwitchIntent|RuntimeResponseRequest|RuntimeConfigurationRequest|RuntimeDisconnect)} ContentToWorker */
-    /** @typedef {(RuntimeApplyCompletedResponse|RuntimeConfigurationRequest|RuntimeBadgeUpdate|ResponseReady)} PopupToWorker */
+    /** @typedef {(RuntimeApplyCompletedResponse|RuntimePopupConfigurationRequest|RuntimeBadgeUpdate|ResponseReady)} PopupToWorker */
     /** @typedef {(WorkflowProbe|ManualSwitchIntent|ConfigurationInvalidated|ResponseReady)} WorkerToContent */
     /** @typedef {(WorkflowProbe|ManualSwitchIntent)} PopupToContent */
     /** @typedef {PendingRequestAvailable} WorkerToPopup */
@@ -2614,7 +2742,15 @@
     /** @typedef {{status: "unavailable"}} PopupQueueUnavailable */
     /** @typedef {number} ErrorCode */
     /** @typedef {({applied: true}|{id: RequestID, missing: true})} RuntimeApplyCompletedReply */
-    /** @typedef {"RequestID"|"NonnegativeInteger"|"PositiveInteger"|"PrivateToken"|"RequestToken"|"EthereumChainID"|"SolanaPublicKey"|"AuthorityContext"|"Provider"|"RequestProvider"|"SolanaCluster"|"Revisions"|"ProviderRevisions"|"AuthorityVersion"|"EthereumConfiguration"|"SolanaConfiguration"|"ConfigurationSnapshot"|"SelectedAccount"|"ApprovalPayload"|"TransactionSpeedPayload"|"TransactionEditsPayload"|"NativeCommand"|"EthereumRequestBody"|"SolanaRequestObject"|"SolanaRequestBody"|"ManualProviderConfiguration"|"ManualRequestBody"|"ProviderRequest"|"DappRequest"|"ProviderError"|"NativeResult"|"NativeResponse"|"PageResponse"|"NativeEnqueueAcknowledgement"|"NativeAdmission"|"NativeDelivery"|"NativeResponsePollReply"|"NativeStatus"|"NativeConfigurationReply"|"NativeDisconnectReply"|"NativeAcknowledgementReply"|"NativeOpenReply"|"RecoveryRequest"|"NativeRecoveryReply"|"RPCResponse"|"PopupDisplayAccount"|"PopupSelectableAccount"|"PopupNetworkOption"|"PopupClusterOption"|"PopupTransactionSlider"|"PopupTransactionEditor"|"PopupTransactionNotice"|"PopupReview"|"PopupApprovalState"|"PopupPendingRequest"|"PopupCompletedResponse"|"PopupQueue"|"PopupCommandResult"|"PopupResponse"|"PageDisconnect"|"PageRPC"|"PageToContent"|"ContentToPage"|"ResponseReady"|"PendingRequestAvailable"|"ConfigurationInvalidated"|"ManualSwitchAcknowledgement"|"WorkflowProbe"|"WorkflowProbeReply"|"ManualSwitchIntent"|"RuntimeManualSwitchIntent"|"RuntimeConfigurationRequest"|"RuntimeDappRequest"|"RuntimeDisconnect"|"RuntimeRPC"|"RuntimeResponseRequest"|"RuntimeBadgeUpdate"|"RuntimeApplyCompletedResponse"|"ContentToWorker"|"PopupToWorker"|"WorkerToContent"|"PopupToContent"|"WorkerToPopup"|"WorkerRequest"|"PageToContentMessage"|"ContentMessage"|"WorkflowVersion"|"PopupQueueUnavailable"|"ErrorCode"|"RuntimeApplyCompletedReply"} ProtocolTypeName */
+    /** @typedef {{host: string, configurationKey: string}} TransportSiteIdentity */
+    /** @typedef {{tabId: NonnegativeInteger, frameId: 0, documentId?: string}} TransportDocumentIdentity */
+    /** @typedef {{source: "site", privateBrowsing: boolean, site: TransportSiteIdentity, document: TransportDocumentIdentity}} NativeSiteContext */
+    /** @typedef {{source: "popup", privateBrowsing: boolean}} NativePopupContext */
+    /** @typedef {{source: "worker", privateBrowsing: boolean}} NativeWorkerContext */
+    /** @typedef {(NativeSiteContext|NativePopupContext|NativeWorkerContext)} NativeTransportContext */
+    /** @typedef {{tabId: NonnegativeInteger, configurationKey: string}} PopupTabTarget */
+    /** @typedef {{workflowVersion: WorkflowVersion, subject: "getLatestConfiguration", target: PopupTabTarget, __bwContext: NativePopupContext}} RuntimePopupConfigurationRequest */
+    /** @typedef {"RequestID"|"NonnegativeInteger"|"PositiveInteger"|"PrivateToken"|"RequestToken"|"EthereumChainID"|"SolanaPublicKey"|"AuthorityContext"|"Provider"|"RequestProvider"|"SolanaCluster"|"Revisions"|"ProviderRevisions"|"AuthorityVersion"|"EthereumConfiguration"|"SolanaConfiguration"|"ConfigurationSnapshot"|"SelectedAccount"|"ApprovalPayload"|"TransactionSpeedPayload"|"TransactionEditsPayload"|"NativeCommand"|"EthereumRequestBody"|"SolanaRequestObject"|"SolanaRequestBody"|"ManualProviderConfiguration"|"ManualRequestBody"|"ProviderRequest"|"DappRequest"|"ProviderError"|"NativeResult"|"NativeResponse"|"PageResponse"|"NativeEnqueueAcknowledgement"|"NativeAdmission"|"NativeDelivery"|"NativeResponsePollReply"|"NativeStatus"|"NativeConfigurationReply"|"NativeDisconnectReply"|"NativeAcknowledgementReply"|"NativeOpenReply"|"RecoveryRequest"|"NativeRecoveryReply"|"RPCResponse"|"PopupDisplayAccount"|"PopupSelectableAccount"|"PopupNetworkOption"|"PopupClusterOption"|"PopupTransactionSlider"|"PopupTransactionEditor"|"PopupTransactionNotice"|"PopupReview"|"PopupApprovalState"|"PopupPendingRequest"|"PopupCompletedResponse"|"PopupQueue"|"PopupCommandResult"|"PopupResponse"|"PageDisconnect"|"PageRPC"|"PageToContent"|"ContentToPage"|"ResponseReady"|"PendingRequestAvailable"|"ConfigurationInvalidated"|"ManualSwitchAcknowledgement"|"WorkflowProbe"|"WorkflowProbeReply"|"ManualSwitchIntent"|"RuntimeManualSwitchIntent"|"RuntimeConfigurationRequest"|"RuntimeDappRequest"|"RuntimeDisconnect"|"RuntimeRPC"|"RuntimeResponseRequest"|"RuntimeBadgeUpdate"|"RuntimeApplyCompletedResponse"|"ContentToWorker"|"PopupToWorker"|"WorkerToContent"|"PopupToContent"|"WorkerToPopup"|"WorkerRequest"|"PageToContentMessage"|"ContentMessage"|"WorkflowVersion"|"PopupQueueUnavailable"|"ErrorCode"|"RuntimeApplyCompletedReply"|"TransportSiteIdentity"|"TransportDocumentIdentity"|"NativeSiteContext"|"NativePopupContext"|"NativeWorkerContext"|"NativeTransportContext"|"PopupTabTarget"|"RuntimePopupConfigurationRequest"} ProtocolTypeName */
 
     /**
      * @param {ProtocolTypeName} typeName
@@ -2703,18 +2839,26 @@
             case "RuntimeResponseRequest": return n277(value, context);
             case "RuntimeBadgeUpdate": return n279(value, context);
             case "RuntimeApplyCompletedResponse": return n281(value, context);
-            case "ContentToWorker": return n283(value, context);
-            case "PopupToWorker": return n290(value, context);
-            case "WorkerToContent": return n294(value, context);
-            case "PopupToContent": return n298(value, context);
-            case "WorkerToPopup": return n299(value, context);
-            case "WorkerRequest": return n300(value, context);
-            case "PageToContentMessage": return n303(value, context);
-            case "ContentMessage": return n304(value, context);
-            case "WorkflowVersion": return n307(value, context);
-            case "PopupQueueUnavailable": return n308(value, context);
-            case "ErrorCode": return n309(value, context);
-            case "RuntimeApplyCompletedReply": return n310(value, context);
+            case "ContentToWorker": return n284(value, context);
+            case "PopupToWorker": return n291(value, context);
+            case "WorkerToContent": return n296(value, context);
+            case "PopupToContent": return n300(value, context);
+            case "WorkerToPopup": return n301(value, context);
+            case "WorkerRequest": return n302(value, context);
+            case "PageToContentMessage": return n305(value, context);
+            case "ContentMessage": return n306(value, context);
+            case "WorkflowVersion": return n309(value, context);
+            case "PopupQueueUnavailable": return n310(value, context);
+            case "ErrorCode": return n311(value, context);
+            case "RuntimeApplyCompletedReply": return n312(value, context);
+            case "TransportSiteIdentity": return n314(value, context);
+            case "TransportDocumentIdentity": return n315(value, context);
+            case "NativeSiteContext": return n318(value, context);
+            case "NativePopupContext": return n322(value, context);
+            case "NativeWorkerContext": return n324(value, context);
+            case "NativeTransportContext": return n326(value, context);
+            case "PopupTabTarget": return n329(value, context);
+            case "RuntimePopupConfigurationRequest": return n330(value, context);
             default: return null;
             }
         } catch { return null; }
@@ -2803,18 +2947,26 @@
                 case "RuntimeResponseRequest": n277(value, context); return true;
                 case "RuntimeBadgeUpdate": n279(value, context); return true;
                 case "RuntimeApplyCompletedResponse": n281(value, context); return true;
-                case "ContentToWorker": n283(value, context); return true;
-                case "PopupToWorker": n290(value, context); return true;
-                case "WorkerToContent": n294(value, context); return true;
-                case "PopupToContent": n298(value, context); return true;
-                case "WorkerToPopup": n299(value, context); return true;
-                case "WorkerRequest": n300(value, context); return true;
-                case "PageToContentMessage": n303(value, context); return true;
-                case "ContentMessage": n304(value, context); return true;
-                case "WorkflowVersion": n307(value, context); return true;
-                case "PopupQueueUnavailable": n308(value, context); return true;
-                case "ErrorCode": n309(value, context); return true;
-                case "RuntimeApplyCompletedReply": n310(value, context); return true;
+                case "ContentToWorker": n284(value, context); return true;
+                case "PopupToWorker": n291(value, context); return true;
+                case "WorkerToContent": n296(value, context); return true;
+                case "PopupToContent": n300(value, context); return true;
+                case "WorkerToPopup": n301(value, context); return true;
+                case "WorkerRequest": n302(value, context); return true;
+                case "PageToContentMessage": n305(value, context); return true;
+                case "ContentMessage": n306(value, context); return true;
+                case "WorkflowVersion": n309(value, context); return true;
+                case "PopupQueueUnavailable": n310(value, context); return true;
+                case "ErrorCode": n311(value, context); return true;
+                case "RuntimeApplyCompletedReply": n312(value, context); return true;
+                case "TransportSiteIdentity": n314(value, context); return true;
+                case "TransportDocumentIdentity": n315(value, context); return true;
+                case "NativeSiteContext": n318(value, context); return true;
+                case "NativePopupContext": n322(value, context); return true;
+                case "NativeWorkerContext": n324(value, context); return true;
+                case "NativeTransportContext": n326(value, context); return true;
+                case "PopupTabTarget": n329(value, context); return true;
+                case "RuntimePopupConfigurationRequest": n330(value, context); return true;
                 default: return false;
                 }
             } catch { return false; }

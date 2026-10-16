@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {BrowserLifecycle} from "../../Scripts/approval_lifecycle/browser.mjs";
+import vm from "node:vm";
+import {BrowserLifecycle, nativeSiteContext} from "../../Scripts/approval_lifecycle/browser.mjs";
 import {LifecycleFailure, Scheduler} from "../../Scripts/approval_lifecycle/scheduler.mjs";
 import {deferred} from "./test_helpers.mjs";
 import {createRequire} from "node:module";
@@ -27,6 +28,9 @@ test("composed harness boots actual provider, content and worker scripts across 
         browser.check();
         assert.equal(operation.result, "0x1");
         assert.equal(native.filter(message => message.subject === "getLatestConfiguration").length, 1);
+        const configuration = native.find(message => message.subject === "getLatestConfiguration");
+        assert.deepEqual(configuration.__bwContext, nativeSiteContext(tab));
+        assert.equal(configuration.configurationKey, new URL(tab.url).origin);
         assert.equal(tab.document.pageWindow.ethereum.isBigWallet, true);
         assert.equal(tab.document.pageWindow.solana.isBigWallet, true);
         assert.equal(tab.document.pageWindow.navigator.wallets.length, 1);
@@ -112,23 +116,100 @@ test("composed harness preserves distinct profiles, documents and restarted brow
 
 test("composed popup executes its real queue boot and closes its own timers", async () => {
     const scheduler = new Scheduler;
-    const commands = [];
+    const commands = [], messages = [];
     const browser = new BrowserLifecycle({scheduler, mode: "popup", native: async message => {
         commands.push(message.subject);
+        messages.push(message);
         if (message.subject === "getPendingRequests") { return {requests: [], completedResponses: []}; }
         return bootstrap(message);
     }});
     try {
         browser.openTab();
         const popup = await browser.openPopup();
-        await scheduler.until(() => commands.includes("getPendingRequests") && popup.harness.get("screen-idle").classList.contains("hidden") === false);
+        await scheduler.until(() => commands.includes("getPendingRequests") &&
+            messages.some(message => message.subject === "getLatestConfiguration" && message.__bwContext?.source === "popup") &&
+            popup.harness.get("screen-idle").classList.contains("hidden") === false);
         assert.equal(popup.harness.get("idle-host").textContent, "wallet.example");
+        assert.deepEqual(messages.find(message => message.subject === "getPendingRequests").__bwContext,
+            {source: "popup", privateBrowsing: false});
+        const configuration = messages.find(message => message.subject === "getLatestConfiguration" &&
+            message.__bwContext?.source === "popup");
+        assert.deepEqual(configuration?.__bwContext, {source: "popup", privateBrowsing: false});
+        assert.equal(configuration?.configurationKey, "https://wallet.example");
         browser.closePopup();
         assert.equal(scheduler.pending({owner: popup.owner}).length, 0);
         assert.equal(browser.profile().popup, null);
         browser.check();
     } finally { browser.close(); }
 });
+
+test("composed popup captures active-tab privacy without replacing its displayed target", async () => {
+    const scheduler = new Scheduler;
+    const messages = [];
+    const browser = new BrowserLifecycle({scheduler, mode: "popup", native: async message => {
+        messages.push(message);
+        return message.subject === "getPendingRequests" ? {requests: [], completedResponses: []} : bootstrap(message);
+    }});
+    try {
+        const normal = browser.openTab();
+        const popup = await browser.openPopup();
+        await scheduler.until(() => messages.some(message => message.subject === "getLatestConfiguration" &&
+            message.__bwContext?.source === "popup"));
+        await scheduler.drain();
+        const target = vm.runInContext("popupQueue.tab.activeTab", popup.harness.context);
+        assert.equal(target.id, normal.id);
+        assert.deepEqual(messages.find(message => message.subject === "getPendingRequests").__bwContext,
+            {source: "popup", privateBrowsing: false});
+
+        const privateTab = browser.openTab({url: "https://private.example/dapp", privateBrowsing: true});
+        assert.equal(browser.profile().activeTab, privateTab.id);
+        let result;
+        const operation = vm.runInContext('nativeMessage("getPendingRequests", 77)', popup.harness.context).then(
+            value => { result = {value}; }, error => { result = {error}; }
+        );
+        await scheduler.until(() => result !== undefined);
+        await operation;
+        assert.equal(result.error, undefined);
+        assert.deepEqual(messages.find(message => message.subject === "getPendingRequests" && message.id === 77).__bwContext,
+            {source: "popup", privateBrowsing: true});
+        assert.equal(vm.runInContext("popupQueue.tab.activeTab", popup.harness.context), target);
+        assert.equal(popup.harness.get("idle-host").textContent, "wallet.example");
+        browser.check();
+    } finally { browser.close(); }
+});
+
+for (const url of ["https://wallet.example/second", "https://other.example/page"]) {
+    test(`popup tab messages retain their explicit destination after focusing ${url}`, async () => {
+        const scheduler = new Scheduler;
+        const browser = new BrowserLifecycle({scheduler, mode: "popup", native: async message =>
+            message.subject === "getPendingRequests" ? {requests: [], completedResponses: []} : bootstrap(message)});
+        try {
+            const first = browser.openTab();
+            const popup = await browser.openPopup();
+            const second = browser.openTab({url});
+            browser.focus(second.id);
+            const active = await popup.harness.browser.tabs.query({active: true, currentWindow: true});
+            assert.equal(active[0].id, second.id);
+            const received = [];
+            for (const tab of [first, second]) {
+                tab.document.runtimeListeners.push(message => {
+                    if (message.subject === "workflowProbe") { received.push(tab.id); }
+                    return false;
+                });
+            }
+            const probe = {subject: "workflowProbe", nonce: "a".repeat(32), workflowVersion: 4};
+            for (const tab of [second, first]) {
+                let response;
+                const pending = popup.harness.browser.tabs.sendMessage(tab.id, probe).then(value => { response = value; });
+                await scheduler.until(() => response !== undefined);
+                await pending;
+                assert.equal(response.nonce, probe.nonce);
+            }
+            assert.deepEqual(received, [second.id, first.id]);
+            browser.check();
+        } finally { browser.close(); }
+    });
+}
 
 test("native reply scheduling identities remain bound to calls when completions arrive in reverse order", async () => {
     const runs = [];

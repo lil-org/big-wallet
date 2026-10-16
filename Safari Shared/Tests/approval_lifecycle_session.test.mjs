@@ -223,6 +223,7 @@ async function terminalPopupRecoverySession({queuedSuccessor = false} = {}) {
         return queuedSuccessor ? [terminal, next, other] : [terminal];
     };
     const tab = session.browser.openTab({profileIdentifier, url: "https://one.example/page"});
+    if (queuedSuccessor) { session.browser.openTab({profileIdentifier: other.handle.profileIdentifier, url: "https://one.example/other"}); }
     await session.pumpUntil(() => session.browser.configurationReady(tab.id, disconnected));
     return {session, terminal, next, other, profileIdentifier, reviewedPopup: () => reviewedPopup, queueNext: () => { pending = next; }};
 }
@@ -348,8 +349,8 @@ test("recovery focuses queued native requests whose approval coordinator was los
             await session.quiesce({rejectReviews});
             assert.deepEqual(commands, [{operation: "native", payload: {
                 message: {subject: "showApproval", id: 7, requestToken: request.handle.token, configurationKey: request.configurationKey,
-                    workflowVersion: 4, __bwPrivateBrowsing: false},
-                profileIdentifier: request.handle.profileIdentifier, privateBrowsing: false,
+                    workflowVersion: 4, __bwContext: {source: "worker", privateBrowsing: false}},
+                profileIdentifier: request.handle.profileIdentifier,
             }}]);
             assert.deepEqual(decisions, rejectReviews ? ["reject"] : []);
             assert.equal(request.phase, rejectReviews ? "responded" : "queued");
@@ -381,8 +382,8 @@ test("recovery refocuses paused native requests without a presentation before de
             await session.quiesce({rejectReviews});
             assert.deepEqual(commands, [{operation: "native", payload: {
                 message: {subject: "showApproval", id: request.handle.id, requestToken: request.handle.token,
-                    configurationKey: request.configurationKey, workflowVersion: 4, __bwPrivateBrowsing: false},
-                profileIdentifier: request.handle.profileIdentifier, privateBrowsing: false,
+                    configurationKey: request.configurationKey, workflowVersion: 4, __bwContext: {source: "worker", privateBrowsing: false}},
+                profileIdentifier: request.handle.profileIdentifier,
             }}]);
             assert.deepEqual(decisions, rejectReviews ? ["reject"] : []);
             assert.equal(request.phase, rejectReviews ? "responded" : "queued");
@@ -852,6 +853,23 @@ test("an unsolicited popup approval cannot create user consent", async () => {
             id: request.handle.id, requestToken: request.handle.token, reviewToken: session.browser.popupState().review.reviewToken,
             payload: {selectedAccounts: session.browser.popupPresentation().accounts, chainId: "0x1"}}), error => error.invariant === "consent");
         assert.equal(session.oracle.approvals.size, 0);
+        assert.throws(() => session.browser.check(), error => error.invariant === "consent");
+    } finally { session.browser.close(); }
+});
+
+test("a popup click refused during privacy lookup cannot leave reusable consent", async () => {
+    const {session, request, popup} = await popupSession();
+    try {
+        const reviewToken = session.browser.popupState().review.reviewToken;
+        const selectedAccounts = session.browser.popupPresentation().accounts;
+        popup.harness.browser.tabs.query = async () => [];
+        assert.equal(await session.decide({}, "approve", request), false);
+        assert.equal(session.popupApprovals.size, 0);
+        assert.equal(popup.harness.nativeMessages.filter(message => message.subject === "approveRequest").length, 0);
+        await assert.rejects(popup.harness.browser.runtime.sendNativeMessage("org.lil.wallet", {
+            subject: "approveRequest", id: request.handle.id, requestToken: request.handle.token, reviewToken,
+            payload: {selectedAccounts, chainId: "0x1"},
+        }), error => error.invariant === "consent");
         assert.throws(() => session.browser.check(), error => error.invariant === "consent");
     } finally { session.browser.close(); }
 });

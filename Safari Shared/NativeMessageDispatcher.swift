@@ -2,6 +2,114 @@
 
 import Foundation
 
+struct NativeRequestContext: Sendable {
+    struct SiteIdentity: Equatable, Sendable {
+        let host: String
+        let configurationKey: String
+    }
+
+    struct DocumentIdentity: Equatable, Sendable {
+        let tabID: Int
+        let frameID: Int
+        let documentID: String?
+    }
+
+    enum Source: Equatable, Sendable {
+        case site(SiteIdentity, DocumentIdentity)
+        case popup
+        case worker
+    }
+
+    let source: Source
+    let privateBrowsing: Bool
+    let profileIdentifier: UUID?
+
+    private init?(_ wire: WireProtocol.ValidatedObject, profileIdentifier: UUID?) {
+        guard wire.contract == .nativeTransportContext,
+              let source = wire.json["source"] as? String,
+              let privateBrowsing = wire.json["privateBrowsing"] as? Bool else { return nil }
+        switch source {
+        case "site":
+            guard let site = wire.json["site"] as? [String: Any],
+                  let host = site["host"] as? String,
+                  let configurationKey = site["configurationKey"] as? String,
+                  ExtensionBridge.isValidIdentity(host: host, configurationKey: configurationKey),
+                  let document = wire.json["document"] as? [String: Any],
+                  let tabID = document["tabId"] as? Int,
+                  let frameID = document["frameId"] as? Int else { return nil }
+            self.source = .site(
+                SiteIdentity(host: host, configurationKey: configurationKey),
+                DocumentIdentity(tabID: tabID, frameID: frameID, documentID: document["documentId"] as? String)
+            )
+        case "popup":
+            self.source = .popup
+        case "worker":
+            self.source = .worker
+        default:
+            return nil
+        }
+        self.privateBrowsing = privateBrowsing
+        self.profileIdentifier = profileIdentifier
+    }
+
+    static func extract(
+        from message: Any,
+        profileIdentifier: UUID?
+    ) -> (message: WireProtocol.JSONObject, context: NativeRequestContext)? {
+        guard var json = WireProtocol.JSONObject(message)?.json,
+              let rawContext = json.removeValue(forKey: WireProtocol.nativeContextKey),
+              let wire = WireProtocol.object(.nativeTransportContext, value: rawContext),
+              let context = NativeRequestContext(wire, profileIdentifier: profileIdentifier),
+              let payload = WireProtocol.JSONObject(json) else { return nil }
+        return (payload, context)
+    }
+
+    func authorizes(_ request: SafariRequest) -> Bool {
+        switch source {
+        case .site(let site, _):
+            return request.host == site.host && request.configurationKey == site.configurationKey
+        case .popup:
+            return false
+        case .worker:
+            guard case .unknown(let body) = request.body else { return false }
+            return body.method == .switchAccount
+        }
+    }
+
+    func authorizes(_ request: InternalSafariRequest) -> Bool {
+        switch request.command {
+        case .openApp:
+            return source == .worker
+        case .popup:
+            return source == .popup
+        case .worker(.getRecoveryRequests):
+            return source == .worker
+        case .worker(.pollResponse(let identity)):
+            return matches(configurationKey: identity.response.configurationKey)
+        case .page(let command):
+            switch command {
+            case .rpc:
+                if case .site = source { return true }
+                return false
+            case .getLatestConfiguration(let configurationKey):
+                return matches(configurationKey: configurationKey)
+            case .disconnect(let identity):
+                guard case .site = source else { return false }
+                return matches(configurationKey: identity.configurationKey)
+            case .acknowledgeResponse(let identity):
+                return matches(configurationKey: identity.configurationKey)
+            case .showApproval(let identity):
+                return source != .popup && matches(configurationKey: identity.configurationKey)
+            }
+        }
+    }
+
+    private func matches(configurationKey: String) -> Bool {
+        guard case .site(let site, _) = source else { return true }
+        return site.configurationKey == configurationKey
+    }
+}
+
 enum NativeApprovalReconciliationResult: Equatable, Sendable {
     case pending, responseReady, opened, missing, unavailable
 }
@@ -92,30 +200,27 @@ struct NativeMessageDispatcher: Sendable {
 
     func dispatch(
         message: WireProtocol.JSONObject,
-        profileIdentifier: UUID?,
-        privateBrowsing: Bool
+        context: NativeRequestContext
     ) async throws -> WireProtocol.ValidatedObject {
         if message["subject"] != nil {
             return try await handleInternal(
                 message: message.json,
-                profileIdentifier: profileIdentifier,
-                privateBrowsing: privateBrowsing
+                context: context
             )
         }
         return try await handleDapp(
             message: message.json,
-            profileIdentifier: profileIdentifier,
-            privateBrowsing: privateBrowsing
+            context: context
         )
     }
 
     private func handleInternal(
         message: [String: Any],
-        profileIdentifier: UUID?,
-        privateBrowsing: Bool
+        context: NativeRequestContext
     ) async throws -> WireProtocol.ValidatedObject {
         guard let wire = WireProtocol.object(.nativeCommand, value: message),
               let request = try? InternalSafariRequest(wire: wire),
+              context.authorizes(request),
               let data = ExtensionBridge.payloadData(message),
               ExtensionBridge.isInternalPayloadAllowed(command: request.command, byteCount: data.count)
         else { throw Error.invalidMessage }
@@ -125,16 +230,16 @@ struct NativeMessageDispatcher: Sendable {
             guard await dependencies.openApp() else { throw Error.bridgeUnavailable }
             return try Self.encode(["id": request.id, "opened": true], as: .nativeOpenReply)
         case .page(let command):
-            guard !privateBrowsing else { throw Error.unsupportedOperation }
-            return try await handle(command, request: request, profileIdentifier: profileIdentifier)
+            guard !context.privateBrowsing else { throw Error.unsupportedOperation }
+            return try await handle(command, request: request, profileIdentifier: context.profileIdentifier)
         case .worker(let command):
-            guard !privateBrowsing else { throw Error.unsupportedOperation }
-            return try await handle(command, request: request, profileIdentifier: profileIdentifier)
+            guard !context.privateBrowsing else { throw Error.unsupportedOperation }
+            return try await handle(command, request: request, profileIdentifier: context.profileIdentifier)
         case .popup:
             guard policy == .popup else { throw Error.unsupportedOperation }
-            let response = privateBrowsing
+            let response = context.privateBrowsing
                 ? await dependencies.privatePopup(request)
-                : await dependencies.popup(request, profileIdentifier)
+                : await dependencies.popup(request, context.profileIdentifier)
             guard let object = try? PopupResponseEncoder.encode(response, for: request) else {
                 throw Error.invalidMessage
             }
@@ -180,11 +285,11 @@ struct NativeMessageDispatcher: Sendable {
 
     private func handleDapp(
         message: [String: Any],
-        profileIdentifier: UUID?,
-        privateBrowsing: Bool
+        context: NativeRequestContext
     ) async throws -> WireProtocol.ValidatedObject {
         guard let wire = WireProtocol.object(.dappRequest, value: message),
-              let request = SafariRequest(wire: wire) else { throw Error.invalidMessage }
+              let request = SafariRequest(wire: wire),
+              context.authorizes(request) else { throw Error.invalidMessage }
         let ingress: ExtensionBridge.Ingress
         switch ExtensionBridge.dappIngressResult(request: request, wire: wire) {
         case .accepted(let value): ingress = value
@@ -192,13 +297,13 @@ struct NativeMessageDispatcher: Sendable {
             return try Self.response(.init(for: request, payload: .error(.internalError)), for: request)
         case .invalid: throw Error.invalidMessage
         }
-        if privateBrowsing {
+        if context.privateBrowsing {
             return try Self.response(.init(for: request, payload: .error(.privateBrowsingUnsupported)), for: request)
         }
         switch await dependencies.bridge.enqueue(
             ingress: ingress,
-            profileIdentifier: profileIdentifier,
-            privateBrowsing: privateBrowsing
+            profileIdentifier: context.profileIdentifier,
+            privateBrowsing: context.privateBrowsing
         ) {
         case .accepted(let handle, let approvalRequired, let authority, let admissionKind, let nativeDeliveryNonce):
             if !approvalRequired || admissionKind == .coalesced {

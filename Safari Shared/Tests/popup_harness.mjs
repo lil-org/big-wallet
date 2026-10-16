@@ -192,10 +192,10 @@ export function createPopupHarness(options = {}) {
         },
     };
     const unavailable = () => new Promise(() => {});
-    function dispatch(handler, message) {
+    function dispatch(handler, message, ...args) {
         if (!open) { return unavailable(); }
         assert.equal(typeof handler, "function", `Unexpected popup message: ${message.subject}`);
-        return Promise.resolve(handler(message)).then(
+        return Promise.resolve(handler(message, ...args)).then(
             value => open ? value : unavailable(),
             error => { if (!open) { return unavailable(); } throw error; }
         );
@@ -222,7 +222,7 @@ export function createPopupHarness(options = {}) {
             query: async () => options.tab ? [options.tab] : [],
             sendMessage(id, message) {
                 tabMessages.push({id, message: normalized(message)});
-                return dispatch(options.tabMessage, message);
+                return dispatch(options.tabMessage, message, id);
             },
         },
     };

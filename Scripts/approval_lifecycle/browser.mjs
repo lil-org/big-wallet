@@ -21,6 +21,15 @@ const extensionURL = "safari-web-extension://wallet/";
 const clone = value => value === undefined ? undefined : structuredClone(value);
 const never = () => new Promise(() => {});
 
+export function nativeSiteContext(tab) {
+    const url = new URL(tab.url);
+    if (url.protocol === "file:") { url.search = ""; url.hash = ""; }
+    return {source: "site", privateBrowsing: tab.privateBrowsing,
+        site: {host: url.protocol === "file:" ? url.href : url.host,
+            configurationKey: url.protocol === "file:" ? url.href : url.origin},
+        document: {tabId: tab.id, frameId: 0, documentId: tab.document.owner}};
+}
+
 function publicProviderState(document, provider) {
     return provider === "ethereum" ? {address: document.pageWindow.ethereum.selectedAddress || "", chainId: document.pageWindow.ethereum.chainId} :
         {publicKey: document.pageWindow.solana.publicKey?.toBase58() || ""};
@@ -223,6 +232,11 @@ export class BrowserLifecycle {
             },
             tabs: {
                 query: async () => [...this.tabs.values()].filter(tab => tab.profile === profile && tab.alive).map(tab => ({id: tab.id, url: tab.url, incognito: tab.privateBrowsing})),
+                get: async id => {
+                    const tab = this.tabs.get(id);
+                    if (!tab?.alive || tab.profile !== profile) { throw new Error("Unknown tab"); }
+                    return {id: tab.id, url: tab.url, incognito: tab.privateBrowsing};
+                },
                 sendMessage: (id, message) => this.toContent(id, message, {id: extensionID, url: extensionURL}, owner),
                 onUpdated: {addListener: listener => { worker.tabUpdated = listener; }},
                 onRemoved: {addListener: listener => { worker.tabRemoved = listener; }},
@@ -351,7 +365,7 @@ export class BrowserLifecycle {
             removeChild() {},
         };
         const sourceLive = () => document.alive && tab.document === document;
-        const sender = () => ({id: extensionID, url: tab.url, frameId: 0,
+        const sender = () => ({id: extensionID, url: tab.url, frameId: 0, documentId: owner,
             tab: {id: tab.id, url: tab.url, incognito: tab.privateBrowsing}});
         const browser = {runtime: {
             id: extensionID, getURL: path => extensionURL + path,
@@ -483,7 +497,7 @@ export class BrowserLifecycle {
             tab: tab ? {id: tab.id, url: tab.url, incognito: tab.privateBrowsing} : null,
             native: message => this.nativeMessage(profile, owner, message, isLive),
             worker: message => this.toWorker(profile, message, {id: extensionID, url: extensionURL + "popup.html"}, owner, isLive),
-            tabMessage: message => tab ? this.toContent(tab.id, message, {id: extensionID, url: extensionURL + "popup.html"}, owner) : never(),
+            tabMessage: (message, id) => this.toContent(id, message, {id: extensionID, url: extensionURL + "popup.html"}, owner),
             storageGet: async () => Object.fromEntries(profile.storage),
             globals: this.scheduler.bindings(owner),
             onClose: () => {
@@ -492,6 +506,11 @@ export class BrowserLifecycle {
                 if (profile.popup === popup) { profile.popup = null; }
             },
         });
+        harness.browser.tabs.query = async () => {
+            const activeTab = this.tabs.get(profile.activeTab);
+            return activeTab?.alive && activeTab.profile === profile
+                ? [{id: activeTab.id, url: activeTab.url, incognito: activeTab.privateBrowsing}] : [];
+        };
         popup.harness = harness;
         await harness.boot();
         return popup;

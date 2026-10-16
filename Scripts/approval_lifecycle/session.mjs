@@ -3,7 +3,7 @@ import {tmpdir} from "node:os";
 import {join, resolve} from "node:path";
 import {createRequire} from "node:module";
 import {isDeepStrictEqual} from "node:util";
-import {BrowserLifecycle, requestNameForOperation} from "./browser.mjs";
+import {BrowserLifecycle, nativeSiteContext, requestNameForOperation} from "./browser.mjs";
 import {NativeChild} from "./native_child.mjs";
 import {EffectLedger, FakeRPC, LifecycleOracle, canonicalAccount, handleKey} from "./oracle.mjs";
 import {LifecycleFailure, Scheduler} from "./scheduler.mjs";
@@ -115,7 +115,7 @@ export class LifecycleSession {
         return child;
     }
     sendNative(message, profileIdentifier) {
-        const promise = this.child("bridge").command("native", {message, profileIdentifier, privateBrowsing: false}, {timeout: 60000}).then(reply => {
+        const promise = this.child("bridge").command("native", {message, profileIdentifier}, {timeout: 60000}).then(reply => {
             if (message.subject === "pollResponse" && reply?.response?.kind === "result" && reply.response.approvalCommitted === true && reply.state) {
                 this.oracle.recordCommittedGrant({handle: {id: message.id, token: message.requestToken, profileIdentifier}, state: reply.state});
             }
@@ -525,7 +525,7 @@ export class LifecycleSession {
             if (remaining <= 0) { throw new LifecycleFailure("watchdog", "Fresh native configuration remained unavailable", {tab: index, reply}); }
             reply = await bridge.command("native", {profileIdentifier: tab.profile.id, message: {
                 id: 1, subject: "getLatestConfiguration", configurationKey: new URL(tab.url).origin,
-                workflowVersion: bridge.ready.workflowVersion, __bwPrivateBrowsing: false,
+                workflowVersion: bridge.ready.workflowVersion, __bwContext: nativeSiteContext(tab),
             }}, {timeout: remaining});
             if (reply?.id === 1 && reply.state && !Object.hasOwn(reply, "unavailable")) { break; }
             if (reply?.id !== 1 || reply.unavailable !== true || Object.keys(reply).length !== 2 || attempt >= 2) {
@@ -603,6 +603,7 @@ export class LifecycleSession {
             const buttonID = decision === "reject" ? "button-reject" : "button-approve";
             if (popup.harness.get(buttonID).disabled) { return false; }
             const before = popup.harness.nativeMessages.length;
+            let intent;
             if (decision === "approve") {
                 const presentation = this.browser.popupPresentation(profileIdentifier);
                 const payload = {};
@@ -612,11 +613,23 @@ export class LifecycleSession {
                 } else if (state.review.kind === "signMessage" && presentation.cluster) { payload.cluster = presentation.cluster; }
                 const label = `popup-approval-${++this.approvalSerial}`;
                 this.oracle.approvalIntent({handle: request.handle, label, selectedAccounts: payload.selectedAccounts});
-                this.popupApprovals.set(popup.owner, {handle: structuredClone(request.handle), payload, review: structuredClone(state.review)});
+                intent = {handle: structuredClone(request.handle), payload, review: structuredClone(state.review)};
+                this.popupApprovals.set(popup.owner, intent);
             }
-            try { this.trackPopup(this.browser.clickPopup(profileIdentifier, buttonID), profileIdentifier); }
-            finally { this.popupApprovals.delete(popup.owner); }
-            if (popup.harness.nativeMessages.length === before) { return false; }
+            const subjects = decision === "approve" ? ["approveRequest"] : decision === "reject" ? ["rejectRequest"]
+                : ["retryApproval", "retryTransaction"];
+            const attempted = () => popup.harness.nativeMessages.slice(before).some(message => subjects.includes(message.subject));
+            let clickFinished = false;
+            try {
+                this.trackPopup(Promise.resolve(this.browser.clickPopup(profileIdentifier, buttonID)).finally(() => {
+                    clickFinished = true;
+                }), profileIdentifier);
+                await this.scheduler.until(() => attempted() || clickFinished || !popup.alive ||
+                    this.browser.profile(profileIdentifier).popup !== popup, {timeout: this.options.timeout});
+            } finally {
+                if (intent && this.popupApprovals.get(popup.owner) === intent) { this.popupApprovals.delete(popup.owner); }
+            }
+            if (!attempted()) { return false; }
         } else {
             if (decision === "approve" && request.presentation !== "review") { return false; }
             const label = `native-approval-${++this.approvalSerial}`;
@@ -781,9 +794,10 @@ export class LifecycleSession {
             exercised = !!saved;
             if (saved) {
                 if (this.mode === "native") { this.track(this.child("approval").command("decide", {handle: saved.handle, decision: "approve", revision: saved.revision ?? -1})); }
-                else { this.track(this.child("bridge").command("native", {profileIdentifier: saved.handle.profileIdentifier, privateBrowsing: false,
+                else { this.track(this.child("bridge").command("native", {profileIdentifier: saved.handle.profileIdentifier,
                     message: {subject: "approveRequest", id: saved.handle.id, requestToken: saved.handle.token,
-                        reviewToken: saved.reviewToken, payload: saved.payload || {}, workflowVersion: 4, __bwPrivateBrowsing: false}})); }
+                        reviewToken: saved.reviewToken, payload: saved.payload || {}, workflowVersion: 4,
+                        __bwContext: {source: "popup", privateBrowsing: false}}})); }
             }
             break;
         }
@@ -921,7 +935,7 @@ export class LifecycleSession {
                     request.presentation === "none" && request.coordinatorPhase === "paused")) {
                     this.sendNative({subject: "showApproval", id: request.handle.id, requestToken: request.handle.token,
                         configurationKey: request.configurationKey, workflowVersion: this.child("bridge").ready.workflowVersion,
-                        __bwPrivateBrowsing: false}, request.handle.profileIdentifier);
+                        __bwContext: {source: "worker", privateBrowsing: false}}, request.handle.profileIdentifier);
                     continue;
                 }
                 if (!["responded", "completed"].includes(request.phase)) { await this.decide({}, "reject", request); }
