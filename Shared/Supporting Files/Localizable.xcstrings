@@ -32303,6 +32303,287 @@
         }
       }
     },
+    "This keystore exceeds the supported import limits" : {
+      "comment" : "Keystore import resource limits exceeded error",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يتجاوز مخزن المفاتيح هذا حدود الاستيراد المدعومة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "এই কীস্টোরটি সমর্থিত আমদানি সীমা অতিক্রম করেছে"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aquest magatzem de claus supera els límits d’importació admesos"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toto úložiště klíčů překračuje podporované limity importu"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dette nøglelager overskrider de understøttede importgrænser"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Schlüsselspeicher überschreitet die unterstützten Importgrenzen"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αυτός ο χώρος αποθήκευσης κλειδιών υπερβαίνει τα υποστηριζόμενα όρια εισαγωγής"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This keystore exceeds the supported import limits"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este almacén de claves supera los límites de importación admitidos"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este almacén de claves supera los límites de importación admitidos"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tämä avainsäilö ylittää tuetut tuontirajat"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce magasin de clés dépasse les limites d’importation prises en charge"
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "આ કીસ્ટોર સમર્થિત આયાત મર્યાદાઓને વટાવે છે"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מאגר המפתחות הזה חורג ממגבלות הייבוא הנתמכות"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यह कीस्टोर समर्थित इम्पोर्ट सीमाओं से अधिक है"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ova pohrana ključeva premašuje podržana ograničenja uvoza"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ez a kulcstároló túllépi a támogatott importálási korlátokat"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Penyimpanan kunci ini melebihi batas impor yang didukung"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo archivio di chiavi supera i limiti di importazione supportati"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このキーストアは対応するインポート上限を超えています"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಈ ಕೀಸ್ಟೋರ್ ಬೆಂಬಲಿತ ಆಮದು ಮಿತಿಗಳನ್ನು ಮೀರಿದೆ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 키 저장소는 지원되는 가져오기 한도를 초과합니다"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ഈ കീസ്റ്റോർ പിന്തുണയ്ക്കുന്ന ഇറക്കുമതി പരിധികൾ കവിയുന്നു"
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "हा कीस्टोअर समर्थित आयात मर्यादा ओलांडतो"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Storan kunci ini melebihi had import yang disokong"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dette nøkkellageret overskrider de støttede importgrensene"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze sleutelopslag overschrijdt de ondersteunde importlimieten"
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ଏହି କୀଷ୍ଟୋର ସମର୍ଥିତ ଆମଦାନି ସୀମା ଅତିକ୍ରମ କରିଛି"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਇਹ ਕੀਸਟੋਰ ਸਮਰਥਿਤ ਇੰਪੋਰਟ ਹੱਦਾਂ ਤੋਂ ਵੱਧ ਹੈ"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ten magazyn kluczy przekracza obsługiwane limity importu"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este repositório de chaves excede os limites de importação suportados"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este repositório de chaves excede os limites de importação suportados"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acest depozit de chei depășește limitele de import acceptate"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это хранилище ключей превышает поддерживаемые ограничения импорта"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toto úložisko kľúčov prekračuje podporované limity importu"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta shramba ključev presega podprte omejitve uvoza"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detta nyckellager överskrider de importgränser som stöds"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இந்த கீஸ்டோர் ஆதரிக்கப்படும் இறக்குமதி வரம்புகளை மீறுகிறது"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ఈ కీస్టోర్ మద్దతు ఉన్న దిగుమతి పరిమితులను మించిపోయింది"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "คลังเก็บคีย์นี้เกินขีดจำกัดการนำเข้าที่รองรับ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu anahtar deposu desteklenen içe aktarma sınırlarını aşıyor"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Це сховище ключів перевищує підтримувані обмеження імпорту"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "یہ کی اسٹور درآمد کی معاونت یافتہ حدود سے تجاوز کرتا ہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kho khóa này vượt quá giới hạn nhập được hỗ trợ"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此密钥库超出了支持的导入限制"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此金鑰庫超出了支援的匯入限制"
+          }
+        }
+      }
+    },
     "To" : {
       "comment" : "16757150246313463204",
       "localizations" : {

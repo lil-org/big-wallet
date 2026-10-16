@@ -1719,6 +1719,158 @@ final class WalletCoreProxyHDWalletTests: XCTestCase {
 
 final class WalletCoreProxyStoredKeyTests: XCTestCase {
 
+    func testUserImportInputLimitCountsUTF8Bytes() {
+        XCTAssertEqual(WalletImportLimits.maximumInputBytes, 1_048_576)
+        let asciiBoundary = String(repeating: "a", count: 1_048_576)
+        let unicodeBoundary = String(repeating: "é", count: 524_288)
+
+        XCTAssertTrue(WalletImportLimits.acceptsInput(asciiBoundary))
+        XCTAssertFalse(WalletImportLimits.acceptsInput(asciiBoundary + "a"))
+        XCTAssertEqual(unicodeBoundary.utf8.count, 1_048_576)
+        XCTAssertTrue(WalletImportLimits.acceptsInput(unicodeBoundary))
+        XCTAssertFalse(WalletImportLimits.acceptsInput(unicodeBoundary + "a"))
+    }
+
+    func testUserImportPBKDF2BudgetCountsEverySHA256Block() {
+        XCTAssertEqual(WalletImportLimits.maximumPBKDF2Work, 2_000_000)
+        let boundaries = [
+            (iterations: 2_000_000, derivedKeyBytes: 32),
+            (iterations: 1_000_000, derivedKeyBytes: 33),
+            (iterations: 62_500, derivedKeyBytes: 1024),
+        ]
+        for boundary in boundaries {
+            XCTAssertTrue(WalletImportLimits.allowsPBKDF2(
+                iterations: boundary.iterations, derivedKeyBytes: boundary.derivedKeyBytes
+            ), "\(boundary)")
+            XCTAssertFalse(WalletImportLimits.allowsPBKDF2(
+                iterations: boundary.iterations + 1, derivedKeyBytes: boundary.derivedKeyBytes
+            ), "\(boundary)")
+        }
+    }
+
+    func testUserImportPBKDF2BudgetRejectsInvalidAndOverflowingInputs() {
+        let inputs = [
+            (iterations: 0, derivedKeyBytes: 32),
+            (iterations: -1, derivedKeyBytes: 32),
+            (iterations: Int.min, derivedKeyBytes: 32),
+            (iterations: Int(UInt32.max), derivedKeyBytes: 32),
+            (iterations: Int.max, derivedKeyBytes: 32),
+            (iterations: 1, derivedKeyBytes: 0),
+            (iterations: 1, derivedKeyBytes: -1),
+            (iterations: 1, derivedKeyBytes: 1025),
+            (iterations: 1, derivedKeyBytes: Int.max),
+            (iterations: Int.max, derivedKeyBytes: Int.max),
+        ]
+        for input in inputs {
+            XCTAssertFalse(WalletImportLimits.allowsPBKDF2(
+                iterations: input.iterations, derivedKeyBytes: input.derivedKeyBytes
+            ), "\(input)")
+        }
+    }
+
+    func testUserJSONImportSizeLimitDoesNotRestrictStoredReads() throws {
+        var boundary = Vectors.ethereumWeb3PBKDF2Fixture
+        boundary.append(Data(repeating: 0x20, count: 1_048_576 - boundary.count))
+        XCTAssertNoThrow(try WalletStoredKey.importUserJSON(json: boundary))
+
+        let oversized = boundary + Data([0x20])
+        XCTAssertThrowsError(try WalletStoredKey.importUserJSON(json: oversized)) { error in
+            XCTAssertEqual(error as? WalletImportError, .limitExceeded)
+        }
+        XCTAssertNotNil(WalletStoredKey.importJSON(json: oversized))
+
+        let oversizedMalformed = Data(repeating: 0xff, count: 1_048_577)
+        XCTAssertThrowsError(try WalletStoredKey.importUserJSON(json: oversizedMalformed)) { error in
+            XCTAssertEqual(error as? WalletImportError, .limitExceeded)
+        }
+    }
+
+    func testUserJSONImportChecksPBKDF2WorkWithoutDerivingKeys() throws {
+        let boundaries = [
+            (iterations: 2_000_000, derivedKeyBytes: 32),
+            (iterations: 1_000_000, derivedKeyBytes: 33),
+            (iterations: 62_500, derivedKeyBytes: 1024),
+        ]
+        for boundary in boundaries {
+            let accepted = try pbkdf2ImportJSON(
+                iterations: boundary.iterations, derivedKeyBytes: boundary.derivedKeyBytes
+            )
+            XCTAssertNoThrow(try WalletStoredKey.importUserJSON(json: accepted), "\(boundary)")
+            let rejected = try pbkdf2ImportJSON(
+                iterations: boundary.iterations + 1, derivedKeyBytes: boundary.derivedKeyBytes
+            )
+            XCTAssertThrowsError(try WalletStoredKey.importUserJSON(json: rejected), "\(boundary)") { error in
+                XCTAssertEqual(error as? WalletImportError, .limitExceeded)
+            }
+            XCTAssertNotNil(WalletStoredKey.importJSON(json: rejected), "\(boundary)")
+        }
+        let expensiveStoredKey = try pbkdf2ImportJSON(iterations: Int(UInt32.max), derivedKeyBytes: 32)
+        XCTAssertNotNil(WalletStoredKey.importJSON(json: expensiveStoredKey))
+        XCTAssertThrowsError(try WalletStoredKey.importUserJSON(json: expensiveStoredKey)) { error in
+            XCTAssertEqual(error as? WalletImportError, .limitExceeded)
+        }
+    }
+
+    func testUserJSONImportKeepsMalformedInputDistinctFromLimitFailures() throws {
+        let malformed = try [
+            Data(), Data("[]".utf8), Data("{}".utf8), Data("not json".utf8),
+            pbkdf2ImportJSON(iterations: 0, derivedKeyBytes: 32),
+            pbkdf2ImportJSON(iterations: Int.max, derivedKeyBytes: 32),
+            pbkdf2ImportJSON(iterations: 1, derivedKeyBytes: 1025),
+        ]
+        for json in malformed {
+            XCTAssertThrowsError(try WalletStoredKey.importUserJSON(json: json)) { error in
+                guard case WalletKeyStoreError.invalidKey = error else {
+                    return XCTFail("Expected invalid key, got \(error)")
+                }
+            }
+        }
+    }
+
+    func testUserJSONImportDecryptsPublishedEthereumPBKDF2Vector() throws {
+        let key = try WalletStoredKey.importUserJSON(json: Vectors.ethereumWeb3PBKDF2Fixture)
+
+        XCTAssertEqual(
+            key.decryptPrivateKey(password: Vectors.walletCoreJSONPrivateKeyPassword),
+            Vectors.walletCoreJSONPrivateKeyData
+        )
+    }
+
+    func testUserJSONImportPreservesExistingPBKDF2Variants() throws {
+        for fixture in Vectors.walletCoreJSONVariantPrivateKeyFixtures {
+            let key = try WalletStoredKey.importUserJSON(json: fixture.json)
+            XCTAssertEqual(
+                key.decryptPrivateKey(password: Vectors.walletCoreJSONPBKDF2PrivateKeyPassword),
+                Vectors.secpPrivateKey,
+                fixture.name
+            )
+        }
+    }
+
+    func testUserJSONImportPreservesExistingScryptLimits() throws {
+        XCTAssertNoThrow(try WalletStoredKey.importUserJSON(json: Vectors.walletCoreJSONPrivateKeyFixture))
+        XCTAssertNoThrow(try WalletStoredKey.importUserJSON(json: Vectors.walletCoreJSONMnemonicFixture))
+
+        let fixture = String(decoding: Vectors.walletCoreJSONPrivateKeyFixture, as: UTF8.self)
+        let oversizedWork = Data(fixture.replacingOccurrences(of: #""p": 8"#, with: #""p": 9"#).utf8)
+        XCTAssertThrowsError(try WalletStoredKey.importUserJSON(json: oversizedWork)) { error in
+            guard case WalletKeyStoreError.invalidKey = error else {
+                return XCTFail("Expected invalid key, got \(error)")
+            }
+        }
+    }
+
+    private func pbkdf2ImportJSON(iterations: Int, derivedKeyBytes: Int) throws -> Data {
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Vectors.ethereumWeb3PBKDF2Fixture) as? [String: Any])
+        var crypto = try XCTUnwrap(object["crypto"] as? [String: Any])
+        var parameters = try XCTUnwrap(crypto["kdfparams"] as? [String: Any])
+        parameters["c"] = iterations
+        parameters["dklen"] = derivedKeyBytes
+        crypto["kdfparams"] = parameters
+        object["crypto"] = crypto
+        return try JSONSerialization.data(withJSONObject: object)
+    }
+
     func testImportsWalletCorePrivateKeyJSONFixture() throws {
         let expectedAccount = WalletAccount(address: Vectors.walletCoreJSONPrivateKeyAddress,
                                             coin: .ethereum,
@@ -2310,6 +2462,7 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
         try assertExportedJSON(reencryptedPrivateKeyJSON,
                                doesNotLeak: [WalletCrypto.hexString(Vectors.secpPrivateKey)])
         XCTAssertEqual(reencryptedPrivateKey.name, "renamed-private")
+        XCTAssertNoThrow(try WalletStoredKey.importUserJSON(json: reencryptedPrivateKeyJSON))
         XCTAssertEqual(reencryptedPrivateKey.decryptPrivateKey(password: Vectors.longPassword), Vectors.secpPrivateKey)
         XCTAssertNil(reencryptedPrivateKey.decryptPrivateKey(password: Vectors.password))
 
@@ -2323,6 +2476,7 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
 
         try assertExportedJSON(reencryptedMnemonicJSON, doesNotLeak: [mnemonic])
         XCTAssertEqual(reencryptedMnemonicKey.name, "renamed-mnemonic")
+        XCTAssertNoThrow(try WalletStoredKey.importUserJSON(json: reencryptedMnemonicJSON))
         XCTAssertEqual(reencryptedMnemonicKey.decryptMnemonic(password: Vectors.longPassword), mnemonic)
         XCTAssertNil(reencryptedMnemonicKey.decryptMnemonic(password: Vectors.password))
     }

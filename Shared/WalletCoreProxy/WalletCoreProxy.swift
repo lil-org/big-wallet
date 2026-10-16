@@ -9,6 +9,25 @@ enum WalletKeyStoreError: Swift.Error {
     case accountNotFound
 }
 
+enum WalletImportError: Error, Equatable {
+    case limitExceeded
+}
+
+enum WalletImportLimits {
+    static let maximumInputBytes = 1_048_576
+    static let maximumPBKDF2Work = 2_000_000
+
+    static func acceptsInput(_ input: String) -> Bool {
+        input.utf8.prefix(maximumInputBytes + 1).count <= maximumInputBytes
+    }
+
+    static func allowsPBKDF2(iterations: Int, derivedKeyBytes: Int) -> Bool {
+        guard PBKDF2.parametersAreValid(rounds: iterations, keyLength: derivedKeyBytes) else { return false }
+        let outputBlocks = (derivedKeyBytes - 1) / 32 + 1
+        return iterations <= maximumPBKDF2Work / outputBlocks
+    }
+}
+
 enum WalletCoin: UInt32, Hashable, Sendable {
     case ethereum = 60
     case solana = 501
@@ -245,6 +264,16 @@ struct WalletStoredKey {
 
     static func importJSON(json: Data) -> WalletStoredKey? {
         return StoredKeyStorage.importJSON(json).map(WalletStoredKey.init(storage:))
+    }
+
+    static func importUserJSON(json: Data) throws -> WalletStoredKey {
+        guard json.count <= WalletImportLimits.maximumInputBytes else { throw WalletImportError.limitExceeded }
+        guard let key = importJSON(json: json) else { throw WalletKeyStoreError.invalidKey }
+        if case let .pbkdf2(iterations, derivedKeyBytes, _) = key.storage.encryptedPayload.kdf,
+           !WalletImportLimits.allowsPBKDF2(iterations: iterations, derivedKeyBytes: derivedKeyBytes) {
+            throw WalletImportError.limitExceeded
+        }
+        return key
     }
 
     static func importPrivateKey(privateKey: Data, name: String, password: Data, coin: WalletCoin) -> WalletStoredKey? {

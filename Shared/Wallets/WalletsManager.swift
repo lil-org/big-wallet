@@ -683,6 +683,7 @@ private enum WalletKeyPreparation {
 
     @concurrent
     static func validateWalletInput(_ input: String) async -> WalletsManager.InputValidationResult {
+        guard WalletImportLimits.acceptsInput(input) else { return .invalid }
         let trimmed = input.singleSpaced
         if WalletCrypto.isValidMnemonic(mnemonic: trimmed) || privateKeyImport(from: trimmed) != nil { return .valid }
         return input.maybeJSON ? .requiresPassword : .invalid
@@ -694,6 +695,7 @@ private enum WalletKeyPreparation {
         let passwordString = String(decoding: password, as: UTF8.self)
         let wallet: WalletContainer
         if let input {
+            guard WalletImportLimits.acceptsInput(input) else { throw WalletImportError.limitExceeded }
             let trimmed = input.singleSpaced
             if WalletCrypto.isValidMnemonic(mnemonic: trimmed) {
                 wallet = try importMnemonic(trimmed, name: "", encryptPassword: passwordString)
@@ -773,7 +775,7 @@ private enum WalletKeyPreparation {
     }
 
     private static func importJSON(_ json: Data, name: String, password: String, newPassword: String, coin: WalletCoin) throws -> WalletContainer {
-        guard let key = WalletStoredKey.importJSON(json: json) else { throw WalletKeyStoreError.invalidKey }
+        let key = try WalletStoredKey.importUserJSON(json: json)
         guard var data = key.decryptPrivateKey(password: Data(password.utf8)) else { throw WalletKeyStoreError.invalidPassword }
         defer { data.resetBytes(in: 0..<data.count) }
         if let mnemonic = checkMnemonic(data) { return try importMnemonic(mnemonic, name: name, encryptPassword: newPassword) }

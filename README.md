@@ -111,6 +111,12 @@ Revocation history retains the latest removal of each wallet or account without 
 
 ### Password setup and secret exports
 
+New wallet imports accept at most 1 MiB of UTF-8 input. Imported PBKDF2 keystores
+must fit a budget of 2,000,000 iterations across all SHA-256 output blocks
+(`iterations * ceil(derivedKeyBytes / 32)`). Existing scrypt limits still apply.
+These admission limits reject unusually expensive keystores before decryption;
+they do not change stored-wallet loading or the app's encryption settings.
+
 Initial password setup only inserts a missing credential; it never replaces an existing password. Unreadable or malformed credentials, and wallet records without their password, stop setup and offer Retry. Competing setup sessions must authenticate with the credential that was actually stored.
 
 During macOS startup or onboarding, a credential-storage failure cancels the current step, clears password drafts, and shows Retry in the same window. Only explicit Retry restarts the flow from current storage state; an existing password requires fresh authentication. Closing the flow cancels its pending wallet-open and pre-authentication approval requests.

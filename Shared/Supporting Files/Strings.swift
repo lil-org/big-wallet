@@ -27,6 +27,7 @@ struct Strings {
     static let enterKeystorePassword = loc("Enter Keystore Password")
     static let importWalletTextFieldPlaceholder = loc("Options:\n\n• Private key\n• Secret words\n• Keystore")
     static let failedToImportWallet = loc("Failed to import wallet")
+    static let walletImportLimitExceeded = loc("This keystore exceeds the supported import limits")
     static let welcomeScreenText = loc("Sign crypto\ntransactions\nin Safari")
     static let createPassword = loc("Create Password")
     static let repeatPassword = loc("Repeat Password")

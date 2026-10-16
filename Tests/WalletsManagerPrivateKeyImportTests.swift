@@ -163,6 +163,30 @@ final class WalletsManagerPrivateKeyImportTests: XCTestCase {
         assertPrivateKey(imported?.privateKey, equals: Vectors.data(hex: input))
     }
 
+    @MainActor
+    func testValidationLimitsRawUTF8BytesBeforeWhitespaceNormalization() async {
+        let keychain = Keychain(
+            copyMatching: { _, _ in XCTFail("Validation must not read Keychain"); return errSecParam },
+            add: { _, _ in XCTFail("Validation must not add Keychain items"); return errSecParam },
+            update: { _, _ in XCTFail("Validation must not update Keychain items"); return errSecParam },
+            delete: { _ in XCTFail("Validation must not delete Keychain items"); return errSecParam }
+        )
+        let manager = WalletsManager(keychain: keychain)
+        let mnemonic = Vectors.walletCoreJSONMnemonic
+        let paddingBytes = WalletImportLimits.maximumInputBytes - mnemonic.utf8.count
+        let atLimit = String(repeating: " ", count: paddingBytes) + mnemonic
+        let aboveLimit = String(repeating: " ", count: paddingBytes - 2) + mnemonic + "\u{2003}"
+        XCTAssertEqual(atLimit.utf8.count, WalletImportLimits.maximumInputBytes)
+        XCTAssertEqual(aboveLimit.utf8.count, WalletImportLimits.maximumInputBytes + 1)
+        XCTAssertLessThan(aboveLimit.count, WalletImportLimits.maximumInputBytes)
+
+        let accepted = await manager.validateWalletInput(atLimit)
+        let rejected = await manager.validateWalletInput(aboveLimit)
+
+        XCTAssertTrue(accepted == .valid)
+        XCTAssertTrue(rejected == .invalid)
+    }
+
     private func testPrivateKey(file: StaticString = #filePath, line: UInt = #line) throws -> WalletPrivateKey {
         guard let privateKey = WalletPrivateKey(data: privateKeyData) else {
             XCTFail("Expected valid private key", file: file, line: line)
@@ -464,6 +488,121 @@ final class WalletRemovalIntegrationTests: XCTestCase {
 
         XCTAssertEqual(transactionEntries.withLock { $0 }, 0)
         XCTAssertTrue(fixture.keychain.events.isEmpty)
+    }
+
+    func testOversizedWalletInputRejectsValidationAndImportBeforeSourceMutation() async throws {
+        let fixture = try RemovalFixture()
+        let transactionEntries = Mutex(0)
+        let manager = fixture.transactionManager(ObservedWalletSourceMutator(
+            base: WalletSourceMutationStub(onRevoke: { _ in XCTFail("Rejected imports must not revoke authority") }),
+            beforeTransaction: { transactionEntries.withLock { $0 += 1 } }
+        ))
+        await assertWalletReload(manager)
+        let originalData = fixture.keychain.walletData
+        let originalWallets = manager.wallets
+        let maximumBytes = WalletImportLimits.maximumInputBytes
+        let multiByteInput = String(repeating: "é", count: maximumBytes / 2 + 1)
+        XCTAssertLessThan(multiByteInput.count, maximumBytes)
+        let inputs = [
+            String(repeating: " ", count: maximumBytes) + Vectors.walletCoreJSONMnemonic,
+            multiByteInput,
+            "{\"padding\":\"" + String(repeating: "a", count: maximumBytes) + "\"}",
+        ]
+
+        for input in inputs {
+            XCTAssertGreaterThan(input.utf8.count, maximumBytes)
+            let validation = await manager.validateWalletInput(input)
+            XCTAssertTrue(validation == .invalid)
+            do {
+                _ = try await manager.addWallet(input: input, inputPassword: "password")
+                XCTFail("Expected oversized input to be rejected")
+            } catch WalletImportError.limitExceeded {
+            }
+
+            XCTAssertEqual(transactionEntries.withLock { $0 }, 0)
+            XCTAssertTrue(fixture.keychain.events.isEmpty)
+            XCTAssertEqual(fixture.keychain.walletData, originalData)
+            XCTAssertEqual(manager.wallets, originalWallets)
+        }
+    }
+
+    func testPBKDF2ImportBudgetRejectionPreservesExistingWalletSources() async throws {
+        let fixture = try RemovalFixture()
+        let transactionEntries = Mutex(0)
+        let manager = fixture.transactionManager(ObservedWalletSourceMutator(
+            base: WalletSourceMutationStub(onRevoke: { _ in XCTFail("Rejected imports must not revoke authority") }),
+            beforeTransaction: { transactionEntries.withLock { $0 += 1 } }
+        ))
+        await assertWalletReload(manager)
+        let originalData = fixture.keychain.walletData
+        let originalWallets = manager.wallets
+        let source = WalletRepository.Source(
+            walletID: fixture.walletID,
+            data: try XCTUnwrap(originalData[fixture.walletID]),
+            password: try XCTUnwrap(fixture.keychain.passwordData)
+        )
+        let costs = [
+            (rounds: WalletImportLimits.maximumPBKDF2Work + 1, keyLength: 32),
+            (rounds: WalletImportLimits.maximumPBKDF2Work / 2 + 1, keyLength: 33),
+        ]
+
+        for cost in costs {
+            var json = try XCTUnwrap(JSONSerialization.jsonObject(
+                with: Vectors.walletCoreJSONVariantPrivateKeyFixtures[0].json
+            ) as? [String: Any])
+            var crypto = try XCTUnwrap(json["crypto"] as? [String: Any])
+            var parameters = try XCTUnwrap(crypto["kdfparams"] as? [String: Any])
+            parameters["c"] = cost.rounds
+            parameters["dklen"] = cost.keyLength
+            crypto["kdfparams"] = parameters
+            json["crypto"] = crypto
+            let input = String(decoding: try JSONSerialization.data(withJSONObject: json), as: UTF8.self)
+
+            do {
+                _ = try await manager.addWallet(
+                    input: input,
+                    inputPassword: String(decoding: Vectors.walletCoreJSONPBKDF2PrivateKeyPassword, as: UTF8.self)
+                )
+                XCTFail("Expected excessive PBKDF2 work to be rejected")
+            } catch WalletImportError.limitExceeded {
+            }
+
+            XCTAssertEqual(transactionEntries.withLock { $0 }, 0)
+            XCTAssertTrue(fixture.keychain.events.isEmpty)
+            XCTAssertEqual(fixture.keychain.walletData, originalData)
+            XCTAssertEqual(manager.wallets, originalWallets)
+            XCTAssertTrue(try manager.repository.sourceIsCurrent(source))
+        }
+    }
+
+    func testAdmittedMnemonicSolanaAndJSONImportsRoundTripThroughManager() async throws {
+        let fixture = try RemovalFixture()
+        fixture.keychain.walletData = [:]
+        let manager = fixture.manager { _ in XCTFail("Import must not revoke authority") }
+        let inputs: [(input: String, password: String?, mnemonic: Bool, exported: String)] = [
+            (Vectors.walletCoreJSONMnemonic, nil, true, Vectors.walletCoreJSONMnemonic),
+            (Vectors.solanaSequentialSecretKeyBase58, nil, false, Vectors.solanaSequentialSecretKeyBase58),
+            (
+                String(decoding: Vectors.walletCoreJSONVariantPrivateKeyFixtures[0].json, as: UTF8.self),
+                String(decoding: Vectors.walletCoreJSONPBKDF2PrivateKeyPassword, as: UTF8.self),
+                false,
+                WalletCrypto.hexString(data: Vectors.secpPrivateKey)
+            ),
+        ]
+
+        for entry in inputs {
+            let validation = await manager.validateWalletInput(entry.input)
+            XCTAssertTrue(validation == (entry.password == nil ? .valid : .requiresPassword))
+            let wallet = try await manager.addWallet(input: entry.input, inputPassword: entry.password)
+            let exported = entry.mnemonic
+                ? try await manager.exportMnemonic(wallet: wallet)
+                : try await manager.exportPrivateKey(wallet: wallet)
+
+            XCTAssertEqual(wallet.isMnemonic, entry.mnemonic)
+            XCTAssertEqual(exported, entry.exported)
+            XCTAssertNotNil(fixture.keychain.walletData[wallet.id])
+        }
+        XCTAssertEqual(manager.wallets.count, inputs.count)
     }
 
     func testExistingWalletDecryptsWithBOMPrefixedStoredPassword() async throws {

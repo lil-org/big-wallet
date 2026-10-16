@@ -89,7 +89,8 @@ class ImportViewController: NSViewController {
                 guard let self else { return }
                 finishImporting()
                 guard !Task.isCancelled else { return }
-                presentMessageAlert(Strings.failedToImportWallet, style: .critical)
+                presentMessageAlert(error as? WalletImportError == .limitExceeded
+                    ? Strings.walletImportLimitExceeded : Strings.failedToImportWallet, style: .critical)
             }
         }
     }

@@ -128,7 +128,8 @@ class ImportViewController: UIViewController {
                 guard let self else { return }
                 setWaiting(false)
                 guard !Task.isCancelled else { return }
-                showMessageAlert(text: Strings.failedToImportWallet)
+                showMessageAlert(text: error as? WalletImportError == .limitExceeded
+                    ? Strings.walletImportLimitExceeded : Strings.failedToImportWallet)
             }
         }
     }
