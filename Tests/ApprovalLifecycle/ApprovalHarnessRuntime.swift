@@ -81,7 +81,11 @@ final class HarnessNetworks: Sendable {
 
 private final class HarnessPopupSigningSource: WalletSigningSource {
     let approvedAccount: WalletAccountDescriptor
-    let requiresCommitLease = true
+    var commit: WalletSigningCommit {
+        .vault(acquire: { [weak self] in
+            self?.isCurrent() == true ? WalletExecutionLease(release: {}) : nil
+        })
+    }
     private let repository: WalletRepository
     private struct State { var source: WalletRepository.Source?; var invalidated = false }
     private let state = Mutex(State())
@@ -106,7 +110,6 @@ private final class HarnessPopupSigningSource: WalletSigningSource {
     }
 
     func retireSigningMaterial() {}
-    @MainActor func acquireCommitLease() async -> WalletExecutionLease? { isCurrent() ? WalletExecutionLease(release: {}) : nil }
     func invalidate() { state.withLock { $0.invalidated = true } }
 }
 

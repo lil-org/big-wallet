@@ -1152,11 +1152,11 @@ final class WalletSigningScopeTests: XCTestCase {
         let signer = access
         XCTAssertTrue(access.attach(permit: try approvedWalletSigningPermitForTesting(approvedAccount: descriptor())))
         _ = await signer.sign()
-        let firstLease = await access.takeCommitLease()
-        XCTAssertNotNil(firstLease)
-        firstLease?.release()
-        let secondLease = await access.takeCommitLease()
-        XCTAssertNil(secondLease)
+        let firstCommit = await access.takeCommit()
+        let firstLease = try walletCommitLeaseForTesting(firstCommit)
+        firstLease.release()
+        let secondCommit = await access.takeCommit()
+        assertWalletCommitUnavailableForTesting(secondCommit)
         assertUnavailable(await signer.sign())
     }
 
@@ -1243,7 +1243,7 @@ final class WalletSigningScopeTests: XCTestCase {
             isCurrent: { true },
             sign: { operation, _ in await backing.sign(operation) },
             retireSigningMaterial: { backing.retireSigningMaterial() },
-            requiresCommitLease: false
+            commit: .native
         )
         XCTAssertTrue(session.attach(permit: permit))
         let signing = Task { await session.sign() }
@@ -1480,7 +1480,7 @@ final class WalletSigningScopeTests: XCTestCase {
                 isCurrent: { true },
                 sign: { operation, source in await access.sign(operation, validating: source) },
                 retireSigningMaterial: { access.invalidate() },
-                requiresCommitLease: false
+                commit: .native
             )
             XCTAssertTrue(signer.attach(permit: permit))
             let response = try walletSigningResponseForTesting(await signer.sign().get(), permit: permit)
@@ -1500,7 +1500,7 @@ final class WalletSigningScopeTests: XCTestCase {
             isCurrent: { true },
             sign: { operation, source in await access.sign(operation, validating: source) },
             retireSigningMaterial: { access.invalidate() },
-            requiresCommitLease: false
+            commit: .native
         )
         XCTAssertTrue(signer.attach(permit: permit))
         guard case .failure(.failedToSign) = await signer.sign() else {
@@ -1569,7 +1569,7 @@ final class WalletSigningScopeTests: XCTestCase {
                 isCurrent: { true },
                 sign: { operation, source in await access.sign(operation, validating: source) },
                 retireSigningMaterial: { access.invalidate() },
-                requiresCommitLease: false
+                commit: .native
             )
             XCTAssertTrue(signer.attach(permit: permit))
             guard case .success(.broadcast(let output)) = await signer.sign(),
@@ -1608,7 +1608,7 @@ final class WalletSigningScopeTests: XCTestCase {
                 isCurrent: { true },
                 sign: { operation, source in await access.sign(operation, validating: source) },
                 retireSigningMaterial: { access.invalidate() },
-                requiresCommitLease: false
+                commit: .native
             )
             XCTAssertTrue(signer.attach(permit: permit))
             let signatures: [String]
@@ -1688,7 +1688,7 @@ final class WalletSigningScopeTests: XCTestCase {
                 isCurrent: { true },
                 sign: { operation, source in await access.sign(operation, validating: source) },
                 retireSigningMaterial: { access.invalidate() },
-                requiresCommitLease: false
+                commit: .native
             )
             XCTAssertTrue(signer.attach(permit: permit))
             guard case .success(.broadcast(let output)) = await signer.sign(),
@@ -1748,7 +1748,7 @@ final class WalletSigningScopeTests: XCTestCase {
             isCurrent: isCurrent,
             sign: { operation, _ in await backing.sign(operation) },
             retireSigningMaterial: { backing.retireSigningMaterial() },
-            acquireCommitLease: { WalletExecutionLease {} },
+            commit: .vault(acquire: { WalletExecutionLease {} }),
             clock: clock
         )
     }

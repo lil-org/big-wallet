@@ -8,8 +8,6 @@ import {
     freezeObjectNormally,
     isArrayNormally,
     isSafeIntegerNormally,
-    getWeakMapValue,
-    setWeakMapValue,
     hasOwnProperty,
 } from "./intrinsics";
 
@@ -40,7 +38,7 @@ const authorizationChangedMessage =
     "Authorization changed while the request was pending";
 
 function stateFor(provider) {
-    return getWeakMapValue(providerStates, provider);
+    return providerStates.get(provider);
 }
 
 function invalidParameters() {
@@ -737,7 +735,7 @@ class BigWalletEthereum {
             stateEpoch: 0,
             transport,
         };
-        setWeakMapValue(providerStates, this, state);
+        providerStates.set(this, state);
         try {
             applyFunction(setTimeoutNormally, undefined, [() => {
                 if (state.runtime.phase !== "retired") { emitSafely(this, "_initialized", []); }

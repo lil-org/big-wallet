@@ -293,7 +293,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                 isCurrent: { true },
                 sign: { operation, _ in await owned.sign(operation) },
                 retireSigningMaterial: { owned.retireSigningMaterial() },
-                acquireCommitLease: { WalletExecutionLease(release: {}) }
+                commit: .vault(acquire: { WalletExecutionLease(release: {}) })
             )
             weak let scopedReference = scoped
 
@@ -430,12 +430,74 @@ final class PopupRequestSessionsTests: XCTestCase {
                     approvedAccount: popupTestAccountDescriptor(), handle: setup.snapshot.handle,
                     deadline: setup.claim.executionDeadline
                 ),
-                acquireCommitLease: { acquisitions += 1; return WalletExecutionLease(release: {}) }
+                commit: .vault(acquire: { acquisitions += 1; return WalletExecutionLease(release: {}) })
             ))
         XCTAssertEqual(result, .abandoned)
         XCTAssertEqual(acquisitions, 0)
         let events = await store.events()
         XCTAssertEqual(events, ["claim", "abandon"])
+    }
+
+    func testOrdinarySigningClaimRejectsNativeCommitBeforeResolution() async throws {
+        let store = try makeStore()
+        let setup = try await makeExecutionSetup(store: store, id: 612)
+        let session = makeWalletSigningSessionForTesting(
+            authorization: walletSigningAuthorizationForTesting(
+                approvedAccount: popupTestAccountDescriptor(), handle: setup.claim.handle,
+                deadline: setup.claim.executionDeadline
+            ),
+            sign: { _, _ in
+                XCTFail("An ordinary claim must reject native signing access")
+                return .failure(.failedToSign)
+            },
+            commit: .native
+        )
+        let executor = DurableApprovalExecutor(store: store, environment: .init(
+            requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
+                XCTFail("An ordinary claim must not execute with native commit authority")
+                return .rollback
+            })
+        ))
+
+        let result = await executor.execute(claim: setup.claim, prepare: { _ in
+            .ready(consent: setup.consent, signing: session)
+        }, resolve: { _ in
+            XCTFail("Commit policy must be checked before resolving the approval")
+            return .approved(setup.approval)
+        })
+
+        XCTAssertEqual(result, .abandoned)
+        XCTAssertFalse(session.validateCurrent())
+        let events = await store.events()
+        XCTAssertEqual(events, ["claim", "abandon"])
+    }
+
+    func testUnavailableVaultCommitAbandonsOrdinaryAndNativeClaims() async throws {
+        for native in [false, true] {
+            let store = try makeStore()
+            let setup = try await makeExecutionSetup(store: store, id: 613, native: native)
+            var acquisitions = 0
+            let session = makeWalletSigningSessionForTesting(
+                authorization: WalletSigningAuthorization(
+                    handle: setup.claim.handle, approvedAccount: popupTestAccountDescriptor(),
+                    signingDeadline: setup.claim.authority.signingDeadline(for: setup.claim.request)
+                ),
+                commit: .vault(acquire: { acquisitions += 1; return nil })
+            )
+            let executor = DurableApprovalExecutor(store: store, environment: .init(
+                requestProcessor: CompactPopupProcessor(execute: { _, _, _, permit in
+                    approvedFailureForTesting(.userRejected, permit: permit)
+                })
+            ))
+
+            let result = await execute(executor, setup: setup, signing: session)
+
+            XCTAssertEqual(result, .abandoned)
+            XCTAssertEqual(acquisitions, 1)
+            XCTAssertFalse(session.validateCurrent())
+            let events = await store.events()
+            XCTAssertEqual(events, [native ? "nativeClaim" : "claim", "abandon"])
+        }
     }
 
     func testSessionUsesFourDisposablePhasesAndOneReviewToken() throws {
@@ -529,6 +591,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         enum Boundary: CaseIterable { case postValidation, responseCompletion, broadcastCheckpoint }
         for (index, boundary) in Boundary.allCases.enumerated() {
             let clock = TestClock(date: Date(timeIntervalSince1970: 1_700_000_000))
+            let leaseReleases = LockedTestValue(0)
             let store = try makeStore(clock: { clock.date })
             let setup = try await makeExecutionSetup(store: store, id: 450 + index)
             let deadline = setup.claim.executionDeadline
@@ -553,12 +616,13 @@ final class PopupRequestSessionsTests: XCTestCase {
                     authorization: walletSigningAuthorizationForTesting(
                         approvedAccount: popupTestAccountDescriptor(), handle: setup.snapshot.handle, deadline: deadline
                     ),
-                    acquireCommitLease: {
+                    commit: .vault(acquire: {
                         if boundary == .postValidation { clock.setDate(deadline) }
-                        return WalletExecutionLease(release: {})
-                    }, clock: { clock.date }
+                        return WalletExecutionLease { leaseReleases.withValue { $0 += 1 } }
+                    }), clock: { clock.date }
                 ))
             XCTAssertEqual(result, boundary == .responseCompletion ? .ownershipLost : .abandoned)
+            XCTAssertEqual(leaseReleases.value, 1)
             let events = await store.events()
             XCTAssertEqual(events, boundary == .responseCompletion ? ["claim"] : ["claim", "abandon"])
             let recovered = try await store.snapshot(handle: setup.snapshot.handle)
@@ -592,7 +656,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                 authorization: walletSigningAuthorizationForTesting(
                     approvedAccount: popupTestAccountDescriptor(), handle: setup.snapshot.handle, deadline: deadline
                 ),
-                acquireCommitLease: { WalletExecutionLease { clock.setDate(deadline) } },
+                commit: .vault(acquire: { WalletExecutionLease { clock.setDate(deadline) } }),
                 clock: { clock.date }
             ))
         XCTAssertEqual(result, .persisted)
@@ -626,7 +690,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                         approvedAccount: popupTestAccountDescriptor(), handle: setup.snapshot.handle,
                         deadline: setup.claim.executionDeadline
                     ),
-                    acquireCommitLease: { WalletExecutionLease { state.release() } }
+                    commit: .vault(acquire: { WalletExecutionLease { state.release() } })
                 ))
             XCTAssertEqual(result, .persisted)
             XCTAssertTrue(state.wasHeldAtDurableCommit)
@@ -827,7 +891,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                         approvedAccount: popupTestAccountDescriptor(), handle: setup.snapshot.handle,
                         deadline: setup.claim.executionDeadline
                     ),
-                    acquireCommitLease: { leases += 1; return WalletExecutionLease(release: {}) },
+                    commit: .vault(acquire: { leases += 1; return WalletExecutionLease(release: {}) }),
                     clock: { setup.claim.executionDeadline.addingTimeInterval(-0.1) }
                 ))
             XCTAssertEqual(result, .abandoned)
@@ -872,8 +936,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                         sign: { _, _ in
                             XCTFail("Expired operation must not sign"); return .failure(.failedToSign)
                         },
-                        requiresCommitLease: kind != "native",
-                        acquireCommitLease: { XCTFail("Expired operation must not acquire a lease"); return nil },
+                        commit: kind == "native" ? .native : .vault(acquire: { XCTFail("Expired operation must not acquire a lease"); return nil }),
                         clock: { setup.claim.executionDeadline.addingTimeInterval(offset) }
                     )
                     defer { session.invalidate() }
@@ -972,7 +1035,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             isCurrent: { true },
             sign: { operation, _ in await access.sign(operation) },
             retireSigningMaterial: { access.retireSigningMaterial() },
-            acquireCommitLease: { WalletExecutionLease(release: {}) }
+            commit: .vault(acquire: { WalletExecutionLease(release: {}) })
         )
         var preparations = 0
         var executions = 0
@@ -1128,15 +1191,14 @@ final class PopupRequestSessionsTests: XCTestCase {
                         }
                         return result
                     },
-                    requiresCommitLease: !native,
-                    acquireCommitLease: {
+                    commit: native ? .native : .vault(acquire: {
                         if phase == "lease" {
                             started.fulfill()
                             await gate.wait()
                             late.fulfill()
                         }
                         return WalletExecutionLease { releases.withValue { $0 += 1 } }
-                    }
+                    })
                 )
                 let executor = DurableApprovalExecutor(
                     store: store,
@@ -4008,7 +4070,7 @@ extension PopupRequestSessionsTests {
                             isCurrent: { true },
                             sign: { operation, _ in await signingAccess.sign(operation) },
                             retireSigningMaterial: { signingAccess.retireSigningMaterial() },
-                            acquireCommitLease: { WalletExecutionLease(release: {}) },
+                            commit: .vault(acquire: { WalletExecutionLease(release: {}) }),
                             clock: { clock.date }
                         )
                         authenticationStarted = true
@@ -4310,7 +4372,7 @@ extension PopupRequestSessionsTests {
                         isCurrent: { true },
                         sign: { operation, _ in await signingAccess.sign(operation) },
                         retireSigningMaterial: { signingAccess.retireSigningMaterial() },
-                        acquireCommitLease: { WalletExecutionLease(release: {}) }
+                        commit: .vault(acquire: { WalletExecutionLease(release: {}) })
                     )
                     started.fulfill()
                     await unlockGate.wait()
@@ -4935,12 +4997,12 @@ extension PopupRequestSessionsTests {
                         authorization: authorization,
                         sign: { operation, _ in await owned.sign(operation) },
                         retireSigningMaterial: { owned.retireSigningMaterial() },
-                        acquireCommitLease: {
+                        commit: .vault(acquire: {
                             XCTAssertEqual(owned.operations.count, 1)
                             leaseState.acquire()
                             await store.record("lease")
                             return WalletExecutionLease { leaseState.release() }
-                        }
+                        })
                     )
                     return .unlocked(catalog: catalog, session: access)
                 }
@@ -7292,7 +7354,7 @@ extension PopupRequestSessionsTests {
                             isCurrent: { true },
                             sign: { operation, _ in await owned.sign(operation) },
                             retireSigningMaterial: { owned.retireSigningMaterial() },
-                            acquireCommitLease: { WalletExecutionLease(release: {}) }
+                            commit: .vault(acquire: { WalletExecutionLease(release: {}) })
                         )
                         return .unlocked(catalog: authenticationCatalog, session: access)
                     }
@@ -7616,7 +7678,7 @@ extension PopupRequestSessionsTests {
                     authorization: signingAuthorization,
                     isCurrent: { true },
                     sign: { _, _ in .failure(.failedToSign) },
-                    requiresCommitLease: false
+                    commit: .native
                 )
             },
             networkResolver: { _ in
@@ -7681,7 +7743,7 @@ extension PopupRequestSessionsTests {
                         authorization: signingAuthorization,
                         isCurrent: { true },
                         sign: { _, _ in .failure(.failedToSign) },
-                        requiresCommitLease: false
+                        commit: .native
                     )
                 },
                 networkResolver: popupApprovalNetwork
@@ -7726,7 +7788,7 @@ extension PopupRequestSessionsTests {
                     authorization: signingAuthorization,
                     isCurrent: { true },
                     sign: { _, _ in .failure(.failedToSign) },
-                    requiresCommitLease: false
+                    commit: .native
                 )
             },
             networkResolver: popupApprovalNetwork
@@ -7866,7 +7928,7 @@ extension PopupRequestSessionsTests {
                     isCurrent: { true },
                     sign: { operation, _ in await signingAccess.sign(operation) },
                     retireSigningMaterial: { signingAccess.retireSigningMaterial() },
-                    requiresCommitLease: false
+                    commit: .native
                 )
                 return session
             },
@@ -7982,7 +8044,7 @@ extension PopupRequestSessionsTests {
                         authorization: signingAuthorization,
                         isCurrent: { true },
                         sign: { _, _ in .failure(.failedToSign) },
-                        requiresCommitLease: false
+                        commit: .native
                     )
                 },
                 networkResolver: { _ in
@@ -8065,7 +8127,7 @@ extension PopupRequestSessionsTests {
                     authorization: signingAuthorization,
                     isCurrent: { true },
                     sign: { _, _ in .failure(.failedToSign) },
-                    requiresCommitLease: false
+                    commit: .native
                 )
             },
             networkResolver: { chainID in
@@ -8425,7 +8487,7 @@ extension PopupRequestSessionsTests {
                         isCurrent: { true },
                         sign: { operation, _ in await signingAccess.sign(operation) },
                         retireSigningMaterial: { signingAccess.retireSigningMaterial() },
-                        requiresCommitLease: false
+                        commit: .native
                     )
                     return session
                 },
@@ -8627,7 +8689,7 @@ extension PopupRequestSessionsTests {
                             authorization: signingAuthorization,
                             isCurrent: { true },
                             sign: { _, _ in .failure(.failedToSign) },
-                            requiresCommitLease: false,
+                            commit: .native,
                             clock: { nativeClock.date }
                         )
                     },
@@ -8796,7 +8858,7 @@ extension PopupRequestSessionsTests {
                         authorization: signingAuthorization,
                         isCurrent: { true },
                         sign: { _, _ in .failure(.failedToSign) },
-                        requiresCommitLease: false,
+                        commit: .native,
                         clock: { nativeClock.date }
                     )
                 },
@@ -9521,7 +9583,7 @@ extension PopupRequestSessionsTests {
                 XCTFail("Unresolved approval must not use signing material")
                 return .failure(.failedToSign)
             },
-            requiresCommitLease: false,
+            commit: .native,
             clock: clock
         )
         addTeardownBlock {
@@ -9536,7 +9598,7 @@ extension PopupRequestSessionsTests {
                 handle: setup.claim.handle, approvedAccount: popupTestAccountDescriptor(),
                 signingDeadline: setup.claim.authority.signingDeadline(for: setup.claim.request)
             ),
-            requiresCommitLease: !native
+            commit: native ? .native : .vault(acquire: { WalletExecutionLease(release: {}) })
         )
     }
 

@@ -465,6 +465,77 @@ test("stage executor aggregates independent failures and blocks only unmet depen
     ]);
 }));
 
+for (const changed of [false, true]) {
+    test(`generated artifacts ${changed ? "are exported without passing a stale check" : "stay unexported when current"}`, async () => fixture(async root => {
+        const workspace = join(root, "workspace"), artifacts = join(root, "artifacts");
+        const source = "Safari Shared/Resources/inpage.js";
+        await mkdir(join(workspace, "Safari Shared/Resources"), {recursive: true});
+        await mkdir(artifacts);
+        await writeFile(join(workspace, source), "current bundle");
+        const stage = {id: "provider.bundle", group: "repository", command: "fake", args: [], cwd: ".", dependencies: [],
+            requirements: [], timeoutSeconds: 1, unchanged: [source]};
+        const results = await executeStages([stage], {writeJSON: atomicJSON, hashFile, workspace, artifacts, preflight: {checks: {}, destinations: {}},
+            execute: async () => { if (changed) { await writeFile(join(workspace, source), "generated bundle"); } return success(); }});
+        assert.equal(results[0].status, changed ? "failed" : "passed");
+        if (changed) {
+            const artifact = `generated/provider.bundle/${source}`;
+            assert.match(results[0].reason, /Generated artifact was not current/);
+            assert.deepEqual(results[0].generatedArtifacts, [{source, artifact, sha256: digest("generated bundle")}]);
+            assert.equal(await readFile(join(artifacts, artifact), "utf8"), "generated bundle");
+            assert.equal(auditResults(results).status, "failed");
+        } else {
+            assert.equal(results[0].generatedArtifacts, undefined);
+            assert.deepEqual(await readdir(artifacts), []);
+        }
+    }));
+}
+
+test("generated artifact copy failures fail the stage and preserve existing output", async () => fixture(async root => {
+    const workspace = join(root, "workspace"), artifacts = join(root, "artifacts");
+    await mkdir(workspace);
+    await mkdir(join(artifacts, "generated/provider.bundle"), {recursive: true});
+    await writeFile(join(workspace, "inpage.js"), "old bundle");
+    const destination = join(artifacts, "generated/provider.bundle/inpage.js");
+    await writeFile(destination, "preserved output");
+    const stage = {id: "provider.bundle", group: "repository", command: "fake", args: [], cwd: ".", dependencies: [],
+        requirements: [], timeoutSeconds: 1, unchanged: ["inpage.js"]};
+    const results = await executeStages([stage], {writeJSON: atomicJSON, hashFile, workspace, artifacts, preflight: {checks: {}, destinations: {}},
+        execute: async () => { await writeFile(join(workspace, "inpage.js"), "new bundle"); return success(); }});
+    assert.equal(results[0].status, "failed");
+    assert.match(results[0].reason, /EEXIST/);
+    assert.equal(results[0].generatedArtifacts, undefined);
+    assert.equal(await readFile(destination, "utf8"), "preserved output");
+}));
+
+for (const interference of ["source-symlink", "source-directory", "destination-symlink", "traversal"]) {
+    test(`generated artifact exports reject ${interference}`, async () => fixture(async root => {
+        const workspace = join(root, "workspace"), artifacts = join(root, "artifacts"), outside = join(root, "outside");
+        await mkdir(workspace);
+        await mkdir(artifacts);
+        await mkdir(outside);
+        const source = interference === "traversal" ? "../inpage.js" : "inpage.js";
+        const filename = join(workspace, source);
+        await writeFile(filename, "old bundle");
+        const stage = {id: "provider.bundle", group: "repository", command: "fake", args: [], cwd: ".", dependencies: [],
+            requirements: [], timeoutSeconds: 1, unchanged: [source]};
+        const results = await executeStages([stage], {writeJSON: atomicJSON, hashFile, workspace, artifacts, preflight: {checks: {}, destinations: {}},
+            execute: async () => {
+                await rm(filename);
+                if (interference === "source-symlink") {
+                    await writeFile(join(workspace, "other.js"), "new bundle");
+                    await symlink(join(workspace, "other.js"), filename);
+                } else if (interference === "source-directory") { await mkdir(filename); }
+                else { await writeFile(filename, "new bundle"); }
+                if (interference === "destination-symlink") { await symlink(outside, join(artifacts, "generated")); }
+                return success();
+            }});
+        assert.equal(results[0].status, "failed");
+        assert.match(results[0].reason, /generated artifact path|regular file|symlinks/);
+        assert.equal(results[0].generatedArtifacts, undefined);
+        assert.deepEqual(await readdir(outside), []);
+    }));
+}
+
 test("a transport failure retains the complete planned inventory before any command starts", async () => fixture(async root => {
     const manifest = createManifest(job({profile: "extended"}));
     let retained;

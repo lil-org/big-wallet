@@ -192,6 +192,21 @@ final class WalletExecutionLease: Sendable {
     }
 }
 
+enum WalletSigningCommit: Sendable {
+    case native
+    case vault(acquire: @MainActor @Sendable () async -> WalletExecutionLease?)
+
+    enum Outcome: Sendable {
+        case readyWithoutLease
+        case lease(WalletExecutionLease)
+        case unavailable
+
+        func releaseLease() {
+            if case .lease(let lease) = self { lease.release() }
+        }
+    }
+}
+
 protocol WalletSigning: AnyObject, Sendable {
     @MainActor
     func sign() async -> Result<WalletSigningOutput, WalletSigningFailure>
@@ -200,7 +215,7 @@ protocol WalletSigning: AnyObject, Sendable {
 
 protocol WalletSigningSource: AnyObject, Sendable {
     var approvedAccount: WalletAccountDescriptor { get }
-    var requiresCommitLease: Bool { get }
+    var commit: WalletSigningCommit { get }
 
     func isCurrent() -> Bool
 
@@ -209,9 +224,6 @@ protocol WalletSigningSource: AnyObject, Sendable {
         Result<WalletSigningOutput, WalletSigningFailure>
 
     func retireSigningMaterial()
-
-    @MainActor
-    func acquireCommitLease() async -> WalletExecutionLease?
 
     func invalidate()
 }
@@ -617,7 +629,7 @@ private final class RepositoryWalletSigningSource: WalletSigningSource {
     }
 
     let approvedAccount: WalletAccountDescriptor
-    let requiresCommitLease = false
+    let commit = WalletSigningCommit.native
     private let repository: WalletRepository
     private let state = Mutex(State.pending)
 
@@ -656,11 +668,6 @@ private final class RepositoryWalletSigningSource: WalletSigningSource {
 
     func retireSigningMaterial() {
         invalidate()
-    }
-
-    @MainActor
-    func acquireCommitLease() async -> WalletExecutionLease? {
-        nil
     }
 }
 
@@ -832,14 +839,14 @@ final class WalletSigningSession: WalletSigning {
     private enum ResourcePhase: Sendable {
         case materialAvailable
         case materialRetired
-        case acquiringCommitLease
-        case leaseTransferred
+        case acquiringCommit
+        case commitConsumed
         case invalidated
 
         var permitsCommit: Bool {
             switch self {
             case .materialAvailable, .materialRetired: true
-            case .acquiringCommitLease, .leaseTransferred, .invalidated: false
+            case .acquiringCommit, .commitConsumed, .invalidated: false
             }
         }
     }
@@ -851,7 +858,7 @@ final class WalletSigningSession: WalletSigning {
 
     nonisolated let authorization: WalletSigningAuthorization
     nonisolated var approvedAccount: WalletAccountDescriptor { authorization.approvedAccount }
-    var requiresCommitLease: Bool { source.requiresCommitLease }
+    nonisolated let commit: WalletSigningCommit
 
     private nonisolated let state = Mutex(State())
     private nonisolated let source: any WalletSigningSource
@@ -864,6 +871,7 @@ final class WalletSigningSession: WalletSigning {
     ) {
         self.source = source
         self.authorization = authorization
+        commit = source.commit
         self.clock = clock
     }
 
@@ -940,33 +948,47 @@ final class WalletSigningSession: WalletSigning {
         if retiresMaterial { source.retireSigningMaterial() }
     }
 
-    func takeCommitLease() async -> WalletExecutionLease? {
-        guard source.approvedAccount == approvedAccount, source.requiresCommitLease else { return nil }
+    func takeCommit() async -> WalletSigningCommit.Outcome {
+        guard !Task.isCancelled else {
+            invalidate()
+            return .unavailable
+        }
+        guard source.approvedAccount == approvedAccount else { return .unavailable }
         let retired = state.withLock { state -> (operation: ApprovedWalletSigningOperation?, phase: ResourcePhase)? in
             guard state.phase.permitsCommit else { return nil }
             let operation = state.operation
             operation?.finishAttempt()
             state.operation = nil
             let phase = state.phase
-            state.phase = .acquiringCommitLease
+            state.phase = .acquiringCommit
             return (operation, phase)
         }
-        guard let retired else { return nil }
+        guard let retired else { return .unavailable }
         withExtendedLifetime(retired.operation) {
             if case .materialAvailable = retired.phase { source.retireSigningMaterial() }
         }
         return await withTaskCancellationHandler {
-            let lease = await source.acquireCommitLease()
+            let outcome: WalletSigningCommit.Outcome
+            switch commit {
+            case .native:
+                outcome = .readyWithoutLease
+            case .vault(let acquire):
+                if let lease = await acquire() {
+                    outcome = .lease(lease)
+                } else {
+                    outcome = .unavailable
+                }
+            }
             let canTransfer = state.withLock { state in
-                guard case .acquiringCommitLease = state.phase else { return false }
-                state.phase = .leaseTransferred
+                guard case .acquiringCommit = state.phase else { return false }
+                state.phase = .commitConsumed
                 return !Task.isCancelled
             }
             guard canTransfer else {
-                lease?.release()
-                return nil
+                outcome.releaseLease()
+                return .unavailable
             }
-            return lease
+            return outcome
         } onCancel: {
             self.invalidate()
         }

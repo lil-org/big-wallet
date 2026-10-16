@@ -10,11 +10,6 @@ import {
     getOwnPropertyDescriptorNormally,
     isArrayNormally,
     isSafeIntegerNormally,
-    MapConstructor,
-    getWeakMapValue,
-    setWeakMapValue,
-    getMapEntry,
-    setMapEntry,
 } from "./intrinsics";
 
 import OperationRuntime from "./operation_runtime";
@@ -67,7 +62,7 @@ const isArrayBufferViewNormally = ArrayBuffer.isView;
 const providerStates = new WeakMap;
 
 function getProviderState(provider) {
-    const state = getWeakMapValue(providerStates, provider);
+    const state = providerStates.get(provider);
     if (!state) {
         throw new TypeError("Invalid Solana provider");
     }
@@ -75,11 +70,11 @@ function getProviderState(provider) {
 }
 
 function providerState(provider) {
-    return getWeakMapValue(providerStates, provider);
+    return providerStates.get(provider);
 }
 
 function setProviderState(provider, state) {
-    setWeakMapValue(providerStates, provider, state);
+    providerStates.set(provider, state);
 }
 
 function isArrayBuffer(value) {
@@ -495,7 +490,7 @@ function applySignerPlan(plan) {
 
 function applyTransactionSignatures(adapters, publicKey, signatures, assertCurrent) {
     const plans = [];
-    const signerTargets = new MapConstructor;
+    const signerTargets = new Map;
     for (let index = 0; index < adapters.length; index += 1) {
         const adapter = adapters[index];
         if (!transactionMessageMatches(adapter)) {
@@ -505,15 +500,15 @@ function applyTransactionSignatures(adapters, publicKey, signatures, assertCurre
             );
         }
         const plan = signerPlan(adapter, publicKey, signatures[index]);
-        let properties = getMapEntry(signerTargets, plan.target);
+        let properties = signerTargets.get(plan.target);
         if (!properties) {
-            properties = new MapConstructor;
-            setMapEntry(signerTargets, plan.target, properties);
+            properties = new Set;
+            signerTargets.set(plan.target, properties);
         }
-        if (getMapEntry(properties, plan.property)) {
+        if (properties.has(plan.property)) {
             throw new ProviderRpcError(4200, solanaSignatureApplicationError);
         }
-        setMapEntry(properties, plan.property, true);
+        properties.add(plan.property);
         plans[index] = plan;
     }
     for (let index = 0; index < plans.length; index += 1) {
@@ -549,12 +544,7 @@ function normalizedMessages(values, message) {
     }
     const messages = [];
     for (let index = 0; index < values.length; index += 1) {
-        definePropertyNormally(messages, index, {
-            configurable: true,
-            enumerable: true,
-            value: normalizedBase58Value(values[index], message),
-            writable: true,
-        });
+        messages.push(normalizedBase58Value(values[index], message));
     }
     return messages;
 }
@@ -664,12 +654,7 @@ function normalizeRequest(method, params) {
                 );
                 const messages = [];
                 for (let index = 0; index < adapters.length; index += 1) {
-                    definePropertyNormally(messages, index, {
-                        configurable: true,
-                        enumerable: true,
-                        value: adapters[index].message,
-                        writable: true,
-                    });
+                    messages.push(adapters[index].message);
                 }
                 const suppliedValues = hasMessages
                     ? raw.messages

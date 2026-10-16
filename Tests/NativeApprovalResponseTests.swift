@@ -173,7 +173,7 @@ final class NativeApprovalResponseTests: XCTestCase {
             isCurrent: { true },
             sign: { operation, _ in await access.sign(operation) },
             retireSigningMaterial: { access.retireSigningMaterial() },
-            requiresCommitLease: false
+            commit: .native
         )
         XCTAssertTrue(session.attach(permit: permit))
         return (session, fixture)

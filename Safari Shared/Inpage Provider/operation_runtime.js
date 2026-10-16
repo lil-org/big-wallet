@@ -2,40 +2,20 @@
 
 "use strict";
 
-import {
-    applyFunction,
-    pushArrayNormally,
-    MapConstructor,
-    TypeErrorConstructor,
-    getMapEntry,
-    setMapEntry,
-} from "./intrinsics";
+import {TypeErrorConstructor} from "./intrinsics";
 
-const deleteMapEntryNormally = Map.prototype.delete;
-const forEachMapNormally = Map.prototype.forEach;
-const setPrototypeOfNormally = Object.setPrototypeOf;
 const ErrorConstructor = Error;
 const RangeErrorConstructor = RangeError;
 const defaultMaximumLoadingOperations = 64;
 const maximumWireId = Number.MAX_SAFE_INTEGER;
 
-function operationQueue() {
-    const queue = [];
-    setPrototypeOfNormally(queue, null);
-    return queue;
-}
-
-function deleteMapEntry(map, key) {
-    applyFunction(deleteMapEntryNormally, map, [key]);
-}
-
 class OperationRuntime {
 
     #generation;
     #nextWireId = 1;
-    #operations = new MapConstructor;
+    #operations = new Map;
     #phase = "loading";
-    #queue = operationQueue();
+    #queue = [];
     #loadingAdmissionCount = 0;
     #loadingError;
     #maximumLoadingOperations;
@@ -102,16 +82,16 @@ class OperationRuntime {
             rejectPromise,
             resolvePromise,
         };
-        setMapEntry(this.#operations, wireId, record);
+        this.#operations.set(wireId, record);
         return record;
     }
 
     owns(record) {
-        return !!record && getMapEntry(this.#operations, record.wireId) === record;
+        return !!record && this.#operations.get(record.wireId) === record;
     }
 
     operation(wireId) {
-        return getMapEntry(this.#operations, wireId);
+        return this.#operations.get(wireId);
     }
 
     enqueue(record) {
@@ -125,7 +105,7 @@ class OperationRuntime {
         }
         this.#loadingAdmissionCount += 1;
         record.queued = true;
-        applyFunction(pushArrayNormally, this.#queue, [record]);
+        this.#queue.push(record);
         return true;
     }
 
@@ -167,7 +147,7 @@ class OperationRuntime {
                 }
             }
         } finally {
-            this.#queue = operationQueue();
+            this.#queue = [];
             this.#loadingAdmissionCount = 0;
             if (this.#phase === "draining") {
                 this.#phase = "ready";
@@ -191,12 +171,9 @@ class OperationRuntime {
     }
 
     #rejectAll(error) {
-        const entries = operationQueue();
-        applyFunction(forEachMapNormally, this.#operations, [entry => {
-            applyFunction(pushArrayNormally, entries, [entry]);
-        }]);
-        this.#operations = new MapConstructor;
-        this.#queue = operationQueue();
+        const entries = [...this.#operations.values()];
+        this.#operations = new Map;
+        this.#queue = [];
         this.#loadingAdmissionCount = 0;
         for (let index = 0; index < entries.length; index += 1) {
             entries[index].dispatching = false;
@@ -225,7 +202,7 @@ class OperationRuntime {
 
     #take(record) {
         if (!this.owns(record)) { return null; }
-        deleteMapEntry(this.#operations, record.wireId);
+        this.#operations.delete(record.wireId);
         record.dispatching = false;
         record.queued = false;
         return record;

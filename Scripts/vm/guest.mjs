@@ -2,8 +2,8 @@
 
 import {spawn} from "node:child_process";
 import {createHash} from "node:crypto";
-import {createWriteStream} from "node:fs";
-import {lstat, mkdir, realpath} from "node:fs/promises";
+import {constants, createWriteStream} from "node:fs";
+import {lstat, mkdir, open, realpath, writeFile} from "node:fs/promises";
 import {availableParallelism, cpus, freemem, loadavg, totalmem, userInfo} from "node:os";
 import {dirname, isAbsolute, join, resolve, sep} from "node:path";
 import {pathToFileURL} from "node:url";
@@ -327,6 +327,39 @@ export function pendingStageResults(manifest) {
         ...(stage.nativeAudit ? {nativeAudit: stage.nativeAudit} : {})}));
 }
 
+async function preserveGeneratedArtifact(workspace, artifacts, stageId, path, previousHash) {
+    const components = typeof path === "string" ? path.split(sep) : [];
+    if (!/^[A-Za-z0-9][A-Za-z0-9.-]{0,127}$/.test(stageId) || stageId.includes("..") ||
+        !components.length || components.some(component => !component || component === "." || component === "..")) {
+        throw new Error("Invalid generated artifact path");
+    }
+    const source = join(workspace, path);
+    if (await realpath(source) !== source || !(await lstat(source)).isFile()) {
+        throw new Error("Generated artifact must be a regular file without symlinks");
+    }
+    const file = await open(source, constants.O_RDONLY | constants.O_NOFOLLOW);
+    let contents;
+    try {
+        if (!(await file.stat()).isFile()) { throw new Error("Generated artifact must be a regular file"); }
+        contents = await file.readFile();
+    } finally { await file.close(); }
+    const hash = sha256(contents);
+    if (hash === previousHash) { return null; }
+    if (await realpath(artifacts) !== artifacts) { throw new Error("Artifact directory may not traverse symlinks"); }
+    let directory = artifacts;
+    for (const component of ["generated", stageId, ...components.slice(0, -1)]) {
+        directory = join(directory, component);
+        try { await mkdir(directory, {mode: 0o700}); }
+        catch (error) { if (error.code !== "EEXIST") { throw error; } }
+        if (!(await lstat(directory)).isDirectory() || await realpath(directory) !== directory) {
+            throw new Error("Generated artifact directory may not traverse symlinks");
+        }
+    }
+    const artifact = join("generated", stageId, path);
+    await writeFile(join(artifacts, artifact), contents, {flag: "wx", mode: 0o600});
+    return {source: path, artifact, sha256: hash};
+}
+
 export async function executeStages(manifest, {workspace, artifacts, preflight: checked, proofKey, execute = runProcess,
     stopRequested = async () => false, publish = async () => {}, runId, exchange, unlockSigning, writeJSON, hashFile, measureResources = resourceSnapshot}) {
     const results = pendingStageResults(manifest);
@@ -396,7 +429,12 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
                 if (!result.audit.ok) { result.status = "failed"; result.reason = result.audit.issues; }
             }
             for (const [path, hash] of Object.entries(before)) {
-                if (await hashFile(join(workspace, path)) !== hash) { result.status = "failed"; result.reason = `Generated artifact was not current: ${path}`; }
+                const generated = await preserveGeneratedArtifact(workspace, artifacts, stage.id, path, hash);
+                if (generated) {
+                    result.status = "failed";
+                    result.reason = `Generated artifact was not current: ${path}`;
+                    (result.generatedArtifacts ??= []).push(generated);
+                }
             }
         } catch (error) { result.status = error.cancelled ? "cancelled" : "failed"; result.reason = error.message; }
         result.finishedAt = timestamp();

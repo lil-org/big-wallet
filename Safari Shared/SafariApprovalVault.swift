@@ -534,7 +534,11 @@ final class SafariApprovalVault: Sendable {
         }
 
         let approvedAccount: WalletAccountDescriptor
-        let requiresCommitLease = true
+        var commit: WalletSigningCommit {
+            .vault { [weak self] in
+                await self?.acquireCommitLease()
+            }
+        }
         private let snapshotData: Data
         private let keyIdentity: SafariApprovalKeyIdentity
         private let signer: UnlockedAccountSigner
@@ -572,7 +576,7 @@ final class SafariApprovalVault: Sendable {
         }
 
         @MainActor
-        func acquireCommitLease() async -> WalletExecutionLease? {
+        private func acquireCommitLease() async -> WalletExecutionLease? {
             guard !Task.isCancelled, let vault = state.withLock({ $0.vault }) else { return nil }
             let lease = await vault.executionLease(ifCurrent: snapshotData, keyIdentity: keyIdentity)
             guard !Task.isCancelled, state.withLock({ $0.vault === vault }) else {

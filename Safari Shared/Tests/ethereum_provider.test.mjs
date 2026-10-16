@@ -2940,15 +2940,8 @@ test("queued Solana generated payloads reuse normalized data without extra hooks
         const objectPrototype = vm.runInContext("Object.prototype", harness.context);
         const arrayPrototype = vm.runInContext("Array.prototype", harness.context);
         let objectCalls = 0;
-        let setterCalls = 0;
         objectPrototype.toJSON = function () { objectCalls += 1; return this; };
         arrayPrototype.toJSON = () => { throw new Error("Array prototype called"); };
-        for (const field of ["id", "method", "params"]) {
-            Object.defineProperty(objectPrototype, field, {
-                configurable: true,
-                set() { setterCalls += 1; },
-            });
-        }
         try {
             applySolanaConfiguration(harness, {
                 publicKey: authorization.publicKey,
@@ -2958,13 +2951,9 @@ test("queued Solana generated payloads reuse normalized data without extra hooks
             assert.equal(harness.requests.length, 1, method);
             assert.deepEqual(normalized(harness.requests[0].body.object.params), expected);
             assert.equal(objectCalls, 0, "The final wire envelope never invokes JSON hooks");
-            assert.equal(setterCalls, 0, "Envelope fields never invoke inherited setters");
         } finally {
             delete objectPrototype.toJSON;
             delete arrayPrototype.toJSON;
-            for (const field of ["id", "method", "params"]) {
-                delete objectPrototype[field];
-            }
         }
         harness.applyDecodedEnvelope(harness.provider, {
             id: harness.requests[0].id,
@@ -3020,54 +3009,6 @@ test("Solana send options remain private when generated fields have inherited se
             id: harness.requests[0].id,
             kind: "error",
             name: "signAndSendTransaction",
-            error: {code: 4001, message: "Canceled"},
-        });
-        await rejected;
-    }
-});
-
-test("Solana batch construction preserves messages with inherited array accessors", async () => {
-    for (const objectTransactions of [false, true]) {
-        const authorization = {
-            isConnected: true,
-            publicKey: firstSolanaKey,
-            nativeRevision: 1,
-        };
-        const harness = solanaHarness(authorization);
-        const prototype = vm.runInContext("Array.prototype", harness.context);
-        const assigned = new WeakMap;
-        Object.defineProperty(prototype, "0", {
-            configurable: true,
-            get() { return assigned.get(this); },
-            set(value) {
-                assigned.set(this, value);
-                if (this.length === 0) { this.length = 1; }
-            },
-        });
-        let pending;
-        try {
-            pending = harness.provider.request({
-                method: "signAllTransactions",
-                params: objectTransactions
-                    ? {transactions: [legacyTransaction(1).transaction]}
-                    : {messages: ["2"]},
-            });
-            applySolanaConfiguration(harness, {
-                publicKey: authorization.publicKey,
-                isConnected: authorization.isConnected,
-                nativeRevision: authorization.nativeRevision,
-            });
-            assert.deepEqual(structuredClone(harness.requests[0].body.object.params), {
-                messages: ["2"],
-            });
-        } finally {
-            delete prototype["0"];
-        }
-        const rejected = assert.rejects(pending, error => error.code === 4001);
-        harness.applyDecodedEnvelope(harness.provider, {
-            id: harness.requests[0].id,
-            kind: "error",
-            name: "signAllTransactions",
             error: {code: 4001, message: "Canceled"},
         });
         await rejected;

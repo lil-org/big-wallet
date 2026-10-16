@@ -536,8 +536,7 @@ func makeWalletSigningSessionForTesting(
     isCurrent: @escaping @Sendable () -> Bool = { true },
     sign: @escaping @MainActor @Sendable (ApprovedWalletSigningOperation, any WalletSigningSource) async -> Result<WalletSigningOutput, WalletSigningFailure> = { operation, _ in walletSigningResultForTesting(operation) },
     retireSigningMaterial: @escaping @Sendable () -> Void = {},
-    requiresCommitLease: Bool = true,
-    acquireCommitLease: (@MainActor @Sendable () async -> WalletExecutionLease?)? = nil,
+    commit: WalletSigningCommit = .vault(acquire: { WalletExecutionLease(release: {}) }),
     clock: @escaping @MainActor @Sendable () -> Date = { Date() }
 ) -> WalletSigningSession {
     WalletSigningSession(
@@ -546,13 +545,35 @@ func makeWalletSigningSessionForTesting(
             isCurrent: isCurrent,
             sign: sign,
             retireSigningMaterial: retireSigningMaterial,
-            acquireCommitLease: requiresCommitLease ? acquireCommitLease ?? {
-                isCurrent() ? WalletExecutionLease(release: {}) : nil
-            } : nil
+            commit: commit
         ),
         authorization: authorization,
         clock: clock
     )
+}
+
+func walletCommitLeaseForTesting(
+    _ outcome: WalletSigningCommit.Outcome,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) throws -> WalletExecutionLease {
+    let lease: WalletExecutionLease?
+    if case .lease(let value) = outcome {
+        lease = value
+    } else {
+        lease = nil
+    }
+    return try XCTUnwrap(lease, "Expected a vault commit lease", file: file, line: line)
+}
+
+func assertWalletCommitUnavailableForTesting(
+    _ outcome: WalletSigningCommit.Outcome,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    guard case .unavailable = outcome else {
+        return XCTFail("Expected unavailable commit authority", file: file, line: line)
+    }
 }
 
 final class TestWalletSigningSource: WalletSigningSource {
@@ -567,12 +588,23 @@ final class TestWalletSigningSource: WalletSigningSource {
     }
 
     let approvedAccount: WalletAccountDescriptor
-    let requiresCommitLease: Bool
+    private let commitCapability: WalletSigningCommit
     private let state: Mutex<State>
     private let current: @Sendable () -> Bool
     private let retirement: @Sendable () -> Void
     private let invalidation: @Sendable () -> Void
-    private let lease: (@MainActor @Sendable () async -> WalletExecutionLease?)?
+
+    var commit: WalletSigningCommit {
+        switch commitCapability {
+        case .native:
+            return .native
+        case .vault(let acquire):
+            return .vault(acquire: { [weak self] in
+                guard self?.isCurrent() == true else { return nil }
+                return await acquire()
+            })
+        }
+    }
 
     var materialRetirementCount: Int { state.withLock { $0.retirements } }
     var invalidationCount: Int { state.withLock { $0.invalidations } }
@@ -582,15 +614,14 @@ final class TestWalletSigningSource: WalletSigningSource {
         isCurrent: @escaping @Sendable () -> Bool = { true },
         sign: @escaping Signing = { operation, _ in walletSigningResultForTesting(operation) },
         retireSigningMaterial: @escaping @Sendable () -> Void = {},
-        acquireCommitLease: (@MainActor @Sendable () async -> WalletExecutionLease?)? = nil,
+        commit: WalletSigningCommit = .native,
         invalidate: @escaping @Sendable () -> Void = {}
     ) {
         self.approvedAccount = approvedAccount
-        requiresCommitLease = acquireCommitLease != nil
+        commitCapability = commit
         state = Mutex(State(signing: sign))
         current = isCurrent
         retirement = retireSigningMaterial
-        lease = acquireCommitLease
         invalidation = invalidate
     }
 
@@ -614,12 +645,6 @@ final class TestWalletSigningSource: WalletSigningSource {
             return true
         }
         if retired { retirement() }
-    }
-
-    @MainActor
-    func acquireCommitLease() async -> WalletExecutionLease? {
-        guard isCurrent() else { return nil }
-        return await lease?()
     }
 
     func invalidate() {
@@ -669,7 +694,7 @@ func walletSigningOutputForTesting(
             if let privateKey { return operation.sign(with: privateKey) }
             return walletSigningResultForTesting(operation)
         },
-        requiresCommitLease: false, clock: clock
+        commit: .native, clock: clock
     )
     defer { session.invalidate() }
     guard session.attach(permit: permit) else {

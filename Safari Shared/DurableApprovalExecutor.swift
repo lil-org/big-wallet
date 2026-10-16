@@ -225,7 +225,9 @@ final class DurableApprovalExecutor {
             signingDeadline: claim.authority.signingDeadline(for: claim.request)
         )
         guard let session, session.authorization == expected else { return false }
-        if case .ordinary = claim.authority { return session.requiresCommitLease }
+        if case .ordinary = claim.authority {
+            guard case .vault = session.commit else { return false }
+        }
         return true
     }
 
@@ -260,17 +262,24 @@ final class DurableApprovalExecutor {
             return await abandon(permit: permit)
         }
         var acquiredExecutionLease: WalletExecutionLease?
-        if let signing, signing.requiresCommitLease {
+        if let signing {
             let acquisition = await context.runBeforeDeadline(
                 onStop: { signing.invalidate() },
-                discardValue: { $0?.release() }
+                discardValue: { $0.releaseLease() }
             ) {
-                await signing.takeCommitLease()
+                await signing.takeCommit()
             }
-            guard case .value(let lease?) = acquisition else {
+            guard case .value(let outcome) = acquisition else {
                 return await abandon(permit: permit)
             }
-            acquiredExecutionLease = lease
+            switch outcome {
+            case .readyWithoutLease:
+                break
+            case .lease(let lease):
+                acquiredExecutionLease = lease
+            case .unavailable:
+                return await abandon(permit: permit)
+            }
         }
         defer { acquiredExecutionLease?.release() }
         switch operationResult {

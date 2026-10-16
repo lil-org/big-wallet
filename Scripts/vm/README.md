@@ -227,6 +227,9 @@ stages become blocked. Timeouts, missing results, unexpected skips, and empty
 native suites cannot pass. Debug crypto skips require corresponding successful
 Release gates. Thresholds are not relaxed for virtualization.
 
+Stale generated bundles remain failed checks, with their rebuilt files exported
+under `artifacts/generated/<stage-id>/` and their paths and SHA-256 recorded in the stage's `generatedArtifacts` result.
+
 If artifact collection is incomplete, the runner keeps the stopped VM clone
 and records its path in `retained-vm.json` in the results directory. Later runs
 preserve that clone for diagnostic recovery. Clones with fully collected

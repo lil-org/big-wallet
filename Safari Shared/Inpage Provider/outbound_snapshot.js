@@ -4,41 +4,30 @@
 
 import {
     applyFunction,
-    createObjectNormally,
     definePropertyNormally,
     freezeObjectNormally,
-    getOwnPropertyDescriptorNormally,
+    hasOwnProperty,
     TypeErrorConstructor,
 } from "./intrinsics";
 
-const getOwnPropertyNamesNormally = Object.getOwnPropertyNames;
+const objectKeysNormally = Object.keys;
 const parseJSONNormally = JSON.parse;
 const stringifyJSONNormally = JSON.stringify;
 
 function neutralizeSnapshot(value) {
     if (!value || typeof value !== "object") { return value; }
-    const names = applyFunction(getOwnPropertyNamesNormally, Object, [value]);
+    const names = objectKeysNormally(value);
     for (let index = 0; index < names.length; index += 1) {
-        const descriptor = applyFunction(
-            getOwnPropertyDescriptorNormally,
-            Object,
-            [value, names[index]]
-        );
-        if (descriptor && "value" in descriptor) {
-            neutralizeSnapshot(descriptor.value);
-        }
+        neutralizeSnapshot(value[names[index]]);
     }
-    if (!applyFunction(
-        getOwnPropertyDescriptorNormally,
-        Object,
-        [value, "toJSON"]
-    )) {
-        applyFunction(definePropertyNormally, Object, [value, "toJSON", {
+    if (!hasOwnProperty(value, "toJSON")) {
+        definePropertyNormally(value, "toJSON", {
+            __proto__: null,
             configurable: true,
             enumerable: false,
             value: undefined,
             writable: true,
-        }]);
+        });
     }
     return value;
 }
@@ -68,31 +57,11 @@ function outboundDataSnapshot(value) {
 }
 
 function trustedOutboundRecord(values) {
-    const record = createObjectNormally(null);
-    const names = getOwnPropertyNamesNormally(values);
-    for (let index = 0; index < names.length; index += 1) {
-        const name = names[index];
-        const descriptor = getOwnPropertyDescriptorNormally(values, name);
-        if (descriptor.enumerable && "value" in descriptor) {
-            definePropertyNormally(record, name, {
-                __proto__: null,
-                enumerable: true,
-                value: descriptor.value,
-            });
-        }
-    }
-    return freezeObjectNormally(record);
+    return freezeObjectNormally({__proto__: null, ...values});
 }
 
 function trustedOutboundArray(values) {
-    const array = [];
-    for (let index = 0; index < values.length; index += 1) {
-        definePropertyNormally(array, index, {
-            __proto__: null,
-            enumerable: true,
-            value: getOwnPropertyDescriptorNormally(values, index)?.value,
-        });
-    }
+    const array = [...values];
     definePropertyNormally(array, "toJSON", {__proto__: null, value: undefined});
     return freezeObjectNormally(array);
 }
