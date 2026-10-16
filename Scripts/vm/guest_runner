@@ -1,0 +1,56 @@
+#!/bin/sh
+set -eu
+
+fail() { printf '%s\n' "Big Wallet guest runner: $*" >&2; exit 1; }
+
+case "$(/usr/sbin/sysctl -n hw.model)" in
+    VirtualMac*) ;;
+    *) fail 'Refusing to run outside a macOS virtual machine.' ;;
+esac
+[ "$(/usr/bin/id -u)" -ne 0 ] || fail 'Run as the configured guest console user, not root.'
+[ "$#" -eq 1 ] || fail 'Expected /Volumes/BigWalletBuild/Exchange/job.json or --verify-session.'
+case "$1" in /Volumes/BigWalletBuild/Exchange/job.json|--verify-session) ;; *) fail 'Job path must use the fixed local exchange.' ;; esac
+build=/Volumes/BigWalletBuild
+exchange="$build/Exchange"
+job="$exchange/job.json"
+[ ! -L "$job" ] && [ -f "$job" ] || fail 'The job must be a regular file.'
+for local_directory in "$build" "$exchange"; do
+    [ ! -L "$local_directory" ] && [ -d "$local_directory" ] &&
+        [ "$(CDPATH= cd -- "$local_directory" && pwd -P)" = "$local_directory" ] || fail 'Guest storage must use direct local directories.'
+done
+/sbin/mount | /usr/bin/awk -v mountpoint="$build" '
+    $1 ~ /^\/dev\/disk[0-9]+s[0-9]+$/ && $2 == "on" && $3 == mountpoint && $4 == "(apfs," && /[, ]local[,)]/ { found = 1 }
+    END { exit !found }
+' || fail 'The managed local APFS build volume is not mounted.'
+[ "$(/usr/bin/stat -f '%u' "$exchange")" -eq "$(/usr/bin/id -u)" ] &&
+    [ "$(/usr/bin/stat -f '%g' "$exchange")" -eq "$(/usr/bin/id -g)" ] || fail 'The local exchange must belong to the selected guest account.'
+exchange_mode=$(/usr/bin/stat -f '%Lp' "$exchange")
+case "$exchange_mode" in ''|*[!0-7]*) fail 'The local exchange permissions are invalid.' ;; esac
+[ "$((0$exchange_mode & 07777))" -eq "$((0700))" ] || fail 'The local exchange must be private.'
+[ "$(/usr/bin/stat -f '%Su' /dev/console)" = "$(/usr/bin/id -un)" ] || fail 'The configured guest user must have an active Aqua login.'
+identity='/Library/Application Support/BigWalletTestVM/identity.json'
+build_identity="$build/.big-wallet-vm.json"
+for protected_path in "$build" "$build_identity" '/Library/Application Support/BigWalletTestVM' "$identity"; do
+    [ ! -L "$protected_path" ] && [ -e "$protected_path" ] || fail 'A root-owned provisioning identity is required.'
+    [ "$(/usr/bin/stat -f '%u' "$protected_path")" -eq 0 ] || fail 'The provisioning identity must be owned by root.'
+    protected_mode=$(/usr/bin/stat -f '%Lp' "$protected_path")
+    [ "$((0$protected_mode & 022))" -eq 0 ] || fail 'The provisioning identity must not be writable by other users.'
+done
+[ -f "$identity" ] || fail 'The provisioning identity must be a regular file.'
+[ -f "$build_identity" ] || fail 'The build-volume identity must be a regular file.'
+[ "$(/usr/bin/plutil -extract version raw -o - "$identity")" = 1 ] || fail 'Unsupported guest identity.'
+[ "$(/usr/bin/plutil -extract version raw -o - "$build_identity")" = 1 ] || fail 'Unsupported build-volume identity.'
+[ "$(/usr/bin/plutil -extract consoleUser raw -o - "$identity")" = "$(/usr/bin/id -un)" ] || fail 'The logged-in account differs from the provisioned console user.'
+[ "$(/usr/bin/plutil -extract vmId raw -o - "$identity")" = "$(/usr/bin/plutil -extract vmId raw -o - "$job")" ] || fail 'The job belongs to another VM.'
+[ "$(/usr/bin/plutil -extract vmId raw -o - "$build_identity")" = "$(/usr/bin/plutil -extract vmId raw -o - "$job")" ] || fail 'The build volume belongs to another VM.'
+console_locked=$(/usr/sbin/ioreg -n Root -d 1 -a | /usr/bin/plutil -extract IOConsoleLocked raw -o - -) || fail 'The guest unlocked-session state could not be read.'
+[ "$console_locked" = false ] || fail 'The guest graphical session must be unlocked before testing.'
+
+export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+if [ "$1" = --verify-session ]; then
+    [ "${BW_TEST_VM_EXCHANGE:-}" = "$exchange" ] || fail 'A verified guest test invocation is required.'
+    [ -n "${BW_TEST_VM_RUN_ID:-}" ] && [ "$BW_TEST_VM_RUN_ID" = "$(/usr/bin/plutil -extract runId raw -o - "$job")" ] || fail 'The active run identity does not match the staged job.'
+    exec /usr/local/bin/node /usr/local/libexec/big-wallet-vm/guest.mjs --verify-session --exchange "$exchange"
+fi
+exec /usr/bin/caffeinate -dimsu /usr/local/bin/node /usr/local/libexec/big-wallet-vm/guest.mjs --exchange "$exchange"

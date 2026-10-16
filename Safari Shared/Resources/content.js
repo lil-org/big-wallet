@@ -544,6 +544,7 @@ function bigWalletPostDisconnect(message, response, generation, configurationKey
 }
 
 function bigWalletPublishConfiguration(validatedState, configurationKey, generation) {
+    if (!bigWalletMatchesGeneration(generation)) { return false; }
     const response = {kind: "configuration", state: validatedState};
     const delivery = bigWalletConfigurationDelivery(response, configurationKey, generation, false);
     if (!delivery?.response) { return false; }

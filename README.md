@@ -14,11 +14,20 @@ download on the [app store](https://lil.org/get)
 
 ### Swift toolchain and concurrency
 
+Builds and tests run in the dedicated headless macOS VM so app windows,
+simulators, and authentication prompts stay off the working host. Start with
+`Scripts/test_vm.sh doctor` and `Scripts/test_vm.sh setup`, then run
+`Scripts/test_vm.sh run all` or `Scripts/test_vm.sh run extended`. Setup preserves
+the existing VirtualBuddy installation. The runner stages immutable source
+snapshots and returns logs and test results without opening viewers. See
+[VM setup, signing, and test coverage](Scripts/vm/README.md) for the one-time
+guest bootstrap and targeted test commands.
+
 Use Xcode 27 or newer with Swift 6.4. All native targets use Swift 6 language mode. Minimum supported versions are iOS 26, macOS 15, and visionOS 2.
 
 Default actor isolation is `nonisolated`, with `NonisolatedNonsendingByDefault` and `InferIsolatedConformances` enabled. UI and wallet presentation state belong to `MainActor`; shared storage and service state use actors or `Synchronization.Mutex`. Unannotated async functions stay on their caller's actor, and CPU-intensive work uses `@concurrent`. Values crossing actors must be `Sendable`. Synchronous cancellation, secret invalidation, and lease release use synchronized ownership. File locks continue to coordinate the app, Safari extensions, and approval helper across processes. Never suspend while holding an in-process mutex.
 
-Run `Scripts/check_swift6.sh` for the native Debug/Release builds, platform test suites, Safari protocol tests, Release crypto performance gates, focused Thread Sanitizer checks, differential protocol fuzzing, and approval lifecycle tests. Individual stages are `build`, `test`, `performance`, `tsan`, `fuzz`, and `approval`. The script uses Xcode's default DerivedData, runs simulator suites serially, and disables coverage collection so sandboxed host profiling files are not required. Set `SWIFT6_IOS_DESTINATION` and `SWIFT6_VISIONOS_DESTINATION` to select installed simulator destinations. Runtime validation on the oldest supported OS versions requires those runtimes or devices separately.
+`Scripts/check_swift6.sh` now routes host invocations to the VM runner. Individual stages remain `build`, `test`, `performance`, `tsan`, `fuzz`, and `approval`; the complete VM run also includes Worker and script regression tests. It uses Xcode's default DerivedData inside the guest, runs simulator suites serially, and disables coverage collection. Simulator destinations are resolved from the pinned guest runtimes. Runtime validation on the oldest supported OS versions requires those runtimes or devices separately.
 
 ### Safari wire protocol
 
@@ -26,7 +35,7 @@ Run `Scripts/check_swift6.sh` for the native Debug/Release builds, platform test
 
 `Scripts/check_wire_protocol.sh` checks that the generated files are current without modifying them. Xcode builds, npm build/test commands, version bumps, and release preflight run this check. The generator uses Node.js built-ins and adds no package dependencies. `BUILD_VERSION` remains release metadata in `bridge_wire.js` and is updated by the existing version-bump script.
 
-Run `node Scripts/fuzz_wire_protocol.mjs` to compare the production JavaScript and Swift codecs with independent fixtures, mandatory boundary cases, and seeded mutations. Failures are minimized and saved for replay. Commands and the Unicode-key regression found by the harness are documented in [the protocol README](Safari%20Shared/Protocol/README.md#differential-fuzzing).
+Run `Scripts/test_vm.sh run all --stage fuzz` to compare the production JavaScript and Swift codecs inside the VM with independent fixtures, mandatory boundary cases, and seeded mutations. Failures are minimized and saved for replay. Commands and the Unicode-key regression found by the harness are documented in [the protocol README](Safari%20Shared/Protocol/README.md#differential-fuzzing).
 
 ### Approval lifecycle and crash tests
 
@@ -37,7 +46,7 @@ Scripts/check_approval_lifecycle.sh --soak --seed 42
 Scripts/check_approval_lifecycle.sh --replay /path/to/replay.json
 ```
 
-The default run checks mandatory scenarios and process-crash boundaries, then runs 32 seeded sequences of 64 actions, alternating native and popup approval. `--soak` defaults to 1,000 sequences of 200 actions; `--seed`, `--sequences`, and `--steps` select a bounded run. `--failure-dir` chooses where failure artifacts are retained. `Scripts/check_swift6.sh approval` runs the default check.
+The default run checks mandatory scenarios and process-crash boundaries, then runs 32 seeded sequences of 64 actions, alternating native and popup approval. `--soak` defaults to 1,000 sequences of 200 actions; `--seed`, `--sequences`, and `--steps` select a bounded run. Host invocations run in the test VM, which retains failure artifacts in the printed results directory. `Scripts/check_swift6.sh approval` runs the default check.
 
 The standalone `ApprovalCrashWorker` Xcode scheme builds in the default DerivedData without depending on or launching the wallet app or Safari extension. Before building, the runner checks that the target has no application dependencies, wallet entitlements, application entry points, resource-copy phases, or shell-script phases. Its two process roles share only a disposable test directory. Wallet records, metadata, networks, authentication outcomes, and RPC responses are explicit fixtures. Production routing, approval, signing, and durable persistence execute against those dependencies.
 

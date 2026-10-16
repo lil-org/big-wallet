@@ -183,6 +183,138 @@ test("gate preparation can drain reviews while ordinary recovery leaves them ava
     }
 });
 
+async function terminalPopupRecoverySession({queuedSuccessor = false} = {}) {
+    const session = new LifecycleSession({seed: 1, mode: "popup", timeout: 1000});
+    const profileIdentifier = "00000000-0000-0000-0000-000000000001";
+    const terminal = {phase: "queued", provider: "solana", name: "signMessage", configurationKey: "https://one.example",
+        handle: {id: 4, token: "00000000-0000-0000-0000-000000000004", profileIdentifier}};
+    const next = {phase: "queued", provider: "ethereum", name: "requestAccounts", configurationKey: terminal.configurationKey,
+        handle: {id: terminal.handle.id, token: "00000000-0000-0000-0000-000000000001", profileIdentifier}};
+    const other = {...next, handle: {...next.handle, profileIdentifier: "00000000-0000-0000-0000-000000000002"}};
+    let pending = terminal, reviewedPopup;
+    session.browser = new BrowserLifecycle({scheduler: session.scheduler, mode: "popup", native: async (message, profile) => {
+        const current = profile === profileIdentifier ? pending : queuedSuccessor ? other : null;
+        if (message.subject === "getLatestConfiguration") { return {id: message.id, state: disconnected}; }
+        if (message.subject === "getRecoveryRequests") { return {id: message.id, requests: []}; }
+        if (message.subject === "getPendingRequests") {
+            return {requests: current ? [{id: current.handle.id, requestToken: current.handle.token,
+                provider: current.provider, configurationKey: current.configurationKey, host: "one.example",
+                receivedAt: session.scheduler.now, sequence: 1}] : [], completedResponses: []};
+        }
+        if (message.subject === "getApprovalState") {
+            return {status: "ok", approval: {id: current.handle.id, host: "one.example", state: "review", actions: ["approve", "reject"], review: {
+                kind: current === terminal ? "signMessage" : "accountSelection", title: "Review",
+                reviewToken: "00000000-0000-0000-0000-000000000101",
+                ...(current === terminal ? {meta: "0x010203", account: {name: "Account", croppedAddress: "1234"}} :
+                    {allowsEmptySelection: false, canSelectNetwork: false, accounts: []}),
+            }}};
+        }
+        throw new Error(`Unexpected popup command ${message.subject}`);
+    }});
+    session.inspect = async () => {
+        if (!reviewedPopup) {
+            await session.pumpUntil(() => session.browser.popupRequest(profileIdentifier)?.requestToken === terminal.handle.token &&
+                session.browser.popupState(profileIdentifier)?.state === "review");
+            reviewedPopup = session.browser.profile(profileIdentifier).popup;
+            terminal.phase = "responded";
+            if (queuedSuccessor) { pending = next; }
+        }
+        session.lastInspectionAvailable = true;
+        return queuedSuccessor ? [terminal, next, other] : [terminal];
+    };
+    const tab = session.browser.openTab({profileIdentifier, url: "https://one.example/page"});
+    await session.pumpUntil(() => session.browser.configurationReady(tab.id, disconnected));
+    return {session, terminal, next, other, profileIdentifier, reviewedPopup: () => reviewedPopup, queueNext: () => { pending = next; }};
+}
+
+test("drained popup recovery closes a terminal review before the next approval", async () => {
+    const {session, next, profileIdentifier, reviewedPopup, queueNext} = await terminalPopupRecoverySession();
+    try {
+        await session.quiesce({rejectReviews: true});
+        assert.equal(reviewedPopup().alive, false);
+        assert.equal(session.browser.profile(profileIdentifier).popup, null);
+        assert.equal(session.scheduler.pending({owner: reviewedPopup().owner}).length, 0);
+        queueNext();
+        const reopened = await session.browser.openPopup(profileIdentifier);
+        await session.pumpUntil(() => session.browser.popupRequest(profileIdentifier)?.requestToken === next.handle.token &&
+            session.browser.popupState(profileIdentifier)?.state === "review");
+        assert.notEqual(reopened, reviewedPopup());
+        assert.equal(session.browser.popupRequest(profileIdentifier).id, next.handle.id);
+    } finally { session.browser.close(); }
+});
+
+test("popup recovery reopens an explicitly terminal head and preserves a queued successor with the same id", async () => {
+    const {session, terminal, next, other, profileIdentifier, reviewedPopup} = await terminalPopupRecoverySession({queuedSuccessor: true});
+    try {
+        assert.equal(terminal.handle.id, next.handle.id);
+        assert.notEqual(terminal.handle.token, next.handle.token);
+        await session.quiesce();
+        assert.equal(terminal.phase, "responded");
+        assert.equal(reviewedPopup().alive, false);
+        assert.equal(session.browser.popupRequest(profileIdentifier).requestToken, next.handle.token);
+        assert.equal(session.browser.profile(profileIdentifier).popup.alive, true);
+        assert.equal(session.browser.profile(profileIdentifier).popupSerial, 2);
+        assert.equal(session.browser.profile(other.handle.profileIdentifier).popupSerial, 1);
+        assert.equal(session.browser.profile(other.handle.profileIdentifier).popup.alive, true);
+        assert.equal(other.phase, "queued");
+        assert.equal(next.phase, "queued");
+        assert.equal(session.background.size, 0);
+        assert.equal(session.scheduler.pending({kind: "message"}).length, 0);
+    } finally { session.browser.close(); }
+});
+
+test("popup recovery requires exact terminal evidence and drained work before replacing a head", async () => {
+    for (const guard of ["queued", "approving", "missing", "otherToken", "otherProfile", "unavailable", "background", "messages"]) {
+        const profileIdentifier = "00000000-0000-0000-0000-000000000001";
+        const handle = {id: 4, token: "displayed", profileIdentifier};
+        const evidence = {phase: ["queued", "approving"].includes(guard) ? guard : "responded", handle: {...handle}};
+        if (guard === "otherToken") { evidence.handle.token = "different"; }
+        if (guard === "otherProfile") { evidence.handle.profileIdentifier = "00000000-0000-0000-0000-000000000002"; }
+        const successor = {phase: "queued", handle: {...handle, token: "next"}};
+        const session = recoverySession(guard === "missing" ? [successor] : [evidence, successor], guard !== "unavailable");
+        session.mode = "popup";
+        const open = new Set(), closes = [];
+        Object.assign(session.browser, {
+            closePopup(profile) { closes.push(profile); open.delete(profile); },
+            async openPopup(profile) { open.add(profile); },
+            popupRequest: profile => profile === profileIdentifier ? {id: handle.id, requestToken: handle.token} : null,
+            popupReviewing: () => true,
+            popupState: () => ({review: {reviewToken: "review"}}),
+        });
+        if (guard === "background") { session.track(new Promise(() => {})); }
+        if (guard === "messages") { session.scheduler.schedule(() => {}, 0, "fixture", "message"); }
+        await assert.rejects(session.quiesce(), error => error.invariant === "progress");
+        assert.equal(open.has(profileIdentifier), true, guard);
+        assert.equal(closes.filter(profile => profile === profileIdentifier).length, 1, guard);
+        assert.equal(successor.phase, "queued", guard);
+    }
+});
+
+test("popup recovery retains live reviews and cannot discard unresolved work", async () => {
+    for (const [phase, rejectReviews, available, succeeds] of [
+        ["queued", false, true, true], ["queued", true, true, false],
+        ["approving", true, true, false], ["responded", true, false, false],
+    ]) {
+        const profileIdentifier = "00000000-0000-0000-0000-000000000001";
+        const request = {phase, handle: {id: 4, token: "pending", profileIdentifier}};
+        const session = recoverySession([request], available);
+        session.mode = "popup";
+        const open = new Set(), closes = [];
+        Object.assign(session.browser, {
+            closePopup(profile) { closes.push(profile); open.delete(profile); },
+            async openPopup(profile) { open.add(profile); },
+            popupRequest: () => ({id: request.handle.id, requestToken: request.handle.token}),
+            popupReviewing: () => true,
+            popupState: () => ({review: {reviewToken: "review"}}),
+        });
+        if (succeeds) { await session.quiesce({rejectReviews}); }
+        else { await assert.rejects(session.quiesce({rejectReviews}), error => error.invariant === "progress"); }
+        assert.equal(open.has(profileIdentifier), true);
+        assert.equal(closes.filter(profile => profile === profileIdentifier).length, 1);
+        assert.equal(request.phase, phase);
+    }
+});
+
 test("quiescence waits for tracked native work even when browser and stored requests are terminal", async () => {
     const session = recoverySession([{phase: "responded"}]);
     let finish;
@@ -194,35 +326,109 @@ test("quiescence waits for tracked native work even when browser and stored requ
     assert.equal(session.background.size, 0);
 });
 
-test("recovery focuses a queued manual switch whose approval coordinator was lost", async () => {
-    const request = {phase: "queued", provider: "unknown", name: "switchAccount", configurationKey: "https://one.example",
-        handle: {id: 7, token: "12345678-1234-1234-1234-123456789abc", profileIdentifier: "00000000-0000-0000-0000-000000000001"}};
-    const session = recoverySession([request]);
-    const commands = [];
-    session.children.set("bridge", {ready: {workflowVersion: 4}, command: async (operation, payload) => {
-        if (operation === "checkpoints") { return {}; }
-        commands.push({operation, payload});
-        request.presentation = "review";
-        return {id: request.handle.id, opened: true};
-    }});
-    session.decide = async () => { throw new Error("A missing coordinator must be focused before a decision"); };
-    await session.quiesce();
-    assert.deepEqual(commands, [{operation: "native", payload: {
-        message: {subject: "showApproval", id: 7, requestToken: request.handle.token, configurationKey: request.configurationKey,
-            workflowVersion: 4, __bwPrivateBrowsing: false},
-        profileIdentifier: request.handle.profileIdentifier, privateBrowsing: false,
-    }}]);
-    assert.equal(session.background.size, 0);
+test("recovery focuses queued native requests whose approval coordinator was lost before deciding", async () => {
+    for (const [provider, name] of [["unknown", "switchAccount"], ["ethereum", "signPersonalMessage"], ["solana", "signMessage"]]) {
+        for (const rejectReviews of [false, true]) {
+            const request = {phase: "queued", provider, name, configurationKey: "https://one.example",
+                handle: {id: 7, token: "12345678-1234-1234-1234-123456789abc", profileIdentifier: "00000000-0000-0000-0000-000000000001"}};
+            const session = recoverySession([request]);
+            session.browser.operations.set("retired-provider", {status: "rejected", error: {code: 4900}});
+            const commands = [], decisions = [];
+            session.children.set("bridge", {ready: {workflowVersion: 4}, command: async (operation, payload) => {
+                if (operation === "checkpoints") { return {}; }
+                commands.push({operation, payload});
+                request.presentation = "review";
+                return {id: request.handle.id, opened: true};
+            }});
+            session.decide = async (_, decision, current) => {
+                assert.equal(current.presentation, "review", "A missing coordinator must be focused before a decision");
+                decisions.push(decision);
+                current.phase = "responded";
+            };
+            await session.quiesce({rejectReviews});
+            assert.deepEqual(commands, [{operation: "native", payload: {
+                message: {subject: "showApproval", id: 7, requestToken: request.handle.token, configurationKey: request.configurationKey,
+                    workflowVersion: 4, __bwPrivateBrowsing: false},
+                profileIdentifier: request.handle.profileIdentifier, privateBrowsing: false,
+            }}]);
+            assert.deepEqual(decisions, rejectReviews ? ["reject"] : []);
+            assert.equal(request.phase, rejectReviews ? "responded" : "queued");
+            assert.equal(session.background.size, 0);
+        }
+    }
 });
 
-test("recovery does not refocus an existing manual switch presentation", async () => {
-    for (const presentation of ["none", "waiting", "retryRequired", "review"]) {
-        const request = {phase: "queued", provider: "unknown", name: "switchAccount", presentation};
-        const session = recoverySession([request]);
-        session.sendNative = () => { throw new Error("Existing coordinator must retain its presentation"); };
-        session.decide = async () => { request.phase = "responded"; };
-        await session.quiesce();
-        assert.equal(request.presentation, presentation);
+test("recovery refocuses paused native requests without a presentation before deciding", async () => {
+    for (const [provider, name] of [["unknown", "switchAccount"], ["ethereum", "signPersonalMessage"], ["solana", "signMessage"]]) {
+        for (const rejectReviews of [false, true]) {
+            const request = {phase: "queued", provider, name, presentation: "none", coordinatorPhase: "paused", revision: 0,
+                configurationKey: "https://one.example",
+                handle: {id: 7, token: "12345678-1234-1234-1234-123456789abc", profileIdentifier: "00000000-0000-0000-0000-000000000002"}};
+            const session = recoverySession([request]);
+            const commands = [], decisions = [];
+            session.children.set("bridge", {ready: {workflowVersion: 4}, command: async (operation, payload) => {
+                if (operation === "checkpoints") { return {}; }
+                commands.push({operation, payload});
+                Object.assign(request, {presentation: "review", coordinatorPhase: "reviewing", revision: 1});
+                return {id: request.handle.id, opened: true};
+            }});
+            session.decide = async (_, decision, current) => {
+                assert.equal(current.presentation, "review", "A paused coordinator must recover before a decision");
+                assert.equal(current.revision, 1, "The decision must use the resumed presentation revision");
+                decisions.push(decision);
+                current.phase = "responded";
+            };
+            await session.quiesce({rejectReviews});
+            assert.deepEqual(commands, [{operation: "native", payload: {
+                message: {subject: "showApproval", id: request.handle.id, requestToken: request.handle.token,
+                    configurationKey: request.configurationKey, workflowVersion: 4, __bwPrivateBrowsing: false},
+                profileIdentifier: request.handle.profileIdentifier, privateBrowsing: false,
+            }}]);
+            assert.deepEqual(decisions, rejectReviews ? ["reject"] : []);
+            assert.equal(request.phase, rejectReviews ? "responded" : "queued");
+            assert.equal(session.background.size, 0);
+        }
+    }
+});
+
+test("recovery does not refocus an existing native presentation", async () => {
+    for (const [provider, name] of [["unknown", "switchAccount"], ["ethereum", "signPersonalMessage"], ["solana", "signMessage"]]) {
+        for (const presentation of ["none", "waiting", "retryRequired", "review"]) {
+            const request = {phase: "queued", provider, name, presentation, coordinatorPhase: presentation === "retryRequired" ? "paused" : undefined};
+            const session = recoverySession([request]);
+            session.sendNative = () => { throw new Error("Existing coordinator must retain its presentation"); };
+            session.decide = async () => { request.phase = "responded"; };
+            await session.quiesce();
+            assert.equal(request.presentation, presentation);
+        }
+    }
+});
+
+test("recovery cannot refocus a native coordinator without proof that it is paused", async () => {
+    for (const coordinatorPhase of [undefined, "registered", "validating", "acquiringReceipt", "awaitingAuthentication", "waiting", "rejecting"]) {
+        for (const rejectReviews of [false, true]) {
+            const request = {phase: "queued", presentation: "none", coordinatorPhase, revision: 0};
+            const session = recoverySession([request]);
+            session.sendNative = () => { throw new Error("An active or unobserved coordinator must not be refocused"); };
+            await assert.rejects(session.quiesce({rejectReviews}), error => error.invariant === "progress");
+            assert.equal(request.presentation, "none");
+            assert.equal(request.coordinatorPhase, coordinatorPhase);
+        }
+    }
+});
+
+test("recovery cannot relaunch or hide an active native execution without a presentation", async () => {
+    for (const [provider, name] of [["ethereum", "signPersonalMessage"], ["solana", "signMessage"]]) {
+        for (const rejectReviews of [false, true]) {
+            for (const presentation of [undefined, "none"]) {
+                const request = {phase: "approving", provider, name, presentation, coordinatorPhase: "paused"};
+                const session = recoverySession([request]);
+                session.browser.operations.set("retired-provider", {status: "rejected", error: {code: 4900}});
+                session.sendNative = () => { throw new Error("Active execution must not be relaunched"); };
+                await assert.rejects(session.quiesce({rejectReviews}), error => error.invariant === "progress");
+                assert.equal(request.phase, "approving");
+            }
+        }
     }
 });
 
@@ -827,6 +1033,85 @@ test("equal network revisions cannot give two documents different chains", async
         const operation = session.browser.request(second.id, "ethereum", {method: "eth_chainId"});
         await assert.rejects(session.pumpUntil(() => operation.status !== "pending"), error => error.invariant === "replay");
     } finally { session.browser.close(); }
+});
+
+test("refresh retries typed temporary unavailability while pumping cleanup and advancing the clock", async () => {
+    for (const unavailableReads of [1, 2]) {
+        const session = await configurationSession(disconnected, disconnected);
+        const bridge = session.child("bridge");
+        const command = bridge.command;
+        const reads = [], timeouts = [];
+        const startedAt = session.scheduler.monotonic;
+        let cleanupCompleted = false;
+        bridge.command = async (operation, payload, options) => {
+            if (operation !== "native") { return command(operation, payload); }
+            reads.push(session.scheduler.monotonic - startedAt);
+            timeouts.push(options.timeout);
+            if (reads.length === 1) { session.scheduler.schedule(() => { cleanupCompleted = true; }, 0, "cleanup", "native-gate"); }
+            else { assert.equal(cleanupCompleted, true); }
+            return reads.length <= unavailableReads ? {id: payload.message.id, unavailable: true} : {id: payload.message.id, state: disconnected};
+        };
+        try {
+            await session.refreshTab(0);
+            assert.deepEqual(reads, unavailableReads === 1 ? [0, 1000] : [0, 1000, 6000]);
+            assert.ok(timeouts.every(value => value > 0 && value <= session.options.timeout));
+            assert.ok(timeouts.every((value, index) => index === 0 || value <= timeouts[index - 1]));
+            session.check();
+        } finally { session.browser.close(); }
+    }
+});
+
+test("refresh cannot replace persistent native unavailability with cached provider state", async () => {
+    const session = await configurationSession(disconnected, disconnected);
+    const bridge = session.child("bridge");
+    const command = bridge.command;
+    let reads = 0;
+    bridge.command = async (operation, payload) => {
+        if (operation !== "native") { return command(operation, payload); }
+        reads += 1;
+        return {id: payload.message.id, unavailable: true};
+    };
+    try {
+        await assert.rejects(session.refreshTab(0), error => error.invariant === "progress" && error.details.reply.unavailable === true);
+        assert.equal(reads, 3);
+        assert.equal(session.scheduler.monotonic, 6000);
+    } finally { session.browser.close(); }
+});
+
+test("configuration retries share one wall-clock watchdog", async t => {
+    const session = await configurationSession(disconnected, disconnected);
+    let now = 0, reads = 0;
+    const clock = t.mock.method(performance, "now", () => now);
+    session.child("bridge").command = async (_operation, payload, options) => {
+        reads += 1;
+        assert.equal(options.timeout, session.options.timeout);
+        return {id: payload.message.id, unavailable: true};
+    };
+    session.advance = async () => { now = session.options.timeout; };
+    try {
+        await assert.rejects(session.refreshTab(0), error => error.invariant === "watchdog");
+        assert.equal(reads, 1);
+    } finally { clock.mock.restore(); session.browser.close(); }
+});
+
+test("configuration refresh does not retry malformed replies or unrelated native failures", async () => {
+    for (const reply of [null, {}, {id: 1}, {id: 1, unavailable: false}, {id: 2, unavailable: true},
+        {id: 1, unavailable: true, state: null}, {id: 1, unavailable: true, state: disconnected},
+        {id: 2, state: disconnected}, {id: 1, unavailable: true, unexpected: true}]) {
+        const session = await configurationSession(disconnected, disconnected);
+        let reads = 0;
+        session.child("bridge").command = async () => { reads += 1; return reply; };
+        try {
+            await assert.rejects(session.refreshTab(0), error => error.invariant === "progress");
+            assert.equal(reads, 1);
+            assert.equal(session.scheduler.monotonic, 0);
+        } finally { session.browser.close(); }
+    }
+    const session = await configurationSession(disconnected, disconnected);
+    const failure = Object.assign(new Error("Unexpected native failure"), {native: true});
+    session.child("bridge").command = async () => { throw failure; };
+    try { await assert.rejects(session.refreshTab(0), error => error === failure); }
+    finally { session.browser.close(); }
 });
 
 test("refresh rejects stale provider values at the authoritative native revision", async () => {

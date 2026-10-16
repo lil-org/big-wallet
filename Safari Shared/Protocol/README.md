@@ -29,7 +29,10 @@ Internal transport currentness checks only read installation state; they do not 
 
 ## Differential fuzzing
 
-Run from the repository root on macOS with Node.js and the project's Xcode Swift toolchain:
+Run `Scripts/test_vm.sh run all --stage fuzz` from the host, or use `run extended
+--stage fuzz` for the three fixed 20,000-case seeds. The VM retains the logs and
+failure artifacts. The following low-level commands run from the repository
+root inside the guest with Node.js and the project's Xcode Swift toolchain:
 
 ```sh
 node Scripts/fuzz_wire_protocol.mjs
@@ -38,7 +41,10 @@ node Scripts/fuzz_wire_protocol.mjs --iterations 0
 node Scripts/fuzz_wire_protocol.mjs --replay /path/to/failure.json
 ```
 
-`npm run test:protocol-fuzz` in `Safari Shared/Inpage Provider` and `Scripts/check_swift6.sh fuzz` run the same bounded check. The `all` native validation stage includes it. Ordinary `npm test` runs the corpus and harness tests without requiring Swift.
+`Scripts/check_swift6.sh fuzz` routes host calls to the VM. Inside the guest,
+`npm run test:protocol-fuzz` in `Safari Shared/Inpage Provider` runs the same
+bounded check. The VM's `all` profile includes it. Ordinary `npm test` runs the
+corpus and harness tests without requiring Swift.
 
 The runner compiles the actual generated Swift codec with `Scripts/ProtocolFuzzOracle.swift` into a temporary standalone executable. It does not build or launch the wallet, access wallet data, or change DerivedData. Both codecs receive the same serialized candidate. It compares acceptance and decoded snapshots across native value and raw-data entry points, and checks JavaScript `decode`, `build`, and snapshot revalidation. Contract inventories and independently labeled positive/negative fixtures prevent an all-reject or all-accept implementation from appearing correct.
 

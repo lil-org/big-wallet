@@ -518,11 +518,22 @@ export class LifecycleSession {
     async refreshTab(index) {
         const tab = this.tabs[index];
         const bridge = this.child("bridge");
-        const reply = await bridge.command("native", {profileIdentifier: tab.profile.id, message: {
-            id: 1, subject: "getLatestConfiguration", configurationKey: new URL(tab.url).origin,
-            workflowVersion: bridge.ready.workflowVersion, __bwPrivateBrowsing: false,
-        }});
-        if (!reply.state) { throw new LifecycleFailure("progress", "Fresh native configuration is unavailable", {tab: index, reply}); }
+        const deadline = performance.now() + this.options.timeout;
+        let reply;
+        for (let attempt = 0; ; attempt += 1) {
+            const remaining = deadline - performance.now();
+            if (remaining <= 0) { throw new LifecycleFailure("watchdog", "Fresh native configuration remained unavailable", {tab: index, reply}); }
+            reply = await bridge.command("native", {profileIdentifier: tab.profile.id, message: {
+                id: 1, subject: "getLatestConfiguration", configurationKey: new URL(tab.url).origin,
+                workflowVersion: bridge.ready.workflowVersion, __bwPrivateBrowsing: false,
+            }}, {timeout: remaining});
+            if (reply?.id === 1 && reply.state && !Object.hasOwn(reply, "unavailable")) { break; }
+            if (reply?.id !== 1 || reply.unavailable !== true || Object.keys(reply).length !== 2 || attempt >= 2) {
+                throw new LifecycleFailure("progress", "Fresh native configuration is unavailable", {tab: index, reply});
+            }
+            await this.pump();
+            await this.advance(attempt === 0 ? 1000 : 5000);
+        }
         if (!this.browser.configurationReady(tab.id, reply.state)) { this.browser.focus(tab.id); }
         await this.pumpUntil(() => this.browser.configurationReady(tab.id, reply.state), {advance: true});
         await this.pump();
@@ -884,13 +895,30 @@ export class LifecycleSession {
                 }
                 if (this.background.size === 0 && this.scheduler.pending({kind: "message"}).length === 0 && this.browser.snapshot().every(tab =>
                     this.browser.configurationReady(tab.id, tab.configuration?.state))) {
+                    if (this.mode === "popup" && rejectReviews) {
+                        for (const profileIdentifier of profiles) { this.browser.closePopup(profileIdentifier); }
+                    }
                     await this.barrier("recovered");
                     return;
                 }
             }
+            if (this.mode === "popup" && this.lastInspectionAvailable && this.background.size === 0 &&
+                this.scheduler.pending({kind: "message"}).length === 0) {
+                const terminalProfile = profiles.find(profileIdentifier => {
+                    const current = this.browser.popupRequest(profileIdentifier);
+                    return current && requests.some(request => request.handle.profileIdentifier === profileIdentifier &&
+                        request.handle.id === current.id && request.handle.token === current.requestToken &&
+                        ["responded", "completed"].includes(request.phase));
+                });
+                if (terminalProfile !== undefined) {
+                    this.browser.closePopup(terminalProfile);
+                    await this.browser.openPopup(terminalProfile);
+                    continue;
+                }
+            }
             for (const request of requests) {
-                if (this.mode === "native" && request.phase === "queued" && request.provider === "unknown" &&
-                    request.name === "switchAccount" && request.presentation === undefined) {
+                if (this.mode === "native" && request.phase === "queued" && (request.presentation === undefined ||
+                    request.presentation === "none" && request.coordinatorPhase === "paused")) {
                     this.sendNative({subject: "showApproval", id: request.handle.id, requestToken: request.handle.token,
                         configurationKey: request.configurationKey, workflowVersion: this.child("bridge").ready.workflowVersion,
                         __bwPrivateBrowsing: false}, request.handle.profileIdentifier);

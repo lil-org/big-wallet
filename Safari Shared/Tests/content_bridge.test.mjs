@@ -777,6 +777,77 @@ test("focus discovers lazy revocation without replacing the generation or cancel
     assert.equal(harness.context.bigWalletRequests.size, 0);
 });
 
+test("late enqueue acknowledgement after provider replacement preserves current configuration and both request lifetimes", async () => {
+    const initial = configurationState({ethereum: 1, solana: 5});
+    const current = configurationState({ethereum: 1, solana: 6});
+    const currentToken = "123e4567-e89b-12d3-a456-426614174001";
+    let configuration = initial;
+    let finishEnqueue;
+    let admissions = 0;
+    const harness = makeHarness({
+        configurationResponse: () => ({kind: "configuration", state: configuration}),
+        sendMessage: message => {
+            if (message.subject === "message-to-wallet") {
+                admissions += 1;
+                if (admissions === 1) { return new Promise(resolve => { finishEnqueue = resolve; }); }
+                return {id: 7, requestToken: currentToken, admissionKind: "new", approvalRequired: true, state: current};
+            }
+            if (message.subject === "getResponse") {
+                return {kind: "result", id: 7, provider: "ethereum", name: "requestAccounts", result: [],
+                    approvalCommitted: false, state: message.requestToken === requestToken ? initial : current};
+            }
+            throw new Error(`Unexpected message ${message.subject}`);
+        },
+    });
+    await settle();
+    const oldGeneration = harness.generation();
+    harness.dispatchPage("request", dappRequest());
+    await settle();
+    assert.equal(typeof finishEnqueue, "function");
+    const oldRequest = [...harness.context.bigWalletRequests.values()][0];
+    assert.equal(oldRequest.phase, "enqueuing");
+
+    configuration = current;
+    vm.runInContext(`{
+        const generation = bigWalletNextGeneration();
+        bigWalletProviderGeneration = generation;
+        if (!bigWalletInjectProvider(generation)) { throw new Error("Provider replacement failed"); }
+        bigWalletConfigurationState = undefined;
+        void bigWalletLoadConfiguration(generation, 0, true);
+    }`, harness.context);
+    await settle();
+    const currentGeneration = harness.generation();
+    assert.notEqual(currentGeneration, oldGeneration);
+    const expectedCache = {configurationKey: "https://wallet.example", providerGeneration: currentGeneration, state: current};
+    assert.deepEqual(clone(harness.context.bigWalletConfigurationState), expectedCache);
+    const published = harness.postedMessages.length;
+
+    finishEnqueue({id: 7, requestToken, admissionKind: "new", approvalRequired: true, state: initial});
+    await settle();
+    assert.deepEqual(clone(harness.context.bigWalletConfigurationState), expectedCache);
+    assert.equal(harness.postedMessages.length, published);
+    assert.equal(oldRequest.requestToken, requestToken);
+    assert.equal(oldRequest.phase, "waiting");
+
+    harness.dispatchPage("request", dappRequest(), currentGeneration);
+    await settle();
+    assert.equal(admissions, 2);
+    assert.equal(harness.context.bigWalletRequests.size, 2);
+    const enqueued = harness.runtimeMessages.filter(message => message.subject === "message-to-wallet");
+    assert.equal(enqueued[1].authority.revisions.solana, 6);
+    assert.notEqual(enqueued[0].enqueueAttempt, enqueued[1].enqueueAttempt);
+    await harness.runTimer();
+    await harness.runTimer();
+    const polls = harness.runtimeMessages.filter(message => message.subject === "getResponse");
+    assert.deepEqual(polls.map(message => message.requestToken), [requestToken, currentToken]);
+    const terminals = harness.postedMessages.filter(({message}) => message.response?.kind === "result").map(({message}) => message);
+    assert.deepEqual(terminals.map(message => message.providerGeneration), [oldGeneration, currentGeneration]);
+    assert.equal(terminals.every(message => message.id === 7), true);
+    assert.deepEqual(clone(harness.context.bigWalletConfigurationState), expectedCache);
+    assert.equal(harness.context.bigWalletRequests.size, 0);
+    assert.equal(harness.pendingTimers(), 0);
+});
+
 test("synthetic focus and visibility events do not reconcile configuration", async () => {
     const harness = makeHarness();
     await settle();

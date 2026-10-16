@@ -483,6 +483,7 @@ final class AlchemyJWTProvider: AlchemyAuthorizationProviding {
             @escaping @Sendable (UInt64) async throws -> Void = {
                 try await Task.sleep(nanoseconds: $0)
             },
+        persistenceRepairDidSucceed: @escaping @Sendable () -> Void = {},
         notificationCenter: NotificationCenter = .default,
         observesCrossProcessChanges: Bool = false
     ) {
@@ -507,7 +508,8 @@ final class AlchemyJWTProvider: AlchemyAuthorizationProviding {
                     Self.defaultPersistenceRepairCooldownNanoseconds,
                 maximumCooldownNanoseconds:
                     Self.maximumPersistenceRepairCooldownNanoseconds,
-                sleep: persistenceRepairCooldownSleep
+                sleep: persistenceRepairCooldownSleep,
+                didSucceed: persistenceRepairDidSucceed
             )
         self.notificationCenter = notificationCenter
         self.state = Mutex(State())
@@ -2229,11 +2231,13 @@ private actor AlchemyJWTPersistenceRepairCoordinator {
     private let initialCooldownNanoseconds: UInt64
     private let maximumCooldownNanoseconds: UInt64
     private let sleep: Sleeper
+    private let didSucceed: @Sendable () -> Void
 
     init(
         initialCooldownNanoseconds: UInt64,
         maximumCooldownNanoseconds: UInt64,
-        sleep: @escaping Sleeper
+        sleep: @escaping Sleeper,
+        didSucceed: @escaping @Sendable () -> Void
     ) {
         self.initialCooldownNanoseconds = max(
             initialCooldownNanoseconds,
@@ -2244,6 +2248,7 @@ private actor AlchemyJWTPersistenceRepairCoordinator {
             1
         )
         self.sleep = sleep
+        self.didSucceed = didSucceed
     }
 
     func markDirty(operation: @escaping Operation) {
@@ -2280,6 +2285,7 @@ private actor AlchemyJWTPersistenceRepairCoordinator {
         if isClean {
             activeIdentifier = nil
             consecutiveFailedWindows = 0
+            didSucceed()
             if generation != observedGeneration {
                 startRepair()
             }

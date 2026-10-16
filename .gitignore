@@ -29,6 +29,8 @@ xcuserdata
 .asc/tmp/
 .asc/reports/
 .asc/review-details.local.json
+.vm-testing.local.json
+Scripts/vm/**/__pycache__/
 
 # Bundler
 .bundle

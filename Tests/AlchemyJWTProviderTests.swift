@@ -2657,6 +2657,8 @@ final class AlchemyJWTProviderTests: XCTestCase {
 
     func testPersistenceRepairCooldownIsExponentialAndCannotBeRearmedByTraffic()
         async throws {
+        let repairCompleted = expectation(description: "persistence repair completed successfully")
+        repairCompleted.assertForOverFulfill = false
         let now: Int64 = 2_000_000_000
         let rejected = makeRecord(
             marker: "cooldown-rejected",
@@ -2681,7 +2683,8 @@ final class AlchemyJWTProviderTests: XCTestCase {
             now: now,
             persistenceRepairCooldownSleep: {
                 try await cooldownSleeper.sleep($0)
-            }
+            },
+            persistenceRepairDidSucceed: { repairCompleted.fulfill() }
         )
         let loadedAuthorization = try await provider.authorization(
             for: alchemyURL
@@ -2741,9 +2744,6 @@ final class AlchemyJWTProviderTests: XCTestCase {
             expectedCooldowns
         )
 
-        let repairReleased = expectation(description: "repair released persistence lock")
-        repairReleased.assertForOverFulfill = false
-        contendedLock.onRelease = { repairReleased.fulfill() }
         contendedLock.makeAvailable()
         await cooldownSleeper.resumeNext()
         let rejectedDigest = tokenDigest(rejected.token)
@@ -2754,8 +2754,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let pendingAfterRecovery = await cooldownSleeper.pendingCount()
         XCTAssertEqual(pendingAfterRecovery, 0)
 
-        await fulfillment(of: [repairReleased], timeout: 2)
-        contendedLock.onRelease = nil
+        await fulfillment(of: [repairCompleted], timeout: 2)
         let acquiredLock = try contendedLock.tryAcquire()
         XCTAssertTrue(acquiredLock)
         await provider.invalidateAuthorization(
@@ -3591,6 +3590,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
             @escaping @Sendable (UInt64) async throws -> Void = {
                 try await Task.sleep(nanoseconds: $0)
             },
+        persistenceRepairDidSucceed: @escaping @Sendable () -> Void = {},
         notificationCenter: NotificationCenter = .default
     ) -> AlchemyJWTProvider {
         return AlchemyJWTProvider(
@@ -3611,6 +3611,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
             proactiveRefreshSleep: proactiveRefreshSleep,
             persistenceRepairCooldownSleep:
                 persistenceRepairCooldownSleep,
+            persistenceRepairDidSucceed: persistenceRepairDidSucceed,
             notificationCenter: notificationCenter
         )
     }
@@ -3706,11 +3707,21 @@ final class AlchemyJWTProviderTests: XCTestCase {
 
     private func waitForSleeper(
         _ sleeper: TestAlchemyJWTProactiveSleeper,
+        file: StaticString = #filePath,
+        line: UInt = #line,
         _ condition: @escaping @Sendable ([UInt64], Int) -> Bool
     ) async {
-        let observed = expectation(description: "scheduled sleep checkpoint")
+        let observed = XCTestExpectation(description: "scheduled sleep checkpoint")
         await sleeper.observe(condition, expectation: observed)
-        await fulfillment(of: [observed], timeout: 2)
+        let result = await XCTWaiter.fulfillment(of: [observed], timeout: 10)
+        guard result != .completed else { return }
+        let durations = await sleeper.requestedDurations()
+        let pendingCount = await sleeper.pendingCount()
+        XCTFail(
+            "Scheduled sleep checkpoint failed (\(result)); requested durations: \(durations), pending sleeps: \(pendingCount)",
+            file: file,
+            line: line
+        )
     }
 
     private func waitForStoredRecord(_ record: AlchemyJWTRecord, in store: TestAlchemyJWTStore) async {
@@ -3918,11 +3929,6 @@ private final class TestAlchemyJWTRefreshLock: Sendable, AlchemyJWTRefreshLockin
     }
     private let semaphore: DispatchSemaphore
     private let counts = Mutex(Counts())
-    private let releaseObserver = Mutex<(@Sendable () -> Void)?>(nil)
-    var onRelease: (@Sendable () -> Void)? {
-        get { releaseObserver.withLock { $0 } }
-        set { releaseObserver.withLock { $0 = newValue } }
-    }
 
     init(isAvailable: Bool = true) {
         semaphore = DispatchSemaphore(value: isAvailable ? 1 : 0)
@@ -3940,7 +3946,6 @@ private final class TestAlchemyJWTRefreshLock: Sendable, AlchemyJWTRefreshLockin
 
     func release() {
         semaphore.signal()
-        onRelease?()
     }
     func makeAvailable() { semaphore.signal() }
 }

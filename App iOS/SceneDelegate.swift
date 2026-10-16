@@ -10,7 +10,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private var foregroundTask: Task<Void, Never>?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
-        guard (scene as? UIWindowScene) != nil else { return }
+        guard let windowScene = scene as? UIWindowScene else { return }
+        if isXCTestHostedLaunch {
+            let window = UIWindow(windowScene: windowScene)
+            window.rootViewController = UIViewController()
+            self.window = window
+            window.makeKeyAndVisible()
+            return
+        }
         
         if let shortcutItem = connectionOptions.shortcutItem, shortcutItem.type == feedbackShortcutItemType {
             UIApplication.shared.open(.quickFeedbackMail)
@@ -22,6 +29,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneWillEnterForeground(_ scene: UIScene) {
+        guard !isXCTestHostedLaunch else { return }
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
         foregroundTask?.cancel()
         foregroundTask = Task {
@@ -38,6 +46,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func windowScene(_ windowScene: UIWindowScene, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
+        guard !isXCTestHostedLaunch else {
+            completionHandler(false)
+            return
+        }
         if shortcutItem.type == feedbackShortcutItemType {
             UIApplication.shared.open(.quickFeedbackMail)
         }

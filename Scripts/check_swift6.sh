@@ -6,6 +6,25 @@ repo_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
 cd "$repo_dir"
 
 mode=${1:-all}
+case "$mode" in
+    --help|-h)
+        echo 'Usage: Scripts/check_swift6.sh [all|build|test|performance|tsan|fuzz|approval]'
+        echo 'Host invocations run inside the headless test VM. Use Scripts/test_vm.sh for setup and results.'
+        exit 0
+        ;;
+    all|build|test|performance|tsan|fuzz|approval) ;;
+    *) echo 'Usage: Scripts/check_swift6.sh [all|build|test|performance|tsan|fuzz|approval]' >&2; exit 2 ;;
+esac
+. "$script_dir/vm/guest_session.sh"
+if test_vm_is_virtual_mac; then
+    test_vm_require_guest_session || exit 2
+else
+    if [ "$mode" = all ]; then
+        exec "$script_dir/test_vm.sh" run all
+    fi
+    exec "$script_dir/test_vm.sh" run all --stage "$mode"
+fi
+
 mac_destination='platform=macOS,arch=arm64'
 ios_destination=${SWIFT6_IOS_DESTINATION:-'platform=iOS Simulator,name=iPhone 18 Pro'}
 vision_destination=${SWIFT6_VISIONOS_DESTINATION:-'platform=visionOS Simulator,name=Apple Vision Pro'}

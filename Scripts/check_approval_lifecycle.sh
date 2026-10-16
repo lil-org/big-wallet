@@ -7,13 +7,27 @@ cd "$repo_dir"
 
 . "$script_dir/inpage_provider_toolchain.sh"
 inpage_provider_prepare_tool_path "$repo_dir"
-require_inpage_provider_toolchain
 
 if [ "${1:-}" = --help ]; then
     inpage_provider_run_node "$script_dir/approval_lifecycle/run.mjs" --help
     exit 0
 fi
 
+. "$script_dir/vm/guest_session.sh"
+if test_vm_is_virtual_mac; then
+    test_vm_require_guest_session || exit 2
+else
+    inpage_provider_run_node --input-type=module - "$script_dir/test_vm.sh" "${APPROVAL_CONFIGURATION:-Debug}" "$@" <<'JS'
+import {spawnSync} from 'node:child_process';
+const [, , runner, configuration, ...extra] = process.argv;
+const result = spawnSync(runner, ['run', 'all', '--stage', 'approval', '--configuration', configuration,
+    ...extra.map(value => `--approval-arg=${value}`)], {stdio: 'inherit'});
+process.exit(result.status ?? 2);
+JS
+    exit $?
+fi
+
+require_inpage_provider_toolchain
 configuration=${APPROVAL_CONFIGURATION:-Debug}
 case "$configuration" in
     Debug|Release) ;;

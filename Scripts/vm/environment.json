@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "xcode": {"version": "27.0", "buildVersion": "27A266a"},
+  "node": {"version": "24.22.0", "npmVersion": "11.16.0"},
+  "jq": {"version": "1.8.1", "sha256": "a9fe3ea2f86dfc72f6728417521ec9067b343277152b114f4e98d8cb0e263603"},
+  "runtimes": [
+    {"platform": "iOS", "version": "27.0", "buildVersion": "24A434"},
+    {"platform": "visionOS", "version": "27.0", "buildVersion": "24M362"}
+  ],
+  "buildData": {"bytes": 103079215104, "volumeName": "BigWalletBuild"},
+  "minimumHostFreeBytes": 32212254720
+}

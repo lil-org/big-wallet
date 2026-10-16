@@ -1,0 +1,130 @@
+{
+  "summary": {
+    "totalTestCount": 7,
+    "passedTests": 2,
+    "failedTests": 0,
+    "skippedTests": 5,
+    "expectedFailures": 0,
+    "result": "Passed"
+  },
+  "tree": {
+    "testNodes": [
+      {
+        "name": "Tests iOS",
+        "nodeType": "Test Plan",
+        "result": "Passed",
+        "children": [
+          {
+            "name": "Tests iOS",
+            "nodeIdentifierURL": "test://com.apple.xcode/Wallet/Tests%20iOS",
+            "nodeType": "Unit test bundle",
+            "result": "Passed",
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "name": "Test skipped - WALLETCORE_PROXY_PERF_ALLOW_DEBUG=1 is required to run crypto performance gates in Debug.",
+                        "nodeType": "Skip Message"
+                      }
+                    ],
+                    "duration": "0.008s",
+                    "durationInSeconds": 0.008010029792785645,
+                    "name": "testEd25519SigningPerformanceGate()",
+                    "nodeIdentifier": "WalletCoreProxyPerformanceGateTests/testEd25519SigningPerformanceGate()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Wallet/Tests%20iOS/WalletCoreProxyPerformanceGateTests/testEd25519SigningPerformanceGate",
+                    "nodeType": "Test Case",
+                    "result": "Skipped"
+                  },
+                  {
+                    "duration": "0.00097s",
+                    "durationInSeconds": 0.0009729862213134766,
+                    "name": "testPerformanceGateThresholdResolutionSkipsUnlessBaselineIsConfigured()",
+                    "nodeIdentifier": "WalletCoreProxyPerformanceGateTests/testPerformanceGateThresholdResolutionSkipsUnlessBaselineIsConfigured()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Wallet/Tests%20iOS/WalletCoreProxyPerformanceGateTests/testPerformanceGateThresholdResolutionSkipsUnlessBaselineIsConfigured",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "children": [
+                      {
+                        "name": "Test skipped - WALLETCORE_PROXY_PERF_ALLOW_DEBUG=1 is required to run crypto performance gates in Debug.",
+                        "nodeType": "Skip Message"
+                      }
+                    ],
+                    "duration": "0.0018s",
+                    "durationInSeconds": 0.0017889738082885742,
+                    "name": "testScryptDefaultDerivationPerformanceGate()",
+                    "nodeIdentifier": "WalletCoreProxyPerformanceGateTests/testScryptDefaultDerivationPerformanceGate()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Wallet/Tests%20iOS/WalletCoreProxyPerformanceGateTests/testScryptDefaultDerivationPerformanceGate",
+                    "nodeType": "Test Case",
+                    "result": "Skipped"
+                  },
+                  {
+                    "duration": "0.0029s",
+                    "durationInSeconds": 0.0028799772262573242,
+                    "name": "testScryptDefaultParametersAndSequentialDerivationVectors()",
+                    "nodeIdentifier": "WalletCoreProxyPerformanceGateTests/testScryptDefaultParametersAndSequentialDerivationVectors()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Wallet/Tests%20iOS/WalletCoreProxyPerformanceGateTests/testScryptDefaultParametersAndSequentialDerivationVectors",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "children": [
+                      {
+                        "name": "Test skipped - WALLETCORE_PROXY_PERF_ALLOW_DEBUG=1 is required to run crypto performance gates in Debug.",
+                        "nodeType": "Skip Message"
+                      }
+                    ],
+                    "duration": "0.0036s",
+                    "durationInSeconds": 0.0035680532455444336,
+                    "name": "testScryptWalletCoreJSONImportPerformanceGate()",
+                    "nodeIdentifier": "WalletCoreProxyPerformanceGateTests/testScryptWalletCoreJSONImportPerformanceGate()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Wallet/Tests%20iOS/WalletCoreProxyPerformanceGateTests/testScryptWalletCoreJSONImportPerformanceGate",
+                    "nodeType": "Test Case",
+                    "result": "Skipped"
+                  },
+                  {
+                    "children": [
+                      {
+                        "name": "Test skipped - WALLETCORE_PROXY_PERF_ALLOW_DEBUG=1 is required to run crypto performance gates in Debug.",
+                        "nodeType": "Skip Message"
+                      }
+                    ],
+                    "duration": "0.002s",
+                    "durationInSeconds": 0.001981973648071289,
+                    "name": "testSecp256k1PublicKeyPerformanceGate()",
+                    "nodeIdentifier": "WalletCoreProxyPerformanceGateTests/testSecp256k1PublicKeyPerformanceGate()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Wallet/Tests%20iOS/WalletCoreProxyPerformanceGateTests/testSecp256k1PublicKeyPerformanceGate",
+                    "nodeType": "Test Case",
+                    "result": "Skipped"
+                  },
+                  {
+                    "children": [
+                      {
+                        "name": "Test skipped - WALLETCORE_PROXY_PERF_ALLOW_DEBUG=1 is required to run crypto performance gates in Debug.",
+                        "nodeType": "Skip Message"
+                      }
+                    ],
+                    "duration": "0.0015s",
+                    "durationInSeconds": 0.0014859437942504883,
+                    "name": "testSecp256k1SigningPerformanceGate()",
+                    "nodeIdentifier": "WalletCoreProxyPerformanceGateTests/testSecp256k1SigningPerformanceGate()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Wallet/Tests%20iOS/WalletCoreProxyPerformanceGateTests/testSecp256k1SigningPerformanceGate",
+                    "nodeType": "Test Case",
+                    "result": "Skipped"
+                  }
+                ],
+                "name": "WalletCoreProxyPerformanceGateTests",
+                "nodeIdentifierURL": "test://com.apple.xcode/Wallet/Tests%20iOS/WalletCoreProxyPerformanceGateTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

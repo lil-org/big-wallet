@@ -6,9 +6,10 @@ import Cocoa
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     
-    private let agent = Agent.shared
-    private let priceService = PriceService.shared
-    private let walletsManager = WalletsManager.shared
+    private let isTestHost = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    private lazy var agent = Agent.shared
+    private lazy var priceService = PriceService.shared
+    private lazy var walletsManager = WalletsManager.shared
     private var quitKeyboardShortcutMonitor: Any?
     private var startupTask: Task<Void, Never>?
     private var foregroundTask: Task<Void, Never>?
@@ -23,6 +24,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        guard !isTestHost else { return }
 #if DEBUG
         AmbientPseudoLocalizationLaunchMode.recordFromEnvironment()
 #endif
@@ -37,6 +39,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
+        guard !isTestHost else { return }
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
         agent.applicationDidBecomeActive()
         foregroundTask?.cancel()
@@ -48,6 +51,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard !isTestHost else { return false }
         openWallet()
         return true
     }
@@ -73,6 +77,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func clearAmbientPseudoLocalizationLaunchMode() {
+        guard !isTestHost else { return }
 #if DEBUG
         AmbientPseudoLocalizationLaunchMode.clear()
 #endif

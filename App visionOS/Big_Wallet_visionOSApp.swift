@@ -10,6 +10,7 @@ struct Big_Wallet_visionOSApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var showAccountsView = false
     @State private var accountPresentationRequest = 0
+    private let isTestHost = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 
     init() {
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
@@ -18,7 +19,9 @@ struct Big_Wallet_visionOSApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if showAccountsView {
+                if isTestHost {
+                    Color.clear
+                } else if showAccountsView {
                     AccountsViewControllerWrapper()
                 } else {
                     PasswordViewControllerWrapper(successHandler: {
@@ -33,13 +36,14 @@ struct Big_Wallet_visionOSApp: App {
                 showAccountsView = true
             }
             .task {
+                guard !isTestHost else { return }
                 await WalletsManager.shared.start()
                 guard !Task.isCancelled else { return }
                 let backgroundTask = SafariApprovalVaultHost.backgroundTask(using: .shared)
                 await SafariApprovalVaultHost.shared.start(backgroundTask: backgroundTask)
             }
             .task(id: scenePhase) {
-                guard scenePhase == .active else { return }
+                guard !isTestHost, scenePhase == .active else { return }
                 AlchemyJWTProvider.prewarmForApplicationLifecycle()
                 await WalletsManager.shared.handleExternalWalletStoreChange()
                 guard !Task.isCancelled else { return }
