@@ -10,7 +10,6 @@ private struct RunnerFailure: Error, CustomStringConvertible {
 
 private struct Options {
     let vm: URL
-    let exchange: URL
     let status: URL
     let stopFile: URL
     let ownerPID: pid_t
@@ -19,7 +18,7 @@ private struct Options {
     let setupWindow: Bool
 
     init(arguments: [String]) throws {
-        let allowed: Set<String> = ["--vm", "--exchange", "--status", "--stop-file", "--owner-pid", "--provision-user", "--provision-password-file"]
+        let allowed: Set<String> = ["--vm", "--status", "--stop-file", "--owner-pid", "--provision-user", "--provision-password-file"]
         var values: [String: String] = [:]
         var setupWindow = false
         var index = 0
@@ -47,7 +46,6 @@ private struct Options {
             return URL(fileURLWithPath: value)
         }
         vm = try path("--vm")
-        exchange = try path("--exchange")
         status = try path("--status")
         stopFile = try path("--stop-file")
         guard let rawPID = values["--owner-pid"], let pid = Int32(rawPID), pid > 1, pid != getpid() else {
@@ -101,25 +99,15 @@ private func within(_ child: URL, _ parent: URL) -> Bool {
 private func timestamp() -> String { ISO8601DateFormatter().string(from: Date()) }
 
 @MainActor
-private final class Host: NSObject, VZVirtualMachineDelegate, @MainActor VZVirtioSocketListenerDelegate, NSWindowDelegate {
+private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
     private let options: Options
     private var machine: VZVirtualMachine?
     private var setupWindow: NSWindow?
     private var setupView: VZVirtualMachineView?
-    private var listener: VZVirtioSocketListener?
-    private var connection: VZVirtioSocketConnection?
-    private var connectionAttempts = 0
-    private var connectionReader: DispatchSourceRead?
-    private var input = Data()
-    private var pendingOutput = Data()
     private var lockFD: Int32 = -1
     private var timer: DispatchSourceTimer?
     private var signals: [DispatchSourceSignal] = []
     private var state = "starting"
-    private var guest: [String: Any]?
-    private var lastGuestEvent: [String: Any]?
-    private var lastHeartbeat: Date?
-    private var connectedAt: Date?
     private var shutdownStarted: Date?
     private var stopReason: String?
     private var failure: String?
@@ -139,13 +127,6 @@ private final class Host: NSObject, VZVirtualMachineDelegate, @MainActor VZVirti
         let machine = VZVirtualMachine(configuration: configuration, queue: .main)
         self.machine = machine
         machine.delegate = self
-        guard let socket = machine.socketDevices.first as? VZVirtioSocketDevice else {
-            throw RunnerFailure("Virtio socket device is unavailable")
-        }
-        let listener = VZVirtioSocketListener()
-        listener.delegate = self
-        socket.setSocketListener(listener, forPort: 50777)
-        self.listener = listener
         installWatchdog()
         let startOptions = try makeStartOptions()
         machine.start(options: startOptions) { [weak self] error in
@@ -169,15 +150,11 @@ private final class Host: NSObject, VZVirtualMachineDelegate, @MainActor VZVirti
     private func validatePaths() throws {
         guard options.vm.pathExtension == "vbvm" else { throw RunnerFailure("VM must be a .vbvm bundle") }
         try checkedPath(options.vm, directory: true)
-        try checkedPath(options.exchange, directory: true)
         try checkedPath(options.status, directory: false, mayBeMissing: true)
         try checkedPath(options.stopFile, directory: false, mayBeMissing: true)
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        guard options.exchange.pathComponents.count >= 4, options.exchange != home,
-              !within(options.vm, options.exchange), !within(options.exchange, options.vm),
-              options.status != options.stopFile,
+        guard options.status != options.stopFile,
               !within(options.status, options.vm), !within(options.stopFile, options.vm) else {
-            throw RunnerFailure("Exchange and control paths must be scoped outside the VM bundle")
+            throw RunnerFailure("Control paths must be distinct and outside the VM bundle")
         }
         for filename in ["Disk.img", "AuxiliaryStorage", "HardwareModel", "MachineIdentifier", ".vbdata/Config.plist"] {
             try checkedPath(options.vm.appendingPathComponent(filename), directory: false)
@@ -264,7 +241,6 @@ private final class Host: NSObject, VZVirtualMachineDelegate, @MainActor VZVirti
         }
         network.attachment = VZNATNetworkDeviceAttachment()
         configuration.networkDevices = [network]
-        configuration.socketDevices = [VZVirtioSocketDeviceConfiguration()]
         let attachment = try VZDiskImageStorageDeviceAttachment(url: options.vm.appendingPathComponent("Disk.img"), readOnly: false, cachingMode: .cached, synchronizationMode: .fsync)
         configuration.storageDevices = [VZVirtioBlockDeviceConfiguration(attachment: attachment)]
         let buildData = options.vm.appendingPathComponent("BuildData.img")
@@ -336,8 +312,6 @@ private final class Host: NSObject, VZVirtualMachineDelegate, @MainActor VZVirti
             if Date().timeIntervalSince(since) >= 15 && !forceStopRequested { forceStop() }
             if Date().timeIntervalSince(since) >= 25 { finish(code: failure == nil ? 0 : 1) }
         }
-        if let last = lastHeartbeat ?? connectedAt, Date().timeIntervalSince(last) > 15 { closeConnection() }
-        if connection != nil { send(["type": "heartbeat", "protocolVersion": 1, "sessionId": sessionID]) }
         publishStatus()
     }
 
@@ -381,7 +355,6 @@ private final class Host: NSObject, VZVirtualMachineDelegate, @MainActor VZVirti
     }
 
     private func finish(code: Int32) {
-        closeConnection()
         state = code == 0 ? "stopped" : "failed"
         try? writeStatus()
         if lockFD >= 0 { close(lockFD); lockFD = -1 }
@@ -392,13 +365,9 @@ private final class Host: NSObject, VZVirtualMachineDelegate, @MainActor VZVirti
     private func writeStatus() throws {
         var status: [String: Any] = [
             "schemaVersion": 1, "state": state, "running": machine?.state == .running,
-            "guestConnected": connection != nil && guest != nil, "hostPID": getpid(), "ownerPID": options.ownerPID,
-            "connectionPending": connection != nil && guest == nil, "connectionAttempts": connectionAttempts,
+            "hostPID": getpid(), "ownerPID": options.ownerPID,
             "vmPath": options.vm.path, "sessionId": sessionID, "startedAt": startedAt, "updatedAt": timestamp(),
         ]
-        if let guest { status["guest"] = guest }
-        if let lastGuestEvent { status["lastGuestEvent"] = lastGuestEvent }
-        if let lastHeartbeat { status["lastHeartbeatAt"] = ISO8601DateFormatter().string(from: lastHeartbeat) }
         if let stopReason { status["stopReason"] = stopReason }
         if let failure { status["error"] = failure }
         try checkedPath(options.status, directory: false, mayBeMissing: true)
@@ -411,109 +380,6 @@ private final class Host: NSObject, VZVirtualMachineDelegate, @MainActor VZVirti
             if failure == nil { failure = "Cannot publish VM status" }
             if shutdownStarted == nil { beginShutdown(reason: "status-write-failed") }
         }
-    }
-
-    func listener(_ listener: VZVirtioSocketListener, shouldAcceptNewConnection connection: VZVirtioSocketConnection, from socketDevice: VZVirtioSocketDevice) -> Bool {
-        connectionAttempts += 1
-        guard shutdownStarted == nil, self.connection == nil else { return false }
-        self.connection = connection
-        connectedAt = Date()
-        let fd = connection.fileDescriptor
-        guard fd >= 0 else { self.connection = nil; return false }
-        var enabled: Int32 = 1
-        _ = setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &enabled, socklen_t(MemoryLayout<Int32>.size))
-        _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
-        startReading(connection)
-        send(["type": "hello", "role": "host", "protocolVersion": 1, "sessionId": sessionID])
-        return true
-    }
-
-    private func startReading(_ connection: VZVirtioSocketConnection) {
-        let fd = connection.fileDescriptor
-        let read: @MainActor () -> Void = { [weak self, weak connection] in
-            guard let self, let connection, self.connection === connection else { return }
-            self.readConnection()
-        }
-        let close: @MainActor () -> Void = { connection.close() }
-        let reader = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .main)
-        reader.setEventHandler { MainActor.assumeIsolated { read() } }
-        reader.setCancelHandler { MainActor.assumeIsolated { close() } }
-        reader.resume()
-        connectionReader = reader
-    }
-
-    private func readConnection() {
-        guard let connection else { return }
-        var bytes = [UInt8](repeating: 0, count: 4096)
-        while true {
-            let count = Darwin.read(connection.fileDescriptor, &bytes, bytes.count)
-            if count > 0 {
-                input.append(contentsOf: bytes.prefix(count))
-                guard input.count <= 65536 else { closeConnection(); return }
-                while let newline = input.firstIndex(of: 10) {
-                    let line = Data(input[..<newline])
-                    input.removeSubrange(...newline)
-                    guard line.count <= 16384, accept(line) else { closeConnection(); return }
-                }
-            } else if count == 0 { closeConnection(); return }
-            else if errno == EINTR { continue }
-            else if errno != EAGAIN && errno != EWOULDBLOCK { closeConnection(); return }
-            else { return }
-        }
-    }
-
-    private func accept(_ line: Data) -> Bool {
-        guard let message = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
-              message["protocolVersion"] as? Int == 1, let type = message["type"] as? String else { return false }
-        if type == "hello" {
-            guard guest == nil, let uid = message["uid"] as? Int, uid > 0,
-                  let user = message["user"] as? String, user.count <= 256,
-                  let consoleUser = message["consoleUser"] as? String, consoleUser == user,
-                  let consoleUID = message["consoleUID"] as? Int, consoleUID == uid,
-                  let os = message["osVersion"] as? String, os.count <= 256 else { return false }
-            guest = ["protocolVersion": 1, "uid": uid, "user": user, "consoleUser": consoleUser, "consoleUID": consoleUID, "osVersion": os]
-            send(["type": "helloAck", "protocolVersion": 1, "accepted": true, "sessionId": sessionID])
-        } else {
-            guard guest != nil, ["heartbeat", "jobStarted", "jobFinished", "agentError"].contains(type) else { return false }
-            if type != "heartbeat" {
-                var event: [String: Any] = ["type": type, "receivedAt": timestamp()]
-                if let runID = message["runId"] as? String, runID.count <= 128 { event["runId"] = runID }
-                if let code = message["exitCode"] as? Int { event["exitCode"] = code }
-                if let error = message["error"] as? String { event["error"] = String(error.prefix(512)) }
-                lastGuestEvent = event
-            }
-        }
-        lastHeartbeat = Date()
-        publishStatus()
-        return true
-    }
-
-    private func send(_ message: [String: Any]) {
-        guard let connection, let data = try? JSONSerialization.data(withJSONObject: message) else { return }
-        pendingOutput.append(data)
-        pendingOutput.append(10)
-        guard pendingOutput.count <= 65536 else { closeConnection(); return }
-        while !pendingOutput.isEmpty {
-            let written = pendingOutput.withUnsafeBytes { Darwin.write(connection.fileDescriptor, $0.baseAddress, $0.count) }
-            if written > 0 { pendingOutput.removeFirst(written) }
-            else if written < 0 && errno == EINTR { continue }
-            else if written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) { return }
-            else { closeConnection(); return }
-        }
-    }
-
-    private func closeConnection() {
-        let previousReader = connectionReader
-        let previousConnection = connection
-        connectionReader = nil
-        connection = nil
-        if let previousReader { previousReader.cancel() }
-        else { previousConnection?.close() }
-        guest = nil
-        connectedAt = nil
-        lastHeartbeat = nil
-        input.removeAll()
-        pendingOutput.removeAll()
     }
 
     nonisolated func guestDidStop(_ virtualMachine: VZVirtualMachine) {

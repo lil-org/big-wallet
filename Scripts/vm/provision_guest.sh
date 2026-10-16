@@ -940,8 +940,8 @@ function provisionGuest() {
     fs.chownSync(logDirectory, uid, gid);
     const agentPlist = path.join(launchDirectory, `${agentLabel}.plist`);
     const agentConfiguration = {Label: agentLabel,
-        ProgramArguments: [`${library}/VMGuestAgent`, '--runner', `${library}/guest_runner`, '--port', '50777'],
-        LimitLoadToSessionType: 'Aqua', RunAtLoad: true, KeepAlive: true,
+        ProgramArguments: [`${library}/VMGuestAgent`],
+        LimitLoadToSessionType: 'Aqua', RunAtLoad: false, KeepAlive: false,
         EnvironmentVariables: {PATH: environment.PATH, DEVELOPER_DIR: developer},
         StandardOutPath: path.join(logDirectory, 'agent.log'), StandardErrorPath: path.join(logDirectory, 'agent.log')};
     const signing = config.signing;
@@ -1042,7 +1042,6 @@ function provisionGuest() {
         stop() { if (isLoaded()) run('Stop the guest test agent for replacement', '/bin/launchctl', ['bootout', service], serviceOptions); },
         start() {
             run('Load the guest test agent', '/bin/launchctl', ['bootstrap', `gui/${uid}`, agentPlist], serviceOptions);
-            run('Start the guest test agent', '/bin/launchctl', ['kickstart', service], serviceOptions);
         },
     });
     console.log(`Guest ${config.vmId} base is ready for ${config.consoleUser}. No account, password, or existing VM installation was reset.`);

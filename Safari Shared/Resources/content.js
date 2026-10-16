@@ -381,8 +381,9 @@ async function bigWalletReadResponse(state) {
         }), bigWalletResponsePollTimeout);
     } catch {}
     if (!bigWalletIsCurrent(state, "waiting")) { return; }
-    if (bigWalletWire.isMessage("NativeStatus", response) &&
-        response.id === state.message.id && response.missing === true) {
+    const status = bigWalletWire.decodeMessage("NativeStatus", response);
+    const correlatedStatus = status?.id === state.message.id ? status : null;
+    if (correlatedStatus?.missing === true) {
         bigWalletFail(state);
         return;
     }
@@ -391,13 +392,12 @@ async function bigWalletReadResponse(state) {
         bigWalletDeliver(state, terminal);
         return;
     }
-    bigWalletRetryResponse(state, response, startedAt);
+    bigWalletRetryResponse(state, correlatedStatus?.pending === true, startedAt);
 }
 
-function bigWalletRetryResponse(state, response, startedAt) {
+function bigWalletRetryResponse(state, isPending, startedAt) {
     const retryDelay = document.visibilityState === "visible" ? 1000 : 5000;
-    if (bigWalletWire.isMessage("NativeStatus", response) &&
-        response.id === state.message.id && response.pending === true) {
+    if (isPending) {
         state.responseFailureMilliseconds = 0;
         state.lastResponseFailureAt = null;
     } else {
@@ -502,29 +502,28 @@ function bigWalletDisconnect({message, providerGeneration: generation, observedR
         workflowVersion: bigWalletWorkflowVersion,
     };
     void (async () => {
-        let response;
+        let terminal = null;
         let lostReplies = 0;
         for (;;) {
-            response = undefined;
+            let response;
             try { response = await bigWalletWire.withTimeout(browser.runtime.sendMessage(request), bigWalletDisconnectTimeout); } catch {}
+            terminal = bigWalletTerminal(response, id);
             if (!bigWalletMatchesGeneration(generation)) { break; }
-            const terminal = bigWalletTerminal(response, id);
             if (!terminal) {
                 if (lostReplies++ === 0) { continue; }
                 break;
             }
             break;
         }
-        bigWalletPostDisconnect({...message, id}, response, generation, identity.configurationKey);
+        bigWalletPostDisconnect({...message, id}, terminal, generation, identity.configurationKey);
     })();
 }
 
-function bigWalletPostDisconnect(message, response, generation, configurationKey) {
+function bigWalletPostDisconnect(message, terminal, generation, configurationKey) {
     if (typeof message.id === "undefined") {
         bigWalletLoadConfiguration(bigWalletProviderGeneration, 0);
         return;
     }
-    const terminal = bigWalletTerminal(response, message.id);
     const valid = terminal?.name === "revokePermissions" && terminal.provider === message.provider;
     const prepared = valid ? terminal : bigWalletErrorResponse(
         message.id, message.provider, "revokePermissions", "Failed to revoke permissions"
@@ -621,7 +620,7 @@ function bigWalletRuntimeMessage(
         });
         return true;
     }
-    if (bigWalletWire.isConfigurationInvalidated(request)) {
+    if (request.subject === "configurationInvalidated") {
         const identity = bigWalletCurrentIdentity();
         if (identity?.configurationKey === request.configurationKey && typeof bigWalletProviderGeneration === "string") {
             void bigWalletLoadConfiguration(bigWalletProviderGeneration, 0, true);
@@ -629,11 +628,11 @@ function bigWalletRuntimeMessage(
         sendResponse();
         return true;
     }
-    const ids = bigWalletWire.responseReadyIds(request);
-    if (ids) {
+    if (request.subject === "responseReady") {
+        const ids = new Set(request.ids ?? [request.id]);
         for (const state of bigWalletRequests.values()) {
             if (state.phase === "waiting" &&
-                ids.includes(state.message.id)) {
+                ids.has(state.message.id)) {
                 bigWalletSchedule(state, 0);
             }
         }

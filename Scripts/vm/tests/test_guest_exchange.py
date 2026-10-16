@@ -50,10 +50,33 @@ script = script.replace("const root = '/Volumes/BigWalletBuild';", 'const root =
 script = script.replace('[[root, 0, 0o022]', '[[root, uid, 0o022]')
 if 'Guest artifact export failed' in script:
     while (root / 'hold-export').exists(): time.sleep(0.01)
-if (root / 'fail-report').exists() and "process.stdout.write('{}" in script:
+if (root / 'fail-report').exists() and "supervisorAlive:" in script:
     print('fixture guest password', file=sys.stderr)
     sys.exit(1)
-os.execv(sys.argv[2], [sys.argv[2], '-e', script, *arguments[3:]])
+shim = r"""
+const cpFixture = require('node:child_process');
+const fsFixture = require('node:fs');
+const rootFixture = ROOT_PLACEHOLDER;
+const realSpawnSync = cpFixture.spawnSync;
+cpFixture.spawnSync = (file, args, options) => {
+    if (file === '/usr/local/libexec/big-wallet-vm/VMGuestAgent') {
+        if (args[0] !== '--process-identity') throw Error('Unexpected supervisor invocation');
+        if (fsFixture.existsSync(rootFixture + '/identity-unavailable')) return {status: 2, stdout: ''};
+        return {status: 0, stdout: JSON.stringify([1, Number(args[1])])};
+    }
+    if (file !== '/bin/launchctl') return realSpawnSync(file, args, options);
+    fsFixture.appendFileSync(rootFixture + '/launchctl-calls', JSON.stringify(args) + '\\n');
+    if (args[0] === 'print') return {status: fsFixture.existsSync(rootFixture + '/service-unavailable') ? 1 : 0};
+    if (args[0] !== 'kickstart' || args[1] !== '-p' || args.includes('-k')) throw Error('Unexpected launchctl command');
+    if (fsFixture.existsSync(rootFixture + '/launch-fails')) return {status: 1, stdout: ''};
+    const receipt = {version: 1, runId: process.argv[1], vmId: process.argv[2], agentPID: FIXTURE_PID, agentStart: [1, FIXTURE_PID], state: 'running', runnerPID: FIXTURE_PID, runnerStart: [1, FIXTURE_PID]};
+    fsFixture.mkdirSync(rootFixture + '/Exchange/.agent-runs', {recursive: true, mode: 0o700});
+    fsFixture.writeFileSync(rootFixture + '/Exchange/.agent-runs/' + receipt.runId + '.json', JSON.stringify(receipt));
+    if (fsFixture.existsSync(rootFixture + '/lose-launch-reply')) process.exit(255);
+    return {status: 0, stdout: String(FIXTURE_PID)};
+};
+""".replace('ROOT_PLACEHOLDER', json.dumps(str(root))).replace('FIXTURE_PID', str(os.getppid()))
+os.execv(sys.argv[2], [sys.argv[2], '-e', shim + script, *arguments[3:]])
 ''')
         self.node = shutil.which('node')
         self.assertIsNotNone(self.node)
@@ -83,7 +106,7 @@ os.execv(sys.argv[2], [sys.argv[2], '-e', script, *arguments[3:]])
         self.fail(f'Transport did not reach expected state: {self.transport.phase}, {self.transport.result}')
 
     def uploaded(self):
-        self.drive(lambda _: self.transport.phase == 'upload' and self.transport.child is None)
+        self.drive(lambda _: self.transport.launched_at is not None)
         self.assertEqual(json.loads((self.guest / 'job.json').read_text()), self.job)
 
     def report(self, *, finished=False):
@@ -248,22 +271,111 @@ os.execv(sys.argv[2], [sys.argv[2], '-e', script, *arguments[3:]])
         self.assertIsNone(transport.stop_child)
         self.assertFalse(transport.askpass.exists())
 
-    def test_terminal_notification_is_idempotent_and_missing_final_report_is_bounded(self):
+    def observation(self, receipt=None, report=None, alive=True):
+        return {'version': 1, **{key: self.job[key] for key in ('runId', 'vmId')},
+                'receipt': receipt, 'report': report, 'supervisorAlive': alive}
+
+    def receipt(self, state='completed', **fields):
+        return {'version': 1, **{key: self.job[key] for key in ('runId', 'vmId')},
+                'agentPID': os.getpid(), 'agentStart': [1, os.getpid()], 'state': state, **fields}
+
+    def test_receipt_completion_is_idempotent_and_missing_final_report_is_bounded(self):
         transport = self.start()
         self.uploaded()
-        with patch.object(exchange_module.time, 'monotonic', return_value=100):
-            transport.notify_guest_finished()
-        with patch.object(exchange_module.time, 'monotonic', return_value=120):
-            transport.notify_guest_finished()
+        value = self.observation(self.receipt(exitCode=0), alive=False)
+        transport._observe_report(value, 100)
+        transport._observe_report(value, 120)
         self.assertEqual(transport.guest_finished_at, 100)
-        with patch.object(exchange_module.time, 'monotonic', return_value=131):
-            outcome = transport.poll()
-        self.assertEqual(outcome['reason'], 'guest_exited_without_result')
+        self.assertEqual(transport._observation_failure(131), 'guest_exited_without_result')
+
+    def test_unknown_launch_response_observes_receipt_without_relaunch(self):
+        (self.guest_root / 'lose-launch-reply').touch()
+        transport = self.start()
+        self.uploaded()
+        self.drive(lambda _: transport.observed_launch)
+        self.assertEqual(transport.agent_pid, os.getpid())
+        self.report(finished=True)
+        transport.next_poll = 0
+        self.assertEqual(self.drive(lambda value: value is not None)['status'], 'passed')
+        calls = [json.loads(line) for line in (self.guest_root / 'launchctl-calls').read_text().splitlines()]
+        self.assertEqual(sum(call[0] == 'kickstart' for call in calls), 1)
+
+    def test_stop_while_waiting_for_gui_service_prevents_launch(self):
+        (self.guest_root / 'service-unavailable').touch()
+        transport = self.start()
+        self.drive(lambda _: transport.phase == 'launch')
+        transport.request_stop()
+        result = self.drive(lambda value: value is not None)
+        self.assertEqual(result['reason'], 'guest_exchange_cancelled')
+        calls = self.guest_root / 'launchctl-calls'
+        if calls.exists():
+            self.assertFalse(any(json.loads(line)[0] == 'kickstart' for line in calls.read_text().splitlines()))
+
+    def test_unknown_launch_without_receipt_is_bounded(self):
+        (self.guest_root / 'launch-fails').touch()
+        transport = self.start()
+        self.uploaded()
+        self.assertEqual(transport._observation_failure(transport.launched_at + 31), 'guest_launch_failed')
+        self.assertFalse(transport.observed_launch)
+
+    def test_invalid_receipt_and_envelope_cannot_publish_a_final_report(self):
+        transport = self.start()
+        self.uploaded()
+        final = {**self.job, 'status': 'passed', 'finishedAt': 'done'}
+        for key, invalid in [('vmId', 'wrong'), ('runId', 'wrong'), ('version', True), ('agentPID', True), ('state', 'unknown')]:
+            with self.subTest(key=key):
+                receipt = self.receipt(exitCode=0)
+                receipt[key] = invalid
+                with self.assertRaises(exchange_module.GuestExchangeError):
+                    transport._observe_report(self.observation(receipt, final), time.monotonic())
+        for key, invalid in [('vmId', 'wrong'), ('runId', 'wrong'), ('version', True), ('supervisorAlive', 1)]:
+            with self.subTest(envelope=key):
+                value = self.observation(report=final)
+                value[key] = invalid
+                with self.assertRaises(exchange_module.GuestExchangeError):
+                    transport._observe_report(value, time.monotonic())
+        self.assertFalse((self.exchange / 'artifacts/result.json').exists())
+
+    def test_failed_receipt_reports_launch_failure_without_claiming_success(self):
+        transport = self.start()
+        self.uploaded()
+        result = transport._observe_report(self.observation(self.receipt(state='failed',
+            reason='guest_launch_failed', error='fixture guest password')), time.monotonic())
+        self.assertEqual(result['reason'], 'guest_launch_failed')
+        self.assertEqual(result['error'], '[REDACTED]')
+        self.assertFalse((self.exchange / 'artifacts/result.json').exists())
+
+    def test_upload_preserves_claims_and_refuses_active_or_same_run_exchange(self):
+        receipts = self.guest / '.agent-runs'
+        receipts.mkdir(mode=0o700)
+        previous = self.receipt(exitCode=0)
+        (receipts / 'fixture-run.json').write_text(json.dumps(previous))
+        transport = self.start()
+        result = self.drive(lambda value: value is not None)
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(json.loads((receipts / 'fixture-run.json').read_text()), previous)
+        self.close_transport()
+        (receipts / 'fixture-run.json').unlink()
+        previous.update(runId='old', state='running', runnerPID=os.getpid(), runnerStart=[1, os.getpid()])
+        previous.pop('exitCode')
+        (receipts / 'old.json').write_text(json.dumps(previous))
+        self.start()
+        self.assertEqual(self.drive(lambda value: value is not None)['status'], 'failed')
+        self.assertTrue((receipts / 'old.json').exists())
+        self.close_transport()
+        previous['agentStart'] = [2, os.getpid()]
+        previous['runnerStart'] = [2, os.getpid()]
+        (receipts / 'old.json').write_text(json.dumps(previous))
+        self.start()
+        self.uploaded()
+        self.assertEqual(json.loads((receipts / 'old.json').read_text()), previous)
 
     def test_final_export_is_not_interrupted_by_terminal_report_grace(self):
         transport = self.start()
         self.uploaded()
         self.report(finished=True)
+        (self.guest / '.agent-runs/fixture-run.json').write_text(json.dumps(self.receipt(exitCode=0)))
+        (self.guest_root / 'identity-unavailable').touch()
         gate = self.guest_root / 'hold-export'
         gate.touch()
         self.drive(lambda _: transport.phase == 'export')

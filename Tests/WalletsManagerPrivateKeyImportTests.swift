@@ -637,7 +637,9 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         let retryRequest = try XCTUnwrap(retry.request)
         XCTAssertNil(retryRequest.authorizedAccount)
         let binding = try XCTUnwrap(retry.requestBinding)
-        XCTAssertNil(DappRequestProcessor().prepareWithoutWallets(binding))
+        guard case .needsCatalog = DappRequestProcessor().prepare(binding, catalog: nil) else {
+            return XCTFail("Expected a catalog requirement")
+        }
         let catalog = try XCTUnwrap(manager.reviewCatalog())
         guard case .approval(let intent) = DappRequestProcessor().prepare(binding, catalog: catalog),
               case .selectAccount = intent.action else {

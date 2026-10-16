@@ -103,7 +103,7 @@ class SetupFixture:
         return plan
 
     def launch(self, command, **kwargs):
-        exchange = Path(command[command.index('--exchange') + 1])
+        exchange = Path(command[command.index('--status') + 1]).parent
         job = host.read_json(exchange / 'job.json')
         self.launches.append(job['kind'])
         if job['kind'] == 'doctor':
@@ -176,7 +176,7 @@ class SetupPreparationTests(unittest.TestCase):
                 launch = fixture.launch
                 def edit_after_report(command, **options):
                     child = launch(command, **options)
-                    exchange = Path(command[command.index('--exchange') + 1])
+                    exchange = Path(command[command.index('--status') + 1]).parent
                     if host.read_json(exchange / 'job.json')['kind'] == phase:
                         installer.write_bytes(installer.read_bytes() + b'\nfixture installer edit\n')
                     return child

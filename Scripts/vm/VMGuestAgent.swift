@@ -52,13 +52,14 @@ private func writeReceiptData(_ data: Data, to fd: Int32) throws {
     guard result == 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
 }
 
-private func writeReceiptAtomically(_ data: Data, to path: String) throws {
+private func writeReceiptAtomically(_ data: Data, to path: String, exclusive: Bool = false) throws {
     let temporary = path + "." + UUID().uuidString + ".tmp"
     let fd = open(temporary, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0o600)
     guard fd >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
     defer { close(fd); unlink(temporary) }
     try writeReceiptData(data, to: fd)
-    guard rename(temporary, path) == 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
+    let result = exclusive ? link(temporary, path) : rename(temporary, path)
+    guard result == 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
 }
 
 private func consoleIdentity() -> (uid: uid_t, name: String)? {
@@ -68,293 +69,61 @@ private func consoleIdentity() -> (uid: uid_t, name: String)? {
     return (info.st_uid, String(cString: name))
 }
 
-private enum SocketConnectionOutcome: Sendable {
-    case connected(Int32)
-    case failed(String, Int32)
-
-    static func establish() -> SocketConnectionOutcome {
-        let fd = socket(AF_VSOCK, SOCK_STREAM, 0)
-        guard fd >= 0 else { return .failed("socket", errno) }
-        func failed(_ operation: String, _ code: Int32) -> SocketConnectionOutcome {
-            close(fd)
-            return .failed(operation, code)
-        }
-        var enabled: Int32 = 1
-        guard setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &enabled, socklen_t(MemoryLayout<Int32>.size)) == 0 else {
-            return failed("socket-SO_NOSIGPIPE", errno)
-        }
-        let flags = fcntl(fd, F_GETFL)
-        guard flags >= 0, fcntl(fd, F_SETFD, FD_CLOEXEC) == 0,
-              fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) == 0 else {
-            return failed("socket-flags", errno)
-        }
-        // Darwin virtio sockets require blocking connect; the kernel timeout bounds this background attempt.
-        var timeout = timeval(tv_sec: 10, tv_usec: 0)
-        guard setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size)) == 0 else {
-            return failed("connect-timeout", errno)
-        }
-        var address = sockaddr_vm()
-        address.svm_len = UInt8(MemoryLayout<sockaddr_vm>.size)
-        address.svm_family = sa_family_t(AF_VSOCK)
-        address.svm_cid = UInt32(VMADDR_CID_HOST)
-        address.svm_port = 50777
-        let result = withUnsafePointer(to: &address) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                Darwin.connect(fd, $0, socklen_t(MemoryLayout<sockaddr_vm>.size))
-            }
-        }
-        guard result == 0 else { return failed("connect", errno) }
-        timeout = timeval()
-        guard setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size)) == 0,
-              fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0 else {
-            return failed("connected-socket-flags", errno)
-        }
-        return .connected(fd)
+private func processStart(_ pid: pid_t) throws -> [UInt64]? {
+    var information = proc_bsdinfo()
+    let size = MemoryLayout<proc_bsdinfo>.size
+    errno = 0
+    let count = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &information, Int32(size))
+    guard count == size else {
+        if errno == ESRCH { return nil }
+        throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno == 0 ? EIO : errno))
     }
+    guard information.pbi_pid == UInt32(pid), information.pbi_start_tvsec > 0,
+          information.pbi_start_tvusec < 1_000_000 else {
+        throw NSError(domain: NSPOSIXErrorDomain, code: Int(EINVAL))
+    }
+    return [information.pbi_start_tvsec, information.pbi_start_tvusec]
 }
 
 @MainActor
 private final class GuestAgent {
-    private var socketFD: Int32 = -1
-    private var reader: DispatchSourceRead?
-    private var timer: DispatchSourceTimer?
-    private var signals: [DispatchSourceSignal] = []
-    private var input = Data()
-    private var output = Data()
-    private var acknowledged = false
-    private var lastHostMessage: Date?
     private var process: Process?
-    private var activeRunID: String?
-    private var seenRunIDs = Set<String>()
-    private var lastError: String?
-    private var terminalEvent: [String: Any]?
+    private var signals: [DispatchSourceSignal] = []
     private var runnerLog: FileHandle?
-    private let connectQueue = DispatchQueue(label: "org.lil.big-wallet.vm.connect", qos: .utility)
-    private var connectAttempt: UUID?
-    private var diagnosticTimes: [String: Date] = [:]
+    private var receipt: [String: Any]?
+    private var launchFailure: String?
+    private var terminationTimer: DispatchSourceTimer?
+    private let console: () -> (uid: uid_t, name: String)?
+    private let finish: (Int32) -> Void
+    private let writeReceipt: (Data, String, Bool) throws -> Void
+
+    init(console: @escaping () -> (uid: uid_t, name: String)? = consoleIdentity,
+         writeReceipt: @escaping (Data, String, Bool) throws -> Void = {
+             try writeReceiptAtomically($0, to: $1, exclusive: $2)
+         },
+         finish: @escaping (Int32) -> Void = { exit($0) }) {
+        self.console = console
+        self.writeReceipt = writeReceipt
+        self.finish = finish
+    }
 
     func start() {
-        for value in [SIGINT, SIGTERM, SIGHUP] {
-            signal(value, SIG_IGN)
-            let source = DispatchSource.makeSignalSource(signal: value, queue: .main)
-            source.setEventHandler { [weak self] in
-                MainActor.assumeIsolated {
-                    self?.process?.terminate()
-                    self?.disconnect()
-                    exit(0)
-                }
-            }
-            source.resume()
-            signals.append(source)
-        }
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now(), repeating: 2)
-        timer.setEventHandler { [weak self] in MainActor.assumeIsolated { self?.tick() } }
-        timer.resume()
-        self.timer = timer
-    }
-
-    private func tick() {
-        guard let console = consoleIdentity(), console.uid == getuid(), getuid() != 0 else {
-            diagnose("console-session", phase: "waiting-console", code: 0)
-            disconnect()
-            return
-        }
-        if let last = lastHostMessage, Date().timeIntervalSince(last) > 15 {
-            diagnose("host-heartbeat", phase: "error", code: ETIMEDOUT)
-            disconnect()
-        }
-        if socketFD < 0 && connectAttempt == nil { connect(console: console) }
-        if socketFD >= 0 {
-            var heartbeat: [String: Any] = ["type": "heartbeat", "protocolVersion": 1]
-            if let activeRunID { heartbeat["runId"] = activeRunID }
-            send(heartbeat)
-        }
-        if acknowledged { inspectJob() }
-    }
-
-    private func connect(console: (uid: uid_t, name: String)) {
-        let attempt = UUID()
-        connectAttempt = attempt
-        diagnose("connect-start", phase: "connecting", code: 0)
-        connectQueue.async { [self] in
-            let outcome = SocketConnectionOutcome.establish()
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated {
-                    self.completeConnect(outcome, attempt: attempt, console: console)
-                }
-            }
-        }
-    }
-
-    private func completeConnect(_ outcome: SocketConnectionOutcome, attempt: UUID, console: (uid: uid_t, name: String)) {
-        guard connectAttempt == attempt else {
-            if case .connected(let fd) = outcome { close(fd) }
-            return
-        }
-        connectAttempt = nil
-        let fd: Int32
-        switch outcome {
-        case .failed(let operation, let code):
-            diagnose(operation, phase: "error", code: code)
-            return
-        case .connected(let descriptor):
-            fd = descriptor
-        }
-        guard socketFD < 0, let current = consoleIdentity(), current.uid == console.uid,
-              current.name == console.name, current.uid == getuid() else {
-            close(fd)
-            diagnose("console-changed", phase: "waiting-console", code: 0)
-            return
-        }
-        socketFD = fd
-        lastHostMessage = Date()
-        diagnose("connected", phase: "awaiting-hello-ack", code: 0)
-        startReading(fd)
-        let version = ProcessInfo.processInfo.operatingSystemVersion
-        let os = "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
-        send(["type": "hello", "protocolVersion": 1, "uid": getuid(), "user": NSUserName(),
-              "consoleUser": console.name, "consoleUID": console.uid, "osVersion": os])
-    }
-
-    private func startReading(_ fd: Int32) {
-        let reader = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .main)
-        reader.setEventHandler { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self, self.socketFD == fd else { return }
-                self.readMessages()
-            }
-        }
-        reader.setCancelHandler { close(fd) }
-        reader.resume()
-        self.reader = reader
-    }
-
-    private func readMessages() {
-        guard socketFD >= 0 else { return }
-        var bytes = [UInt8](repeating: 0, count: 4096)
-        while true {
-            let count = Darwin.read(socketFD, &bytes, bytes.count)
-            if count > 0 {
-                input.append(contentsOf: bytes.prefix(count))
-                guard input.count <= 65536 else {
-                    diagnose("receive-limit", phase: "error", code: EMSGSIZE)
-                    disconnect()
-                    return
-                }
-                while let newline = input.firstIndex(of: 10) {
-                    let line = Data(input[..<newline])
-                    input.removeSubrange(...newline)
-                    guard line.count <= 16384,
-                          let message = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
-                          message["protocolVersion"] as? Int == 1,
-                          let type = message["type"] as? String,
-                          ["hello", "helloAck", "heartbeat"].contains(type) else {
-                        diagnose("host-message", phase: "error", code: EPROTO)
-                        disconnect()
-                        return
-                    }
-                    if type == "helloAck" {
-                        guard message["accepted"] as? Bool == true else {
-                            diagnose("hello-ack-rejected", phase: "error", code: EPROTO)
-                            disconnect()
-                            return
-                        }
-                        acknowledged = true
-                        diagnose("hello-ack", phase: "ready", code: 0)
-                        if let terminalEvent { send(terminalEvent) }
-                    }
-                    lastHostMessage = Date()
-                }
-            } else if count == 0 {
-                diagnose("host-closed", phase: "disconnected", code: 0)
-                disconnect()
-                return
-            }
-            else if errno == EINTR { continue }
-            else if errno == EAGAIN || errno == EWOULDBLOCK { return }
-            else {
-                let failure = errno
-                diagnose("read", phase: "error", code: failure)
-                disconnect()
-                return
-            }
-        }
-    }
-
-    private func send(_ message: [String: Any]) {
-        guard socketFD >= 0, let encoded = try? JSONSerialization.data(withJSONObject: message) else { return }
-        output.append(encoded)
-        output.append(10)
-        guard output.count <= 65536 else {
-            diagnose("send-limit", phase: "error", code: EMSGSIZE)
-            disconnect()
-            return
-        }
-        while !output.isEmpty {
-            let count = output.withUnsafeBytes { Darwin.write(socketFD, $0.baseAddress, $0.count) }
-            if count > 0 { output.removeFirst(count) }
-            else if count < 0 && errno == EINTR { continue }
-            else if count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) { return }
-            else {
-                let failure = count == 0 ? EPIPE : errno
-                diagnose("write", phase: "error", code: failure)
-                disconnect()
-                return
-            }
-        }
-    }
-
-    private func diagnose(_ operation: String, phase: String, code: Int32) {
-        let description = code == 0 ? "" : String(cString: strerror(code))
-        logDiagnostic(key: "\(operation):\(code)",
-                      message: "transport \(operation), phase=\(phase), errno=\(code)\(description.isEmpty ? "" : " (\(description))")")
-    }
-
-    private func logDiagnostic(key: String, message: String) {
-        let now = Date()
-        if let previous = diagnosticTimes[key], now.timeIntervalSince(previous) < 60 { return }
-        if diagnosticTimes.count >= 64, let oldest = diagnosticTimes.min(by: { $0.value < $1.value })?.key {
-            diagnosticTimes.removeValue(forKey: oldest)
-        }
-        diagnosticTimes[key] = now
-        let timestamp = ISO8601DateFormatter().string(from: now)
-        FileHandle.standardError.write(Data(("\(timestamp) VMGuestAgent: \(message)\n").utf8))
-    }
-
-    private func disconnect() {
-        connectAttempt = nil
-        let previousReader = reader
-        let previousFD = socketFD
-        reader = nil
-        socketFD = -1
-        if let previousReader { previousReader.cancel() }
-        else if previousFD >= 0 { close(previousFD) }
-        input.removeAll()
-        output.removeAll()
-        acknowledged = false
-        lastHostMessage = nil
-    }
-
-    private func inspectJob() {
-        guard process == nil else { return }
-        let jobURL = URL(fileURLWithPath: exchangePath).appendingPathComponent("job.json")
-        guard let data = try? readJobFile(jobURL.path),
-              let job = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let runID = job["runId"] as? String,
-              runID.range(of: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", options: .regularExpression) != nil,
-              !seenRunIDs.contains(runID) else { return }
-        guard isRegularFile(runnerPath), access(runnerPath, X_OK) == 0 else {
-            reportError("Guest runner is not installed or executable", runID: runID)
-            return
-        }
         do {
-            guard try claim(runID) else {
-                seenRunIDs.insert(runID)
-                reportError("This runId was already claimed; refusing to repeat it", runID: runID)
-                return
+            guard let console = console(), console.uid == getuid(), getuid() != 0 else {
+                throw NSError(domain: NSPOSIXErrorDomain, code: Int(EPERM))
             }
-            seenRunIDs.insert(runID)
+            let jobURL = URL(fileURLWithPath: exchangePath).appendingPathComponent("job.json")
+            let data = try readJobFile(jobURL.path)
+            guard let job = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let runID = job["runId"] as? String,
+                  runID.range(of: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", options: .regularExpression) != nil,
+                  let vmID = job["vmId"] as? String, !vmID.isEmpty, vmID.utf8.count <= 128 else {
+                throw NSError(domain: NSPOSIXErrorDomain, code: Int(EINVAL))
+            }
+            try claim(runID: runID, vmID: vmID)
+            guard isRegularFile(runnerPath), access(runnerPath, X_OK) == 0 else {
+                throw NSError(domain: NSPOSIXErrorDomain, code: Int(ENOENT))
+            }
             let logURL = URL(fileURLWithPath: exchangePath).appendingPathComponent("guest-runner.log")
             let logFD = open(logURL.path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0o600)
             guard logFD >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
@@ -371,59 +140,95 @@ private final class GuestAgent {
                                  "BW_VM_EXCHANGE": exchangePath]
             child.terminationHandler = { [weak self] child in
                 DispatchQueue.main.async {
-                    MainActor.assumeIsolated {
-                        self?.completed(runID: runID, code: child.terminationStatus)
-                    }
+                    MainActor.assumeIsolated { self?.completed(code: child.terminationStatus) }
                 }
             }
+            installSignalHandlers()
             try child.run()
             runnerLog = log
             process = child
-            activeRunID = runID
-            send(["type": "jobStarted", "protocolVersion": 1, "runId": runID])
+            if let start = try processStart(child.processIdentifier) {
+                try publish(state: "running", fields: ["runnerPID": child.processIdentifier, "runnerStart": start])
+            }
         } catch {
-            reportError("Guest runner could not start (\((error as NSError).domain):\((error as NSError).code))", runID: runID)
+            let message = "Guest runner could not start (\((error as NSError).domain):\((error as NSError).code))"
+            FileHandle.standardError.write(Data((message + "\n").utf8))
+            if process != nil {
+                launchFailure = message
+                terminateChild()
+            } else {
+                try? publish(state: "failed", fields: ["reason": "guest_launch_failed", "error": message])
+                finish(2)
+            }
         }
     }
 
-    private func claim(_ runID: String) throws -> Bool {
+    private func terminateChild() {
+        guard let process, terminationTimer == nil else { return }
+        if process.isRunning { process.terminate() }
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + .seconds(5))
+        timer.setEventHandler { [weak self] in
+            MainActor.assumeIsolated {
+                if let child = self?.process, child.isRunning { kill(child.processIdentifier, SIGKILL) }
+            }
+        }
+        terminationTimer = timer
+        timer.resume()
+    }
+
+    private func installSignalHandlers() {
+        for value in [SIGINT, SIGTERM, SIGHUP] {
+            signal(value, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: value, queue: .main)
+            source.setEventHandler { [weak self] in
+                MainActor.assumeIsolated { self?.terminateChild() }
+            }
+            source.resume()
+            signals.append(source)
+        }
+    }
+
+    private func claim(runID: String, vmID: String) throws {
         let directory = URL(fileURLWithPath: exchangePath).appendingPathComponent(".agent-runs", isDirectory: true)
         if mkdir(directory.path, 0o700) != 0 && errno != EEXIST { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
         var info = stat()
         guard lstat(directory.path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR else {
             throw NSError(domain: NSPOSIXErrorDomain, code: Int(EINVAL))
         }
-        let receipt = directory.appendingPathComponent(runID + ".json")
-        let fd = open(receipt.path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0o600)
-        if fd < 0 && errno == EEXIST { return false }
-        guard fd >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
-        defer { close(fd) }
-        let data = try JSONSerialization.data(withJSONObject: ["runId": runID, "state": "claimed", "agentPID": getpid()])
-        try writeReceiptData(data, to: fd)
-        return true
+        guard let start = try processStart(getpid()) else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(ESRCH)) }
+        let value: [String: Any] = ["version": 1, "vmId": vmID, "runId": runID,
+                                  "agentPID": getpid(), "agentStart": start, "state": "claimed"]
+        try writeReceipt(JSONSerialization.data(withJSONObject: value),
+                         directory.appendingPathComponent(runID + ".json").path, true)
+        receipt = value
     }
 
-    private func completed(runID: String, code: Int32) {
+    private func publish(state: String, fields: [String: Any]) throws {
+        guard var value = receipt, let runID = value["runId"] as? String else { return }
+        value["state"] = state
+        value.merge(fields) { _, new in new }
+        let path = URL(fileURLWithPath: exchangePath).appendingPathComponent(".agent-runs/" + runID + ".json").path
+        try writeReceipt(JSONSerialization.data(withJSONObject: value), path, false)
+    }
+
+    private func completed(code: Int32) {
+        terminationTimer?.cancel()
+        terminationTimer = nil
         process = nil
-        activeRunID = nil
         runnerLog = nil
-        let receipt = URL(fileURLWithPath: exchangePath).appendingPathComponent(".agent-runs/" + runID + ".json")
-        if let data = try? JSONSerialization.data(withJSONObject: ["runId": runID, "state": "completed", "exitCode": code]) {
-            try? writeReceiptAtomically(data, to: receipt.path)
+        do {
+            if let launchFailure {
+                try publish(state: "failed", fields: ["reason": "guest_launch_failed", "error": launchFailure])
+                finish(2)
+            } else {
+                try publish(state: "completed", fields: ["exitCode": code])
+                finish(code)
+            }
+        } catch {
+            FileHandle.standardError.write(Data("Guest completion receipt could not be published\n".utf8))
+            finish(2)
         }
-        sendTerminalEvent(["type": "jobFinished", "protocolVersion": 1, "runId": runID, "exitCode": code])
-    }
-
-    private func reportError(_ message: String, runID: String) {
-        guard lastError != message || terminalEvent?["runId"] as? String != runID else { return }
-        lastError = message
-        FileHandle.standardError.write(Data((message + "\n").utf8))
-        sendTerminalEvent(["type": "agentError", "protocolVersion": 1, "runId": runID, "error": message])
-    }
-
-    private func sendTerminalEvent(_ message: [String: Any]) {
-        terminalEvent = message
-        if acknowledged { send(message) }
     }
 }
 
@@ -431,9 +236,17 @@ private final class GuestAgent {
 @MainActor
 private struct VMGuestAgentProgram {
     static func main() {
-        let arguments = Array(CommandLine.arguments.dropFirst())
-        if !arguments.isEmpty && arguments != ["--runner", runnerPath, "--port", "50777"] {
-            FileHandle.standardError.write(Data("Only the fixed guest runner and vsock port are supported\n".utf8))
+        if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--process-identity",
+           let pid = Int32(CommandLine.arguments[2]), pid > 1 {
+            do {
+                let value: Any = try processStart(pid).map { $0 as Any } ?? NSNull()
+                let data = try JSONSerialization.data(withJSONObject: value, options: .fragmentsAllowed)
+                FileHandle.standardOutput.write(data)
+                return
+            } catch { exit(2) }
+        }
+        guard CommandLine.arguments.count == 1 else {
+            FileHandle.standardError.write(Data("The guest supervisor accepts no arguments\n".utf8))
             exit(2)
         }
         let agent = GuestAgent()

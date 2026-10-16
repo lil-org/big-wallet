@@ -46,7 +46,7 @@ struct DappRequestProcessor: DappRequestProcessing {
 
     func prepare(
         _ binding: ExtensionBridge.RequestBinding,
-        catalog: WalletReviewCatalog
+        catalog: WalletReviewCatalog?
     ) -> DappRequestPreparation {
         let request = binding.request
         let preparation: UnboundDappRequestPreparation
@@ -67,6 +67,7 @@ struct DappRequestProcessor: DappRequestProcessing {
                 solana: solana
             )
         case .unknown(let body):
+            guard let catalog else { return .needsCatalog }
             preparation = Self.prepareSwitchAccount(
                 request: request,
                 body: body,
@@ -77,35 +78,13 @@ struct DappRequestProcessor: DappRequestProcessing {
         return bind(preparation, to: binding)
     }
 
-    func prepareWithoutWallets(
-        _ binding: ExtensionBridge.RequestBinding
-    ) -> DappRequestPreparation? {
-        let request = binding.request
-        let preparation: UnboundDappRequestPreparation?
-        switch request.body {
-        case .ethereum(let body):
-            preparation = EthereumDappRequestProcessor.prepareWithoutWallets(
-                request: request,
-                body: body,
-                networkResolver: ethereumNetworkResolver,
-                customDefinitionResult: customDefinitionResult
-            )
-        case .solana(let body):
-            preparation = SolanaDappRequestProcessor.prepareWithoutWallets(
-                request: request,
-                body: body
-            )
-        case .unknown:
-            return nil
-        }
-        return preparation.map { bind($0, to: binding) }
-    }
-
     private func bind(
         _ preparation: UnboundDappRequestPreparation,
         to binding: ExtensionBridge.RequestBinding
     ) -> DappRequestPreparation {
         switch preparation {
+        case .needsCatalog:
+            return .needsCatalog
         case .unavailable:
             return .unavailable
         case .immediate(let resolution):

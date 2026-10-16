@@ -3108,13 +3108,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let admitted = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
             guard case .found(let originalSnapshot) = await bridge.load(handle: admitted.handle),
                   let originalBinding = originalSnapshot.requestBinding,
-                  case .immediate(let expected) = DappRequestProcessor().prepareWithoutWallets(originalBinding) else {
+                  case .immediate(let expected) = DappRequestProcessor().prepare(originalBinding, catalog: nil) else {
                 return XCTFail("Expected the existing deferred provider error")
             }
             bridge = makeBridge(clock: { [clock = clock!] in clock.date })
             guard case .found(let snapshot) = await bridge.load(handle: admitted.handle),
                   let binding = snapshot.requestBinding,
-                  case .immediate(let actual) = DappRequestProcessor().prepareWithoutWallets(binding) else {
+                  case .immediate(let actual) = DappRequestProcessor().prepare(binding, catalog: nil) else {
                 return XCTFail("Expected the deferred provider error after restart")
             }
             XCTAssertEqual(actual.response(for: binding.request)?.json as NSDictionary?, expected.response(for: originalBinding.request)?.json as NSDictionary?)
@@ -9956,12 +9956,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
         init(broadcasts: Bool) { self.broadcasts = broadcasts }
 
-        func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog) -> DappRequestPreparation {
+        func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog?) -> DappRequestPreparation {
             DappRequestProcessor().prepare(binding, catalog: catalog)
-        }
-
-        func prepareWithoutWallets(_ binding: ExtensionBridge.RequestBinding) -> DappRequestPreparation? {
-            DappRequestProcessor().prepareWithoutWallets(binding)
         }
 
         func execute(permit: ExtensionBridge.ApprovedExecutionPermit, signer: (any WalletSigning)?) async -> ApprovedExecutionResult {

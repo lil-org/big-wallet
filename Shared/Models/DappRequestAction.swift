@@ -22,12 +22,14 @@ enum DappRequestAction: Sendable {
 }
 
 enum DappRequestPreparation: Sendable {
+    case needsCatalog
     case immediate(ImmediateResolution)
     case approval(BoundApprovalIntent)
     case unavailable
 }
 
 enum UnboundDappRequestPreparation: Sendable {
+    case needsCatalog
     case immediate(ImmediateResolution)
     case approval(DappRequestAction)
     case unavailable

@@ -51,6 +51,36 @@ def _report(value, run_id, vm_id, *, final=False):
     return value
 
 
+def _process_start(value):
+    return (isinstance(value, list) and len(value) == 2 and
+            all(type(part) is int for part in value) and 0 < value[0] <= 9007199254740991 and 0 <= value[1] < 1000000)
+
+
+def _receipt(value, run_id, vm_id):
+    if value is None:
+        return None
+    def pid(value):
+        return type(value) is int and 1 < value <= 2147483647
+    if (not isinstance(value, dict) or type(value.get('version')) is not int or value['version'] != 1 or
+            value.get('runId') != run_id or value.get('vmId') != vm_id or not pid(value.get('agentPID')) or
+            not _process_start(value.get('agentStart'))):
+        raise GuestExchangeError('The guest receipt does not match the current job')
+    state = value.get('state')
+    fields = {'version', 'runId', 'vmId', 'agentPID', 'agentStart', 'state'}
+    if state == 'running' and pid(value.get('runnerPID')) and _process_start(value.get('runnerStart')):
+        fields.update(('runnerPID', 'runnerStart'))
+    elif state == 'completed' and type(value.get('exitCode')) is int and 0 <= value['exitCode'] <= 255:
+        fields.add('exitCode')
+    elif (state == 'failed' and value.get('reason') == 'guest_launch_failed' and
+          isinstance(value.get('error'), str) and len(value['error']) <= 4096):
+        fields.update(('reason', 'error'))
+    elif state != 'claimed':
+        raise GuestExchangeError('The guest receipt state is invalid')
+    if set(value) != fields:
+        raise GuestExchangeError('The guest receipt fields are invalid')
+    return value
+
+
 def _atomic_json(path, value):
     path = Path(path)
     if path.parent.resolve() != path.parent or path.is_symlink():
@@ -220,6 +250,40 @@ const readJSON = filename => {
 };
 const runId = process.argv[1];
 if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(runId)) fail('Invalid exchange job identity');
+const vmId = process.argv[2];
+const validPID = value => Number.isSafeInteger(value) && value > 1 && value <= 2147483647;
+const validStart = value => Array.isArray(value) && value.length === 2 &&
+    value.every(Number.isSafeInteger) && value[0] > 0 && value[1] >= 0 && value[1] < 1000000;
+const processStart = pid => {
+    if (!validPID(pid)) fail('Invalid guest supervisor identity');
+    const result = cp.spawnSync('/usr/local/libexec/big-wallet-vm/VMGuestAgent', ['--process-identity', String(pid)],
+        {encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL'});
+    if (result.status !== 0) fail('Cannot inspect guest process identity');
+    const value = JSON.parse(result.stdout);
+    if (value !== null && !validStart(value)) fail('Invalid guest process start identity');
+    return value;
+};
+const alive = (pid, start) => {
+    if (!validStart(start)) fail('Invalid recorded process identity');
+    const current = processStart(pid);
+    return current !== null && current[0] === start[0] && current[1] === start[1];
+};
+const receiptDirectory = path.join(exchange, '.agent-runs');
+const receiptNames = () => {
+    try {
+        const metadata = fs.lstatSync(receiptDirectory);
+        if (!metadata.isDirectory() || metadata.uid !== uid || metadata.mode & 0o077)
+            fail('Invalid guest receipt directory');
+        return fs.readdirSync(receiptDirectory).filter(name => name.endsWith('.json'));
+    } catch (error) { if (error.code === 'ENOENT') return []; throw error; }
+};
+const readReceipt = id => {
+    if (!receiptNames().includes(id + '.json')) return null;
+    const value = readJSON(path.join(receiptDirectory, id + '.json'));
+    if (value.version !== 1 || value.runId !== id || value.vmId !== vmId || !validPID(value.agentPID) || !validStart(value.agentStart))
+        fail('Invalid guest receipt identity');
+    return value;
+};
 const stopMarker = path.join(exchange, '.stop-' + runId);
 const publishStop = () => {
     const temporary = path.join(exchange, '.stop-' + runId + '.' + process.pid + '.json');
@@ -231,6 +295,13 @@ const publishStop = () => {
 '''
 
 _UPLOAD = _REMOTE_PREAMBLE + r'''
+if (readReceipt(runId)) fail('This job was already claimed; refusing to replace it');
+for (const name of receiptNames()) {
+    const value = readReceipt(name.slice(0, -5));
+    if (['claimed', 'running'].includes(value.state) &&
+        (alive(value.agentPID, value.agentStart) || value.runnerPID !== undefined && alive(value.runnerPID, value.runnerStart)))
+        fail('A guest job is still running; refusing to replace its exchange');
+}
 fs.rmSync(path.join(exchange, 'job.json'), {force: true});
 const incoming = fs.mkdtempSync(path.join(exchange, '.upload-'));
 try {
@@ -239,7 +310,7 @@ try {
     if (unpack.status !== 0) fail('Guest exchange input transfer failed');
     const job = readJSON(path.join(incoming, 'job.json'));
     if (job.runId !== runId || job.vmId !== process.argv[2]) fail('Guest exchange job identity changed');
-    for (const name of ['source', 'snapshot-manifest.json', 'inputs', 'stop.json', 'artifacts', 'guest-runner.log', '.agent-runs'])
+    for (const name of ['source', 'snapshot-manifest.json', 'inputs', 'stop.json', 'artifacts', 'guest-runner.log'])
         fs.rmSync(path.join(exchange, name), {recursive: true, force: true});
     for (const name of ['source', 'snapshot-manifest.json', 'inputs']) {
         const input = path.join(incoming, name);
@@ -253,14 +324,49 @@ try {
 } finally { fs.rmSync(incoming, {recursive: true, force: true}); }
 '''
 
+_LAUNCH = _REMOTE_PREAMBLE + r'''
+const job = readJSON(path.join(exchange, 'job.json'));
+if (job.runId !== runId || job.vmId !== vmId) fail('Guest launch job identity changed');
+const existing = readReceipt(runId);
+if (existing) {
+    process.stdout.write(JSON.stringify({version: 1, runId, vmId, agentPID: existing.agentPID, agentStart: existing.agentStart}) + '\n');
+} else {
+    const service = `gui/${uid}/org.lil.big-wallet.vm-guest`;
+    const deadline = Date.now() + 120000;
+    while (true) {
+        if (fs.existsSync(stopMarker)) { publishStop(); process.exit(86); }
+        const loaded = cp.spawnSync('/bin/launchctl', ['print', service],
+            {stdio: 'ignore', timeout: 1000, killSignal: 'SIGKILL'});
+        if (loaded.status === 0) break;
+        if (Date.now() >= deadline) fail('The guest Aqua service did not become available');
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2000);
+    }
+    if (fs.existsSync(stopMarker)) { publishStop(); process.exit(86); }
+    const launched = cp.spawnSync('/bin/launchctl', ['kickstart', '-p', service],
+        {encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL'});
+    const agentPID = Number(launched.stdout?.trim());
+    if (launched.status !== 0 || !validPID(agentPID)) fail('The guest Aqua supervisor could not be launched');
+    const agentStart = readReceipt(runId)?.agentStart ?? processStart(agentPID);
+    process.stdout.write(JSON.stringify({version: 1, runId, vmId, agentPID, agentStart}) + '\n');
+}
+'''
+
 _POLL = _REMOTE_PREAMBLE + r'''
 const filename = path.join(exchange, 'artifacts/result.json');
-if (!fs.existsSync(filename)) process.stdout.write('{}\n');
-else {
-    const value = readJSON(filename);
-    if (value.runId !== runId) fail('Guest report belongs to another run');
-    process.stdout.write(JSON.stringify(value) + '\n');
-}
+const report = fs.existsSync(filename) ? readJSON(filename) : null;
+if (report && (report.runId !== runId || report.vmId !== vmId)) fail('Guest report belongs to another run');
+const receipt = readReceipt(runId);
+const expectedPID = process.argv[3] ? Number(process.argv[3]) : null;
+if (expectedPID !== null && !validPID(expectedPID)) fail('Invalid expected supervisor PID');
+if (receipt && expectedPID !== null && receipt.agentPID !== expectedPID) fail('Guest supervisor identity changed');
+const expectedStart = process.argv[4] ? JSON.parse(process.argv[4]) : null;
+if (expectedStart !== null && !validStart(expectedStart)) fail('Invalid expected supervisor start');
+if (receipt && expectedStart !== null && JSON.stringify(receipt.agentStart) !== JSON.stringify(expectedStart))
+    fail('Guest supervisor start identity changed');
+const agentPID = receipt?.agentPID ?? expectedPID;
+const agentStart = receipt?.agentStart ?? expectedStart;
+process.stdout.write(JSON.stringify({version: 1, runId, vmId, receipt, report,
+    supervisorAlive: report?.finishedAt || agentPID === null || agentStart === null ? null : alive(agentPID, agentStart)}) + '\n');
 '''
 
 _EXPORT = _REMOTE_PREAMBLE + r'''
@@ -294,6 +400,10 @@ class GuestExchange:
         self.stop_sent = False
         self.next_poll = 0
         self.guest_finished_at = None
+        self.launched_at = None
+        self.observed_launch = False
+        self.agent_pid = None
+        self.agent_start = None
         self.final_seen = False
         try:
             self.work = access._private_directory(private_workdir)
@@ -347,7 +457,7 @@ class GuestExchange:
         if output_path:
             self.files.append(self.output)
         self.errors = self._temporary_output()
-        command = self.command + [shlex.join(['/usr/local/bin/node', '-e', script, self.run_id, self.vm_id])]
+        command = self.command + [shlex.join(['/usr/local/bin/node', '-e', script, self.run_id, self.vm_id, str(self.agent_pid or ''), json.dumps(self.agent_start) if self.agent_start else ''])]
         source = open(input_path, 'rb') if input_path else subprocess.DEVNULL
         try:
             self.child = subprocess.Popen(command, stdin=source, stdout=self.output, stderr=self.errors,
@@ -369,12 +479,54 @@ class GuestExchange:
         if self.password and self.stop_child is None and not self.stop_sent:
             self._start_stop()
 
-    def notify_guest_finished(self):
-        if self.guest_finished_at is None:
-            self.guest_finished_at = time.monotonic()
+    def _observation_failure(self, now):
+        if self.final_seen:
+            return None
+        if self.guest_finished_at is not None and now - self.guest_finished_at >= 30:
+            return 'guest_exited_without_result'
+        if self.launched_at is not None and not self.observed_launch and now - self.launched_at >= 30:
+            return 'guest_launch_failed'
+        return None
 
-    def _missing_final_result(self, now):
-        return not self.final_seen and self.guest_finished_at is not None and now - self.guest_finished_at >= 30
+    def _observe_launch(self, now, diagnostic=None):
+        if diagnostic:
+            _atomic_json(self.exchange / 'guest-launch.json', {'runId': self.run_id, 'error': diagnostic})
+        self.launched_at = now
+        self.next_poll = now
+
+    def _observe_report(self, value, now):
+        if (not isinstance(value, dict) or type(value.get('version')) is not int or value['version'] != 1 or
+                value.get('runId') != self.run_id or value.get('vmId') != self.vm_id or
+                set(value) != {'version', 'runId', 'vmId', 'receipt', 'report', 'supervisorAlive'} or
+                value['supervisorAlive'] is not None and type(value['supervisorAlive']) is not bool):
+            raise GuestExchangeError('Invalid guest observation envelope')
+        receipt = _receipt(value['receipt'], self.run_id, self.vm_id)
+        if receipt:
+            if self.agent_pid is not None and receipt['agentPID'] != self.agent_pid:
+                raise GuestExchangeError('Guest supervisor identity changed')
+            if self.agent_start is not None and receipt['agentStart'] != self.agent_start:
+                raise GuestExchangeError('Guest supervisor start identity changed')
+            self.agent_pid = receipt['agentPID']
+            self.agent_start = receipt['agentStart']
+            _atomic_json(self.exchange / 'guest-receipt.json', receipt)
+        report = value['report']
+        if receipt is not None or report is not None:
+            self.observed_launch = True
+        if report is not None:
+            _report(report, self.run_id, self.vm_id)
+            if report.get('finishedAt'):
+                _report(report, self.run_id, self.vm_id, final=True)
+                self.final_seen = True
+                self._start_remote('export', _EXPORT, output_path=self.output_archive, timeout=1800)
+                return None
+            _atomic_json(self.exchange / 'artifacts/result.json', report)
+        if receipt and receipt['state'] == 'failed':
+            return self._finish({'status': 'failed', 'reason': 'guest_launch_failed',
+                'error': receipt['error'].encode().replace(self.password, b'[REDACTED]').decode()})
+        if value['supervisorAlive'] is False or receipt and receipt['state'] == 'completed':
+            if self.guest_finished_at is None:
+                self.guest_finished_at = now
+        return None
 
     def _error_text(self, file):
         file.seek(0, os.SEEK_END)
@@ -436,8 +588,8 @@ class GuestExchange:
             if self.result is not None:
                 return self.result
             if self.child is None:
-                if self._missing_final_result(now):
-                    return self._finish({'status': 'failed', 'reason': 'guest_exited_without_result'})
+                if reason := self._observation_failure(now):
+                    return self._finish({'status': 'failed', 'reason': reason})
                 if now >= self.next_poll:
                     self._start_remote('report', _POLL, timeout=30)
                 return None
@@ -445,25 +597,37 @@ class GuestExchange:
                 if self.output.tell() > MAX_EXPORT_BYTES + MAX_EXPORT_FILES * 2048:
                     raise GuestExchangeError('The guest artifact download exceeds its size limit')
                 _capacity(self.work, 0)
-            if self.phase == 'report' and self.output.tell() > MAX_REPORT_BYTES:
+            if self.phase in ('launch', 'report') and self.output.tell() > MAX_REPORT_BYTES:
                 raise GuestExchangeError('The guest report exceeds its size limit')
             if self.errors.tell() > MAX_REPORT_BYTES:
                 raise GuestExchangeError('The guest exchange diagnostic output exceeds its size limit')
             code = self.child.poll()
             if code is None:
-                if self._missing_final_result(now):
-                    return self._finish({'status': 'failed', 'reason': 'guest_exited_without_result'})
+                if reason := self._observation_failure(now):
+                    return self._finish({'status': 'failed', 'reason': reason})
+                if now > self.deadline and self.phase == 'launch':
+                    access._stop(self.child)
+                    self.child.wait()
+                    self.child = None
+                    self._close_phase_files()
+                    self._observe_launch(now, 'Guest launch acknowledgement timed out')
+                    return None
                 if now > self.deadline:
                     return self._finish({'status': 'failed', 'reason': 'guest_exchange_timeout', 'phase': self.phase})
                 return None
             self.child.wait()
             self.child = None
+            if code != 0 and self.phase == 'launch' and not self.stop_requested:
+                diagnostic = self._error_text(self.errors)
+                self._close_phase_files()
+                self._observe_launch(now, diagnostic or 'Guest launch outcome is unknown')
+                return None
             if code != 0:
                 return self._finish({'status': 'failed', 'reason': 'guest_exchange_cancelled' if self.stop_requested else 'guest_exchange_failed',
                                      'phase': self.phase, 'error': self._error_text(self.errors)})
             phase = self.phase
             data = None
-            if phase == 'report':
+            if phase in ('launch', 'report'):
                 self.output.seek(0)
                 data = self.output.read(MAX_REPORT_BYTES + 1)
             self._close_phase_files()
@@ -473,19 +637,25 @@ class GuestExchange:
                 self._start_remote('upload', _UPLOAD, input_path=self.input_archive, timeout=900)
             elif phase == 'upload':
                 self.input_archive.unlink(missing_ok=True)
-                self.next_poll = now
+                if self.stop_requested:
+                    return self._finish({'status': 'failed', 'reason': 'guest_exchange_cancelled'})
+                self._start_remote('launch', _LAUNCH, timeout=150)
+            elif phase == 'launch':
+                value = json.loads(data)
+                if (not isinstance(value, dict) or type(value.get('version')) is not int or value['version'] != 1 or
+                        value.get('runId') != self.run_id or value.get('vmId') != self.vm_id or
+                        type(value.get('agentPID')) is not int or not 1 < value['agentPID'] <= 2147483647 or
+                        'agentStart' not in value or value['agentStart'] is not None and not _process_start(value['agentStart'])):
+                    raise GuestExchangeError('Invalid guest launch acknowledgement')
+                self.agent_pid = value['agentPID']
+                self.agent_start = value['agentStart']
+                self._observe_launch(now)
             elif phase == 'report':
                 if len(data) > MAX_REPORT_BYTES:
                     raise GuestExchangeError('The guest report exceeds its size limit')
-                value = json.loads(data)
-                if value:
-                    _report(value, self.run_id, self.vm_id)
-                    if value.get('finishedAt'):
-                        _report(value, self.run_id, self.vm_id, final=True)
-                        self.final_seen = True
-                        self._start_remote('export', _EXPORT, output_path=self.output_archive, timeout=1800)
-                    else:
-                        _atomic_json(self.exchange / 'artifacts/result.json', value)
+                result = self._observe_report(json.loads(data), now)
+                if result is not None:
+                    return result
                 self.next_poll = now + 5
             elif phase == 'export':
                 self._start_local('extract', '--extract', self.output_archive, self.export_directory,

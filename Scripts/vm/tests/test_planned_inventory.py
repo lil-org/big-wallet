@@ -226,9 +226,6 @@ class PlannedInventoryTests(unittest.TestCase):
                 plan = self.plan(stages=['test'], configuration='Debug', onlyTesting=['Tests visionOS'])
                 if trigger == 'stop':
                     host.atomic_json(self.exchange / 'stop.json', {'runId': self.job['runId']})
-                if trigger == 'agent':
-                    host.atomic_json(self.exchange / 'vm-status.json',
-                                     {'lastGuestEvent': {'type': 'agentError', 'runId': self.job['runId'], 'error': 'fixture'}})
                 class Child:
                     def poll(self): return 0 if trigger == 'exit' else None
                     def wait(self, timeout=None): return 0
@@ -237,7 +234,10 @@ class PlannedInventoryTests(unittest.TestCase):
                         patch.object(host.time, 'monotonic', side_effect=lambda: next(clock)), \
                         patch.object(host.time, 'sleep'), patch.object(host, 'check_capacity', return_value=100):
                     result = host.monitor_vm(SimpleNamespace(command='run'), self.root, self.root / 'unused.vbvm',
-                                             self.exchange, self.job['runId'], self.root, {}, 100)
+                                             self.exchange, self.job['runId'], self.root, {}, 100,
+                                             setup_hook=SimpleNamespace(exchange_complete=False,
+                                                 poll=lambda: {'status': 'failed', 'reason': 'guest_launch_failed'},
+                                                 request_stop=lambda: None, cancel=lambda: None) if trigger == 'agent' else None)
                 self.assertEqual(result['status'], status)
                 self.assertEqual(result['hostTermination']['reason'], reason)
                 self.assertEqual([stage['id'] for stage in result['stages']], [stage['id'] for stage in plan['stages']])

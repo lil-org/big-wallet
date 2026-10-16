@@ -58,16 +58,12 @@ final class DappRequestAdmission {
         }
         guard let binding = snapshot.requestBinding else { return .unavailable }
         guard await store.authorityIsCurrent(handle: handle) else { return .unavailable }
-        let preparation: DappRequestPreparation
-        if let walletIndependent = requestProcessor.prepareWithoutWallets(binding) {
-            preparation = walletIndependent
-        } else if reviewCatalog == nil {
-            return await currentAdmissionDisposition(
-                handle: handle,
-                queued: .approvalRequired
-            )
-        } else {
-            guard let catalog = reviewCatalog?() else {
+        var preparation = requestProcessor.prepare(binding, catalog: nil)
+        if case .needsCatalog = preparation {
+            guard let reviewCatalog else {
+                return await currentAdmissionDisposition(handle: handle, queued: .approvalRequired)
+            }
+            guard let catalog = reviewCatalog() else {
                 return await currentAdmissionDisposition(
                     handle: handle,
                     queued: .approvalRequired
@@ -86,7 +82,7 @@ final class DappRequestAdmission {
             )
         }
         switch preparation {
-        case .approval, .unavailable:
+        case .needsCatalog, .approval, .unavailable:
             return await currentAdmissionDisposition(
                 handle: handle,
                 queued: .approvalRequired

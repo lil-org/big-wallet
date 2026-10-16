@@ -31,12 +31,6 @@ final class PopupRequestSession {
         let network: EthereumNetwork?
     }
 
-    private enum Draft {
-        case none
-        case selection(SelectionDraft)
-        case transaction(PopupTransactionSession)
-    }
-
     private enum Lifecycle {
         case review(feedback: String?)
         case claiming
@@ -46,7 +40,7 @@ final class PopupRequestSession {
     }
 
     let reviewCatalog: WalletReviewCatalog?
-    private var draft: Draft
+    private var reviewContent: ReviewContent
     private var approvalReview: ApprovalReview
     private var lifecycle: Lifecycle
     private(set) var reviewToken = UUID()
@@ -57,29 +51,14 @@ final class PopupRequestSession {
     var request: SafariRequest { binding.request }
     var preparedAction: DappRequestAction { approvalReview.action }
     var selectionDraft: SelectionDraft? {
-        guard case .selection(let selection) = draft else { return nil }
-        return selection
+        switch reviewContent {
+        case .selectAccount(_, let selection), .switchAccount(_, let selection): selection
+        default: nil
+        }
     }
     var transaction: PopupTransactionSession? {
-        guard case .transaction(let transaction) = draft else { return nil }
+        guard case .approveTransaction(_, let transaction) = reviewContent else { return nil }
         return transaction
-    }
-
-    private var reviewContent: ReviewContent? {
-        switch (preparedAction, draft) {
-        case (.selectAccount(let action), .selection(let selection)):
-            .selectAccount(action: action, draft: selection)
-        case (.switchAccount(let action), .selection(let selection)):
-            .switchAccount(action: action, draft: selection)
-        case (.approveMessage(let action), .none):
-            .approveMessage(action)
-        case (.approveTransaction(let action), .transaction(let transaction)):
-            .approveTransaction(action: action, transaction: transaction)
-        case (.addEthereumChain(let action), .none):
-            .addEthereumChain(action)
-        default:
-            nil
-        }
     }
 
     init(
@@ -89,11 +68,18 @@ final class PopupRequestSession {
     ) {
         switch intent.action {
         case .approveTransaction(let action):
-            draft = .transaction(PopupTransactionSession(action: action, operations: transactionApprovalOperations))
-        case .selectAccount(let action), .switchAccount(let action):
-            draft = .selection(SelectionDraft(selectedAccounts: action.selectedAccounts, network: action.network))
-        case .approveMessage, .addEthereumChain:
-            draft = .none
+            reviewContent = .approveTransaction(action: action,
+                transaction: PopupTransactionSession(action: action, operations: transactionApprovalOperations))
+        case .selectAccount(let action):
+            reviewContent = .selectAccount(action: action,
+                draft: SelectionDraft(selectedAccounts: action.selectedAccounts, network: action.network))
+        case .switchAccount(let action):
+            reviewContent = .switchAccount(action: action,
+                draft: SelectionDraft(selectedAccounts: action.selectedAccounts, network: action.network))
+        case .approveMessage(let action):
+            reviewContent = .approveMessage(action)
+        case .addEthereumChain(let action):
+            reviewContent = .addEthereumChain(action)
         }
         approvalReview = ApprovalReview(intent: intent)
         self.reviewCatalog = reviewCatalog
@@ -133,7 +119,6 @@ final class PopupRequestSession {
     var presentation: Presentation {
         switch lifecycle {
         case .review(let feedback):
-            guard let reviewContent else { return .error(message: Strings.somethingWentWrong) }
             return .review(ReviewPresentation(
                 reviewToken: reviewToken,
                 content: reviewContent,
@@ -188,8 +173,13 @@ final class PopupRequestSession {
 
     @discardableResult
     func setSelection(accounts: Set<SpecificWalletAccount>, network: EthereumNetwork?) -> Bool {
-        guard case .review = lifecycle, case .selection = draft else { return false }
-        draft = .selection(SelectionDraft(selectedAccounts: accounts, network: network))
+        guard case .review = lifecycle else { return false }
+        let draft = SelectionDraft(selectedAccounts: accounts, network: network)
+        switch reviewContent {
+        case .selectAccount(let action, _): reviewContent = .selectAccount(action: action, draft: draft)
+        case .switchAccount(let action, _): reviewContent = .switchAccount(action: action, draft: draft)
+        default: return false
+        }
         return true
     }
 
@@ -613,11 +603,9 @@ final class PopupRequestSessions {
         if case .immediateResponse(let persistence) = entries[snapshot.handle] {
             return .immediateResponse(persistence.state)
         }
-        let preparation: DappRequestPreparation
+        var preparation = requestProcessor.prepare(binding, catalog: nil)
         var preparedCatalog: WalletReviewCatalog?
-        if let walletIndependent = requestProcessor.prepareWithoutWallets(binding) {
-            preparation = walletIndependent
-        } else {
+        if case .needsCatalog = preparation {
             guard let walletAccess = walletEnvironment.currentReviewCatalog() else {
                 return .secureSetupRequired
             }
@@ -632,7 +620,7 @@ final class PopupRequestSessions {
             )
         }
         switch preparation {
-        case .unavailable:
+        case .needsCatalog, .unavailable:
             return .unavailable
         case .immediate(let response):
             persistImmediateResponse(response, handle: snapshot.handle)

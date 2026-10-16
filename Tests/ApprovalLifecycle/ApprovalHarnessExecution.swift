@@ -219,12 +219,8 @@ struct HarnessObservedProcessor: DappRequestProcessing {
     let base: DappRequestProcessor
     let ipc: HarnessIPC
 
-    func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog) -> DappRequestPreparation {
+    func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog?) -> DappRequestPreparation {
         base.prepare(binding, catalog: catalog)
-    }
-
-    func prepareWithoutWallets(_ binding: ExtensionBridge.RequestBinding) -> DappRequestPreparation? {
-        base.prepareWithoutWallets(binding)
     }
 
     func execute(permit: ExtensionBridge.ApprovedExecutionPermit, signer: (any WalletSigning)?) async -> ApprovedExecutionResult {

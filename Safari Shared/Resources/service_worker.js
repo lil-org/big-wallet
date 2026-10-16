@@ -42,11 +42,6 @@ function nativeRequestIdentity(request) {
         requestToken: request.requestToken, workflowVersion: WORKFLOW_VERSION};
 }
 
-function nativeRequestStatus(response, id) {
-    const decoded = WIRE.decodeMessage("NativeStatus", response);
-    return decoded?.id === id ? decoded : undefined;
-}
-
 function pageFailure(id, provider, name, message = "Failed to communicate with Big Wallet", code = -32603) {
     return {kind: "error", id, provider, name, state: null, error: {code, message}};
 }
@@ -245,8 +240,7 @@ function sendNativeAdmission(message) {
 }
 
 function validRecoveryRequest(request) {
-    return WIRE.isMessage("RecoveryRequest", request) &&
-        WIRE.configurationIdentityForURL(request.configurationKey)?.configurationKey === request.configurationKey;
+    return WIRE.configurationIdentityForURL(request.configurationKey)?.configurationKey === request.configurationKey;
 }
 
 function recoverRequests() {
@@ -255,11 +249,11 @@ function recoverRequests() {
     const pending = (async () => {
         void ensureRecoveryAlarm();
         const id = WIRE.genId();
-        const response = await WIRE.withTimeout(sendNativeMessage({
+        const rawResponse = await WIRE.withTimeout(sendNativeMessage({
             subject: "getRecoveryRequests", id, workflowVersion: WORKFLOW_VERSION,
         }, false), TRANSPORT_TIMEOUT);
-        if (!WIRE.isMessage("NativeRecoveryReply", response) || response.id !== id ||
-            !response.requests?.every(validRecoveryRequest)) { return; }
+        const response = WIRE.decodeMessage("NativeRecoveryReply", rawResponse);
+        if (response?.id !== id || !response.requests?.every(validRecoveryRequest)) { return; }
         void ensureRecoveryAlarm(response.requests.length ? 1 : IDLE_RECOVERY_INTERVAL_MINUTES);
         if (response.requests.length === 0) { return; }
         const ready = [];
@@ -422,10 +416,11 @@ async function showManualSwitchApproval(response, configurationKey) {
     for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
             const opened = await WIRE.withTimeout(sendNativeMessage(request, false), NATIVE_APPROVAL_TRANSPORT_TIMEOUT);
-            if (WIRE.isMessage("NativeOpenReply", opened) && opened.id === response.id && opened.opened === true) {
+            const status = WIRE.decodeMessage("NativeOpenReply", opened);
+            if (status?.id !== response.id) { continue; }
+            if (status.opened === true) {
                 return true;
             }
-            const status = nativeRequestStatus(opened, response.id);
             if (status?.pending) { return true; }
             if (status?.ready) {
                 void recoverRequests().catch(() => {});
@@ -527,7 +522,7 @@ async function handleMessage(request, context) {
     case "disconnect": return disconnect(request, context);
     case "updatePendingRequestBadge": await updateBadge(request, context); return undefined;
     case "responseReady":
-        if (!context.privateBrowsing && WIRE.responseReadyIds(request)) {
+        if (!context.privateBrowsing) {
             await sendResponseReady(request);
             await recoverRequests();
         }

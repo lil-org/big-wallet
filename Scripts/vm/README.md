@@ -22,7 +22,8 @@ Scripts/test_vm.sh stop
 ```
 
 The existing `check_swift6.sh` and `check_approval_lifecycle.sh` commands route
-host invocations here. Guest execution requires virtual hardware, a root-owned
+host invocations here. `check_swift6.sh` is a host-only alias; the guest executes
+the shared stage manifest and rejects direct umbrella invocations. Guest execution requires virtual hardware, a root-owned
 provisioning identity, the selected console user's graphical session, and a
 matching job identity. Missing prerequisites never trigger a host fallback.
 
@@ -104,11 +105,15 @@ Jobs and results live at `/Volumes/BigWalletBuild/Exchange` inside the guest.
 The host transfers the source snapshot over pinned SSH, publishes the job only
 after the transfer completes, and retrieves progress and artifacts through the
 same connection. No host directory is mounted in the guest, so rebuilding the
-agent does not require renewed network-volume permission. The Aqua-session
-agent still launches every test, and the host accepts a completed result only
+agent does not require renewed network-volume permission. After atomic upload, SSH explicitly starts the registered Aqua LaunchAgent
+with `launchctl kickstart -p`, without restarting an existing process. The agent
+runs one job and exits; booting the guest or installing the agent does not launch
+a leftover job. Per-run claims survive uploads and prevent duplicate execution.
+SSH polls atomic supervisor receipts and test results. An uncertain launch reply
+is observed without repeating launch. The host accepts a completed result only
 after its artifacts have been retrieved.
 
-Base provisioning can finish before signing is available. It starts the guest
+Base provisioning can finish before signing is available. It registers the guest
 agent and records the missing signing prerequisites. After the base is verified,
 `Scripts/test_vm.sh run all --candidate --stage repository --stage worker` runs
 those independent suites in a disposable copy of the candidate. Its report
@@ -260,4 +265,7 @@ node --test Scripts/vm/tests/*.test.mjs
 The headless launcher and guest agent are compiled separately with `swiftc`
 and ad-hoc signed. No wallet Xcode target or host signing identity is used for
 that bootstrap. They use public Virtualization APIs, not VirtualBuddy's viewer
-automation. A guest LaunchAgent uses virtio sockets for normal job transport.
+automation. Pinned SSH carries job control and results; the guest LaunchAgent
+preserves the graphical session required for native tests. There is no separate
+socket control channel. Missing launch receipts and supervisor exits without
+results have a 30-second observation grace; receipts alone cannot establish success.

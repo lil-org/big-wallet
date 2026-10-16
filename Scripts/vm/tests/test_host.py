@@ -735,8 +735,6 @@ class LifecycleTests(unittest.TestCase):
                 else:
                     host.atomic_json(exchange / 'artifacts/result.json',
                                      {'runId': 'run-fixture', 'status': 'running'})
-                    host.atomic_json(exchange / 'vm-status.json', {'lastGuestEvent': {
-                        'runId': 'run-fixture', 'type': 'agentError', 'error': 'fixture'}})
                 class Child:
                     returncode = None
                     def poll(self): return self.returncode
@@ -753,7 +751,10 @@ class LifecycleTests(unittest.TestCase):
                         patch.object(host, 'atomic_json', side_effect=write), \
                         patch.object(host, 'stop_owned_process', wraps=host.stop_owned_process) as stop:
                     result = host.monitor_vm(SimpleNamespace(command='run'), self.root, self.root / 'unused.vbvm',
-                                             exchange, 'run-fixture', self.root, {}, 100)
+                                             exchange, 'run-fixture', self.root, {}, 100,
+                                             setup_hook=SimpleNamespace(exchange_complete=False,
+                                                 poll=lambda: {'status': 'failed', 'reason': 'guest_launch_failed'},
+                                                 request_stop=lambda: None, cancel=lambda: None) if failure == 'stop-write' else None)
                 self.assertEqual(result['status'], 'failed')
                 self.assertTrue(result['finishedAt'])
                 if failure == 'malformed-report':
@@ -950,31 +951,6 @@ class AttestationAndTerminalTests(unittest.TestCase):
         self.preflight['pinnedEnvironment']['runtimes']['ios']['available'] = False
         self.assertFalse(host.environment_attested(self.preflight, self.environment))
 
-    def test_other_run_and_nonterminal_events_are_ignored(self):
-        for event in ({'runId': 'other', 'type': 'jobFinished'}, {'runId': 'current', 'type': 'jobStarted'}):
-            self.assertIsNone(host.terminal_guest_failure({'lastGuestEvent': event}, 'current'))
-
-    def test_agent_launch_failure_or_missing_report_ends_monitor_without_long_timeout(self):
-        for kind, expected in (('agentError', 'guest_launch_failed'), ('jobFinished', 'guest_exited_without_result')):
-            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary)
-                exchange = root / 'exchange'
-                (exchange / 'artifacts').mkdir(parents=True)
-                event = {'type': kind, 'runId': 'fixture', 'exitCode': 1}
-                host.atomic_json(exchange / 'vm-status.json', {'lastGuestEvent': event})
-                clock = itertools.count()
-                class Child:
-                    def poll(self): return None
-                    def wait(self, timeout=None): return 0
-                with patch.object(host.subprocess, 'Popen', return_value=Child()), \
-                        patch.object(host.time, 'monotonic', side_effect=lambda: next(clock)), \
-                        patch.object(host.time, 'sleep'), \
-                        patch.object(host, 'check_capacity', side_effect=AssertionError('terminal event was ignored')):
-                    result = host.monitor_vm(SimpleNamespace(command='run'), root, root / 'unused.vbvm', exchange,
-                                             'fixture', root, {}, 86400)
-                self.assertEqual(result['status'], 'failed')
-                self.assertEqual(result['reason'], expected)
-                self.assertEqual(result['guestFailure'], event)
 
 
 class SetupViewerTests(unittest.TestCase):

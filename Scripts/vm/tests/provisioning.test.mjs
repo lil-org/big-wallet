@@ -1719,3 +1719,25 @@ test('ownership is changed only when the owner or group differs', () => {
     ownership('/fixture', 501, 21);
     assert.deepEqual(changes, [['/fixture', 502, 20], ['/fixture', 501, 21]]);
 });
+
+test('installed Aqua supervisor remains idle until an explicit job launch', () => {
+    const configStart = source.indexOf('    const agentConfiguration = ');
+    const configEnd = source.indexOf('    const signing = ', configStart);
+    const configuration = vm.runInNewContext(`${source.slice(configStart, configEnd)} agentConfiguration`, {
+        library: '/fixture/tools', agentLabel: 'fixture-agent', environment: {PATH: '/fixture/bin'},
+        developer: '/fixture/Xcode', logDirectory: '/fixture/logs', path,
+    });
+    assert.equal(configuration.LimitLoadToSessionType, 'Aqua');
+    assert.equal(configuration.RunAtLoad, false);
+    assert.equal(configuration.KeepAlive, false);
+    assert.deepEqual(Array.from(configuration.ProgramArguments), ['/fixture/tools/VMGuestAgent']);
+    const serviceStart = source.indexOf('    const service = `gui/${uid}/${agentLabel}`;');
+    const serviceEnd = source.indexOf('    console.log(', serviceStart);
+    const commands = [];
+    vm.runInNewContext(source.slice(serviceStart, serviceEnd), {
+        uid: 501, agentLabel: 'fixture-agent', agentPlist: '/fixture/agent.plist', replacements: [], check,
+        spawnSync: () => ({status: 1}), run: (_label, command, args) => commands.push([command, ...args]),
+        replaceGuestAgentInstallation: (_replacements, service) => service.start(),
+    });
+    assert.deepEqual(commands, [['/bin/launchctl', 'bootstrap', 'gui/501', '/fixture/agent.plist']]);
+});

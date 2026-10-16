@@ -26,7 +26,6 @@ class ExchangeMonitorTests(unittest.TestCase):
         self.hook = SimpleNamespace(exchange_complete=False, polls=0, stopped=False)
         self.hook.poll = self.poll
         self.hook.request_stop = self.request_stop
-        self.hook.notify_guest_finished = lambda: self.events.append('guest-finished')
         self.hook.cancel = lambda: self.events.append('cancel-transfer')
         self.on_poll = lambda _: None
         host.atomic_json(self.exchange / 'snapshot-manifest.json', {'version': 1, 'files': []})
@@ -68,11 +67,6 @@ class ExchangeMonitorTests(unittest.TestCase):
         host.atomic_json(self.result_path, value)
         return value
 
-    def terminal_event(self, kind='jobFinished', *, run_id=None):
-        event = {'type': kind, 'runId': self.run_id if run_id is None else run_id, 'exitCode': 0}
-        host.atomic_json(self.exchange / 'vm-status.json', {'lastGuestEvent': event})
-        return event
-
     def run_monitor(self, timeout=100):
         with ExitStack() as stack:
             launch = stack.enter_context(patch.object(host.subprocess, 'Popen', return_value=self.vm))
@@ -97,7 +91,6 @@ class ExchangeMonitorTests(unittest.TestCase):
         return result
 
     def test_job_finished_and_terminal_json_wait_for_artifact_export(self):
-        self.terminal_event()
 
         def progress(count):
             if count == 1:
@@ -112,7 +105,6 @@ class ExchangeMonitorTests(unittest.TestCase):
         self.assertNotIn('hostTermination', result)
         self.assertEqual(self.hook.polls, 3)
         self.assertEqual(self.events.count('capacity'), 2)
-        self.assertIn('guest-finished', self.events)
         self.assertNotIn('request-stop', self.events)
         self.assertEqual(self.events[-2:], ['cancel-transfer', 'stop-vm'])
         self.assertEqual((self.exchange / 'artifacts/test.fixture.log').read_text(), 'complete exported log')
@@ -152,27 +144,18 @@ class ExchangeMonitorTests(unittest.TestCase):
         self.assertTrue(all(stage['status'] == 'blocked' for stage in result['stages']))
         self.assertEqual(result['reason'], 'guest_exchange_failed')
 
-    def test_agent_error_remains_terminal_while_exchange_is_pending(self):
-        event = self.terminal_event('agentError')
-        result = self.run_monitor()
-        self.assertEqual(result['reason'], 'guest_launch_failed')
-        self.assertEqual(result['guestFailure'], event)
-        self.assertNotIn('guest-finished', self.events)
-        self.assertNotIn('capacity', self.events)
-        self.assertIn('request-stop', self.events)
-
-    def test_unrelated_completion_cannot_signal_current_transfer(self):
-        self.terminal_event(run_id='another-run')
-
-        def finish(count):
-            if count == 2:
-                self.report()
-                self.hook.exchange_complete = True
-
-        self.on_poll = finish
-        result = self.run_monitor()
-        self.assertEqual(result['status'], 'passed')
-        self.assertNotIn('guest-finished', self.events)
+    def test_guest_launch_and_exit_failures_remain_terminal(self):
+        for reason in ('guest_launch_failed', 'guest_exited_without_result'):
+            with self.subTest(reason=reason):
+                for name in ('stop.json', 'vm-stop', 'artifacts/result.json'):
+                    (self.exchange / name).unlink(missing_ok=True)
+                self.vm.returncode = None
+                failure = {'status': 'failed', 'reason': reason}
+                self.on_poll = lambda _: failure
+                result = self.run_monitor()
+                self.assertEqual(result['reason'], reason)
+                self.assertEqual(result['guestFailure'], failure)
+                self.assertIn('request-stop', self.events)
 
     def test_vm_exit_cannot_accept_terminal_report_before_export(self):
         self.report()

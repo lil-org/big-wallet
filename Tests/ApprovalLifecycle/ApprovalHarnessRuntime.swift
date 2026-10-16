@@ -418,11 +418,10 @@ final class HarnessRuntime {
             environment: .init(now: clock.now, uptime: { Double(clock.uptime()) / 1_000_000_000 },
                 wait: { duration in try? await clock.sleep(for: duration) },
                 waitForAuthenticationExpiry: { seconds in try await clock.sleep(until: clock.now().addingTimeInterval(seconds)) },
-                prepareWithoutWallets: { [processor] in processor.prepareWithoutWallets($0) },
-                reloadWallets: { [wallets] in await wallets.reloadFromStore() }, prepare: { [processor, wallets] binding in
-                    guard let catalog = wallets.reviewCatalog() else { return nil }
-                    return processor.prepare(binding, catalog: catalog)
-                }, attemptNativeDecision: { [weak self] consent in
+                prepare: { [processor] binding, catalog in processor.prepare(binding, catalog: catalog) },
+                reloadWallets: { [wallets] in await wallets.reloadFromStore() },
+                currentReviewCatalog: { [wallets] in wallets.reviewCatalog() },
+                attemptNativeDecision: { [weak self] consent in
                     guard let self else { return .interruptionRequired }
                     let label = consentLabels[handle] ?? UUID().uuidString.lowercased()
                     savedConsents[label] = consent

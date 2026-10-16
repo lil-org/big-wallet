@@ -82,9 +82,9 @@ final class NativeApprovalCoordinator {
         let uptime: @MainActor @Sendable () -> TimeInterval
         let wait: @MainActor @Sendable (UInt64) async -> Void
         let waitForAuthenticationExpiry: @MainActor @Sendable (TimeInterval) async throws -> Void
-        let prepareWithoutWallets: @MainActor @Sendable (ExtensionBridge.RequestBinding) -> DappRequestPreparation?
+        let prepare: @MainActor @Sendable (ExtensionBridge.RequestBinding, WalletReviewCatalog?) -> DappRequestPreparation
         let reloadWallets: @MainActor @Sendable () async -> Bool
-        let prepare: @MainActor @Sendable (ExtensionBridge.RequestBinding) -> DappRequestPreparation?
+        let currentReviewCatalog: @MainActor @Sendable () -> WalletReviewCatalog?
         let attemptNativeDecision: @MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult
 
         init(
@@ -92,9 +92,9 @@ final class NativeApprovalCoordinator {
             uptime: (@MainActor @Sendable () -> TimeInterval)? = nil,
             wait: @escaping @MainActor @Sendable (UInt64) async -> Void,
             waitForAuthenticationExpiry: (@MainActor @Sendable (TimeInterval) async throws -> Void)? = nil,
-            prepareWithoutWallets: (@MainActor @Sendable (ExtensionBridge.RequestBinding) -> DappRequestPreparation?)? = nil,
+            prepare: (@MainActor @Sendable (ExtensionBridge.RequestBinding, WalletReviewCatalog?) -> DappRequestPreparation)? = nil,
             reloadWallets: (@MainActor @Sendable () async -> Bool)? = nil,
-            prepare: (@MainActor @Sendable (ExtensionBridge.RequestBinding) -> DappRequestPreparation?)? = nil,
+            currentReviewCatalog: (@MainActor @Sendable () -> WalletReviewCatalog?)? = nil,
             attemptNativeDecision: (@MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult)? = nil
         ) {
             self.now = now
@@ -104,12 +104,9 @@ final class NativeApprovalCoordinator {
                 let clock = ContinuousClock()
                 try await clock.sleep(until: clock.now.advanced(by: .seconds(seconds)), tolerance: nil)
             }
-            self.prepareWithoutWallets = prepareWithoutWallets ?? { DappRequestProcessor().prepareWithoutWallets($0) }
+            self.prepare = prepare ?? { DappRequestProcessor().prepare($0, catalog: $1) }
             self.reloadWallets = reloadWallets ?? { await WalletsManager.shared.reloadFromStore() }
-            self.prepare = prepare ?? {
-                guard let catalog = WalletsManager.shared.reviewCatalog() else { return nil }
-                return DappRequestProcessor().prepare($0, catalog: catalog)
-            }
+            self.currentReviewCatalog = currentReviewCatalog ?? { WalletsManager.shared.reviewCatalog() }
             self.attemptNativeDecision = attemptNativeDecision ?? { _ in .pending }
         }
 
@@ -768,21 +765,26 @@ final class NativeApprovalCoordinator {
             if finishIfResolved(status, work: work) { return }
             if case .pending(let snapshot, .current) = status, let binding = snapshot.requestBinding {
                 guard work.mayAttempt else { break }
-                var preparation = work.update { _ in
-                    work.environment.prepareWithoutWallets(binding)
-                } ?? nil
-                if preparation == nil, await work.environment.reloadWallets() {
-                    guard work.mayAttempt else { break }
-                    guard let refreshed = await work.load() else { return }
-                    if finishIfResolved(refreshed, work: work) { return }
-                    guard case .pending(let current, .current) = refreshed,
-                          current.requestBinding == binding else { continue }
-                    preparation = work.update { _ in work.environment.prepare(binding) } ?? nil
+                var preparation: DappRequestPreparation? = work.update { _ in
+                    work.environment.prepare(binding, nil)
+                }
+                if case .needsCatalog? = preparation {
+                    preparation = nil
+                    if await work.environment.reloadWallets() {
+                        guard work.mayAttempt else { break }
+                        guard let refreshed = await work.load() else { return }
+                        if finishIfResolved(refreshed, work: work) { return }
+                        guard case .pending(let current, .current) = refreshed,
+                              current.requestBinding == binding else { continue }
+                        if let catalog = work.update({ _ in work.environment.currentReviewCatalog() }) ?? nil {
+                            preparation = work.update { _ in work.environment.prepare(binding, catalog) }
+                        }
+                    }
                 }
                 guard work.mayAttempt else { break }
                 if let preparation {
                     switch preparation {
-                    case .unavailable:
+                    case .needsCatalog, .unavailable:
                         work.update { $0.pause() }
                     case .approval(let intent):
                         guard intent.binding == binding else {

@@ -31,42 +31,23 @@ struct SolanaDappRequestProcessor {
     static func prepare(
         request: SafariRequest,
         body: SafariRequest.Solana,
-        catalog: WalletReviewCatalog,
+        catalog: WalletReviewCatalog?,
         solana: Solana? = nil
     ) -> UnboundDappRequestPreparation {
         switch body.method {
         case .connect:
             return prepareConnect(request: request, body: body, catalog: catalog)
         case .signAllTransactions, .signMessage, .signTransaction, .signAndSendTransaction:
+            if body.method == .signAllTransactions, body.messages == nil {
+                return .immediate(immediateFailure(to: request, error: .malformedPayload))
+            }
+            guard let catalog else { return .needsCatalog }
             return prepareSigningOrSending(
                 request: request,
                 body: body,
                 catalog: catalog,
                 solana: solana ?? .shared
             )
-        }
-    }
-
-    static func prepareWithoutWallets(
-        request: SafariRequest,
-        body: SafariRequest.Solana
-    ) -> UnboundDappRequestPreparation? {
-        switch body.method {
-        case .connect:
-            if let account = request.authorizedAccount, account.coin == .solana {
-                return .immediate(.existingSolanaConnection)
-            }
-            if body.onlyIfTrusted {
-                return .immediate(immediateFailure(to: request, error: .unauthorized(publicKey: body.publicKey)))
-            }
-            return nil
-        case .signAllTransactions:
-            guard body.messages != nil else {
-                return .immediate(immediateFailure(to: request, error: .malformedPayload))
-            }
-            return nil
-        case .signMessage, .signTransaction, .signAndSendTransaction:
-            return nil
         }
     }
 
@@ -85,9 +66,15 @@ struct SolanaDappRequestProcessor {
     private static func prepareConnect(
         request: SafariRequest,
         body: SafariRequest.Solana,
-        catalog: WalletReviewCatalog
+        catalog: WalletReviewCatalog?
     ) -> UnboundDappRequestPreparation {
-        if let response = prepareWithoutWallets(request: request, body: body) { return response }
+        if let account = request.authorizedAccount, account.coin == .solana {
+            return .immediate(.existingSolanaConnection)
+        }
+        if body.onlyIfTrusted {
+            return .immediate(immediateFailure(to: request, error: .unauthorized(publicKey: body.publicKey)))
+        }
+        guard let catalog else { return .needsCatalog }
         let action = SelectAccountAction(
             coinType: .solana,
             selectedAccounts: Set(catalog.suggestedAccounts(coin: .solana)),
@@ -103,10 +90,6 @@ struct SolanaDappRequestProcessor {
         catalog: WalletReviewCatalog,
         solana: Solana
     ) -> UnboundDappRequestPreparation {
-        if body.method == .signAllTransactions, body.messages == nil {
-            return .immediate(immediateFailure(to: request, error: .malformedPayload))
-        }
-
         let walletID: String
         let account: WalletAccount
         switch walletAndAccount(

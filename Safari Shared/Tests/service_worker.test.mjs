@@ -1155,6 +1155,16 @@ for (const [kind, command] of [["dapp", request], ["manual", manualSwitchIntent]
     });
 }
 
+test("unavailable recovery discovery completes an alarm without polling or acknowledging", async () => {
+    const harness = makeHarness({recoveryNative: message => ({id: message.id, unavailable: true})});
+    await settle();
+    await harness.fireAlarm();
+    assert.equal(harness.pollMessages.length, 0);
+    assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "acknowledgeResponse").length, 0);
+    assert.equal(harness.alarms.has(recoveryAlarmName), true);
+    assert.deepEqual(harness.alarmClears, []);
+});
+
 test("clock jumps retain recovery and repair a far-future active alarm", async () => {
     let now = admissionDeadline - 900_000;
     const alarms = new Map([[recoveryAlarmName, {

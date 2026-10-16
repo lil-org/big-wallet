@@ -8,38 +8,12 @@ struct EthereumDappRequestProcessor {
     static func prepare(
         request: SafariRequest,
         body: SafariRequest.Ethereum,
-        catalog: WalletReviewCatalog,
+        catalog: WalletReviewCatalog?,
         networkResolver: @MainActor (Int) -> ApprovalNetworkResolution = { NetworkResolver.main.approvalResolution(chainId: $0) },
         customDefinitionResult: @MainActor (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult = {
             Networks.existingCustomDefinitionResult(networkFromDapp: $0)
         }
     ) -> UnboundDappRequestPreparation {
-        prepareAvailable(request: request, body: body, catalog: catalog, networkResolver: networkResolver,
-            customDefinitionResult: customDefinitionResult)
-            ?? .immediate(immediateFailure(to: request, error: .internalError))
-    }
-
-    @MainActor
-    static func prepareWithoutWallets(
-        request: SafariRequest,
-        body: SafariRequest.Ethereum,
-        networkResolver: @MainActor (Int) -> ApprovalNetworkResolution = { NetworkResolver.main.approvalResolution(chainId: $0) },
-        customDefinitionResult: @MainActor (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult = {
-            Networks.existingCustomDefinitionResult(networkFromDapp: $0)
-        }
-    ) -> UnboundDappRequestPreparation? {
-        prepareAvailable(request: request, body: body, catalog: nil, networkResolver: networkResolver,
-            customDefinitionResult: customDefinitionResult)
-    }
-
-    @MainActor
-    private static func prepareAvailable(
-        request: SafariRequest,
-        body: SafariRequest.Ethereum,
-        catalog: WalletReviewCatalog?,
-        networkResolver: @MainActor (Int) -> ApprovalNetworkResolution,
-        customDefinitionResult: @MainActor (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult
-    ) -> UnboundDappRequestPreparation? {
         lazy var walletAndAccount = request.authorizedAccount.flatMap { descriptor in
             guard descriptor.coin == .ethereum,
                   descriptor.normalizedAddress == WalletCoin.ethereum.normalizedAddress(body.address)
@@ -55,7 +29,7 @@ struct EthereumDappRequestProcessor {
             if let account = request.authorizedAccount, account.coin == .ethereum {
                 return .immediate(.existingEthereumAccounts)
             }
-            guard let catalog else { return nil }
+            guard let catalog else { return .needsCatalog }
             let action = SelectAccountAction(
                 coinType: .ethereum,
                 selectedAccounts: Set(catalog.suggestedAccounts(coin: .ethereum)),
@@ -67,7 +41,7 @@ struct EthereumDappRequestProcessor {
             guard let content = signingReviewContent(for: body) else {
                 return .immediate(immediateGenericFailure(to: request))
             }
-            guard catalog != nil else { return nil }
+            guard catalog != nil else { return .needsCatalog }
             guard let walletAndAccount else {
                 return .immediate(immediateGenericFailure(to: request))
             }
@@ -101,7 +75,7 @@ struct EthereumDappRequestProcessor {
             guard resolvedNetwork.network.chainId == chainId else {
                 return .immediate(.failure(.internalError))
             }
-            guard catalog != nil else { return nil }
+            guard catalog != nil else { return .needsCatalog }
             guard let walletAndAccount else {
                 return .immediate(immediateFailure(
                     to: request,
@@ -141,7 +115,7 @@ struct EthereumDappRequestProcessor {
             case .unavailable: return .unavailable
             }
             if !body.address.isEmpty {
-                guard catalog != nil else { return nil }
+                guard catalog != nil else { return .needsCatalog }
                 guard walletAndAccount != nil else {
                     return .immediate(immediateFailure(
                         to: request,

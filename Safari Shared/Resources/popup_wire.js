@@ -48,10 +48,7 @@
         switch (review.kind) {
         case "accountSelection": return validSelection(review);
         case "signMessage": return validMessage(review);
-        case "sendTransaction":
-            return review.editor.usesEIP1559
-                ? typeof review.editor.maxPriorityFeePerGasGwei === "string" && typeof review.editor.maxFeePerGasGwei === "string"
-                : typeof review.editor.gasPriceGwei === "string";
+        case "sendTransaction": return true;
         case "addChain": return true;
         default: return false;
         }
@@ -59,22 +56,25 @@
 
     function decodeApprovalState(value, expectedRequestID) {
         const decoded = wire.decodeMessage("PopupApprovalState", value);
-        if (!decoded || decoded.id !== expectedRequestID ||
-            !hasUniqueValues(decoded.actions, action => action)) { return null; }
+        return decoded && validDecodedApprovalState(decoded, expectedRequestID) ? decoded : null;
+    }
+
+    function validDecodedApprovalState(decoded, expectedRequestID) {
+        if (decoded.id !== expectedRequestID ||
+            !hasUniqueValues(decoded.actions, action => action)) { return false; }
         if (decoded.state === "review") {
-            return validReview(decoded.review, decoded.actions) ? decoded : null;
+            return validReview(decoded.review, decoded.actions);
         }
         return (decoded.state === "error"
             ? decoded.actions.length > 0 && decoded.actions.every(action => action === "retry" || action === "reject")
-            : decoded.actions.length === 0) ? decoded : null;
+            : decoded.actions.length === 0);
     }
 
     function decodeCommandResult(value, expectedRequestID) {
         const decoded = wire.decodeMessage("PopupCommandResult", value);
         if (!decoded) { return null; }
-        if (decoded.approval === null) { return decoded.status === "ok" ? null : decoded; }
-        if (decoded.status === "unavailable") { return null; }
-        return decodeApprovalState(decoded.approval, expectedRequestID) ? decoded : null;
+        if (decoded.approval === null) { return decoded; }
+        return validDecodedApprovalState(decoded.approval, expectedRequestID) ? decoded : null;
     }
 
     return Object.freeze({

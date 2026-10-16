@@ -375,8 +375,9 @@ final class DappRequestProcessorTests: XCTestCase {
             id: 47, name: "addEthereumChain", provider: .ethereum,
             body: ["address": "", "chainId": "0x1", "object": definition]
         )
-        guard case .approval(let intent) = DappRequestProcessor(ethereumNetworkResolver: { _ in .missing }).prepareWithoutWallets(
-            try XCTUnwrap(snapshot.requestBinding)
+        guard case .approval(let intent) = DappRequestProcessor(ethereumNetworkResolver: { _ in .missing }).prepare(
+            try XCTUnwrap(snapshot.requestBinding),
+            catalog: nil
         ) else { return XCTFail("Expected wallet-independent chain addition") }
         let consent = try XCTUnwrap(ApprovalReview(intent: intent).acceptAddEthereumChain(approvedAt: fixture.now))
         for networkState in [ApprovalNetworkResolution.missing, .unavailable] {
@@ -629,6 +630,32 @@ final class DappRequestProcessorTests: XCTestCase {
         }
     }
 
+    func testPreparationDistinguishesAbsentAndEmptyCatalogs() throws {
+        let publicKey = "11111111111111111111111111111111"
+        let requests = try [
+            ethereumRequest(method: "requestAccounts"),
+            solanaRequest(method: "connect", publicKey: ""),
+            solanaRequest(method: "signMessage", publicKey: publicKey,
+                parameters: ["message": "reviewed", "messageEncoding": "utf8"]),
+            solanaRequest(method: "signAllTransactions", publicKey: publicKey,
+                parameters: ["messages": ["not-base58!"]]),
+        ]
+        let processor = DappRequestProcessor()
+        for request in requests {
+            let binding = try requestBindingForTesting(request)
+            guard case .needsCatalog = processor.prepare(binding, catalog: nil) else {
+                return XCTFail("Expected a catalog requirement for \(request.id)")
+            }
+            if case .needsCatalog = processor.prepare(binding, catalog: processorCatalog(accounts: [])) {
+                XCTFail("An empty catalog must resolve the requirement")
+            }
+        }
+        let malformed = try solanaRequest(method: "signAllTransactions", publicKey: publicKey)
+        guard case .immediate = processor.prepare(try requestBindingForTesting(malformed), catalog: nil) else {
+            return XCTFail("Missing batch payload must fail without reading wallets")
+        }
+    }
+
     func testAlreadyGrantedConnectReturnsNativeAccountWithoutAnotherApproval() throws {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 1, count: 32)))
         for coin in [WalletCoin.ethereum, .solana] {
@@ -637,7 +664,7 @@ final class DappRequestProcessorTests: XCTestCase {
                 ? ethereumRequest(method: "requestAccounts")
                 : solanaRequest(method: "connect", publicKey: "")
             request.authorizedAccount = WalletAccountDescriptor(walletID: "wallet", account: account)
-            guard case .immediate(let responseResolution)? = DappRequestProcessor().prepareWithoutWallets(try requestBindingForTesting(request)) else {
+            guard case .immediate(let responseResolution) = DappRequestProcessor().prepare(try requestBindingForTesting(request), catalog: nil) else {
                 return XCTFail("Existing native grants must not prompt again")
             }
             let response = try XCTUnwrap(responseResolution.response(for: request))
@@ -656,13 +683,13 @@ final class DappRequestProcessorTests: XCTestCase {
         let account = processorAccount(privateKey: key, coin: .solana)
         var request = try solanaRequest(method: "connect", publicKey: account.address, parameters: ["onlyIfTrusted": true])
         request.authorizedAccount = WalletAccountDescriptor(walletID: "wallet", account: account)
-        guard case .immediate(let responseResolution)? = DappRequestProcessor().prepareWithoutWallets(try requestBindingForTesting(request)) else {
+        guard case .immediate(let responseResolution) = DappRequestProcessor().prepare(try requestBindingForTesting(request), catalog: nil) else {
             return XCTFail("Trusted connect must not present an approval")
         }
         let response = try XCTUnwrap(responseResolution.response(for: request))
         XCTAssertEqual((response.json["result"] as? [String: String])?["publicKey"], account.address)
         request.authorizedAccount = nil
-        guard case .immediate(let deniedResolution)? = DappRequestProcessor().prepareWithoutWallets(try requestBindingForTesting(request)) else {
+        guard case .immediate(let deniedResolution) = DappRequestProcessor().prepare(try requestBindingForTesting(request), catalog: nil) else {
             return XCTFail("An absent grant must not present an approval")
         }
         let denied = try XCTUnwrap(deniedResolution.response(for: request))
@@ -2360,7 +2387,7 @@ final class DappRequestProcessorTests: XCTestCase {
         XCTAssertEqual((response.json["error"] as? [String: Any])?["message"] as? String, Strings.providerNotReady)
     }
 
-    func testPrepareWithoutWalletsReturnsDisconnectedKnownChainSwitch() throws {
+    func testPrepareWithoutCatalogReturnsDisconnectedKnownChainSwitch() throws {
         let request = try ethereumRequest(
             method: "switchEthereumChain",
             address: "",
@@ -2368,7 +2395,7 @@ final class DappRequestProcessorTests: XCTestCase {
         )
 
         guard case let .immediate(responseResolution) =
-            DappRequestProcessor().prepareWithoutWallets(try requestBindingForTesting(request)) else {
+            DappRequestProcessor().prepare(try requestBindingForTesting(request), catalog: nil) else {
             return XCTFail("Expected wallet-independent response")
         }
         let response = try XCTUnwrap(responseResolution.response(for: request))
@@ -2393,7 +2420,7 @@ final class DappRequestProcessorTests: XCTestCase {
         let catalog = processorCatalog(accounts: [])
         for preparation in [
             DappRequestProcessor(ethereumNetworkResolver: { _ in .missing }).prepare(try requestBindingForTesting(request), catalog: catalog),
-            try XCTUnwrap(DappRequestProcessor(ethereumNetworkResolver: { _ in .missing }).prepareWithoutWallets(try requestBindingForTesting(request))),
+            DappRequestProcessor(ethereumNetworkResolver: { _ in .missing }).prepare(try requestBindingForTesting(request), catalog: nil),
         ] {
             guard case let .immediate(responseResolution) = preparation else {
                 return XCTFail("Expected wallet-independent response")
@@ -2466,7 +2493,7 @@ final class DappRequestProcessorTests: XCTestCase {
             guard case .immediate(let responseResolution) = DappRequestProcessor().prepare(
                 try requestBindingForTesting(request), catalog: catalog
             ), case .immediate(let withoutWalletsResolution) =
-                DappRequestProcessor().prepareWithoutWallets(try requestBindingForTesting(request)) else {
+                DappRequestProcessor().prepare(try requestBindingForTesting(request), catalog: nil) else {
                 return XCTFail("Expected wallet-independent failure for \(testCase.method)")
             }
             let response = try XCTUnwrap(responseResolution.response(for: request))
@@ -2491,14 +2518,14 @@ final class DappRequestProcessorTests: XCTestCase {
         let processor = DappRequestProcessor(ethereumNetworkResolver: { _ in .unavailable })
         for request in requests {
             let binding = try requestBindingForTesting(request)
-            guard case .unavailable? = processor.prepareWithoutWallets(binding),
+            guard case .unavailable = processor.prepare(binding, catalog: nil),
                   case .unavailable = processor.prepare(binding, catalog: catalog) else {
                 return XCTFail("Unavailable networks must not produce terminal responses")
             }
         }
         let missing = DappRequestProcessor(ethereumNetworkResolver: { _ in .missing })
         for (request, code) in zip(requests.prefix(2), [-32603, 4902]) {
-            guard case .immediate(let resolution)? = missing.prepareWithoutWallets(try requestBindingForTesting(request)) else {
+            guard case .immediate(let resolution) = missing.prepare(try requestBindingForTesting(request), catalog: nil) else {
                 return XCTFail("Confirmed missing networks must still produce terminal responses")
             }
             let response = try XCTUnwrap(resolution.response(for: request))
@@ -2522,10 +2549,14 @@ final class DappRequestProcessorTests: XCTestCase {
                 address: account.address,
                 parameters: testCase.parameters
             )
-            XCTAssertNil(DappRequestProcessor().prepareWithoutWallets(try requestBindingForTesting(request)))
+            guard case .needsCatalog = DappRequestProcessor().prepare(try requestBindingForTesting(request), catalog: nil) else {
+                return XCTFail("Expected a catalog requirement")
+            }
             let catalog = processorCatalog(accounts: [account])
             let prepared = DappRequestProcessor().prepare(try requestBindingForTesting(request), catalog: catalog)
             switch prepared {
+            case .needsCatalog:
+                XCTFail("A supplied catalog must satisfy the preparation requirement")
             case .unavailable:
                 XCTFail("Expected available test network")
             case .approval(let intent):
@@ -2557,7 +2588,7 @@ final class DappRequestProcessorTests: XCTestCase {
                 DappRequestProcessor(ethereumNetworkResolver: { _ in .missing }).prepare(try requestBindingForTesting(request), catalog: catalog),
               case .addEthereumChain(let withWallets) = withWalletsIntent.action,
               case .approval(let withoutWalletsIntent) =
-                DappRequestProcessor(ethereumNetworkResolver: { _ in .missing }).prepareWithoutWallets(try requestBindingForTesting(request)),
+                DappRequestProcessor(ethereumNetworkResolver: { _ in .missing }).prepare(try requestBindingForTesting(request), catalog: nil),
               case .addEthereumChain(let withoutWallets) = withoutWalletsIntent.action else {
             return XCTFail("Expected wallet-independent chain approval")
         }

@@ -842,14 +842,6 @@ def clone_cancellation_signals():
             signal.signal(signum, handler)
 
 
-def terminal_guest_failure(status, run_id):
-    event = status.get('lastGuestEvent', {})
-    if event.get('runId') != run_id or event.get('type') not in ('jobFinished', 'agentError'):
-        return None
-    return {'reason': 'guest_launch_failed' if event['type'] == 'agentError' else 'guest_exited_without_result',
-            'event': event}
-
-
 def register_operation(state, vm, exchange, run_id, phase, previous=None, *, clone_owned=False):
     path = state / 'active.json'
     identity = {'runId': run_id, 'vm': str(vm), 'exchange': str(exchange), 'ownerPID': os.getpid()}
@@ -1023,7 +1015,7 @@ def monitor_owned_vm(args, state, vm, exchange, run_id, binaries, environment, t
     status_path = exchange / 'vm-status.json'
     stop_file = exchange / 'vm-stop'
     register_operation(state, vm, exchange, run_id, 'starting')
-    command = [str(host_binary), '--vm', str(vm), '--exchange', str(exchange),
+    command = [str(host_binary), '--vm', str(vm),
                '--status', str(status_path), '--stop-file', str(stop_file), '--owner-pid', str(os.getpid())]
     if args.command == 'setup' and getattr(args, 'interactive', False):
         command.append('--setup-window')
@@ -1084,7 +1076,8 @@ def monitor_owned_vm(args, state, vm, exchange, run_id, binaries, environment, t
                     if setup_hook is not None:
                         prepared = setup_hook.poll()
                         if prepared is not None and prepared['status'] != 'passed':
-                            reason = 'guest_exchange_failed'
+                            reason = prepared.get('reason') if prepared.get('reason') in (
+                                'guest_launch_failed', 'guest_exited_without_result') else 'guest_exchange_failed'
                             guest_failure = prepared
                             break
                         if prepared is not None:
@@ -1107,23 +1100,6 @@ def monitor_owned_vm(args, state, vm, exchange, run_id, binaries, environment, t
                         status = read_json(status_path)
                         if not isinstance(status, dict):
                             raise RunnerError('VM returned an invalid status record')
-                        terminal = terminal_guest_failure(status, run_id)
-                        if terminal and terminal['event'].get('type') == 'jobFinished' and setup_hook is not None:
-                            setup_hook.notify_guest_finished()
-                            terminal = None
-                        if terminal:
-                            if result_path.exists():
-                                result = read_json(result_path)
-                                if (result.get('runId') == run_id and result.get('finishedAt') and
-                                        result.get('status') in ('passed', 'failed', 'blocked', 'cancelled') and result_exported(result)):
-                                    reason = interruption_reason()
-                                    if reason:
-                                        break
-                                    accepted_result = True
-                                    break
-                            reason = terminal['reason']
-                            guest_failure = terminal['event']
-                            break
                     try:
                         check_capacity(state, environment['minimumHostFreeBytes'])
                     except RunnerError as error:
@@ -1499,10 +1475,6 @@ class GuestSetupHook:
         except (self.module.GuestAccessError, OSError, ValueError, RuntimeError) as error:
             self.finished = True
             return {'status': 'failed', 'reason': 'guest_exchange_failed', 'error': str(error)}
-
-    def notify_guest_finished(self):
-        if self.transport is not None:
-            self.transport.notify_guest_finished()
 
     def request_stop(self):
         self.stopping = True

@@ -9431,7 +9431,7 @@ extension PopupRequestSessionsTests {
             store: store.bridge,
             environment: .init(
                 now: Date.init, wait: { _ in await Task.yield() },
-                prepareWithoutWallets: { binding in preparationForTesting(binding: binding, action: action) },
+                prepare: { binding, _ in preparationForTesting(binding: binding, action: action) },
                 attemptNativeDecision: attempt
             )
         )
@@ -9739,18 +9739,15 @@ private final class CompactPopupProcessor: DappRequestProcessing {
         self.execution = execute
     }
 
-    func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog) -> DappRequestPreparation {
+    func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog?) -> DappRequestPreparation {
         guard let handler else { return processor.prepare(binding, catalog: catalog) }
+        guard catalog != nil || walletIndependent else { return .needsCatalog }
         return preparation(handler(binding.request), binding: binding)
-    }
-
-    func prepareWithoutWallets(_ binding: ExtensionBridge.RequestBinding) -> DappRequestPreparation? {
-        guard let handler else { return processor.prepareWithoutWallets(binding) }
-        return walletIndependent ? preparation(handler(binding.request), binding: binding) : nil
     }
 
     private func preparation(_ unbound: UnboundDappRequestPreparation, binding: ExtensionBridge.RequestBinding) -> DappRequestPreparation {
         switch unbound {
+        case .needsCatalog: return .needsCatalog
         case .immediate(let resolution): return .immediate(resolution)
         case .approval(let action): return preparationForTesting(binding: binding, action: action)
         case .unavailable: return .unavailable
@@ -9768,13 +9765,9 @@ private final class PreparationRecordingDappRequestProcessor: DappRequestProcess
     private let processor = DappRequestProcessor(ethereumNetworkResolver: popupApprovalNetwork)
     private(set) var preparations = 0
 
-    func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog) -> DappRequestPreparation {
-        preparations += 1
+    func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog?) -> DappRequestPreparation {
+        if catalog != nil { preparations += 1 }
         return processor.prepare(binding, catalog: catalog)
-    }
-
-    func prepareWithoutWallets(_ binding: ExtensionBridge.RequestBinding) -> DappRequestPreparation? {
-        processor.prepareWithoutWallets(binding)
     }
 
     func execute(permit: ExtensionBridge.ApprovedExecutionPermit, signer: (any WalletSigning)?) async -> ApprovedExecutionResult {
@@ -9797,17 +9790,15 @@ private final class CompactPopupAccessProcessor: DappRequestProcessing {
         self.execution = execute
     }
 
-    func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog) -> DappRequestPreparation {
+    func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog?) -> DappRequestPreparation {
+        guard let catalog else { return .needsCatalog }
         switch handler(binding.request, catalog) {
+        case .needsCatalog: return .needsCatalog
         case .immediate(let resolution): return .immediate(resolution)
         case .approval(let action):
             return preparationForTesting(binding: binding, action: action, accounts: catalog.orderedAccounts)
         case .unavailable: return .unavailable
         }
-    }
-
-    func prepareWithoutWallets(_ binding: ExtensionBridge.RequestBinding) -> DappRequestPreparation? {
-        nil
     }
 
     func execute(permit: ExtensionBridge.ApprovedExecutionPermit, signer: (any WalletSigning)?) async -> ApprovedExecutionResult {

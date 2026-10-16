@@ -4,12 +4,8 @@
 protocol DappRequestProcessing {
     func prepare(
         _ binding: ExtensionBridge.RequestBinding,
-        catalog: WalletReviewCatalog
+        catalog: WalletReviewCatalog?
     ) -> DappRequestPreparation
-
-    func prepareWithoutWallets(
-        _ binding: ExtensionBridge.RequestBinding
-    ) -> DappRequestPreparation?
 
     func execute(
         permit: ExtensionBridge.ApprovedExecutionPermit,
