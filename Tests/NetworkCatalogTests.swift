@@ -1344,10 +1344,10 @@ final class NetworkCatalogTests: XCTestCase {
 
         for index in 0..<requestCount {
             let url = try XCTUnwrap(URL(string: "https://rpc.example/request-\(index)"))
-            let body = try JSONSerialization.data(withJSONObject: ["request": index])
+            let body = try JSONSerialization.data(withJSONObject: ["jsonrpc": "2.0", "id": index, "method": "eth_blockNumber"])
             Task { @MainActor in
                 let response =
-                    (try? await client.send(endpoint: .unauthenticated(url), body: body, expectedResponseID: index))?
+                    (try? await client.send(endpoint: .unauthenticated(url), request: Self.rpcRequest(body, id: index), execution: Self.rpcExecution()))?
                     .json
                 defer {
                     allRequestsCompleted.fulfill()
@@ -1360,7 +1360,7 @@ final class NetworkCatalogTests: XCTestCase {
                     return
                 }
 
-                guard let responseIndex = (response?["request"] as? NSNumber)?.intValue else {
+                guard let responseIndex = (response?["result"] as? NSNumber)?.intValue else {
                     failures.append("Request \(index) received no parsed response")
                     return
                 }
@@ -1392,7 +1392,7 @@ final class NetworkCatalogTests: XCTestCase {
                       let index = Int(pathComponent.dropFirst("request-".count)) else {
                     return nil
                 }
-                return try? JSONSerialization.data(withJSONObject: ["request": index])
+                return try? JSONSerialization.data(withJSONObject: ["id": index, "result": index])
             }
             return Data("not-json".utf8)
         }
@@ -1426,7 +1426,7 @@ final class NetworkCatalogTests: XCTestCase {
         Task { @MainActor in
             let response =
                 (try? await client.send(
-                    endpoint: alchemyEndpoint(url), body: Data(#"{"method":"eth_chainId"}"#.utf8), expectedResponseID: 1
+                    endpoint: alchemyEndpoint(url), request: Self.rpcRequest(Data(#"{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber"}"#.utf8), id: 1), execution: Self.rpcExecution()
                 ))?.json
             XCTAssertEqual(response?["result"] as? String, "ok")
             completion.fulfill()
@@ -1474,7 +1474,7 @@ final class NetworkCatalogTests: XCTestCase {
         Task { @MainActor in
             let response =
                 (try? await client.send(
-                    endpoint: alchemyEndpoint(url), body: Data(#"{"method":"eth_chainId"}"#.utf8), expectedResponseID: 1
+                    endpoint: alchemyEndpoint(url), request: Self.rpcRequest(Data(#"{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber"}"#.utf8), id: 1), execution: Self.rpcExecution()
                 ))?.json
             XCTAssertEqual(response?["result"] as? String, "ok")
             completion.fulfill()
@@ -1502,7 +1502,7 @@ final class NetworkCatalogTests: XCTestCase {
                 request.value(forHTTPHeaderField: "Authorization"),
                 "Bearer rejected-token"
             )
-            XCTAssertEqual(try Self.bodyData(from: request), body)
+            XCTAssertEqual(try Self.bodyData(from: request), try Self.rpcRequest(body, id: 1).body)
             return (
                 401,
                 Data(
@@ -1528,7 +1528,7 @@ final class NetworkCatalogTests: XCTestCase {
         completion.assertForOverFulfill = true
 
         Task { @MainActor in
-            let response = (try? await client.send(endpoint: alchemyEndpoint(url), body: body, expectedResponseID: 1))?
+            let response = (try? await client.send(endpoint: alchemyEndpoint(url), request: Self.rpcRequest(body, id: 1), execution: Self.rpcExecution()))?
                 .json
             XCTAssertEqual(response?["jsonrpc"] as? String, "2.0")
             XCTAssertEqual(response?["id"] as? Int, 1)
@@ -1579,7 +1579,7 @@ final class NetworkCatalogTests: XCTestCase {
             let response =
                 (try? await client.send(
                     endpoint: .unauthenticated(url),
-                    body: Data(#"{"jsonrpc":"2.0","id":2,"method":"eth_chainId"}"#.utf8), expectedResponseID: 2))?.json
+                    request: Self.rpcRequest(Data(#"{"jsonrpc":"2.0","id":2,"method":"eth_blockNumber"}"#.utf8), id: 2), execution: Self.rpcExecution()))?.json
             XCTAssertEqual(response?["id"] as? Int, 2)
             XCTAssertEqual(response?["result"] as? String, "matched")
             completion.fulfill()
@@ -1646,9 +1646,9 @@ final class NetworkCatalogTests: XCTestCase {
                 let response =
                     (try? await client.send(
                         endpoint: .unauthenticated(url),
-                        body: Data(
-                            #"{"jsonrpc":"2.0","id":1,"method":"eth_chainId"}"#.utf8
-                        ), expectedResponseID: 1))?.json
+                        request: Self.rpcRequest(Data(
+                            #"{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber"}"#.utf8
+                        ), id: 1), execution: Self.rpcExecution()))?.json
                 XCTAssertNil(response, fixture.path)
                 completion.fulfill()
             }
@@ -1691,9 +1691,9 @@ final class NetworkCatalogTests: XCTestCase {
                 let response =
                     (try? await client.send(
                         endpoint: .unauthenticated(url),
-                        body: Data(
-                            #"{"jsonrpc":"2.0","id":2,"method":"eth_chainId"}"#.utf8
-                        ), expectedResponseID: 2))?.json
+                        request: Self.rpcRequest(Data(
+                            #"{"jsonrpc":"2.0","id":2,"method":"eth_blockNumber"}"#.utf8
+                        ), id: 2), execution: Self.rpcExecution()))?.json
                 XCTAssertNotNil(response, fixture.path)
                 XCTAssertEqual(
                     response?["id"] as? Int,
@@ -1744,9 +1744,9 @@ final class NetworkCatalogTests: XCTestCase {
                 let response =
                     (try? await client.send(
                         endpoint: .unauthenticated(url),
-                        body: Data(
-                            #"{"jsonrpc":"2.0","id":2,"method":"eth_chainId"}"#.utf8
-                        ), expectedResponseID: 2))?.json
+                        request: Self.rpcRequest(Data(
+                            #"{"jsonrpc":"2.0","id":2,"method":"eth_blockNumber"}"#.utf8
+                        ), id: 2), execution: Self.rpcExecution()))?.json
                 XCTAssertNotNil(response, fixture.path)
                 XCTAssertEqual(
                     response?["id"] as? Int,
@@ -1829,9 +1829,9 @@ final class NetworkCatalogTests: XCTestCase {
             let response =
                 (try? await client.send(
                     endpoint: .unauthenticated(sourceURL),
-                    body: Data(
-                        #"{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}"#.utf8
-                    ), expectedResponseID: 1))?.json
+                    request: Self.rpcRequest(Data(
+                        #"{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}"#.utf8
+                    ), id: 1), execution: Self.rpcExecution()))?.json
             XCTAssertNil(response)
             completion.fulfill()
         }
@@ -1860,7 +1860,7 @@ final class NetworkCatalogTests: XCTestCase {
                 request.value(forHTTPHeaderField: "Authorization"),
                 "Bearer rejected-token"
             )
-            XCTAssertEqual(try Self.bodyData(from: request), body)
+            XCTAssertEqual(try Self.bodyData(from: request), try Self.rpcRequest(body, id: 1).body)
             return (401, Data(#"{"error":"unauthorized"}"#.utf8))
         }
         defer {
@@ -1880,7 +1880,7 @@ final class NetworkCatalogTests: XCTestCase {
         completion.assertForOverFulfill = true
 
         Task { @MainActor in
-            let response = (try? await client.send(endpoint: alchemyEndpoint(url), body: body, expectedResponseID: 1))?
+            let response = (try? await client.send(endpoint: alchemyEndpoint(url), request: Self.rpcRequest(body, id: 1), execution: Self.rpcExecution()))?
                 .json
             XCTAssertEqual(response?["error"] as? String, "unauthorized")
             completion.fulfill()
@@ -1894,59 +1894,37 @@ final class NetworkCatalogTests: XCTestCase {
     }
 
     func testSafariRPCClientReplaysSupportedReadOnlyMethodsAfter401() async throws {
-        let url = try XCTUnwrap(
-            URL(string: "https://eth-mainnet.g.alchemy.com/v2")
-        )
+        let url = try XCTUnwrap(URL(string: "https://eth-mainnet.g.alchemy.com/v2"))
+        let methods = ["eth_blobBaseFee", "eth_estimateUserOperationGas", "eth_supportedEntryPoints", "txpool_contentFrom"]
         let requestCount = LockedNetworkCatalogCounter()
         let session = makeSafariAuthorizationSession { request in
-            let attempt = requestCount.increment()
-            XCTAssertLessThanOrEqual(attempt, 2)
-            XCTAssertEqual(
-                request.value(forHTTPHeaderField: "Authorization"),
-                attempt == 1
-                    ? "Bearer rejected-token"
-                    : "Bearer replacement-token"
-            )
-            if attempt == 1 {
-                return (401, Data(#"{"error":"unauthorized"}"#.utf8))
-            }
-            return (200, Data(#"{"result":"ok"}"#.utf8))
+            let firstAttempt = requestCount.increment().isMultiple(of: 2) == false
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"),
+                           firstAttempt ? "Bearer rejected-token" : "Bearer replacement-token")
+            return firstAttempt
+                ? (401, Data(#"{"error":"unauthorized"}"#.utf8))
+                : (200, Data(#"{"result":"ok"}"#.utf8))
         }
         defer {
             session.invalidateAndCancel()
             SafariAuthorizationURLProtocol.removeRequestHandler()
         }
-        let authorizationProvider = SafariAuthorizationProviderStub(
-            token: "rejected-token",
-            replacementToken: "replacement-token"
-        )
-        let client = SafariRPCClient(
-            urlSession: session,
-            authorizationProvider: authorizationProvider
-        )
-        let completion = expectation(
-            description: "supported read-only Safari RPCs recovered from 401"
-        )
-        completion.assertForOverFulfill = true
-        let body = Data(
-            #"[{"jsonrpc":"2.0","id":1,"method":"eth_blobBaseFee","params":[]},{"jsonrpc":"2.0","id":2,"method":"eth_estimateUserOperationGas","params":[]},{"jsonrpc":"2.0","id":3,"method":"eth_supportedEntryPoints","params":[]},{"jsonrpc":"2.0","id":4,"method":"txpool_contentFrom","params":[]}]"#.utf8
-        )
-
-        Task { @MainActor in
-            let response = (try? await client.send(endpoint: alchemyEndpoint(url), body: body, expectedResponseID: 1))?
-                .json
-            XCTAssertEqual(response?["result"] as? String, "ok")
-            completion.fulfill()
+        let authorizationProvider = SafariAuthorizationProviderStub(token: "rejected-token", replacementToken: "replacement-token")
+        let client = SafariRPCClient(urlSession: session, authorizationProvider: authorizationProvider)
+        for method in methods {
+            let body = try JSONSerialization.data(withJSONObject: ["jsonrpc": "2.0", "id": 1, "method": method, "params": []])
+            let response = try await client.send(
+                endpoint: alchemyEndpoint(url), request: Self.rpcRequest(body, id: 1), execution: Self.rpcExecution()
+            )
+            XCTAssertEqual(response.json["result"] as? String, "ok", method)
         }
-
-        await fulfillment(of: [completion], timeout: 2)
-        XCTAssertEqual(requestCount.value, 2)
-        XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
-        XCTAssertEqual(authorizationProvider.replacementCallCount, 1)
+        XCTAssertEqual(requestCount.value, methods.count * 2)
+        XCTAssertEqual(authorizationProvider.authorizationCallCount, methods.count)
+        XCTAssertEqual(authorizationProvider.replacementCallCount, methods.count)
         XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
     }
 
-    func testSafariRPCClientFailsClosedForUnknownAndMixedBatchMethodsAfter401()
+    func testSafariRPCClientNeverReplaysUnknownOrMutatingMethodsAfter401()
         async throws
     {
         let url = try XCTUnwrap(
@@ -1981,10 +1959,16 @@ final class NetworkCatalogTests: XCTestCase {
                 #"{"jsonrpc":"2.0","id":2,"method":"vendor_unknownMutation","params":[]}"#.utf8
             ),
             Data(
-                #"[{"jsonrpc":"2.0","id":3,"method":"eth_sendRawTransaction","params":["0x02"]}]"#.utf8
+                #"{"jsonrpc":"2.0","id":3,"method":"eth_sendRawTransaction","params":["0x02"]}"#.utf8
             ),
             Data(
-                #"[{"jsonrpc":"2.0","id":4,"method":"eth_chainId","params":[]},{"jsonrpc":"2.0","id":5,"method":"eth_sendRawTransaction","params":["0x03"]}]"#.utf8
+                #"{"jsonrpc":"2.0","id":4,"method":"eth_sendUserOperation","params":[]}"#.utf8
+            ),
+            Data(
+                #"{"jsonrpc":"2.0","id":5,"method":"eth_getVendorMutation","params":[]}"#.utf8
+            ),
+            Data(
+                #"{"jsonrpc":"2.0","id":6,"method":"alchemy_getUnknown","params":[]}"#.utf8
             ),
         ]
 
@@ -1995,7 +1979,7 @@ final class NetworkCatalogTests: XCTestCase {
             completion.assertForOverFulfill = true
             Task { @MainActor in
                 let response =
-                    (try? await client.send(endpoint: alchemyEndpoint(url), body: body, expectedResponseID: index + 1))?
+                    (try? await client.send(endpoint: alchemyEndpoint(url), request: Self.rpcRequest(body, id: index + 1), execution: Self.rpcExecution()))?
                     .json
                 XCTAssertEqual(response?["error"] as? String, "unauthorized")
                 completion.fulfill()
@@ -2040,7 +2024,7 @@ final class NetworkCatalogTests: XCTestCase {
                 request.value(forHTTPHeaderField: "Authorization"),
                 "Bearer rejected-token"
             )
-            XCTAssertEqual(try Self.bodyData(from: request), body)
+            XCTAssertEqual(try Self.bodyData(from: request), try Self.rpcRequest(body, id: 1).body)
             return (401, Data(#"{"error":"unauthorized"}"#.utf8))
         }
         defer {
@@ -2061,7 +2045,7 @@ final class NetworkCatalogTests: XCTestCase {
         completion.assertForOverFulfill = true
 
         Task { @MainActor in
-            let response = (try? await client.send(endpoint: alchemyEndpoint(url), body: body, expectedResponseID: 1))?
+            let response = (try? await client.send(endpoint: alchemyEndpoint(url), request: Self.rpcRequest(body, id: 1), execution: Self.rpcExecution()))?
                 .json
             XCTAssertEqual(response?["error"] as? String, "unauthorized")
             completion.fulfill()
@@ -2108,7 +2092,7 @@ final class NetworkCatalogTests: XCTestCase {
         Task { @MainActor in
             let response =
                 (try? await client.send(
-                    endpoint: alchemyEndpoint(url), body: Data(#"{"method":"eth_chainId"}"#.utf8), expectedResponseID: 1
+                    endpoint: alchemyEndpoint(url), request: Self.rpcRequest(Data(#"{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber"}"#.utf8), id: 1), execution: Self.rpcExecution()
                 ))?.json
             XCTAssertEqual(response?["error"] as? String, "forbidden")
             completion.fulfill()
@@ -2150,9 +2134,9 @@ final class NetworkCatalogTests: XCTestCase {
             }
             let client = SafariRPCClient(urlSession: session, authorizationProvider: provider)
             let endpoint = alchemyEndpoint(try XCTUnwrap(URL(string: "https://eth-mainnet.g.alchemy.com/v2")))
-            let method = checkpoint == .invalidation ? "eth_sendRawTransaction" : "eth_chainId"
+            let method = checkpoint == .invalidation ? "eth_sendRawTransaction" : "eth_blockNumber"
             let body = try JSONSerialization.data(withJSONObject: ["jsonrpc": "2.0", "id": 1, "method": method])
-            let task = Task { try await client.send(endpoint: endpoint, body: body, expectedResponseID: 1) }
+            let task = Task { try await client.send(endpoint: endpoint, request: Self.rpcRequest(body, id: 1), execution: Self.rpcExecution()) }
             await fulfillment(of: [reachedCheckpoint], timeout: 2)
             task.cancel()
             gate.resolve(())
@@ -2225,8 +2209,7 @@ final class NetworkCatalogTests: XCTestCase {
             Task { @MainActor in
                 let response =
                     (try? await client.send(
-                        endpoint: .unauthenticated(url), body: Data(#"{"method":"eth_chainId"}"#.utf8),
-                        expectedResponseID: 1))?.json
+                        endpoint: .unauthenticated(url), request: Self.rpcRequest(Data(#"{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber"}"#.utf8), id: 1), execution: Self.rpcExecution()))?.json
                 XCTAssertEqual(response?["result"] as? String, "ok")
                 completion.fulfill()
             }
@@ -2239,6 +2222,17 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertEqual(authorizationProvider.authorizationCallCount, 0)
         XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
         XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
+    }
+
+    private nonisolated static func rpcRequest(_ body: Data, id: Int) throws -> ValidatedRPCRequest {
+        try ValidatedRPCRequest(body: String(decoding: body, as: UTF8.self), id: id)
+    }
+
+    private nonisolated static func rpcExecution() -> SafariRPCExecution {
+        SafariRPCExecution(
+            deadline: .now.advanced(by: .seconds(30)),
+            responseBudget: SafariRPCResponseBudget(maximumBytes: SafariRPCLimits.live.maximumBufferedResponseBytes)
+        )
     }
 
     private struct ConflictExpectation {
@@ -2297,7 +2291,7 @@ final class NetworkCatalogTests: XCTestCase {
             )
             XCTAssertEqual(
                 try Self.bodyData(from: request),
-                body,
+                try Self.rpcRequest(body, id: 1).body,
                 file: file,
                 line: line
             )
@@ -2321,7 +2315,7 @@ final class NetworkCatalogTests: XCTestCase {
         completion.assertForOverFulfill = true
 
         Task { @MainActor in
-            let result = (try? await client.send(endpoint: alchemyEndpoint(url), body: body, expectedResponseID: 1))?
+            let result = (try? await client.send(endpoint: alchemyEndpoint(url), request: Self.rpcRequest(body, id: 1), execution: Self.rpcExecution()))?
                 .json
             validate(result)
             completion.fulfill()

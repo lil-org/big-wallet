@@ -29,6 +29,53 @@ const attempt = "00000001000000020000000300000004";
 const solanaPublicKey = "11111111111111111111111111111111";
 const execFileAsync = promisify(execFile);
 
+test("RPC request byte limits count UTF-8 without allocating an encoded copy", () => {
+    const maximum = wire.RPC_POLICY.maximumRequestBytes;
+    for (const value of ["", "ascii", "é", "中", "😀", "\ud800", "\udfff", "\ud800x\udfff", "a😀中é"]) {
+        assert.equal(wire.rpcRequestByteCount(value), Buffer.byteLength(value, "utf8"));
+    }
+    for (const [character, byteCount] of [["x", 1], ["é", 2], ["😀", 4]]) {
+        const boundary = character.repeat(maximum / byteCount);
+        assert.equal(wire.rpcRequestByteCount(boundary), maximum);
+        assert.equal(wire.rpcRequestByteCount(boundary + "x"), null);
+    }
+    assert.equal(wire.rpcRequestByteCount("x".repeat(maximum + 1)), null);
+    assert.equal(wire.rpcRequestByteCount(null), null);
+    assert.equal(Object.isFrozen(wire.RPC_POLICY), true);
+});
+
+test("RPC byte counting ignores later character-reading intrinsic changes", () => {
+    const local = vm.createContext({URL, clearTimeout, crypto: webcrypto, setTimeout});
+    new vm.Script(source).runInContext(local);
+    vm.runInContext(`
+        String.prototype.charCodeAt = function () { throw new Error("Replaced charCodeAt"); };
+        Reflect.apply = function () { throw new Error("Replaced Reflect.apply"); };
+    `, local);
+    const localWire = local.BigWalletBridgeWire;
+    for (const value of ["ascii", "é", "中", "😀", "\ud800", "\udfff", "\ud800x\udfff", "a😀中é"]) {
+        assert.equal(localWire.rpcRequestByteCount(value), Buffer.byteLength(value, "utf8"));
+    }
+    const boundary = "😀".repeat(localWire.RPC_POLICY.maximumRequestBytes / 4);
+    assert.equal(localWire.rpcRequestByteCount(boundary), localWire.RPC_POLICY.maximumRequestBytes);
+    assert.equal(localWire.rpcRequestByteCount(boundary + "é"), null);
+});
+
+test("RPC admission releases exactly its own count and retained bytes", () => {
+    const budget = wire.createRPCRequestBudget();
+    const maximum = wire.RPC_POLICY.maximumRequestBytes;
+    const releases = Array.from({length: 4}, (_, index) => budget.reserve(`origin-${index}`, maximum));
+    assert.ok(releases.every(release => typeof release === "function"));
+    assert.equal(budget.reserve("other", 1), null);
+    releases[0]();
+    const replacement = budget.reserve("other", maximum);
+    assert.equal(typeof replacement, "function");
+    releases[0]();
+    assert.equal(budget.reserve("other", 1), null);
+    replacement();
+    releases.slice(1).forEach(release => release());
+    assert.equal(typeof budget.reserve("origin-0", maximum), "function");
+});
+
 const pageState = {
     context: "a".repeat(64),
     revisions: {ethereum: 2, solana: 3},

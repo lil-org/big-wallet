@@ -1848,6 +1848,109 @@ test("RPC responses reserve enough nesting for the content delivery envelope", a
     }
 });
 
+function rpcPageResult(id) {
+    return {kind: "result", id, provider: "ethereum", name: null,
+        state: null, result: "ok", approvalCommitted: false};
+}
+
+test("content bounds RPC per document across reinjection without consuming approval capacity", async () => {
+    const pending = new Map;
+    const harness = makeHarness({sendMessage: message => {
+        if (message.subject === "rpc") {
+            return new Promise(resolve => pending.set(message.id, resolve));
+        }
+        return {kind: "error", id: message.message.id, provider: "ethereum", name: "requestAccounts",
+            state: null, error: {code: 4001, message: "Rejected"}};
+    }});
+    await settle();
+    const maximum = harness.context.BigWalletBridgeWire.RPC_POLICY.maximumOutstandingPerOrigin;
+    for (let id = 1; id <= maximum; id += 1) {
+        harness.dispatchPage("rpc", {id, chainId: "0x1", body: "{}"});
+    }
+    harness.reevaluate();
+    harness.dispatchPage("rpc", {id: maximum + 1, chainId: "0x1", body: "{}"});
+    await settle();
+    assert.equal(pending.size, maximum);
+    const rejected = harness.postedMessages.find(({message}) => message.id === maximum + 1).message.response;
+    assert.equal(rejected.error.code, -32005);
+    assert.deepEqual(rejected.error.data, {reason: "busy", dispatched: false});
+    harness.dispatchPage("request", dappRequest(1000));
+    await settle();
+    assert.equal(harness.runtimeMessages.filter(message => message.subject === "message-to-wallet").length, 1);
+
+    pending.get(1)(rpcPageResult(1));
+    await settle();
+    harness.dispatchPage("rpc", {id: maximum + 2, chainId: "0x1", body: "{}"});
+    await settle();
+    assert.equal(pending.has(maximum + 2), true);
+    for (const [id, resolve] of pending) { resolve(rpcPageResult(id)); }
+    await settle();
+});
+
+test("content rejects oversized UTF-8 RPC and bounds retained request bytes", async () => {
+    const pending = new Map;
+    const harness = makeHarness({sendMessage: message => new Promise(resolve => pending.set(message.id, resolve))});
+    await settle();
+    const policy = harness.context.BigWalletBridgeWire.RPC_POLICY;
+    harness.dispatchPage("rpc", {id: 1, chainId: "0x1", body: "é".repeat(policy.maximumRequestBytes / 2) + "x"});
+    assert.equal(pending.size, 0);
+    assert.deepEqual(harness.postedMessages.at(-1).message.response.error.data,
+        {reason: "request_too_large", dispatched: false});
+    const body = "x".repeat(policy.maximumRequestBytes);
+    const capacity = policy.maximumRetainedRequestBytes / policy.maximumRequestBytes;
+    for (let index = 0; index < capacity; index += 1) {
+        harness.dispatchPage("rpc", {id: index + 2, chainId: "0x1", body});
+    }
+    harness.dispatchPage("rpc", {id: 100, chainId: "0x1", body: "{}"});
+    assert.equal(pending.size, capacity);
+    assert.deepEqual(harness.postedMessages.at(-1).message.response.error.data, {reason: "busy", dispatched: false});
+    pending.get(2)(rpcPageResult(2));
+    await settle();
+    harness.dispatchPage("rpc", {id: 101, chainId: "0x1", body});
+    assert.equal(pending.has(101), true);
+    for (const [id, resolve] of pending) { resolve(rpcPageResult(id)); }
+    await settle();
+});
+
+test("content releases RPC admission after synchronous, rejected and malformed replies", async () => {
+    for (const failure of ["throw", "reject", "malformed"]) {
+        const harness = makeHarness({sendMessage: () => {
+            if (failure === "throw") { throw new Error("transport failed"); }
+            if (failure === "reject") { return Promise.reject(new Error("transport failed")); }
+            return {};
+        }});
+        await settle();
+        const maximum = harness.context.BigWalletBridgeWire.RPC_POLICY.maximumOutstandingPerOrigin;
+        for (let id = 1; id <= maximum + 1; id += 1) {
+            harness.dispatchPage("rpc", {id, chainId: "0x1", body: "{}"});
+            await settle();
+            assert.equal(harness.postedMessages.at(-1).message.response.error.code, -32603, failure);
+        }
+        assert.equal(harness.runtimeMessages.filter(message => message.subject === "rpc").length, maximum + 1);
+    }
+});
+
+test("content frees a timed-out RPC slot without double-releasing its late reply", async () => {
+    const pending = new Map;
+    const harness = makeHarness({sendMessage: message => new Promise(resolve => pending.set(message.id, resolve))});
+    await settle();
+    const maximum = harness.context.BigWalletBridgeWire.RPC_POLICY.maximumOutstandingPerOrigin;
+    for (let id = 1; id <= maximum; id += 1) {
+        harness.dispatchPage("rpc", {id, chainId: "0x1", body: "{}"});
+    }
+    await settle();
+    assert.equal(await harness.runTimer(), true);
+    harness.dispatchPage("rpc", {id: maximum + 1, chainId: "0x1", body: "{}"});
+    assert.equal(pending.has(maximum + 1), true);
+    pending.get(1)(rpcPageResult(1));
+    await settle();
+    harness.dispatchPage("rpc", {id: maximum + 2, chainId: "0x1", body: "{}"});
+    assert.equal(pending.has(maximum + 2), false);
+    assert.deepEqual(harness.postedMessages.at(-1).message.response.error.data, {reason: "busy", dispatched: false});
+    for (const [id, resolve] of pending) { resolve(rpcPageResult(id)); }
+    await settle();
+});
+
 test("ordinary RPC fails after the long content relay timeout", async () => {
     let resolveRPC;
     const harness = makeHarness({sendMessage: message => message.subject === "rpc"

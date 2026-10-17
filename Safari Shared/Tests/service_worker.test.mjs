@@ -1304,6 +1304,107 @@ test("native RPC relays preserve error data and reject uncorrelated results", as
     assert.equal((await wrong.dispatch(command)).kind, "error");
 });
 
+function rpcCommand(id, body = JSON.stringify({jsonrpc: "2.0", id, method: "eth_blockNumber"})) {
+    return {subject: "rpc", id, body, chainId: "0x1", workflowVersion: 4};
+}
+
+function rpcSender(origin, tabId = 9) {
+    const url = `${origin}/dapp`;
+    return {id: "extension-id", url, frameId: 0, tab: {id: tabId, url, incognito: false}};
+}
+
+test("worker RPC capacity is shared across same-origin tabs and bounded globally", async () => {
+    const pending = new Map;
+    const harness = makeHarness({native: message => message.subject === "rpc"
+        ? new Promise(resolve => pending.set(message.id, resolve))
+        : {id: message.id, state: snapshot()}});
+    const policy = wireContext.BigWalletBridgeWire.RPC_POLICY;
+    const first = rpcSender("https://first.example");
+    const second = rpcSender("https://second.example");
+    const requests = [];
+    for (let id = 1; id <= policy.maximumOutstandingPerOrigin; id += 1) {
+        requests.push(harness.dispatch(rpcCommand(id), first));
+    }
+    const sameOrigin = await harness.dispatch(rpcCommand(1000), rpcSender("https://first.example", 10));
+    assert.equal(sameOrigin.error.code, -32005);
+    assert.deepEqual(clone(sameOrigin.error.data), {reason: "busy", dispatched: false});
+    for (let id = policy.maximumOutstandingPerOrigin + 1; id <= policy.maximumOutstandingRequests; id += 1) {
+        requests.push(harness.dispatch(rpcCommand(id), second));
+    }
+    const third = rpcSender("https://third.example");
+    const full = await harness.dispatch(rpcCommand(1001), third);
+    assert.deepEqual(clone(full.error.data), {reason: "busy", dispatched: false});
+    assert.equal(pending.size, policy.maximumOutstandingRequests);
+    const configuration = await harness.dispatch({subject: "getLatestConfiguration", workflowVersion: 4}, first);
+    assert.equal(configuration.kind, "configuration");
+
+    pending.get(1)({id: 1, result: "first"});
+    await requests[0];
+    requests.push(harness.dispatch(rpcCommand(1002), third));
+    assert.equal(pending.has(1002), true);
+    for (const [id, resolve] of pending) { resolve({id, result: "ok"}); }
+    assert.equal((await Promise.all(requests)).every(response => response.kind === "result"), true);
+});
+
+test("worker rejects oversized UTF-8 RPC and bounds retained bytes across origins", async () => {
+    const pending = new Map;
+    const harness = makeHarness({native: message => new Promise(resolve => pending.set(message.id, resolve))});
+    const policy = wireContext.BigWalletBridgeWire.RPC_POLICY;
+    const oversized = await harness.dispatch(rpcCommand(1, "é".repeat(policy.maximumRequestBytes / 2) + "x"));
+    assert.equal(oversized.error.code, -32005);
+    assert.deepEqual(clone(oversized.error.data), {reason: "request_too_large", dispatched: false});
+    assert.equal(pending.size, 0);
+    const body = "x".repeat(policy.maximumRequestBytes);
+    const capacity = policy.maximumRetainedRequestBytes / policy.maximumRequestBytes;
+    const requests = [];
+    for (let index = 0; index < capacity; index += 1) {
+        requests.push(harness.dispatch(rpcCommand(index + 2, body), rpcSender(`https://origin-${index}.example`)));
+    }
+    const full = await harness.dispatch(rpcCommand(100), rpcSender("https://other.example"));
+    assert.equal(pending.size, capacity);
+    assert.deepEqual(clone(full.error.data), {reason: "busy", dispatched: false});
+    pending.get(2)({id: 2, result: "ok"});
+    await requests[0];
+    requests.push(harness.dispatch(rpcCommand(101, body), rpcSender("https://other.example")));
+    assert.equal(pending.has(101), true);
+    for (const [id, resolve] of pending) { resolve({id, result: "ok"}); }
+    assert.equal((await Promise.all(requests)).every(response => response.kind === "result"), true);
+});
+
+test("worker frees RPC admission after synchronous, rejected and malformed native replies", async () => {
+    for (const failure of ["throw", "reject", "malformed"]) {
+        const harness = makeHarness({native: () => {
+            if (failure === "throw") { throw new Error("transport failed"); }
+            if (failure === "reject") { return Promise.reject(new Error("transport failed")); }
+            return {};
+        }});
+        const maximum = wireContext.BigWalletBridgeWire.RPC_POLICY.maximumOutstandingPerOrigin;
+        for (let id = 1; id <= maximum + 1; id += 1) {
+            assert.equal((await harness.dispatch(rpcCommand(id))).error.code, -32603, failure);
+        }
+        assert.equal(harness.nativeMessages.filter(({message}) => message.subject === "rpc").length, maximum + 1);
+    }
+});
+
+test("worker frees timed-out RPC capacity without double-releasing a late native reply", async () => {
+    const pending = new Map;
+    const harness = makeHarness({native: message => new Promise(resolve => pending.set(message.id, resolve))});
+    const maximum = wireContext.BigWalletBridgeWire.RPC_POLICY.maximumOutstandingPerOrigin;
+    const requests = [];
+    for (let id = 1; id <= maximum; id += 1) { requests.push(harness.dispatch(rpcCommand(id))); }
+    assert.equal(await harness.runTimer(180_000), true);
+    assert.equal((await requests[0]).error.code, -32603);
+    requests.push(harness.dispatch(rpcCommand(maximum + 1)));
+    assert.equal(pending.has(maximum + 1), true);
+    pending.get(1)({id: 1, result: "late"});
+    await settle();
+    const full = await harness.dispatch(rpcCommand(maximum + 2));
+    assert.equal(pending.has(maximum + 2), false);
+    assert.deepEqual(clone(full.error.data), {reason: "busy", dispatched: false});
+    for (const [id, resolve] of pending) { resolve({id, result: "ok"}); }
+    await Promise.all(requests);
+});
+
 test("released pages get a reload error without reading old grants", async () => {
     const harness = makeHarness();
     const response = await harness.dispatch({subject: "getResponse", id: 7});

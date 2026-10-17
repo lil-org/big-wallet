@@ -400,6 +400,10 @@ function dispatchRPC(provider, state, record) {
     setDispatchAuthorization(state, record);
     record.metadata.responseName = null;
     const message = rpcMessage(state.chainId, record.wireId, record.payload);
+    if (BigWalletBridgeWire.rpcRequestByteCount(message.body) === null) {
+        const error = BigWalletBridgeWire.rpcAdmissionError("request_too_large");
+        return state.runtime.reject(record, new ProviderRpcError(error.code, error.message, error.data));
+    }
     if (!transportIsCurrent(state)) {
         retire(provider, providerReplacementError());
         return false;

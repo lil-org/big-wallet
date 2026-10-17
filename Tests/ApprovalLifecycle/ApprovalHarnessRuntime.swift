@@ -324,11 +324,15 @@ final class HarnessRuntime {
         }, pollResponse: { [weak self] handle, key, maintenance in
             guard let self else { return .unavailable }
             return await poller.poll(handle: handle, configurationKey: key, maintenance: maintenance)
-        }, rpcNetwork: networks.resolved, sendRPC: { [ipc] endpoint, body, _ in
-            let request = try JSONDecoder().decode(HarnessValue.self, from: body)
+        }, rpcNetwork: networks.resolved, sendRPC: { [ipc] endpoint, rpcRequest, execution in
+            let request = try JSONDecoder().decode(HarnessValue.self, from: rpcRequest.body)
+            try execution.markDispatched()
             let response = try await ipc.request("rpc", details: .object(["request": request, "endpoint": .string(endpoint.url.absoluteString)]))
-            guard let object = WireProtocol.JSONObject(response.foundation) else { throw HarnessError.invalid("Invalid fixture RPC reply") }
-            return object
+            guard let upstream = response.foundation as? [String: Any],
+                  let response = RPCResponseToExtension(upstream: upstream, expectedResponseID: rpcRequest.id) else {
+                throw HarnessError.invalid("Invalid fixture RPC reply")
+            }
+            return response
         }, popup: { [weak self] request, profile in
             guard let self else { return .command(.init(status: .unavailable, approvalState: nil)) }
             return await popupSessions.dispatch(request: request, profileIdentifier: profile)

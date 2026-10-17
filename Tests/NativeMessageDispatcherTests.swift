@@ -124,6 +124,205 @@ final class NativeMessageDispatcherTests: XCTestCase {
         }
     }
 
+    func testRPCRejectsValidatedResponseForAnotherRequest() async throws {
+        try await withFixture(rpcOperation: { _, execution in
+            try execution.markDispatched()
+            return RPCResponseToExtension(upstream: ["id": 2, "result": "wrong request"], expectedResponseID: 2)!
+        }) { fixture in
+            let response = try await fixture.dispatch(fixture.command("rpc", fields: [
+                "chainId": "0x1", "body": #"{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber"}"#,
+            ]))
+            XCTAssertEqual(response["id"] as? Int, 1)
+            XCTAssertNil(response["result"])
+            let error = try XCTUnwrap(response["error"] as? [String: Any])
+            XCTAssertEqual(error["code"] as? Int, -32_603)
+            let data = try XCTUnwrap(error["data"] as? [String: Any])
+            XCTAssertEqual(data["reason"] as? String, "transport")
+            XCTAssertEqual(data["dispatched"] as? Bool, true)
+        }
+    }
+
+    func testRPCAdmissionRejectsMalformedAndProhibitedBodiesBeforeNetworkLookup() async throws {
+        try await withFixture { fixture in
+            let bodies: [(String, Int)] = [
+                ("{", -32_700),
+                ("{}", -32_600),
+                (#"[{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber"}]"#, -32_600),
+                (#"{"jsonrpc":"2.0","method":"eth_blockNumber"}"#, -32_600),
+                (#"{"jsonrpc":"2.0","id":true,"method":"eth_blockNumber"}"#, -32_600),
+                (#"{"jsonrpc":"2.0","id":2,"method":"eth_blockNumber"}"#, -32_600),
+                (#"{"jsonrpc":"2.0","id":1,"method":"eth_sendTransaction"}"#, 4_200),
+                (#"{"jsonrpc":"2.0","id":1,"method":"  ADMIN_addPeer  "}"#, 4_200),
+                (#"{"jsonrpc":"2.0","id":1,"method":"debug_setHead"}"#, 4_200),
+            ]
+            for (body, code) in bodies {
+                let response = try await fixture.dispatch(fixture.command("rpc", fields: ["chainId": "0x1", "body": body]))
+                let error = try XCTUnwrap(response["error"] as? [String: Any])
+                XCTAssertEqual(response["id"] as? Int, 1)
+                XCTAssertEqual(error["code"] as? Int, code)
+                XCTAssertEqual((error["data"] as? [String: Any])?["dispatched"] as? Bool, false)
+            }
+            XCTAssertTrue(fixture.calls.value.isEmpty)
+            XCTAssertEqual(fixture.rpcNetworkCalls.value, 0)
+        }
+    }
+
+    func testRPCUsesItsOwnRequestLimitInsteadOfTheApprovalPayloadLimit() async throws {
+        try await withFixture { fixture in
+            let payload: [String: Any] = [
+                "jsonrpc": "2.0", "id": 1, "method": "vendor_simulate",
+                "params": ["input": String(repeating: "x", count: ExtensionBridge.maximumPayloadBytes + 1)],
+            ]
+            let body = String(decoding: try JSONSerialization.data(withJSONObject: payload), as: UTF8.self)
+            let response = try await fixture.dispatch(fixture.command("rpc", fields: ["chainId": "0x1", "body": body]))
+            XCTAssertEqual(response["result"] as? String, "0x1")
+            XCTAssertEqual(fixture.calls.value, ["rpc"])
+        }
+        var limits = SafariRPCLimits.live
+        limits.maximumRequestBytes = 128
+        try await withFixture(rpcLimits: limits) { fixture in
+            let response = try await fixture.dispatch(fixture.command("rpc", fields: [
+                "chainId": "0x1", "body": String(repeating: "x", count: 129),
+            ]))
+            let error = try XCTUnwrap(response["error"] as? [String: Any])
+            XCTAssertEqual(error["code"] as? Int, -32_005)
+            XCTAssertEqual((error["data"] as? [String: Any])?["reason"] as? String, "request_too_large")
+            XCTAssertEqual(fixture.rpcNetworkCalls.value, 0)
+        }
+    }
+
+    func testPrivilegedRPCAliasesNeverReachEndpointAuthorizationOrNetwork() async throws {
+        try await withFixture { fixture in
+            for method in [
+                "eth_resend", "parity_postTransaction", "debug_deleteChainSlice", "debug_resetHead",
+                "debug_verbosity", "debug_vmodule", "eth_sendTransactionSync",
+                "debug_clearTxpool", "tenderly_setBalance", "tenderly_addBalance",
+                "debug_insertReceipts", "debug_migrateReceipts",
+                "testing_commitBlockV1",
+                "parity_postSign", "parity_signMessage", "parity_setMode",
+                "parity_acceptNonReservedPeers", "parity_addReservedPeer", "parity_dropNonReservedPeers",
+                "parity_executeUpgrade", "parity_removeReservedPeer", "parity_setAuthor", "parity_setChain",
+                "parity_setEngineSigner", "parity_setExtraData", "parity_setGasCeilTarget", "parity_setGasFloorTarget",
+                "parity_setMaxTransactionGas", "parity_setMinGasPrice", "parity_setTransactionsLimit",
+                "parity_changePassword", "parity_deriveAddressHash", "parity_deriveAddressIndex", "parity_importGethAccounts",
+                "parity_killAccount", "parity_newAccountFromPhrase", "parity_newAccountFromSecret", "parity_newAccountFromWallet",
+                "parity_removeAddress", "parity_setAccountMeta", "parity_setAccountName", "parity_changeVault",
+                "parity_changeVaultPassword", "parity_closeVault", "parity_newVault", "parity_openVault", "parity_setVaultMeta",
+                "parity_hardwarePinMatrixAck", "parity_removeTransaction", "parity_exportAccount", "parity_testPassword",
+                "parity_decryptMessage",
+            ] {
+                for variant in [method, " \n" + method.uppercased() + "\t"] {
+                    let payload: [String: Any] = ["jsonrpc": "2.0", "id": 1, "method": variant, "params": []]
+                    let body = String(decoding: try JSONSerialization.data(withJSONObject: payload), as: UTF8.self)
+                    let response = try await fixture.dispatch(fixture.command("rpc", fields: ["chainId": "0x1", "body": body]))
+                    let error = try XCTUnwrap(response["error"] as? [String: Any])
+                    let data = try XCTUnwrap(error["data"] as? [String: Any])
+                    XCTAssertEqual(response["id"] as? Int, 1)
+                    XCTAssertEqual(error["code"] as? Int, 4_200, variant)
+                    XCTAssertEqual(data["reason"] as? String, "prohibited_method", variant)
+                    XCTAssertEqual(data["dispatched"] as? Bool, false, variant)
+                }
+            }
+            XCTAssertEqual(fixture.rpcNetworkCalls.value, 0)
+            XCTAssertTrue(fixture.calls.value.isEmpty)
+        }
+    }
+
+    func testBadBlockFileOutputIsRejectedBeforeNetworkWhileReadsAreForwarded() async throws {
+        try await withFixture { fixture in
+            let writes: [Any] = [["/tmp/bad-blocks.json"], ["file": "/tmp/bad-blocks.json"]]
+            for method in ["debug_getBadBlocks", " \nDEBUG_GETBADBLOCKS\t"] {
+                for params in writes {
+                    let payload: [String: Any] = ["jsonrpc": "2.0", "id": 1, "method": method, "params": params]
+                    let body = String(decoding: try JSONSerialization.data(withJSONObject: payload), as: UTF8.self)
+                    let response = try await fixture.dispatch(fixture.command("rpc", fields: ["chainId": "0x1", "body": body]))
+                    let error = try XCTUnwrap(response["error"] as? [String: Any])
+                    let data = try XCTUnwrap(error["data"] as? [String: Any])
+                    XCTAssertEqual(response["id"] as? Int, 1)
+                    XCTAssertEqual(error["code"] as? Int, 4_200)
+                    XCTAssertEqual(data["reason"] as? String, "prohibited_method")
+                    XCTAssertEqual(data["dispatched"] as? Bool, false)
+                }
+            }
+            XCTAssertEqual(fixture.rpcNetworkCalls.value, 0)
+            XCTAssertTrue(fixture.calls.value.isEmpty)
+
+            let reads: [Any?] = [nil, NSNull(), [Any](), [NSNull()]]
+            for params in reads {
+                var payload: [String: Any] = ["jsonrpc": "2.0", "id": 1, "method": "debug_getBadBlocks"]
+                payload["params"] = params
+                let body = String(decoding: try JSONSerialization.data(withJSONObject: payload), as: UTF8.self)
+                let response = try await fixture.dispatch(fixture.command("rpc", fields: ["chainId": "0x1", "body": body]))
+                XCTAssertEqual(response["result"] as? String, "0x1")
+            }
+            XCTAssertEqual(fixture.rpcNetworkCalls.value, reads.count)
+            XCTAssertEqual(fixture.calls.value, Array(repeating: "rpc", count: reads.count))
+        }
+    }
+
+    func testUnavailableRPCEndpointReturnsTransportFailureWithoutDispatching() async throws {
+        try await withFixture { fixture in
+            fixture.rpcNetworkAvailable = false
+            let response = try await fixture.dispatch(fixture.command("rpc", fields: [
+                "chainId": "0x1", "body": #"{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber"}"#,
+            ]))
+            let error = try XCTUnwrap(response["error"] as? [String: Any])
+            XCTAssertEqual(error["code"] as? Int, -32_603)
+            let data = try XCTUnwrap(error["data"] as? [String: Any])
+            XCTAssertEqual(data["reason"] as? String, "transport")
+            XCTAssertEqual(data["dispatched"] as? Bool, false)
+            XCTAssertEqual(fixture.rpcNetworkCalls.value, 1)
+            XCTAssertTrue(fixture.calls.value.isEmpty)
+        }
+    }
+
+    func testSaturatedRPCDoesNotBlockApprovalRejectionOrRecovery() async throws {
+        let started = TestGate<Void>()
+        let release = TestGate<Void>()
+        var limits = SafariRPCLimits.live
+        limits.maximumActiveRequests = 1
+        limits.maximumActivePerOrigin = 1
+        limits.maximumOutstandingRequests = 1
+        limits.maximumOutstandingPerOrigin = 1
+        try await withFixture(rpcLimits: limits, rpcOperation: { request, execution in
+            try execution.markDispatched()
+            started.resolve(())
+            await release.wait()
+            return RPCResponseToExtension(upstream: ["id": request.id, "result": "0x1"], expectedResponseID: request.id)!
+        }) { fixture in
+            let rpc = fixture.command("rpc", fields: [
+                "chainId": "0x1", "body": #"{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber"}"#,
+            ])
+            let pending = Task {
+                let response = try await fixture.dispatch(rpc)
+                return try XCTUnwrap(WireProtocol.JSONObject(response))
+            }
+            defer { release.resolve(()) }
+            await started.wait()
+            let busy = try await fixture.dispatch(rpc)
+            XCTAssertEqual((busy["error"] as? [String: Any])?["code"] as? Int, -32_005)
+
+            let admission = try await fixture.dispatch(try await fixture.connectionMessage())
+            let token = try XCTUnwrap(admission["requestToken"] as? String)
+            guard let requestToken = ExtensionBridge.RequestToken(rawValue: token) else {
+                return XCTFail("Expected request token")
+            }
+            let handle = ExtensionBridge.Handle(id: 1, token: requestToken, profileIdentifier: nil)
+            let rejected = await fixture.bridge.reject(handle: handle)
+            XCTAssertEqual(rejected, .persisted)
+            let recovery = try await fixture.dispatch(fixture.command("getRecoveryRequests"), source: "worker")
+            XCTAssertNotNil(recovery["requests"])
+            let polled = try await fixture.dispatch(fixture.command("pollResponse", fields: [
+                "configurationKey": fixture.origin, "requestToken": token, "maintenance": "none",
+            ]))
+            XCTAssertNotNil(polled["response"])
+            XCTAssertTrue(fixture.calls.value.contains("materialize"))
+            release.resolve(())
+            let completedRPC = try await pending.value
+            XCTAssertEqual(completedRPC["result"] as? String, "0x1")
+        }
+    }
+
     func testSiteIdentityMismatchesNeverReachDependencies() async throws {
         try await withFixture { fixture in
             let origin = "https://other.example"
@@ -309,11 +508,15 @@ final class NativeMessageDispatcherTests: XCTestCase {
         try JSONSerialization.data(withJSONObject: XCTUnwrap(value), options: [.sortedKeys, .fragmentsAllowed])
     }
 
-    private func withFixture(_ operation: (Fixture) async throws -> Void) async throws {
+    private func withFixture(
+        rpcLimits: SafariRPCLimits = .live,
+        rpcOperation: SafariRPCService.Operation? = nil,
+        _ operation: (Fixture) async throws -> Void
+    ) async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("dispatcher-test-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        try await operation(Fixture(root: root))
+        try await operation(Fixture(root: root, rpcLimits: rpcLimits, rpcOperation: rpcOperation))
     }
 
     private final class Fixture {
@@ -321,9 +524,15 @@ final class NativeMessageDispatcherTests: XCTestCase {
         let bridge: ExtensionBridge
         let calls = LockedTestValue([String]())
         let bridgeCalls = LockedTestValue([String]())
+        let rpcNetworkCalls = LockedTestValue(0)
+        var rpcNetworkAvailable = true
+        let rpcService: SafariRPCService
+        let rpcOperation: SafariRPCService.Operation?
 
-        init(root: URL) {
+        init(root: URL, rpcLimits: SafariRPCLimits, rpcOperation: SafariRPCService.Operation?) {
             bridge = ExtensionBridge(store: ExtensionRequestFileStore(rootURL: root, directoryBoundary: root))
+            rpcService = SafariRPCService(limits: rpcLimits)
+            self.rpcOperation = rpcOperation
         }
 
         func command(_ subject: String, fields: [String: Any] = [:]) -> [String: Any] {
@@ -350,6 +559,9 @@ final class NativeMessageDispatcherTests: XCTestCase {
             let calls = calls
             let bridge = bridge
             let bridgeCalls = bridgeCalls
+            let rpcNetworkCalls = rpcNetworkCalls
+            let rpcNetworkAvailable = rpcNetworkAvailable
+            let rpcOperation = rpcOperation
             let popup: @Sendable () -> PopupResponse = {
                 .queue(.init(requests: [], completedResponses: [], strings: Strings.popup, layoutDirection: .ltr))
             }
@@ -363,19 +575,26 @@ final class NativeMessageDispatcherTests: XCTestCase {
                         requestToken: handle.requestToken, profileIdentifier: handle.profileIdentifier)
                 },
                 rpcNetwork: { chain in
-                    .init(network: EthereumNetwork(chainId: chain, name: "Fixture", symbol: "ETH",
+                    rpcNetworkCalls.withValue { $0 += 1 }
+                    guard rpcNetworkAvailable else { return nil }
+                    return .init(network: EthereumNetwork(chainId: chain, name: "Fixture", symbol: "ETH",
                         rpcEndpoint: .unauthenticated(URL(string: "https://rpc.example")!),
                         isTestnet: true, mightShowPrice: false, explorer: nil), source: .custom)
                 },
-                sendRPC: { _, _, id in
+                sendRPC: { _, request, execution in
+                    if let rpcOperation { return try await rpcOperation(request, execution) }
+                    try execution.markDispatched()
                     calls.withValue { $0.append("rpc") }
-                    return WireProtocol.JSONObject(["id": id, "result": "0x1", "privateUpstreamField": "discard"])!
+                    return RPCResponseToExtension(
+                        upstream: ["id": request.id, "result": "0x1", "privateUpstreamField": "discard"],
+                        expectedResponseID: request.id
+                    )!
                 },
                 popup: { _, _ in calls.withValue { $0.append("popup") }; return popup() },
                 privatePopup: { _ in calls.withValue { $0.append("privatePopup") }; return popup() },
                 openApp: { calls.withValue { $0.append("open") }; return true },
                 invalidateNetworkCache: { calls.withValue { $0.append("invalidate") } }
-            ))
+            ), rpcService: rpcService)
             var transportContext: [String: Any] = ["source": source, "privateBrowsing": privateBrowsing]
             if source == "site" {
                 let origin = siteOrigin ?? self.origin

@@ -15,6 +15,7 @@ const IDLE_RECOVERY_INTERVAL_MINUTES = 5;
 const REQUEST_MAINTENANCE_INTERVAL = 30 * 1000;
 const requestMaintenanceTimes = new Map;
 const toolbarClicks = new Map;
+const rpcBudget = WIRE.createRPCRequestBudget();
 let recoveryFlight = null;
 let recoveryQueued = false;
 
@@ -205,6 +206,12 @@ async function handleRPC(request, nativeContext) {
     if (nativeContext?.source !== "site" || nativeContext.privateBrowsing) {
         return pageFailure(request?.id, "ethereum", null);
     }
+    const bytes = WIRE.rpcRequestByteCount(request.body);
+    const release = bytes === null ? null : rpcBudget.reserve(nativeContext.site.configurationKey, bytes);
+    if (!release) {
+        return {...pageFailure(request.id, "ethereum", null),
+            error: WIRE.rpcAdmissionError(bytes === null ? "request_too_large" : "busy")};
+    }
     try {
         const response = await WIRE.withTimeout(sendNativeMessage(request, nativeContext), NATIVE_OPERATION_TIMEOUT);
         if (!WIRE.isCorrelatedRPCResponse(response, request.id)) { return pageFailure(request.id, "ethereum", null); }
@@ -221,6 +228,7 @@ async function handleRPC(request, nativeContext) {
         return WIRE.decodePageResponse({...base, kind: "result", result: response.result, approvalCommitted: false}, request.id)
             || pageFailure(request.id, "ethereum", null);
     } catch { return pageFailure(request.id, "ethereum", null); }
+    finally { release(); }
 }
 
 async function ensureRecoveryAlarm(interval) {

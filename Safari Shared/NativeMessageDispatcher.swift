@@ -182,20 +182,21 @@ struct NativeMessageDispatcher: Sendable {
             ExtensionBridge.Handle, String, ResponseDeliveryPoller.Maintenance
         ) async -> ExtensionBridge.ResponseReadResult
         let rpcNetwork: @Sendable (Int) -> ResolvedEthereumNetwork?
-        let sendRPC: @Sendable (EthereumRPCEndpoint, Data, Int) async throws -> WireProtocol.JSONObject
+        let sendRPC: @Sendable (EthereumRPCEndpoint, ValidatedRPCRequest, SafariRPCExecution) async throws -> RPCResponseToExtension
         let popup: @Sendable (InternalSafariRequest, UUID?) async -> PopupResponse
         let privatePopup: @Sendable (InternalSafariRequest) async -> PopupResponse
         let openApp: @Sendable () async -> Bool
         let invalidateNetworkCache: @Sendable () -> Void
     }
 
-    private static let genericRPCFailureMessage = "something went wrong"
     private let policy: ApprovalPolicy
     private let dependencies: Dependencies
+    private let rpcService: SafariRPCService
 
-    init(policy: ApprovalPolicy, dependencies: Dependencies) {
+    init(policy: ApprovalPolicy, dependencies: Dependencies, rpcService: SafariRPCService = SafariRPCService()) {
         self.policy = policy
         self.dependencies = dependencies
+        self.rpcService = rpcService
     }
 
     func dispatch(
@@ -220,10 +221,15 @@ struct NativeMessageDispatcher: Sendable {
     ) async throws -> WireProtocol.ValidatedObject {
         guard let wire = WireProtocol.object(.nativeCommand, value: message),
               let request = try? InternalSafariRequest(wire: wire),
-              context.authorizes(request),
-              let data = ExtensionBridge.payloadData(message),
-              ExtensionBridge.isInternalPayloadAllowed(command: request.command, byteCount: data.count)
+              context.authorizes(request)
         else { throw Error.invalidMessage }
+        switch request.command {
+        case .page(.rpc): break
+        default:
+            guard let data = ExtensionBridge.payloadData(message),
+                  ExtensionBridge.isInternalPayloadAllowed(command: request.command, byteCount: data.count)
+            else { throw Error.invalidMessage }
+        }
         switch request.command {
         case .openApp:
             guard policy == .native else { throw Error.unsupportedOperation }
@@ -231,7 +237,7 @@ struct NativeMessageDispatcher: Sendable {
             return try Self.encode(["id": request.id, "opened": true], as: .nativeOpenReply)
         case .page(let command):
             guard !context.privateBrowsing else { throw Error.unsupportedOperation }
-            return try await handle(command, request: request, profileIdentifier: context.profileIdentifier)
+            return try await handle(command, request: request, context: context)
         case .worker(let command):
             guard !context.privateBrowsing else { throw Error.unsupportedOperation }
             return try await handle(command, request: request, profileIdentifier: context.profileIdentifier)
@@ -365,8 +371,9 @@ struct NativeMessageDispatcher: Sendable {
     private func handle(
         _ command: InternalSafariRequest.PageCommand,
         request: InternalSafariRequest,
-        profileIdentifier: UUID?
+        context: NativeRequestContext
     ) async throws -> WireProtocol.ValidatedObject {
+        let profileIdentifier = context.profileIdentifier
         switch command {
         case .getLatestConfiguration(let configurationKey):
             switch await dependencies.bridge.configurationSnapshot(
@@ -393,7 +400,11 @@ struct NativeMessageDispatcher: Sendable {
                 return try Self.status(.unavailable, id: request.id)
             }
         case .rpc(let body, let chainId):
-            return try await rpcRequest(id: request.id, chainId: chainId, body: body)
+            guard case .site(let site, _) = context.source else { throw Error.invalidMessage }
+            return try await rpcRequest(
+                id: request.id, chainId: chainId, body: body,
+                scope: .init(profileIdentifier: profileIdentifier, origin: site.configurationKey)
+            )
         case .showApproval(let identity):
             guard policy == .native else { throw Error.unsupportedOperation }
             let handle = ExtensionBridge.Handle(id: request.id, token: identity.token, profileIdentifier: profileIdentifier)
@@ -422,21 +433,19 @@ struct NativeMessageDispatcher: Sendable {
         }
     }
 
-    private func rpcRequest(id: Int, chainId: String, body: String) async throws -> WireProtocol.ValidatedObject {
-        guard let chainIdNumber = Int(hexString: chainId),
-              let resolvedNetwork = dependencies.rpcNetwork(chainIdNumber),
-              let httpBody = body.data(using: .utf8) else {
-            return try Self.encode(["id": id, "error": Self.genericRPCFailureMessage], as: .rpcResponse)
-        }
-        do {
-            let response = try await dependencies.sendRPC(resolvedNetwork.rpcEndpoint, httpBody, id)
-            guard let projected = RPCResponseToExtension(upstream: response.json, expectedResponseID: id) else {
-                throw Error.invalidMessage
+    private func rpcRequest(
+        id: Int, chainId: String, body: String, scope: SafariRPCService.Scope
+    ) async throws -> WireProtocol.ValidatedObject {
+        let dependencies = dependencies
+        let response = await rpcService.perform(id: id, body: body, scope: scope) { request, execution in
+            guard let chainIdNumber = Int(hexString: chainId), chainIdNumber > 0 else {
+                throw SafariRPCFailure.invalidRequest
             }
-            return try Self.encode(projected.json, as: .rpcResponse)
-        } catch {
-            return try Self.encode(["id": id, "error": Self.genericRPCFailureMessage], as: .rpcResponse)
+            guard let resolvedNetwork = dependencies.rpcNetwork(chainIdNumber) else { throw SafariRPCFailure.transport }
+            try execution.checkCancellationAndDeadline()
+            return try await dependencies.sendRPC(resolvedNetwork.rpcEndpoint, request, execution)
         }
+        return response.wire
     }
 
     private static func admissionResponse(

@@ -650,7 +650,7 @@ actor ExtensionBridge {
         byteCount: Int
     ) -> Bool {
         guard byteCount >= 0 else { return false }
-        if case .page(.rpc) = command { return true }
+        if case .page(.rpc) = command { return byteCount <= WireProtocol.rpcMaximumRequestBytes }
         return byteCount <= maximumPayloadBytes
     }
 

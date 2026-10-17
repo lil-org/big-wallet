@@ -22,6 +22,7 @@ export const TSAN_TESTS = [
     "AsyncTestSupportTests", "AlchemyJWTProviderTests", "SolanaOptionsTests", "ApprovalResolutionTests",
     "WalletSigningSessionTests", "WalletSigningScopeTests", "NativeApprovalServiceTests", "TransactionInspectorTests",
     "WalletsManagerPreviewTests", "AccountPreviewStateTests", "WalletCoreProxyParallelDerivationTests",
+    "SafariRPCRequestTests", "SafariRPCServiceTests", "SafariRPCStreamingTests",
 ];
 export const EXTENDED_TSAN_TESTS = [
     "ExtensionBridgeStoredRequestTests", "PopupRequestSessionsTests", "DurableProfilePersistenceTests",

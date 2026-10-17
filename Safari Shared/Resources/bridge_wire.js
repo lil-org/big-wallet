@@ -15,12 +15,14 @@
         PROVIDER_REPLACED_ERROR_CODE, PROVIDER_REPLACED_MESSAGE, NATIVE_CONTEXT_KEY,
         MAX_RESPONSE_READY_IDS, MANUAL_SWITCH_INTENT_SUBJECT,
         MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT, MAX_MANUAL_SWITCH_JSON_LENGTH,
-        WORKFLOW_POLICY, RUNTIME_MESSAGE_SUBJECTS,
+        WORKFLOW_POLICY, RPC_POLICY, RUNTIME_MESSAGE_SUBJECTS,
     } = protocol.constants;
     const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
     const ownDescriptor = Object.getOwnPropertyDescriptor;
     const isSafeInteger = Number.isSafeInteger;
     const freeze = Object.freeze;
+    const apply = Reflect.apply;
+    const charCodeAt = String.prototype.charCodeAt;
     const decodeMessage = protocol.decode;
     const isMessage = protocol.isValid;
 
@@ -74,6 +76,58 @@
     }
 
     function isAuthorityVersion(value) { return isMessage("AuthorityVersion", value); }
+
+    function rpcRequestByteCount(body) {
+        const maximum = RPC_POLICY.maximumRequestBytes;
+        if (typeof body !== "string" || body.length > maximum) { return null; }
+        let bytes = 0;
+        for (let index = 0; index < body.length; index += 1) {
+            const code = apply(charCodeAt, body, [index]);
+            if (code < 0x80) { bytes += 1; }
+            else if (code < 0x800) { bytes += 2; }
+            else if (code >= 0xd800 && code <= 0xdbff && index + 1 < body.length &&
+                apply(charCodeAt, body, [index + 1]) >= 0xdc00 && apply(charCodeAt, body, [index + 1]) <= 0xdfff) {
+                bytes += 4;
+                index += 1;
+            } else { bytes += 3; }
+            if (bytes > maximum) { return null; }
+        }
+        return bytes;
+    }
+
+    function rpcAdmissionError(reason) {
+        return {
+            code: -32005,
+            message: reason === "request_too_large" ? "RPC request is too large" : "Too many pending RPC requests",
+            data: {reason, dispatched: false},
+        };
+    }
+
+    function createRPCRequestBudget(maximumOutstanding = RPC_POLICY.maximumOutstandingRequests) {
+        const origins = new Map;
+        let outstanding = 0;
+        let retainedBytes = 0;
+        return freeze({
+            reserve(origin, bytes) {
+                const originCount = origins.get(origin) ?? 0;
+                if (outstanding >= maximumOutstanding || originCount >= RPC_POLICY.maximumOutstandingPerOrigin ||
+                    retainedBytes + bytes > RPC_POLICY.maximumRetainedRequestBytes) { return null; }
+                outstanding += 1;
+                retainedBytes += bytes;
+                origins.set(origin, originCount + 1);
+                let released = false;
+                return () => {
+                    if (released) { return; }
+                    released = true;
+                    outstanding -= 1;
+                    retainedBytes -= bytes;
+                    const remaining = origins.get(origin) - 1;
+                    if (remaining === 0) { origins.delete(origin); }
+                    else { origins.set(origin, remaining); }
+                };
+            },
+        });
+    }
 
     function isNativeEnqueueAcknowledgement(response, id) {
         const decoded = decodeMessage("NativeAdmission", response);
@@ -320,6 +374,7 @@
         PROVIDER_REPLACED_ERROR_CODE,
         PROVIDER_REPLACED_MESSAGE,
         WORKFLOW_POLICY,
+        RPC_POLICY,
         WORKFLOW_VERSION,
         authorizeRuntimeMessage,
         configurationIdentityForURL,
@@ -332,6 +387,9 @@
         popupNativeContext,
         privacyForTab,
         runtimeNativeContext,
+        rpcRequestByteCount,
+        rpcAdmissionError,
+        createRPCRequestBudget,
         workerNativeContext,
         genId,
         genPrivateToken,

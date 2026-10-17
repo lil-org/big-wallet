@@ -5,6 +5,7 @@ var bigWalletWorkflowVersion = bigWalletWire.WORKFLOW_VERSION;
 var bigWalletPageDirection = bigWalletWire.PAGE_TO_CONTENT_DIRECTION;
 var bigWalletContentDirection = bigWalletWire.CONTENT_TO_PAGE_DIRECTION;
 var bigWalletRequests;
+var bigWalletRPCBudget;
 var bigWalletProviderGeneration;
 var bigWalletProviderGenerationSerial;
 var bigWalletContentInstalled;
@@ -20,6 +21,9 @@ var bigWalletResponsePollTimeout = bigWalletTransportTimeout * 4;
 var bigWalletNativeOperationRelayTimeout = 190 * 1000;
 
 if (!(bigWalletRequests instanceof Map)) { bigWalletRequests = new Map; }
+if (!bigWalletRPCBudget) {
+    bigWalletRPCBudget = bigWalletWire.createRPCRequestBudget(bigWalletWire.RPC_POLICY.maximumOutstandingPerOrigin);
+}
 if (!Number.isSafeInteger(bigWalletProviderGenerationSerial)) {
     bigWalletProviderGenerationSerial = 0;
 }
@@ -210,6 +214,15 @@ function bigWalletRPC({message, providerGeneration: generation}) {
         bigWalletPostRPC(message.id, bigWalletErrorResponse(message.id, "ethereum", null), generation);
         return;
     }
+    const bytes = bigWalletWire.rpcRequestByteCount(message.body);
+    const release = bytes === null ? null : bigWalletRPCBudget.reserve("document", bytes);
+    if (!release) {
+        bigWalletPostRPC(message.id, {
+            ...bigWalletErrorResponse(message.id, "ethereum", null),
+            error: bigWalletWire.rpcAdmissionError(bytes === null ? "request_too_large" : "busy"),
+        }, generation);
+        return;
+    }
     let pending;
     try {
         pending = bigWalletWire.withTimeout(
@@ -223,13 +236,14 @@ function bigWalletRPC({message, providerGeneration: generation}) {
             bigWalletNativeOperationRelayTimeout
         );
     } catch {
+        release();
         bigWalletPostRPC(message.id, undefined, generation);
         return;
     }
     Promise.resolve(pending).then(
         response => bigWalletPostRPC(message.id, response, generation),
         () => bigWalletPostRPC(message.id, undefined, generation)
-    );
+    ).finally(release);
 }
 
 function bigWalletPostRPC(id, response, generation) {

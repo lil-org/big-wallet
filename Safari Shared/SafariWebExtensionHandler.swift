@@ -63,7 +63,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             },
             pollResponse: { await poller.poll(handle: $0, configurationKey: $1, maintenance: $2) },
             rpcNetwork: { Nodes.resolution(chainId: $0).resolvedNetwork },
-            sendRPC: { try await rpcClient.send(endpoint: $0, body: $1, expectedResponseID: $2) },
+            sendRPC: { try await rpcClient.send(endpoint: $0, request: $1, execution: $2) },
             popup: { request, profileIdentifier in
 #if os(macOS)
                 .command(.init(status: .ignored, approvalState: nil))

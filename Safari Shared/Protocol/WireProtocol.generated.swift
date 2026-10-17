@@ -14,6 +14,16 @@ enum WireProtocol {
     static let requestTTLMilliseconds = 900000
     static let responseExpiryMilliseconds = 3600000
     static let nativeContextKey = "__bwContext"
+    static let rpcMaximumRequestBytes = 4194304
+    static let rpcMaximumResponseBytes = 16777216
+    static let rpcMaximumActivePerOrigin = 4
+    static let rpcMaximumActiveRequests = 8
+    static let rpcMaximumOutstandingPerOrigin = 64
+    static let rpcMaximumOutstandingRequests = 128
+    static let rpcMaximumRetainedRequestBytes = 16777216
+    static let rpcMaximumBufferedResponseBytes = 33554432
+    static let rpcMaximumQueueWaitMilliseconds = 30000
+    static let rpcMaximumLifetimeMilliseconds = 170000
 
     enum Message: String, CaseIterable, Sendable {
         case requestID = "RequestID"

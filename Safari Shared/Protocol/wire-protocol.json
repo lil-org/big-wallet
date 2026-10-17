@@ -13,6 +13,18 @@
     "MAX_MANUAL_SWITCH_JSON_LENGTH": 262144,
     "MAX_PAYLOAD_BYTES": 262144,
     "MAX_POPUP_RESPONSE_BYTES": 524288,
+    "RPC_POLICY": {
+      "maximumRequestBytes": 4194304,
+      "maximumResponseBytes": 16777216,
+      "maximumActivePerOrigin": 4,
+      "maximumActiveRequests": 8,
+      "maximumOutstandingPerOrigin": 64,
+      "maximumOutstandingRequests": 128,
+      "maximumRetainedRequestBytes": 16777216,
+      "maximumBufferedResponseBytes": 33554432,
+      "maximumQueueWaitMilliseconds": 30000,
+      "maximumLifetimeMilliseconds": 170000
+    },
     "WORKFLOW_POLICY": {
       "maximumNativeChainIdHex": "7fffffffffffffff",
       "maximumRequests": 8,

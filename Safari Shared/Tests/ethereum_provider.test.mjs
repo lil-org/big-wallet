@@ -11,6 +11,7 @@ const providerRequire = createRequire(
     new URL("../Inpage Provider/package.json", import.meta.url)
 );
 const { buildSync } = providerRequire("esbuild");
+const rpcPolicy = providerRequire("../Resources/bridge_wire.js").RPC_POLICY;
 const providerDirectory = new URL("../Inpage Provider/", import.meta.url);
 
 function bundle(entryPoint, format = "cjs", contents) {
@@ -826,6 +827,64 @@ test("Ethereum bounds loading work without retiring the ready provider", async (
     );
     await overflow;
     assert.equal(await harness.provider.request({method: "eth_chainId"}), "0x2");
+});
+
+test("Ethereum rejects oversized RPC before transport while local reads and approvals remain usable", async () => {
+    const harness = ethereumHarness();
+    applyEthereumConfiguration(harness);
+    await assert.rejects(harness.provider.request({
+        method: "vendor_largeRequest",
+        params: {payload: "é".repeat(rpcPolicy.maximumRequestBytes / 2)},
+    }), error => error.code === -32005 && error.data?.reason === "request_too_large" && error.data.dispatched === false);
+    assert.equal(harness.rpc.length, 0);
+    assert.equal(await harness.provider.request({method: "eth_chainId"}), "0x1");
+    const connection = harness.provider.request({method: "eth_requestAccounts"});
+    const address = "0x0000000000000000000000000000000000000001";
+    grantEthereum(harness, harness.requests.at(-1).id, address);
+    assert.deepEqual(normalized(await connection), [address]);
+});
+
+test("Ethereum forwards RPC after charCodeAt is replaced", async () => {
+    const harness = ethereumHarness();
+    applyEthereumConfiguration(harness);
+    vm.runInContext(`String.prototype.charCodeAt = function () {
+        throw new Error("Replaced charCodeAt");
+    };`, harness.context);
+    const params = ["é中😀"];
+    const pending = harness.provider.request({method: "vendor_method", params});
+    pending.catch(() => {});
+    assert.equal(harness.rpc.length, 1);
+    const {message} = harness.rpc[0];
+    assert.deepEqual(JSON.parse(message.body).params, params);
+    harness.applyDecodedEnvelope({id: message.id, kind: "result", result: "ok"});
+    assert.equal(await pending, "ok");
+});
+
+test("Ethereum legacy batches preserve opaque vendor parameters and caller IDs through individual RPCs", async () => {
+    const harness = ethereumHarness();
+    applyEthereumConfiguration(harness);
+    const inputs = [
+        {id: "vendor", method: "vendor_unknownMutation", params: {named: [1, "value"]}},
+        {method: "eth_sendRawTransactionSync", params: ["0x01"]},
+        {id: null, method: "eth_sendUserOperation", params: null},
+        {id: "trace", method: "debug_traceTransaction"},
+    ];
+    const pending = new Promise((resolve, reject) => harness.provider.sendAsync(inputs,
+        (error, result) => error ? reject(error) : resolve(result)));
+    assert.equal(harness.rpc.length, inputs.length);
+    for (const [index, {message}] of harness.rpc.entries()) {
+        assert.equal(message.id % 2, 1);
+        const parsed = JSON.parse(message.body);
+        assert.deepEqual(parsed, {id: message.id, jsonrpc: "2.0", method: inputs[index].method,
+            ...(Object.hasOwn(inputs[index], "params") ? {params: inputs[index].params} : {})});
+    }
+    for (const [index, {message}] of [...harness.rpc.entries()].reverse()) {
+        harness.applyDecodedEnvelope({id: message.id, kind: "result", result: `result-${index}`});
+    }
+    assert.deepEqual(normalized(await pending), inputs.map((input, index) => ({
+        id: Object.hasOwn(input, "id") ? input.id : harness.rpc[index].message.id,
+        jsonrpc: "2.0", result: `result-${index}`,
+    })));
 });
 
 test("Ethereum ignores terminal envelopes until an operation is dispatched", async () => {

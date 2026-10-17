@@ -1033,6 +1033,31 @@
 		AEF38C71F07BFFA776E08F01 /* PeerMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5043FECAA8BA2EEB19DA712 /* PeerMeta.swift */; };
 		BC0CF4F6B8212E5E1C9D9627 /* ApprovalHarnessRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8B2984A6B9A250FCC9E83A /* ApprovalHarnessRuntime.swift */; };
 		CC3642631A0356B341CDFF0E /* ApprovalHarnessTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F9D85565F4CEE7DDA79AB84 /* ApprovalHarnessTransport.swift */; };
+		770BEAEE28CE1A912DE66504 /* SafariRPCRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A85820531F4A197012BB60F6 /* SafariRPCRequest.swift */; };
+		1C9A9FD1E7FEE18883F349E6 /* SafariRPCRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A85820531F4A197012BB60F6 /* SafariRPCRequest.swift */; };
+		656C5080F01BD1039179CCBD /* SafariRPCRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A85820531F4A197012BB60F6 /* SafariRPCRequest.swift */; };
+		7F6F42240D5B41D95E55536D /* SafariRPCRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A85820531F4A197012BB60F6 /* SafariRPCRequest.swift */; };
+		592C6B6895EE7BF5C34F60AD /* SafariRPCRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A85820531F4A197012BB60F6 /* SafariRPCRequest.swift */; };
+		190DD22315E4477AF3C42555 /* SafariRPCRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A85820531F4A197012BB60F6 /* SafariRPCRequest.swift */; };
+		AA23E6674E5F7A4E1767E036 /* SafariRPCRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A85820531F4A197012BB60F6 /* SafariRPCRequest.swift */; };
+		A4339668A9BB6527F22CAF57 /* SafariRPCRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A85820531F4A197012BB60F6 /* SafariRPCRequest.swift */; };
+		639DDEDA329D4195D9A6BF5F /* SafariRPCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 698DF046325BC86C670C2DFB /* SafariRPCService.swift */; };
+		E2CF6228BF2394F8C3CA84E8 /* SafariRPCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 698DF046325BC86C670C2DFB /* SafariRPCService.swift */; };
+		785739E4B4FB384EFE69C838 /* SafariRPCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 698DF046325BC86C670C2DFB /* SafariRPCService.swift */; };
+		92C7198BB3738F9DBB031250 /* SafariRPCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 698DF046325BC86C670C2DFB /* SafariRPCService.swift */; };
+		823516DAA815B34ABD2866AB /* SafariRPCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 698DF046325BC86C670C2DFB /* SafariRPCService.swift */; };
+		7DC0518ED21A45F07B049AFC /* SafariRPCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 698DF046325BC86C670C2DFB /* SafariRPCService.swift */; };
+		F4EF77CB9AAC74E1B192D7B2 /* SafariRPCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 698DF046325BC86C670C2DFB /* SafariRPCService.swift */; };
+		46A06410642BF217DCDA88A8 /* SafariRPCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 698DF046325BC86C670C2DFB /* SafariRPCService.swift */; };
+		0C96FF45A8DB45AF79C6DC3B /* SafariRPCRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C05B9FD2D97C244B7748060A /* SafariRPCRequestTests.swift */; };
+		62275F51E9706F70EDD489EC /* SafariRPCRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C05B9FD2D97C244B7748060A /* SafariRPCRequestTests.swift */; };
+		4E3424EA5602F69661290E5A /* SafariRPCRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C05B9FD2D97C244B7748060A /* SafariRPCRequestTests.swift */; };
+		14E4FCC6EB24E0A45A2559D8 /* SafariRPCServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 840500A5B4556C15A974DA1F /* SafariRPCServiceTests.swift */; };
+		34611BE08BAC9C09B8C6E4FC /* SafariRPCServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 840500A5B4556C15A974DA1F /* SafariRPCServiceTests.swift */; };
+		FF9F76D29661FFD6912029E5 /* SafariRPCServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 840500A5B4556C15A974DA1F /* SafariRPCServiceTests.swift */; };
+		A098D67359FD501E30DFBA0C /* SafariRPCStreamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A5AA78D0ADC12FE3B40B50 /* SafariRPCStreamingTests.swift */; };
+		EBFF3511234892D7C380BBB9 /* SafariRPCStreamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A5AA78D0ADC12FE3B40B50 /* SafariRPCStreamingTests.swift */; };
+		6702DC35B4D4156FBFDA1CF9 /* SafariRPCStreamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A5AA78D0ADC12FE3B40B50 /* SafariRPCStreamingTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1385,6 +1410,11 @@
 		486DD2335AE1E2518BC9C939 /* ApprovalHarnessStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalHarnessStorage.swift; sourceTree = "<group>"; };
 		4B8B2984A6B9A250FCC9E83A /* ApprovalHarnessRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalHarnessRuntime.swift; sourceTree = "<group>"; };
 		0F9D85565F4CEE7DDA79AB84 /* ApprovalHarnessTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalHarnessTransport.swift; sourceTree = "<group>"; };
+		A85820531F4A197012BB60F6 /* SafariRPCRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SafariRPCRequest.swift"; sourceTree = "<group>"; };
+		698DF046325BC86C670C2DFB /* SafariRPCService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SafariRPCService.swift"; sourceTree = "<group>"; };
+		C05B9FD2D97C244B7748060A /* SafariRPCRequestTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariRPCRequestTests.swift; sourceTree = "<group>"; };
+		840500A5B4556C15A974DA1F /* SafariRPCServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariRPCServiceTests.swift; sourceTree = "<group>"; };
+		D4A5AA78D0ADC12FE3B40B50 /* SafariRPCStreamingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariRPCStreamingTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1499,6 +1529,9 @@
 				2F2A00000000000000000015 /* DappRequestProcessorTests.swift */,
 				C0DE0A900000000000000001 /* NativeAuthorityTransportTests.swift */,
 				C0DE0B200000000000000001 /* ResponseDeliveryPollerTests.swift */,
+				D4A5AA78D0ADC12FE3B40B50 /* SafariRPCStreamingTests.swift */,
+				840500A5B4556C15A974DA1F /* SafariRPCServiceTests.swift */,
+				C05B9FD2D97C244B7748060A /* SafariRPCRequestTests.swift */,
 				BF4000012FB6000000000000 /* PopupStringsTests.swift */,
 				C0DE00900000000000000002 /* ApprovalResolutionTests.swift */,
 				D1CD78226FBF1EA31836DF90 /* WalletSigningSessionTests.swift */,
@@ -1858,6 +1891,8 @@
 			isa = PBXGroup;
 			children = (
 				39528F70797C7B12321DFA66 /* NativeMessageDispatcher.swift */,
+				698DF046325BC86C670C2DFB /* SafariRPCService.swift */,
+				A85820531F4A197012BB60F6 /* SafariRPCRequest.swift */,
 				DBB4A70689E84C70208D920F /* Protocol */,
 				C0DE00500000000000000001 /* NativeAgentRuntime.swift */,
 				D0A200012FD1000000000001 /* SafariApprovalVault.swift */,
@@ -3173,6 +3208,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				6B718680CF1514AF96C06D6E /* NativeMessageDispatcher.swift in Sources */,
+				92C7198BB3738F9DBB031250 /* SafariRPCService.swift in Sources */,
+				7F6F42240D5B41D95E55536D /* SafariRPCRequest.swift in Sources */,
 				0F85304BB21A78933CD22E28 /* WireProtocol.generated.swift in Sources */,
 				C0DE00500000000000000012 /* NativeAgentRuntime.swift in Sources */,
 				D0A101012FD1000000000001 /* WalletAccess.swift in Sources */,
@@ -3270,6 +3307,8 @@
 			files = (
 				AF2B9A978726DB86600DBE9F /* AccountPreviewState.swift in Sources */,
 				F1350C67F7A9AB7E2337EAF1 /* NativeMessageDispatcher.swift in Sources */,
+				639DDEDA329D4195D9A6BF5F /* SafariRPCService.swift in Sources */,
+				770BEAEE28CE1A912DE66504 /* SafariRPCRequest.swift in Sources */,
 				5E8078B98E67D28C7DB4366B /* SecretAlertPresentation.swift in Sources */,
 				65FE125EDB868C412908EB5C /* SecretPresentationSession.swift in Sources */,
 				08D4E4254082334408EC786C /* SecretClipboard.swift in Sources */,
@@ -3383,6 +3422,8 @@
 			files = (
 				B708E90EEA90A2093A336F5B /* AccountPreviewState.swift in Sources */,
 				5D9A687B850ED1E53B4C468D /* NativeMessageDispatcher.swift in Sources */,
+				E2CF6228BF2394F8C3CA84E8 /* SafariRPCService.swift in Sources */,
+				1C9A9FD1E7FEE18883F349E6 /* SafariRPCRequest.swift in Sources */,
 				3E928EDD41EF798B09ECFB79 /* SecretPresentationSession.swift in Sources */,
 				E311C12DD6B8BF2730B708C2 /* SecretClipboard.swift in Sources */,
 				FC8A8A89536DE09243F38F9E /* WireProtocol.generated.swift in Sources */,
@@ -3515,6 +3556,8 @@
 			files = (
 				7A22D7161651202D624C5E26 /* AccountPreviewState.swift in Sources */,
 				671FC45254C3D5DB86B3D3B7 /* NativeMessageDispatcher.swift in Sources */,
+				7DC0518ED21A45F07B049AFC /* SafariRPCService.swift in Sources */,
+				190DD22315E4477AF3C42555 /* SafariRPCRequest.swift in Sources */,
 				3D21F2836F718C4D85704B47 /* SecretAlertPresentation.swift in Sources */,
 				007F1C5985FEBF705F776AD8 /* SecretPresentationSession.swift in Sources */,
 				092600FCE385DB215EF29231 /* SecretClipboard.swift in Sources */,
@@ -3628,6 +3671,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				D661699D9671A5D42DEBBABC /* NativeMessageDispatcher.swift in Sources */,
+				F4EF77CB9AAC74E1B192D7B2 /* SafariRPCService.swift in Sources */,
+				AA23E6674E5F7A4E1767E036 /* SafariRPCRequest.swift in Sources */,
 				FA066DB3CB4421D42498E246 /* WireProtocol.generated.swift in Sources */,
 				D0A201032FD1000000000001 /* SafariApprovalVault.swift in Sources */,
 				D0A101052FD1000000000001 /* WalletAccess.swift in Sources */,
@@ -3730,6 +3775,9 @@
 				D42A00012FA0000000000001 /* ApprovalStoreTestFixture.swift in Sources */,
 				C0DE0A900000000000000011 /* NativeAuthorityTransportTests.swift in Sources */,
 				C0DE0B200000000000000011 /* ResponseDeliveryPollerTests.swift in Sources */,
+				A098D67359FD501E30DFBA0C /* SafariRPCStreamingTests.swift in Sources */,
+				14E4FCC6EB24E0A45A2559D8 /* SafariRPCServiceTests.swift in Sources */,
+				0C96FF45A8DB45AF79C6DC3B /* SafariRPCRequestTests.swift in Sources */,
 				BF4000112FB6000000000000 /* PopupStringsTests.swift in Sources */,
 				C0DE00900000000000000021 /* ApprovalResolutionTests.swift in Sources */,
 				4675E5D05F4346D1BEBFD592 /* WalletSigningSessionTests.swift in Sources */,
@@ -3771,6 +3819,8 @@
 			files = (
 				D4050F4B448B91327C672D88 /* AccountPreviewState.swift in Sources */,
 				61E6CCEDE0281FAC1199C800 /* NativeMessageDispatcher.swift in Sources */,
+				785739E4B4FB384EFE69C838 /* SafariRPCService.swift in Sources */,
+				656C5080F01BD1039179CCBD /* SafariRPCRequest.swift in Sources */,
 				40343842C622D71519A25A55 /* SecretPresentationSession.swift in Sources */,
 				B02AE20901AF708B51837229 /* SecretClipboard.swift in Sources */,
 				751F21D762F3E444CE09A22D /* WireProtocol.generated.swift in Sources */,
@@ -3899,6 +3949,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				31AF02DEEDCA2F696335C6FC /* NativeMessageDispatcher.swift in Sources */,
+				823516DAA815B34ABD2866AB /* SafariRPCService.swift in Sources */,
+				592C6B6895EE7BF5C34F60AD /* SafariRPCRequest.swift in Sources */,
 				D962276E119EFBCE801182FB /* WireProtocol.generated.swift in Sources */,
 				D0A201042FD1000000000001 /* SafariApprovalVault.swift in Sources */,
 				D0A101072FD1000000000001 /* WalletAccess.swift in Sources */,
@@ -4003,6 +4055,9 @@
 				D42A00022FA0000000000001 /* ApprovalStoreTestFixture.swift in Sources */,
 				C0DE0A900000000000000012 /* NativeAuthorityTransportTests.swift in Sources */,
 				C0DE0B200000000000000012 /* ResponseDeliveryPollerTests.swift in Sources */,
+				EBFF3511234892D7C380BBB9 /* SafariRPCStreamingTests.swift in Sources */,
+				34611BE08BAC9C09B8C6E4FC /* SafariRPCServiceTests.swift in Sources */,
+				62275F51E9706F70EDD489EC /* SafariRPCRequestTests.swift in Sources */,
 				BF4000122FB6000000000000 /* PopupStringsTests.swift in Sources */,
 				C0DE00900000000000000022 /* ApprovalResolutionTests.swift in Sources */,
 				0C2431432A3F0CE29692BF48 /* WalletSigningSessionTests.swift in Sources */,
@@ -4054,6 +4109,9 @@
 				D42A00032FA0000000000001 /* ApprovalStoreTestFixture.swift in Sources */,
 				C0DE0A900000000000000013 /* NativeAuthorityTransportTests.swift in Sources */,
 				C0DE0B200000000000000013 /* ResponseDeliveryPollerTests.swift in Sources */,
+				6702DC35B4D4156FBFDA1CF9 /* SafariRPCStreamingTests.swift in Sources */,
+				FF9F76D29661FFD6912029E5 /* SafariRPCServiceTests.swift in Sources */,
+				4E3424EA5602F69661290E5A /* SafariRPCRequestTests.swift in Sources */,
 				BF4000132FB6000000000000 /* PopupStringsTests.swift in Sources */,
 				C0DE00900000000000000023 /* ApprovalResolutionTests.swift in Sources */,
 				AA65C4A347D1CDF8E304C3F8 /* WalletSigningSessionTests.swift in Sources */,
@@ -4189,6 +4247,8 @@
 				8D564A129DF1B5CE70CA78A6 /* NativeApprovalCoordinator.swift in Sources */,
 				E0055D11749508E3DE21896F /* NativeApprovalFinalizer.swift in Sources */,
 				2D657ACB6F77A08CA2B380DC /* NativeMessageDispatcher.swift in Sources */,
+				46A06410642BF217DCDA88A8 /* SafariRPCService.swift in Sources */,
+				A4339668A9BB6527F22CAF57 /* SafariRPCRequest.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
