@@ -74,6 +74,25 @@ test("popup approval and rejection use native directly", async () => {
         workflowVersion: 4, __bwContext: {source: "popup", privateBrowsing: false}}]);
 });
 
+test("malformed popup commands fail before privacy lookup or native transport", async () => {
+    const harness = popupHarness();
+    let lookups = 0;
+    harness.browser.tabs.query = async () => {
+        lookups += 1;
+        return [harness.tab];
+    };
+    for (const arguments_ of [
+        ["unsupported", 7],
+        ["getPendingRequests", 7, {unexpected: true}],
+        ["approveRequest", 7, {cluster: "devnet"}, requestToken(7)],
+    ]) {
+        await assert.rejects(harness.call("nativeMessage", ...arguments_), /Invalid native request/);
+    }
+    assert.equal(lookups, 0);
+    assert.deepEqual(harness.nativeMessages, []);
+    assert.deepEqual(harness.workerMessages, []);
+});
+
 test("pending and completed queue entries require exact trusted identities", () => {
     const harness = popupHarness();
     const request = pendingRequest();

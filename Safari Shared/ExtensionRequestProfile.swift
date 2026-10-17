@@ -711,8 +711,8 @@ struct ExtensionRequestProfile: Sendable {
             return request.name == "switchAccount" && request.provider == .unknown
         }
         return record.state.responseData.flatMap {
-            ExtensionRequestProfileCodec.responseJSON($0, id: record.id)
-        }?["name"] as? String == "switchAccount"
+            ExtensionRequestProfileCodec.decodeResponseData($0, id: record.id)
+        }?.name == "switchAccount"
     }
 
     static func manualSwitchRequest(_ record: Record) -> ExtensionBridge.ManualSwitchRequest {
@@ -838,7 +838,7 @@ struct ExtensionRequestProfile: Sendable {
             }
             if case .completed(let since, let response, let acknowledged) = record.state,
                canRetireAdmissionRecord(record, now: now),
-               acknowledged || ExtensionRequestProfileCodec.responseJSON(response, id: record.id)?["name"] as? String != "switchAccount" {
+               acknowledged || ExtensionRequestProfileCodec.decodeResponseData(response, id: record.id)?.name != "switchAccount" {
                 candidates.append((record, bytes, since, index))
             }
         }

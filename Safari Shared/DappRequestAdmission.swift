@@ -58,28 +58,15 @@ final class DappRequestAdmission {
         }
         guard let binding = snapshot.requestBinding else { return .unavailable }
         guard await store.authorityIsCurrent(handle: handle) else { return .unavailable }
-        var preparation = requestProcessor.prepare(binding, catalog: nil)
-        if case .needsCatalog = preparation {
-            guard let reviewCatalog else {
-                return await currentAdmissionDisposition(handle: handle, queued: .approvalRequired)
-            }
-            guard let catalog = reviewCatalog() else {
-                return await currentAdmissionDisposition(
-                    handle: handle,
-                    queued: .approvalRequired
-                )
-            }
-            if let account = binding.request.authorizedAccount,
-               catalog.availability(of: account) == .unavailable {
-                return await currentAdmissionDisposition(
-                    handle: handle,
-                    queued: .approvalRequired
-                )
-            }
-            preparation = requestProcessor.prepare(
-                binding,
-                catalog: catalog
+        let preparation: DappRequestPreparation
+        switch requestProcessor.prepare(binding, loadingCatalog: { reviewCatalog?() }) {
+        case .catalogUnavailable:
+            return await currentAdmissionDisposition(
+                handle: handle,
+                queued: .approvalRequired
             )
+        case .prepared(let result, _):
+            preparation = result
         }
         switch preparation {
         case .needsCatalog, .approval, .unavailable:

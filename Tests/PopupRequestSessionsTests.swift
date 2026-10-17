@@ -2239,6 +2239,95 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(events, ["complete"])
     }
 
+    func testCatalogPreparationFailuresPreserveAdmissionAndPopupRecovery() async throws {
+        let cases: [(name: String, catalogAvailable: Bool, walletIndependent: Bool, next: UnboundDappRequestPreparation)] = [
+            ("missing catalog", false, false, .needsCatalog),
+            ("repeated catalog requirement", true, false, .needsCatalog),
+            ("unavailable after catalog", true, false, .unavailable),
+            ("unavailable without catalog", true, true, .unavailable),
+        ]
+        for testCase in cases {
+            let store = try makeStore()
+            let snapshot = try await enqueue(popupSnapshot(id: 820, provider: .ethereum), in: store)
+            let catalog = testCase.catalogAvailable ? WalletReviewCatalog(account: popupTestAccount()) : nil
+            var catalogReads = 0
+            var preparations = 0
+            let processor = CompactPopupProcessor(walletIndependent: testCase.walletIndependent) { _ in
+                preparations += 1
+                return testCase.next
+            }
+            let admission = DappRequestAdmission(
+                store: store,
+                requestProcessor: processor,
+                reviewCatalog: {
+                    catalogReads += 1
+                    return catalog
+                }
+            )
+            let disposition = await admission.materialize(handle: snapshot.handle)
+            XCTAssertEqual(disposition, .approvalRequired, testCase.name)
+
+            let controller = PopupRequestSessions(
+                store: store,
+                walletEnvironment: popupWalletEnvironment(reviewCatalog: {
+                    catalogReads += 1
+                    return catalog
+                }),
+                loadsTransactionContext: false,
+                executionEnvironment: .init(requestProcessor: processor)
+            )
+            let response = await controller.dispatchJSON(request: try popupCommand(
+                subject: "getApprovalState", id: snapshot.handle.id,
+                requestToken: snapshot.handle.requestToken
+            ), profileIdentifier: nil)
+
+            XCTAssertEqual(response["state"] as? String, "error", testCase.name)
+            XCTAssertEqual(response["error"] as? String,
+                           testCase.catalogAvailable ? Strings.failedToLoad : Strings.secureApprovalSetupRequired,
+                           testCase.name)
+            XCTAssertEqual(response["actions"] as? [String], ["retry", "reject"], testCase.name)
+            XCTAssertNil(response["review"], testCase.name)
+            XCTAssertEqual(catalogReads, testCase.walletIndependent ? 0 : 2, testCase.name)
+            XCTAssertEqual(preparations, testCase.catalogAvailable ? 2 : 0, testCase.name)
+            let events = await store.events()
+            XCTAssertTrue(events.isEmpty, testCase.name)
+            let retained = try await store.snapshot(handle: snapshot.handle)
+            XCTAssertEqual(retained.phase, .queued, testCase.name)
+        }
+    }
+
+    func testEmptyReviewCatalogIsRetainedForSubsequentAvailabilityChecks() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 821, provider: .ethereum), in: store)
+        var catalog: WalletReviewCatalog? = WalletReviewCatalog(accounts: [])
+        var catalogReads = 0
+        let controller = PopupRequestSessions(
+            store: store,
+            walletEnvironment: popupWalletEnvironment(reviewCatalog: {
+                catalogReads += 1
+                return catalog
+            }),
+            loadsTransactionContext: false,
+            executionEnvironment: .init(requestProcessor: DappRequestProcessor())
+        )
+        let request = try popupCommand(
+            subject: "getApprovalState", id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken
+        )
+        let review = await controller.dispatchJSON(request: request, profileIdentifier: nil)
+        XCTAssertEqual(review["state"] as? String, "review")
+        XCTAssertNotNil((review["review"] as? [String: Any])?["reviewToken"])
+
+        catalog = nil
+        let unavailable = await controller.dispatchJSON(request: request, profileIdentifier: nil)
+        XCTAssertEqual(unavailable["state"] as? String, "error")
+        XCTAssertEqual(unavailable["error"] as? String, Strings.secureApprovalSetupRequired)
+        XCTAssertNil(unavailable["review"])
+        XCTAssertEqual(catalogReads, 2)
+        let events = await store.events()
+        XCTAssertTrue(events.isEmpty)
+    }
+
     func testUnknownNonemptySwitchPersistsWithoutReadingCatalog() async throws {
         let store = try makeStore()
         let snapshot = try await enqueue(popupSwitchSnapshot(
@@ -6595,7 +6684,10 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             walletEnvironment: PopupWalletEnvironment(
-                reviewCatalog: { nil },
+                reviewCatalog: {
+                    XCTFail("Wallet-independent approval must not read the catalog")
+                    return nil
+                },
                 unlockWallets: { _, _ in
                     XCTFail("Unexpected wallet unlock")
                     return .unavailable

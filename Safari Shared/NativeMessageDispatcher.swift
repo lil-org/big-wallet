@@ -351,7 +351,7 @@ struct NativeMessageDispatcher: Sendable {
             )
             return try Self.encode([
                 "id": request.id,
-                "response": Self.boundedDappResponse(response, for: request),
+                "response": Self.boundedDappResponse(response, for: request).json,
                 "state": authority.json,
             ], as: .nativeDelivery)
         case .expired:
@@ -487,23 +487,24 @@ struct NativeMessageDispatcher: Sendable {
     }
 
     private static func response(_ response: ResponseToExtension, for request: SafariRequest) throws -> WireProtocol.ValidatedObject {
-        try encode(boundedDappResponse(response, for: request), as: .nativeResponse)
+        try boundedDappResponse(response, for: request)
     }
 
-    private static func boundedDappResponse(_ response: ResponseToExtension, for request: SafariRequest) -> [String: Any] {
+    private static func boundedDappResponse(_ response: ResponseToExtension, for request: SafariRequest) throws -> WireProtocol.ValidatedObject {
         let json = response.json
-        if ExtensionBridge.isPayloadWithinLimit(json), WireProtocol.validate(.nativeResponse, value: json) {
-            return json
+        if ExtensionBridge.isPayloadWithinLimit(json),
+           let object = WireProtocol.object(.nativeResponse, value: json) {
+            return object
         }
         var fallback = ResponseToExtension(for: request, payload: .error(.internalError))
         if response.approvalCommitted { fallback = fallback.markingApprovalCommitted() }
         var internalError = fallback.json
-        if ExtensionBridge.isPayloadWithinLimit(internalError) { return internalError }
+        if ExtensionBridge.isPayloadWithinLimit(internalError) { return try encode(internalError, as: .nativeResponse) }
         internalError["name"] = request.provider == .unknown ? "switchAccount" : ""
         internalError["error"] = [
             "code": ProviderResponseError.internalErrorCode,
             "message": "Failed to process provider response",
         ]
-        return internalError
+        return try encode(internalError, as: .nativeResponse)
     }
 }

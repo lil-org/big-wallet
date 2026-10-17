@@ -641,8 +641,11 @@ test("stamps validated context on the real first native message", async () => {
     const context = wire.runtimeNativeContext(wire.authorizeRuntimeMessage(
         "worker", {subject: "rpc"}, runtimeSenders.content, runtime
     ), {});
+    const privateContext = wire.runtimeNativeContext(wire.authorizeRuntimeMessage(
+        "worker", {subject: "rpc"}, {...runtimeSenders.content, incognito: true}, runtime
+    ), {});
     await send({subject: "rpc", id: 1, body: "{}", chainId: "0x1", workflowVersion: 4}, context);
-    await send({subject: "rpc", id: 2, body: "{}", chainId: "0x1", workflowVersion: 4}, {...context, privateBrowsing: true});
+    await send({subject: "rpc", id: 2, body: "{}", chainId: "0x1", workflowVersion: 4}, privateContext);
     assert.equal(messages.length, 2);
     assert.equal(messages[0].subject, "rpc");
     assert.deepEqual(messages[0].__bwContext, normalized(context));
@@ -659,6 +662,12 @@ test("source contexts preserve optional document metadata and reject conflicting
         site: {host: "wallet.example", configurationKey: "https://wallet.example"},
         document: {tabId: 4, frameId: 0, documentId: "document-one"},
     });
+    assert.equal(Object.isFrozen(context), true);
+    assert.equal(Object.isFrozen(context.site), true);
+    assert.equal(Object.isFrozen(context.document), true);
+    assert.equal(wire.runtimeNativeContext({
+        ...authorized, identity: {...authorized.identity, host: "other.example"},
+    }, request), null);
     for (const origin of ["null", "https://other.example", "https://wallet.example/path", null]) {
         assert.equal(wire.authorizeRuntimeMessage("worker", request, {...sender, origin}, runtime), null);
     }
@@ -682,12 +691,13 @@ test("popup and worker contexts fail closed without their own privacy evidence",
     const popup = wire.authorizeRuntimeMessage("worker", {subject: "getLatestConfiguration"}, runtimeSenders.popup, runtime);
     assert.equal(wire.runtimeNativeContext(popup, {}), null);
     assert.equal(wire.runtimeNativeContext(popup, {__bwContext: {source: "worker", privateBrowsing: false}}), null);
+    assert.equal(wire.runtimeNativeContext(popup, {__bwContext: {source: "popup", privateBrowsing: undefined}}), null);
     assert.deepEqual(normalized(wire.runtimeNativeContext(popup, {
         __bwContext: {source: "popup", privateBrowsing: false},
     })), {source: "popup", privateBrowsing: false});
 });
 
-test("native sender derives site identity and rejects injected or conflicting contexts", () => {
+test("native sender stamps factory contexts and rejects conflicting payload identity", () => {
     const messages = [];
     const send = wire.createTrustedNativeMessageSender({sendRawNativeMessage: message => messages.push(message)});
     const context = wire.runtimeNativeContext(wire.authorizeRuntimeMessage(
@@ -696,12 +706,11 @@ test("native sender derives site identity and rejects injected or conflicting co
     const request = {subject: "getLatestConfiguration", id: 1, workflowVersion: 4};
     send(request, context);
     assert.equal(messages[0].configurationKey, "https://wallet.example");
-    for (const invalid of [null, undefined, false, {...context, privateBrowsing: undefined}]) {
+    for (const invalid of [null, undefined]) {
         assert.throws(() => send(request, invalid), /context is unavailable/);
     }
     assert.throws(() => send({...request, __bwContext: context}, context), /supplied separately/);
     assert.throws(() => send({...request, configurationKey: "https://other.example"}, context), /identity changed/);
-    assert.throws(() => send(request, {...context, site: {...context.site, host: "other.example"}}), /context is unavailable/);
     assert.equal(messages.length, 1);
 });
 

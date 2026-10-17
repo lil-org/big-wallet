@@ -599,22 +599,10 @@ final class PopupRequestSessions {
         if case .immediateResponse(let persistence) = entries[snapshot.handle] {
             return .immediateResponse(persistence.state)
         }
-        var preparation = requestProcessor.prepare(binding, catalog: nil)
-        var preparedCatalog: WalletReviewCatalog?
-        if case .needsCatalog = preparation {
-            guard let walletAccess = walletEnvironment.currentReviewCatalog() else {
-                return .secureSetupRequired
-            }
-            if let account = binding.request.authorizedAccount,
-               walletAccess.availability(of: account) == .unavailable {
-                return .secureSetupRequired
-            }
-            preparedCatalog = walletAccess
-            preparation = requestProcessor.prepare(
-                binding,
-                catalog: walletAccess
-            )
-        }
+        guard case .prepared(let preparation, let preparedCatalog) = requestProcessor.prepare(
+            binding,
+            loadingCatalog: walletEnvironment.currentReviewCatalog
+        ) else { return .secureSetupRequired }
         switch preparation {
         case .needsCatalog, .unavailable:
             return .unavailable

@@ -635,8 +635,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 guard files.synchronizeProfileLocked(handle.profileIdentifier) else {
                     return .retryablePersistenceFailure
                 }
-                if let json = ExtensionRequestProfileCodec.responseJSON(response, id: handle.id),
-                   let terminal = ResponseToExtension(json: json),
+                if let terminal = ExtensionRequestProfileCodec.decodeResponseData(response, id: handle.id),
                    case .error(let error) = terminal.payload,
                    error == .approvalInterrupted {
                     return .interrupted

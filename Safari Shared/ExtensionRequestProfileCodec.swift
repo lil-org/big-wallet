@@ -163,7 +163,7 @@ struct ExtensionRequestProfileCodec: Sendable {
                 }
             }
             if let responseData = record.state.responseData,
-               Self.responseJSON(responseData, id: record.id) == nil {
+               Self.decodeResponseData(responseData, id: record.id) == nil {
                 return nil
             }
             switch record.state {
@@ -196,16 +196,20 @@ struct ExtensionRequestProfileCodec: Sendable {
     static func exactResponseData(_ response: ResponseToExtension) -> Data? {
         guard let data = ExtensionBridge.payloadData(response.json, options: [.sortedKeys]),
               data.count <= ExtensionBridge.maximumPayloadBytes,
-              responseJSON(data, id: response.id) != nil else { return nil }
+              decodeResponseData(data, id: response.id) != nil else { return nil }
         return data
     }
 
     static func responseJSON(_ data: Data, id: Int) -> [String: Any]? {
+        decodeResponseData(data, id: id)?.json
+    }
+
+    static func decodeResponseData(_ data: Data, id: Int) -> ResponseToExtension? {
         guard data.count <= ExtensionBridge.maximumPayloadBytes,
               let response = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let decoded = ResponseToExtension(json: response),
               decoded.id == id else { return nil }
-        return decoded.json
+        return decoded
     }
 
     static func encode<Value: Encodable>(_ value: Value) throws -> Data {

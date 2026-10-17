@@ -67,7 +67,41 @@ final class NativeMessageDispatcherTests: XCTestCase {
         try await withFixture { fixture in
             let message = try await fixture.connectionMessage()
             let result = try await fixture.dispatch(message, privateBrowsing: true)
-            XCTAssertEqual(result["kind"] as? String, "error")
+            XCTAssertEqual(try canonical(result), try canonical([
+                "id": 1, "name": "requestAccounts", "provider": "ethereum",
+                "kind": "error", "approvalCommitted": false, "authorizationFailure": false,
+                "error": ["code": 4200, "message": Strings.privateBrowsingUnsupported],
+            ]))
+            XCTAssertTrue(fixture.calls.value.isEmpty)
+            guard case .available(let requests) = await fixture.bridge.listRecoveryRequests(profileIdentifier: nil) else {
+                return XCTFail("Expected empty store")
+            }
+            XCTAssertTrue(requests.isEmpty)
+        }
+    }
+
+    func testUnauthorizedDappResponsePreservesAuthorityAndCorrelation() async throws {
+        try await withFixture { fixture in
+            var message = try await fixture.connectionMessage()
+            message["name"] = "signPersonalMessage"
+            message["body"] = [
+                "address": "0x0000000000000000000000000000000000000001",
+                "chainId": "0x1", "object": ["data": "0x01"],
+            ]
+            let result = try await fixture.dispatch(message)
+            guard case .snapshot(let authority) = await fixture.bridge.configurationSnapshot(
+                configurationKey: fixture.origin, profileIdentifier: nil
+            ) else { return XCTFail("Expected disconnected authority") }
+            XCTAssertEqual(try canonical(result), try canonical([
+                "id": 1,
+                "response": [
+                    "id": 1, "name": "signPersonalMessage", "provider": "ethereum",
+                    "kind": "error", "approvalCommitted": false, "authorizationFailure": false,
+                    "error": ["code": 4100, "message": Strings.providerNotReady],
+                ],
+                "state": authority.json,
+            ]))
+            XCTAssertEqual(fixture.bridgeCalls.value, ["enqueue"])
             XCTAssertTrue(fixture.calls.value.isEmpty)
             guard case .available(let requests) = await fixture.bridge.listRecoveryRequests(profileIdentifier: nil) else {
                 return XCTFail("Expected empty store")

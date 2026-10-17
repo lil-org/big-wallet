@@ -1041,11 +1041,6 @@ function sendRawNativeMessage(message) {
     return browser.runtime.sendNativeMessage("org.lil.wallet", message);
 }
 
-var sendTrustedNativeMessage =
-    BigWalletBridgeWire.createTrustedNativeMessageSender({
-        sendRawNativeMessage,
-    });
-
 async function nativeMessage(
     subject,
     id,
@@ -1080,7 +1075,10 @@ async function nativeMessage(
     if (!command) { return Promise.reject(new TypeError("Invalid native request")); }
     const context = await captureNativeContext();
     if (!context) { return Promise.reject(new TypeError("Native request context is unavailable")); }
-    return sendTrustedNativeMessage(command, context);
+    return sendRawNativeMessage({
+        ...command,
+        [BigWalletBridgeWire.NATIVE_CONTEXT_KEY]: context,
+    });
 }
 
 async function settleNativeMessage(pendingResponse, nativeOperation = false) {

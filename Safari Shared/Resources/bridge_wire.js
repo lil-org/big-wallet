@@ -336,29 +336,26 @@
     }
 
     function createTrustedNativeMessageSender({sendRawNativeMessage}) {
-        return function sendTrustedNativeMessage(message, context) {
-            const supplied = decodeMessage("NativeTransportContext", context);
-            const trusted = supplied && makeNativeContext(supplied.source, supplied.privateBrowsing,
-                supplied.source === "site" ? {site: supplied.site, document: supplied.document} : {});
-            if (!trusted) { throw new TypeError("Native request context is unavailable"); }
+        return function sendTrustedNativeMessage(message, trustedContext) {
+            if (!trustedContext) { throw new TypeError("Native request context is unavailable"); }
             const payload = {...message};
             if (hasOwn(payload, NATIVE_CONTEXT_KEY)) { throw new TypeError("Native request context must be supplied separately"); }
             const type = Object.prototype.hasOwnProperty.call(payload, "subject") ? "NativeCommand" : "DappRequest";
-            if (trusted.source === "site") {
+            if (trustedContext.source === "site") {
                 for (const name of ["host", "configurationKey"]) {
-                    if (hasOwn(payload, name) && payload[name] !== trusted.site[name]) {
+                    if (hasOwn(payload, name) && payload[name] !== trustedContext.site[name]) {
                         throw new TypeError("Native request identity changed");
                     }
                 }
-                if (type === "DappRequest") { payload.host = trusted.site.host; }
+                if (type === "DappRequest") { payload.host = trustedContext.site.host; }
                 if (type === "DappRequest" || ["getLatestConfiguration", "disconnect", "pollResponse", "acknowledgeResponse", "showApproval"].includes(payload.subject)) {
-                    payload.configurationKey = trusted.site.configurationKey;
+                    payload.configurationKey = trustedContext.site.configurationKey;
                 }
             }
             const checked = protocol.build(type, payload);
             return sendRawNativeMessage({
                 ...checked,
-                [NATIVE_CONTEXT_KEY]: trusted,
+                [NATIVE_CONTEXT_KEY]: trustedContext,
             });
         };
     }
