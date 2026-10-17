@@ -115,6 +115,14 @@ final class SafariRPCClient: Sendable {
             await authorizationProvider.invalidateAuthorization(afterUnauthorized: authorization, for: endpoint.url)
             try execution.checkCancellationAndDeadline()
         }
+        // Exclude UTF-16/32 autodetection so parsing uses the encoding scanned below.
+        guard !received.data.contains(0) else { throw SafariRPCFailure.transport }
+        let jsonBytes = received.data.dropFirst(received.data.starts(with: [0xEF, 0xBB, 0xBF]) ? 3 : 0)
+        try SafariRPCJSONPreflight.validate(
+            jsonBytes, maximumTokens: execution.limits.maximumResponseTokens,
+            tokenLimitFailure: .responseTooLarge, depthLimitFailure: .transport,
+            checkCancellation: execution.checkCancellationAndDeadline
+        )
         guard let correlated = Self.responseDictionary(from: received.data, expectedResponseID: rpcRequest.id),
               let result = RPCResponseToExtension(upstream: correlated, expectedResponseID: rpcRequest.id) else {
             throw SafariRPCFailure.transport

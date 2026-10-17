@@ -43,6 +43,63 @@ final class SafariRPCStreamingTests: XCTestCase {
         XCTAssertEqual(budget.bufferedBytes, 0)
     }
 
+    func testResponseTokenLimitCountsKeysAndValuesWithoutCountingStringContents() async throws {
+        for prefix in [Data(), Data([0xEF, 0xBB, 0xBF])] {
+            let data = prefix + Data(#"{"id":1,"result":{"key":"\"\\[]{}:, 🪙\u0000","value":-1.25e30}}"#.utf8)
+            let session = makeSession { _ in .init(chunks: [data]) }
+            defer { session.invalidateAndCancel(); RPCStreamingURLProtocol.reset() }
+            let budget = SafariRPCResponseBudget(maximumBytes: data.count)
+            let client = SafariRPCClient(urlSession: session)
+            let accepted = execution(maximumResponseBytes: data.count, maximumResponseTokens: 9, budget: budget)
+            let response = try await client.send(endpoint: endpoint(), request: request(), execution: accepted)
+            let result = try XCTUnwrap(response.json["result"] as? [String: Any])
+            XCTAssertEqual(result["key"] as? String, "\"\\[]{}:, 🪙\u{0}")
+            XCTAssertTrue(accepted.dispatched)
+            XCTAssertEqual(budget.bufferedBytes, 0)
+
+            let rejected = execution(maximumResponseBytes: data.count, maximumResponseTokens: 8, budget: budget)
+            await assertFailure(.responseTooLarge) {
+                try await client.send(endpoint: self.endpoint(), request: self.request(), execution: rejected)
+            }
+            XCTAssertTrue(rejected.dispatched)
+            XCTAssertEqual(budget.bufferedBytes, 0)
+        }
+    }
+
+    func testResponseTokenLimitRejectsCompactArraysBeforeParsing() async throws {
+        let prefix = #"{"id":1,"result":["# + String(repeating: "0,", count: SafariRPCLimits.live.maximumResponseTokens)
+        for suffix in ["0]}", ""] {
+            let data = Data((prefix + suffix).utf8)
+            XCTAssertLessThan(data.count, SafariRPCLimits.live.maximumResponseBytes)
+            let session = makeSession { _ in .init(chunks: [data]) }
+            defer { session.invalidateAndCancel(); RPCStreamingURLProtocol.reset() }
+            let budget = SafariRPCResponseBudget(maximumBytes: data.count)
+            await assertFailure(.responseTooLarge) {
+                try await SafariRPCClient(urlSession: session).send(
+                    endpoint: self.endpoint(), request: self.request(),
+                    execution: self.execution(maximumResponseBytes: data.count, budget: budget)
+                )
+            }
+            XCTAssertEqual(budget.bufferedBytes, 0)
+        }
+    }
+
+    func testResponsePreflightRejectsAlternateEncodings() async throws {
+        for encoding: String.Encoding in [.utf16LittleEndian, .utf16BigEndian, .utf32LittleEndian, .utf32BigEndian] {
+            let data = try XCTUnwrap(#"{"id":1,"result":[0,0,0]}"#.data(using: encoding))
+            let session = makeSession { _ in .init(chunks: [data]) }
+            defer { session.invalidateAndCancel(); RPCStreamingURLProtocol.reset() }
+            let budget = SafariRPCResponseBudget(maximumBytes: data.count)
+            await assertFailure(.transport) {
+                try await SafariRPCClient(urlSession: session).send(
+                    endpoint: self.endpoint(), request: self.request(),
+                    execution: self.execution(maximumResponseBytes: data.count, maximumResponseTokens: 7, budget: budget)
+                )
+            }
+            XCTAssertEqual(budget.bufferedBytes, 0)
+        }
+    }
+
     func testActualStreamLimitAppliesWithoutOrWithShortContentLength() async throws {
         let data = Data(#"{"id":1,"result":"oversized response"}"#.utf8)
         for headers: [String: String] in [[:], ["Content-Length": "1"]] {
@@ -220,9 +277,13 @@ final class SafariRPCStreamingTests: XCTestCase {
         return try ValidatedRPCRequest(body: String(decoding: data, as: UTF8.self), id: 1)
     }
 
-    private func execution(maximumResponseBytes: Int, budget: SafariRPCResponseBudget) -> SafariRPCExecution {
+    private func execution(
+        maximumResponseBytes: Int, maximumResponseTokens: Int = SafariRPCLimits.live.maximumResponseTokens,
+        budget: SafariRPCResponseBudget
+    ) -> SafariRPCExecution {
         SafariRPCExecution(deadline: .now.advanced(by: .seconds(30)),
-                           limits: .init(maximumResponseBytes: maximumResponseBytes), responseBudget: budget)
+                           limits: .init(maximumResponseBytes: maximumResponseBytes, maximumResponseTokens: maximumResponseTokens),
+                           responseBudget: budget)
     }
 
     private func makeSession(_ handler: @escaping RPCStreamingURLProtocol.Handler) -> URLSession {

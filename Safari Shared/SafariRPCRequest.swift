@@ -8,6 +8,7 @@ struct SafariRPCLimits: Sendable {
     var maximumRequestBytes: Int
     var maximumRequestTokens: Int
     var maximumResponseBytes: Int
+    var maximumResponseTokens: Int
     var maximumActivePerOrigin: Int
     var maximumActiveRequests: Int
     var maximumOutstandingPerOrigin: Int
@@ -23,6 +24,7 @@ struct SafariRPCLimits: Sendable {
         maximumRequestBytes: Int = WireProtocol.rpcMaximumRequestBytes,
         maximumRequestTokens: Int = 65_536,
         maximumResponseBytes: Int = WireProtocol.rpcMaximumResponseBytes,
+        maximumResponseTokens: Int = 65_536,
         maximumActivePerOrigin: Int = WireProtocol.rpcMaximumActivePerOrigin,
         maximumActiveRequests: Int = WireProtocol.rpcMaximumActiveRequests,
         maximumOutstandingPerOrigin: Int = WireProtocol.rpcMaximumOutstandingPerOrigin,
@@ -35,6 +37,7 @@ struct SafariRPCLimits: Sendable {
         self.maximumRequestBytes = maximumRequestBytes
         self.maximumRequestTokens = maximumRequestTokens
         self.maximumResponseBytes = maximumResponseBytes
+        self.maximumResponseTokens = maximumResponseTokens
         self.maximumActivePerOrigin = maximumActivePerOrigin
         self.maximumActiveRequests = maximumActiveRequests
         self.maximumOutstandingPerOrigin = maximumOutstandingPerOrigin
@@ -101,6 +104,50 @@ enum SafariRPCFailure: Error, Sendable, Equatable {
     }
 }
 
+enum SafariRPCJSONPreflight {
+    static func validate(
+        _ bytes: some Sequence<UInt8>, maximumTokens: Int,
+        tokenLimitFailure: SafariRPCFailure, depthLimitFailure: SafariRPCFailure,
+        checkCancellation: () throws -> Void
+    ) throws {
+        var tokens = 0
+        var depth = 0
+        var inString = false
+        var escaped = false
+        var inScalar = false
+        for (offset, byte) in bytes.enumerated() {
+            if offset % 4096 == 0 { try checkCancellation() }
+            if inString {
+                if escaped { escaped = false }
+                else if byte == 92 { escaped = true }
+                else if byte == 34 { inString = false }
+                continue
+            }
+            switch byte {
+            case 34:
+                tokens += 1
+                inString = true
+                inScalar = false
+            case 91, 123:
+                tokens += 1
+                depth += 1
+                inScalar = false
+                guard depth <= WireProtocol.maximumJSONDepth else { throw depthLimitFailure }
+            case 93, 125:
+                depth -= 1
+                inScalar = false
+            case 9, 10, 13, 32, 44, 58:
+                inScalar = false
+            default:
+                if !inScalar { tokens += 1 }
+                inScalar = true
+            }
+            guard tokens <= maximumTokens else { throw tokenLimitFailure }
+        }
+        try checkCancellation()
+    }
+}
+
 struct ValidatedRPCRequest: Sendable {
     let id: Int
     let method: String
@@ -143,7 +190,11 @@ struct ValidatedRPCRequest: Sendable {
         checkCancellation: @escaping @Sendable () throws -> Void = { try Task.checkCancellation() }
     ) throws -> Prepared {
         guard body.utf8.count <= limits.maximumRequestBytes else { throw SafariRPCFailure.requestTooLarge }
-        try preflight(body, limits: limits, checkCancellation: checkCancellation)
+        try SafariRPCJSONPreflight.validate(
+            body.utf8, maximumTokens: limits.maximumRequestTokens,
+            tokenLimitFailure: .requestTooLarge, depthLimitFailure: .invalidRequest,
+            checkCancellation: checkCancellation
+        )
         let decoded: Any
         do { decoded = try JSONSerialization.jsonObject(with: Data(body.utf8), options: [.fragmentsAllowed]) }
         catch { throw SafariRPCFailure.invalidJSON }
@@ -165,46 +216,6 @@ struct ValidatedRPCRequest: Sendable {
         var writer = CanonicalWriter(maximumBytes: limits.maximumRequestBytes, checkCancellation: checkCancellation)
         try writer.write(value)
         return Prepared(id: id, method: method, value: value, canonicalByteCount: writer.count, checkCancellation: checkCancellation)
-    }
-
-    private static func preflight(
-        _ body: String, limits: SafariRPCLimits, checkCancellation: () throws -> Void
-    ) throws {
-        var tokens = 0
-        var depth = 0
-        var inString = false
-        var escaped = false
-        var inScalar = false
-        for (offset, byte) in body.utf8.enumerated() {
-            if offset % 4096 == 0 { try checkCancellation() }
-            if inString {
-                if escaped { escaped = false }
-                else if byte == 92 { escaped = true }
-                else if byte == 34 { inString = false }
-                continue
-            }
-            switch byte {
-            case 34:
-                tokens += 1
-                inString = true
-                inScalar = false
-            case 91, 123:
-                tokens += 1
-                depth += 1
-                inScalar = false
-                guard depth <= WireProtocol.maximumJSONDepth else { throw SafariRPCFailure.invalidRequest }
-            case 93, 125:
-                depth -= 1
-                inScalar = false
-            case 9, 10, 13, 32, 44, 58:
-                inScalar = false
-            default:
-                if !inScalar { tokens += 1 }
-                inScalar = true
-            }
-            guard tokens <= limits.maximumRequestTokens else { throw SafariRPCFailure.requestTooLarge }
-        }
-        try checkCancellation()
     }
 
     private struct CanonicalWriter {
