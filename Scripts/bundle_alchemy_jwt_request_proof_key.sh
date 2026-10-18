@@ -117,6 +117,43 @@ if [ -e "$resource_path" ] || [ -L "$resource_path" ]; then
 fi
 
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && /bin/pwd -P)
+case "${BW_VM_VERIFICATION_BUILD-NO}" in
+    NO)
+        ;;
+    YES)
+        [ "${ACTION:-}" = build ] &&
+            [ "${DEPLOYMENT_LOCATION:-NO}" = NO ] &&
+            [ "${DEPLOYMENT_POSTPROCESSING:-NO}" = NO ] &&
+            [ -z "${ARCHIVE_PATH:-}" ] &&
+            [ -z "${ARCHIVE_PRODUCTS_PATH:-}" ] ||
+            fail "VM verification builds cannot archive or install products"
+        [ "${CODE_SIGN_IDENTITY:-}" = - ] &&
+            [ "${CODE_SIGN_STYLE:-}" = Manual ] &&
+            [ -z "${DEVELOPMENT_TEAM:-}" ] &&
+            [ -z "${PROVISIONING_PROFILE:-}" ] &&
+            [ -z "${PROVISIONING_PROFILE_SPECIFIER:-}" ] &&
+            [ -z "${CODE_SIGN_ENTITLEMENTS:-}" ] &&
+            [ "${ENABLE_APP_SANDBOX:-}" = NO ] &&
+            [ "${ENABLE_HARDENED_RUNTIME:-}" = NO ] &&
+            [ "${REGISTER_APP_GROUPS:-}" = NO ] ||
+            fail "VM verification builds require the local signing settings"
+        case "${PLATFORM_NAME:-}:${CODE_SIGNING_ALLOWED:-}" in
+            macosx:YES|iphonesimulator:YES|xrsimulator:YES|iphoneos:NO|xros:NO)
+                ;;
+            *)
+                fail "VM verification builds require local signing for their platform"
+                ;;
+        esac
+        . "$script_directory/vm/guest_session.sh"
+        test_vm_require_guest_session ||
+            fail "VM verification builds require a verified test VM session"
+        bundle_complete=1
+        exit 0
+        ;;
+    *)
+        fail "BW_VM_VERIFICATION_BUILD must be YES or NO"
+        ;;
+esac
 load_alchemy_jwt_request_proof_key \
     "$script_directory/alchemy_jwt_request_proof_key.sha256"
 

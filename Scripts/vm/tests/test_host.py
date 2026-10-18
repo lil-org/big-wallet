@@ -1,5 +1,6 @@
 import importlib.util
 import contextlib
+import io
 import json
 import os
 from pathlib import Path
@@ -283,6 +284,13 @@ class LifecycleTests(unittest.TestCase):
         with patch.object(host, 'checked', side_effect=AssertionError('host command started')):
             with self.assertRaisesRegex(host.RunnerError, 'No verified baseline'):
                 host.run_tests(args, self.root, {})
+
+    def test_run_defaults_to_local_signing_and_requires_explicit_apple_selection(self):
+        self.assertEqual(host.parser().parse_args(['run', 'all']).signing, 'local')
+        self.assertEqual(host.parser().parse_args(['run', 'all', '--signing', 'apple']).signing, 'apple')
+        self.assertEqual(host.parser().parse_args(['run', '--signing', 'local']).signing, 'local')
+        with patch('sys.stderr', new=io.StringIO()), self.assertRaises(SystemExit):
+            host.parser().parse_args(['run', '--signing', 'automatic'])
 
     def test_source_mismatch_blocks_baseline_and_candidate_before_preparation(self):
         for candidate in (False, True):

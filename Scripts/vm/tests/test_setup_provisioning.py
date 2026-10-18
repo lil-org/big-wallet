@@ -468,7 +468,7 @@ class SetupReceiptTests(unittest.TestCase):
         (self.state / 'candidate.json').unlink()
         (self.state / 'baseline.vbvm').mkdir()
         host.atomic_json(self.state / 'baseline.json', {**self.record, 'bootstrapTools': self.tools,
-                        'bootstrapSourceDigest': host.bootstrap_source_digest()})
+                        'bootstrapSourceDigest': host.bootstrap_source_digest(), 'verificationSigningMode': 'local'})
         with patch.object(host, 'validate_vm', return_value={}), patch.object(host, 'check_capacity'), \
                 patch.object(host, 'build_tools', return_value=self.state / 'tools'), \
                 patch.object(host, 'bootstrap_tool_hashes', return_value=self.tools), \

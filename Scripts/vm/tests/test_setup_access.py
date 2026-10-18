@@ -88,6 +88,7 @@ class SetupAccessTests(unittest.TestCase):
         job = host.read_json(exchange / 'job.json')
         self.assertEqual(job['kind'], 'doctor')
         self.assertEqual(job['runId'], run_id)
+        self.assertEqual(job['payload']['signing'], 'local')
         return host.read_json(exchange / 'artifacts/result.json')
 
     def run_doctor(self, monitor=None):

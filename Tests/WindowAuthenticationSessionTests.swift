@@ -29,6 +29,8 @@ final class WindowAuthenticationSessionTests: XCTestCase {
     }
 
     func testPasswordAuthenticationRestoresSecretOwnerEligibilityBeforeReturning() async throws {
+        let initialActivationPolicy = NSApp.activationPolicy()
+        defer { _ = NSApp.setActivationPolicy(initialActivationPolicy) }
         let fixture = AuthenticationKeychainFixture(password: "password")
         let controller = makeWindow()
         let owner = try XCTUnwrap(controller.window)
@@ -58,6 +60,8 @@ final class WindowAuthenticationSessionTests: XCTestCase {
     }
 
     func testPasswordCompletionPreservesUnrelatedFocusAndLeavesSecretOwnerIneligible() async throws {
+        let initialActivationPolicy = NSApp.activationPolicy()
+        defer { _ = NSApp.setActivationPolicy(initialActivationPolicy) }
         let fixture = AuthenticationKeychainFixture(password: "password")
         let controller = makeWindow()
         let owner = try XCTUnwrap(controller.window)
@@ -331,14 +335,78 @@ final class WindowAuthenticationSessionTests: XCTestCase {
     }
 
     private func requireActiveKeyWindow(_ window: NSWindow) async throws {
-        if window.sheetParent == nil { window.center() }
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
-        for _ in 0..<100 {
-            if NSApp.isActive, NSApp.keyWindow === window, window.isKeyWindow { return }
-            try await Task.sleep(for: .milliseconds(10))
+        guard NSApp.activationPolicy() == .regular || NSApp.setActivationPolicy(.regular) else {
+            throw WindowFocusFailure(description: "Could not enable test-host activation: \(focusState(for: window))")
         }
-        throw XCTSkip("The test host cannot obtain active key-window ownership in this desktop session.")
+        if window.sheetParent == nil { window.center() }
+        NSApp.unhide(nil)
+        let deadline = ContinuousClock.now + .seconds(5)
+        let activation = Mutex<Result<Int32, WindowFocusFailure>?>(nil)
+        let expectedPID = ProcessInfo.processInfo.processIdentifier
+        var requestedActivation = false
+        while ContinuousClock.now < deadline {
+            if !NSApp.isActive, !requestedActivation {
+                requestedActivation = true
+                let configuration = NSWorkspace.OpenConfiguration()
+                configuration.activates = true
+                configuration.createsNewApplicationInstance = false
+                configuration.allowsRunningApplicationSubstitution = false
+                configuration.addsToRecentItems = false
+                configuration.promptsUserIfNeeded = false
+                NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { application, error in
+                    let result: Result<Int32, WindowFocusFailure>
+                    if let application {
+                        result = .success(application.processIdentifier)
+                    } else {
+                        result = .failure(WindowFocusFailure(description: error.map { String(describing: $0) } ?? "No application returned"))
+                    }
+                    activation.withLock { $0 = result }
+                }
+            }
+            if requestedActivation {
+                guard let result = activation.withLock({ $0 }) else {
+                    try await Task.sleep(for: .milliseconds(20))
+                    continue
+                }
+                switch result {
+                case .success(let processIdentifier):
+                    guard processIdentifier == expectedPID else {
+                        throw WindowFocusFailure(description: "Launch Services activated PID \(processIdentifier), expected \(expectedPID): \(focusState(for: window))")
+                    }
+                case .failure(let error):
+                    throw WindowFocusFailure(description: "Launch Services could not activate the test host: \(error); \(focusState(for: window))")
+                }
+            }
+            if NSApp.isActive {
+                window.makeKeyAndOrderFront(nil)
+                if NSApp.isActive, NSApp.keyWindow === window, window.isKeyWindow { return }
+            } else {
+                NSApp.activate()
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let activationCompleted = activation.withLock { $0 != nil }
+        throw WindowFocusFailure(description: "Could not obtain active key-window ownership: launchServicesRequested=\(requestedActivation), launchServicesCompleted=\(activationCompleted), \(focusState(for: window))")
+    }
+
+    private func focusState(for window: NSWindow) -> String {
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        return [
+            "policy=\(NSApp.activationPolicy().rawValue)",
+            "active=\(NSApp.isActive)",
+            "hidden=\(NSApp.isHidden)",
+            "running=\(NSApp.isRunning)",
+            "screens=\(NSScreen.screens.count)",
+            "target=\(window.windowNumber)",
+            "targetKey=\(window.isKeyWindow)",
+            "targetCanBecomeKey=\(window.canBecomeKey)",
+            "targetVisible=\(window.isVisible)",
+            "targetOnActiveSpace=\(window.isOnActiveSpace)",
+            "sheetParent=\(window.sheetParent?.windowNumber.description ?? "nil")",
+            "keyWindow=\(NSApp.keyWindow?.windowNumber.description ?? "nil")",
+            "frontmostBundle=\(frontmost?.bundleIdentifier ?? "nil")",
+            "frontmostPID=\(frontmost?.processIdentifier.description ?? "nil")",
+        ].joined(separator: ", ")
     }
 
     private func makeWindow() -> WalletWindowController {
@@ -390,6 +458,10 @@ final class WindowAuthenticationSessionTests: XCTestCase {
     private func waitUntil(_ predicate: () -> Bool, file: StaticString = #filePath, line: UInt = #line) async {
         await expectEventually(file: file, line: line, predicate)
     }
+}
+
+private struct WindowFocusFailure: Error, CustomStringConvertible {
+    let description: String
 }
 
 @MainActor

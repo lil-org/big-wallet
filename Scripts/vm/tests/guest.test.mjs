@@ -61,13 +61,14 @@ test("job validation admits the host snapshot contract and rejects execution inj
         {payload: {stages: ["deploy"]}}, {payload: {stages: ["test", "test"]}}, {payload: {configuration: "AdHoc"}}, {unknown: true},
         {payload: {onlyTesting: ["Class/test;rm"]}}, {payload: {onlyTesting: ["-skip-testing:Class"]}}, {source: {sha256: "a", commit: "b"}},
         {payload: {approvalArgs: ["--worker", "/bin/sh"]}}, {payload: {approvalArgs: ["--failure-dir", "/tmp/elsewhere"]}}, {payload: {approvalArgs: ["--seed", "no"]}},
-        {payload: {unknown: true}},
+        {payload: {unknown: true}}, {payload: {signing: "automatic"}}, {payload: {signing: null}},
     ]) { assert.throws(() => validateJob(job(invalid)), JSON.stringify(invalid)); }
     for (const payload of [undefined, null, [], 1, "options", {}]) {
         assert.throws(() => validateJob({...job(), payload}));
     }
     assert.doesNotThrow(() => validateJob(job({payload: {approvalArgs: ["--soak", "--seed", "42", "--mode", "popup"]}})));
     assert.doesNotThrow(() => validateJob(job({payload: {onlyTesting: ["Tests macOS/PasswordStorageTests/testSetup()", "SecretHandlingTests"]}})));
+    for (const signing of ["local", "apple"]) { assert.equal(validateJob(job({payload: {signing}})).payload.signing, signing); }
 });
 
 test("hardware guard cannot be enabled with environment variables or a physical hypervisor", () => {
@@ -122,14 +123,16 @@ test("all matrix includes every native configuration/platform and all repository
     }
 });
 
-test("credential-independent candidate runs report partial coverage even if selected stages pass", () => {
+test("selected runs report partial coverage without unrelated credential prerequisites", () => {
     const stages = [{id: "worker.test", status: "passed"}];
     const preflight = {checks: {node: true, bootstrap: true, xcode: true, proofKey: false, signing: false}};
     const selected = coverageReport(job({payload: {stages: ["worker"]}}), stages, preflight);
     assert.equal(selected.scope, "selected");
     assert.equal(selected.status, "partial");
     assert.equal(selected.fullSuiteVerified, false);
-    assert.deepEqual(selected.missingPrerequisites, ["proofKey", "signing"]);
+    assert.deepEqual(selected.missingPrerequisites, []);
+    assert.equal(selected.signingMode, "local");
+    assert.equal(selected.credentialCoverage.appleDevelopmentSigning, "not-requested");
     const incomplete = coverageReport(job(), [...stages, {id: "test.macos.debug", status: "blocked"}], preflight);
     assert.equal(incomplete.scope, "full");
     assert.equal(incomplete.status, "partial");
@@ -140,6 +143,94 @@ test("credential-independent candidate runs report partial coverage even if sele
     assert.equal(coverageReport(job(), stages, {checks}).fullSuiteVerified, false);
     const complete = coverageReport(job(), manifest.map(stage => ({id: stage.id, status: "passed"})), {checks});
     assert.equal(complete.fullSuiteVerified, true);
+});
+
+test("local and Apple modes retain the complete same test workload with explicit signing settings", () => {
+    for (const profile of ["all", "extended"]) {
+        for (const configuration of [undefined, "Debug"]) {
+            const local = createManifest(job({profile, payload: {configuration}}));
+            const explicitLocal = createManifest(job({profile, payload: {configuration, signing: "local"}}));
+            const apple = createManifest(job({profile, payload: {configuration, signing: "apple"}}));
+            assert.deepEqual(local, explicitLocal);
+            assert.deepEqual(local.map(stage => stage.id), apple.map(stage => stage.id));
+            for (const stage of local) {
+                const signed = apple.find(candidate => candidate.id === stage.id);
+                assert.deepEqual(stage.nativeAudit, signed.nativeAudit);
+                assert.equal(stage.timeoutSeconds, signed.timeoutSeconds);
+                assert.deepEqual(stage.env, signed.env);
+                if (stage.command !== "xcodebuild") { assert.deepEqual(stage, signed); continue; }
+                assert.equal(stage.proofKey, undefined);
+                assert.ok(!stage.requirements.includes("proofKey"));
+                assert.ok(!stage.requirements.includes("signing"));
+                for (const setting of ["CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "PROVISIONING_PROFILE=",
+                    "PROVISIONING_PROFILE_SPECIFIER=", "CODE_SIGN_ENTITLEMENTS=", "ENABLE_APP_SANDBOX=NO",
+                    "ENABLE_HARDENED_RUNTIME=NO", "REGISTER_APP_GROUPS=NO", "BW_VM_VERIFICATION_BUILD=YES"]) {
+                    assert.ok(stage.args.includes(setting), `${stage.id}: ${setting}`);
+                    assert.ok(!signed.args.includes(setting), `${signed.id}: production override ${setting}`);
+                }
+                const device = stage.args.includes("generic/platform=iOS") || stage.args.includes("generic/platform=visionOS");
+                assert.deepEqual(stage.args.filter(arg => arg.startsWith("CODE_SIGNING_ALLOWED=")), [`CODE_SIGNING_ALLOWED=${device ? "NO" : "YES"}`]);
+                assert.deepEqual(stage.args.filter(arg => arg.startsWith("-only-testing:")), signed.args.filter(arg => arg.startsWith("-only-testing:")));
+                if (stage.args.includes("test-without-building")) { continue; }
+                assert.equal(signed.proofKey, true, signed.id);
+                assert.ok(signed.requirements.includes("proofKey"), signed.id);
+                if (stage.args.includes("generic/platform=macOS") || stage.args.includes("$destination:macos")) {
+                    assert.ok(signed.requirements.includes("signing"), signed.id);
+                }
+            }
+        }
+    }
+});
+
+test("complete local coverage never implies Apple, production credential, or entitlement integration coverage", () => {
+    const localJob = job();
+    const manifest = createManifest(localJob);
+    const checks = {...Object.fromEntries(manifest.flatMap(stage => stage.requirements).map(name => [name, true])), signing: false, proofKey: false};
+    const stages = manifest.map(stage => ({id: stage.id, status: "passed"}));
+    const local = coverageReport(localJob, stages, {checks});
+    assert.equal(local.status, "complete");
+    assert.equal(local.fullSuiteVerified, true);
+    assert.deepEqual(local.missingPrerequisites, []);
+    assert.deepEqual(local.credentialCoverage, {appleDevelopmentSigning: "not-requested", productionProofResource: "not-requested",
+        productionDistributionSigning: "not-verified", osEntitlementIntegration: "not-verified"});
+    const appleJob = job({payload: {signing: "apple"}});
+    const unavailable = coverageReport(appleJob, stages, {checks});
+    assert.equal(unavailable.fullSuiteVerified, false);
+    assert.deepEqual(new Set(unavailable.missingPrerequisites), new Set(["proofKey", "signing"]));
+    assert.equal(unavailable.credentialCoverage.appleDevelopmentSigning, "incomplete");
+    assert.equal(unavailable.credentialCoverage.productionProofResource, "incomplete");
+    const apple = coverageReport(appleJob, stages, {checks: {...checks, signing: true, proofKey: true}});
+    assert.equal(apple.fullSuiteVerified, true);
+    assert.equal(apple.credentialCoverage.appleDevelopmentSigning, "passed");
+    assert.equal(apple.credentialCoverage.productionProofResource, "passed");
+    assert.equal(apple.credentialCoverage.productionDistributionSigning, "not-verified");
+    assert.equal(apple.credentialCoverage.osEntitlementIntegration, "not-verified");
+    assert.equal(coverageReport(appleJob, stages.filter(stage => stage.id !== "build.macos.release"),
+        {checks: {...checks, signing: true, proofKey: true}}).credentialCoverage.appleDevelopmentSigning, "incomplete");
+});
+
+test("native stages retain audited result bundles without long-running system diagnostics", () => {
+    for (const profile of ["all", "extended"]) {
+        for (const signing of ["local", "apple"]) {
+            for (const configuration of [undefined, "Debug", "Release"]) {
+                const manifest = createManifest(job({profile, payload: {signing, configuration}}));
+                for (const stage of manifest) {
+                    if (!stage.nativeAudit) {
+                        assert.ok(!stage.args.includes("-collect-test-diagnostics"), stage.id);
+                        continue;
+                    }
+                    assert.equal(stage.args.filter(arg => arg === "-collect-test-diagnostics").length, 1, stage.id);
+                    assert.equal(stage.args[stage.args.indexOf("-collect-test-diagnostics") + 1], "never", stage.id);
+                    assert.equal(stage.resultBundle, true, stage.id);
+                    assert.equal(stage.nativeAudit.configuration, stage.args[stage.args.indexOf("-configuration") + 1], stage.id);
+                    assert.equal(stage.nativeAudit.kind, stage.group === "test" ? "full" : stage.group, stage.id);
+                    assert.equal(stage.timeoutSeconds, stage.group === "tsan" ? 14400 : 7200, stage.id);
+                    const command = commandForStage(stage, {destinations: {macos: "macos", ios: "ios", visionos: "visionos"}, artifacts: "/artifacts"});
+                    assert.equal(command.args[command.args.indexOf("-resultBundlePath") + 1], `/artifacts/${stage.id}.xcresult`, stage.id);
+                }
+            }
+        }
+    }
 });
 
 test("all matrix never invokes live deployment, account mutation, or custom DerivedData", () => {

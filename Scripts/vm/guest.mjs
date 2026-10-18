@@ -153,7 +153,8 @@ export function pinnedEnvironmentEvidence(xcodeOutput, runtimeData, provisioning
     return {xcode: {available: xcodeMatches, expected: {version: expectedXcode?.version, buildVersion: expectedXcode?.buildVersion}, actual: liveXcode}, runtimes};
 }
 
-export async function preflight({workspace, identity, bootstrapEvidence, provision, readSnapshotFile, execute = runProcess, stopRequested = async () => false}) {
+export async function preflight({workspace, identity, bootstrapEvidence, provision, readSnapshotFile, signing = "local", execute = runProcess, stopRequested = async () => false}) {
+    if (!["local", "apple"].includes(signing)) { throw new Error("Invalid signing mode"); }
     const checks = {};
     const versions = {};
     checks.bootstrap = bootstrapEvidence.available;
@@ -185,7 +186,6 @@ export async function preflight({workspace, identity, bootstrapEvidence, provisi
     checks.macos = checks.xcode && identity.aqua;
     checks.ios = simulatorResult.code === 0 && Boolean(destinations.ios);
     checks.visionos = simulatorResult.code === 0 && Boolean(destinations.visionos);
-    checks.signing = false;
     let proofKey;
     let proofKeyIssue;
     let signingIssue;
@@ -193,11 +193,10 @@ export async function preflight({workspace, identity, bootstrapEvidence, provisi
     let pinnedEnvironment;
     let missingSigning;
     let provisioning;
+    let provisioningIssue;
+    const capabilities = {appleSigning: "not-requested", requestProofKey: "not-requested"};
     try {
         provisioning = {vmId: provision.vmId, consoleUser: provision.consoleUser, appliedRequestID: provision.appliedProvisioningRequestID ?? null};
-        if (Array.isArray(provision.missingSigning)) {
-            missingSigning = provision.missingSigning.filter(value => typeof value === "string").map(value => value.slice(0, 1024)).slice(0, 20);
-        }
         pinnedEnvironment = pinnedEnvironmentEvidence(xcode.output, runtimeData, provision);
         checks.xcode = checks.xcode && pinnedEnvironment.xcode.available;
         const runtimeIDs = new Set(Object.values(pinnedEnvironment.runtimes).filter(runtime => runtime.available).map(runtime => runtime.identifier));
@@ -205,45 +204,85 @@ export async function preflight({workspace, identity, bootstrapEvidence, provisi
         checks.macos = checks.xcode && identity.aqua;
         checks.ios = simulatorResult.code === 0 && runtimeResult.code === 0 && Boolean(destinations.ios);
         checks.visionos = simulatorResult.code === 0 && runtimeResult.code === 0 && Boolean(destinations.visionos);
-        if (typeof provision.keychainPath === "string" && inside(join(userInfo().homedir, "Library/Keychains"), provision.keychainPath) &&
-            typeof provision.keychainPassword === "string" && provision.keychainPassword.length > 0 && provision.keychainPassword.length <= 8192) {
-            unlockSigning = async () => {
-                const unlocked = await execute("/usr/bin/security", ["unlock-keychain", "-p", provision.keychainPassword, provision.keychainPath], {timeoutSeconds: 30, stopRequested});
-                return unlocked.code === 0 && !unlocked.cancelled && !unlocked.timedOut;
-            };
-            if (await unlockSigning()) {
-                const signing = await execute("/usr/bin/security", ["find-identity", "-v", "-p", "codesigning", provision.keychainPath], {timeoutSeconds: 30, stopRequested});
-                checks.signing = signing.code === 0 && /\b[1-9][0-9]* valid identities found\b/.test(signing.output);
-            }
+    } catch (error) {
+        provisioningIssue = error.message;
+        checks.xcode = checks.macos = checks.ios = checks.visionos = false;
+    }
+    if (signing === "apple") {
+        checks.signing = false;
+        if (Array.isArray(provision?.missingSigning)) {
+            missingSigning = provision.missingSigning.filter(value => typeof value === "string").map(value => value.slice(0, 1024)).slice(0, 20);
         }
-        if (!checks.signing) { signingIssue = "The dedicated guest signing keychain could not be unlocked or contains no valid signing identity"; }
-        if (typeof provision.proofKey !== "string" || !/^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/.test(provision.proofKey)) { throw new Error("Guest proof key is missing or malformed"); }
-        const fingerprint = (await readSnapshotFile(join(workspace, "Scripts/alchemy_jwt_request_proof_key.sha256"), 100)).toString().trim();
-        if (sha256(provision.proofKey) !== fingerprint) { throw new Error("Guest proof key does not match the source fingerprint"); }
-        proofKey = provision.proofKey;
-    } catch (error) { proofKeyIssue = error.message; }
-    checks.proofKey = Boolean(proofKey);
+        try {
+            if (typeof provision?.keychainPath === "string" && inside(join(userInfo().homedir, "Library/Keychains"), provision.keychainPath) &&
+                typeof provision.keychainPassword === "string" && provision.keychainPassword.length > 0 && provision.keychainPassword.length <= 8192) {
+                unlockSigning = async () => {
+                    const unlocked = await execute("/usr/bin/security", ["unlock-keychain", "-p", provision.keychainPassword, provision.keychainPath], {timeoutSeconds: 30, stopRequested});
+                    return unlocked.code === 0 && !unlocked.cancelled && !unlocked.timedOut;
+                };
+                if (await unlockSigning()) {
+                    const identities = await execute("/usr/bin/security", ["find-identity", "-v", "-p", "codesigning", provision.keychainPath], {timeoutSeconds: 30, stopRequested});
+                    checks.signing = identities.code === 0 && /\b[1-9][0-9]* valid identities found\b/.test(identities.output);
+                }
+            }
+            if (!checks.signing) { signingIssue = "The dedicated guest signing keychain could not be unlocked or contains no valid signing identity"; }
+        } catch (error) { signingIssue = error.message; }
+        try {
+            if (typeof provision?.proofKey !== "string" || !/^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/.test(provision.proofKey)) { throw new Error("Guest proof key is missing or malformed"); }
+            const fingerprint = (await readSnapshotFile(join(workspace, "Scripts/alchemy_jwt_request_proof_key.sha256"), 100)).toString().trim();
+            if (sha256(provision.proofKey) !== fingerprint) { throw new Error("Guest proof key does not match the source fingerprint"); }
+            proofKey = provision.proofKey;
+        } catch (error) { proofKeyIssue = error.message; }
+        checks.proofKey = Boolean(proofKey);
+        capabilities.appleSigning = checks.signing ? "available" : "unavailable";
+        capabilities.requestProofKey = checks.proofKey ? "available" : "unavailable";
+    }
     return {report: {checks, versions, destinations, simulators: choices, bootstrap: bootstrapEvidence, pinnedEnvironment, provisioning,
-        ...(proofKeyIssue ? {proofKeyIssue} : {}), ...(signingIssue ? {signingIssue} : {}), ...(missingSigning ? {missingSigning} : {})}, proofKey, unlockSigning};
+        signingMode: signing, capabilities,
+        ...(provisioningIssue ? {provisioningIssue} : {}), ...(proofKeyIssue ? {proofKeyIssue} : {}),
+        ...(signingIssue ? {signingIssue} : {}), ...(missingSigning ? {missingSigning} : {})}, proofKey, unlockSigning};
+}
+
+export function requiredPrerequisites(job) {
+    if (job.kind === "doctor") {
+        return ["bootstrap", "node", "python", "jq", "xcode", "macos", "ios", "visionos",
+            ...((job.payload.signing ?? "local") === "apple" ? ["signing", "proofKey"] : [])];
+    }
+    return [...new Set(createManifest(job).flatMap(stage => stage.requirements))];
+}
+
+function credentialCoverage(job, stages, preflight) {
+    const signingMode = job.payload.signing ?? "local";
+    const manifest = job.kind === "run" ? createManifest(job) : [];
+    const outcomes = new Map(stages.map(stage => [stage.id, stage.status]));
+    const status = requirement => {
+        if (signingMode === "local") { return "not-requested"; }
+        const required = manifest.filter(stage => stage.requirements.includes(requirement));
+        if (!required.length) { return "not-run"; }
+        return preflight?.checks?.[requirement] === true && required.every(stage => outcomes.get(stage.id) === "passed")
+            ? "passed" : "incomplete";
+    };
+    return {appleDevelopmentSigning: status("signing"), productionProofResource: status("proofKey"),
+        productionDistributionSigning: "not-verified", osEntitlementIntegration: "not-verified"};
 }
 
 export function coverageReport(job, stages, preflight) {
     const options = job.payload;
     const selected = options.stages.length > 0 || options.onlyTesting.length > 0 || Boolean(options.configuration) || Boolean(options.approvalArgs?.length);
-    const missingPrerequisites = Object.entries(preflight?.checks ?? {}).filter(([, available]) => available !== true).map(([name]) => name);
+    const missingPrerequisites = requiredPrerequisites(job).filter(name => preflight?.checks?.[name] !== true);
+    const signingMode = options.signing ?? "local";
+    const credentials = credentialCoverage(job, stages, preflight);
     if (job.kind === "doctor") {
-        return {scope: "prerequisites", status: preflight && !missingPrerequisites.length ? "complete" : "partial", missingPrerequisites};
+        return {scope: "prerequisites", status: preflight && !missingPrerequisites.length ? "complete" : "partial",
+            missingPrerequisites, signingMode, credentialCoverage: credentials};
     }
     const manifest = createManifest(job);
-    for (const requirement of new Set(manifest.flatMap(stage => stage.requirements))) {
-        if (preflight?.checks?.[requirement] !== true && !missingPrerequisites.includes(requirement)) { missingPrerequisites.push(requirement); }
-    }
     const outcomes = new Map(stages.map(stage => [stage.id, stage.status]));
     const incompleteStages = manifest.filter(stage => outcomes.get(stage.id) !== "passed").map(stage => ({id: stage.id, status: outcomes.get(stage.id) ?? "not-run"}));
     const fullSuiteVerified = !selected && stages.length === manifest.length && !incompleteStages.length && !missingPrerequisites.length && auditResults(stages).status === "passed";
     return {scope: selected ? "selected" : "full", status: fullSuiteVerified ? "complete" : "partial",
         selectedStageGroups: options.stages.length ? [...options.stages] : ["all"], onlyTesting: [...options.onlyTesting],
-        missingPrerequisites, incompleteStages, fullSuiteVerified};
+        missingPrerequisites, incompleteStages, fullSuiteVerified, signingMode, credentialCoverage: credentials};
 }
 
 export async function prepareStageScratch(workspace, runId, stageId) {
@@ -401,6 +440,12 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
             const scratch = stage.scratchDirectory ? await prepareStageScratch(workspace, runId, stage.id) : undefined;
             if (scratch) { result.scratchDirectory = scratch; }
             const {command, args} = commandForStage(stage, {destinations: checked.destinations, artifacts, scratch});
+            if (command === "xcodebuild" && args.includes("BW_VM_VERIFICATION_BUILD=YES")) {
+                if (typeof runId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(runId) || runId.includes("..") || exchange !== EXCHANGE_PATH) {
+                    throw new Error("Local verification builds require the active guest job identity");
+                }
+                args.push(`BW_TEST_VM_RUN_ID=${runId}`, `BW_TEST_VM_EXCHANGE=${exchange}`);
+            }
             result.command = [command, ...args];
             result.log = `${stage.id}.log`;
             const before = Object.fromEntries(await Promise.all((stage.unchanged ?? []).map(async path => [path, await hashFile(join(workspace, path))])));
@@ -450,18 +495,20 @@ export async function runJob({job: input, identity, provision, workspace, exchan
     const job = validateJob(input);
     const manifest = job.kind === "run" ? createManifest(job) : [];
     const reportPath = join(artifacts, "result.json");
-    const report = {version: 1, runId: job.runId, vmId: job.vmId, kind: job.kind, profile: job.profile, status: "running", startedAt: timestamp(),
+    const report = {version: 1, runId: job.runId, vmId: job.vmId, kind: job.kind, profile: job.profile, signingMode: job.payload.signing ?? "local", status: "running", startedAt: timestamp(),
         resources: {started: resourceSnapshot()}, identity, source, buildVolume, stages: pendingStageResults(manifest)};
     try {
         await writeJSON(reportPath, report);
         if (await stopRequested()) { throw new Error("Run cancelled"); }
-        const checked = await preflight({workspace, identity, provision, bootstrapEvidence, readSnapshotFile, stopRequested});
+        const checked = await preflight({workspace, identity, provision, bootstrapEvidence, readSnapshotFile,
+            signing: report.signingMode, stopRequested});
         report.preflight = checked.report;
         await writeJSON(reportPath, report);
         if (await stopRequested()) { throw new Error("Run cancelled"); }
         if (job.kind === "doctor") {
-            report.status = Object.values(checked.report.checks).every(value => value === true) ? "passed" : "failed";
-            report.summary = {issues: Object.entries(checked.report.checks).filter(([, value]) => !value).map(([key]) => `Unavailable prerequisite: ${key}`)};
+            const missing = requiredPrerequisites(job).filter(name => checked.report.checks[name] !== true);
+            report.status = missing.length ? "failed" : "passed";
+            report.summary = {issues: missing.map(key => `Unavailable prerequisite: ${key}`)};
         } else {
             report.stages = await executeStages(manifest, {
                 workspace, artifacts, preflight: checked.report, proofKey: checked.proofKey, unlockSigning: checked.unlockSigning, stopRequested, runId: job.runId, exchange,

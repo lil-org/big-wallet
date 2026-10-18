@@ -868,10 +868,11 @@ final class AlchemyJWTProviderTests: XCTestCase {
             records: [current, unexpectedSecond],
             firstFetchGate: firstFetchGate
         )
+        let clock = TestClock(date: Date(timeIntervalSince1970: TimeInterval(now)))
         let provider = makeProvider(
             store: TestAlchemyJWTStore(record: current),
             broker: broker,
-            now: now,
+            clock: clock,
             proactiveRefreshSleep: {
                 try await sleeper.sleep($0)
             }
@@ -893,9 +894,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let durations = await sleeper.requestedDurations()
         let fetchCount = await broker.fetchCount
         XCTAssertEqual(fetchCount, 1)
-        XCTAssertEqual(durations.first, 0)
-        XCTAssertGreaterThan(durations[1], 750_000_000)
-        XCTAssertLessThanOrEqual(durations[1], 1_000_000_000)
+        XCTAssertEqual(durations, [0, 1_000_000_000])
     }
 
     func testClockChangeNotificationReschedulesWithoutRPCOrLifecycleEvent()
@@ -1640,11 +1639,11 @@ final class AlchemyJWTProviderTests: XCTestCase {
             afterUnauthorized: original,
             for: alchemyURL
         )
+        await firstFetchGate.waitUntilStarted()
         async let second = provider.replacementAuthorization(
             afterUnauthorized: original,
             for: alchemyURL
         )
-        await firstFetchGate.waitUntilStarted()
         await fulfillment(of: [contended], timeout: 2)
         firstFetchGate.release()
         let resolvedAuthorizations = try await (first, second)

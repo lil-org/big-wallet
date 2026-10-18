@@ -143,9 +143,9 @@ test("Debug-only unfiltered native tests receive Release performance proof on ea
             assert.deepEqual(gate.nativeAudit, {configuration: "Release", platform, kind: "performance"});
             assert.equal(gate.args[gate.args.indexOf("-configuration") + 1], "Release");
             assert.ok(gate.args.includes("ENABLE_TESTABILITY=YES"));
-            assert.ok(!gate.args.some(arg => arg.startsWith("CODE_SIGNING_ALLOWED=")));
+            assert.ok(gate.args.includes("CODE_SIGNING_ALLOWED=YES"));
             assert.deepEqual(gate.env, PERFORMANCE_ENV);
-            assert.equal(gate.proofKey, true);
+            assert.equal(gate.proofKey, undefined);
             const selectors = gate.args.filter(arg => arg.startsWith("-only-testing:"));
             assert.equal(selectors.length, PERFORMANCE_TESTS.length);
             for (const name of PERFORMANCE_TESTS) { assert.ok(selectors.some(arg => arg.endsWith(`/${name}`))); }
@@ -164,7 +164,7 @@ test("normal full matrices and filtered or non-test Debug selections add no simu
         for (const configuration of ["debug", "release"]) { assert.equal(full.filter(stage => stage.id === `test.${platform}.${configuration}`).length, 1); }
     }
     for (const stage of full) {
-        if (stage.nativeAudit) { assert.equal(stage.args[stage.args.indexOf("-collect-test-diagnostics") + 1], "on-failure"); }
+        if (stage.nativeAudit) { assert.equal(stage.args[stage.args.indexOf("-collect-test-diagnostics") + 1], "never"); }
         if (stage.group === "build") { assert.ok(!stage.args.includes("-collect-test-diagnostics")); }
     }
 });

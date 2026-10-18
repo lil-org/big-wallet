@@ -23,6 +23,14 @@ snapshots and returns logs and test results without opening viewers. See
 [VM setup, signing, and test coverage](Scripts/vm/README.md) for the one-time
 guest bootstrap and targeted test commands.
 
+The default VM verification uses ad-hoc macOS and simulator test hosts and needs
+no Apple signing credentials or production RPC proof key. It runs the complete
+development suite with fixture dependencies, including Release performance and
+crash-recovery checks. `Scripts/test_vm.sh run all --signing apple` additionally
+uses the provisioned Apple identity, production entitlements, and proof resource.
+Reports distinguish these modes; normal release signing and packaging checks
+remain unchanged.
+
 The installed guest bootstrap verifies the VM, session, and source snapshot before
 loading that snapshot's test harness. Changes to the harness, stage manifest, or
 result auditor run with the next snapshot without repeating setup. Job selectors

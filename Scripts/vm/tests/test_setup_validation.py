@@ -94,7 +94,7 @@ class SetupValidationInventoryTests(unittest.TestCase):
         self.assertEqual(result['reason'], 'vm_launch_failed')
         self.assertEqual(result['plannedResult'], 'planned-result.json')
         self.assertEqual(result['selection'], {
-            'stages': ['test'], 'configuration': 'Debug',
+            'stages': ['test'], 'configuration': 'Debug', 'signing': 'local',
             'onlyTesting': ['WindowAuthenticationSessionTests', 'PasswordStorageTests', 'SecretHandlingTests'],
         })
         self.assertEqual(result['source'], job['source'])

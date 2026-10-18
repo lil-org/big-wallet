@@ -106,6 +106,10 @@ class SetupFixture:
         exchange = Path(command[command.index('--status') + 1]).parent
         job = host.read_json(exchange / 'job.json')
         self.launches.append(job['kind'])
+        if job['kind'] == 'run':
+            self.test.assertEqual(job['payload'], {
+                'stages': ['test'], 'configuration': 'Debug', 'signing': 'local',
+                'onlyTesting': ['WindowAuthenticationSessionTests', 'PasswordStorageTests', 'SecretHandlingTests']})
         if job['kind'] == 'doctor':
             self.doctor_control = (exchange, job['runId'])
         elif self.stop_phase == 'late-prior-stop':
@@ -114,7 +118,8 @@ class SetupFixture:
         report = {'version': 1, 'runId': job['runId'], 'status': 'passed', 'finishedAt': 'fixture',
                   'identity': {'vmId': job['vmId'], 'consoleUser': 'wallet-test'}, 'source': job['source'],
                   'preflight': {'bootstrap': {'available': True, 'hashes': self.tools},
-                    'checks': {name: True for name in ('bootstrap', 'node', 'python', 'jq', 'xcode', 'macos', 'ios', 'visionos')}}}
+                    'checks': {**{name: True for name in ('bootstrap', 'node', 'python', 'jq', 'xcode', 'macos', 'ios', 'visionos')},
+                               'signing': False, 'proofKey': False}}}
         host.atomic_json(exchange / 'artifacts/result.json', report)
         fixture = self
         class Child:
@@ -200,11 +205,46 @@ class SetupPreparationTests(unittest.TestCase):
         with SetupFixture(self) as fixture:
             captured = host.bootstrap_source_digest()
             self.assertEqual(fixture.run(), 0)
-            self.assertEqual(host.read_json(fixture.state / 'baseline.json')['bootstrapSourceDigest'], captured)
+            baseline = host.read_json(fixture.state / 'baseline.json')
+            self.assertEqual(baseline['bootstrapSourceDigest'], captured)
+            self.assertEqual(baseline['verificationSigningMode'], 'local')
             self.assertEqual(fixture.launches, ['doctor', 'run'])
             fixture.launches.clear()
             self.assertEqual(fixture.run(), 0)
             self.assertEqual(fixture.launches, [])
+
+    def test_failed_local_smoke_tests_do_not_promote_a_baseline(self):
+        with SetupFixture(self) as fixture:
+            launch = fixture.launch
+            def fail_smoke(command, **options):
+                child = launch(command, **options)
+                exchange = Path(command[command.index('--status') + 1]).parent
+                if host.read_json(exchange / 'job.json')['kind'] == 'run':
+                    report = host.read_json(exchange / 'artifacts/result.json')
+                    report.update(status='failed', stages=[{'id': 'test.macos.debug', 'status': 'failed'}])
+                    host.atomic_json(exchange / 'artifacts/result.json', report)
+                return child
+            with patch.object(host.subprocess, 'Popen', side_effect=fail_smoke):
+                self.assertEqual(fixture.run(), 2)
+            self.assertEqual(fixture.launches, ['doctor', 'run'])
+            self.assertFalse((fixture.state / 'baseline.json').exists())
+            candidate = host.read_json(fixture.state / 'candidate.json')
+            self.assertIn('baseVerifiedAt', candidate)
+            self.assertNotIn('verifiedAt', candidate)
+            self.assertNotIn('verificationSigningMode', candidate)
+            self.assertNotIn('promotionPending', candidate)
+
+    def test_baseline_without_local_verification_requires_smoke_tests(self):
+        with SetupFixture(self) as fixture:
+            self.assertEqual(fixture.run(), 0)
+            baseline_path = fixture.state / 'baseline.json'
+            baseline = host.read_json(baseline_path)
+            baseline.pop('verificationSigningMode')
+            host.atomic_json(baseline_path, baseline)
+            fixture.launches.clear()
+            self.assertEqual(fixture.run(), 0)
+            self.assertEqual(fixture.launches, ['doctor', 'run'])
+            self.assertEqual(host.read_json(baseline_path)['verificationSigningMode'], 'local')
 
     def test_stop_during_preparation_cancels_before_the_next_vm_launch(self):
         phases = ('tools', 'clone', 'archive', 'snapshot', 'doctor-shutdown', 'doctor-signal', 'validation-snapshot', 'validation-plan')

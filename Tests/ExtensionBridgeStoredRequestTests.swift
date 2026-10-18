@@ -2891,12 +2891,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
             fileIO: approvalStoreIO(directoryBoundary: rootURL) { io in
                 io.removeItem = { url in
-                if url == orphan {
-                    removalAttempts.withValue { $0 += 1 }
-                    throw Failure.injectedWrite
+                    if url.resolvingSymlinksInPath().path == orphan.resolvingSymlinksInPath().path {
+                        removalAttempts.withValue { $0 += 1 }
+                        throw Failure.injectedWrite
+                    }
+                    try FileManager.default.removeItem(at: url)
                 }
-                try FileManager.default.removeItem(at: url)
-            }
             }
         ))
         let identifiers: [UUID?] = [nil, UUID(), UUID()]
@@ -2917,25 +2917,32 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let orphan = rootURL.appendingPathComponent(".profile-write-\(UUID().uuidString.lowercased()).tmp")
         try Data("interrupted snapshot".utf8).write(to: orphan)
         let failRemoval = LockedTestValue(true)
+        let removalAttempts = LockedTestValue(0)
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
             fileIO: approvalStoreIO(directoryBoundary: rootURL) { io in
                 io.removeItem = { url in
-                if url == orphan, failRemoval.value { throw Failure.injectedWrite }
-                try FileManager.default.removeItem(at: url)
-            }
+                    if url.resolvingSymlinksInPath().path == orphan.resolvingSymlinksInPath().path {
+                        removalAttempts.withValue { $0 += 1 }
+                        if failRemoval.value { throw Failure.injectedWrite }
+                    }
+                    try FileManager.default.removeItem(at: url)
+                }
             }
         ))
         store.performMaintenance(profileIdentifier: nil)
         guard case .available = store.list(profileIdentifier: nil) else {
             return XCTFail("Cleanup failure must not block recovery")
         }
+        XCTAssertEqual(removalAttempts.value, 1)
         XCTAssertTrue(FileManager.default.fileExists(atPath: orphan.path))
         failRemoval.value = false
         guard case .available = store.list(profileIdentifier: nil) else {
             return XCTFail("Expected available store")
         }
+        XCTAssertEqual(removalAttempts.value, 1)
         XCTAssertTrue(FileManager.default.fileExists(atPath: orphan.path))
         store.performMaintenance()
+        XCTAssertEqual(removalAttempts.value, 2)
         XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path))
     }
 

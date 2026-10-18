@@ -14,12 +14,19 @@ Scripts/test_vm.sh doctor
 Scripts/test_vm.sh setup
 Scripts/test_vm.sh run all
 Scripts/test_vm.sh run extended
+Scripts/test_vm.sh run all --signing apple
 Scripts/test_vm.sh run all --stage test --configuration Debug \
   --only-testing 'Tests macOS/WindowAuthenticationSessionTests'
 Scripts/test_vm.sh run all --stage test --only-testing 'Tests visionOS'
 Scripts/test_vm.sh status
 Scripts/test_vm.sh stop
 ```
+
+The default signing mode is `local`. All automated development suites run without
+an Apple signing identity, provisioning profiles, or the production RPC proof key.
+Runnable macOS and simulator test hosts use ad-hoc signatures. Generic iOS and
+visionOS device builds compile without signing. The VM applies these settings
+per build invocation; the project's normal Debug and Release settings stay intact.
 
 The existing `check_swift6.sh` and `check_approval_lifecycle.sh` commands route
 host invocations here. `check_swift6.sh` is a host-only alias; the guest executes
@@ -113,12 +120,15 @@ SSH polls atomic supervisor receipts and test results. An uncertain launch reply
 is observed without repeating launch. The host accepts a completed result only
 after its artifacts have been retrieved.
 
-Base provisioning can finish before signing is available. It registers the guest
-agent and records the missing signing prerequisites. After the base is verified,
-`Scripts/test_vm.sh run all --candidate --stage repository --stage worker` runs
-those independent suites in a disposable copy of the candidate. Its report
-explicitly identifies partial coverage. A candidate never substitutes for a
-fully verified baseline, and unavailable signed stages cannot pass.
+Setup verifies the guest tools and runs its native smoke tests in `local` mode,
+then promotes the candidate to a baseline. Missing Apple signing credentials or
+the production RPC proof key do not block this verification. An explicitly
+requested credential import must still succeed before its provisioning request
+is acknowledged.
+
+If setup's native validation has not passed, a base-verified candidate can run
+with `--candidate`. It never substitutes for the baseline automatically. Selected
+or failed suites remain incomplete; the runner does not waive their checks.
 
 Unattended runs require automatic login to the guest test account and an
 unlocked graphical session. This is guest-only setup; no host login, screen
@@ -126,11 +136,15 @@ locking, permissions, or Keychain settings are changed.
 
 ## Existing signing input
 
+Apple signing is optional. `run all --signing apple` uses the project's normal
+entitlements and signing settings and requires an existing Apple Development
+identity, matching profiles, and the production RPC proof key in the guest.
+Missing credentials block that mode; it never falls back to local signing.
+
 Setup does not create signing keys, CSRs, or certificates and does not export
-anything from the host Keychain. If signed macOS coverage is available, supply
-only an existing Apple Development identity and matching profiles already held
-on the host. Otherwise those stages remain explicitly blocked while independent
-coverage can run. Entitlements and packaging checks remain intact.
+anything from the host Keychain. Supply only existing signing inputs when you
+want this additional coverage. Normal release packaging and credential checks
+remain intact.
 
 Keep input outside the checkout. For example, a private `provision-input.json`:
 
@@ -201,6 +215,27 @@ performance gates, focused TSan, protocol fuzzing, and Debug/Release approval
 lifecycle runs. `extended` adds broader TSan, three fixed 20,000-case fuzz seeds,
 and Debug/Release lifecycle soaks of 1,000 sequences × 200 actions.
 
+Both signing modes run the same selected tests, performance thresholds, crash
+scenarios, and result audits. Local verification removes production entitlements,
+App Sandbox, and Hardened Runtime settings from its ad-hoc test products. The
+native tests exercise injected storage, authentication, and RPC dependencies;
+source and packaging contract tests continue checking the production entitlement
+files. Actual OS authorization of shared Keychain or app-group access is outside
+that fixture coverage.
+
+Local builds remove any stale `AlchemyJWTRequestProofKey` resource and omit it.
+They never read a production proof key or bundle a substitute. The omission is
+allowed only for a verified VM build session with the local build settings;
+archive and deployment actions are rejected. Production bundling still requires
+the pinned key, and release artifact validation rejects these keyless products.
+
+Reports record the signing mode and credential coverage separately from suite
+results. A complete `local` run establishes the full automated development matrix;
+it does not establish Apple signing, production proof-resource packaging, or
+distribution readiness. `apple` mode adds builds using the provisioned credentials.
+Neither mode substitutes for actual Safari, biometric, or release-distribution
+testing.
+
 Selectors are `build`, `test`, `performance`, `tsan`, `fuzz`, `approval`,
 `repository`, and `worker`. Repeat `--stage` to select more than one. Dependencies
 are included automatically. Repeat `--only-testing` for XCTest classes or
@@ -226,6 +261,12 @@ and lifecycle replay files. Unrelated stages continue after failure; dependent
 stages become blocked. Timeouts, missing results, unexpected skips, and empty
 native suites cannot pass. Debug crypto skips require corresponding successful
 Release gates. Thresholds are not relaxed for virtualization.
+
+Native test commands disable Xcode's verbose system diagnostics with
+`-collect-test-diagnostics never`. Xcode's failure-time simulator diagnostic
+collector can remain blocked after XCTest has finished inside the headless VM.
+Test logs and `.xcresult` bundles are still retained and audited; failures,
+unexpected skips, missing results, and performance requirements remain enforced.
 
 Stale generated bundles remain failed checks, with their rebuilt files exported
 under `artifacts/generated/<stage-id>/` and their paths and SHA-256 recorded in the stage's `generatedArtifacts` result.

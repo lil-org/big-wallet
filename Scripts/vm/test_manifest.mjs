@@ -2,6 +2,11 @@ import {isAbsolute, join, resolve, sep} from "node:path";
 
 export const SELECTORS = ["build", "test", "performance", "tsan", "fuzz", "approval", "repository", "worker"];
 export const BOOTSTRAP_TOOL_NAMES = ["VMGuestAgent", "guest_runner", "guest_bootstrap.mjs"];
+const LOCAL_SIGNING_SETTINGS = [
+    "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "PROVISIONING_PROFILE=",
+    "PROVISIONING_PROFILE_SPECIFIER=", "CODE_SIGN_ENTITLEMENTS=", "ENABLE_APP_SANDBOX=NO",
+    "ENABLE_HARDENED_RUNTIME=NO", "REGISTER_APP_GROUPS=NO", "BW_VM_VERIFICATION_BUILD=YES",
+];
 export const PLATFORMS = [
     {id: "macos", target: "Tests macOS", scheme: "Wallet", generic: "generic/platform=macOS", requirement: "macos"},
     {id: "ios", target: "Tests iOS", scheme: "Wallet iOS", generic: "generic/platform=iOS", requirement: "ios"},
@@ -45,7 +50,7 @@ export function validateJob(value) {
     if (typeof value.vmId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/.test(value.vmId)) { throw new Error("Invalid VM identifier"); }
     if (!["run", "doctor"].includes(value.kind) || !["all", "extended"].includes(value.profile)) { throw new Error("Invalid job kind or profile"); }
     const options = value.payload;
-    const optionNames = new Set(["stages", "onlyTesting", "configuration", "approvalArgs"]);
+    const optionNames = new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "signing"]);
     if (!options || typeof options !== "object" || Array.isArray(options) || Object.keys(options).some(key => !optionNames.has(key))) {
         throw new Error("Unsupported job payload");
     }
@@ -58,6 +63,7 @@ export function validateJob(value) {
         throw new Error("Invalid XCTest selection");
     }
     if (options.configuration !== undefined && !["Debug", "Release"].includes(options.configuration)) { throw new Error("Invalid configuration"); }
+    if (options.signing !== undefined && !["local", "apple"].includes(options.signing)) { throw new Error("Invalid signing mode"); }
     if (!value.bootstrapTools || typeof value.bootstrapTools !== "object" || Array.isArray(value.bootstrapTools) ||
         Object.keys(value.bootstrapTools).length !== BOOTSTRAP_TOOL_NAMES.length || BOOTSTRAP_TOOL_NAMES.some(name => !/^[a-f0-9]{64}$/.test(value.bootstrapTools[name]))) {
         throw new Error("Invalid bootstrap tool identity");
@@ -149,7 +155,7 @@ export function createManifest(job) {
                     debugPerformancePlatforms.add(platform.id);
                 }
             }
-            add(`test.${slug}`, "test", "xcodebuild", ["test-without-building", ...base, "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "on-failure",
+            add(`test.${slug}`, "test", "xcodebuild", ["test-without-building", ...base, "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never",
                 ...selectedTests.map(test => `-only-testing:${test}`)], {
                 dependencies: [`build-tests.${slug}`], requirements: ["xcode", platform.requirement], timeoutSeconds: 7200,
                 nativeAudit: {configuration, platform: platform.id, kind: "full", filtered: selectedTests.length > 0 && !selectedTests.includes(platform.target)},
@@ -158,7 +164,7 @@ export function createManifest(job) {
         }
     }
     const nativeBase = ["-jobs", "2", "-enableCodeCoverage", "NO", "test", "-project", "Wallet.xcodeproj", "-scheme", "Tests macOS",
-        "-destination", "$destination:macos", "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "on-failure"];
+        "-destination", "$destination:macos", "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never"];
     const nativeRequirements = ["node", "xcode", "proofKey", "macos", "signing"];
     const nativeDependencies = ["provider.install", "protocol.check"];
     add("performance.release", "performance", "xcodebuild", [...nativeBase, "-configuration", "Release", "ENABLE_TESTABILITY=YES",
@@ -170,7 +176,7 @@ export function createManifest(job) {
         for (const platform of PLATFORMS.filter(platform => platform.id !== "macos" && debugPerformancePlatforms.has(platform.id))) {
             add(`performance.${platform.id}.release`, "performance", "xcodebuild", ["-jobs", "2", "-enableCodeCoverage", "NO", "test",
                 "-project", "Wallet.xcodeproj", "-scheme", platform.target, "-configuration", "Release", "ENABLE_TESTABILITY=YES",
-                "-destination", `$destination:${platform.id}`, "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "on-failure",
+                "-destination", `$destination:${platform.id}`, "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never",
                 ...PERFORMANCE_TESTS.map(name => `-only-testing:${platform.target}/WalletCoreProxyPerformanceGateTests/${name}`)], {
                 dependencies: nativeDependencies, requirements: ["node", "xcode", "proofKey", platform.requirement], proofKey: true, timeoutSeconds: 7200,
                 env: PERFORMANCE_ENV, nativeAudit: {configuration: "Release", platform: platform.id, kind: "performance"}, resultBundle: true,
@@ -219,7 +225,18 @@ export function createManifest(job) {
     const byID = new Map(stages.map(stage => [stage.id, stage]));
     const include = id => { for (const dependency of byID.get(id).dependencies) { if (!selected.has(dependency)) { selected.add(dependency); include(dependency); } } };
     for (const id of selected) { include(id); }
-    return stages.filter(stage => selected.has(stage.id)).map(stage => ({...stage, requirements: [...new Set(["bootstrap", ...stage.requirements])]}));
+    return stages.filter(stage => selected.has(stage.id)).map(stage => {
+        if ((options.signing ?? "local") === "local" && stage.command === "xcodebuild") {
+            const {proofKey, ...local} = stage;
+            const deviceBuild = stage.args.includes("generic/platform=iOS") || stage.args.includes("generic/platform=visionOS");
+            stage = {...local,
+                args: [...stage.args.filter(argument => !argument.startsWith("CODE_SIGNING_ALLOWED=")),
+                    ...LOCAL_SIGNING_SETTINGS, `CODE_SIGNING_ALLOWED=${deviceBuild ? "NO" : "YES"}`],
+                requirements: stage.requirements.filter(requirement => requirement !== "signing" && requirement !== "proofKey"),
+            };
+        }
+        return {...stage, requirements: [...new Set(["bootstrap", ...stage.requirements])]};
+    });
 }
 
 export function commandForStage(stage, {destinations, artifacts, scratch}) {

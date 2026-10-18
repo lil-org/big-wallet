@@ -602,9 +602,15 @@ def stage_planned_result(exchange, job):
               'profile': job['profile'], 'status': 'planned', 'origin': 'host-plan',
               'plannedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
               'source': job['source'], 'jobSHA256': hash_regular_file(job_path), 'stages': stages,
-              'selection': {key: job['payload'][key] for key in ('stages', 'onlyTesting', 'configuration', 'approvalArgs') if key in job['payload']}}
+              'selection': job_selection(job)}
     atomic_json(exchange / 'artifacts/planned-result.json', result)
     return result
+
+
+def job_selection(job):
+    payload = job['payload']
+    return {'signing': payload.get('signing', 'local'),
+            **{key: payload[key] for key in ('stages', 'onlyTesting', 'configuration', 'approvalArgs') if key in payload}}
 
 
 def host_doctor(args, state, environment):
@@ -633,7 +639,8 @@ def host_doctor(args, state, environment):
             raise RunnerError('Prepared baseline needs the current guest bootstrap/environment; run setup')
         if not matches_source_vm(record, args.vm):
             raise RunnerError('Prepared baseline belongs to another source VM')
-        return {'verifiedAt': record.get('verifiedAt'), 'vmId': record['vmId']}
+        return {'verifiedAt': record.get('verifiedAt'), 'vmId': record['vmId'],
+                'verificationSigningMode': record.get('verificationSigningMode')}
     check('baseline', baseline)
     return {'version': 1, 'status': 'passed' if all(c['status'] == 'passed' for c in checks) else 'blocked',
             'scope': 'host prerequisites; guest readiness is verified during setup and each run',
@@ -934,6 +941,13 @@ def finalize_interrupted_result(exchange, run_id, reason, guest_failure=None, ho
                 hash_regular_file(exchange / 'snapshot-manifest.json') != result['source']['sha256']):
             raise RunnerError('The planned inventory does not match the interrupted job and source snapshot')
         result['plannedResult'] = planned_path.name
+    job_path = exchange / 'job.json'
+    if job_path.exists():
+        job = read_json(job_path)
+        if job.get('runId') != run_id:
+            raise RunnerError('The interrupted job belongs to a different run')
+        if isinstance(job.get('payload'), dict):
+            result['selection'] = job_selection(job)
     finished_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     status = ('cancelled' if reason == 'cancelled' else
               'failed' if reason in ('timed_out', 'guest_launch_failed', 'guest_exited_without_result', 'guest_exchange_failed',
@@ -1557,7 +1571,7 @@ def run_setup_doctor(args, state, candidate, environment, operation, record, con
     check_setup_stop(operation)
     for attempt in range(2):
         job = {'version': 1, 'runId': run_id, 'vmId': record['vmId'], 'kind': 'doctor', 'profile': 'all',
-               'payload': {'stages': [], 'onlyTesting': []}, 'source': source, 'bootstrapTools': bootstrap_tools}
+               'payload': {'stages': [], 'onlyTesting': [], 'signing': 'local'}, 'source': source, 'bootstrapTools': bootstrap_tools}
         if needs_install:
             print('Applying guest provisioning over pinned SSH with the existing guest account.', flush=True)
         hook = GuestSetupHook(module, access, configuration['consoleUser'], password, directory, exchange, job,
@@ -1629,9 +1643,10 @@ def prepare_setup(args, state, environment, operation):
         existing = read_json(state / 'baseline.json')
         if (matches_source_vm(existing, args.vm) and existing.get('environment') == environment and
                 existing.get('bootstrapTools') == bootstrap_tools and existing.get('bootstrapSourceDigest') == source_digest and
-                existing.get('consoleUser') == selected_console_user(args, existing)):
+                existing.get('consoleUser') == selected_console_user(args, existing) and
+                existing.get('verificationSigningMode') == 'local'):
             validate_vm(state / 'baseline.vbvm')
-            print('The prepared baseline already matches the pinned environment and guest bootstrap.')
+            print('The prepared baseline already passed local verification with the pinned environment and guest bootstrap.')
             print('Run Scripts/test_vm.sh run all; each run checks live guest readiness again.')
             return 0
     record = read_json(record_path) if record_path.exists() else None
@@ -1753,7 +1768,7 @@ def prepare_setup(args, state, environment, operation):
         verify_setup_sources(verification_exchange, source_digest, environment)
         verification_job = {'version': 1, 'runId': verification_id,
                     'vmId': record['vmId'], 'kind': 'run', 'profile': 'all',
-                    'payload': {'stages': ['test'], 'configuration': 'Debug',
+                    'payload': {'stages': ['test'], 'configuration': 'Debug', 'signing': 'local',
                                 'onlyTesting': ['WindowAuthenticationSessionTests', 'PasswordStorageTests', 'SecretHandlingTests']},
                     'source': source, 'bootstrapTools': bootstrap_tools}
         atomic_json(verification_exchange / 'job.json', verification_job)
@@ -1779,6 +1794,7 @@ def prepare_setup(args, state, environment, operation):
         if result['status'] == 'passed':
             metadata = candidate.lstat()
             record.update({'verifiedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                           'verificationSigningMode': 'local',
                            'buildDataInitializationAllowed': False,
                            'bootstrapTools': bootstrap_tools,
                            'bootstrapSourceDigest': source_digest,
@@ -1790,10 +1806,10 @@ def prepare_setup(args, state, environment, operation):
     print(f'Results: {exchange / "artifacts/result.json"}')
     if result['status'] != 'passed':
         print('Full setup validation is incomplete; see the report and provisioning log for missing prerequisites or failures.')
-        print('Rerunning setup reuses retained inputs. A verified candidate can run explicitly partial coverage with --candidate.')
+        print('Rerunning setup reuses retained inputs. Use --candidate for diagnostic runs after base prerequisites are verified.')
         print('The original VirtualBuddy VM was not modified.')
         return 2
-    print('Prepared baseline verified. Run Scripts/test_vm.sh run all.')
+    print('Prepared baseline verified with local signing. Run Scripts/test_vm.sh run all; Apple signing is checked only with --signing apple.')
     return 0
 
 
@@ -1833,7 +1849,8 @@ def run_tests(args, state, environment):
                 if bootstrap_source_digest(exchange / 'source/Scripts/vm') != record['bootstrapSourceDigest']:
                     raise RunnerError('The snapshotted guest bootstrap/environment does not match the verified VM. Re-run setup before testing.')
                 job = {'version': 1, 'runId': run_id, 'vmId': record['vmId'], 'kind': 'run',
-                       'profile': args.profile, 'payload': {'stages': args.stage, 'onlyTesting': args.only_testing}, 'source': source,
+                       'profile': args.profile, 'payload': {'stages': args.stage, 'onlyTesting': args.only_testing,
+                                                          'signing': args.signing}, 'source': source,
                        'bootstrapTools': bootstrap_tools}
                 if args.configuration:
                     job['payload']['configuration'] = args.configuration
@@ -1899,7 +1916,9 @@ def parser():
     setup_parser.add_argument('--timeout', type=int)
     run_parser = commands.add_parser('run')
     run_parser.add_argument('profile', choices=('all', 'extended'), nargs='?', default='all')
-    run_parser.add_argument('--candidate', action='store_true', help='Run against a base-verified candidate; unmet signed stages remain blocked')
+    run_parser.add_argument('--candidate', action='store_true', help='Run diagnostics against a base-verified candidate before setup smoke tests pass')
+    run_parser.add_argument('--signing', choices=('local', 'apple'), default='local',
+                            help='Use credential-free local signing by default, or explicitly verify Apple signing prerequisites')
     run_parser.add_argument('--stage', choices=STAGES, action='append', default=[])
     run_parser.add_argument('--only-testing', action='append', default=[])
     run_parser.add_argument('--configuration', choices=('Debug', 'Release'))

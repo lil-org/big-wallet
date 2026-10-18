@@ -153,8 +153,8 @@ class RunSnapshotBindingTests(unittest.TestCase):
         path = self.tools / 'test_manifest.mjs'
         original = path.read_text()
         changed = original.replace(
-            'new Set(["stages", "onlyTesting", "configuration", "approvalArgs"])',
-            'new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "fixtureOption"])'
+            'new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "signing"])',
+            'new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "signing", "fixtureOption"])'
         ).replace('["check", "check", []]', '[options.fixtureOption ? "option-check" : "check", "check", []]')
         self.assertNotEqual(changed, original)
         path.write_text(changed)
@@ -196,6 +196,17 @@ class RunSnapshotBindingTests(unittest.TestCase):
         for name, contents in originals.items():
             self.assertEqual((exchanges[0] / 'source/Scripts/vm' / name).read_bytes(), contents)
         self.assertFalse((self.state / 'active.json').exists())
+
+    def test_signing_selection_is_preserved_in_the_job_and_host_plan(self):
+        for signing in ('local', 'apple'):
+            with self.subTest(signing=signing):
+                self.args.signing = signing
+                self.assertEqual(host.run_tests(self.args, self.state, self.environment), 0)
+                exchange = self.monitor_vm.call_args.args[3]
+                job = host.read_json(exchange / 'job.json')
+                planned = host.read_json(exchange / 'artifacts/planned-result.json')
+                self.assertEqual(job['payload']['signing'], signing)
+                self.assertEqual(planned['selection']['signing'], signing)
 
 
 class PlannedInventoryTests(unittest.TestCase):
@@ -261,6 +272,8 @@ class PlannedInventoryTests(unittest.TestCase):
     def test_plans_match_guest_inventory_for_profiles_dependencies_and_native_filters(self):
         cases = [
             {},
+            {'payload': {'stages': ['test'], 'onlyTesting': [], 'signing': 'local'}},
+            {'payload': {'stages': ['test'], 'onlyTesting': [], 'signing': 'apple'}},
             {'profile': 'extended'},
             {'payload': {'stages': ['repository', 'worker'], 'onlyTesting': []}},
             {'payload': {'stages': ['test'], 'configuration': 'Debug', 'onlyTesting': ['Tests visionOS']}},
@@ -277,7 +290,7 @@ class PlannedInventoryTests(unittest.TestCase):
                 self.assertFalse((self.exchange / 'artifacts/result.json').exists())
                 self.assertEqual(plan['source'], self.job['source'])
                 selection = overrides.get('payload', self.job['payload'])
-                self.assertEqual(plan['selection'], selection)
+                self.assertEqual(plan['selection'], {'signing': 'local', **selection})
                 self.assertEqual(len(commands.call_args_list), 2)
                 self.assertTrue(all(Path(call.args[0][0]).name == 'node' for call in commands.call_args_list))
                 ids = {stage['id'] for stage in plan['stages']}
@@ -352,6 +365,22 @@ class PlannedInventoryTests(unittest.TestCase):
         self.assertEqual(result['plannedResult'], 'planned-result.json')
         self.assertFalse(vm.exists())
         self.assertFalse((self.root / 'active.json').exists())
+
+    def test_signing_selection_survives_failure_before_and_after_guest_progress(self):
+        for signing, guest_reported in itertools.product(('local', 'apple'), (False, True)):
+            with self.subTest(signing=signing, guest_reported=guest_reported):
+                (self.exchange / 'artifacts/result.json').unlink(missing_ok=True)
+                plan = self.plan(payload={'stages': ['test'], 'configuration': 'Debug',
+                                         'onlyTesting': ['Tests macOS/PasswordStorageTests'], 'signing': signing})
+                if guest_reported:
+                    host.atomic_json(self.exchange / 'artifacts/result.json', {
+                        'runId': self.job['runId'], 'status': 'running',
+                        'stages': [{'id': 'test.macos.debug', 'status': 'running'}]})
+                result = host.finalize_interrupted_result(self.exchange, self.job['runId'], 'timed_out')
+                self.assertEqual(result['selection'], plan['selection'])
+                self.assertEqual(result['selection']['signing'], signing)
+                self.assertEqual(result['status'], 'failed')
+                self.assertFalse(result['coverage']['fullSuiteVerified'])
 
     def test_fallback_rejects_a_plan_that_no_longer_matches_the_job(self):
         self.plan()
