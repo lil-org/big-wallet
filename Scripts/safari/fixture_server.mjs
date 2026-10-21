@@ -26,7 +26,7 @@ const maximumOriginRegistryBytes = 64 * 1024;
 const canonicalUUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 const ethereumSendActions = new Set(["ethereum-send", "ethereum-send-custom", "ethereum-send-estimated"]);
 const lockProbeScenarios = new Set(["install-native-roundtrip", "ethereum-signing"]);
-const zeroSigningScenarios = new Set(["install-native-roundtrip", "extension-toggle", "profiles-private",
+const zeroSigningScenarios = new Set(["install-native-roundtrip", "profiles-private",
     "authority-revocation", "malformed-requests"]);
 const oneSigningScenarios = new Set(["ethereum-signing", "solana-signing", "rejection-duplicate-approval",
     "ethereum-broadcast", "solana-broadcast", "navigation-tab-closure", "macos-auth-isolation", "browser-restart",

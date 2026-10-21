@@ -2221,7 +2221,7 @@ def run_tests(args, state, environment):
                     stage_planned_result(exchange, job)
                 if getattr(args, 'interactive_safari', False):
                     print('Assisted Safari run: use the owned Safari Activation VM window for extension activation checkpoints. '
-                          'The same disposable guest and installation remain active through browser restart and extension toggles.', flush=True)
+                          'The same disposable guest and installation remain active through browser restart.', flush=True)
                 print(f'Source: {source["sha256"]}', flush=True)
                 if operation_stop_requested(exchange, run_id):
                     raise KeyboardInterrupt

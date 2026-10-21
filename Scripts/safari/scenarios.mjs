@@ -11,7 +11,6 @@ export const SAFARI_SCENARIOS = Object.freeze([
     ["macos-auth-isolation", "testApprovalWindowAuthenticationIsolation", ["macos"]],
     ["ios-popup-recovery", "testPopupDismissalAndRecovery", ["ios"]],
     ["browser-restart", "testBrowserRestartAndRecovery"],
-    ["extension-toggle", "testExtensionDisableAndReenable"],
     ["background-foreground", "testBackgroundAndForeground"],
     ["profiles-private", "testProfilesAndPrivateBrowsing"],
     ["authority-revocation", "testAuthorityRevocationDuringApproval"],

@@ -1356,7 +1356,8 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             locksToRemove = maintenance.operationLocksToRemove
         }
         guard changed else { return .state(profile) }
-        guard writeProfileLocked(profile, failureRecovery: requiresReadBack ? .readBack : .none) else {
+        guard ExtensionRequestProfile.makeRoomForAuthority(in: &profile.state),
+              writeProfileLocked(profile, failureRecovery: requiresReadBack ? .readBack : .none) else {
             return .unavailable
         }
         for handle in locksToRemove {

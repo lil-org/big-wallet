@@ -151,10 +151,6 @@ struct ExtensionRequestProfile: Sendable {
         var ethereumChainId = "0x1"
         var solanaAccount: WalletAccountDescriptor?
         var revisions: ExtensionBridge.ProviderRevisions
-
-        var isDefaultDisconnected: Bool {
-            ethereumAccount == nil && solanaAccount == nil && ethereumChainId == "0x1"
-        }
     }
 
     struct MutationReceipt: Codable, Sendable {
@@ -535,16 +531,9 @@ struct ExtensionRequestProfile: Sendable {
     }
 
     @discardableResult
-    static func reclaimAuthority(in profile: inout State, now: Date) -> Bool {
+    static func expireMutationReceipts(in profile: inout State, now: Date) -> Bool {
         let previousCount = profile.mutationReceipts.count
         profile.mutationReceipts.removeAll { now.timeIntervalSince($0.createdAt) >= Self.mutationReceiptLifetime }
-        let referenced = Set(profile.records.map(\.configurationKey) + profile.mutationReceipts.map(\.configurationKey))
-        let removable = profile.origins.filter { $0.value.isDefaultDisconnected && !referenced.contains($0.key) }.map(\.key)
-        if !removable.isEmpty, let revision = nextRevision(in: &profile) {
-            profile.reclaimedAuthorityRevision = revision
-            for key in removable { profile.origins.removeValue(forKey: key) }
-            return true
-        }
         return previousCount != profile.mutationReceipts.count
     }
 
@@ -553,6 +542,10 @@ struct ExtensionRequestProfile: Sendable {
         profile.origins[configurationKey] = .init(revisions: revisions(
             ethereum: profile.reclaimedAuthorityRevision, solana: profile.reclaimedAuthorityRevision
         ))
+        return makeRoomForAuthority(in: &profile, excluding: configurationKey)
+    }
+
+    static func makeRoomForAuthority(in profile: inout State, excluding configurationKey: String? = nil) -> Bool {
         if authorityFits(profile.origins) { return true }
         let referenced = Set(profile.records.map(\.configurationKey) + profile.mutationReceipts.map(\.configurationKey))
         let removable = profile.origins.filter { key, origin in
@@ -682,7 +675,7 @@ struct ExtensionRequestProfile: Sendable {
             origin.revisions = Self.revisions(ethereum: origin.revisions.ethereum, solana: revision)
         }
         self.state.origins[record.configurationKey] = origin
-        guard (try? ExtensionRequestProfileCodec.encode(self.state.origins).count).map({ $0 <= Self.maximumAuthorityBytes }) == true else { return false }
+        guard Self.makeRoomForAuthority(in: &state, excluding: record.configurationKey) else { return false }
         return invalidateStaleRequests(configurationKey: record.configurationKey, excluding: record.handle, now: now)
     }
 
@@ -964,7 +957,7 @@ struct ExtensionRequestProfile: Sendable {
             }
         }
         self.state.records = kept
-        changed = Self.reclaimAuthority(in: &state, now: now) || changed
+        changed = Self.expireMutationReceipts(in: &state, now: now) || changed
         return Maintenance(changed: changed, operationLocksToRemove: locksToRemove)
     }
 
@@ -1047,7 +1040,7 @@ struct ExtensionRequestProfile: Sendable {
             return nil
         }
         state.records.append(record)
-        Self.reclaimAuthority(in: &state, now: now)
+        Self.expireMutationReceipts(in: &state, now: now)
         return retiredHandles
     }
 
@@ -1077,6 +1070,7 @@ struct ExtensionRequestProfile: Sendable {
             (try? ExtensionRequestProfileCodec.encode(state.mutationReceipts).count).map({ $0 > Self.maximumMutationReceiptBytes }) == true {
             state.mutationReceipts.removeFirst()
         }
+        guard Self.makeRoomForAuthority(in: &state, excluding: configurationKey) else { return false }
         return invalidateStaleRequests(configurationKey: configurationKey, excluding: nil, now: now)
     }
 

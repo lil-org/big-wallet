@@ -68,13 +68,13 @@ After promotion, normal local macOS Safari runtime jobs automatically bind to
 the baseline's preparation receipt and run headlessly using the stable prepared
 installation. Every run still builds the current source and uses its own fixture
 descriptor and data. Its evidence records `activationMode: prepared` and the
-preparation receipt identity. A changed or disabled grant is a failed prerequisite;
-startup and restart checks only observe the Wallet checkbox. The explicit
-disable/re-enable scenario still performs both actions and reports any Safari
-activation restriction. Preparation itself establishes
-no lifecycle coverage, and persistence across a cold clone and subsequent builds
-must still pass the selected browser tests. It cannot be combined with
-`run --interactive-safari`.
+preparation receipt identity. The base VM must already have Wallet enabled.
+A changed or disabled grant is a failed prerequisite; startup and restart checks
+only observe the Wallet checkbox. The suite does not disable or re-enable the
+extension and does not claim coverage of that transition. Preparation itself
+establishes no lifecycle coverage, and persistence across a cold clone and
+subsequent builds must still pass the selected browser tests. It cannot be
+combined with `run --interactive-safari`.
 
 The separate `run --interactive-safari` option opens an owned window titled
 `Big Wallet Test VM — Safari Activation` for the same disposable clone running
@@ -83,9 +83,11 @@ tests are selected. At an activation checkpoint, select the Wallet extension's
 checkbox in Safari Settings > Extensions inside that window. XCTest observes
 the checkbox for up to two minutes without synthesizing the activation click,
 then continues the normal provider, native-message, and lifecycle assertions.
-Keep the window available for later activation checkpoints, including browser
-restart and extension reenablement. Closing it requests normal run cancellation
-and artifact collection. The host's Safari and wallet are not involved.
+This separate assisted workflow can establish initial activation when preparing
+an unprepared installation; normal prepared runs require the existing enabled
+grant. Keep the window available for activation checkpoints, including browser
+restart. Closing it requests normal run cancellation and artifact collection.
+The host's Safari and wallet are not involved.
 
 ## First setup
 
@@ -332,7 +334,7 @@ active test guest. Its evidence records `activationMode: interactive`, including
 each checkpoint's scenario, iteration, requested state, and observed-state times.
 The audit rejects missing or mismatched modes and incomplete checkpoints. A
 passing assisted run does not establish unattended coverage, and activation
-alone does not establish browser-restart or extension-toggle coverage.
+alone does not establish browser-restart coverage.
 
 Plain `setup --interactive` does not prepare Safari activation; use the explicit
 `--safari-activation` workflow above. Safari's unsigned-extension permission is
@@ -342,9 +344,10 @@ The assisted run keeps the same clone and product active while the user performs
 each required click. If Safari rejects the genuine click while XCTest is
 observing, that remains a failed prerequisite; no private preference or API
 overrides Safari's control. Prepared clones have passed selected headless Debug
-install/native-roundtrip and browser-restart checks. The explicit disable/re-enable
-scenario still fails Safari's activation restriction; the complete unattended
-macOS matrix is unverified.
+install/native-roundtrip and browser-restart checks. The base VM's enabled grant
+is a test prerequisite. Extension disable/re-enable testing is outside the suite;
+all remaining scenarios retain their normal provider, native-message, and
+lifecycle assertions.
 
 Apple-signed macOS Safari products preserve their original app-group and Keychain
 entitlements and signing identities. The wrapper adds a temporary sandbox file

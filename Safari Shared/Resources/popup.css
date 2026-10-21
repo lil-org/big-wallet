@@ -71,6 +71,10 @@ body {
     to { transform: rotate(360deg); }
 }
 
+@media (prefers-reduced-motion: reduce) {
+    .spinner { animation: none; }
+}
+
 .queue-indicator {
     text-align: center;
     color: var(--fg-secondary);

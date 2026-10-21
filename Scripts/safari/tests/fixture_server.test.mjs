@@ -31,7 +31,7 @@ async function harness(context, scenario = "install-native-roundtrip", options =
 }
 
 test("interactive activation is opt-in and records ordered observed states without completing a scenario", async context => {
-    const {server, control, root} = await harness(context, "extension-toggle", {interactiveActivation: true});
+    const {server, control, root} = await harness(context, "install-native-roundtrip", {interactiveActivation: true});
     assert.equal((await (await control("config")).json()).interactiveActivation, true);
     assert.equal((await control("interactive-activation", {phase: "observed", enabled: true})).status, 409);
     assert.equal((await control("interactive-activation", {phase: "waiting", enabled: true})).status, 200);
@@ -44,7 +44,7 @@ test("interactive activation is opt-in and records ordered observed states witho
     const ledger = JSON.parse(await readFile(join(root, "artifacts/safari.macos.debug.safari-activation.json"), "utf8"));
     assert.equal(ledger.activationMode, "interactive");
     assert.deepEqual(ledger.requests.map(request => request.enabled), [true, false]);
-    assert.ok(ledger.requests.every(request => request.scenario.id === "extension-toggle" &&
+    assert.ok(ledger.requests.every(request => request.scenario.id === "install-native-roundtrip" &&
         request.scenario.iteration === 1 && Date.parse(request.observedAt) >= Date.parse(request.requestedAt)));
     assert.equal(server.scenarios.length, 0);
     assert.equal(server.providerReady, false);
@@ -435,7 +435,7 @@ test("an aborted case must complete native cleanup before any later scenario sta
 });
 
 test("approval draining follows failed cleanup and clears after the next successful scenario", async context => {
-    const {control, server, root} = await harness(context, "extension-toggle");
+    const {control, server, root} = await harness(context, "malformed-requests");
     let cleanups = 0;
     const cleanup = server.stopOwnedProcesses.bind(server);
     server.stopOwnedProcesses = async () => { cleanups += 1; return cleanup(); };
@@ -446,7 +446,7 @@ test("approval draining follows failed cleanup and clears after the next success
     };
     assert.equal((await (await control("config")).json()).requiresApprovalDrain, false);
     await makeHandshake();
-    assert.equal((await control("finish", {scenario: "extension-toggle", iteration: 1, status: "passed"})).status, 200);
+    assert.equal((await control("finish", {scenario: "malformed-requests", iteration: 1, status: "passed"})).status, 200);
     assert.equal((await control("start", {scenario: "profiles-private", iteration: 1})).status, 200);
     assert.equal((await (await control("config")).json()).requiresApprovalDrain, false);
     assert.equal(cleanups, 0);
@@ -459,7 +459,7 @@ test("approval draining follows failed cleanup and clears after the next success
     assert.deepEqual(server.scenarios[1].evidence, evidence);
     await makeHandshake();
     assert.equal((await control("finish", {scenario: "authority-revocation", iteration: 1, status: "passed"})).status, 200);
-    assert.equal((await control("start", {scenario: "malformed-requests", iteration: 1})).status, 200);
+    assert.equal((await control("start", {scenario: "install-native-roundtrip", iteration: 1})).status, 200);
     assert.equal((await (await control("config")).json()).requiresApprovalDrain, false);
     assert.equal(cleanups, 1);
     const saved = JSON.parse(await readFile(join(root, "artifacts/safari.macos.debug.safari.json"), "utf8"));
@@ -587,7 +587,7 @@ test("unresolved process inspection waits once and preserves bounded stat/comm d
 });
 
 test("cleanup never signals a process with an unresolved live executable identity", async context => {
-    const {server, root} = await harness(context, "extension-toggle", {
+    const {server, root} = await harness(context, "malformed-requests", {
         processInspector: pid => inspectProcess(pid, async () => ({stdout: "S (Big Wallet)\n"})),
         processTerminator: () => assert.fail("Unknown live processes must not receive a signal"),
     });
@@ -603,7 +603,7 @@ test("cleanup never signals a process with an unresolved live executable identit
 test("cleanup accepts a verified process that becomes a zombie after termination without signaling it again", async context => {
     let terminated = false;
     const signals = [];
-    const {server, root} = await harness(context, "extension-toggle", {
+    const {server, root} = await harness(context, "malformed-requests", {
         processInspector: pid => inspectProcess(pid, async () => ({stdout: terminated ? "Z (Big Wallet)\n" : `S ${executablePath}\n`})),
         processTerminator: (pid, signal) => { signals.push({pid, signal}); terminated = true; },
     });
@@ -1314,7 +1314,7 @@ test("scenarios that never approve signing reject every signing or dispatch path
     const signing = [{kind: "consentAccepted", ...identity},
         {kind: "authorization", ...identity, executionID: "late-execution"},
         {kind: "signingStarted", requestID: 7, executionID: "late-execution"}];
-    for (const scenario of ["install-native-roundtrip", "extension-toggle", "profiles-private", "authority-revocation", "malformed-requests"]) {
+    for (const scenario of ["install-native-roundtrip", "profiles-private", "authority-revocation", "malformed-requests"]) {
         const base = {errors: [], handshake: {provider: true, native: true}, results: [], broadcasts: [], ...lockProof(server, scenario)};
         assert.deepEqual(server.check(base, scenario), []);
         for (const change of [{events: signing}, {events: [{kind: "broadcastCheckpoint"}]},

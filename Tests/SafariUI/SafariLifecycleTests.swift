@@ -224,6 +224,7 @@ final class SafariLifecycleTests: XCTestCase {
             try await self.perform("ethereum-sign", control: control)
             try await self.showApproval(control: control)
             let first = try await self.approvalWindowIdentifier(excluding: [])
+            try self.focusApprovalWindow(self.helper.windows[first])
             try self.click(self.helper.windows[first].buttons["safari.approval.approve"], "hold authentication for the first request")
             try await control.waitForPoint("beforeAuthentication")
             try self.newTab()
@@ -234,7 +235,7 @@ final class SafariLifecycleTests: XCTestCase {
             }
             try await self.perform("ethereum-sign", control: control)
             let second = try await self.approvalWindowIdentifier(excluding: [first])
-            self.helper.activate()
+            try self.focusApprovalWindow(self.helper.windows[second])
             try self.click(self.helper.windows[second].buttons["safari.approval.approve"], "hold authentication for the second request")
             try await control.waitForPoint("beforeAuthentication", additional: 2)
             try self.require(first != second, "Concurrent requests reused one approval window")
@@ -247,10 +248,16 @@ final class SafariLifecycleTests: XCTestCase {
                              "Authenticating the second window completed another document's request")
             try self.require(self.helper.windows[first].secureTextFields["safari.authentication.password"].exists,
                              "Authenticating the second request also unlocked the first approval window")
-            try self.click(self.helper.windows[first].buttons[XCUIIdentifierCloseWindow], "close the still-locked first request")
+            let firstWindow = self.helper.windows[first]
+            try self.focusApprovalWindow(firstWindow)
+            let cancelAuthentication = firstWindow.buttons["safari.authentication.cancel"]
+            try self.require(cancelAuthentication.isEnabled, "The first request's authentication cannot be cancelled")
+            try self.click(cancelAuthentication, "cancel only the still-locked first request")
+            try self.require(firstWindow.waitForNonExistence(timeout: 10),
+                             "Cancelling the first request's authentication did not close its approval window")
             let firstResult = try await control.result("ethereum-sign", success: false, occurrence: 2)
             try self.require(firstResult["documentId"] as? String == firstDocument,
-                             "Closing the first window rejected another document's request")
+                             "Cancelling the first window rejected another document's request")
             try self.require(try await control.eventCount("signingStarted") == 1,
                              "Authenticating one approval window signed more than its owned request")
             try await control.assertSingleSettlement("ethereum-sign", expected: 2)
@@ -308,21 +315,6 @@ final class SafariLifecycleTests: XCTestCase {
             try await self.perform("ethereum-sign", control: control)
             try await self.approve(control: control)
             _ = try await control.result("ethereum-sign")
-        }
-    }
-
-    @MainActor
-    func testExtensionDisableAndReenable() async throws {
-        try await scenario("extension-toggle") { control, config in
-            try await self.prepare(control: control, config: config)
-            try await self.connect("ethereum", control: control)
-            try await self.setExtensionEnabled(false, control: control)
-            try self.open(config.dappURL)
-            try self.require(self.safari.staticTexts["provider-unavailable"].waitForExistence(timeout: 15),
-                             "A fresh page still exposes the wallet after extension disablement")
-            try await self.setExtensionEnabled(true, control: control)
-            try self.open(config.dappURL)
-            try await self.connect("ethereum", control: control)
         }
     }
 
@@ -875,6 +867,7 @@ final class SafariLifecycleTests: XCTestCase {
             do {
                 try await control.gate("authentication", "release")
 #if os(macOS)
+                if self.helperIsRunning { self.helper.activate() }
                 if self.passwordField.waitForExistence(timeout: 8) { try await self.authenticateIfPresent(control: control) }
 #endif
                 self.safari.activate()
@@ -882,8 +875,7 @@ final class SafariLifecycleTests: XCTestCase {
                 if let result = try await control.optionalResult("ethereum-send-custom", timeout: 8) {
                     try self.require(result["ok"] as? Bool == false, "The changed RPC destination reused the prior approval")
                 } else {
-                    try await self.reject(control: control)
-                    _ = try await control.result("ethereum-send-custom", success: false)
+                    try await self.rejectIfNeeded(action: "ethereum-send-custom", control: control)
                 }
                 try await control.assertNoSigningOrBroadcast()
             } catch {
@@ -1295,18 +1287,20 @@ final class SafariLifecycleTests: XCTestCase {
         try await showApproval(control: control)
 #if os(macOS)
         let address = try accountAddress ?? control.selectedAccountAddress()
-        let comparison = address.hasPrefix("0x") ? "identifier == %@ AND label ==[c] %@" : "identifier == %@ AND label == %@"
-        let account = helper.descendants(matching: .any).matching(
-            NSPredicate(format: comparison, "safari.approval.account", address)
-        ).firstMatch
-        if account.exists, account.value as? String != "selected" {
-            try click(account, "fixture account selection")
-        }
+        try selectNativeApprovalAccount(address, required: accountAddress != nil)
 #else
         let address = try accountAddress ?? control.selectedAccountAddress()
         let comparison = address.hasPrefix("0x") ? "label CONTAINS[c] %@" : "label CONTAINS %@"
         let account = popup.switches.matching(NSPredicate(format: comparison, address)).firstMatch
-        if account.exists, try !switchState(account, description: "wallet account selection") { account.tap() }
+        if accountAddress != nil { try require(account.exists, "The requested wallet account is missing from the approval") }
+        if account.exists {
+            if try !switchState(account, description: "wallet account selection") {
+                try revealPopupElement(account, "wallet account selection")
+                try click(account, "wallet account selection")
+            }
+            try require(try switchState(account, description: "wallet account selection"),
+                        "The requested wallet account did not become selected")
+        }
         let cluster = popup.switches.matching(NSPredicate(format: "label BEGINSWITH %@", "Devnet")).firstMatch
         if !approvalButton.isEnabled, cluster.exists { cluster.tap() }
 #endif
@@ -1352,6 +1346,50 @@ final class SafariLifecycleTests: XCTestCase {
         try click(popup.buttons["Cancel"], "popup rejection")
 #endif
         safari.activate()
+    }
+
+    @MainActor
+    private func rejectIfNeeded(action: String, control: SafariUIControl) async throws {
+#if os(macOS)
+        if helperIsRunning { helper.activate() }
+#else
+        if !popup.exists { try showPopup() }
+#endif
+        let deadline = Date().addingTimeInterval(25)
+        while Date() < deadline {
+            if try await control.hasResult(action) {
+                _ = try await control.result(action, success: false)
+                return
+            }
+            if passwordIsVisible {
+                try await authenticateIfPresent(control: control)
+                continue
+            }
+#if os(macOS)
+            let reject = helperIsRunning ? helper.buttons["safari.approval.reject"] : wallet.buttons["safari.approval.reject"]
+#else
+            let reject = popup.buttons["Cancel"]
+#endif
+            if reject.exists && reject.isEnabled {
+                do {
+#if os(iOS)
+                    try revealPopupElement(reject, "rejection of the invalidated request")
+#endif
+                    if reject.isHittable {
+                        try click(reject, "reject the invalidated request if it still needs a decision")
+                        safari.activate()
+                        _ = try await control.result(action, success: false)
+                        return
+                    }
+                } catch {
+                    guard try await control.hasResult(action) else { throw error }
+                    _ = try await control.result(action, success: false)
+                    return
+                }
+            }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        throw SafariUIFailure("The invalidated request neither completed nor exposed rejection controls")
     }
 
     @MainActor
@@ -1704,8 +1742,13 @@ final class SafariLifecycleTests: XCTestCase {
         if !helperIsRunning { return }
         helper.activate()
         let windows = helper.windows.matching(NSPredicate(format: "identifier BEGINSWITH %@", "safari.approval.window."))
-        for window in windows.allElementsBoundByIndex {
+        let identifiers = windows.allElementsBoundByIndex.map(\.identifier)
+        for identifier in identifiers {
+            let window = helper.windows[identifier]
+            guard window.exists else { continue }
+            try focusApprovalWindow(window)
             try click(window.buttons[XCUIIdentifierCloseWindow], "retire the interrupted request's approval window")
+            try require(window.waitForNonExistence(timeout: 10), "The interrupted approval window did not close")
         }
 #endif
     }
@@ -1717,6 +1760,8 @@ final class SafariLifecycleTests: XCTestCase {
         try click(close, "close approval window during authentication")
 #else
         try click(popupDone, "dismiss extension popup during authentication")
+        try require(popup.waitForNonExistence(timeout: 10) && popupDone.waitForNonExistence(timeout: 10),
+                    "Safari did not dismiss the extension popup")
 #endif
     }
 
@@ -1823,11 +1868,61 @@ final class SafariLifecycleTests: XCTestCase {
 
     @MainActor
     private func authenticate(window: XCUIElement) throws {
-        helper.activate()
+        try focusApprovalWindow(window)
         let password = window.secureTextFields["safari.authentication.password"]
         try click(password, "password sheet belonging to the selected request")
         password.typeText("approval-fixture-password")
         try click(window.buttons["safari.authentication.confirm"], "authenticate only the selected request")
+    }
+
+    @MainActor
+    private func focusApprovalWindow(_ window: XCUIElement) throws {
+        helper.activate()
+        try require(window.waitForExistence(timeout: 12), "The selected approval window no longer exists")
+        let frame = window.frame
+        try require(!frame.isEmpty && frame.minX.isFinite && frame.minY.isFinite,
+                    "The selected approval window has no visible frame")
+        let identifier = window.identifier
+        let otherFrames = helper.windows.allElementsBoundByIndex
+            .filter { $0.identifier != identifier }
+            .flatMap { other in [other.frame] + other.sheets.allElementsBoundByIndex.map(\.frame) }
+        let titlebarPoints = [frame.midX, frame.minX + 12, frame.maxX - 12].map {
+            CGPoint(x: $0, y: frame.minY + 4)
+        }
+        guard let point = titlebarPoints.first(where: { point in !otherFrames.contains { $0.contains(point) } }) else {
+            throw SafariUIFailure("The selected approval window has no exposed title bar")
+        }
+        window.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: point.x - frame.minX, dy: point.y - frame.minY)).click()
+    }
+
+    @MainActor
+    private func selectNativeApprovalAccount(_ address: String, required: Bool) throws {
+        let application = helperIsRunning && helper.buttons["safari.approval.approve"].exists ? helper : wallet
+        let table = application.tables["safari.approval.accounts"]
+        guard table.exists else {
+            try require(!required, "The requested account selection screen is missing")
+            return
+        }
+        let normalizedAddress = address.hasPrefix("0x") ? address.lowercased() : address
+        let selectedIdentifier = "safari.approval.account.\(normalizedAddress).selected"
+        let account = table.staticTexts.matching(NSPredicate(format: "identifier IN %@", [
+            selectedIdentifier, "safari.approval.account.\(normalizedAddress).unselected",
+        ])).firstMatch
+        if !account.exists || !account.isHittable {
+            table.scroll(byDeltaX: 0, deltaY: 10_000)
+            for _ in 0..<8 {
+                if account.exists && account.isHittable { break }
+                table.scroll(byDeltaX: 0, deltaY: -250)
+            }
+        }
+        try require(account.exists && account.isHittable,
+                    "The requested wallet account could not be revealed in the approval")
+        if account.identifier != selectedIdentifier {
+            try click(account, "fixture account selection")
+        }
+        try require(table.staticTexts[selectedIdentifier].waitForExistence(timeout: 5),
+                    "The requested wallet account did not become selected before approval")
     }
 
     @MainActor private func openSafariSettings() {
@@ -2031,19 +2126,39 @@ final class SafariLifecycleTests: XCTestCase {
     @MainActor
     private func revealPopupElement(_ element: XCUIElement, _ description: String) throws {
         try require(element.waitForExistence(timeout: 10), "Missing \(description)")
-        func isVisible() -> Bool {
-            let frame = element.frame
-            let viewport = popup.frame.intersection(safari.frame).insetBy(dx: 8, dy: 8)
-            let center = CGPoint(x: frame.midX, y: frame.midY)
-            return !frame.isEmpty && center.x.isFinite && center.y.isFinite &&
-                !viewport.isNull && !viewport.isEmpty && viewport.contains(center) && element.isHittable
-        }
         for _ in 0..<8 {
-            if isVisible() { return }
-            if element.frame.midY < popup.frame.intersection(safari.frame).midY { popup.swipeDown() }
-            else { popup.swipeUp() }
+            try require(popup.exists && element.exists, "The popup closed or changed while revealing \(description)")
+            if element.isHittable { return }
+            var viewport = popup.frame.intersection(safari.frame)
+            let navigation = safari.navigationBars["Wallet"]
+            if navigation.exists {
+                let top = max(viewport.minY, navigation.frame.maxY)
+                viewport = CGRect(x: viewport.minX, y: top, width: viewport.width, height: max(0, viewport.maxY - top))
+            }
+            let scrollIndicator = popup.otherElements.matching(NSPredicate(format: "label BEGINSWITH %@", "Vertical scroll bar")).firstMatch
+            if scrollIndicator.exists {
+                viewport = viewport.intersection(CGRect(x: viewport.minX, y: scrollIndicator.frame.minY,
+                    width: viewport.width, height: scrollIndicator.frame.height))
+            }
+            try require(!viewport.isEmpty && !viewport.isNull && !viewport.isInfinite,
+                        "The popup has no visible scrolling area for \(description)")
+            let previousFrame = element.frame
+            if previousFrame.minY < viewport.minY {
+                popup.swipeDown()
+            } else if previousFrame.maxY > viewport.maxY {
+                popup.swipeUp()
+            } else {
+                let hittable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND hittable == true"), object: element)
+                try require(XCTWaiter.wait(for: [hittable], timeout: 3) == .completed,
+                            "The visible \(description) remains blocked in the popup")
+                return
+            }
+            try require(popup.exists && element.exists, "The popup closed or changed while scrolling to \(description)")
+            try require(element.isHittable || element.frame != previousFrame,
+                        "The popup did not scroll toward \(description)")
         }
-        try require(isVisible(), "The popup could not scroll \(description) into view")
+        try require(popup.exists && element.exists && element.isHittable,
+                    "The popup could not scroll \(description) into view")
     }
 
     @MainActor

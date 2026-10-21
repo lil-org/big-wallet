@@ -18,13 +18,14 @@ class AccountCellView: NSTableRowView {
     func setup(account: WalletAccount, walletId: String, isSelected: Bool, isDisabled: Bool, showsAccountSelection: Bool = false) {
         wantsLayer = true
         self.showsAccountSelection = showsAccountSelection
-#if BW_SAFARI_VM_TESTING
-        setAccessibilityIdentifier(showsAccountSelection ? "safari.approval.account" : nil)
-        setAccessibilityLabel(account.address)
-        setAccessibilityValue(isSelected ? "selected" : "unselected")
-#endif
         addressImageView.image = account.image
         addressTextField.stringValue = account.nameOrCroppedAddress(walletId: walletId)
+#if BW_SAFARI_VM_TESTING
+        let address = account.coin == .ethereum ? account.address.lowercased() : account.address
+        let selection = isSelected ? "selected" : "unselected"
+        addressTextField.setAccessibilityIdentifier(showsAccountSelection ? "safari.approval.account.\(address).\(selection)" : nil)
+        addressTextField.setAccessibilityLabel(account.address)
+#endif
         setSelected(isSelected)
         setDisabled(isDisabled)
     }

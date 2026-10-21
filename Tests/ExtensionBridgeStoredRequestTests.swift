@@ -54,7 +54,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    func testAuthorityBootstrapPersistsLedgerAndProfileIdentityAndWarmReadsAreReadOnly() throws {
+    func testAuthorityBootstrapPersistsLedgerAndProfileIdentityAndWarmReadsAreReadOnly() async throws {
         let writes = LockedTestValue(0)
         let synchronizations = LockedTestValue(0)
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
@@ -83,6 +83,65 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual((try storedProfile()["origins"] as? [String: Any])?.count, 0)
         XCTAssertNil(first.ethereumAccount)
         XCTAssertNil(first.solanaAccount)
+        let original = try Data(contentsOf: defaultProfileURL)
+        for index in 0..<(2 * ExtensionRequestProfile.maximumOrigins) {
+            guard case .snapshot = store.configurationSnapshot(
+                configurationKey: "https://passive-\(index).example", profileIdentifier: nil
+            ) else { return XCTFail("Passive configurations must not consume origin capacity") }
+        }
+        XCTAssertEqual(writes.value, 2)
+        XCTAssertEqual(synchronizations.value, 0)
+        XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
+        XCTAssertEqual((try storedProfile()["origins"] as? [String: Any])?.count, 0)
+        for (index, provider) in [InpageProvider.ethereum, .solana].enumerated() {
+            let fixture = try makeConnectionFixture(id: 69_000 + index, provider: provider, host: "new-\(index).example")
+            let admission = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
+            XCTAssertTrue(admission.approvalRequired)
+        }
+    }
+
+    func testIdleConnectionsSurviveUnrelatedHistoryExpiryAcrossStores() async throws {
+        for (providerIndex, provider) in [InpageProvider.ethereum, .solana].enumerated() {
+            for separateMaintenance in [false, true] {
+                let id = 69_100 + providerIndex * 10 + (separateMaintenance ? 5 : 0)
+                let old = try makeFixture(id: id, host: "old-\(id).example")
+                let oldHandle = try accepted(await bridge.enqueue(ingress: old.ingress, profileIdentifier: nil)).handle
+                let completed = await bridge.completeImmediate(handle: oldHandle, resolution: immediateResolution(for: old.request))
+                XCTAssertEqual(completed, .persisted)
+                guard case .revoked(let revoked) = await bridge.revoke(
+                    configurationKey: old.request.configurationKey, provider: .ethereum,
+                    attempt: attempt(for: id + 1), expected: old.ingress.authority, profileIdentifier: nil
+                ) else { return XCTFail("Expected unrelated revocation history") }
+                let initial = try makeConnectionFixture(id: id + 2, provider: provider, host: "idle-\(id).example")
+                let watermark = try XCTUnwrap(try storedProfile()["reclaimedAuthorityRevision"] as? Int)
+                clock.setDate(clock.date.addingTimeInterval(3_601))
+                let otherProcess = makeBridge(clock: { [clock = clock!] in clock.date })
+                if separateMaintenance { await otherProcess.performMaintenance(profileIdentifier: nil) }
+                var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: initial.ingress.canonicalData) as? [String: Any])
+                raw["id"] = id + 3
+                raw["enqueueAttempt"] = attempt(for: id + 3)
+                raw["admissionDeadline"] = Int(clock.date.addingTimeInterval(ExtensionBridge.requestTTL).timeIntervalSince1970 * 1_000)
+                let fresh = try authorityFixture(raw)
+                let admitted = try accepted(await otherProcess.enqueue(ingress: fresh.ingress, profileIdentifier: nil))
+                XCTAssertTrue(admitted.approvalRequired)
+                XCTAssertEqual(admitted.revisions, initial.ingress.authority.revisions)
+                guard case .found(let snapshot) = await bridge.load(handle: admitted.handle) else {
+                    return XCTFail("An idle page's new connection must remain available for approval")
+                }
+                XCTAssertEqual(snapshot.request?.authority, initial.ingress.authority)
+                let current = await otherProcess.authorityIsCurrent(handle: admitted.handle)
+                XCTAssertTrue(current)
+                let profile = try PropertyListDecoder().decode(ExtensionRequestProfile.State.self, from: Data(contentsOf: defaultProfileURL))
+                XCTAssertEqual(profile.reclaimedAuthorityRevision, watermark)
+                XCTAssertTrue(profile.mutationReceipts.isEmpty)
+                XCTAssertEqual(profile.records.count, 1)
+                XCTAssertEqual(ExtensionRequestProfile.authoritySnapshot(profile, configurationKey: old.request.configurationKey).version,
+                               revoked.version)
+                XCTAssertNotNil(profile.origins[old.request.configurationKey])
+                let rejected = await otherProcess.reject(handle: admitted.handle)
+                XCTAssertEqual(rejected, .persisted)
+            }
+        }
     }
 
     @MainActor
@@ -894,6 +953,17 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let first = try makeFixture(id: 60_110)
         let second = try makeFixture(id: 60_111)
         await bridge.performMaintenance(profileIdentifier: nil)
+        var profile = try storedProfile()
+        var origins = try XCTUnwrap(profile["origins"] as? [String: Any])
+        let unused = try XCTUnwrap(origins["https://other.example"])
+        for index in 0..<(ExtensionRequestProfile.maximumOrigins - origins.count) {
+            origins["https://unused-\(index).example"] = unused
+        }
+        profile["origins"] = origins
+        try PropertyListSerialization.data(fromPropertyList: profile, format: .binary, options: 0)
+            .write(to: defaultProfileURL, options: .atomic)
+        let incoming = try makeFixture(id: 60_119, name: "requestAccounts", host: "new.example")
+        _ = try accepted(await bridge.enqueue(ingress: incoming.ingress, profileIdentifier: nil))
         guard case .snapshot(let advanced) = await bridge.configurationSnapshot(
             configurationKey: first.request.configurationKey, profileIdentifier: nil
         ) else { return XCTFail("Expected unrelated authority advance") }
@@ -1297,30 +1367,36 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
     }
 
-    func testDisconnectedReclamationAdvancesWatermarkAndPreservesProfileEpoch() async throws {
-        let fixture = try makeFixture(id: 60_040)
-        let origin = fixture.request.configurationKey
-        let before = fixture.ingress.authority
-        guard case .revoked(let revoked) = await bridge.revoke(configurationKey: origin, provider: .ethereum,
-            attempt: attempt(for: 60_041), expected: before, profileIdentifier: nil) else { return XCTFail("Expected revoke") }
-        clock.setDate(clock.date.addingTimeInterval(3_601))
-        await bridge.performMaintenance(profileIdentifier: nil)
-        guard case .snapshot(let absent) = await bridge.configurationSnapshot(configurationKey: origin, profileIdentifier: nil) else {
-            return XCTFail("Expected absent-origin authority")
-        }
-        XCTAssertEqual(absent.version.context, before.context)
-        XCTAssertGreaterThan(absent.version.revisions.ethereum, revoked.version.revisions.ethereum)
-        XCTAssertEqual((try storedProfile()["origins"] as? [String: Any])?.count, 0)
-        let template = try makeFixture(id: 60_042, name: "requestAccounts")
-        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: template.ingress.canonicalData) as? [String: Any])
-        raw["authority"] = before.json
-        let stale = try authorityFixture(raw)
-        guard case .unauthorized = await bridge.enqueue(ingress: stale.ingress, profileIdentifier: nil) else {
-            return XCTFail("Reclamation must not revive an old connection intent")
-        }
-        guard case .stale = await bridge.revoke(configurationKey: origin, provider: .ethereum,
-            attempt: attempt(for: 60_041), expected: before, profileIdentifier: nil) else {
-            return XCTFail("An expired receipt cannot make an old revoke fresh again")
+    func testExpiredMutationReceiptsPreserveRevocationsAndProfileEpoch() async throws {
+        for (index, provider) in [InpageProvider.ethereum, .solana].enumerated() {
+            let id = 60_040 + index * 10
+            let fixture = try makeConnectionFixture(id: id, provider: provider, host: "revoked-\(index).example")
+            let origin = fixture.request.configurationKey
+            let before = fixture.ingress.authority
+            guard case .revoked(let revoked) = await bridge.revoke(configurationKey: origin, provider: provider,
+                attempt: attempt(for: id + 1), expected: before, profileIdentifier: nil) else { return XCTFail("Expected revoke") }
+            clock.setDate(clock.date.addingTimeInterval(3_601))
+            await bridge.performMaintenance(profileIdentifier: nil)
+            guard case .snapshot(let retained) = await bridge.configurationSnapshot(configurationKey: origin, profileIdentifier: nil) else {
+                return XCTFail("Expected retained revocation authority")
+            }
+            XCTAssertEqual(retained.version, revoked.version)
+            XCTAssertEqual(retained.version.context, before.context)
+            let profile = try storedProfile()
+            XCTAssertNotNil((profile["origins"] as? [String: Any])?[origin])
+            XCTAssertEqual((profile["mutationReceipts"] as? [Any])?.count, 0)
+            var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture.ingress.canonicalData) as? [String: Any])
+            raw["id"] = id + 2
+            raw["enqueueAttempt"] = attempt(for: id + 2)
+            raw["admissionDeadline"] = Int(clock.date.addingTimeInterval(ExtensionBridge.requestTTL).timeIntervalSince1970 * 1_000)
+            let stale = try authorityFixture(raw)
+            guard case .unauthorized = await bridge.enqueue(ingress: stale.ingress, profileIdentifier: nil) else {
+                return XCTFail("Receipt expiry must not revive pre-revocation authority")
+            }
+            guard case .stale = await bridge.revoke(configurationKey: origin, provider: provider,
+                attempt: attempt(for: id + 1), expected: before, profileIdentifier: nil) else {
+                return XCTFail("An expired receipt cannot make an old revoke fresh again")
+            }
         }
     }
 
@@ -1523,115 +1599,77 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(unchanged.ethereumAccount, account)
     }
 
-    func testRevocationCannotPersistAuthorityBeyondItsReadableByteLimit() async throws {
-        struct Origin: Codable {
-            var ethereumAccount: WalletAccountDescriptor?
-            var ethereumChainId = "0xa"
-            var solanaAccount: WalletAccountDescriptor?
-            var revisions: ExtensionBridge.ProviderRevisions
-        }
-        let limit = 1_024 * 1_024
-        let encoder = PropertyListEncoder()
-        encoder.outputFormat = .binary
-        func originKey(_ index: Int, length: Int) -> String {
-            var key = "file:///tmp/\(index)/"
-            while key.utf8.count + 235 < length {
-                key += String(repeating: "%E4%B8%AD", count: 26) + "/"
-            }
-            let remaining = length - key.utf8.count
-            return key + String(repeating: "%E4%B8%AD", count: remaining / 9) +
-                String(repeating: "b", count: remaining % 9)
-        }
-        func origin(_ index: Int) throws -> Origin {
-            Origin(revisions: try XCTUnwrap(ExtensionBridge.ProviderRevisions(
-                rawValue: ["ethereum": index + 1, "solana": index]
-            )))
-        }
-        func maximumLength(budget: Int, makeOrigins: (Int) throws -> [String: Origin]) throws -> Int {
-            var lower = 1_000
-            var upper = 3_000
-            while lower < upper {
-                let middle = (lower + upper + 1) / 2
-                if try encoder.encode(makeOrigins(middle)).count <= budget { lower = middle }
-                else { upper = middle - 1 }
-            }
-            return lower
-        }
-        func baseOrigins(length: Int) throws -> [String: Origin] {
-            try Dictionary(uniqueKeysWithValues: (0..<399).map {
-                (originKey($0, length: length), try origin($0))
-            })
-        }
-        let ordinaryLength = try maximumLength(budget: limit - 2_000, makeOrigins: baseOrigins)
-        let base = try baseOrigins(length: ordinaryLength)
-        func paddedOrigins(length: Int) throws -> [String: Origin] {
-            var origins = base
-            origins[originKey(399, length: length)] = try origin(399)
-            return origins
-        }
-        let finalLength = try maximumLength(budget: limit, makeOrigins: paddedOrigins)
-        var origins = try paddedOrigins(length: finalLength)
-        let key = originKey(0, length: ordinaryLength)
-        XCTAssertTrue(origins.keys.allSatisfy {
-            guard let url = URL(string: $0) else { return false }
-            return $0.utf8.count <= 4_096 && url.absoluteString == $0 &&
-                url.path.utf8.count <= 1_024 && url.pathComponents.allSatisfy { $0.utf8.count <= 255 }
-        })
-        XCTAssertLessThanOrEqual(try encoder.encode(origins).count, limit)
-        var revokedOrigins = origins
-        revokedOrigins[key]?.revisions = try XCTUnwrap(ExtensionBridge.ProviderRevisions(
-            rawValue: ["ethereum": 401, "solana": 0]
-        ))
-        XCTAssertGreaterThan(try encoder.encode(revokedOrigins).count, limit)
+    @MainActor
+    func testEthereumGrantReclaimsUnusedAuthorityAtByteLimit() async throws {
+        try await assertGrantReclaimsUnusedAuthorityAtByteLimit(authorityTestAccount())
+    }
 
+    @MainActor
+    func testSolanaGrantReclaimsUnusedAuthorityAtByteLimit() async throws {
+        try await assertGrantReclaimsUnusedAuthorityAtByteLimit(.init(
+            walletID: "solana-wallet", coin: .solana, normalizedAddress: String(repeating: "1", count: 32),
+            derivationPath: "m/44'/501'/0'/0'"
+        ))
+    }
+
+    func testRevocationReclaimsUnusedAuthorityAtByteLimitAndPreservesProtectedOrigins() async throws {
+        let key = "https://wallet.example"
         guard case .snapshot = await bridge.configurationSnapshot(configurationKey: key, profileIdentifier: nil) else {
             return XCTFail("Expected profile bootstrap")
         }
-        var profile = try storedProfile()
-        profile["authoritySequence"] = 400
-        func seed(_ origins: [String: Origin]) throws {
-            profile["origins"] = try PropertyListSerialization.propertyList(
-                from: encoder.encode(origins), options: [], format: nil
+        let initial = try PropertyListDecoder().decode(
+            ExtensionRequestProfile.State.self, from: Data(contentsOf: defaultProfileURL)
+        )
+        for protected in [false, true] {
+            var profile = initial
+            profile.authoritySequence = 400
+            profile.origins = try authorityOriginsAtByteLimit(
+                preserving: [key: .init(revisions: ExtensionRequestProfile.revisions(ethereum: 0, solana: 0))],
+                fillerAccount: protected ? authorityTestAccount() : nil
             )
-            try PropertyListSerialization.data(fromPropertyList: profile, format: .binary, options: 0)
-                .write(to: defaultProfileURL, options: .atomic)
+            let before = ExtensionRequestProfile.authoritySnapshot(profile, configurationKey: key)
+            let victimKey = try XCTUnwrap(profile.origins.keys.filter { $0 != key }.sorted().first)
+            let victim = ExtensionRequestProfile.authoritySnapshot(profile, configurationKey: victimKey)
+            var candidate = profile.origins
+            candidate[key]?.revisions = ExtensionRequestProfile.revisions(ethereum: 401, solana: 0)
+            XCTAssertGreaterThan(try ExtensionRequestProfileCodec.encode(candidate).count, ExtensionRequestProfile.maximumAuthorityBytes)
+            let original = try ExtensionRequestProfileCodec.encode(profile)
+            try original.write(to: defaultProfileURL, options: .atomic)
+            let result = await bridge.revoke(
+                configurationKey: key, provider: .ethereum, attempt: attempt(for: 61_400),
+                expected: before.version, profileIdentifier: nil
+            )
+            if protected {
+                guard case .unavailable = result else {
+                    return XCTFail("Authority growth must fail when every other origin has a grant")
+                }
+                XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
+                guard case .snapshot(let unchanged) = await bridge.configurationSnapshot(configurationKey: key, profileIdentifier: nil) else {
+                    return XCTFail("Rejected revocation must preserve a readable profile")
+                }
+                XCTAssertEqual(unchanged.version, before.version)
+            } else {
+                guard case .revoked(let revoked) = result,
+                      case .snapshot(let readable) = await bridge.configurationSnapshot(configurationKey: key, profileIdentifier: nil),
+                      case .stale(let evicted) = await bridge.revoke(
+                        configurationKey: victimKey, provider: .ethereum, attempt: attempt(for: 61_401),
+                        expected: victim.version, profileIdentifier: nil
+                      ) else { return XCTFail("Revocation must reclaim unused authority and fence the evicted origin") }
+                XCTAssertEqual(revoked.version.context, before.version.context)
+                XCTAssertEqual(revoked.version.revisions.ethereum, 401)
+                XCTAssertEqual(revoked.version.revisions.solana, before.version.revisions.solana)
+                XCTAssertEqual(readable.version, revoked.version)
+                XCTAssertGreaterThan(evicted.version.revisions.ethereum, victim.version.revisions.ethereum)
+                let persisted = try PropertyListDecoder().decode(
+                    ExtensionRequestProfile.State.self, from: Data(contentsOf: defaultProfileURL)
+                )
+                XCTAssertNil(persisted.origins[victimKey])
+                XCTAssertNotNil(persisted.origins[key])
+                XCTAssertEqual(persisted.mutationReceipts.count, 1)
+                XCTAssertLessThanOrEqual(try ExtensionRequestProfileCodec.encode(persisted.origins).count,
+                                         ExtensionRequestProfile.maximumAuthorityBytes)
+            }
         }
-        try seed(origins)
-        let original = try Data(contentsOf: defaultProfileURL)
-        let writes = LockedTestValue(0)
-        let tested = makeBridge(clock: { [clock = clock!] in clock.date },
-            configureIO: { io in
-                let baseIO = io
-                io.replace = { data, url in
-            writes.withValue { $0 += 1 }
-            try baseIO.replace(data, url)
-        }
-            })
-        guard case .snapshot(let before) = await tested.configurationSnapshot(configurationKey: key, profileIdentifier: nil) else {
-            return XCTFail("Expected valid profile at the authority byte limit")
-        }
-        guard case .unavailable = await tested.revoke(configurationKey: key, provider: .ethereum,
-            attempt: attempt(for: 61_400), expected: before.version, profileIdentifier: nil) else {
-            return XCTFail("An oversized authority mutation must not persist")
-        }
-        XCTAssertEqual(writes.value, 0)
-        XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original)
-        guard case .snapshot(let unchanged) = await tested.configurationSnapshot(configurationKey: key, profileIdentifier: nil) else {
-            return XCTFail("Rejected revocation must preserve a readable profile")
-        }
-        XCTAssertEqual(unchanged.version, before.version)
-        XCTAssertEqual(unchanged.ethereumChainId, "0xa")
-
-        origins.removeValue(forKey: originKey(399, length: finalLength))
-        try seed(origins)
-        guard case .revoked(let revoked) = await tested.revoke(configurationKey: key, provider: .ethereum,
-            attempt: attempt(for: 61_400), expected: before.version, profileIdentifier: nil),
-              case .snapshot(let readable) = await tested.configurationSnapshot(configurationKey: key, profileIdentifier: nil) else {
-            return XCTFail("A revocation that fits must persist and remain readable")
-        }
-        XCTAssertEqual(writes.value, 1)
-        XCTAssertEqual(revoked.version.revisions.ethereum, 401)
-        XCTAssertEqual(readable.version, revoked.version)
     }
 
     func testWalletSourceMutationSerializesPreparationAndWritesWithoutRevocation() throws {
@@ -2235,6 +2273,129 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let request = try XCTUnwrap(SafariRequest(json: object))
         guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: object) else { throw Failure.expectedValue }
         return Fixture(request: request, ingress: ingress)
+    }
+
+    private func authorityOriginsAtByteLimit(
+        preserving retained: [String: ExtensionRequestProfile.OriginState],
+        fillerAccount: WalletAccountDescriptor? = nil
+    ) throws -> [String: ExtensionRequestProfile.OriginState] {
+        func originKey(_ index: Int, length: Int) -> String {
+            var key = "file:///tmp/\(index)/"
+            while key.utf8.count + 235 < length {
+                key += String(repeating: "%E4%B8%AD", count: 26) + "/"
+            }
+            let remaining = length - key.utf8.count
+            return key + String(repeating: "%E4%B8%AD", count: remaining / 9) +
+                String(repeating: "b", count: remaining % 9)
+        }
+        func origin(_ index: Int) -> ExtensionRequestProfile.OriginState {
+            .init(ethereumAccount: fillerAccount,
+                  revisions: ExtensionRequestProfile.revisions(ethereum: index + 1, solana: index))
+        }
+        func maximumLength(
+            budget: Int,
+            makeOrigins: (Int) -> [String: ExtensionRequestProfile.OriginState]
+        ) throws -> Int {
+            var lower = 1_000
+            var upper = 3_000
+            while lower < upper {
+                let middle = (lower + upper + 1) / 2
+                if try ExtensionRequestProfileCodec.encode(makeOrigins(middle)).count <= budget { lower = middle }
+                else { upper = middle - 1 }
+            }
+            return lower
+        }
+        func baseOrigins(length: Int) -> [String: ExtensionRequestProfile.OriginState] {
+            var origins = retained
+            for index in 0..<399 { origins[originKey(index, length: length)] = origin(index) }
+            return origins
+        }
+        let limit = ExtensionRequestProfile.maximumAuthorityBytes
+        let ordinaryLength = try maximumLength(budget: limit - 2_000, makeOrigins: baseOrigins)
+        let base = baseOrigins(length: ordinaryLength)
+        func paddedOrigins(length: Int) -> [String: ExtensionRequestProfile.OriginState] {
+            var origins = base
+            origins[originKey(399, length: length)] = origin(399)
+            return origins
+        }
+        let finalLength = try maximumLength(budget: limit, makeOrigins: paddedOrigins)
+        let origins = paddedOrigins(length: finalLength)
+        XCTAssertTrue(origins.keys.allSatisfy(ExtensionRequestProfile.validConfigurationKey))
+        XCTAssertLessThanOrEqual(try ExtensionRequestProfileCodec.encode(origins).count, limit)
+        return origins
+    }
+
+    @MainActor
+    private func assertGrantReclaimsUnusedAuthorityAtByteLimit(_ account: WalletAccountDescriptor) async throws {
+        let connected = authorityTestAccount()
+        _ = try await grantAuthority(connected, id: 61_410, host: "connected.example")
+        clock.setDate(clock.date.addingTimeInterval(3_601))
+        await bridge.performMaintenance(profileIdentifier: nil)
+        let pending = try makeFixture(id: 61_411, name: "requestAccounts", host: "pending.example")
+        let pendingHandle = try accepted(await bridge.enqueue(ingress: pending.ingress, profileIdentifier: nil)).handle
+        let receiptKey = "https://receipt.example"
+        guard case .snapshot(let receiptBefore) = await bridge.configurationSnapshot(configurationKey: receiptKey, profileIdentifier: nil),
+              case .revoked = await bridge.revoke(
+                configurationKey: receiptKey, provider: .ethereum, attempt: attempt(for: 61_412),
+                expected: receiptBefore.version, profileIdentifier: nil
+              ) else { return XCTFail("Expected protected mutation receipt") }
+        let provider: InpageProvider = account.coin == .ethereum ? .ethereum : .solana
+        let target = try makeConnectionFixture(id: 61_413, provider: provider, host: "growing.example")
+        let handle = try accepted(await bridge.enqueue(ingress: target.ingress, profileIdentifier: nil)).handle
+        var profile = try PropertyListDecoder().decode(
+            ExtensionRequestProfile.State.self, from: Data(contentsOf: defaultProfileURL)
+        )
+        let protected = profile.origins
+        profile.authoritySequence = 400
+        profile.origins = try authorityOriginsAtByteLimit(preserving: protected)
+        let victimKey = try XCTUnwrap(profile.origins.keys.filter { protected[$0] == nil }.sorted().first)
+        let victim = ExtensionRequestProfile.authoritySnapshot(profile, configurationKey: victimKey)
+        var candidate = profile.origins
+        let key = target.request.configurationKey
+        if account.coin == .ethereum {
+            candidate[key]?.ethereumAccount = account
+            candidate[key]?.revisions = ExtensionRequestProfile.revisions(
+                ethereum: 401, solana: target.ingress.authority.revisions.solana
+            )
+        } else {
+            candidate[key]?.solanaAccount = account
+            candidate[key]?.revisions = ExtensionRequestProfile.revisions(
+                ethereum: target.ingress.authority.revisions.ethereum, solana: 401
+            )
+        }
+        XCTAssertGreaterThan(try ExtensionRequestProfileCodec.encode(candidate).count, ExtensionRequestProfile.maximumAuthorityBytes)
+        try ExtensionRequestProfileCodec.encode(profile).write(to: defaultProfileURL, options: .atomic)
+        let completion = try await completeApprovedSelection(handle: handle, accounts: [account])
+        XCTAssertEqual(completion, .persisted)
+        guard case .snapshot(let granted) = await bridge.configurationSnapshot(configurationKey: key, profileIdentifier: nil),
+              case .found = await bridge.load(handle: pendingHandle),
+              case .stale(let evicted) = await bridge.revoke(
+                configurationKey: victimKey, provider: .ethereum, attempt: attempt(for: 61_414),
+                expected: victim.version, profileIdentifier: nil
+              ) else { return XCTFail("Grant must preserve pending authority and fence the evicted origin") }
+        XCTAssertEqual(granted.version.context, target.ingress.authority.context)
+        XCTAssertEqual(granted.version.revisions, candidate[key]?.revisions)
+        XCTAssertEqual(account.coin == .ethereum ? granted.ethereumAccount : granted.solanaAccount, account)
+        XCTAssertGreaterThan(evicted.version.revisions.ethereum, victim.version.revisions.ethereum)
+        let pendingIsCurrent = await bridge.authorityIsCurrent(handle: pendingHandle)
+        XCTAssertTrue(pendingIsCurrent)
+        let persisted = try PropertyListDecoder().decode(
+            ExtensionRequestProfile.State.self, from: Data(contentsOf: defaultProfileURL)
+        )
+        XCTAssertNil(persisted.origins[victimKey])
+        XCTAssertEqual(persisted.reclaimedAuthorityRevision, 402)
+        XCTAssertLessThanOrEqual(try ExtensionRequestProfileCodec.encode(persisted.origins).count,
+                                 ExtensionRequestProfile.maximumAuthorityBytes)
+        XCTAssertEqual(try ExtensionRequestProfileCodec.encode(persisted.mutationReceipts),
+                       try ExtensionRequestProfileCodec.encode(profile.mutationReceipts))
+        for protectedKey in protected.keys where protectedKey != key {
+            let before = ExtensionRequestProfile.authoritySnapshot(profile, configurationKey: protectedKey)
+            let after = ExtensionRequestProfile.authoritySnapshot(persisted, configurationKey: protectedKey)
+            XCTAssertEqual(after.version, before.version)
+            XCTAssertEqual(after.ethereumAccount, before.ethereumAccount)
+            XCTAssertEqual(after.solanaAccount, before.solanaAccount)
+            XCTAssertEqual(after.ethereumChainId, before.ethereumChainId)
+        }
     }
 
     private func grantAuthority(
@@ -10008,6 +10169,17 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             rawObject: object
         ) else { throw Failure.expectedValue }
         return Fixture(request: request, ingress: ingress)
+    }
+
+    private func makeConnectionFixture(id: Int, provider: InpageProvider, host: String) throws -> Fixture {
+        let template = try makeFixture(id: id, name: "requestAccounts", host: host)
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: template.ingress.canonicalData) as? [String: Any])
+        raw["provider"] = provider.rawValue
+        raw["name"] = provider == .ethereum ? "requestAccounts" : "connect"
+        raw["body"] = provider == .ethereum
+            ? ["address": "", "chainId": "0x1"]
+            : ["publicKey": "", "object": [String: Any]()]
+        return try authorityFixture(raw)
     }
 
     @MainActor

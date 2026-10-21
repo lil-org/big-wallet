@@ -565,8 +565,8 @@ extension Agent.ActiveApproval {
         alert.messageText = Strings.addNetwork
         alert.informativeText = action.chainToAdd.chainName + "\n\n" + action.chainToAdd.defaultRpcUrl
         alert.alertStyle = .informational
-        alert.addButton(withTitle: Strings.ok)
-        alert.addButton(withTitle: Strings.cancel)
+        alert.addButton(withTitle: Strings.ok).setAccessibilityIdentifier("safari.approval.approve")
+        alert.addButton(withTitle: Strings.cancel).setAccessibilityIdentifier("safari.approval.reject")
         alert.beginSheetModal(for: window) { [weak self] response in
             guard let self, acceptsActions(for: review) else { return }
             if response == .alertFirstButtonReturn {

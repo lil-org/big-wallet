@@ -297,6 +297,9 @@ class AccountsListViewController: NSViewController {
         secondaryButton.title = Strings.cancel
         primaryButton.setAccessibilityIdentifier("safari.approval.approve")
         secondaryButton.setAccessibilityIdentifier("safari.approval.reject")
+#if BW_SAFARI_VM_TESTING
+        tableView.setAccessibilityIdentifier(accountSelection == nil ? nil : "safari.approval.accounts")
+#endif
         tableView.keyboardActivation = { [weak self] in
             guard let self else { return }
             activateRow(at: tableView.selectedRow)
