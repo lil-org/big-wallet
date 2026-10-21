@@ -93,6 +93,14 @@ class GuestAccessTests(unittest.TestCase):
             {'dev-entry': '/dev/disk8', 'content-hint': 'GUID_partition_scheme'},
             {'dev-entry': '/dev/disk8s2', 'content-hint': 'Apple_APFS'}]}
 
+    def detach_arguments(self, device='/dev/disk8'):
+        disk = self.candidate / 'Disk.img'
+        metadata = disk.stat()
+        return disk, device, (metadata.st_dev, metadata.st_ino, metadata.st_uid)
+
+    def attached_image(self):
+        return {**self.attachment(), 'image-path': str(self.candidate / 'Disk.img')}
+
     def inventory(self):
         return {'Containers': [
             {'PhysicalStores': [{'DeviceIdentifier': 'disk0s2'}], 'Volumes': [{'DeviceIdentifier': 'disk1s5', 'Roles': ['Data']}]},
@@ -147,26 +155,26 @@ class GuestAccessTests(unittest.TestCase):
                          {'DeviceIdentifier': 'disk9s5', 'MountPoint': str(self.mount)}]
             with self.subTest(returncode=returncode), patch.object(access, '_plist', side_effect=responses) as disk_services, \
                     patch.object(access.subprocess, 'run', return_value=subprocess.CompletedProcess(command, returncode, b'', b'')) as probe, \
-                    patch.object(access, '_checked') as cleanup:
+                    patch.object(access, '_detach_owned_image') as cleanup:
                 with access.attached_data(self.candidate, owners=False) as mount:
                     self.assertEqual(mount, self.mount)
                 probe.assert_called_once_with(command, capture_output=True, timeout=30)
                 self.preflight.assert_called_once_with(disk)
                 self.assertEqual(disk_services.call_count, 4)
                 self.assertIn('-readwrite', disk_services.call_args_list[1].args[0])
-                cleanup.assert_called_once_with(['/usr/bin/hdiutil', 'detach', '/dev/disk8'])
+                cleanup.assert_called_once_with(*self.detach_arguments())
             self.preflight.reset_mock()
 
     def test_owned_attachment_always_detaches_after_read_failure(self):
         responses = [{'images': []}, self.attachment(), self.inventory(), {'DeviceIdentifier': 'disk9s5', 'MountPoint': str(self.mount)}]
         with patch.object(access, '_plist', side_effect=responses) as commands, \
                 patch.object(access.subprocess, 'run', return_value=SimpleNamespace(returncode=1, stdout=b'', stderr=b'')), \
-                patch.object(access, '_checked') as cleanup:
+                patch.object(access, '_detach_owned_image') as cleanup:
             with self.assertRaisesRegex(RuntimeError, 'fixture failure'):
                 with access.attached_data(self.candidate, owners=True) as mount:
                     self.assertEqual(mount, self.mount)
                     raise RuntimeError('fixture failure')
-        cleanup.assert_called_once_with(['/usr/bin/hdiutil', 'detach', '/dev/disk8'])
+        cleanup.assert_called_once_with(*self.detach_arguments())
         command = commands.call_args_list[1].args[0]
         self.assertEqual(command[-1], str(self.candidate / 'Disk.img'))
         self.assertIn('-nobrowse', command)
@@ -194,11 +202,11 @@ class GuestAccessTests(unittest.TestCase):
     def test_ambiguous_data_inventory_detaches_without_mount_access(self):
         with patch.object(access, '_plist', side_effect=[{'images': []}, self.attachment(), {'Containers': []}]), \
                 patch.object(access.subprocess, 'run', return_value=SimpleNamespace(returncode=1, stdout=b'', stderr=b'')), \
-                patch.object(access, '_checked') as cleanup:
+                patch.object(access, '_detach_owned_image') as cleanup:
             with self.assertRaises(access.GuestAccessError):
                 with access.attached_data(self.candidate, owners=False):
                     self.fail('unexpected mount')
-        cleanup.assert_called_once_with(['/usr/bin/hdiutil', 'detach', '/dev/disk8'])
+        cleanup.assert_called_once_with(*self.detach_arguments())
 
     def test_busy_or_already_attached_candidate_is_never_attached_again(self):
         for busy in (True, False):
@@ -216,11 +224,11 @@ class GuestAccessTests(unittest.TestCase):
         responses = [{'images': []}, access.GuestAccessError('attach failed'), {'images': [unrelated, image]}]
         with patch.object(access, '_plist', side_effect=responses), \
                 patch.object(access.subprocess, 'run', return_value=SimpleNamespace(returncode=1, stdout=b'', stderr=b'')), \
-                patch.object(access, '_checked') as cleanup:
+                patch.object(access, '_detach_owned_image') as cleanup:
             with self.assertRaisesRegex(access.GuestAccessError, 'attach failed'):
                 with access.attached_data(self.candidate, owners=True):
                     self.fail('unexpected mount')
-        cleanup.assert_called_once_with(['/usr/bin/hdiutil', 'detach', '/dev/disk8'])
+        cleanup.assert_called_once_with(*self.detach_arguments(None))
 
     def test_detach_requires_one_gpt_physical_device_and_never_guesses_synthetic_root(self):
         attachment = self.attachment()
@@ -241,7 +249,8 @@ class GuestAccessTests(unittest.TestCase):
             commands.append(command)
             if command[0] == '/usr/sbin/lsof':
                 return subprocess.CompletedProcess(command, 1, stdout=b'', stderr=b'')
-            self.assertEqual(kwargs['timeout'], 60)
+            self.assertGreater(kwargs['timeout'], 0)
+            self.assertLessEqual(kwargs['timeout'], 60)
             operation = command[1]
             if operation == 'info':
                 output = {'images': [image] if state['attached'] else []}
@@ -262,9 +271,200 @@ class GuestAccessTests(unittest.TestCase):
             with self.assertRaises(KeyboardInterrupt):
                 with access.attached_data(self.candidate, owners=False):
                     self.fail('Cancellation must propagate before mount access')
-        self.assertEqual([command[1] for command in commands[1:]], ['info', 'attach', 'info', 'detach'])
+        self.assertEqual([command[1] for command in commands[1:]], ['info', 'attach', 'info', 'detach', 'info'])
         self.assertFalse(state['attached'])
         self.assertIs(access.signal.getsignal(access.signal.SIGINT), previous)
+
+    def test_cleanup_detach_retries_only_the_verified_image_and_device(self):
+        state = {'attached': True, 'attempts': 0, 'now': 100}
+        calls = []
+        unrelated = {'image-path': '/unrelated/Disk.img', 'system-entities': [
+            {'dev-entry': '/dev/disk77', 'content-hint': 'GUID_partition_scheme'}]}
+        def inventory(command, *, timeout):
+            self.assertEqual(command, ['/usr/bin/hdiutil', 'info', '-plist'])
+            self.assertLessEqual(timeout, 10)
+            calls.append('info')
+            return {'images': [unrelated, self.attached_image()] if state['attached'] else [unrelated]}
+        def detach(command, *, timeout):
+            self.assertEqual(command, ['/usr/bin/hdiutil', 'detach', '/dev/disk8'])
+            self.assertLessEqual(timeout, 10)
+            calls.append('detach')
+            state['attempts'] += 1
+            if state['attempts'] == 1:
+                raise access.GuestAccessError('busy')
+            state['attached'] = False
+            return b''
+        def sleep(seconds):
+            calls.append(('sleep', seconds))
+            state['now'] += seconds
+        with patch.object(access, '_plist', side_effect=inventory), patch.object(access, '_checked', side_effect=detach), \
+                patch.object(access.time, 'monotonic', side_effect=lambda: state['now']), \
+                patch.object(access.time, 'sleep', side_effect=sleep):
+            access._detach_owned_image(*self.detach_arguments(None))
+        self.assertEqual(calls, ['info', 'detach', 'info', ('sleep', 5), 'info', 'detach', 'info'])
+        self.assertFalse(state['attached'])
+
+    def test_cleanup_detach_refuses_changed_ambiguous_or_unknown_mapping_before_retry(self):
+        image = self.attached_image()
+        changed_device = {**image, 'system-entities': [{'dev-entry': '/dev/disk77', 'content-hint': 'GUID_partition_scheme'}]}
+        wrong_path = {**image, 'image-path': '/unrelated/Disk.img'}
+        no_guid = {**image, 'system-entities': [{'dev-entry': '/dev/disk8', 'content-hint': 'Apple_APFS'}]}
+        ambiguous_root = {**image, 'system-entities': [*image['system-entities'],
+            {'dev-entry': '/dev/disk77', 'content-hint': 'GUID_partition_scheme'}]}
+        outcomes = [{}, {'images': {}}, {'images': [None]}, {'images': [{'image-path': str(self.candidate / 'Disk.img')}]},
+                    {'images': [{**image, 'image-path': ''}]}, {'images': [{**image, 'image-path': 'Disk.img'}]},
+                    {'images': [{**image, 'image-path': '/unknown/../Disk.img'}]},
+                    {'images': [{**image, 'system-entities': [{'dev-entry': None}]}]},
+                    {'images': [changed_device]}, {'images': [wrong_path]}, {'images': [no_guid]},
+                    {'images': [image, image]}, {'images': [image, wrong_path]},
+                    {'images': [image, {**wrong_path, 'image-path': 'ram://32768'}]}, {'images': [ambiguous_root]},
+                    access.GuestAccessError('inventory unavailable')]
+        for index, outcome in enumerate(outcomes):
+            with self.subTest(case=index), \
+                    patch.object(access, '_plist', side_effect=[{'images': [image]}, {'images': [image]}, outcome]) as inventory, \
+                    patch.object(access, '_checked', side_effect=access.GuestAccessError('busy')) as detach, \
+                    patch.object(access.time, 'sleep'):
+                with self.assertRaises(access.GuestAccessError):
+                    access._detach_owned_image(*self.detach_arguments())
+                detach.assert_called_once_with(['/usr/bin/hdiutil', 'detach', '/dev/disk8'], timeout=10)
+                self.assertEqual(inventory.call_count, 3)
+
+    def test_cleanup_detach_allows_an_unrelated_opaque_image_path(self):
+        unrelated = {'image-path': 'ram://32768', 'system-entities': [
+            {'dev-entry': '/dev/disk77', 'content-hint': 'GUID_partition_scheme'}]}
+        with patch.object(access, '_plist', side_effect=[
+                {'images': [unrelated, self.attached_image()]}, {'images': [unrelated]}]), \
+                patch.object(access, '_checked') as detach:
+            access._detach_owned_image(*self.detach_arguments())
+        detach.assert_called_once_with(['/usr/bin/hdiutil', 'detach', '/dev/disk8'], timeout=10)
+
+    def test_cleanup_detach_refuses_replaced_or_symlinked_image_before_retry(self):
+        disk = self.candidate / 'Disk.img'
+        for symlink in (False, True):
+            arguments = self.detach_arguments()
+            saved = disk.with_name('saved.img')
+            def replace(_):
+                disk.rename(saved)
+                if symlink:
+                    disk.symlink_to(saved)
+                else:
+                    disk.write_bytes(b'replaced')
+            with self.subTest(symlink=symlink), patch.object(access, '_plist', return_value={'images': [self.attached_image()]}) as inventory, \
+                    patch.object(access, '_checked', side_effect=access.GuestAccessError('busy')) as detach, \
+                    patch.object(access.time, 'sleep', side_effect=replace):
+                with self.assertRaises(access.GuestAccessError):
+                    access._detach_owned_image(*arguments)
+                self.assertEqual(detach.call_count, 1)
+                self.assertEqual(inventory.call_count, 2)
+            disk.unlink()
+            saved.rename(disk)
+
+    def test_cleanup_detach_refuses_owner_or_device_identity_changes(self):
+        disk, device, identity = self.detach_arguments()
+        for changed in ((identity[0] + 1, identity[1], identity[2]), (identity[0], identity[1], identity[2] + 1)):
+            with self.subTest(identity=changed), patch.object(access, '_plist') as inventory, patch.object(access, '_checked') as detach:
+                with self.assertRaisesRegex(access.GuestAccessError, 'changed'):
+                    access._detach_owned_image(disk, device, changed)
+                inventory.assert_not_called()
+                detach.assert_not_called()
+        with patch.object(access, '_plist') as inventory, patch.object(access, '_checked') as detach:
+            with self.assertRaisesRegex(access.GuestAccessError, 'invalid'):
+                access._detach_owned_image(disk, '/dev/disk8s2', identity)
+            inventory.assert_not_called()
+            detach.assert_not_called()
+
+    def test_cleanup_detach_accepts_confirmed_absence_after_an_error(self):
+        for error in (access.GuestAccessError('busy'), access.GuestAccessError('detach could not complete')):
+            with self.subTest(error=error), \
+                    patch.object(access, '_plist', side_effect=[{'images': [self.attached_image()]}, {'images': []}]) as inventory, \
+                    patch.object(access, '_checked', side_effect=error) as detach, patch.object(access.time, 'sleep') as sleep:
+                access._detach_owned_image(*self.detach_arguments())
+                self.assertEqual(inventory.call_count, 2)
+                self.assertEqual(detach.call_count, 1)
+                sleep.assert_not_called()
+
+    def test_cleanup_detach_has_three_attempts_and_verifies_successful_exit(self):
+        for outcome in (b'', access.GuestAccessError('busy')):
+            with self.subTest(outcome=outcome), patch.object(access, '_plist', return_value={'images': [self.attached_image()]}) as inventory, \
+                    patch.object(access, '_checked', side_effect=[outcome] * 3) as detach, patch.object(access.time, 'sleep') as sleep:
+                with self.assertRaisesRegex(access.GuestAccessError, 'remained attached'):
+                    access._detach_owned_image(*self.detach_arguments())
+                self.assertEqual(detach.call_args_list, [call(['/usr/bin/hdiutil', 'detach', '/dev/disk8'], timeout=10)] * 3)
+                self.assertEqual(inventory.call_count, 6)
+                self.assertEqual(sleep.call_args_list, [call(5), call(10)])
+
+    def test_cleanup_detach_inventory_commands_and_backoff_share_one_deadline(self):
+        state = {'now': 100}
+        timeouts = []
+        def consume(command, *, timeout):
+            self.assertGreater(timeout, 0)
+            self.assertLessEqual(timeout, min(10, 160 - state['now']))
+            timeouts.append(timeout)
+            state['now'] += timeout
+            if command[1] == 'detach':
+                raise access.GuestAccessError('busy')
+            return {'images': [self.attached_image()]}
+        def sleep(seconds):
+            state['now'] += seconds
+        with patch.object(access, '_plist', side_effect=consume), patch.object(access, '_checked', side_effect=consume) as detach, \
+                patch.object(access.time, 'monotonic', side_effect=lambda: state['now']), \
+                patch.object(access.time, 'sleep', side_effect=sleep) as waiting:
+            with self.assertRaisesRegex(access.GuestAccessError, 'cleanup deadline'):
+                access._detach_owned_image(*self.detach_arguments(None))
+        self.assertEqual(state['now'], 160)
+        self.assertEqual(timeouts, [10, 10, 10, 10, 10, 5])
+        self.assertEqual(detach.call_count, 2)
+        waiting.assert_called_once_with(5)
+
+    def test_cleanup_detach_defers_cancellation_through_inventory_detach_and_backoff(self):
+        previous = access.signal.getsignal(access.signal.SIGINT)
+        for trigger in ('inventory', 'detach', 'backoff'):
+            state = {'attached': True, 'attempts': 0, 'interrupted': False}
+            def interrupt(where):
+                if where == trigger and not state['interrupted']:
+                    state['interrupted'] = True
+                    access.signal.getsignal(access.signal.SIGINT)(access.signal.SIGINT, None)
+            def inventory(*args, **kwargs):
+                interrupt('inventory')
+                return {'images': [self.attached_image()] if state['attached'] else []}
+            def detach(*args, **kwargs):
+                interrupt('detach')
+                state['attempts'] += 1
+                if state['attempts'] == 1:
+                    raise access.GuestAccessError('busy')
+                state['attached'] = False
+            with self.subTest(trigger=trigger), patch.object(access, '_plist', side_effect=inventory), \
+                    patch.object(access, '_checked', side_effect=detach), \
+                    patch.object(access.time, 'sleep', side_effect=lambda _: interrupt('backoff')):
+                with self.assertRaises(KeyboardInterrupt):
+                    access._detach_owned_image(*self.detach_arguments(None))
+            self.assertFalse(state['attached'])
+            self.assertEqual(state['attempts'], 2)
+            self.assertIs(access.signal.getsignal(access.signal.SIGINT), previous)
+
+    def test_partial_attach_error_remains_after_cleanup_detach_retry_succeeds(self):
+        state = {'attached': False, 'detaches': 0}
+        commands = []
+        def run(command, **kwargs):
+            commands.append(command)
+            if command[0] == '/usr/sbin/lsof':
+                return subprocess.CompletedProcess(command, 1, b'', b'')
+            if command[1] == 'info':
+                return subprocess.CompletedProcess(command, 0, plistlib.dumps({'images': [self.attached_image()] if state['attached'] else []}), b'')
+            if command[1] == 'attach':
+                state['attached'] = True
+                return subprocess.CompletedProcess(command, 1, b'', b'attach failed')
+            self.assertEqual(command, ['/usr/bin/hdiutil', 'detach', '/dev/disk8'])
+            state['detaches'] += 1
+            state['attached'] = state['detaches'] == 1
+            return subprocess.CompletedProcess(command, 1 if state['attached'] else 0, b'', b'')
+        with patch.object(access.subprocess, 'run', side_effect=run), patch.object(access.time, 'sleep'):
+            with self.assertRaisesRegex(access.GuestAccessError, 'hdiutil failed during guest disk access'):
+                with access.attached_data(self.candidate, owners=False):
+                    self.fail('A failed attach must not yield access')
+        self.assertEqual(sum(command[1] == 'attach' for command in commands), 1)
+        self.assertEqual(state['detaches'], 2)
+        self.assertFalse(state['attached'])
 
     def prepare(self, first_boot=False, console_user='guest'):
         with patch.object(access, 'attached_data', side_effect=lambda *args, **kwargs: contextlib.nullcontext(self.mount)):
@@ -510,11 +710,11 @@ class GuestAccessTests(unittest.TestCase):
         responses = [{'images': []}, self.attachment(), self.inventory(), {'DeviceIdentifier': 'disk9s5', 'MountPoint': str(self.mount)}]
         with patch.object(access, '_plist', side_effect=responses), \
                 patch.object(access.subprocess, 'run', return_value=SimpleNamespace(returncode=1, stdout=b'', stderr=b'')), \
-                patch.object(access, '_checked') as cleanup, patch.object(access.os, 'fdopen', side_effect=fdopen):
+                patch.object(access, '_detach_owned_image') as cleanup, patch.object(access.os, 'fdopen', side_effect=fdopen):
             with self.assertRaises(KeyboardInterrupt):
                 with access.attached_data(self.candidate, owners=False):
                     access._replace_contents(target, original, replacement, inode)
-        cleanup.assert_called_once_with(['/usr/bin/hdiutil', 'detach', '/dev/disk8'])
+        cleanup.assert_called_once_with(*self.detach_arguments())
         self.assertEqual(target.read_bytes(), original)
         self.assertEqual(plistlib.loads(target.read_bytes()), {'other.service': True})
         self.assertEqual(target.stat().st_ino, inode)

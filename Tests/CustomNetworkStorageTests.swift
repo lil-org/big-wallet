@@ -788,7 +788,7 @@ private final class SynchronizationController {
         self.results = results
     }
 
-    func synchronize(_ defaults: UserDefaults) -> Bool {
+    func synchronize(_ defaults: any SharedPreferenceStorage) -> Bool {
         guard !results.isEmpty else { return false }
         return results.removeFirst() ? defaults.synchronize() : false
     }

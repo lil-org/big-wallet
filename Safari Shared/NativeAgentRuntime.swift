@@ -78,6 +78,19 @@ enum NativeAgentRuntime {
         }
         let helperTeam = teamIdentifier(for: helperCode)
         let containingTeam = teamIdentifier(for: containingCode)
+#if BW_SAFARI_VM_TESTING
+        if SafariVMFixtures.shared.isLocal {
+            guard helperTeam == nil, containingTeam == nil,
+                  url.standardizedFileURL == embeddedHelperURL(in: extensionURL),
+                  let helperRun = bundle.url(forResource: "SafariVMRun", withExtension: "json"),
+                  let extensionRun = Bundle(url: extensionURL)?.url(forResource: "SafariVMRun", withExtension: "json"),
+                  let helperData = try? Data(contentsOf: helperRun),
+                  let extensionData = try? Data(contentsOf: extensionRun),
+                  helperData == extensionData,
+                  (try? JSONDecoder().decode(SafariVMFixtures.Descriptor.self, from: helperData)) == SafariVMFixtures.shared.descriptor else { return false }
+            return true
+        }
+#endif
 #if DEBUG
         return helperTeam == containingTeam
 #else

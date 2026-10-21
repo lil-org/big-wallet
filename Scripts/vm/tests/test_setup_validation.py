@@ -30,9 +30,12 @@ class SetupValidationInventoryTests(unittest.TestCase):
         manifest = exchange / 'source/Scripts/vm/test_manifest.mjs'
         manifest.parent.mkdir(parents=True)
         shutil.copyfile(host.TOOLS / 'test_manifest.mjs', manifest)
+        scenarios = exchange / 'source/Scripts/safari/scenarios.mjs'
+        scenarios.parent.mkdir()
+        shutil.copyfile(host.TOOLS.parent / 'safari/scenarios.mjs', scenarios)
         host.atomic_json(exchange / 'snapshot-manifest.json', {'version': 1, 'files': [
-            {'path': 'Scripts/vm/test_manifest.mjs', 'type': 'file', 'mode': 0o644,
-             'sha256': host.hash_regular_file(manifest)}]})
+            {'path': str(path.relative_to(exchange / 'source')), 'type': 'file', 'mode': 0o644,
+             'sha256': host.hash_regular_file(path)} for path in (manifest, scenarios)]})
         return {'sha256': host.hash_regular_file(exchange / 'snapshot-manifest.json'), 'commit': 'b' * 40}
 
     def test_validation_launch_failure_keeps_selected_inventory_and_cannot_promote_baseline(self):

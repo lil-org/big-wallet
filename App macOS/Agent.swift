@@ -1,6 +1,9 @@
 // ∅ 2026 lil org
 
 import Cocoa
+#if BW_SAFARI_VM_TESTING
+import SafariServices
+#endif
 
 struct PendingWalletOpenIntent {
     private(set) var isPending = false
@@ -89,6 +92,9 @@ class Agent: NSObject {
             didSet {
                 guard !isRetired else { return }
                 if let window = windowController?.window {
+#if BW_SAFARI_VM_TESTING
+                    window.setAccessibilityIdentifier("safari.approval.window.\(UUID().uuidString)")
+#endif
                     windowCloseObserver.observe(window)
                 }
             }
@@ -138,6 +144,9 @@ class Agent: NSObject {
     }
 
     static let shared = Agent()
+#if BW_SAFARI_VM_TESTING
+    private static var didRequestSafariVMExtensionState = false
+#endif
     private var isReady = false
     private let credentialDependencies: StartupCredentialCoordinator.Dependencies
     private lazy var startupCredentials = StartupCredentialCoordinator(
@@ -148,6 +157,9 @@ class Agent: NSObject {
         case .authenticated:
             activateAwaitingApprovals()
             if pendingWalletOpenIntent.consume() { showWallet() }
+#if BW_SAFARI_VM_TESTING
+            recordSafariVMExtensionState()
+#endif
         case .cancelled:
             pendingWalletOpenIntent.cancel()
             cancelPendingApprovals()
@@ -161,6 +173,99 @@ class Agent: NSObject {
     private var pendingWalletOpenIntent = PendingWalletOpenIntent()
     private var nativeDeliveryOwner: ExtensionBridge.NativeDeliveryOwner?
     private var approvalInbox = ApprovalInbox<ActiveApproval>()
+
+#if BW_SAFARI_VM_TESTING
+    @MainActor
+    private final class SafariVMActivationPreparationProbe {
+        private let preparation: SafariVMFixtures.ActivationPreparation
+        private let fixtures = SafariVMFixtures.shared
+        private let deadline = Date().addingTimeInterval(15 * 60)
+        private var running = true
+        private var queryInFlight = false
+
+        init(_ preparation: SafariVMFixtures.ActivationPreparation) {
+            self.preparation = preparation
+        }
+
+        private var isActive: Bool {
+            running && Date() < deadline && fixtures.matchesActivationPreparation(preparation)
+        }
+
+        func run() async {
+            defer { running = false }
+            guard isActive else { return }
+            if preparation.showPreferences {
+                SFSafariApplication.showPreferencesForExtension(
+                    withIdentifier: Identifiers.safariExtensionBundle, completionHandler: nil
+                )
+            }
+            while !Task.isCancelled && isActive {
+                if !queryInFlight { query() }
+                do { try await Task.sleep(for: .seconds(1)) }
+                catch { return }
+            }
+        }
+
+        private func query() {
+            queryInFlight = true
+            Task { @MainActor [weak self] in
+                let enabled: Bool?
+                let errorDomain: String?
+                let errorCode: Int?
+                do {
+                    let state = try await SFSafariExtensionManager.stateOfSafariExtension(withIdentifier: Identifiers.safariExtensionBundle)
+                    enabled = state.isEnabled
+                    errorDomain = nil
+                    errorCode = nil
+                } catch {
+                    let error = error as NSError
+                    enabled = nil
+                    errorDomain = String(error.domain.prefix(128))
+                    errorCode = error.code
+                }
+                guard let self else { return }
+                queryInFlight = false
+                guard isActive else { return }
+                fixtures.event("safariExtensionState", metadata: [
+                    "enabled": enabled.map { $0 as Any } ?? NSNull(),
+                    "errorDomain": errorDomain.map { $0 as Any } ?? NSNull(),
+                    "errorCode": errorCode.map { $0 as Any } ?? NSNull(),
+                    "preparationNonce": preparation.nonce
+                ],
+                    operation: .init(requestID: nil, scenarioID: nil, iteration: nil))
+            }
+        }
+    }
+
+    static func prepareSafariVMExtension(_ preparation: SafariVMFixtures.ActivationPreparation) -> Task<Void, Never> {
+        let probe = SafariVMActivationPreparationProbe(preparation)
+        return Task { @MainActor in await probe.run() }
+    }
+
+    private func recordSafariVMExtensionState() {
+        guard CurrentApp.isDockApp, !Self.didRequestSafariVMExtensionState else { return }
+        Self.didRequestSafariVMExtensionState = true
+        let fixtures = SafariVMFixtures.shared
+        let operation = fixtures.capture()
+        Task { @MainActor in
+            do {
+                let state = try await SFSafariExtensionManager.stateOfSafariExtension(withIdentifier: Identifiers.safariExtensionBundle)
+                fixtures.event("safariExtensionState", metadata: [
+                    "enabled": state.isEnabled,
+                    "errorDomain": NSNull(),
+                    "errorCode": NSNull()
+                ], operation: operation)
+            } catch {
+                let error = error as NSError
+                fixtures.event("safariExtensionState", metadata: [
+                    "enabled": NSNull(),
+                    "errorDomain": String(error.domain.prefix(128)),
+                    "errorCode": error.code
+                ], operation: operation)
+            }
+        }
+    }
+#endif
 
     private override init() {
         credentialDependencies = .init()

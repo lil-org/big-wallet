@@ -700,6 +700,10 @@ class PopupRequestController {
             const row = document.createElement("button");
             const selected = isSelected(item);
             row.type = "button";
+            row.id = `${containerId}-${index}`;
+            if (containerId === "accounts-list") {
+                row.setAttribute("aria-label", `${item.name} ${item.address}`);
+            }
             row.className = rowClass;
             row.setAttribute("aria-pressed", selected ? "true" : "false");
             fillRow(row, item);

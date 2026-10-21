@@ -20,6 +20,11 @@ import time
 import uuid
 
 
+DETACH_CLEANUP_SECONDS = 60
+DETACH_COMMAND_SECONDS = 10
+DETACH_RETRY_DELAYS = (5, 10)
+
+
 class GuestAccessError(Exception):
     pass
 
@@ -60,10 +65,10 @@ def _read(path, *, private=False, maximum=1024 * 1024):
         return file.read(maximum + 1), metadata
 
 
-def _checked(command):
+def _checked(command, *, timeout=60):
     with _defer_cancellation():
         try:
-            result = subprocess.run(command, capture_output=True, timeout=60)
+            result = subprocess.run(command, capture_output=True, timeout=timeout)
         except (OSError, subprocess.TimeoutExpired):
             raise GuestAccessError(f'{Path(command[0]).name} could not complete guest disk access') from None
         if result.returncode:
@@ -71,9 +76,9 @@ def _checked(command):
         return result.stdout
 
 
-def _plist(command):
+def _plist(command, *, timeout=60):
     try:
-        return plistlib.loads(_checked(command))
+        return plistlib.loads(_checked(command, timeout=timeout))
     except (ValueError, plistlib.InvalidFileException):
         raise GuestAccessError('Guest disk inventory was not a valid plist') from None
 
@@ -124,6 +129,66 @@ def _attachment_root(attachment):
     return physical[0]['dev-entry'] if len(physical) == 1 else None
 
 
+def _detach_owned_image(disk, device, identity):
+    if device is not None and not re.fullmatch(r'/dev/disk\d+', device):
+        raise GuestAccessError('The owned guest disk detach device is invalid')
+    deadline = time.monotonic() + DETACH_CLEANUP_SECONDS
+
+    def timeout():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise GuestAccessError('Guest disk detach exceeded its cleanup deadline')
+        return min(DETACH_COMMAND_SECONDS, remaining)
+
+    def unchanged_image():
+        metadata = _regular(disk).stat()
+        if metadata.st_uid != os.getuid() or (metadata.st_dev, metadata.st_ino, metadata.st_uid) != identity:
+            raise GuestAccessError('The owned guest disk changed during detach cleanup')
+
+    def still_attached():
+        nonlocal device
+        unchanged_image()
+        inventory = _plist(['/usr/bin/hdiutil', 'info', '-plist'], timeout=timeout())
+        images = inventory.get('images') if isinstance(inventory, dict) else None
+        if (not isinstance(images, list) or any(not isinstance(image, dict) or
+                not isinstance(image.get('image-path'), str) or not image['image-path'] or '\0' in image['image-path'] or
+                not isinstance(image.get('system-entities'), list) or
+                any(not isinstance(entity, dict) or 'dev-entry' in entity and not isinstance(entity['dev-entry'], str)
+                    for entity in image['system-entities']) for image in images)):
+            raise GuestAccessError('Guest disk detach inventory is invalid')
+        matching = [image for image in images if image['image-path'] == str(disk)]
+        if device is None:
+            if not matching:
+                return False
+            if len(matching) != 1 or not (device := _attachment_root(matching[0])):
+                raise GuestAccessError('The owned guest disk attachment changed during detach cleanup')
+        holders = [image for image in images if any(entity.get('dev-entry') == device for entity in image['system-entities'])]
+        if not matching and not holders:
+            return False
+        if (len(matching) != 1 or len(holders) != 1 or holders[0] is not matching[0] or
+                _attachment_root(matching[0]) != device):
+            raise GuestAccessError('The owned guest disk attachment changed during detach cleanup')
+        unchanged_image()
+        return True
+
+    with _defer_cancellation():
+        for attempt in range(len(DETACH_RETRY_DELAYS) + 1):
+            if attempt:
+                delay = DETACH_RETRY_DELAYS[attempt - 1]
+                if deadline - time.monotonic() <= delay:
+                    raise GuestAccessError('Guest disk detach exceeded its cleanup deadline')
+                time.sleep(delay)
+            if not still_attached():
+                return
+            try:
+                _checked(['/usr/bin/hdiutil', 'detach', device], timeout=timeout())
+            except GuestAccessError:
+                pass
+            if not still_attached():
+                return
+        raise GuestAccessError('The owned guest disk remained attached after bounded cleanup attempts')
+
+
 def _check_unencrypted_image(path):
     specification = importlib.util.spec_from_file_location('big_wallet_apfs_preflight',
                                                           Path(__file__).with_name('apfs_preflight.py'))
@@ -139,8 +204,10 @@ def _check_unencrypted_image(path):
 def attached_data(candidate, *, owners):
     candidate_mac(candidate)
     disk = _regular(Path(candidate) / 'Disk.img')
-    if disk.stat().st_uid != os.getuid():
+    metadata = disk.stat()
+    if metadata.st_uid != os.getuid():
         raise GuestAccessError('The candidate disk must be owned by the current user')
+    identity = metadata.st_dev, metadata.st_ino, metadata.st_uid
     try:
         busy = subprocess.run(['/usr/sbin/lsof', '-t', '+w', str(disk)], capture_output=True, timeout=30)
     except (OSError, subprocess.TimeoutExpired):
@@ -168,13 +235,7 @@ def attached_data(candidate, *, owners):
             raise GuestAccessError('The candidate Data volume did not mount at a real directory')
         yield mount
     finally:
-        if detach_device is None:
-            images = _plist(['/usr/bin/hdiutil', 'info', '-plist']).get('images', [])
-            matches = [image for image in images if Path(image.get('image-path', '')).absolute() == disk]
-            if len(matches) == 1:
-                detach_device = _attachment_root(matches[0])
-        if detach_device:
-            _checked(['/usr/bin/hdiutil', 'detach', detach_device])
+        _detach_owned_image(disk, detach_device, identity)
 
 
 def _public_key(line):

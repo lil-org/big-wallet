@@ -427,6 +427,15 @@ validate_mobile_entitlements() {
 
 validate_release_bundle() (
     temporary_root=$3
+    for fixture_resources in "$2" "$2/Contents/Resources" \
+        "$2/PlugIns/Safari iOS.appex" "$2/PlugIns/Safari visionOS.appex" \
+        "$2/Contents/PlugIns/Safari macOS.appex/Contents/Resources" \
+        "$2/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app/Contents/Resources"
+    do
+        if [ -e "$fixture_resources/SafariVMRun.json" ] || [ -L "$fixture_resources/SafariVMRun.json" ]; then
+            fail "Safari VM fixture products cannot be distributed"
+        fi
+    done
     case "$1" in
         IOS)
             validate_mobile_entitlements "$2" "Safari iOS.appex" iOS

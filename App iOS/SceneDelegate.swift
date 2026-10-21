@@ -36,6 +36,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             await WalletsManager.shared.handleExternalWalletStoreChange()
             guard !Task.isCancelled else { return }
             await SafariApprovalVaultHost.shared.reconcile()
+#if BW_SAFARI_VM_TESTING
+            await SafariApprovalVaultHost.shared.waitForReconciliation()
+            await SafariVMMutations.shared.processPending()
+#endif
             await ExtensionBridge.shared.performMaintenance()
         }
     }

@@ -1058,6 +1058,13 @@
 		A098D67359FD501E30DFBA0C /* SafariRPCStreamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A5AA78D0ADC12FE3B40B50 /* SafariRPCStreamingTests.swift */; };
 		EBFF3511234892D7C380BBB9 /* SafariRPCStreamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A5AA78D0ADC12FE3B40B50 /* SafariRPCStreamingTests.swift */; };
 		6702DC35B4D4156FBFDA1CF9 /* SafariRPCStreamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A5AA78D0ADC12FE3B40B50 /* SafariRPCStreamingTests.swift */; };
+		A2CF7CBD2C54F0FD9E82ABFA /* SafariVMFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07C1C8EA0DDBED8CA9501B7A /* SafariVMFixtures.swift */; };
+		48AE204175D1F9B460DE4BA5 /* SafariVMFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07C1C8EA0DDBED8CA9501B7A /* SafariVMFixtures.swift */; };
+		B3ADA3C5ED0A4A39C2A37E6C /* SafariVMFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07C1C8EA0DDBED8CA9501B7A /* SafariVMFixtures.swift */; };
+		4252635C07BB565FB351972D /* SafariVMFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07C1C8EA0DDBED8CA9501B7A /* SafariVMFixtures.swift */; };
+		DA422125B14FEEBCAEBD4DD7 /* SafariVMFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07C1C8EA0DDBED8CA9501B7A /* SafariVMFixtures.swift */; };
+		38F34B4EB47F8E268C4DCC51 /* SafariLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70060F661C04B73312C924DD /* SafariLifecycleTests.swift */; };
+		5F0D3D5C74D38AE2F9EC9E6B /* SafariLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70060F661C04B73312C924DD /* SafariLifecycleTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1110,6 +1117,8 @@
 			remoteGlobalIDString = 2C17BDC92D3D007E0015C58B;
 			remoteInfo = "Big Wallet visionOS";
 		};
+		482FA7F1EAFE5B61558E653F /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = 2C1995342674C4B900A8E370 /* Project object */; proxyType = 1; remoteGlobalIDString = 2C19953B2674C4B900A8E370; remoteInfo = "Big Wallet"; };
+		A228A73EEDE38D4229868267 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = 2C1995342674C4B900A8E370 /* Project object */; proxyType = 1; remoteGlobalIDString = 2C5FF96E26C84F7B00B32ACC; remoteInfo = "Big Wallet iOS"; };
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -1415,6 +1424,10 @@
 		C05B9FD2D97C244B7748060A /* SafariRPCRequestTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariRPCRequestTests.swift; sourceTree = "<group>"; };
 		840500A5B4556C15A974DA1F /* SafariRPCServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariRPCServiceTests.swift; sourceTree = "<group>"; };
 		D4A5AA78D0ADC12FE3B40B50 /* SafariRPCStreamingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariRPCStreamingTests.swift; sourceTree = "<group>"; };
+		70060F661C04B73312C924DD /* SafariLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariLifecycleTests.swift; sourceTree = "<group>"; };
+		07C1C8EA0DDBED8CA9501B7A /* SafariVMFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariVMFixtures.swift; sourceTree = "<group>"; };
+		BEB260680600F016819B58C4 /* Safari UI Tests macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Safari UI Tests macOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		098EF24E66D70871FB0679A6 /* Safari UI Tests iOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Safari UI Tests iOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1489,6 +1502,8 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		DB74028C63F3C04BDF7993F6 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		777FBC5F690A326E117F6822 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		EDDD4D44E0B3116DBA841F99 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -1503,6 +1518,7 @@
 		2C03EB8E2B06A18700EF61F5 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				E8E92E120536C98CFE366B19 /* SafariUI */,
 				EA36AB064B8AEBD6648A1157 /* AccountPreviewStateTests.swift */,
 				D0D9D762A778D6D42FC747A1 /* NativeMessageDispatcherTests.swift */,
 				49639FB766301B747C6439F2 /* ApprovalLifecycle */,
@@ -1598,6 +1614,8 @@
 		2C19953D2674C4B900A8E370 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				098EF24E66D70871FB0679A6 /* Safari UI Tests iOS.xctest */,
+				BEB260680600F016819B58C4 /* Safari UI Tests macOS.xctest */,
 				90C5B8CA01AAC6E6B3D33B83 /* ApprovalCrashWorker */,
 				2C19953C2674C4B900A8E370 /* Big Wallet.app */,
 				2C5FF96F26C84F7B00B32ACC /* Big Wallet.app */,
@@ -1990,6 +2008,7 @@
 		2CF255A4275A483600AE54B9 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				07C1C8EA0DDBED8CA9501B7A /* SafariVMFixtures.swift */,
 				F5AB9012857B05CDCED2093A /* SecretPresentationSession.swift */,
 				F6BCB55F1F949D0DBC9AD6A2 /* SecretClipboard.swift */,
 				D0A100012FD1000000000001 /* WalletAccess.swift */,
@@ -2092,6 +2111,7 @@
 			path = ApprovalLifecycle;
 			sourceTree = "<group>";
 		};
+		E8E92E120536C98CFE366B19 /* SafariUI */ = {isa = PBXGroup; children = (70060F661C04B73312C924DD /* SafariLifecycleTests.swift */,); path = SafariUI; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -2106,6 +2126,7 @@
 				2C09CB9D273979C1009AD39B /* Resources */,
 				516B2583C21E4F89B3F786DA /* Remove Legacy Alchemy API Key */,
 				2FA6A0010000000000000001 /* Bundle Alchemy JWT Request Proof Key */,
+				778BD22837D21210FD298065 /* Bundle Safari VM Configuration */,
 				2CFAAA122FA2600000000000 /* Copy Embedded Ambient Agent */,
 			);
 			buildRules = (
@@ -2150,6 +2171,7 @@
 				2C19953A2674C4B900A8E370 /* Resources */,
 				E912C196422D43E2A14A6C26 /* Remove Legacy Alchemy API Key */,
 				2FA6A0010000000000000003 /* Bundle Alchemy JWT Request Proof Key */,
+				D68478C49C6BD5C06BB3C9BA /* Bundle Safari VM Configuration */,
 				2C09CBB8273979C1009AD39B /* Embed Foundation Extensions */,
 				2CFAAA132FA2600000000000 /* Clean Legacy Ambient Helpers */,
 			);
@@ -2173,6 +2195,7 @@
 				2C5FF96D26C84F7B00B32ACC /* Resources */,
 				4EC946B2766C4F89AE45F6A5 /* Remove Legacy Alchemy API Key */,
 				2FA6A0010000000000000004 /* Bundle Alchemy JWT Request Proof Key */,
+				0044DF7D1550F7816794F76D /* Bundle Safari VM Configuration */,
 				2CCEB84627594E2A00768473 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
@@ -2235,6 +2258,7 @@
 				2CB9B54D2FA23F0600F094FB /* Resources */,
 				D8E7DDB615794095B0AE5890 /* Remove Legacy Alchemy API Key */,
 				2FA6A0010000000000000006 /* Bundle Alchemy JWT Request Proof Key */,
+				0CA9D1FFC43D2DCB0B3311B5 /* Bundle Safari VM Configuration */,
 			);
 			buildRules = (
 			);
@@ -2256,6 +2280,7 @@
 				2CCEB82B27594E2A00768473 /* Resources */,
 				0F74DBBAAD154CE0816A24C8 /* Remove Legacy Alchemy API Key */,
 				2FA6A0010000000000000007 /* Bundle Alchemy JWT Request Proof Key */,
+				06A1FD3F59B3C525274A8A72 /* Bundle Safari VM Configuration */,
 			);
 			buildRules = (
 			);
@@ -2316,6 +2341,28 @@
 			productReference = 90C5B8CA01AAC6E6B3D33B83 /* ApprovalCrashWorker */;
 			productType = "com.apple.product-type.tool";
 		};
+		F1C27FC3CD560C81123408E1 /* Safari UI Tests macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 242717631DC952882765D0A0 /* Build configuration list for PBXNativeTarget "Safari UI Tests macOS" */;
+			buildPhases = (AABAC41FE1AF1B569D4CB41A /* Sources */, 777FBC5F690A326E117F6822 /* Frameworks */, 4FB63CD0571B09304E09D8E4 /* Resources */, B4E884B8490D1DAAF21FB463 /* Bundle Safari VM Configuration */,);
+			buildRules = ();
+			dependencies = (EA914E9E3FF333A0D32DD6ED /* PBXTargetDependency */,);
+			name = "Safari UI Tests macOS";
+			productName = "Safari UI Tests macOS";
+			productReference = BEB260680600F016819B58C4 /* Safari UI Tests macOS.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		A701BC0DFEA495AAAD14361C /* Safari UI Tests iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BAD9EB4C6DA4897DC1FF3993 /* Build configuration list for PBXNativeTarget "Safari UI Tests iOS" */;
+			buildPhases = (74C27D3E74CD4E0C0D436677 /* Sources */, EDDD4D44E0B3116DBA841F99 /* Frameworks */, 996B8AE92B82DB727B54A7C6 /* Resources */, AE35B84F8CBF5A4CFEAF1E6A /* Bundle Safari VM Configuration */,);
+			buildRules = ();
+			dependencies = (2B549DD9E72ACB626AB5E8E9 /* PBXTargetDependency */,);
+			name = "Safari UI Tests iOS";
+			productName = "Safari UI Tests iOS";
+			productReference = 098EF24E66D70871FB0679A6 /* Safari UI Tests iOS.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -2326,6 +2373,8 @@
 				LastSwiftUpdateCheck = 2640;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
+					A701BC0DFEA495AAAD14361C = {CreatedOnToolsVersion = 27.0; TestTargetID = 2C5FF96E26C84F7B00B32ACC; };
+					F1C27FC3CD560C81123408E1 = {CreatedOnToolsVersion = 27.0; TestTargetID = 2C19953B2674C4B900A8E370; };
 					2C09CB9E273979C1009AD39B = {
 						CreatedOnToolsVersion = 13.0;
 					};
@@ -2419,6 +2468,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				A701BC0DFEA495AAAD14361C /* Safari UI Tests iOS */,
+				F1C27FC3CD560C81123408E1 /* Safari UI Tests macOS */,
 				02BF6F22EB119D0C0F4A9BD5 /* ApprovalCrashWorker */,
 				2C19953B2674C4B900A8E370 /* Big Wallet */,
 				2CB9B54E2FA23F0600F094FB /* Big Wallet Ambient */,
@@ -2439,6 +2490,10 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+
+
+
+
 				2FA3C1F50733900F1DB828D3 /* protocol.generated.js in Resources */,
 				C3D101012FD0000000000001 /* PrivacyInfo.xcprivacy in Resources */,
 				BF3F00012FB5000000000000 /* Localizable.xcstrings in Resources */,
@@ -2581,6 +2636,8 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		4FB63CD0571B09304E09D8E4 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		996B8AE92B82DB727B54A7C6 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
@@ -3200,6 +3257,97 @@
 			shellScript = "/bin/sh \"$PROJECT_DIR/Scripts/check_wire_protocol.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
+		D68478C49C6BD5C06BB3C9BA /* Bundle Safari VM Configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = ("$(SRCROOT)/Scripts/safari/bundle_configuration.sh",);
+			name = "Bundle Safari VM Configuration";
+			outputPaths = ("$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/SafariVMRun.json",);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/Scripts/safari/bundle_configuration.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		0CA9D1FFC43D2DCB0B3311B5 /* Bundle Safari VM Configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = ("$(SRCROOT)/Scripts/safari/bundle_configuration.sh",);
+			name = "Bundle Safari VM Configuration";
+			outputPaths = ("$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/SafariVMRun.json",);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/Scripts/safari/bundle_configuration.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		778BD22837D21210FD298065 /* Bundle Safari VM Configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = ("$(SRCROOT)/Scripts/safari/bundle_configuration.sh",);
+			name = "Bundle Safari VM Configuration";
+			outputPaths = ("$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/SafariVMRun.json",);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/Scripts/safari/bundle_configuration.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		0044DF7D1550F7816794F76D /* Bundle Safari VM Configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = ("$(SRCROOT)/Scripts/safari/bundle_configuration.sh",);
+			name = "Bundle Safari VM Configuration";
+			outputPaths = ("$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/SafariVMRun.json",);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/Scripts/safari/bundle_configuration.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		06A1FD3F59B3C525274A8A72 /* Bundle Safari VM Configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = ("$(SRCROOT)/Scripts/safari/bundle_configuration.sh",);
+			name = "Bundle Safari VM Configuration";
+			outputPaths = ("$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/SafariVMRun.json",);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/Scripts/safari/bundle_configuration.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		B4E884B8490D1DAAF21FB463 /* Bundle Safari VM Configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = ("$(SRCROOT)/Scripts/safari/bundle_configuration.sh",);
+			name = "Bundle Safari VM Configuration";
+			outputPaths = ("$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/SafariVMRun.json",);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/Scripts/safari/bundle_configuration.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		AE35B84F8CBF5A4CFEAF1E6A /* Bundle Safari VM Configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = ("$(SRCROOT)/Scripts/safari/bundle_configuration.sh",);
+			name = "Bundle Safari VM Configuration";
+			outputPaths = ("$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/SafariVMRun.json",);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/Scripts/safari/bundle_configuration.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -3207,6 +3355,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B3ADA3C5ED0A4A39C2A37E6C /* SafariVMFixtures.swift in Sources */,
 				6B718680CF1514AF96C06D6E /* NativeMessageDispatcher.swift in Sources */,
 				92C7198BB3738F9DBB031250 /* SafariRPCService.swift in Sources */,
 				7F6F42240D5B41D95E55536D /* SafariRPCRequest.swift in Sources */,
@@ -3420,6 +3569,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A2CF7CBD2C54F0FD9E82ABFA /* SafariVMFixtures.swift in Sources */,
 				B708E90EEA90A2093A336F5B /* AccountPreviewState.swift in Sources */,
 				5D9A687B850ED1E53B4C468D /* NativeMessageDispatcher.swift in Sources */,
 				E2CF6228BF2394F8C3CA84E8 /* SafariRPCService.swift in Sources */,
@@ -3554,6 +3704,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4252635C07BB565FB351972D /* SafariVMFixtures.swift in Sources */,
 				7A22D7161651202D624C5E26 /* AccountPreviewState.swift in Sources */,
 				671FC45254C3D5DB86B3D3B7 /* NativeMessageDispatcher.swift in Sources */,
 				7DC0518ED21A45F07B049AFC /* SafariRPCService.swift in Sources */,
@@ -3817,6 +3968,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				48AE204175D1F9B460DE4BA5 /* SafariVMFixtures.swift in Sources */,
 				D4050F4B448B91327C672D88 /* AccountPreviewState.swift in Sources */,
 				61E6CCEDE0281FAC1199C800 /* NativeMessageDispatcher.swift in Sources */,
 				785739E4B4FB384EFE69C838 /* SafariRPCService.swift in Sources */,
@@ -3948,6 +4100,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA422125B14FEEBCAEBD4DD7 /* SafariVMFixtures.swift in Sources */,
 				31AF02DEEDCA2F696335C6FC /* NativeMessageDispatcher.swift in Sources */,
 				823516DAA815B34ABD2866AB /* SafariRPCService.swift in Sources */,
 				592C6B6895EE7BF5C34F60AD /* SafariRPCRequest.swift in Sources */,
@@ -4252,6 +4405,8 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AABAC41FE1AF1B569D4CB41A /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (38F34B4EB47F8E268C4DCC51 /* SafariLifecycleTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		74C27D3E74CD4E0C0D436677 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (5F0D3D5C74D38AE2F9EC9E6B /* SafariLifecycleTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -4290,6 +4445,8 @@
 			target = 2C17BDC92D3D007E0015C58B /* Big Wallet visionOS */;
 			targetProxy = 2CF9B10A2D526F4D00B5CE82 /* PBXContainerItemProxy */;
 		};
+		EA914E9E3FF333A0D32DD6ED /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 2C19953B2674C4B900A8E370 /* Big Wallet */; targetProxy = 482FA7F1EAFE5B61558E653F /* PBXContainerItemProxy */; };
+		2B549DD9E72ACB626AB5E8E9 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 2C5FF96E26C84F7B00B32ACC /* Big Wallet iOS */; targetProxy = A228A73EEDE38D4229868267 /* PBXContainerItemProxy */; };
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
@@ -5163,6 +5320,90 @@
 			};
 			name = Release;
 		};
+		DF4C4D77A66C47A550EA072A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
+				CURRENT_PROJECT_VERSION = 148;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Tests/SafariUI/Info.plist;
+				MARKETING_VERSION = 1.0.99;
+				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.wallet.safari-ui-tests.macos";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = "Big Wallet";
+				SDKROOT = macosx;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+			};
+			name = Debug;
+		};
+		1791570029B6AF21724FC876 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
+				CURRENT_PROJECT_VERSION = 148;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Tests/SafariUI/Info.plist;
+				MARKETING_VERSION = 1.0.99;
+				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.wallet.safari-ui-tests.macos";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = "Big Wallet";
+				SDKROOT = macosx;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+			};
+			name = Release;
+		};
+		AF9F665FB6A8196AD6A4B383 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
+				CURRENT_PROJECT_VERSION = 148;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Tests/SafariUI/Info.plist;
+				MARKETING_VERSION = 1.0.99;
+				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.wallet.safari-ui-tests.ios";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = "Big Wallet iOS";
+				SDKROOT = iphoneos;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B7955F0A9E01A37A7C12A667 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
+				CURRENT_PROJECT_VERSION = 148;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Tests/SafariUI/Info.plist;
+				MARKETING_VERSION = 1.0.99;
+				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.wallet.safari-ui-tests.ios";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = "Big Wallet iOS";
+				SDKROOT = iphoneos;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -5274,6 +5515,8 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		242717631DC952882765D0A0 /* Build configuration list for PBXNativeTarget "Safari UI Tests macOS" */ = {isa = XCConfigurationList; buildConfigurations = (DF4C4D77A66C47A550EA072A /* Debug */, 1791570029B6AF21724FC876 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		BAD9EB4C6DA4897DC1FF3993 /* Build configuration list for PBXNativeTarget "Safari UI Tests iOS" */ = {isa = XCConfigurationList; buildConfigurations = (AF9F665FB6A8196AD6A4B383 /* Debug */, B7955F0A9E01A37A7C12A667 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = 2C1995342674C4B900A8E370 /* Project object */;

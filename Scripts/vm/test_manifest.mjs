@@ -1,6 +1,7 @@
 import {isAbsolute, join, resolve, sep} from "node:path";
+import {SAFARI_SCENARIOS, SAFARI_TEST_CLASS} from "../safari/scenarios.mjs";
 
-export const SELECTORS = ["build", "test", "performance", "tsan", "fuzz", "approval", "repository", "worker"];
+export const SELECTORS = ["build", "test", "performance", "tsan", "fuzz", "approval", "safari", "repository", "worker"];
 export const BOOTSTRAP_TOOL_NAMES = ["VMGuestAgent", "guest_runner", "guest_bootstrap.mjs"];
 const LOCAL_SIGNING_SETTINGS = [
     "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "PROVISIONING_PROFILE=",
@@ -12,6 +13,11 @@ export const PLATFORMS = [
     {id: "ios", target: "Tests iOS", scheme: "Wallet iOS", generic: "generic/platform=iOS", requirement: "ios"},
     {id: "visionos", target: "Tests visionOS", scheme: "Wallet visionOS", generic: "generic/platform=visionOS", requirement: "visionos"},
 ];
+export const SAFARI_PLATFORMS = PLATFORMS.filter(platform => platform.id !== "visionos")
+    .map(platform => ({...platform, target: `Safari UI ${platform.target}`}));
+const TEST_TARGETS = [...PLATFORMS, ...SAFARI_PLATFORMS].map(platform => platform.target);
+const isSafariSelector = selector => selector.startsWith("Safari UI Tests ") || selector === SAFARI_TEST_CLASS || selector.startsWith(`${SAFARI_TEST_CLASS}/`);
+const SAFARI_STAGE_OVERHEAD_SECONDS = 600;
 export const PERFORMANCE_ENV = {
     TEST_RUNNER_WALLETCORE_PROXY_PERF_SCRYPT_DERIVE_MS: "1000",
     TEST_RUNNER_WALLETCORE_PROXY_PERF_SCRYPT_WALLETCORE_JSON_IMPORT_MS: "1000",
@@ -50,7 +56,7 @@ export function validateJob(value) {
     if (typeof value.vmId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/.test(value.vmId)) { throw new Error("Invalid VM identifier"); }
     if (!["run", "doctor"].includes(value.kind) || !["all", "extended"].includes(value.profile)) { throw new Error("Invalid job kind or profile"); }
     const options = value.payload;
-    const optionNames = new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "signing"]);
+    const optionNames = new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "signing", "interactiveSafari", "prepareSafari", "preparedSafari"]);
     if (!options || typeof options !== "object" || Array.isArray(options) || Object.keys(options).some(key => !optionNames.has(key))) {
         throw new Error("Unsupported job payload");
     }
@@ -58,12 +64,41 @@ export function validateJob(value) {
         throw new Error("Invalid stage selection");
     }
     if (!Array.isArray(options.onlyTesting) || options.onlyTesting.length > 200 || options.onlyTesting.some(test =>
-        typeof test !== "string" || !PLATFORMS.some(platform => platform.target === test) &&
-        !/^(?:(?:Tests macOS|Tests iOS|Tests visionOS)\/)?[A-Za-z_][A-Za-z0-9_]*(?:\/[A-Za-z_][A-Za-z0-9_]*(?:\(\))?)?$/.test(test))) {
+        typeof test !== "string" || !TEST_TARGETS.includes(test) &&
+        !/^(?:(?:(?:Safari UI )?Tests macOS|(?:Safari UI )?Tests iOS|Tests visionOS)\/)?[A-Za-z_][A-Za-z0-9_]*(?:\/[A-Za-z_][A-Za-z0-9_]*(?:\(\))?)?$/.test(test))) {
         throw new Error("Invalid XCTest selection");
+    }
+    for (const selector of options.onlyTesting) {
+        if (isSafariSelector(selector) &&
+            !SAFARI_PLATFORMS.some(platform => safariTestsForPlatform([selector], platform).length)) {
+            throw new Error(`Safari selection did not match any known tests: ${selector}`);
+        }
+    }
+    if (value.kind === "run" && options.onlyTesting.some(isSafariSelector) && options.stages.length &&
+        !options.stages.some(stage => stage === "safari" || stage === "build")) {
+        throw new Error("Safari XCTest selectors require --stage safari or --stage build");
     }
     if (options.configuration !== undefined && !["Debug", "Release"].includes(options.configuration)) { throw new Error("Invalid configuration"); }
     if (options.signing !== undefined && !["local", "apple"].includes(options.signing)) { throw new Error("Invalid signing mode"); }
+    if (options.interactiveSafari !== undefined && typeof options.interactiveSafari !== "boolean") { throw new Error("Invalid interactive Safari mode"); }
+    if (options.interactiveSafari && (value.kind !== "run" || options.stages.length && !options.stages.includes("safari") ||
+        !safariTestsForPlatform(options.onlyTesting, SAFARI_PLATFORMS.find(platform => platform.id === "macos")).length)) {
+        throw new Error("Interactive Safari mode requires selected macOS Safari runtime tests");
+    }
+    if (options.prepareSafari !== undefined && typeof options.prepareSafari !== "boolean") { throw new Error("Invalid Safari preparation mode"); }
+    if (options.prepareSafari && (value.kind !== "run" || value.profile !== "all" ||
+        options.stages.length !== 1 || options.stages[0] !== "safari" ||
+        options.onlyTesting.length !== 1 || options.onlyTesting[0] !== "Safari UI Tests macOS" ||
+        options.configuration !== "Debug" || options.signing !== "local" ||
+        options.interactiveSafari || options.preparedSafari !== undefined || options.approvalArgs?.length)) {
+        throw new Error("Safari preparation requires only local Debug macOS Safari setup");
+    }
+    if (options.preparedSafari !== undefined && (!validSafariPreparationReference(options.preparedSafari) ||
+        value.kind !== "run" || options.prepareSafari || options.interactiveSafari || (options.signing ?? "local") !== "local" ||
+        options.stages.length && !options.stages.includes("safari") ||
+        !safariTestsForPlatform(options.onlyTesting, SAFARI_PLATFORMS.find(platform => platform.id === "macos")).length)) {
+        throw new Error("Prepared Safari mode requires selected local macOS Safari runtime tests and a valid preparation reference");
+    }
     if (!value.bootstrapTools || typeof value.bootstrapTools !== "object" || Array.isArray(value.bootstrapTools) ||
         Object.keys(value.bootstrapTools).length !== BOOTSTRAP_TOOL_NAMES.length || BOOTSTRAP_TOOL_NAMES.some(name => !/^[a-f0-9]{64}$/.test(value.bootstrapTools[name]))) {
         throw new Error("Invalid bootstrap tool identity");
@@ -77,6 +112,13 @@ export function validateJob(value) {
     }
     validateApprovalArguments(options.approvalArgs ?? []);
     return structuredClone(value);
+}
+
+export function validSafariPreparationReference(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value) &&
+        Object.keys(value).sort().join(",") === "preparationRunID,receiptSHA256" &&
+        typeof value.preparationRunID === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.preparationRunID) &&
+        !value.preparationRunID.includes("..") && typeof value.receiptSHA256 === "string" && /^[a-f0-9]{64}$/.test(value.receiptSHA256);
 }
 
 function validateApprovalArguments(args) {
@@ -98,8 +140,21 @@ function validateApprovalArguments(args) {
 
 export function testingForPlatform(selectors, platform) {
     return selectors.flatMap(selector => {
-        if (selector.startsWith("Tests ")) { return selector === platform.target || selector.startsWith(`${platform.target}/`) ? [selector] : []; }
+        if (TEST_TARGETS.some(target => selector === target || selector.startsWith(`${target}/`))) {
+            return selector === platform.target || selector.startsWith(`${platform.target}/`) ? [selector] : [];
+        }
+        if ((selector === SAFARI_TEST_CLASS || selector.startsWith(`${SAFARI_TEST_CLASS}/`)) &&
+            !SAFARI_PLATFORMS.some(candidate => candidate.target === platform.target)) { return []; }
         return [`${platform.target}/${selector}`];
+    });
+}
+
+export function safariTestsForPlatform(selectors, platform) {
+    const selected = testingForPlatform(selectors, platform).map(selector => selector.replace(/\(\)$/, ""));
+    const scenarios = SAFARI_SCENARIOS.filter(scenario => scenario.platforms.includes(platform.id));
+    return scenarios.filter(scenario => {
+        const identifier = `${platform.target}/${SAFARI_TEST_CLASS}/${scenario.method}`;
+        return !selectors.length || selected.some(selector => identifier === selector || identifier.startsWith(`${selector}/`));
     });
 }
 
@@ -126,6 +181,7 @@ export function createManifest(job) {
     add("scripts.approval-worker-target", "repository", "node", ["--test", "Scripts/tests/approval_worker_target.test.mjs"]);
     add("runner.node-tests", "repository", "node", ["--test", "Scripts/vm/tests/*.test.mjs"], {requirements: ["node", "xcode"]});
     add("runner.python-tests", "repository", "python3", ["-m", "unittest", "discover", "-s", "Scripts/vm/tests", "-p", "test_*.py"], {requirements: ["python", "node"]});
+    add("safari.runner-tests", "repository", "node", ["--test", "Scripts/safari/tests/*.test.mjs"], {dependencies: ["provider.install"]});
     add("worker.install", "worker", "npm", ["ci", "--no-audit"], {cwd: worker});
     for (const [id, script, suffix] of [
         ["check", "check", []], ["test", "test", []], ["validate-self", "validate:self", []],
@@ -214,6 +270,50 @@ export function createManifest(job) {
             });
         }
     }
+    for (const platform of SAFARI_PLATFORMS) {
+        const scenarios = safariTestsForPlatform(options.onlyTesting, platform);
+        if (!scenarios.length) { continue; }
+        const requiredTests = scenarios.map(scenario => `${SAFARI_TEST_CLASS}/${scenario.method}`);
+        const selectedTests = requiredTests.flatMap(test => ["--only-testing", `${platform.target}/${test}`]);
+        for (const configuration of configurations) {
+            const slug = `${platform.id}.${configuration.toLowerCase()}`;
+            const signing = options.signing ?? "local";
+            const interactive = platform.id === "macos" && options.interactiveSafari === true;
+            const prepared = platform.id === "macos" ? options.preparedSafari : undefined;
+            const base = ["Scripts/safari/run.mjs", "--platform", platform.id, "--configuration", configuration,
+                "--signing", signing, "--destination", `$destination:${platform.id}`];
+            add(`build-safari.${slug}`, "build", "node", [...base, "--phase", "build"], {
+                dependencies: ["provider.install", "protocol.check"], scratchDirectory: true, timeoutSeconds: 3600 + SAFARI_STAGE_OVERHEAD_SECONDS,
+                requirements: ["node", "xcode", platform.requirement, ...(signing === "apple" ? ["proofKey", ...(platform.id === "macos" ? ["signing"] : [])] : [])],
+                ...(signing === "apple" ? {proofKey: true} : {}),
+            });
+            if (options.prepareSafari) {
+                add(`prepare-safari.${slug}`, "safari", "node", [...base, "--phase", "prepare"], {
+                    dependencies: [`build-safari.${slug}`], scratchDirectory: true, preparationResult: true,
+                    requirements: ["node", "xcode", "macos"], timeoutSeconds: 1800 + SAFARI_STAGE_OVERHEAD_SECONDS,
+                });
+                continue;
+            }
+            const runtime = (id, iterations, dependencies) => add(id, "safari", "node",
+                [...base, "--phase", "test", "--iterations", String(iterations), ...(interactive ? ["--interactive-safari"] : []),
+                    ...(prepared ? ["--prepared-safari", JSON.stringify(prepared)] : []), ...selectedTests], {
+                    dependencies, scratchDirectory: true, resultBundle: true, timeoutSeconds: (iterations === 1 ? 7200 : 21600) + SAFARI_STAGE_OVERHEAD_SECONDS,
+                    requirements: ["node", "xcode", platform.requirement, ...(platform.id === "macos" ? ["safariAutomation"] : [])],
+                    nativeAudit: {kind: "safari", platform: platform.id, configuration, signing, iterations,
+                        activationMode: prepared ? "prepared" : interactive ? "interactive" : "automatic",
+                        ...(prepared ? {preparation: structuredClone(prepared)} : {}),
+                        requiredTests, requiredScenarios: scenarios.map(scenario => scenario.id),
+                        filtered: scenarios.length !== safariTestsForPlatform([], platform).length},
+                });
+            runtime(`safari.${slug}`, 1, [`build-safari.${slug}`]);
+            if (job.profile === "extended" && configuration === "Release") {
+                runtime(`safari.soak-${platform.id}.release`, 10, [`safari.${slug}`]);
+            }
+        }
+    }
+    if (options.stages.includes("safari") && !stages.some(stage => stage.group === "safari")) {
+        throw new Error("Safari selection did not match any known tests");
+    }
     const selected = new Set(stages.filter(stage => !options.stages.length || options.stages.includes(stage.group)).map(stage => stage.id));
     for (const stage of stages) {
         if (selected.has(stage.id) && stage.nativeAudit?.configuration === "Debug" && stage.nativeAudit.kind === "full" &&
@@ -243,6 +343,7 @@ export function commandForStage(stage, {destinations, artifacts, scratch}) {
     const args = stage.args.map(arg => arg.startsWith("$destination:") ? destinations[arg.slice(13)] : arg);
     if (args.some(arg => typeof arg !== "string" || !arg)) { throw new Error(`Missing destination for ${stage.id}`); }
     if (stage.resultBundle) { args.push("-resultBundlePath", join(artifacts, `${stage.id}.xcresult`)); }
+    if (stage.preparationResult) { args.push("--preparation-result", join(artifacts, `${stage.id}.safari-preparation.json`)); }
     if (stage.failureDirectory) { args.push("--failure-dir", join(artifacts, "failures", stage.id)); }
     if (stage.scratchDirectory) {
         if (typeof scratch !== "string" || !isAbsolute(scratch) || resolve(scratch) !== scratch ||

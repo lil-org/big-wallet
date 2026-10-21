@@ -18,14 +18,20 @@ const runtimeID = platform => `com.apple.CoreSimulator.SimRuntime.${platform}-27
 const provision = () => ({vmId: "fixture-vm", consoleUser: "wallet-test", xcode: {version: "27.0", buildVersion: "27A266a"},
     runtimes: [{platform: "iOS", version: "27.0", buildVersion: "24A434"}, {platform: "visionOS", version: "27.0", buildVersion: "24M362"}]});
 
-function probe({signing, credentials = provision(), security = () => success("1 valid identities found"), proofDigest} = {}) {
+function probe({signing, credentials = provision(), security = () => success("1 valid identities found"), proofDigest,
+    automation = () => success("This device DOES NOT REQUIRE user authentication to enable Automation Mode.\n")} = {}) {
     const calls = [];
     let proofReads = 0;
     return {calls, proofReads: () => proofReads, run: () => preflight({signing, workspace: "/fixture/workspace",
         identity: {aqua: true}, bootstrapEvidence: {available: true}, provision: credentials,
         readSnapshotFile: async () => { proofReads += 1; return proofDigest ?? createHash("sha256").update(proof).digest("hex"); },
-        execute: async (command, args) => {
+        execute: async (command, args, options) => {
             calls.push([command, ...args]);
+            if (command === "/usr/bin/automationmodetool") {
+                assert.deepEqual(args, []);
+                assert.equal(options.timeoutSeconds, 10);
+                return automation();
+            }
             if (command === "/usr/bin/security") { return security(args); }
             if (command === "node") { return success("v24.22.0"); }
             if (command === "npm") { return success("11.16.0"); }
@@ -69,6 +75,38 @@ test("default local preflight never reads credential fields, opens Keychain, or 
     assert.equal(coverage.status, "complete");
     assert.deepEqual(coverage.missingPrerequisites, []);
     assert.equal(coverage.credentialCoverage.appleDevelopmentSigning, "not-requested");
+});
+
+test("guest preflight reads automation authentication status without changing it", async () => {
+    const status = "Automation Mode is DISABLED.\nThis device DOES NOT REQUIRE user authentication to enable Automation Mode.\n";
+    const fixture = probe({automation: () => ({...success(status), stdout: status})});
+    const checked = await fixture.run();
+    assert.equal(checked.report.checks.safariAutomation, true);
+    assert.equal(checked.report.versions.safariAutomation, status);
+    assert.equal(checked.report.safariAutomationIssue, undefined);
+    assert.deepEqual(fixture.calls.filter(call => call[0] === "/usr/bin/automationmodetool"), [["/usr/bin/automationmodetool"]]);
+    const long = await probe({automation: () => success(status + "x".repeat(4000))}).run();
+    assert.equal(long.report.versions.safariAutomation.length, 2000);
+});
+
+test("missing, timed-out, ambiguous, or authentication-required automation fails only its optional capability", async () => {
+    const available = "This device DOES NOT REQUIRE user authentication to enable Automation Mode.\n";
+    for (const automation of [
+        () => success("Automation Mode is ENABLED.\nThis device REQUIRES user authentication to enable Automation Mode.\n"),
+        () => success("Automation Mode is ENABLED.\n"),
+        () => success(""),
+        () => ({...success(available), stdout: "Authentication is required"}),
+        () => ({...success(available), code: 1}),
+        () => ({...success(available), timedOut: true}),
+        () => ({...success(available), error: "Tool unavailable"}),
+        () => { throw new Error("ENOENT"); },
+    ]) {
+        const checked = await probe({automation}).run();
+        assert.equal(checked.report.checks.safariAutomation, false);
+        assert.match(checked.report.safariAutomationIssue, /Scripts\/test_vm\.sh setup/);
+        assert.ok(requiredPrerequisites(job()).every(name => checked.report.checks[name] === true));
+        assert.equal(coverageReport(job(), [], checked.report).status, "complete");
+    }
 });
 
 test("Apple mode requires its own identity and proof key instead of silently using local verification", async () => {

@@ -26,6 +26,9 @@ MAX_EXPORT_FILES = 500000
 MAX_REPORT_BYTES = 16 * 1024 ** 2
 FREE_RESERVE_BYTES = 1024 ** 3
 TERMINAL_STATUSES = ('passed', 'failed', 'blocked', 'cancelled')
+REPORT_RETRY_DELAYS = (5, 10)
+REPORT_OUTAGE_SECONDS = 60
+MAX_RECORDED_REPORT_OUTAGES = 16
 
 
 class GuestExchangeError(RuntimeError):
@@ -102,6 +105,58 @@ def _atomic_json(path, value):
 def _capacity(directory, needed):
     if needed < 0 or shutil.disk_usage(directory).free - FREE_RESERVE_BYTES < needed:
         raise GuestExchangeError('Insufficient host capacity for the guest exchange')
+
+
+def safari_credential_job_digest(job, exchange):
+    payload = job.get('payload')
+    if (job.get('kind') != 'run' or not isinstance(payload, dict) or payload.get('signing', 'local') != 'local' or
+            not isinstance(payload.get('stages'), list) or not isinstance(payload.get('onlyTesting'), list) or
+            payload['stages'] and 'safari' not in payload['stages']):
+        return None
+    plan = _json(exchange / 'artifacts/planned-result.json')
+    job_data, _ = access._read(exchange / 'job.json', maximum=65536)
+    snapshot_data, _ = access._read(exchange / 'snapshot-manifest.json', maximum=MAX_REPORT_BYTES)
+    digest = hashlib.sha256(job_data).hexdigest()
+    if (json.loads(job_data) != job or plan.get('version') != 1 or plan.get('origin') != 'host-plan' or
+            plan.get('status') != 'planned' or plan.get('runId') != job.get('runId') or plan.get('vmId') != job.get('vmId') or
+            plan.get('profile') != job.get('profile') or plan.get('source') != job.get('source') or
+            plan.get('jobSHA256') != digest or not isinstance(job.get('source'), dict) or
+            job['source'].get('sha256') != hashlib.sha256(snapshot_data).hexdigest() or
+            not isinstance(plan.get('stages'), list)):
+        raise GuestExchangeError('Safari guest credential selection does not match the captured job plan')
+    selected = False
+    preparation = payload.get('prepareSafari', False)
+    if type(preparation) is not bool:
+        raise GuestExchangeError('Invalid Safari guest credential preparation mode')
+    if preparation:
+        if (job.get('profile') != 'all' or payload['stages'] != ['safari'] or
+                payload['onlyTesting'] != ['Safari UI Tests macOS'] or
+                payload.get('configuration') != 'Debug' or payload.get('signing') != 'local' or
+                payload.get('interactiveSafari') or 'preparedSafari' in payload or payload.get('approvalArgs')):
+            raise GuestExchangeError('Safari guest credential preparation is not an explicit local Debug setup')
+        expected = ['provider.install', 'protocol.check', 'build-safari.macos.debug', 'prepare-safari.macos.debug']
+        if [stage.get('id') if isinstance(stage, dict) else None for stage in plan['stages']] != expected:
+            raise GuestExchangeError('Safari guest credential preparation does not match the captured preparation stages')
+    for stage in plan['stages']:
+        if isinstance(stage, dict) and stage.get('preparationResult'):
+            if (not preparation or stage.get('id') != 'prepare-safari.macos.debug' or
+                    stage.get('preparationResult') is not True or stage.get('group') != 'safari' or
+                    stage.get('status') != 'pending' or 'nativeAudit' in stage):
+                raise GuestExchangeError('Safari guest credential selection is not an explicit preparation stage')
+            selected = True
+            continue
+        audit = stage.get('nativeAudit') if isinstance(stage, dict) else None
+        if not isinstance(audit, dict) or audit.get('kind') != 'safari' or audit.get('platform') != 'macos':
+            continue
+        if (preparation or stage.get('group') != 'safari' or stage.get('status') != 'pending' or audit.get('signing') != 'local' or
+                audit.get('configuration') not in ('Debug', 'Release') or
+                stage.get('id') not in (f'safari.macos.{audit["configuration"].lower()}',
+                                        'safari.soak-macos.release' if audit['configuration'] == 'Release' else '')):
+            raise GuestExchangeError('Safari guest credential selection is not a local macOS runtime stage')
+        selected = True
+    if preparation and not selected:
+        raise GuestExchangeError('Safari guest credential preparation is missing its explicit preparation marker')
+    return digest if selected else None
 
 
 def build_input_archive(exchange, destination):
@@ -226,6 +281,83 @@ def extract_export(archive_path, destination, run_id, vm_id):
     _atomic_json(destination / 'validated-result.json', value)
 
 
+_READY = r'''
+const fs = require('node:fs');
+const path = require('node:path');
+const cp = require('node:child_process');
+const root = '/Volumes/BigWalletBuild';
+const exchange = root + '/Exchange';
+const identityDirectory = '/Library/Application Support/BigWalletTestVM';
+const protectedOwner = 0;
+const uid = process.getuid();
+const runId = process.argv[1];
+const vmId = process.argv[2];
+const consoleUser = process.argv[5];
+const fail = message => { throw new Error(message); };
+if (!uid || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(runId || '') ||
+    !/^[A-Za-z0-9_-]{1,128}$/.test(vmId || '') || !/^[A-Za-z0-9_-]{1,64}$/.test(consoleUser || '') ||
+    require('node:os').userInfo().username !== consoleUser) fail('Invalid guest readiness identity');
+const directoryReady = (directory, owner, mask, exactMode) => {
+    const metadata = fs.lstatSync(directory, {throwIfNoEntry: false});
+    if (!metadata) return false;
+    if (!metadata.isDirectory() || metadata.isSymbolicLink() || fs.realpathSync(directory) !== directory ||
+        metadata.uid !== owner || metadata.mode & mask ||
+        exactMode !== undefined && ((metadata.mode & 0o7777) !== exactMode || metadata.gid !== process.getgid()))
+        fail('Guest readiness directory ownership or permissions are invalid');
+    return true;
+};
+const protectedJSON = filename => {
+    let descriptor;
+    try { descriptor = fs.openSync(filename, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK); }
+    catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+    try {
+        const metadata = fs.fstatSync(descriptor);
+        if (!metadata.isFile() || metadata.uid !== protectedOwner || metadata.mode & 0o022 ||
+            metadata.size < 1 || metadata.size > 4096) fail('Guest readiness identity is not protected');
+        const bytes = Buffer.alloc(4097);
+        let length = 0;
+        while (length < bytes.length) {
+            const count = fs.readSync(descriptor, bytes, length, bytes.length - length, length);
+            if (!count) break;
+            length += count;
+        }
+        const after = fs.fstatSync(descriptor);
+        if (length !== metadata.size || after.size !== metadata.size || after.mtimeMs !== metadata.mtimeMs ||
+            after.ctimeMs !== metadata.ctimeMs) fail('Guest readiness identity changed during reading');
+        const value = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes.subarray(0, length)));
+        if (!value || typeof value !== 'object' || Array.isArray(value)) fail('Guest readiness identity must be an object');
+        return value;
+    } finally { fs.closeSync(descriptor); }
+};
+if (!directoryReady(identityDirectory, protectedOwner, 0o022)) fail('The provisioned guest identity is missing');
+const identity = protectedJSON(path.join(identityDirectory, 'identity.json'));
+if (identity?.version !== 1 || identity.vmId !== vmId || identity.consoleUser !== consoleUser)
+    fail('The provisioned guest identity does not match this VM and account');
+const ready = () => {
+    if (!directoryReady(root, protectedOwner, 0o022)) return false;
+    const mount = cp.spawnSync('/sbin/mount', [], {encoding: 'utf8', timeout: 5000, maxBuffer: 1024 * 1024, killSignal: 'SIGKILL'});
+    if (mount.status !== 0 || mount.error || mount.signal) fail('Guest build mount inspection failed');
+    const matches = mount.stdout.split('\n').map(line => /^(\S+) on (.+) \(([^)]+)\)$/.exec(line))
+        .filter(value => value?.[2] === root);
+    if (!matches.length) return false;
+    if (matches.length !== 1 || !/^\/dev\/disk[0-9]+s[0-9]+$/.test(matches[0][1]) ||
+        matches[0][3].split(', ')[0] !== 'apfs' || !matches[0][3].split(', ').includes('local'))
+        fail('The guest build volume is not a direct local APFS mount');
+    const buildIdentity = protectedJSON(path.join(root, '.big-wallet-vm.json'));
+    if (!buildIdentity) return false;
+    if (buildIdentity.version !== 1 || buildIdentity.vmId !== vmId ||
+        typeof buildIdentity.volumeUUID !== 'string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(buildIdentity.volumeUUID))
+        fail('The guest build volume identity does not match this VM');
+    return directoryReady(exchange, uid, 0o077, 0o700);
+};
+const deadline = performance.now() + 120000;
+while (!ready()) {
+    if (performance.now() >= deadline) fail('The managed guest build volume and private exchange did not become ready within 120 seconds');
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.min(500, Math.max(0, deadline - performance.now())));
+}
+process.stdout.write(JSON.stringify({version: 1, runId, vmId, ready: true}) + '\n');
+'''
+
 _REMOTE_PREAMBLE = r'''
 const fs = require('node:fs');
 const path = require('node:path');
@@ -293,6 +425,29 @@ const publishStop = () => {
     finally { fs.closeSync(descriptor); }
     fs.renameSync(temporary, path.join(exchange, 'stop.json'));
 };
+const safariCredentialPath = path.join(exchange, runId, 'safari', 'guest-credential.json');
+const removeSafariCredential = () => {
+    for (const directory of [path.join(exchange, runId), path.dirname(safariCredentialPath)]) {
+        let metadata;
+        try { metadata = fs.lstatSync(directory); }
+        catch (error) { if (error.code === 'ENOENT') return; throw error; }
+        if (!metadata.isDirectory() || metadata.isSymbolicLink() || metadata.uid !== uid || metadata.mode & 0o077 ||
+            fs.realpathSync(directory) !== directory) fail('Invalid Safari credential directory');
+    }
+    const directory = path.dirname(safariCredentialPath);
+    let invalid = false;
+    for (const name of fs.readdirSync(directory)) {
+        if (name !== 'guest-credential.json' && !/^\.guest-credential\.[1-9][0-9]{0,9}\.tmp$/.test(name)) continue;
+        const filename = path.join(directory, name);
+        let metadata;
+        try { metadata = fs.lstatSync(filename); }
+        catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+        if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.uid !== uid || (metadata.mode & 0o7777) !== 0o600) { invalid = true; continue; }
+        try { fs.unlinkSync(filename); }
+        catch (error) { if (error.code !== 'ENOENT') throw error; }
+    }
+    if (invalid) fail('Invalid Safari credential file');
+};
 '''
 
 _UPLOAD = _REMOTE_PREAMBLE + r'''
@@ -323,6 +478,62 @@ try {
         if (fs.existsSync(stopMarker)) publishStop();
     }
 } finally { fs.rmSync(incoming, {recursive: true, force: true}); }
+'''
+
+_SAFARI_CREDENTIAL = _REMOTE_PREAMBLE + r'''
+const expectedDigest = process.argv[5];
+const consoleUser = process.argv[6];
+if (!/^[a-f0-9]{64}$/.test(expectedDigest || '') || !/^[A-Za-z0-9_-]{1,64}$/.test(consoleUser || '') ||
+    require('node:os').userInfo().username !== consoleUser || runId.includes('..')) fail('Invalid Safari credential identity');
+const descriptor = fs.openSync(path.join(exchange, 'job.json'), fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+let jobBytes;
+try {
+    const metadata = fs.fstatSync(descriptor);
+    if (!metadata.isFile() || metadata.size > 65536) fail('Invalid Safari credential job');
+    jobBytes = fs.readFileSync(descriptor);
+} finally { fs.closeSync(descriptor); }
+if (require('node:crypto').createHash('sha256').update(jobBytes).digest('hex') !== expectedDigest) fail('Safari credential job changed after selection');
+const job = JSON.parse(jobBytes);
+if (job.runId !== runId || job.vmId !== vmId || job.kind !== 'run' || !job.payload ||
+    (job.payload.signing || 'local') !== 'local' || !Array.isArray(job.payload.stages) ||
+    (job.payload.stages.length && !job.payload.stages.includes('safari')) || readReceipt(runId)) fail('Safari credential requires an unclaimed local test run');
+if (fs.existsSync(stopMarker)) { publishStop(); process.exit(86); }
+const verified = cp.spawnSync('/usr/local/libexec/big-wallet-vm/guest_runner', ['--verify-session'],
+    {stdio: 'ignore', env: {...process.env, BW_TEST_VM_RUN_ID: runId, BW_TEST_VM_EXCHANGE: exchange}, timeout: 30000, killSignal: 'SIGKILL'});
+if (verified.status !== 0) fail('Safari credential requires a verified guest session');
+const bytes = Buffer.alloc(4097);
+let length = 0;
+while (length < bytes.length) {
+    const count = fs.readSync(0, bytes, length, bytes.length - length, null);
+    if (!count) break;
+    length += count;
+}
+if (!length || length > 4096 || bytes.subarray(0, length).some(byte => byte === 0 || byte === 10 || byte === 13)) fail('Invalid Safari guest credential');
+let password;
+try { password = new TextDecoder('utf-8', {fatal: true}).decode(bytes.subarray(0, length)); }
+catch { fail('Invalid Safari guest credential encoding'); }
+const value = Buffer.from(JSON.stringify({version: 1, runID: runId, consoleUser, password}));
+if (value.length > 4096) fail('Safari guest credential exceeds its private-file budget');
+for (const directory of [path.join(exchange, runId), path.dirname(safariCredentialPath)]) {
+    try { fs.mkdirSync(directory, {mode: 0o700}); } catch (error) { if (error.code !== 'EEXIST') throw error; }
+    const metadata = fs.lstatSync(directory);
+    if (!metadata.isDirectory() || metadata.isSymbolicLink() || metadata.uid !== uid || metadata.mode & 0o077 ||
+        fs.realpathSync(directory) !== directory) fail('Invalid Safari credential directory');
+}
+const temporary = path.join(path.dirname(safariCredentialPath), '.guest-credential.' + process.pid + '.tmp');
+let file;
+try {
+    file = fs.openSync(temporary, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
+    fs.writeFileSync(file, value);
+    fs.fsyncSync(file);
+    fs.closeSync(file); file = undefined;
+    fs.linkSync(temporary, safariCredentialPath);
+} finally {
+    if (file !== undefined) fs.closeSync(file);
+    try { fs.unlinkSync(temporary); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    bytes.fill(0); value.fill(0); password = undefined;
+}
+if (fs.existsSync(stopMarker)) { removeSafariCredential(); publishStop(); process.exit(86); }
 '''
 
 _LAUNCH = _REMOTE_PREAMBLE + r'''
@@ -374,6 +585,7 @@ _EXPORT = _REMOTE_PREAMBLE + r'''
 const value = readJSON(path.join(exchange, 'artifacts/result.json'));
 if (value.runId !== runId || !value.finishedAt || !['passed', 'failed', 'blocked', 'cancelled'].includes(value.status))
     fail('Guest report is not complete');
+removeSafariCredential();
 const names = ['artifacts'];
 if (fs.existsSync(path.join(exchange, 'guest-runner.log'))) names.push('guest-runner.log');
 const result = cp.spawnSync('/usr/bin/tar', ['-cf', '-', '-C', exchange, ...names],
@@ -385,6 +597,7 @@ _STOP = _REMOTE_PREAMBLE + r'''
 const descriptor = fs.openSync(stopMarker, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW, 0o600);
 fs.closeSync(descriptor);
 publishStop();
+removeSafariCredential();
 '''
 
 
@@ -406,16 +619,22 @@ class GuestExchange:
         self.agent_pid = None
         self.agent_start = None
         self.final_seen = False
+        self.report_outage = None
+        self.report_retry_info = None
+        self.report_journal_failed = False
         try:
             self.work = access._private_directory(private_workdir)
             self.exchange = access._private_directory(exchange)
             self.job = _json(self.exchange / 'job.json', 65536)
+            self.safari_credential_digest = safari_credential_job_digest(self.job, self.exchange)
+            self.console_user = user
             self.run_id = self.job.get('runId')
             self.vm_id = self.job.get('vmId')
             if (not isinstance(self.run_id, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}', self.run_id) or
                     not isinstance(self.vm_id, str) or 'big-wallet-vm-' + self.vm_id != host_key_alias):
                 raise GuestExchangeError('The exchange job identity is invalid')
             self.command = access.ssh_command(address, user, known_hosts, host_key_alias)
+            self.address = access._address(address)
             self.password = access.read_private_password(password_file)
             self.scratch = Path(tempfile.mkdtemp(prefix='guest-exchange-', dir=self.work))
             self.input_archive = self.scratch / 'input.tar'
@@ -452,21 +671,98 @@ class GuestExchange:
             stdin=subprocess.DEVNULL, stdout=self.output, stderr=self.errors, start_new_session=True)
         self.deadline = time.monotonic() + timeout
 
-    def _start_remote(self, phase, script, *, timeout, input_path=None, output_path=None):
+    def _start_remote(self, phase, script, *, timeout, input_path=None, input_file=None, output_path=None, extra_arguments=()):
+        if input_path is not None and input_file is not None:
+            raise GuestExchangeError('Guest transfer input is ambiguous')
         self.phase = phase
         self.output = open(output_path, 'wb') if output_path else self._temporary_output()
         if output_path:
             self.files.append(self.output)
         self.errors = self._temporary_output()
-        command = self.command + [shlex.join(['/usr/local/bin/node', '-e', script, self.run_id, self.vm_id, str(self.agent_pid or ''), json.dumps(self.agent_start) if self.agent_start else ''])]
-        source = open(input_path, 'rb') if input_path else subprocess.DEVNULL
+        command = self.command + [shlex.join(['/usr/local/bin/node', '-e', script, self.run_id, self.vm_id, str(self.agent_pid or ''), json.dumps(self.agent_start) if self.agent_start else '', *extra_arguments])]
+        source = input_file if input_file is not None else open(input_path, 'rb') if input_path else subprocess.DEVNULL
+        self.phase_started_at = time.monotonic()
         try:
             self.child = subprocess.Popen(command, stdin=source, stdout=self.output, stderr=self.errors,
                                           env=self.environment, start_new_session=True)
         finally:
             if input_path:
                 source.close()
-        self.deadline = time.monotonic() + timeout
+        self.deadline = self.phase_started_at + timeout
+        if phase == 'report' and self.report_outage is not None:
+            self.deadline = min(self.deadline, self.report_outage['deadline'])
+            self.report_outage['event']['retryAttempts'] += 1
+            self.report_retry_info['retryAttempts'] += 1
+            self._write_report_retry_info()
+
+    def _write_report_retry_info(self):
+        if not self.report_journal_failed:
+            try:
+                _atomic_json(self.exchange / 'guest-transport.json', self.report_retry_info)
+            except (OSError, RuntimeError):
+                self.report_journal_failed = True
+                raise
+
+    def _complete_report_outage(self, status, reason=None):
+        if self.report_outage is None:
+            return
+        event = self.report_outage['event']
+        event.update(status=status, finishedAt=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                     elapsedSeconds=round(max(0, time.monotonic() - self.report_outage['started']), 3))
+        if reason is not None:
+            event['reason'] = reason
+        if status == 'recovered':
+            self.report_retry_info['recoveredOutages'] += 1
+        self.report_outage = None
+        self._write_report_retry_info()
+
+    def _retry_report_failure(self, code, now):
+        if (self.phase != 'report' or code != 255 or not self.observed_launch or self.stop_requested or
+                self.output.seek(0, os.SEEK_END) != 0):
+            return False
+        expected = ('Connection timed out during banner exchange\r\n'
+                    f'Connection to {self.address} port 22 timed out\r\n').encode('ascii')
+        self.errors.seek(0)
+        diagnostic = self.errors.read(len(expected) + 1)
+        if diagnostic not in (expected, expected.replace(b'\r\n', b'\n')):
+            return False
+        if self.report_outage is None:
+            if self.report_retry_info is None:
+                self.report_retry_info = {'version': 1, 'runId': self.run_id, 'vmId': self.vm_id,
+                    'outages': 0, 'retryAttempts': 0, 'recoveredOutages': 0, 'recentOutages': []}
+            event = {'firstFailureAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                     'status': 'retrying', 'diagnostic': 'Connection timed out during banner exchange',
+                     'failures': 0, 'retryAttempts': 0}
+            self.report_retry_info['outages'] += 1
+            self.report_retry_info['recentOutages'] = [*self.report_retry_info['recentOutages'], event][-MAX_RECORDED_REPORT_OUTAGES:]
+            self.report_outage = {'started': self.phase_started_at,
+                                 'deadline': self.phase_started_at + REPORT_OUTAGE_SECONDS, 'event': event}
+        event = self.report_outage['event']
+        event['failures'] += 1
+        attempts = event['retryAttempts']
+        if attempts >= len(REPORT_RETRY_DELAYS):
+            self._complete_report_outage('failed', 'retry_limit')
+            return False
+        if now + REPORT_RETRY_DELAYS[attempts] >= self.report_outage['deadline']:
+            self._complete_report_outage('failed', 'outage_deadline')
+            return False
+        event['lastRetryDelaySeconds'] = REPORT_RETRY_DELAYS[attempts]
+        self.next_poll = now + REPORT_RETRY_DELAYS[attempts]
+        self._write_report_retry_info()
+        self._close_phase_files()
+        return True
+
+    def _start_safari_credential(self):
+        credential = self._temporary_output()
+        try:
+            credential.write(self.password)
+            credential.flush()
+            credential.seek(0)
+            self._start_remote('safari-credential', _SAFARI_CREDENTIAL, input_file=credential, timeout=45,
+                               extra_arguments=(self.safari_credential_digest, self.console_user))
+        finally:
+            credential.close()
+            self.files.remove(credential)
 
     def _start_stop(self):
         self.stop_errors = self._temporary_output()
@@ -477,6 +773,8 @@ class GuestExchange:
 
     def request_stop(self):
         self.stop_requested = True
+        if self.phase in ('pack', 'ready'):
+            return
         if self.password and self.stop_child is None and not self.stop_sent:
             self._start_stop()
 
@@ -552,7 +850,8 @@ class GuestExchange:
         shutil.rmtree(self.export_directory, ignore_errors=True)
         self.input_archive.unlink(missing_ok=True)
         self.output_archive.unlink(missing_ok=True)
-        return self.result
+        self._complete_report_outage('cancelled' if self.stop_requested else 'failed', result.get('reason'))
+        return None if self.stop_child is not None else self.result
 
     def _publish_export(self):
         report = _report(_json(self.export_directory / 'validated-result.json'), self.run_id, self.vm_id, final=True)
@@ -596,6 +895,8 @@ class GuestExchange:
     def poll(self):
         try:
             now = time.monotonic()
+            if self.stop_requested and self.phase in ('pack', 'ready'):
+                return self._finish({'status': 'failed', 'reason': 'guest_exchange_cancelled', 'phase': self.phase})
             if self.stop_child is not None:
                 code = self.stop_child.poll()
                 if code is None and now > self.stop_deadline:
@@ -605,13 +906,29 @@ class GuestExchange:
                     self.stop_child.wait()
                     self.stop_child = None
                     self.stop_sent = code == 0
-                    if code != 0:
+                    if code != 0 and self.result is None:
                         return self._finish({'status': 'failed', 'reason': 'guest_stop_transfer_failed',
                                              'error': self._error_text(self.stop_errors)})
                     self.stop_errors.close()
                     self.files.remove(self.stop_errors)
             if self.result is not None:
-                return self.result
+                return None if self.stop_child is not None else self.result
+            if self.report_outage is not None:
+                if self.stop_requested:
+                    if self.stop_child is not None:
+                        return None
+                    if self.child is not None:
+                        access._stop(self.child)
+                        self.child.wait()
+                        self.child = None
+                        self._close_phase_files()
+                    self._complete_report_outage('cancelled', 'guest_stop_requested')
+                    self.next_poll = now
+                else:
+                    if reason := self._observation_failure(now):
+                        return self._finish({'status': 'failed', 'reason': reason})
+                    if now >= self.report_outage['deadline']:
+                        return self._finish({'status': 'failed', 'reason': 'guest_exchange_timeout', 'phase': 'report'})
             if self.child is None:
                 if reason := self._observation_failure(now):
                     return self._finish({'status': 'failed', 'reason': reason})
@@ -622,7 +939,7 @@ class GuestExchange:
                 if self.output.tell() > MAX_EXPORT_BYTES + MAX_EXPORT_FILES * 2048:
                     raise GuestExchangeError('The guest artifact download exceeds its size limit')
                 _capacity(self.work, 0)
-            if self.phase in ('launch', 'report') and self.output.tell() > MAX_REPORT_BYTES:
+            if self.phase in ('ready', 'launch', 'report') and self.output.tell() > MAX_REPORT_BYTES:
                 raise GuestExchangeError('The guest report exceeds its size limit')
             if self.errors.tell() > MAX_REPORT_BYTES:
                 raise GuestExchangeError('The guest exchange diagnostic output exceeds its size limit')
@@ -648,20 +965,40 @@ class GuestExchange:
                 self._observe_launch(now, diagnostic or 'Guest launch outcome is unknown')
                 return None
             if code != 0:
+                if self.phase == 'report' and not self.stop_requested:
+                    if reason := self._observation_failure(now):
+                        return self._finish({'status': 'failed', 'reason': reason})
+                    if self._retry_report_failure(code, now):
+                        return None
                 return self._finish({'status': 'failed', 'reason': 'guest_exchange_cancelled' if self.stop_requested else 'guest_exchange_failed',
                                      'phase': self.phase, 'error': self._error_text(self.errors)})
             phase = self.phase
             data = None
-            if phase in ('launch', 'report'):
+            if phase in ('ready', 'launch', 'report'):
                 self.output.seek(0)
                 data = self.output.read(MAX_REPORT_BYTES + 1)
             self._close_phase_files()
             if phase == 'pack':
                 if self.stop_requested:
                     return self._finish({'status': 'failed', 'reason': 'guest_exchange_cancelled'})
+                self._start_remote('ready', _READY, timeout=130, extra_arguments=(self.console_user,))
+            elif phase == 'ready':
+                value = json.loads(data)
+                if (value != {'version': 1, 'runId': self.run_id, 'vmId': self.vm_id, 'ready': True} or
+                        type(value.get('version')) is not int or value['ready'] is not True):
+                    raise GuestExchangeError('Invalid guest readiness acknowledgement')
+                if self.stop_requested:
+                    return self._finish({'status': 'failed', 'reason': 'guest_exchange_cancelled'})
                 self._start_remote('upload', _UPLOAD, input_path=self.input_archive, timeout=900)
             elif phase == 'upload':
                 self.input_archive.unlink(missing_ok=True)
+                if self.stop_requested:
+                    return self._finish({'status': 'failed', 'reason': 'guest_exchange_cancelled'})
+                if self.safari_credential_digest:
+                    self._start_safari_credential()
+                else:
+                    self._start_remote('launch', _LAUNCH, timeout=150)
+            elif phase == 'safari-credential':
                 if self.stop_requested:
                     return self._finish({'status': 'failed', 'reason': 'guest_exchange_cancelled'})
                 self._start_remote('launch', _LAUNCH, timeout=150)
@@ -681,6 +1018,7 @@ class GuestExchange:
                 result = self._observe_report(json.loads(data), now)
                 if result is not None:
                     return result
+                self._complete_report_outage('recovered')
                 self.next_poll = now + 5
             elif phase == 'export':
                 self._start_local('extract', '--extract', self.output_archive, self.export_directory,
@@ -710,6 +1048,7 @@ class GuestExchange:
         if self.scratch is not None:
             shutil.rmtree(self.scratch, ignore_errors=True)
         self.password = b''
+        self._complete_report_outage('cancelled', 'guest_exchange_cancelled')
 
 
 if __name__ == '__main__':

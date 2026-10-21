@@ -206,6 +206,20 @@ final class WalletsManager: NSObject {
         }
     }
 
+#if BW_SAFARI_VM_TESTING
+    func restoreSafariVMFixtureWallet() async throws {
+        guard !wallets.contains(where: { $0.id == "fixture-ethereum" }) else { return }
+        let prepared = WalletRepository.PreparedCreation(
+            walletID: "fixture-ethereum",
+            data: try SafariVMFixtures.shared.originalWalletData(id: "fixture-ethereum"),
+            password: Data("approval-fixture-password".utf8)
+        )
+        _ = try await commit { [repository] willMutate in
+            try await repository.saveNewWallet(prepared, willMutateSource: willMutate)
+        }
+    }
+#endif
+
     func exportPrivateKey(wallet: WalletSnapshot, account: WalletAccount? = nil) async throws -> String {
         try await repository.exportPrivateKey(wallet: wallet, account: account)
     }

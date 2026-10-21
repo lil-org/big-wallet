@@ -7,6 +7,18 @@ import Synchronization
 import AppKit
 #endif
 
+protocol SharedPreferenceStorage: AnyObject {
+    func object(forKey key: String) -> Any?
+    func string(forKey key: String) -> String?
+    func bool(forKey key: String) -> Bool
+    func integer(forKey key: String) -> Int
+    func set(_ value: Any?, forKey key: String)
+    func removeObject(forKey key: String)
+    @discardableResult func synchronize() -> Bool
+}
+
+extension UserDefaults: SharedPreferenceStorage {}
+
 enum CustomNetworkInsertionResult: Equatable, Hashable, Sendable {
 
     case inserted
@@ -62,7 +74,7 @@ enum AmbientPseudoLocalizationLaunchMode: String {
     static func recordFromEnvironment(environment: [String: String] = ProcessInfo.processInfo.environment,
                                       ownerProcessId: pid_t = ProcessInfo.processInfo.processIdentifier,
                                       date: Date = Date(),
-                                      defaults: UserDefaults? = SharedDefaults.defaults) {
+                                      defaults: (any SharedPreferenceStorage)? = SharedDefaults.defaults) {
         guard let defaults else { return }
         guard let mode = Self(environmentValue: environment[environmentKey]) else {
             clear(defaults: defaults)
@@ -78,7 +90,7 @@ enum AmbientPseudoLocalizationLaunchMode: String {
     @discardableResult
     static func applyToAmbientProcess(
         date: Date = Date(),
-        defaults: UserDefaults? = SharedDefaults.defaults,
+        defaults: (any SharedPreferenceStorage)? = SharedDefaults.defaults,
         processDefaults: UserDefaults = .standard,
         argumentDomainName: String = UserDefaults.argumentDomain,
         isDockAppRunning: (pid_t) -> Bool = Self.isDockAppRunning(processId:)
@@ -113,7 +125,7 @@ enum AmbientPseudoLocalizationLaunchMode: String {
         return mode
     }
 
-    static func clear(defaults: UserDefaults? = SharedDefaults.defaults) {
+    static func clear(defaults: (any SharedPreferenceStorage)? = SharedDefaults.defaults) {
         guard let defaults else { return }
         defaults.removeObject(forKey: modeKey)
         defaults.removeObject(forKey: ownerProcessIdKey)
@@ -193,15 +205,25 @@ struct SharedDefaults {
 #else
     static let suiteName = "group.org.lil.wallet"
 #endif
-    static var defaults: UserDefaults? { UserDefaults(suiteName: suiteName) }
+    static var defaults: (any SharedPreferenceStorage)? {
+#if BW_SAFARI_VM_TESTING
+        if SafariVMFixtures.shared.isLocal { return SafariVMPreferenceStorage.shared }
+#endif
+        return UserDefaults(suiteName: suiteName)
+    }
+
+    static var containerURL: URL? {
+#if BW_SAFARI_VM_TESTING
+        if SafariVMFixtures.shared.isLocal { return SafariVMFixtures.shared.root }
+#endif
+        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: suiteName)
+    }
     
     static let customEthereumNetworksKey = "customEthereumNetworks"
     private static let customEthereumNetworkNodeKeyPrefix = "customEthereumNetworkNode_"
     private static let customNetworksStorageLock = Mutex(())
     private static let customNetworksStorageFileLock = CrossProcessFileLock(
-        fileURL: FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: suiteName
-        )?.appendingPathComponent(
+        fileURL: containerURL?.appendingPathComponent(
             ".custom-ethereum-networks.lock",
             isDirectory: false
         )
@@ -212,6 +234,43 @@ struct SharedDefaults {
     static func synchronize() {
         defaults?.synchronize()
     }
+
+#if BW_SAFARI_VM_TESTING
+    static func replaceSafariVMCustomNetwork(chainID: Int, rpcURL: URL) throws {
+        guard (64_000...64_999).contains(chainID), let defaults,
+              let chainParameters = URLComponents(url: rpcURL, resolvingAgainstBaseURL: false)?.queryItems?
+                .filter({ $0.name == "chainId" }),
+              chainParameters.count == 1, chainParameters[0].value == String(chainID) else {
+            throw SafariVMFixtures.Failure.invalidFixture
+        }
+        try customNetworksStorageFileLock.acquire(
+            timeoutNanoseconds: customNetworksStorageLockTimeoutNanoseconds,
+            pollNanoseconds: customNetworksStorageLockPollNanoseconds
+        )
+        defer { customNetworksStorageFileLock.release() }
+        try customNetworksStorageLock.withLock { _ in
+            guard defaults.synchronize(), case .decoded(var records) = customNetworksArchive(in: defaults),
+                  records.filter({ Int(hexString: $0.chainId) == chainID }).count == 1,
+                  let index = records.firstIndex(where: { Int(hexString: $0.chainId) == chainID }) else {
+                throw SafariVMFixtures.Failure.unavailable
+            }
+            let previousArchive = defaults.object(forKey: customEthereumNetworksKey)
+            let overrideKey = customEthereumNetworkNodeKey(chainId: chainID)
+            let previousOverride = defaults.object(forKey: overrideKey)
+            records[index].rpcUrls = [rpcURL.absoluteString]
+            defaults.set(try JSONEncoder().encode(records), forKey: customEthereumNetworksKey)
+            defaults.removeObject(forKey: overrideKey)
+            guard defaults.synchronize() else {
+                restore(previousArchive, forKey: customEthereumNetworksKey, in: defaults)
+                restore(previousOverride, forKey: overrideKey, in: defaults)
+                _ = defaults.synchronize()
+                throw SafariVMFixtures.Failure.unavailable
+            }
+        }
+        CustomNetworkCache.shared.invalidate()
+        CustomNetworkChangeNotification.post()
+    }
+#endif
     
     static func insertNetwork(
         _ network: EthereumNetworkFromDapp
@@ -231,16 +290,16 @@ struct SharedDefaults {
 
     static func insertNetwork(
         _ network: EthereumNetworkFromDapp,
-        to defaults: UserDefaults
+        to defaults: any SharedPreferenceStorage
     ) -> CustomNetworkInsertionResult {
         return insertNetwork(network, to: defaults, crossProcessLock: nil)
     }
 
     static func insertNetwork(
         _ network: EthereumNetworkFromDapp,
-        to defaults: UserDefaults,
+        to defaults: any SharedPreferenceStorage,
         crossProcessLock: CrossProcessFileLock?,
-        synchronizeDefaults: (UserDefaults) -> Bool = { $0.synchronize() }
+        synchronizeDefaults: (any SharedPreferenceStorage) -> Bool = { $0.synchronize() }
     ) -> CustomNetworkInsertionResult {
         guard let chainId = Int(hexString: network.chainId),
               chainId > 0 else {
@@ -342,8 +401,8 @@ struct SharedDefaults {
     }
 
     static func loadCustomNetworkSnapshotResult(
-        from defaults: UserDefaults,
-        synchronizeDefaults: (UserDefaults) -> Bool = { $0.synchronize() }
+        from defaults: any SharedPreferenceStorage,
+        synchronizeDefaults: (any SharedPreferenceStorage) -> Bool = { $0.synchronize() }
     ) -> CustomNetworkSnapshotLoadResult {
         return withCustomNetworksStorageLock {
             guard synchronizeDefaults(defaults) else { return .unavailable }
@@ -372,7 +431,7 @@ struct SharedDefaults {
         case corrupt
     }
 
-    private static func customNetworksArchive(in defaults: UserDefaults) -> CustomNetworksArchive {
+    private static func customNetworksArchive(in defaults: any SharedPreferenceStorage) -> CustomNetworksArchive {
         guard let storedValue = defaults.object(forKey: customEthereumNetworksKey) else {
             return .missing
         }
@@ -409,7 +468,7 @@ struct SharedDefaults {
     private static func restore(
         _ value: Any?,
         forKey key: String,
-        in defaults: UserDefaults
+        in defaults: any SharedPreferenceStorage
     ) {
         if let value {
             defaults.set(value, forKey: key)

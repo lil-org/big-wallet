@@ -2,6 +2,7 @@ from contextlib import ExitStack
 import importlib.util
 from pathlib import Path
 import tempfile
+import signal
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -20,7 +21,9 @@ class ExchangeMonitorTests(unittest.TestCase):
         self.run_id, self.exchange = host.new_exchange(self.root, 'run')
         self.result_path = self.exchange / 'artifacts/result.json'
         self.events = []
+        self.capacity = lambda: self.events.append('capacity')
         self.clock = 0
+        self.maximum_clock = 150
         self.vm = SimpleNamespace(returncode=None)
         self.vm.poll = lambda: self.vm.returncode
         self.hook = SimpleNamespace(exchange_complete=False, polls=0, stopped=False)
@@ -48,7 +51,7 @@ class ExchangeMonitorTests(unittest.TestCase):
 
     def sleep(self, seconds):
         self.clock += seconds
-        self.assertLess(self.clock, 150, 'The fixture monitor must finish within its simulated deadline')
+        self.assertLess(self.clock, self.maximum_clock, 'The fixture monitor must finish within its simulated deadline')
 
     def stop_vm(self, process, stop_file):
         self.assertIs(process, self.vm)
@@ -67,15 +70,16 @@ class ExchangeMonitorTests(unittest.TestCase):
         host.atomic_json(self.result_path, value)
         return value
 
-    def run_monitor(self, timeout=100):
+    def run_monitor(self, timeout=100, *, previous_stops=()):
         with ExitStack() as stack:
             launch = stack.enter_context(patch.object(host.subprocess, 'Popen', return_value=self.vm))
             stack.enter_context(patch.object(host.time, 'monotonic', side_effect=lambda: self.clock))
             stack.enter_context(patch.object(host.time, 'sleep', side_effect=self.sleep))
-            stack.enter_context(patch.object(host, 'check_capacity', side_effect=lambda *_: self.events.append('capacity')))
+            stack.enter_context(patch.object(host, 'check_capacity', side_effect=lambda *_: self.capacity()))
             stack.enter_context(patch.object(host, 'stop_owned_process', side_effect=self.stop_vm))
             result = host.monitor_vm(SimpleNamespace(command='run'), self.root, self.root / 'owned.vbvm',
-                self.exchange, self.run_id, self.root / 'tools', {'minimumHostFreeBytes': 1}, timeout, setup_hook=self.hook, keep_operation=True)
+                self.exchange, self.run_id, self.root / 'tools', {'minimumHostFreeBytes': 1}, timeout,
+                setup_hook=self.hook, keep_operation=True, previous_stops=previous_stops)
         active = host.read_json(self.root / 'active.json')
         self.assertEqual(active['acceptedResultSHA256'], host.hash_regular_file(self.result_path))
         if self.hook.exchange_complete:
@@ -108,6 +112,17 @@ class ExchangeMonitorTests(unittest.TestCase):
         self.assertNotIn('request-stop', self.events)
         self.assertEqual(self.events[-2:], ['cancel-transfer', 'stop-vm'])
         self.assertEqual((self.exchange / 'artifacts/test.fixture.log').read_text(), 'complete exported log')
+
+    def test_vm_launch_failure_does_not_claim_artifacts_were_exported(self):
+        with patch.object(host.subprocess, 'Popen', side_effect=OSError('fixture launch failed')):
+            result = host.monitor_vm(SimpleNamespace(command='run'), self.root, self.root / 'owned.vbvm',
+                self.exchange, self.run_id, self.root / 'tools', {'minimumHostFreeBytes': 1}, 100,
+                setup_hook=self.hook, keep_operation=True)
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(result['reason'], 'vm_launch_failed')
+        active = host.read_json(self.root / 'active.json')
+        self.assertEqual(active['phase'], 'starting')
+        self.assertNotIn('artifactsExported', active)
 
     def test_exported_guest_failure_is_preserved_without_transport_failure(self):
         def finish(_):
@@ -169,7 +184,7 @@ class ExchangeMonitorTests(unittest.TestCase):
     def test_stop_drains_export_before_cancel_and_cannot_become_late_success(self):
         def finish(count):
             if count == 1:
-                host.atomic_json(self.exchange / 'stop.json', {'runId': self.run_id})
+                host.publish_stop(self.exchange, self.run_id, requested=True)
             elif self.hook.stopped:
                 self.report()
                 (self.exchange / 'artifacts/cancel.log').write_text('guest cancellation diagnostics')
@@ -206,6 +221,251 @@ class ExchangeMonitorTests(unittest.TestCase):
         self.assertEqual(self.hook.polls, 20)
         self.assertEqual(self.events[0], 'request-stop')
         self.assertEqual(self.events[-2:], ['cancel-transfer', 'stop-vm'])
+
+    def test_stop_preserves_a_long_export_and_extraction_after_guest_finalization(self):
+        self.maximum_clock = 3500
+        self.hook.transport = SimpleNamespace(phase='report', observed_launch=True, final_seen=False)
+        def progress(count):
+            if count == 1:
+                self.report('running', terminal=False)
+                host.publish_stop(self.exchange, self.run_id, requested=True)
+            elif self.hook.stopped and self.clock >= 100:
+                self.hook.transport.final_seen = True
+                self.hook.transport.phase = 'export' if self.clock < 1850 else 'extract'
+                if self.clock >= 2700:
+                    self.report('cancelled')
+                    (self.exchange / 'artifacts/cancel.log').write_text('fully exported diagnostics')
+                    self.hook.exchange_complete = True
+        self.on_poll = progress
+        result = self.run_monitor()
+        self.assertEqual(result['status'], 'cancelled')
+        self.assertEqual(result['reason'], 'cancelled')
+        self.assertTrue(self.hook.exchange_complete)
+        self.assertEqual(self.clock, 2700)
+        self.assertEqual((self.exchange / 'artifacts/cancel.log').read_text(), 'fully exported diagnostics')
+        self.assertNotIn('guestFailure', result)
+        self.assertEqual(self.events[-2:], ['cancel-transfer', 'stop-vm'])
+
+    def test_first_stop_during_report_outage_allows_final_collection_before_vm_shutdown(self):
+        exchange_module = host.guest_exchange_module()
+        transport = exchange_module.GuestExchange.__new__(exchange_module.GuestExchange)
+        outage = {'status': 'retrying', 'failures': 1, 'retryAttempts': 0}
+        transport.__dict__.update({
+            'phase': 'report', 'observed_launch': True, 'final_seen': False,
+            'stop_requested': False, 'stop_sent': False, 'stop_child': None, 'child': None,
+            'result': None, 'next_poll': 5, 'guest_finished_at': None, 'launched_at': 0,
+            'report_outage': {'started': 0, 'deadline': 60, 'event': outage},
+            'report_retry_info': {'version': 1, 'runId': self.run_id, 'vmId': 'fixture-vm',
+                'outages': 1, 'retryAttempts': 0, 'recoveredOutages': 0, 'recentOutages': [outage]},
+            'report_journal_failed': False, 'exchange': self.exchange,
+        })
+        def start_report(phase, script, *, timeout):
+            self.assertEqual((phase, script, timeout), ('report', exchange_module._POLL, 30))
+            self.events.append('poll-final-report')
+            transport.next_poll = self.clock + 5
+        transport._start_remote = start_report
+        transport._finish = lambda result: result
+        self.hook.transport = transport
+        def stop_delivered():
+            self.request_stop()
+            transport.stop_requested = transport.stop_sent = True
+        self.hook.request_stop = stop_delivered
+        def progress(count):
+            if count == 1:
+                self.report('running', terminal=False)
+                host.publish_stop(self.exchange, self.run_id, requested=True)
+            elif self.clock >= 30:
+                self.report('cancelled')
+                (self.exchange / 'artifacts/cancel.log').write_text('exported after finalization')
+                self.hook.exchange_complete = True
+            else:
+                return transport.poll()
+        self.on_poll = progress
+        result = self.run_monitor()
+        self.assertEqual(result['status'], 'cancelled')
+        self.assertEqual(self.clock, 30)
+        self.assertTrue(self.hook.exchange_complete)
+        self.assertIn('poll-final-report', self.events)
+        self.assertEqual((self.exchange / 'artifacts/cancel.log').read_text(), 'exported after finalization')
+        self.assertNotIn('guestFailure', result)
+        self.assertEqual(host.read_json(self.exchange / 'guest-transport.json')['recentOutages'][0]['status'], 'cancelled')
+        self.assertEqual(self.events[-2:], ['cancel-transfer', 'stop-vm'])
+
+    def test_cancel_export_deadline_exhaustion_preserves_incomplete_coverage(self):
+        self.maximum_clock = 1900
+        self.hook.transport = SimpleNamespace(phase='export', observed_launch=True, final_seen=True)
+        result = self.run_monitor(timeout=0)
+        self.assertEqual(result['reason'], 'timed_out')
+        self.assertEqual(self.clock, host.STOP_EXPORT_SECONDS)
+        self.assertEqual(result['guestFailure'], {'status': 'failed',
+            'reason': 'guest_artifact_collection_timeout', 'phase': 'export'})
+        self.assertFalse(result['coverage']['fullSuiteVerified'])
+        self.assertFalse(self.hook.exchange_complete)
+        self.assertEqual(self.events[-2:], ['cancel-transfer', 'stop-vm'])
+
+    def test_cancel_stops_promptly_when_an_observed_transport_fails(self):
+        self.hook.transport = SimpleNamespace(phase='export', observed_launch=True, final_seen=True)
+        failure = {'status': 'failed', 'reason': 'guest_exchange_timeout', 'phase': 'export'}
+        self.on_poll = lambda _: failure
+        result = self.run_monitor(timeout=0)
+        self.assertEqual(result['reason'], 'timed_out')
+        self.assertEqual(result['guestFailure'], failure)
+        self.assertEqual(self.clock, 0)
+        self.assertEqual(self.hook.polls, 1)
+
+    def test_cancel_still_uses_short_grace_before_the_guest_job_is_observed(self):
+        self.hook.transport = SimpleNamespace(phase='launch', observed_launch=False, final_seen=False)
+        result = self.run_monitor(timeout=0)
+        self.assertEqual(result['reason'], 'timed_out')
+        self.assertEqual(self.clock, 20)
+        self.assertEqual(self.hook.polls, 20)
+
+    def test_cancel_finalization_is_bounded_without_a_terminal_guest_report(self):
+        self.maximum_clock = 700
+        self.hook.transport = SimpleNamespace(phase='report', observed_launch=True, final_seen=False)
+        result = self.run_monitor(timeout=0)
+        self.assertEqual(result['reason'], 'timed_out')
+        self.assertEqual(self.clock, host.STOP_FINALIZATION_SECONDS)
+        self.assertFalse(self.hook.exchange_complete)
+
+    def test_a_second_stop_request_ends_long_collection_promptly(self):
+        self.hook.transport = SimpleNamespace(phase='export', observed_launch=True, final_seen=True)
+        def progress(count):
+            if count == 1 or self.hook.stopped and self.clock >= 30:
+                host.publish_stop(self.exchange, self.run_id, requested=True)
+        self.on_poll = progress
+        result = self.run_monitor()
+        self.assertEqual(result['status'], 'cancelled')
+        self.assertEqual(self.clock, 30)
+        self.assertFalse(self.hook.exchange_complete)
+        self.assertEqual(self.events[-2:], ['cancel-transfer', 'stop-vm'])
+
+    def test_a_second_interrupt_ends_long_collection_promptly(self):
+        self.hook.transport = SimpleNamespace(phase='export', observed_launch=True, final_seen=True)
+        def progress(count):
+            if count == 1 or self.hook.stopped and self.clock >= 30:
+                signal.getsignal(signal.SIGINT)(signal.SIGINT, None)
+        self.on_poll = progress
+        result = self.run_monitor()
+        self.assertEqual(result['status'], 'cancelled')
+        self.assertEqual(self.clock, 30)
+        self.assertFalse(self.hook.exchange_complete)
+        self.assertEqual(self.events[-2:], ['cancel-transfer', 'stop-vm'])
+
+    def assert_early_requests(self, *requests):
+        self.hook.transport = SimpleNamespace(phase='export', observed_launch=True, final_seen=True)
+        def progress(count):
+            if count == 1:
+                for request in requests:
+                    if request == 'stop':
+                        host.publish_stop(self.exchange, self.run_id, requested=True)
+                    else:
+                        signal.getsignal(request)(request, None)
+        self.on_poll = progress
+        result = self.run_monitor()
+        self.assertEqual(result['status'], 'cancelled')
+        self.assertEqual(self.clock, 1)
+        self.assertEqual(self.hook.polls, 1)
+        self.assertFalse(self.hook.exchange_complete)
+        self.assertEqual(self.events[-2:], ['cancel-transfer', 'stop-vm'])
+
+    def test_two_stop_requests_before_collection_skip_the_collection_wait(self):
+        self.assert_early_requests('stop', 'stop')
+
+    def test_stop_then_interrupt_before_collection_skip_the_collection_wait(self):
+        self.assert_early_requests('stop', signal.SIGINT)
+
+    def test_interrupt_then_stop_before_collection_skip_the_collection_wait(self):
+        self.assert_early_requests(signal.SIGINT, 'stop')
+
+    def test_repeated_interrupts_before_collection_skip_the_collection_wait(self):
+        self.assert_early_requests(signal.SIGTERM, signal.SIGHUP)
+
+    def test_first_interrupt_allows_the_guest_to_finish_export(self):
+        self.hook.transport = SimpleNamespace(phase='export', observed_launch=True, final_seen=True)
+        def progress(count):
+            if count == 1:
+                signal.getsignal(signal.SIGINT)(signal.SIGINT, None)
+            elif self.hook.stopped and self.clock >= 30:
+                self.report('cancelled')
+                self.hook.exchange_complete = True
+        self.on_poll = progress
+        result = self.run_monitor()
+        self.assertEqual(result['status'], 'cancelled')
+        self.assertEqual(self.clock, 30)
+        self.assertTrue(self.hook.exchange_complete)
+        self.assertEqual(host.operation_stop_record(self.exchange, self.run_id)['requestCount'], 0)
+        self.assertNotIn('guestFailure', result)
+
+    def test_previous_setup_scope_is_counted_once_when_scopes_repeat(self):
+        previous_id, previous_exchange = host.new_exchange(self.root, 'setup')
+        previous = (previous_exchange, previous_id)
+        self.hook.transport = SimpleNamespace(phase='export', observed_launch=True, final_seen=True)
+        def progress(count):
+            if count == 1:
+                host.publish_stop(previous_exchange, previous_id, requested=True)
+            elif self.hook.stopped and self.clock >= 30:
+                self.report('cancelled')
+                self.hook.exchange_complete = True
+        self.on_poll = progress
+        result = self.run_monitor(previous_stops=(previous, previous, (self.exchange, self.run_id)))
+        self.assertEqual(result['status'], 'cancelled')
+        self.assertEqual(self.clock, 30)
+        self.assertTrue(self.hook.exchange_complete)
+        self.assertNotIn('guestFailure', result)
+
+    def test_two_requests_across_setup_scopes_skip_the_collection_wait(self):
+        previous_id, previous_exchange = host.new_exchange(self.root, 'setup')
+        self.hook.transport = SimpleNamespace(phase='export', observed_launch=True, final_seen=True)
+        def progress(count):
+            if count == 1:
+                host.publish_stop(previous_exchange, previous_id, requested=True)
+                host.publish_stop(self.exchange, self.run_id, requested=True)
+        self.on_poll = progress
+        result = self.run_monitor(previous_stops=((previous_exchange, previous_id),))
+        self.assertEqual(result['status'], 'cancelled')
+        self.assertEqual(self.clock, 1)
+        self.assertEqual(self.hook.polls, 1)
+        self.assertFalse(self.hook.exchange_complete)
+
+    def test_stop_during_timeout_stop_publication_ends_collection_immediately(self):
+        self.hook.transport = SimpleNamespace(phase='export', observed_launch=True, final_seen=True)
+        publish = host.publish_stop
+        def request_during_publication(exchange, run_id, *, requested=False):
+            if not requested:
+                publish(exchange, run_id, requested=True)
+            return publish(exchange, run_id, requested=requested)
+        with patch.object(host, 'publish_stop', side_effect=request_during_publication):
+            result = self.run_monitor(timeout=0)
+        self.assertEqual(result['reason'], 'timed_out')
+        self.assertEqual(self.clock, 0)
+        self.assertEqual(self.hook.polls, 0)
+        self.assertFalse(self.hook.exchange_complete)
+        self.assertEqual(host.operation_stop_record(self.exchange, self.run_id)['requestCount'], 1)
+        self.assertEqual(self.events[-2:], ['cancel-transfer', 'stop-vm'])
+
+    def test_first_interrupt_during_timeout_collection_ends_collection_promptly(self):
+        self.hook.transport = SimpleNamespace(phase='export', observed_launch=True, final_seen=True)
+        def interrupt(_):
+            if self.clock >= 30:
+                signal.getsignal(signal.SIGINT)(signal.SIGINT, None)
+        self.on_poll = interrupt
+        result = self.run_monitor(timeout=0)
+        self.assertEqual(result['reason'], 'timed_out')
+        self.assertEqual(self.clock, 30)
+        self.assertFalse(self.hook.exchange_complete)
+        self.assertNotIn('guestFailure', result)
+
+    def test_capacity_failure_ends_collection_immediately(self):
+        self.hook.transport = SimpleNamespace(phase='export', observed_launch=True, final_seen=True)
+        def capacity():
+            raise host.RunnerError('fixture disk reserve reached')
+        self.capacity = capacity
+        result = self.run_monitor(timeout=0)
+        self.assertEqual(result['reason'], 'timed_out')
+        self.assertIn('fixture disk reserve reached', result['hostTermination']['error'])
+        self.assertEqual(self.clock, 0)
+        self.assertEqual(self.hook.polls, 1)
 
 
 if __name__ == '__main__':

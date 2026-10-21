@@ -1409,6 +1409,35 @@ invoke_artifact_validator \
     "$mac_artifact" \
     "$valid_key_file"
 
+assert_safari_fixture_excluded() {
+    sfe_name=$1
+    sfe_platform=$2
+    sfe_source=$3
+    sfe_resources=$4
+    for sfe_kind in file symlink; do
+        sfe_artifact="$test_root/$sfe_name-$sfe_kind"
+        /usr/bin/ditto "$sfe_source" "$sfe_artifact"
+        sfe_marker="$sfe_artifact/Products/Applications/Big Wallet.app/$sfe_resources/SafariVMRun.json"
+        if [ "$sfe_kind" = file ]; then
+            printf '%s' '{}' > "$sfe_marker"
+        else
+            /bin/ln -s "$test_root/missing-safari-descriptor" "$sfe_marker"
+        fi
+        invoke_artifact_validator "$sfe_name-$sfe_kind" failure "$sfe_platform" \
+            "$sfe_artifact" "$valid_key_file"
+        /usr/bin/grep -F 'Safari VM fixture products cannot be distributed' "$last_stderr" >/dev/null ||
+            fail "$sfe_name-$sfe_kind failed without rejecting the Safari fixture"
+    done
+}
+
+assert_safari_fixture_excluded ios-app-fixture IOS "$ios_artifact" .
+assert_safari_fixture_excluded ios-extension-fixture IOS "$ios_artifact" 'PlugIns/Safari iOS.appex'
+assert_safari_fixture_excluded visionos-app-fixture VISION_OS "$vision_artifact" .
+assert_safari_fixture_excluded visionos-extension-fixture VISION_OS "$vision_artifact" 'PlugIns/Safari visionOS.appex'
+assert_safari_fixture_excluded macos-app-fixture MAC_OS "$mac_artifact" Contents/Resources
+assert_safari_fixture_excluded macos-extension-fixture MAC_OS "$mac_artifact" 'Contents/PlugIns/Safari macOS.appex/Contents/Resources'
+assert_safari_fixture_excluded macos-helper-fixture MAC_OS "$mac_artifact" 'Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app/Contents/Resources'
+
 mac_reordered_artifact="$test_root/macOS reordered keychain groups"
 /usr/bin/ditto "$mac_artifact" "$mac_reordered_artifact"
 mac_reordered_app="$mac_reordered_artifact/Products/Applications/Big Wallet.app"

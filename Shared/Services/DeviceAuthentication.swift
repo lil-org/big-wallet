@@ -11,7 +11,10 @@ struct DeviceAuthentication {
     }
 
     static var canUseBiometrics: Bool {
-        LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
+#if BW_SAFARI_VM_TESTING
+        if SafariVMFixtures.shared.isLocal { return false }
+#endif
+        return LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
     }
 
     @MainActor

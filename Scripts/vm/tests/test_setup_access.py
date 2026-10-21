@@ -142,7 +142,7 @@ class SetupAccessTests(unittest.TestCase):
         self.module.prepare_guest_access.return_value = {**self.access, 'knownHosts': None}
         def stop(*args, **options):
             result = self.drive(*args, **options)
-            host.atomic_json(self.exchange / 'stop.json', {'runId': self.run_id})
+            host.publish_stop(self.exchange, self.run_id, requested=True)
             return result
         with self.assertRaises(KeyboardInterrupt):
             self.run_doctor(stop)

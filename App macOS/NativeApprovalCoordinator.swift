@@ -19,6 +19,11 @@ final class NativeApprovalReview {
 
     var request: SafariRequest { approval.request }
     var action: DappRequestAction { approval.action }
+#if BW_SAFARI_VM_TESTING
+    var fixtureOperation: SafariVMFixtures.Operation {
+        SafariVMFixtures.shared.capture(handle: approval.binding.handle)
+    }
+#endif
 
     init(intent: BoundApprovalIntent) {
         approval = ApprovalReview(intent: intent)

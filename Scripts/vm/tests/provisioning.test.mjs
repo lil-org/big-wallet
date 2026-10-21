@@ -1254,6 +1254,43 @@ test('provisioning leaves protected system simulator directories to Xcode', () =
     assert.match(source, /'-downloadPlatform', wanted\.platform, '-exportPath', downloads/);
 });
 
+test('UI automation provisioning uses the supported guest administrator tool and verifies the selected user', () => {
+    const calls = [];
+    const configure = pureFunction('configureUIAutomation', {check, run(label, file, args, options = {}) {
+        calls.push({file, args: [...args], user: options.user ?? false, timeout: options.timeout, killSignal: options.killSignal});
+        return args.length ? 'succeeded.' : 'Automation Mode is disabled.\nThis device DOES NOT REQUIRE user authentication to enable Automation Mode.';
+    }});
+    configure();
+    assert.deepEqual(calls, [
+        {file: '/usr/bin/automationmodetool', args: ['enable-automationmode-without-authentication'], user: false, timeout: 30000, killSignal: 'SIGKILL'},
+        {file: '/usr/bin/automationmodetool', args: [], user: true, timeout: 10000, killSignal: 'SIGKILL'},
+    ]);
+    assert.ok(source.indexOf('    configureUIAutomation();') > source.indexOf("['-runFirstLaunch']"));
+    assert.doesNotMatch(source, /TCC\.db|authorizationdb\s+write|tccutil\s+reset/);
+});
+
+test('UI automation provisioning rejects required authentication even when automation is already enabled', () => {
+    for (const status of [
+        'Automation Mode is ENABLED.\nThis device requires user authentication to enable Automation Mode.',
+        'Automation Mode is ENABLED.', '', 'unexpected output',
+    ]) {
+        const configure = pureFunction('configureUIAutomation', {check, run: (_label, _file, args) => args.length ? 'succeeded.' : status});
+        assert.throws(configure, /still requires authentication.*setup --interactive/);
+    }
+});
+
+test('UI automation provisioning preserves administrator or selected-user verification failures', () => {
+    for (const failureCall of [1, 2]) {
+        let calls = 0;
+        const configure = pureFunction('configureUIAutomation', {check, run() {
+            if (++calls === failureCall) throw new Error('fixture authorization unavailable');
+            return 'succeeded.';
+        }});
+        assert.throws(configure, /fixture authorization unavailable/);
+        assert.equal(calls, failureCall);
+    }
+});
+
 test('created user developer parents have the selected user ownership without recursive permission changes', () => {
     const directories = new Map([['/Users/tester/Library', {owner: 0}]]);
     const fakeFS = {

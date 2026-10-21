@@ -226,9 +226,7 @@ struct AmbientRuntimeIdentity: Codable, Equatable, Sendable {
     private static let maximumEncodedBytes = 4 * 1024
 
     private static var defaultDirectoryURL: URL? {
-        FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: SharedDefaults.suiteName
-        )?.appendingPathComponent(
+        SharedDefaults.containerURL?.appendingPathComponent(
             "native-runtime-identities-v1",
             isDirectory: true
         )

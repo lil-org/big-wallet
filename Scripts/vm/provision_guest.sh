@@ -116,6 +116,15 @@ function run(label, file, args, options = {}) {
     }
     return result.stdout.trim();
 }
+function configureUIAutomation() {
+    const tool = '/usr/bin/automationmodetool';
+    run('Configure guest UI automation authentication', tool,
+        ['enable-automationmode-without-authentication'], {timeout: 30000, killSignal: 'SIGKILL'});
+    const status = run('Verify guest UI automation authentication', tool, [],
+        {user: true, timeout: 10000, killSignal: 'SIGKILL'});
+    check(/(?:^|\n)This device DOES NOT REQUIRE user authentication to enable Automation Mode\.(?:\n|$)/.test(status),
+        'Guest UI automation still requires authentication. Complete guest setup with Scripts/test_vm.sh setup --interactive.');
+}
 function staged(relative, name) {
     text(relative, name);
     check(!path.isAbsolute(relative), `${name} must be relative to the provisioning directory.`);
@@ -891,6 +900,7 @@ function provisionGuest() {
     run('Select guest Xcode', '/usr/bin/xcode-select', ['--switch', developer]);
     run('Accept guest Xcode license', '/usr/bin/xcodebuild', ['-license', 'accept']);
     run('Initialize guest Xcode', '/usr/bin/xcodebuild', ['-runFirstLaunch']);
+    configureUIAutomation();
 
     console.log('Verifying pinned guest simulator runtimes.');
     function installedRuntimes() {

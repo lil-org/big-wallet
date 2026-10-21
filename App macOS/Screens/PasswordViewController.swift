@@ -45,6 +45,9 @@ final class PasswordViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         passwordTextField.placeholderString = Strings.password
+        passwordTextField.setAccessibilityIdentifier("safari.authentication.password")
+        okButton.setAccessibilityIdentifier("safari.authentication.confirm")
+        cancelButton.setAccessibilityIdentifier("safari.authentication.cancel")
         cancelButton.title = Strings.cancel
         applyConfiguration()
     }

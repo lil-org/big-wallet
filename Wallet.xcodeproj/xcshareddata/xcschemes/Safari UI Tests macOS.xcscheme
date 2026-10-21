@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Scheme LastUpgradeVersion="2700" version="1.7">
+  <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES">
+    <BuildActionEntries>
+      <BuildActionEntry buildForTesting="YES" buildForRunning="NO" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="F1C27FC3CD560C81123408E1" BuildableName="Safari UI Tests macOS.xctest" BlueprintName="Safari UI Tests macOS" ReferencedContainer="container:Wallet.xcodeproj"/>
+      </BuildActionEntry>
+    </BuildActionEntries>
+  </BuildAction>
+  <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.PosixSpawn" shouldUseLaunchSchemeArgsEnv="NO" shouldAutocreateTestPlan="YES" preferredScreenCaptureFormat="screenshots" systemAttachmentLifetime="keepNever" userAttachmentLifetime="keepAlways">
+    <Testables><TestableReference skipped="NO" parallelizable="NO">
+      <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="F1C27FC3CD560C81123408E1" BuildableName="Safari UI Tests macOS.xctest" BlueprintName="Safari UI Tests macOS" ReferencedContainer="container:Wallet.xcodeproj"/>
+    </TestableReference></Testables>
+  </TestAction>
+  <AnalyzeAction buildConfiguration="Debug"/>
+  <ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="NO"/>
+</Scheme>

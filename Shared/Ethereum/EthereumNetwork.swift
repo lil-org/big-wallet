@@ -53,6 +53,9 @@ struct EthereumRPCEndpoint: Equatable, Hashable, Sendable {
     let url: URL
     private let trust: Trust
     let feeMarketHint: EthereumFeeMarketHint?
+#if BW_SAFARI_VM_TESTING
+    let fixtureSourceURL: URL?
+#endif
 
     private init(
         url: URL,
@@ -62,7 +65,23 @@ struct EthereumRPCEndpoint: Equatable, Hashable, Sendable {
         self.url = url
         self.trust = trust
         self.feeMarketHint = feeMarketHint
+#if BW_SAFARI_VM_TESTING
+        fixtureSourceURL = nil
+#endif
     }
+
+#if BW_SAFARI_VM_TESTING
+    private init(fixtureURL: URL, sourceURL: URL) {
+        url = fixtureURL
+        trust = .unauthenticated
+        feeMarketHint = nil
+        fixtureSourceURL = sourceURL
+    }
+
+    static func fixture(url: URL, sourceURL: URL) -> EthereumRPCEndpoint {
+        EthereumRPCEndpoint(fixtureURL: url, sourceURL: sourceURL)
+    }
+#endif
 
     static func unauthenticated(_ url: URL) -> EthereumRPCEndpoint {
         return EthereumRPCEndpoint(
@@ -110,12 +129,18 @@ struct EthereumRPCEndpoint: Equatable, Hashable, Sendable {
         lhs: EthereumRPCEndpoint,
         rhs: EthereumRPCEndpoint
     ) -> Bool {
+#if BW_SAFARI_VM_TESTING
+        guard lhs.fixtureSourceURL == rhs.fixtureSourceURL else { return false }
+#endif
         return lhs.url == rhs.url && lhs.trust == rhs.trust
     }
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(url)
         hasher.combine(trust)
+#if BW_SAFARI_VM_TESTING
+        hasher.combine(fixtureSourceURL)
+#endif
     }
 
 }
@@ -150,7 +175,11 @@ struct EthereumNetwork: Codable, Equatable, Hashable, Sendable {
         self.chainId = chainId
         self.name = name
         self.symbol = symbol
+#if BW_SAFARI_VM_TESTING
+        self.rpcEndpoint = SafariVMFixtures.shared.ethereumEndpoint(chainID: chainId, sourceURL: rpcEndpoint.fixtureSourceURL ?? rpcEndpoint.url)
+#else
         self.rpcEndpoint = rpcEndpoint
+#endif
         self.isTestnet = isTestnet
         self.mightShowPrice = mightShowPrice
         self.explorer = explorer
@@ -169,13 +198,23 @@ struct EthereumNetwork: Codable, Equatable, Hashable, Sendable {
                 debugDescription: "Invalid Ethereum RPC URL"
             )
         }
+#if BW_SAFARI_VM_TESTING
+        rpcEndpoint = SafariVMFixtures.shared.ethereumEndpoint(chainID: chainId, sourceURL: rpcURL)
+#else
         rpcEndpoint = .unauthenticated(rpcURL)
+#endif
         isTestnet = try container.decode(Bool.self, forKey: .isTestnet)
         mightShowPrice = try container.decode(Bool.self, forKey: .mightShowPrice)
         explorer = try container.decodeIfPresent(String.self, forKey: .explorer)
     }
 
-    var nodeURLString: String { return rpcEndpoint.url.absoluteString }
+    var nodeURLString: String {
+#if BW_SAFARI_VM_TESTING
+        return (rpcEndpoint.fixtureSourceURL ?? rpcEndpoint.url).absoluteString
+#else
+        return rpcEndpoint.url.absoluteString
+#endif
+    }
     var allowsAlchemyAuthorization: Bool {
         return rpcEndpoint.allowsAlchemyAuthorization
     }

@@ -16,17 +16,25 @@ private struct Options {
     let provisionUser: String?
     let provisionPasswordFile: URL?
     let setupWindow: Bool
+    let safariWindow: Bool
 
     init(arguments: [String]) throws {
         let allowed: Set<String> = ["--vm", "--status", "--stop-file", "--owner-pid", "--provision-user", "--provision-password-file"]
         var values: [String: String] = [:]
         var setupWindow = false
+        var safariWindow = false
         var index = 0
         while index < arguments.count {
             let key = arguments[index]
             if key == "--setup-window" {
-                guard !setupWindow else { throw RunnerFailure("Duplicate setup-window option") }
+                guard !setupWindow && !safariWindow else { throw RunnerFailure("Duplicate interactive window option") }
                 setupWindow = true
+                index += 1
+                continue
+            }
+            if key == "--safari-window" {
+                guard !setupWindow && !safariWindow else { throw RunnerFailure("Duplicate interactive window option") }
+                safariWindow = true
                 index += 1
                 continue
             }
@@ -55,6 +63,7 @@ private struct Options {
         provisionUser = values["--provision-user"]
         provisionPasswordFile = try values["--provision-password-file"].map { _ in try path("--provision-password-file") }
         self.setupWindow = setupWindow
+        self.safariWindow = safariWindow
         guard (provisionUser == nil) == (provisionPasswordFile == nil) else {
             throw RunnerFailure("Provisioning requires both a username and a password file")
         }
@@ -163,7 +172,7 @@ private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
     }
 
     private func showSetupWindowIfRequested() {
-        guard options.setupWindow, setupWindow == nil, let machine else { return }
+        guard options.setupWindow || options.safariWindow, setupWindow == nil, let machine else { return }
         let frame = NSRect(x: 0, y: 0, width: 1120, height: 700)
         let view = VZVirtualMachineView(frame: frame)
         view.capturesSystemKeys = false
@@ -171,7 +180,7 @@ private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
         view.virtualMachine = machine
         let window = NSWindow(contentRect: frame, styleMask: [.titled, .closable, .miniaturizable, .resizable],
                               backing: .buffered, defer: false)
-        window.title = "Big Wallet Test VM — Setup"
+        window.title = options.safariWindow ? "Big Wallet Test VM — Safari Activation" : "Big Wallet Test VM — Setup"
         window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(width: 640, height: 400)
         window.contentView = view
@@ -186,7 +195,15 @@ private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard sender === setupWindow else { return true }
-        beginShutdown(reason: "setup-window-closed")
+        if options.safariWindow {
+            if getppid() != options.ownerPID {
+                beginShutdown(reason: "owner-exited")
+            } else if kill(options.ownerPID, SIGINT) != 0 {
+                fail("Could not request cancellation from the VM run owner")
+            }
+        } else {
+            beginShutdown(reason: "setup-window-closed")
+        }
         return true
     }
 
@@ -401,7 +418,7 @@ private struct VMHostProgram {
         do {
             let options = try Options(arguments: Array(CommandLine.arguments.dropFirst()))
             let application = NSApplication.shared
-            let policy: NSApplication.ActivationPolicy = options.setupWindow ? .regular : .prohibited
+            let policy: NSApplication.ActivationPolicy = options.setupWindow || options.safariWindow ? .regular : .prohibited
             if application.activationPolicy() != policy {
                 _ = application.setActivationPolicy(policy)
             }

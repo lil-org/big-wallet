@@ -685,7 +685,18 @@ final class SafariApprovalVault: Sendable {
         }
     }
 
-    static let shared = SafariApprovalVault()
+    static let shared: SafariApprovalVault = {
+#if BW_SAFARI_VM_TESTING
+        if SafariVMFixtures.shared.isLocal {
+            return SafariApprovalVault(
+                keyStore: SafariVMApprovalKeyStore(),
+                canEvaluateAuthentication: { _, _ in true },
+                authentication: { _, _, _ in !Task.isCancelled }
+            )
+        }
+#endif
+        return SafariApprovalVault()
+    }()
     static let envelopeVersion = 1
     static let maximumEnvelopeBytes = 8 * 1_024 * 1_024
     static let coordinationLockTimeoutNanoseconds: UInt64 = 5_000_000_000
@@ -705,9 +716,7 @@ final class SafariApprovalVault: Sendable {
     private let lock = Mutex(())
 
     init(
-        fileURL: URL? = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: SharedDefaults.suiteName
-        )?.appendingPathComponent(
+        fileURL: URL? = SharedDefaults.containerURL?.appendingPathComponent(
             "SafariApprovalVault.v1",
             isDirectory: false
         ),
@@ -741,13 +750,17 @@ final class SafariApprovalVault: Sendable {
         coordinationLease: CoordinationLease? = nil,
         activity: SafariApprovalReconciliationActivity? = nil
     ) throws -> Publication {
-        try withCoordination(coordinationLease) {
+        let publication = try withCoordination(coordinationLease) {
             try publishCoordinated(
                 source: source,
                 integrityKey: integrityKey,
                 activity: activity
             )
         }
+#if BW_SAFARI_VM_TESTING
+        SafariVMFixtures.shared.event("vaultPublication", metadata: ["generation": publication.generation.uuidString.lowercased()])
+#endif
+        return publication
     }
 
     private func publishCoordinated(
@@ -1020,6 +1033,9 @@ final class SafariApprovalVault: Sendable {
         authorization: WalletSigningAuthorization
     ) async -> WalletUnlockResult {
         let approvedAccount = authorization.approvedAccount
+#if BW_SAFARI_VM_TESTING
+        let fixtureOperation = SafariVMFixtures.shared.capture(handle: authorization.handle)
+#endif
         guard !Task.isCancelled,
               Date() < authorization.signingDeadline,
               approvedAccount.isValid,
@@ -1044,11 +1060,26 @@ final class SafariApprovalVault: Sendable {
             guard context.read({ canEvaluateAuthentication($0, .deviceOwnerAuthentication) }) else {
                 return .unavailable
             }
-            guard await authentication(
+#if BW_SAFARI_VM_TESTING
+            let authenticated = await SafariVMFixtures.$operation.withValue(fixtureOperation) {
+                do {
+                    try await SafariVMFixtures.shared.checkpoint("beforeAuthentication")
+                    return await authentication(context, .deviceOwnerAuthentication, reason)
+                } catch { return false }
+            }
+#else
+            let authenticated = await authentication(
                 context,
                 .deviceOwnerAuthentication,
                 reason
-            ) else { return .canceled }
+            )
+#endif
+#if BW_SAFARI_VM_TESTING
+            SafariVMFixtures.shared.event("authenticationCompleted", requestID: authorization.handle.id,
+                metadata: ["succeeded": authenticated, "authentication": SafariVMFixtures.shared.isLocal ? "fixture" : "system"],
+                operation: fixtureOperation)
+#endif
+            guard authenticated else { return .canceled }
 
             guard let unlocked = unlockAccount(
                 encryptedAccount,
@@ -1092,6 +1123,12 @@ final class SafariApprovalVault: Sendable {
         do {
             let identity = SafariApprovalKeyIdentity(generation: envelope.generation, account: approvedAccount)
             key = try context.read { try keyStore.load(identity: identity, context: $0) }
+#if BW_SAFARI_VM_TESTING
+            SafariVMFixtures.shared.event("protectedKeyRead", requestID: authorization.handle.id,
+                metadata: ["account": approvedAccount.normalizedAddress, "generation": envelope.generation.uuidString.lowercased(),
+                           "storage": SafariVMFixtures.shared.isLocal ? "fixture" : "production"],
+                operation: SafariVMFixtures.shared.capture(handle: authorization.handle))
+#endif
         } catch {
             SafariApprovalDiagnostics.record("load approval key", error: error)
             return nil
@@ -1487,13 +1524,38 @@ actor SafariApprovalVaultHost {
             synchronizeDefaults = synchronize
         }
 
-        func data() -> Data? { defaults.data(forKey: publicationMetadataKey) }
-        func set(_ data: Data) { defaults.set(data, forKey: publicationMetadataKey) }
-        func remove() { defaults.removeObject(forKey: publicationMetadataKey) }
-        func synchronize() -> Bool { synchronizeDefaults(defaults) }
+        func data() -> Data? {
+#if BW_SAFARI_VM_TESTING
+            if SafariVMFixtures.shared.isLocal { return SafariVMFixtures.shared.preference(publicationMetadataKey) as? Data }
+#endif
+            return defaults.data(forKey: publicationMetadataKey)
+        }
+        func set(_ data: Data) {
+#if BW_SAFARI_VM_TESTING
+            if SafariVMFixtures.shared.isLocal { SafariVMFixtures.shared.setPreference(data, forKey: publicationMetadataKey); return }
+#endif
+            defaults.set(data, forKey: publicationMetadataKey)
+        }
+        func remove() {
+#if BW_SAFARI_VM_TESTING
+            if SafariVMFixtures.shared.isLocal { SafariVMFixtures.shared.setPreference(nil, forKey: publicationMetadataKey); return }
+#endif
+            defaults.removeObject(forKey: publicationMetadataKey)
+        }
+        func synchronize() -> Bool {
+#if BW_SAFARI_VM_TESTING
+            if SafariVMFixtures.shared.isLocal { return true }
+#endif
+            return synchronizeDefaults(defaults)
+        }
     }
 
-    static let shared = SafariApprovalVaultHost()
+    static let shared: SafariApprovalVaultHost = {
+#if BW_SAFARI_VM_TESTING
+        if SafariVMFixtures.shared.isLocal { return SafariApprovalVaultHost(integrityKeyStore: SafariVMApprovalKeyStore()) }
+#endif
+        return SafariApprovalVaultHost()
+    }()
 
     private let vault: SafariApprovalVault
     private let metadata: PublicationStorage
@@ -1572,6 +1634,17 @@ actor SafariApprovalVaultHost {
     func waitForReconciliation() async {
         while let reconciliationTask { await reconciliationTask.value }
     }
+
+#if BW_SAFARI_VM_TESTING
+    func replaceSafariVMGeneration() async throws -> (previous: String, current: String) {
+        await waitForReconciliation()
+        guard let previous = publicationMetadata()?.generation else { throw SafariApprovalVault.Error.unavailable }
+        try await performSourceMutation { invalidate in try invalidate() }
+        await waitForReconciliation()
+        guard let current = publicationMetadata()?.generation, current != previous else { throw SafariApprovalVault.Error.unavailable }
+        return (previous.uuidString.lowercased(), current.uuidString.lowercased())
+    }
+#endif
 
     private func runReconciliation() async {
         defer { reconciliationTask = nil }

@@ -1,7 +1,10 @@
-import {PERFORMANCE_TESTS} from "./test_manifest.mjs";
+import {createHash} from "node:crypto";
+import {isAbsolute, resolve} from "node:path";
+import {PERFORMANCE_TESTS, validSafariPreparationReference} from "./test_manifest.mjs";
 
 const finiteCount = value => Number.isSafeInteger(value) && value >= 0;
 const count = (summary, name) => finiteCount(summary[name]) ? summary[name] : undefined;
+const bundleMetadata = value => typeof value === "string" && value.trim().length > 0 && value.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value);
 
 export function testCases(tree) {
     const cases = [];
@@ -40,7 +43,15 @@ export function auditNativeResult(summary, tree, policy) {
     if (Object.values(counts).every(value => value !== undefined) && counts.passed + counts.failed + counts.skipped !== counts.total) {
         issues.push("XCTest outcome counts do not match its total");
     }
-    if (counts.failed > 0) { issues.push(`${counts.failed} XCTest failures`); }
+    if (counts.failed > 0) {
+        issues.push(`${counts.failed} XCTest failures`);
+        if (policy.kind === "safari" && Array.isArray(summary.testFailures)) {
+            for (const failure of summary.testFailures.slice(0, 10)) {
+                const detail = typeof failure?.failureText === "string" ? failure.failureText.slice(0, 2048).trim() : "";
+                if (detail) { issues.push(`Safari XCTest failure: ${detail}`); }
+            }
+        }
+    }
     const cases = testCases(tree);
     if (counts.total !== cases.length) { issues.push("Test-case inventory does not match XCTest summary"); }
     const skipped = cases.filter(test => test.result === "skipped");
@@ -55,7 +66,186 @@ export function auditNativeResult(summary, tree, policy) {
     if (policy.kind === "performance") {
         for (const name of PERFORMANCE_TESTS) { if (!performancePassed.includes(name)) { issues.push(`Release performance gate did not pass: ${name}`); } }
     }
+    if (policy.kind === "safari") {
+        const expected = policy.requiredTests;
+        if (!Array.isArray(expected) || !expected.length || expected.some(name => typeof name !== "string") || new Set(expected).size !== expected.length) {
+            issues.push("Safari audit requires a nonempty, unique expected-test inventory");
+        } else {
+            const target = policy.platform === "macos" ? "Safari UI Tests macOS" : "Safari UI Tests iOS";
+            const inventory = new Map();
+            for (const test of cases) {
+                const identifier = test.identifier.replace(new RegExp(`^${target}/`), "").replace(/\(\)$/, "");
+                inventory.set(identifier, (inventory.get(identifier) ?? 0) + 1);
+                if (!expected.includes(identifier)) { issues.push(`Unexpected Safari test: ${test.identifier}`); }
+                if (test.result !== "passed") { issues.push(`Safari test did not pass: ${test.identifier} (${test.result})`); }
+            }
+            for (const identifier of expected) {
+                if (inventory.get(identifier) !== 1) { issues.push(`Safari test must execute exactly once: ${identifier}`); }
+            }
+        }
+    }
     return {ok: issues.length === 0, counts, issues, skipped: skipped.map(test => test.identifier), expectedSkips, performancePassed};
+}
+
+export function auditSafariResult(evidence, policy, {runId, stageId} = {}) {
+    const issues = [];
+    const expected = policy.requiredScenarios;
+    if (!Array.isArray(expected) || !expected.length || expected.some(id => typeof id !== "string") || new Set(expected).size !== expected.length ||
+        !Number.isSafeInteger(policy.iterations) || policy.iterations < 1 || policy.iterations > 10 ||
+        !["automatic", "interactive", "prepared"].includes(policy.activationMode) ||
+        policy.activationMode !== "automatic" && policy.platform !== "macos" ||
+        policy.activationMode === "prepared" && (policy.signing !== "local" || !validSafariPreparationReference(policy.preparation))) {
+        return {ok: false, issues: ["Safari audit requires a bounded, nonempty scenario inventory"], scenarioCount: 0};
+    }
+    if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
+        return {ok: false, issues: ["Missing Safari browser evidence"], scenarioCount: 0};
+    }
+    for (const [key, value] of Object.entries({version: 1, runId, stageId, platform: policy.platform,
+        configuration: policy.configuration, signing: policy.signing, iterations: policy.iterations, activationMode: policy.activationMode})) {
+        if (value === undefined || evidence[key] !== value) { issues.push(`Safari evidence has an invalid ${key}`); }
+    }
+    if (policy.activationMode === "prepared") {
+        if (!validSafariPreparationReference(evidence.preparation) ||
+            evidence.preparation.preparationRunID !== policy.preparation.preparationRunID ||
+            evidence.preparation.receiptSHA256 !== policy.preparation.receiptSHA256) {
+            issues.push("Safari evidence does not match the verified baseline preparation");
+        }
+    } else if (evidence.preparation !== undefined && evidence.preparation !== null) {
+        issues.push("Safari evidence contains an unrequested baseline preparation");
+    }
+    const browserIdentifier = policy.platform === "macos" ? "com.apple.Safari" : "com.apple.mobilesafari";
+    if (evidence.browser?.bundleIdentifier !== browserIdentifier || typeof evidence.browser?.version !== "string" || !evidence.browser.version.length) {
+        issues.push("Safari evidence did not identify the tested browser and version");
+    }
+    if (evidence.extensionIdentifier !== "org.lil.wallet.Safari") {
+        issues.push("Safari evidence did not identify the expected wallet extension");
+    }
+    if (evidence.extension?.bundleIdentifier !== "org.lil.wallet.Safari" ||
+        !bundleMetadata(evidence.extension?.version) || !bundleMetadata(evidence.extension?.build)) {
+        issues.push("Safari evidence did not identify the tested extension bundle, version, and build");
+    }
+    const macOS = evidence.runtime?.macOS;
+    if (typeof macOS?.version !== "string" || macOS.version.length > 128 || !/^\d+(?:\.\d+){0,3}$/.test(macOS.version) ||
+        typeof macOS?.build !== "string" || !/^[A-Za-z0-9]{1,128}$/.test(macOS.build)) {
+        issues.push("Safari evidence did not identify the guest macOS version and build");
+    }
+    if (evidence.handshake?.provider !== true || evidence.handshake?.native !== true) {
+        issues.push("Safari provider and native messaging handshake did not pass");
+    }
+    if (evidence.cleanup?.status !== "passed") {
+        issues.push("Safari evidence has no successful final cleanup");
+    }
+    const activations = evidence.activationRequests;
+    if (!Array.isArray(activations) || activations.length > 512 ||
+        policy.activationMode !== "interactive" && activations.length) {
+        issues.push("Safari evidence has an invalid activation checkpoint inventory");
+    } else {
+        let previousObservation = 0;
+        for (const activation of activations) {
+            const requestedAt = Date.parse(activation?.requestedAt);
+            const observedAt = Date.parse(activation?.observedAt);
+            if (!activation || typeof activation.enabled !== "boolean" || !expected.includes(activation.scenario?.id) ||
+                !Number.isSafeInteger(activation.scenario?.iteration) || activation.scenario.iteration < 1 ||
+                activation.scenario.iteration > policy.iterations || typeof activation.requestedAt !== "string" ||
+                typeof activation.observedAt !== "string" || !Number.isFinite(requestedAt) ||
+                !Number.isFinite(observedAt) || requestedAt < previousObservation || observedAt < requestedAt) {
+                issues.push("Safari evidence has an incomplete or invalid activation checkpoint");
+            }
+            previousObservation = observedAt;
+        }
+    }
+    const scenarios = evidence.scenarios;
+    const inventory = new Map();
+    if (!Array.isArray(scenarios)) { issues.push("Missing Safari scenario evidence"); }
+    else {
+        for (const scenario of scenarios) {
+            if (!scenario || typeof scenario !== "object" || !expected.includes(scenario.id) ||
+                !Number.isSafeInteger(scenario.iteration) || scenario.iteration < 1 || scenario.iteration > policy.iterations) {
+                issues.push("Safari evidence contains an unexpected scenario or iteration");
+                continue;
+            }
+            const key = `${scenario.id}:${scenario.iteration}`;
+            inventory.set(key, (inventory.get(key) ?? 0) + 1);
+            if (scenario.status !== "passed") { issues.push(`Safari scenario did not pass: ${key}`); }
+        }
+    }
+    for (const id of expected) {
+        for (let iteration = 1; iteration <= policy.iterations; iteration += 1) {
+            const key = `${id}:${iteration}`;
+            if (inventory.get(key) !== 1) { issues.push(`Safari scenario must pass exactly once: ${key}`); }
+        }
+    }
+    return {ok: issues.length === 0, issues, scenarioCount: inventory.size,
+        iterations: policy.iterations, browser: evidence.browser, extensionIdentifier: evidence.extensionIdentifier,
+        extension: evidence.extension, runtime: evidence.runtime, activationMode: evidence.activationMode,
+        ...(policy.activationMode === "prepared" ? {preparation: evidence.preparation} : {}),
+        cleanup: evidence.cleanup?.status ?? "missing"};
+}
+
+export function auditSafariPreparation(evidence, {runId} = {}) {
+    const issues = [];
+    const objectWithKeys = (value, keys) => value !== null && typeof value === "object" && !Array.isArray(value) &&
+        Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+    const path = value => typeof value === "string" && value.length <= 4096 && isAbsolute(value) &&
+        resolve(value) === value && !/[\u0000-\u001f\u007f]/.test(value);
+    const time = value => typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) &&
+        Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+    const fields = ["version", "status", "preparationRunID", "platform", "configuration", "signingMode",
+        "installationDirectory", "receiptSHA256", "receipt"];
+    if (!objectWithKeys(evidence, fields) || evidence.version !== 1 || evidence.status !== "passed" ||
+        evidence.preparationRunID !== runId || evidence.platform !== "macos" ||
+        evidence.configuration !== "Debug" || evidence.signingMode !== "local" ||
+        !validSafariPreparationReference({preparationRunID: runId, receiptSHA256: evidence?.receiptSHA256})) {
+        return {ok: false, issues: ["Safari preparation result has an invalid status or identity"]};
+    }
+    const receipt = evidence.receipt;
+    if (!objectWithKeys(receipt, ["version", "status", "preparationRunID", "descriptor", "installationDirectory",
+        "sourceApp", "signatures", "enabledObservation", "cleanup", "preparedAt"]) ||
+        receipt.version !== 1 || receipt.status !== "passed" || receipt.preparationRunID !== runId) {
+        return {ok: false, issues: ["Safari preparation receipt has an invalid status or identity"]};
+    }
+    if (createHash("sha256").update(JSON.stringify(receipt)).digest("hex") !== evidence.receiptSHA256) {
+        issues.push("Safari preparation receipt digest does not match its contents");
+    }
+    const descriptor = receipt.descriptor;
+    if (!objectWithKeys(descriptor, ["version", "runID", "root", "platform", "signingMode", "configuration"]) ||
+        descriptor.version !== 1 || descriptor.runID !== runId || descriptor.platform !== "macos" ||
+        descriptor.signingMode !== "local" || descriptor.configuration !== "Debug" ||
+        descriptor.root !== `/Volumes/BigWalletBuild/Exchange/${runId}/safari/macos/Debug`) {
+        issues.push("Safari preparation receipt does not match the current fixture descriptor");
+    }
+    const installation = receipt.installationDirectory;
+    if (!path(installation) || !installation.endsWith("/Applications/BigWalletSafariVM/Prepared") ||
+        installation !== evidence.installationDirectory ||
+        !path(receipt.sourceApp) || !receipt.sourceApp.includes("/Library/Developer/Xcode/DerivedData/") ||
+        !receipt.sourceApp.endsWith("/Big Wallet.app")) {
+        issues.push("Safari preparation receipt has invalid installation paths");
+    }
+    if (!objectWithKeys(receipt.signatures, ["app", "extension", "helper"])) {
+        issues.push("Safari preparation receipt is missing signed product identities");
+    } else {
+        for (const [role, identifier] of [["app", "org.lil.wallet"], ["extension", "org.lil.wallet.Safari"], ["helper", "org.lil.wallet.ambient"]]) {
+            const signature = receipt.signatures[role];
+            if (!objectWithKeys(signature, ["identifier", "cdhash"]) || signature.identifier !== identifier ||
+                typeof signature.cdhash !== "string" || !/^[a-f0-9]{40}$/.test(signature.cdhash)) {
+                issues.push(`Safari preparation receipt has an invalid ${role} signature identity`);
+            }
+        }
+    }
+    const observation = receipt.enabledObservation;
+    if (!objectWithKeys(observation, ["enabled", "processID", "executablePath", "preparationNonce", "observedAt"]) ||
+        observation.enabled !== true || !Number.isSafeInteger(observation.processID) || observation.processID <= 1 ||
+        observation.processID > 2147483647 || observation.executablePath !== `${installation}/Big Wallet.app/Contents/MacOS/Big Wallet` ||
+        typeof observation.preparationNonce !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(observation.preparationNonce) ||
+        !time(observation.observedAt) || !time(receipt.preparedAt) || Date.parse(observation.observedAt) > Date.parse(receipt.preparedAt)) {
+        issues.push("Safari preparation receipt has no valid native enabled-state observation");
+    }
+    if (!objectWithKeys(receipt.cleanup, ["status"]) || receipt.cleanup.status !== "passed") {
+        issues.push("Safari preparation receipt has no successful process cleanup");
+    }
+    return {ok: issues.length === 0, issues,
+        preparation: {preparationRunID: runId, receiptSHA256: evidence.receiptSHA256}};
 }
 
 export function auditResults(stages) {
@@ -66,11 +256,17 @@ export function auditResults(stages) {
         if (stage.status !== "passed" || stage.nativeAudit?.configuration !== "Release" ||
             stage.audit?.ok !== true || typeof platform !== "string") { continue; }
         const gates = released.get(platform) ?? new Set();
-        for (const name of stage.audit.performancePassed) { gates.add(name); }
+        for (const name of stage.audit.performancePassed ?? []) { gates.add(name); }
         released.set(platform, gates);
     }
     for (const stage of stages) {
         if (stage.status === "passed") {
+            if (stage.preparationResult && stage.audit?.ok !== true) {
+                issues.push(`${stage.id} has no passing Safari preparation audit`);
+            }
+            if (stage.nativeAudit?.kind === "safari" && (stage.audit?.ok !== true || stage.audit.safari?.ok !== true)) {
+                issues.push(`${stage.id} has no passing Safari browser audit`);
+            }
             for (const skipped of stage.audit?.expectedSkips ?? []) {
                 if (!released.get(stage.nativeAudit?.platform)?.has(skipped)) {
                     issues.push(`${stage.id} skipped ${skipped} without a passing Release gate for its platform`);

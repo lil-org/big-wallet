@@ -1363,7 +1363,11 @@ final class Solana: Sendable {
         }
 
         func endpoint(for cluster: Cluster) -> Endpoint? {
+#if BW_SAFARI_VM_TESTING
+            return Endpoint(url: SafariVMFixtures.shared.rpcURL(path: "solana", query: URLQueryItem(name: "cluster", value: cluster.rawValue)), allowsAlchemyAuthorization: false)
+#else
             return endpoints[cluster]
+#endif
         }
     }
 
@@ -1396,7 +1400,7 @@ final class Solana: Sendable {
 
     init(urlSession: URLSession,
          rpcConfiguration: RPCConfiguration,
-         authorizationProvider: AlchemyAuthorizationProviding = AlchemyJWTProvider.shared,
+         authorizationProvider: AlchemyAuthorizationProviding = AlchemyJWTProvider.rpcAuthorizationProvider,
          timing: Timing = .live) {
         self.urlSession = urlSession
         self.rpcConfiguration = rpcConfiguration
@@ -1697,6 +1701,10 @@ final class Solana: Sendable {
 
     private func createRequest(method: Method, endpointURL: URL, parameters: [Any]? = nil) -> URLRequest {
         var request = URLRequest(url: endpointURL)
+#if BW_SAFARI_VM_TESTING
+        do { try SafariVMFixtures.shared.authorize(&request) }
+        catch { preconditionFailure("Safari VM rejected an RPC endpoint") }
+#endif
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpMethod = "POST"
 
@@ -1903,7 +1911,13 @@ final class Solana: Sendable {
         try Task.checkCancellation()
         var authorizedRequest = request
         authorization?.apply(to: &authorizedRequest)
+#if BW_SAFARI_VM_TESTING
+        let redirectDelegate = NoRedirectSessionDelegate()
+        let transport = try await urlSession.responsePreservingTransportError(for: authorizedRequest, delegate: redirectDelegate)
+        guard !redirectDelegate.didRejectRedirect else { throw SafariVMFixtures.Failure.rejected }
+#else
         let transport = try await urlSession.responsePreservingTransportError(for: authorizedRequest)
+#endif
         let decodedResponse = transport.data.flatMap { try? JSONDecoder().decode(Response.self, from: $0) }
         try Task.checkCancellation()
         if let httpResponse = transport.response as? HTTPURLResponse,

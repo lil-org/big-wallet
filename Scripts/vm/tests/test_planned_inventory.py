@@ -31,6 +31,9 @@ class RunSnapshotBindingTests(unittest.TestCase):
         self.tools.mkdir(parents=True)
         for name in (*self.sources, *self.harness, 'plan_manifest.mjs'):
             shutil.copyfile(host.TOOLS / name, self.tools / name)
+        scenarios = self.tools.parent / 'safari/scenarios.mjs'
+        scenarios.parent.mkdir()
+        shutil.copyfile(host.TOOLS.parent / 'safari/scenarios.mjs', scenarios)
         for arguments in (('init', '-q'), ('config', 'user.email', 'fixture@example.invalid'),
                           ('config', 'user.name', 'Fixture'), ('add', '.'), ('commit', '-qm', 'fixture')):
             subprocess.run(['git', '-C', str(self.repository), *arguments], check=True, capture_output=True)
@@ -69,6 +72,68 @@ class RunSnapshotBindingTests(unittest.TestCase):
                        'acceptedResultSHA256': host.hash_regular_file(exchange / 'artifacts/result.json')})
         host.atomic_json(state / 'active.json', active)
         return result
+
+    def test_interactive_safari_mode_is_bound_to_the_captured_job_and_plan(self):
+        self.args.stage = ['safari']
+        self.args.only_testing = ['Safari UI Tests macOS/SafariLifecycleTests/testInstallAndNativeRoundtrip']
+        self.args.configuration = 'Debug'
+        self.args.interactive_safari = True
+        self.assertEqual(host.run_tests(self.args, self.state, self.environment), 0)
+        call = self.monitor_vm.call_args
+        exchange = call.args[3]
+        job = host.read_json(exchange / 'job.json')
+        plan = host.read_json(exchange / 'artifacts/planned-result.json')
+        self.assertTrue(job['payload']['interactiveSafari'])
+        stages = [stage for stage in plan['stages'] if stage.get('nativeAudit', {}).get('kind') == 'safari']
+        self.assertEqual(len(stages), 1)
+        self.assertEqual(stages[0]['nativeAudit']['activationMode'], 'interactive')
+        self.assertEqual(call.args[2], self.state / 'runs' / (job['runId'] + '.vbvm'))
+
+    def test_prepared_baseline_keeps_unqualified_ios_only_safari_selections_valid(self):
+        record = host.read_json(self.state / 'baseline.json')
+        reference = {'preparationRunID': 'setup-prepared-fixture', 'receiptSHA256': 'f' * 64}
+        host.atomic_json(self.state / 'baseline.json', {**record, 'safariPreparation': reference})
+        self.args.stage = ['safari']
+        self.args.configuration = 'Release'
+        for selectors in (
+                ['SafariLifecycleTests/testPopupExecutionCheckpointRecovery'],
+                ['SafariLifecycleTests/testPopupDismissalAndRecovery',
+                 'Safari UI Tests iOS/SafariLifecycleTests/testInstallAndNativeRoundtrip']):
+            with self.subTest(selectors=selectors):
+                self.args.only_testing = selectors
+                self.assertEqual(host.run_tests(self.args, self.state, self.environment), 0)
+                exchange = self.monitor_vm.call_args.args[3]
+                job = host.read_json(exchange / 'job.json')
+                plan = host.read_json(exchange / 'artifacts/planned-result.json')
+                self.assertNotIn('preparedSafari', job['payload'])
+                self.assertEqual([stage['id'] for stage in plan['stages']], [
+                    'provider.install', 'protocol.check', 'build-safari.ios.release', 'safari.ios.release'])
+                self.assertEqual(plan['jobSHA256'], host.hash_regular_file(exchange / 'job.json'))
+
+    def test_prepared_baseline_rebinds_the_final_plan_when_macos_runtime_is_selected(self):
+        record = host.read_json(self.state / 'baseline.json')
+        reference = {'preparationRunID': 'setup-prepared-fixture', 'receiptSHA256': 'f' * 64}
+        host.atomic_json(self.state / 'baseline.json', {**record, 'safariPreparation': reference})
+        self.args.stage = ['safari']
+        self.args.configuration = 'Debug'
+        self.args.only_testing = ['SafariLifecycleTests/testInstallAndNativeRoundtrip']
+        self.assertEqual(host.run_tests(self.args, self.state, self.environment), 0)
+        exchange = self.monitor_vm.call_args.args[3]
+        job = host.read_json(exchange / 'job.json')
+        plan = host.read_json(exchange / 'artifacts/planned-result.json')
+        self.assertEqual(job['payload']['preparedSafari'], reference)
+        self.assertEqual(plan['selection']['preparedSafari'], reference)
+        self.assertEqual(plan['jobSHA256'], host.hash_regular_file(exchange / 'job.json'))
+        stages = [stage for stage in plan['stages'] if stage.get('nativeAudit', {}).get('kind') == 'safari']
+        self.assertEqual(len(stages), 2)
+        for stage in stages:
+            audit = stage['nativeAudit']
+            if audit['platform'] == 'macos':
+                self.assertEqual(audit['activationMode'], 'prepared')
+                self.assertEqual(audit['preparation'], reference)
+            else:
+                self.assertEqual(audit['activationMode'], 'automatic')
+                self.assertNotIn('preparation', audit)
 
     def test_runner_edits_captured_during_snapshot_block_before_clone_or_boot(self):
         snapshot = host.snapshot_source
@@ -153,8 +218,8 @@ class RunSnapshotBindingTests(unittest.TestCase):
         path = self.tools / 'test_manifest.mjs'
         original = path.read_text()
         changed = original.replace(
-            'new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "signing"])',
-            'new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "signing", "fixtureOption"])'
+            'new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "signing", "interactiveSafari", "prepareSafari", "preparedSafari"])',
+            'new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "signing", "interactiveSafari", "prepareSafari", "preparedSafari", "fixtureOption"])'
         ).replace('["check", "check", []]', '[options.fixtureOption ? "option-check" : "check", "check", []]')
         self.assertNotEqual(changed, original)
         path.write_text(changed)
@@ -223,9 +288,12 @@ class PlannedInventoryTests(unittest.TestCase):
         self.manifest = self.exchange / 'source/Scripts/vm/test_manifest.mjs'
         self.manifest.parent.mkdir(parents=True)
         shutil.copyfile(host.TOOLS / 'test_manifest.mjs', self.manifest)
-        digest = host.hash_regular_file(self.manifest)
+        scenarios = self.exchange / 'source/Scripts/safari/scenarios.mjs'
+        scenarios.parent.mkdir()
+        shutil.copyfile(host.TOOLS.parent / 'safari/scenarios.mjs', scenarios)
         host.atomic_json(self.exchange / 'snapshot-manifest.json', {'version': 1, 'files': [
-            {'path': 'Scripts/vm/test_manifest.mjs', 'type': 'file', 'mode': 0o644, 'sha256': digest}]})
+            {'path': str(path.relative_to(self.exchange / 'source')), 'type': 'file', 'mode': 0o644,
+             'sha256': host.hash_regular_file(path)} for path in (self.manifest, scenarios)]})
         self.job = {'version': 1, 'runId': 'plan-fixture', 'vmId': 'fixture-vm', 'kind': 'run',
                     'profile': 'all', 'payload': {'stages': [], 'onlyTesting': []},
                     'source': {'sha256': host.hash_regular_file(self.exchange / 'snapshot-manifest.json'), 'commit': 'b' * 40},
@@ -275,6 +343,8 @@ class PlannedInventoryTests(unittest.TestCase):
             {'payload': {'stages': ['test'], 'onlyTesting': [], 'signing': 'local'}},
             {'payload': {'stages': ['test'], 'onlyTesting': [], 'signing': 'apple'}},
             {'profile': 'extended'},
+            {'payload': {'stages': ['safari'], 'onlyTesting': []}},
+            {'payload': {'stages': ['safari'], 'configuration': 'Release', 'onlyTesting': ['Safari UI Tests iOS'], 'signing': 'apple'}},
             {'payload': {'stages': ['repository', 'worker'], 'onlyTesting': []}},
             {'payload': {'stages': ['test'], 'configuration': 'Debug', 'onlyTesting': ['Tests visionOS']}},
             {'payload': {'stages': ['test'], 'configuration': 'Debug', 'onlyTesting': ['Tests iOS/SecretHandlingTests/testSecretBufferIsZeroed']}},
@@ -306,7 +376,8 @@ class PlannedInventoryTests(unittest.TestCase):
                                      'fuzz.seed-3735928559', 'approval.soak-debug', 'approval.soak-release'} <= ids)
 
     def test_source_or_guest_manifest_drift_prevents_any_planning_command(self):
-        for filename in (self.exchange / 'snapshot-manifest.json', self.manifest):
+        for filename in (self.exchange / 'snapshot-manifest.json', self.manifest,
+                         self.exchange / 'source/Scripts/safari/scenarios.mjs'):
             with self.subTest(filename=filename.name):
                 original = filename.read_bytes()
                 filename.write_bytes(original + b'\n')
@@ -324,7 +395,7 @@ class PlannedInventoryTests(unittest.TestCase):
                     (self.exchange / name).unlink(missing_ok=True)
                 plan = self.plan(payload={'stages': ['test'], 'configuration': 'Debug', 'onlyTesting': ['Tests visionOS']})
                 if trigger == 'stop':
-                    host.atomic_json(self.exchange / 'stop.json', {'runId': self.job['runId']})
+                    host.publish_stop(self.exchange, self.job['runId'], requested=True)
                 class Child:
                     def poll(self): return 0 if trigger == 'exit' else None
                     def wait(self, timeout=None): return 0
@@ -880,8 +951,8 @@ class PlannedInventoryTests(unittest.TestCase):
             original_register(*arguments)
             active = host.read_json(self.root / 'active.json')
             self.assertEqual(active['startedAt'], started)
-            self.assertEqual(active['phase'], 'starting')
-            host.atomic_json(self.exchange / 'stop.json', {'runId': self.job['runId']})
+            self.assertEqual(active['phase'], 'preparing')
+            host.publish_stop(self.exchange, self.job['runId'], requested=True)
         with patch.object(host, 'register_operation', side_effect=register), \
                 patch.object(host.subprocess, 'Popen', side_effect=AssertionError('VMHost must not launch')) as launch, \
                 patch.object(host, 'stop_owned_process') as stop:
@@ -900,7 +971,7 @@ class PlannedInventoryTests(unittest.TestCase):
             host.register_operation(self.root, self.root / 'fixture.vbvm', self.exchange, self.job['runId'], 'preparing')
         host.clear_owned_operation(self.root, self.job['runId'])
         self.assertEqual(host.read_json(self.root / 'active.json'), active)
-        host.atomic_json(self.exchange / 'stop.json', {'runId': 'another-run'})
+        host.publish_stop(self.exchange, 'another-run', requested=True)
         self.assertFalse(host.operation_stop_requested(self.exchange, self.job['runId']))
 
     def test_busy_clone_after_preparing_stop_preserves_recovery_ownership(self):

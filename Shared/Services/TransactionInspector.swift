@@ -28,6 +28,10 @@ struct TransactionInspector: Sendable {
     @concurrent
     func interpret(data: String) async throws -> String? {
         try Task.checkCancellation()
+#if BW_SAFARI_VM_TESTING
+        _ = SafariVMFixtures.shared
+        return nil
+#else
         let nameHex = String(data.cleanHex.prefix(8)).lowercased()
         guard nameHex.count == 8, nameHex.allSatisfy(\.isHexDigit) else { return nil }
         guard let signature = try await methodSignatures.resolve(nameHex: nameHex) else { return nil }
@@ -40,6 +44,7 @@ struct TransactionInspector: Sendable {
         }
         try Task.checkCancellation()
         return decoded ?? (signature + "\n\n" + data)
+#endif
     }
 
     func decode(data: String, nameHex: String, signature: String) -> String? {

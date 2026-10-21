@@ -100,6 +100,8 @@ class ApproveTransactionViewController: NSViewController {
         
         okButton.title = Strings.ok
         cancelButton.title = Strings.cancel
+        okButton.setAccessibilityIdentifier("safari.approval.approve")
+        cancelButton.setAccessibilityIdentifier("safari.approval.reject")
         
         priceTask = Task { [weak self, priceService] in
             await priceService.update()

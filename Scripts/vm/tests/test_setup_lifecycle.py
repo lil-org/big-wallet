@@ -114,7 +114,7 @@ class SetupFixture:
             self.doctor_control = (exchange, job['runId'])
         elif self.stop_phase == 'late-prior-stop':
             self.stop_exchange = exchange
-            host.atomic_json(self.doctor_control[0] / 'stop.json', {'runId': self.doctor_control[1]})
+            host.publish_stop(self.doctor_control[0], self.doctor_control[1], requested=True)
         report = {'version': 1, 'runId': job['runId'], 'status': 'passed', 'finishedAt': 'fixture',
                   'identity': {'vmId': job['vmId'], 'consoleUser': 'wallet-test'}, 'source': job['source'],
                   'preflight': {'bootstrap': {'available': True, 'hashes': self.tools},
@@ -268,7 +268,7 @@ class SetupPreparationTests(unittest.TestCase):
             def register(state, vm, exchange, run_id, phase, previous=None):
                 original(state, vm, exchange, run_id, phase, previous=previous)
                 if previous:
-                    host.atomic_json(previous[1] / 'stop.json', {'runId': previous[0]})
+                    host.publish_stop(previous[1], previous[0], requested=True)
             with patch.object(host, 'register_operation', side_effect=register):
                 self.assertEqual(fixture.run(), 2)
             self.assertEqual(fixture.launches, ['doctor'])

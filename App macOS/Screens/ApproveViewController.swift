@@ -60,6 +60,8 @@ class ApproveViewController: NSViewController {
         
         okButton.title = Strings.ok
         cancelButton.title = Strings.cancel
+        okButton.setAccessibilityIdentifier("safari.approval.approve")
+        cancelButton.setAccessibilityIdentifier("safari.approval.reject")
         
         titleLabel.stringValue = approveTitle
         updateDisplayedMeta()

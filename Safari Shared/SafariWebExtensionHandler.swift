@@ -90,6 +90,9 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     }()
 
     func beginRequest(with context: NSExtensionContext) {
+#if BW_SAFARI_VM_TESTING
+        let receivedAt = Date().timeIntervalSince1970
+#endif
         guard let item = context.inputItems.first as? NSExtensionItem,
               let message = item.userInfo?[SFExtensionMessageKey],
               let ingress = NativeRequestContext.extract(
@@ -102,13 +105,48 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         // Foundation's borrowed context is handed exclusively to one terminal responder.
         nonisolated(unsafe) let transferredContext = context
         let responder = ExtensionRequestResponder(context: transferredContext)
+#if BW_SAFARI_VM_TESTING
+        let fixtures = SafariVMFixtures.shared
+        let operation = fixtures.capture(requestID: ingress.message.json["id"] as? Int)
+        var metadata: [String: Any] = ["profileIdentifier": ingress.context.profileIdentifier.map { $0.uuidString.lowercased() as Any } ?? NSNull(),
+                                       "privateBrowsing": ingress.context.privateBrowsing,
+                                       "receivedAt": receivedAt]
+        switch ingress.context.source {
+        case .site(let site, let document):
+            metadata["source"] = "site"
+            metadata["host"] = site.host
+            metadata["configurationKey"] = site.configurationKey
+            metadata["tabID"] = document.tabID
+            metadata["frameID"] = document.frameID
+            metadata["documentID"] = document.documentID.map { $0 as Any } ?? NSNull()
+        case .popup: metadata["source"] = "popup"
+        case .worker: metadata["source"] = "worker"
+        }
+        fixtures.event("nativeIngress", requestID: operation.requestID, metadata: metadata, operation: operation)
+#endif
         Task {
+#if BW_SAFARI_VM_TESTING
+            let lockProbe = Task { await SafariVMLockProbe.shared.holdIfRequested() }
+#endif
             do {
-                responder.complete(with: try await Self.dispatcher.dispatch(
+#if BW_SAFARI_VM_TESTING
+                let response = try await SafariVMFixtures.$operation.withValue(operation) {
+                    try await Self.dispatcher.dispatch(message: ingress.message, context: ingress.context)
+                }
+#else
+                let response = try await Self.dispatcher.dispatch(
                     message: ingress.message,
                     context: ingress.context
-                ))
+                )
+#endif
+#if BW_SAFARI_VM_TESTING
+                await lockProbe.value
+#endif
+                responder.complete(with: response)
             } catch {
+#if BW_SAFARI_VM_TESTING
+                await lockProbe.value
+#endif
                 responder.cancelRequest(withError: error)
             }
         }

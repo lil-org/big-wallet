@@ -304,6 +304,15 @@ final class AlchemyJWTProvider: AlchemyAuthorizationProviding {
 
     static let shared = AlchemyJWTProvider.makeShared()
 
+    static var rpcAuthorizationProvider: any AlchemyAuthorizationProviding {
+#if BW_SAFARI_VM_TESTING
+        _ = SafariVMFixtures.shared
+        return SafariVMRPCForbiddenAuthorization()
+#else
+        return shared
+#endif
+    }
+
     private enum ProviderError: Error {
         case refreshBackoff
         case refreshLockContended
@@ -674,10 +683,15 @@ final class AlchemyJWTProvider: AlchemyAuthorizationProviding {
 
     @discardableResult
     func prewarm() -> Task<Void, Never> {
+#if BW_SAFARI_VM_TESTING
+        _ = SafariVMFixtures.shared
+        return Task {}
+#else
         return Task(priority: .utility) { [weak self] in
             guard let self else { return }
             await self.prewarmIfNeeded()
         }
+#endif
     }
 
     @discardableResult
@@ -687,15 +701,23 @@ final class AlchemyJWTProvider: AlchemyAuthorizationProviding {
             AlchemyJWTProvider.shared
         }
     ) -> Task<Void, Never>? {
+#if BW_SAFARI_VM_TESTING
+        _ = SafariVMFixtures.shared
+        return nil
+#else
         guard environment["XCTestConfigurationFilePath"] == nil,
               environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else {
             return nil
         }
         return provider().prewarm()
+#endif
     }
 
     @concurrent
     func prewarmForImmediateUse() async {
+#if BW_SAFARI_VM_TESTING
+        _ = SafariVMFixtures.shared
+#else
         let currentTime = nowSeconds()
         if usableMemoryRecord(at: currentTime) != nil
             || loadUsablePersistedRecord(at: currentTime) != nil {
@@ -709,6 +731,7 @@ final class AlchemyJWTProvider: AlchemyAuthorizationProviding {
             return
         }
         synchronizeProactiveRefresh(at: nowSeconds())
+#endif
     }
 
     static func isAlchemyRPCURL(_ url: URL) -> Bool {

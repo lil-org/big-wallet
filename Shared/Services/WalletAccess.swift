@@ -384,10 +384,17 @@ struct PreparedBroadcast: Sendable {
               identity == dispatch.broadcast.identity,
               dispatch.consume(), let recovery = recoveryCompletion(for: permit),
               let recoveryResponse = recovery.response(for: permit) else { return nil }
+#if BW_SAFARI_VM_TESTING
+        let fixtureOperation = SafariVMFixtures.shared.capture(handle: permit.handle)
+#endif
         let response: ResponseToExtension
         switch transaction {
         case .ethereum(let signed, let expectedHash, let network):
             guard !Task.isCancelled else { return recovery }
+#if BW_SAFARI_VM_TESTING
+            SafariVMFixtures.shared.event("broadcastDispatch", requestID: permit.handle.id,
+                metadata: ["executionID": permit.executionID.uuidString.lowercased()], operation: fixtureOperation)
+#endif
             let result = await sender.sendEthereum(signedTransaction: signed, network: network)
             response = EthereumDappRequestProcessor.transactionBroadcastResponse(
                 to: permit.request, expectedHash: expectedHash,
@@ -395,6 +402,10 @@ struct PreparedBroadcast: Sendable {
             )
         case .solana(let signed, let expectedSignature, let cluster, let options):
             guard !Task.isCancelled else { return recovery }
+#if BW_SAFARI_VM_TESTING
+            SafariVMFixtures.shared.event("broadcastDispatch", requestID: permit.handle.id,
+                metadata: ["executionID": permit.executionID.uuidString.lowercased()], operation: fixtureOperation)
+#endif
             let result = await sender.sendSolana(signedTransaction: signed, cluster: cluster, options: options)
             response = SolanaDappRequestProcessor.transactionBroadcastResponse(
                 to: permit.request, expectedSignature: expectedSignature,
@@ -908,6 +919,15 @@ final class WalletSigningSession: WalletSigning {
     }
 
     func sign() async -> Result<WalletSigningOutput, WalletSigningFailure> {
+#if BW_SAFARI_VM_TESTING
+        let operation = SafariVMFixtures.shared.capture(handle: authorization.handle)
+        return await SafariVMFixtures.$operation.withValue(operation) { await performSigning() }
+#else
+        return await performSigning()
+#endif
+    }
+
+    private func performSigning() async -> Result<WalletSigningOutput, WalletSigningFailure> {
         let binding = state.withLock { state -> ApprovedWalletSigningOperation? in
             guard let operation = state.operation, operation.beginAttempt() else { return nil }
             return operation
@@ -915,8 +935,33 @@ final class WalletSigningSession: WalletSigning {
         guard let binding else { return .failure(.authorizationUnavailable) }
         defer { finishSigningAttempt(binding) }
         return await withTaskCancellationHandler {
+#if BW_SAFARI_VM_TESTING
+            do { try await SafariVMFixtures.shared.checkpoint("beforeSigning", requestID: authorization.handle.id) }
+            catch { return .failure(.authorizationUnavailable) }
+#endif
             guard await authorizationIsCurrent(binding) else { return .failure(.authorizationUnavailable) }
+#if BW_SAFARI_VM_TESTING
+            if case .ethereumTransaction(let transaction, let network) = binding.payload {
+                var approved = EthereumRPC.estimateGasTransactionObject(for: transaction)
+                approved["chainId"] = network.network.chainIdHexString
+                approved["nonce"] = transaction.nonce.flatMap { EthereumQuantity.parseUInt256($0, allowPrefixless: true)?.toHexString(withPrefix: true) }
+                approved["value"] = approved["value"] ?? "0x0"
+                approved["to"] = approved["to"] ?? "0x"
+                approved["type"] = approved["type"] ?? "0x0"
+                approved["accessList"] = approved["accessList"] ?? []
+                SafariVMFixtures.shared.event("authorizedTransaction", requestID: authorization.handle.id,
+                    metadata: ["executionID": binding.permit.executionID.uuidString.lowercased(), "transaction": approved])
+            }
+            SafariVMFixtures.shared.event("signingStarted", requestID: authorization.handle.id,
+                metadata: ["executionID": binding.permit.executionID.uuidString.lowercased(), "account": approvedAccount.normalizedAddress])
+#endif
             let result = await source.sign(binding)
+#if BW_SAFARI_VM_TESTING
+            SafariVMFixtures.shared.event("signingFinished", requestID: authorization.handle.id,
+                metadata: ["executionID": binding.permit.executionID.uuidString.lowercased()])
+            do { try await SafariVMFixtures.shared.checkpoint("afterSigning", requestID: authorization.handle.id) }
+            catch { return .failure(.authorizationUnavailable) }
+#endif
             if case .failure(.authorizationUnavailable) = result { return result }
             guard await authorizationIsCurrent(binding) else { return .failure(.authorizationUnavailable) }
             return result

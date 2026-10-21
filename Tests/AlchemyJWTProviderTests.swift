@@ -2597,6 +2597,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let broker = TestAlchemyJWTBroker(records: [replacement])
         let contendedLock = TestAlchemyJWTRefreshLock(isAvailable: false)
         let sleepGate = TestAlchemyJWTSleepGate()
+        let clock = TestClock(date: Date(timeIntervalSince1970: TimeInterval(now)))
         let provider = makeProvider(
             store: store,
             broker: broker,
@@ -2605,9 +2606,10 @@ final class AlchemyJWTProviderTests: XCTestCase {
             persistenceRepairWindowNanoseconds: 1_000_000_000,
             persistenceRepairInitialDelayNanoseconds: 1,
             persistenceRepairMaximumDelayNanoseconds: 2,
-            now: now,
-            sleep: { _ in
+            clock: clock,
+            sleep: { delay in
                 try await sleepGate.sleep()
+                clock.advance(by: delay)
             }
         )
         let loadedAuthorization = try await provider.authorization(

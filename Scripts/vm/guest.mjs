@@ -8,10 +8,11 @@ import {availableParallelism, cpus, freemem, loadavg, totalmem, userInfo} from "
 import {dirname, isAbsolute, join, resolve, sep} from "node:path";
 import {pathToFileURL} from "node:url";
 import {createManifest, validateJob, commandForStage} from "./test_manifest.mjs";
-import {auditNativeResult, auditResults} from "./result_audit.mjs";
+import {auditNativeResult, auditResults, auditSafariPreparation, auditSafariResult} from "./result_audit.mjs";
 
 const EXCHANGE_PATH = "/Volumes/BigWalletBuild/Exchange";
 const MAX_JSON_BYTES = 16 * 1024 * 1024;
+export const SAFARI_TERMINATION_GRACE_MILLISECONDS = 300_000;
 const timestamp = () => new Date().toISOString();
 const sha256 = value => createHash("sha256").update(value).digest("hex");
 const inside = (parent, child) => child === parent || child.startsWith(`${parent}${sep}`);
@@ -43,7 +44,10 @@ export function cleanEnvironment(environment = process.env) {
     ]);
 }
 
-export async function runProcess(command, args, {cwd, env = cleanEnvironment(), logPath, timeoutSeconds = 60, stopRequested = async () => false} = {}) {
+export async function runProcess(command, args, {cwd, env = cleanEnvironment(), logPath, timeoutSeconds = 60,
+    terminationGraceMilliseconds = 5000, stopRequested = async () => false} = {}) {
+    if (!Number.isSafeInteger(terminationGraceMilliseconds) || terminationGraceMilliseconds < 5000 ||
+        terminationGraceMilliseconds > SAFARI_TERMINATION_GRACE_MILLISECONDS) { throw new Error("Invalid process termination grace"); }
     if (await stopRequested()) { return {code: null, signal: null, output: "", timedOut: false, cancelled: true}; }
     let output = "";
     let stdout = "";
@@ -54,6 +58,8 @@ export async function runProcess(command, args, {cwd, env = cleanEnvironment(), 
     let interval;
     let deadline;
     let escalationDone = Promise.resolve();
+    let escalationTimer;
+    let resolveEscalation;
     let exited = false;
     let stopping = false;
     let polling = false;
@@ -66,6 +72,10 @@ export async function runProcess(command, args, {cwd, env = cleanEnvironment(), 
             exited = true;
             clearTimeout(deadline);
             clearInterval(interval);
+            if (terminationGraceMilliseconds > 5000) {
+                clearTimeout(escalationTimer);
+                resolveEscalation?.();
+            }
             resolveExit({code, signal});
         };
         child.once("exit", finish);
@@ -81,7 +91,15 @@ export async function runProcess(command, args, {cwd, env = cleanEnvironment(), 
         timedOut = reason === "timeout";
         cancelled = reason === "cancel";
         kill("SIGTERM");
-        if (child.pid) { escalationDone = new Promise(resolveEscalation => setTimeout(() => { kill("SIGKILL"); resolveEscalation(); }, 5000)); }
+        if (child.pid) {
+            escalationDone = new Promise(resolve => {
+                resolveEscalation = resolve;
+                escalationTimer = setTimeout(() => {
+                    if (terminationGraceMilliseconds === 5000 || !exited) { kill("SIGKILL"); }
+                    resolve();
+                }, terminationGraceMilliseconds);
+            });
+        }
     };
     const capture = data => {
         log?.write(data);
@@ -172,6 +190,20 @@ export async function preflight({workspace, identity, bootstrapEvidence, provisi
     checks.jq = jq.code === 0 && jq.output.trim() === "jq-1.8.1";
     const xcode = await query("xcode", "xcodebuild", ["-version"]);
     const swift = await query("swift", "xcrun", ["swift", "--version"]);
+    let safariAutomationIssue;
+    const automationPrerequisite = "Guest XCTest must be allowed to enable Automation Mode without user authentication. Run Scripts/test_vm.sh setup to refresh guest prerequisites; use setup --interactive if guest consent is requested.";
+    try {
+        const automation = await execute("/usr/bin/automationmodetool", [], {timeoutSeconds: 10, stopRequested});
+        const status = automation.stdout ?? automation.output ?? "";
+        versions.safariAutomation = String(automation.output ?? status).slice(0, 2000);
+        checks.safariAutomation = automation.code === 0 && !automation.timedOut && !automation.cancelled && !automation.error &&
+            /(?:^|\r?\n)This device DOES NOT REQUIRE user authentication to enable Automation Mode\.(?:\r?\n|$)/i.test(status);
+        if (!checks.safariAutomation) { safariAutomationIssue = automationPrerequisite; }
+    } catch (error) {
+        checks.safariAutomation = false;
+        versions.safariAutomation = "";
+        safariAutomationIssue = `${automationPrerequisite} Status probe failed: ${String(error.message).slice(0, 256)}`;
+    }
     const major = Number(xcode.output.match(/Xcode (\d+)/)?.[1]);
     const swiftVersion = swift.output.match(/Swift version (\d+)\.(\d+)/);
     checks.xcode = xcode.code === 0 && major >= 27 && swift.code === 0 && swiftVersion &&
@@ -239,6 +271,7 @@ export async function preflight({workspace, identity, bootstrapEvidence, provisi
     }
     return {report: {checks, versions, destinations, simulators: choices, bootstrap: bootstrapEvidence, pinnedEnvironment, provisioning,
         signingMode: signing, capabilities,
+        ...(safariAutomationIssue ? {safariAutomationIssue} : {}),
         ...(provisioningIssue ? {provisioningIssue} : {}), ...(proofKeyIssue ? {proofKeyIssue} : {}),
         ...(signingIssue ? {signingIssue} : {}), ...(missingSigning ? {missingSigning} : {})}, proofKey, unlockSigning};
 }
@@ -278,11 +311,29 @@ export function coverageReport(job, stages, preflight) {
     }
     const manifest = createManifest(job);
     const outcomes = new Map(stages.map(stage => [stage.id, stage.status]));
+    const safariStages = manifest.filter(stage => stage.nativeAudit?.kind === "safari");
+    const safari = {status: safariStages.length ? "incomplete" : "not-requested", signingMode,
+        stages: safariStages.map(stage => {
+            const result = stages.find(result => result.id === stage.id);
+            return {id: stage.id, platform: stage.nativeAudit.platform, configuration: stage.nativeAudit.configuration,
+                iterations: stage.nativeAudit.iterations, activationMode: stage.nativeAudit.activationMode, status: result?.status ?? "not-run",
+                ...(stage.nativeAudit.preparation ? {preparation: stage.nativeAudit.preparation} : {}),
+                audited: result?.audit?.ok === true && result.audit.safari?.ok === true};
+        }), unattended: options.interactiveSafari ? "not-established" : "requested",
+        physicalDevice: "not-verified", hardwareBiometrics: "not-verified", macOSScreenLock: "not-tested"};
+    if (safari.stages.length && safari.stages.every(stage => stage.status === "passed" && stage.audited)) { safari.status = "passed"; }
     const incompleteStages = manifest.filter(stage => outcomes.get(stage.id) !== "passed").map(stage => ({id: stage.id, status: outcomes.get(stage.id) ?? "not-run"}));
-    const fullSuiteVerified = !selected && stages.length === manifest.length && !incompleteStages.length && !missingPrerequisites.length && auditResults(stages).status === "passed";
-    return {scope: selected ? "selected" : "full", status: fullSuiteVerified ? "complete" : "partial",
+    const fullSuiteVerified = !options.prepareSafari && !options.interactiveSafari && !selected &&
+        stages.length === manifest.length && !incompleteStages.length && !missingPrerequisites.length &&
+        safari.status !== "incomplete" && auditResults(stages).status === "passed";
+    const preparation = options.prepareSafari ? stages.find(stage => stage.id === "prepare-safari.macos.debug") : undefined;
+    return {scope: options.prepareSafari ? "safari-preparation" : selected ? "selected" : "full",
+        status: fullSuiteVerified ? "complete" : "partial",
+        executionMode: options.interactiveSafari ? "assisted" : options.prepareSafari ? "preparation" : "unattended",
         selectedStageGroups: options.stages.length ? [...options.stages] : ["all"], onlyTesting: [...options.onlyTesting],
-        missingPrerequisites, incompleteStages, fullSuiteVerified, signingMode, credentialCoverage: credentials};
+        missingPrerequisites, incompleteStages, fullSuiteVerified, signingMode, credentialCoverage: credentials, safari,
+        ...(options.prepareSafari ? {safariPreparation: {status: preparation?.status === "passed" && preparation.audit?.ok === true ? "passed" : "incomplete",
+            ...(preparation?.audit?.preparation ? {preparation: preparation.audit.preparation} : {})}} : {})};
 }
 
 export async function prepareStageScratch(workspace, runId, stageId) {
@@ -304,6 +355,24 @@ export async function prepareStageScratch(workspace, runId, stageId) {
         }
     }
     return directory;
+}
+
+export async function readSafariEvidence(path) {
+    const maximum = 4 * 1024 * 1024;
+    const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    try {
+        const info = await file.stat();
+        if (!info.isFile() || info.size > maximum) { throw new Error("Safari evidence must be a bounded regular file"); }
+        const bytes = Buffer.alloc(maximum + 1);
+        let length = 0;
+        while (length < bytes.length) {
+            const {bytesRead} = await file.read(bytes, length, bytes.length - length, length);
+            if (!bytesRead) { break; }
+            length += bytesRead;
+        }
+        if (length > maximum) { throw new Error("Safari evidence exceeded its size limit"); }
+        return JSON.parse(bytes.subarray(0, length).toString("utf8"));
+    } finally { await file.close(); }
 }
 
 export async function prepareNativeSimulators(platform, {destinations, artifacts, stageId, execute, writeJSON, stopRequested = async () => false}) {
@@ -364,7 +433,8 @@ export async function prepareNativeSimulators(platform, {destinations, artifacts
 
 export function pendingStageResults(manifest) {
     return manifest.map(stage => ({id: stage.id, group: stage.group, status: "pending",
-        ...(stage.nativeAudit ? {nativeAudit: stage.nativeAudit} : {})}));
+        ...(stage.nativeAudit ? {nativeAudit: stage.nativeAudit} : {}),
+        ...(stage.preparationResult ? {preparationResult: true} : {})}));
 }
 
 async function preserveGeneratedArtifact(workspace, artifacts, stageId, path, previousHash) {
@@ -420,6 +490,9 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
         if (dependencies.length || requirements.length) {
             result.status = "blocked";
             result.reason = {dependencies, requirements};
+            if (requirements.includes("safariAutomation")) {
+                result.reason.prerequisite = checked.safariAutomationIssue ?? "Run Scripts/test_vm.sh setup to configure unattended guest UI automation.";
+            }
             result.resources.finished = measureResources();
             await publish(results);
             continue;
@@ -429,8 +502,8 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
         await publish(results);
         try {
             if (stage.requirements.includes("signing") && (!unlockSigning || !await unlockSigning())) { throw new Error("Guest signing keychain could not be unlocked"); }
-            if (stage.nativeAudit) {
-                result.simulatorPreparation = await prepareNativeSimulators(stage.nativeAudit.platform, {
+            if (stage.nativeAudit || stage.preparationResult) {
+                result.simulatorPreparation = await prepareNativeSimulators(stage.nativeAudit?.platform ?? "macos", {
                     destinations: checked.destinations, artifacts, stageId: stage.id, execute, writeJSON, stopRequested,
                 });
                 if (result.simulatorPreparation.status !== "passed") {
@@ -454,6 +527,7 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
                     ...(runId && exchange ? {BW_TEST_VM_RUN_ID: runId, BW_TEST_VM_EXCHANGE: exchange} : {}),
                     ...(stage.proofKey ? {ALCHEMY_JWT_REQUEST_PROOF_KEY: proofKey} : {})},
                 logPath: join(artifacts, result.log), timeoutSeconds: stage.timeoutSeconds, stopRequested,
+                ...(stage.nativeAudit?.kind === "safari" || stage.preparationResult ? {terminationGraceMilliseconds: SAFARI_TERMINATION_GRACE_MILLISECONDS} : {}),
             });
             result.exitCode = outcome.code;
             result.signal = outcome.signal;
@@ -461,17 +535,45 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
             result.status = outcome.cancelled ? "cancelled" : outcome.timedOut || outcome.error || outcome.code !== 0 ? "failed" : "passed";
             if (outcome.timedOut) { result.reason = `Timed out after ${stage.timeoutSeconds}s`; }
             if (outcome.error) { result.reason = outcome.error; }
+            if (stage.preparationResult && !outcome.cancelled && !outcome.timedOut) {
+                if (await stopRequested()) { throw Object.assign(new Error("Safari preparation auditing was cancelled"), {cancelled: true}); }
+                result.preparationResult = `${stage.id}.safari-preparation.json`;
+                const receiptPath = join(artifacts, result.preparationResult);
+                result.audit = auditSafariPreparation(await readSafariEvidence(receiptPath), {runId});
+                result.preparationSHA256 = await hashFile(receiptPath);
+                if (!result.audit.ok) { result.status = "failed"; result.reason = result.audit.issues; }
+            }
             if (stage.nativeAudit && !outcome.cancelled && !outcome.timedOut) {
                 const bundle = join(artifacts, `${stage.id}.xcresult`);
                 result.resultBundle = `${stage.id}.xcresult`;
-                const summaryResult = await execute("xcrun", ["xcresulttool", "get", "test-results", "summary", "--path", bundle], {timeoutSeconds: 120});
-                const treeResult = await execute("xcrun", ["xcresulttool", "get", "test-results", "tests", "--path", bundle], {timeoutSeconds: 120});
-                if (summaryResult.code !== 0 || treeResult.code !== 0) { throw new Error("Could not audit XCTest result bundle"); }
+                const auditQuery = async kind => {
+                    const outcome = await execute("xcrun", ["xcresulttool", "get", "test-results", kind, "--path", bundle], {timeoutSeconds: 120, stopRequested});
+                    if (outcome.cancelled || await stopRequested()) {
+                        throw Object.assign(new Error("XCTest result auditing was cancelled"), {cancelled: true});
+                    }
+                    if (outcome.timedOut || outcome.error || outcome.code !== 0) {
+                        throw new Error(`Could not audit XCTest result bundle: ${kind}${outcome.timedOut ? " timed out" : " failed"}`);
+                    }
+                    return outcome;
+                };
+                const summaryResult = await auditQuery("summary");
+                const treeResult = await auditQuery("tests");
                 const summary = JSON.parse(summaryResult.stdout ?? summaryResult.output);
                 const tree = JSON.parse(treeResult.stdout ?? treeResult.output);
                 await writeJSON(join(artifacts, `${stage.id}.summary.json`), summary);
                 await writeJSON(join(artifacts, `${stage.id}.tests.json`), tree);
                 result.audit = auditNativeResult(summary, tree, stage.nativeAudit);
+                if (stage.nativeAudit.kind === "safari") {
+                    result.safariEvidence = `${stage.id}.safari.json`;
+                    try {
+                        const evidence = await readSafariEvidence(join(artifacts, result.safariEvidence));
+                        result.audit.safari = auditSafariResult(evidence, stage.nativeAudit, {runId, stageId: stage.id});
+                    } catch (error) {
+                        result.audit.safari = {ok: false, issues: [`Safari browser evidence is unavailable: ${String(error.message).slice(0, 2048)}`], scenarioCount: 0, cleanup: "missing"};
+                    }
+                    result.audit.issues.push(...result.audit.safari.issues);
+                    result.audit.ok = result.audit.ok && result.audit.safari.ok;
+                }
                 if (!result.audit.ok) { result.status = "failed"; result.reason = result.audit.issues; }
             }
             for (const [path, hash] of Object.entries(before)) {

@@ -164,7 +164,7 @@ test("normal full matrices and filtered or non-test Debug selections add no simu
         for (const configuration of ["debug", "release"]) { assert.equal(full.filter(stage => stage.id === `test.${platform}.${configuration}`).length, 1); }
     }
     for (const stage of full) {
-        if (stage.nativeAudit) { assert.equal(stage.args[stage.args.indexOf("-collect-test-diagnostics") + 1], "never"); }
+        if (stage.nativeAudit && stage.nativeAudit.kind !== "safari") { assert.equal(stage.args[stage.args.indexOf("-collect-test-diagnostics") + 1], "never"); }
         if (stage.group === "build") { assert.ok(!stage.args.includes("-collect-test-diagnostics")); }
     }
 });

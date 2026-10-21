@@ -41,7 +41,12 @@ struct Keychain: Sendable {
         self.delete = delete
     }
     
-    static let shared = Keychain()
+    static let shared: Keychain = {
+#if BW_SAFARI_VM_TESTING
+        if SafariVMFixtures.shared.isLocal { return SafariVMFixtures.shared.keychain }
+#endif
+        return Keychain()
+    }()
     
     private let accessGroup = "8DXC3N7E7P.org.lil.keychain"
     

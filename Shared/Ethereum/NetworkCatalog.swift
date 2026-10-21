@@ -270,7 +270,11 @@ struct ResolvedEthereumNetwork: Equatable, Sendable {
     }
 
     var rpcURL: URL {
+#if BW_SAFARI_VM_TESTING
+        return rpcEndpoint.fixtureSourceURL ?? rpcEndpoint.url
+#else
         return rpcEndpoint.url
+#endif
     }
 
     var allowsAlchemyAuthorization: Bool {

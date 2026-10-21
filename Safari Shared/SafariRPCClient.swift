@@ -16,7 +16,7 @@ final class SafariRPCClient: Sendable {
     private let authorizationProvider: AlchemyAuthorizationProviding
 
     init(urlSession: URLSession = .shared,
-         authorizationProvider: AlchemyAuthorizationProviding = AlchemyJWTProvider.shared) {
+         authorizationProvider: AlchemyAuthorizationProviding = AlchemyJWTProvider.rpcAuthorizationProvider) {
         self.urlSession = urlSession
         self.authorizationProvider = authorizationProvider
     }
@@ -86,6 +86,9 @@ final class SafariRPCClient: Sendable {
         execution: SafariRPCExecution
     ) async throws -> AttemptResult {
         var request = URLRequest(url: endpoint.url)
+#if BW_SAFARI_VM_TESTING
+        try SafariVMFixtures.shared.authorize(&request)
+#endif
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

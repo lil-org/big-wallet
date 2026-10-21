@@ -235,13 +235,25 @@ final class ApprovalReview {
         guard case .open = state,
               approvedAt.timeIntervalSince1970.isFinite else { return nil }
         state = .accepted
-        return ReviewConsent(intent: intent, decision: decision, approvedAt: approvedAt, nativeReceipt: nativeReceipt)
+        let consent = ReviewConsent(intent: intent, decision: decision, approvedAt: approvedAt, nativeReceipt: nativeReceipt)
+#if BW_SAFARI_VM_TESTING
+        let handle = binding.handle
+        SafariVMFixtures.shared.event("consentAccepted", requestID: handle.id,
+            metadata: ["consentID": consent.fixtureConsentID, "requestToken": handle.requestToken,
+                       "profileIdentifier": handle.profileIdentifier.map { $0.uuidString.lowercased() as Any } ?? NSNull(),
+                       "configurationKey": request.configurationKey],
+            operation: SafariVMFixtures.shared.capture(handle: handle))
+#endif
+        return consent
     }
 
 }
 
 fileprivate final class ConsentAuthorizationUse: Sendable {
     private let consumed = Mutex(false)
+#if BW_SAFARI_VM_TESTING
+    let fixtureConsentID = UUID().uuidString.lowercased()
+#endif
 
     var isAvailable: Bool { consumed.withLock { !$0 } }
 
@@ -293,6 +305,9 @@ struct ReviewConsent: Sendable {
     var binding: ExtensionBridge.RequestBinding { intent.binding }
     var request: SafariRequest { binding.request }
     var authorizationIsAvailable: Bool { authorizationUse.isAvailable }
+#if BW_SAFARI_VM_TESTING
+    var fixtureConsentID: String { authorizationUse.fixtureConsentID }
+#endif
 
     func sharesAuthorization(with other: ReviewConsent) -> Bool {
         authorizationUse === other.authorizationUse
@@ -349,6 +364,9 @@ struct ResolvedDappApproval: Sendable {
     var request: SafariRequest { consent.request }
     var nativeReceipt: ExtensionBridge.NativeDeliveryReceipt? { consent.nativeReceipt }
     var approvedAt: Date { consent.approvedAt }
+#if BW_SAFARI_VM_TESTING
+    var fixtureConsentID: String { consent.fixtureConsentID }
+#endif
 
     fileprivate init(
         consent: ReviewConsent,

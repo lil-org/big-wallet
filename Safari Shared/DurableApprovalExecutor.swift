@@ -245,6 +245,22 @@ final class DurableApprovalExecutor {
         signing: WalletSigningSession?,
         context: ClaimContext
     ) async -> Result {
+#if BW_SAFARI_VM_TESTING
+        let operation = SafariVMFixtures.shared.capture(handle: claim.handle)
+        return await SafariVMFixtures.$operation.withValue(operation) {
+            await performApproved(claim: claim, approval: approval, signing: signing, context: context)
+        }
+#else
+        return await performApproved(claim: claim, approval: approval, signing: signing, context: context)
+#endif
+    }
+
+    private func performApproved(
+        claim: ExtensionBridge.ApprovalClaim,
+        approval: ResolvedDappApproval,
+        signing: WalletSigningSession?,
+        context: ClaimContext
+    ) async -> Result {
         guard claim.authority.allowsExecution(at: clock(), isCancelled: Task.isCancelled) else {
             return await abandon(claim: claim)
         }
@@ -258,6 +274,13 @@ final class DurableApprovalExecutor {
             return await abandon(claim: claim)
         }
         defer { permit.releaseLease() }
+#if BW_SAFARI_VM_TESTING
+        SafariVMFixtures.shared.event("authorization", requestID: permit.handle.id,
+            metadata: ["executionID": permit.executionID.uuidString.lowercased(), "consentID": approval.fixtureConsentID,
+                       "requestToken": permit.handle.requestToken,
+                       "configurationKey": permit.request.configurationKey,
+                       "profileIdentifier": permit.handle.profileIdentifier.map { $0.uuidString.lowercased() as Any } ?? NSNull()])
+#endif
         guard signing?.attach(permit: permit) ?? (approval.signingAccount == nil) else {
             return await abandon(permit: permit)
         }
@@ -307,6 +330,10 @@ final class DurableApprovalExecutor {
                 return await abandon(permit: permit)
             }
             let dispatch: ExtensionBridge.BroadcastDispatchPermit
+#if BW_SAFARI_VM_TESTING
+            do { try await SafariVMFixtures.shared.checkpoint("beforeBroadcastCheckpoint", requestID: permit.handle.id) }
+            catch { return await abandon(permit: permit) }
+#endif
             switch await store.prepareBroadcast(permit: permit, broadcast: prepared) {
             case .prepared(let value):
                 dispatch = value
@@ -315,6 +342,12 @@ final class DurableApprovalExecutor {
             case .retryablePersistenceFailure:
                 return .retryablePersistenceFailure
             }
+#if BW_SAFARI_VM_TESTING
+            SafariVMFixtures.shared.event("broadcastCheckpoint", requestID: permit.handle.id,
+                metadata: ["executionID": permit.executionID.uuidString.lowercased()])
+            do { try await SafariVMFixtures.shared.checkpoint("afterBroadcastCheckpoint", requestID: permit.handle.id) }
+            catch { return .retryablePersistenceFailure }
+#endif
             acquiredExecutionLease?.release()
             acquiredExecutionLease = nil
             let delivered = await boundedBroadcast(dispatch, recovery: recovery)
@@ -345,8 +378,16 @@ final class DurableApprovalExecutor {
         permit: ExtensionBridge.ApprovedExecutionPermit,
         result: ApprovedCompletion
     ) async -> Result {
+#if BW_SAFARI_VM_TESTING
+        do { try await SafariVMFixtures.shared.checkpoint("beforeCompletion", requestID: permit.handle.id) }
+        catch { return .retryablePersistenceFailure }
+#endif
         switch await store.complete(permit: permit, result: result) {
         case .persisted:
+#if BW_SAFARI_VM_TESTING
+            SafariVMFixtures.shared.event("completion", requestID: permit.handle.id,
+                metadata: ["executionID": permit.executionID.uuidString.lowercased()])
+#endif
             return .persisted
         case .ownershipLost:
             return .ownershipLost
@@ -380,6 +421,10 @@ final class DurableApprovalExecutor {
         recovery: ApprovedCompletion
     ) async -> ApprovedCompletion {
         let sender = makeBroadcastSender(dispatch.approvedPermit)
+#if BW_SAFARI_VM_TESTING
+        do { try await SafariVMFixtures.shared.checkpoint("beforeDispatch", requestID: dispatch.approvedPermit.handle.id) }
+        catch { return recovery }
+#endif
         return await bounded(
             timeoutNanoseconds: broadcastTimeoutNanoseconds,
             timeoutValue: recovery

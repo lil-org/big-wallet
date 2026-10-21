@@ -19,6 +19,9 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
     private let reason: AuthenticationReason
     private let review: NativeApprovalReview?
     private let dependencies: Dependencies
+#if BW_SAFARI_VM_TESTING
+    private let fixtureOperation: SafariVMFixtures.Operation
+#endif
     private var state = State.idle
     private var task: Task<Void, Never>?
     private var continuation: CheckedContinuation<Bool, Never>?
@@ -35,6 +38,9 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
         self.reason = reason
         self.review = review
         self.dependencies = dependencies
+#if BW_SAFARI_VM_TESTING
+        fixtureOperation = review?.fixtureOperation ?? SafariVMFixtures.shared.capture()
+#endif
         super.init()
     }
 
@@ -99,6 +105,10 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
         let attempt = dependencies.attemptBiometrics
         let reason = reason.title
         task = Task { [weak self] in
+#if BW_SAFARI_VM_TESTING
+            do { try await SafariVMFixtures.shared.checkpoint("beforeAuthentication", requestID: self?.review?.request.id, operation: self?.fixtureOperation) }
+            catch { self?.finish(false); return }
+#endif
             let outcome = await attempt(reason)
             guard let self, !Task.isCancelled, case .biometrics = state else { return }
             task = nil
@@ -224,6 +234,10 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
     private func complete() {
         guard case .ending(let result) = state else { return }
         state = .finished
+#if BW_SAFARI_VM_TESTING
+        SafariVMFixtures.shared.event("authenticationCompleted", requestID: review?.request.id,
+            metadata: ["succeeded": result, "authentication": SafariVMFixtures.shared.isLocal ? "password-sheet" : "system"], operation: fixtureOperation)
+#endif
         closeObserver?.disable()
         closeObserver = nil
         NotificationCenter.default.removeObserver(self)

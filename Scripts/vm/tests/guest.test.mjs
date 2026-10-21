@@ -52,6 +52,8 @@ test("provisioning reader rejects shared, writable, or redirected state before r
 const nativeTree = cases => ({testNodes: [{name: "Tests macOS", nodeType: "Test Plan", children: cases.map(([name, result]) => ({name, nodeIdentifier: name, nodeType: "Test Case", result}))}]});
 const summary = (passed, skipped = 0, failed = 0) => ({totalTestCount: passed + skipped + failed, passedTests: passed, skippedTests: skipped, failedTests: failed});
 const success = output => ({code: 0, signal: null, output: output ?? "", timedOut: false, cancelled: false});
+const passedManifest = manifest => manifest.map(stage => ({id: stage.id, status: "passed",
+    ...(stage.nativeAudit?.kind === "safari" ? {audit: {ok: true, safari: {ok: true}}} : {})}));
 
 test("job validation admits the host snapshot contract and rejects execution injection", () => {
     assert.deepEqual(validateJob(job({source: {...job().source, fileCount: 4, bytes: 100}})).source.fileCount, 4);
@@ -114,7 +116,7 @@ test("all matrix includes every native configuration/platform and all repository
         assert.ok(stage);
         assert.ok(stage.requirements.includes("jq"));
     }
-    for (const id of ["provider.test", "provider.bundle", "protocol.check", "scripts.approval-worker-target", "metadata.localizations", "runner.node-tests", "runner.python-tests",
+    for (const id of ["provider.test", "provider.bundle", "protocol.check", "scripts.approval-worker-target", "metadata.localizations", "runner.node-tests", "runner.python-tests", "safari.runner-tests",
         "worker.check", "worker.test", "worker.validate-self", "worker.validate-dry-run", "worker.deploy-dry-run", "worker.startup", "performance.release",
         "tsan.focused", "fuzz.default", "fuzz.regressions", "approval.debug", "approval.release"]) { assert.ok(ids.has(id), id); }
     assert.equal(stages.length, ids.size);
@@ -141,8 +143,27 @@ test("selected runs report partial coverage without unrelated credential prerequ
     const manifest = createManifest(job());
     const checks = Object.fromEntries(manifest.flatMap(stage => stage.requirements).map(name => [name, true]));
     assert.equal(coverageReport(job(), stages, {checks}).fullSuiteVerified, false);
-    const complete = coverageReport(job(), manifest.map(stage => ({id: stage.id, status: "passed"})), {checks});
+    const complete = coverageReport(job(), passedManifest(manifest), {checks});
     assert.equal(complete.fullSuiteVerified, true);
+    assert.equal(complete.executionMode, "unattended");
+});
+
+test("a fully passing unfiltered assisted run does not establish the unattended matrix", () => {
+    const selectedJob = job({payload: {interactiveSafari: true}});
+    const manifest = createManifest(selectedJob);
+    const stages = passedManifest(manifest);
+    const checks = Object.fromEntries(manifest.flatMap(stage => stage.requirements).map(name => [name, true]));
+    const coverage = coverageReport(selectedJob, stages, {checks});
+    assert.equal(auditResults(stages).status, "passed");
+    assert.equal(coverage.scope, "full");
+    assert.equal(coverage.executionMode, "assisted");
+    assert.equal(coverage.status, "partial");
+    assert.equal(coverage.fullSuiteVerified, false);
+    assert.equal(coverage.safari.status, "passed");
+    assert.equal(coverage.safari.unattended, "not-established");
+    assert.ok(coverage.safari.stages.every(stage => stage.status === "passed" && stage.audited));
+    assert.deepEqual(coverage.incompleteStages, []);
+    assert.deepEqual(coverage.missingPrerequisites, []);
 });
 
 test("local and Apple modes retain the complete same test workload with explicit signing settings", () => {
@@ -155,6 +176,16 @@ test("local and Apple modes retain the complete same test workload with explicit
             assert.deepEqual(local.map(stage => stage.id), apple.map(stage => stage.id));
             for (const stage of local) {
                 const signed = apple.find(candidate => candidate.id === stage.id);
+                if (stage.args[0] === "Scripts/safari/run.mjs") {
+                    assert.equal(stage.args[stage.args.indexOf("--signing") + 1], "local");
+                    assert.equal(signed.args[signed.args.indexOf("--signing") + 1], "apple");
+                    assert.deepEqual(stage.nativeAudit?.requiredTests, signed.nativeAudit?.requiredTests);
+                    assert.deepEqual(stage.nativeAudit?.requiredScenarios, signed.nativeAudit?.requiredScenarios);
+                    assert.equal(stage.nativeAudit?.iterations, signed.nativeAudit?.iterations);
+                    assert.equal(stage.timeoutSeconds, signed.timeoutSeconds);
+                    assert.ok(!stage.requirements.includes("signing") && !stage.requirements.includes("proofKey"));
+                    continue;
+                }
                 assert.deepEqual(stage.nativeAudit, signed.nativeAudit);
                 assert.equal(stage.timeoutSeconds, signed.timeoutSeconds);
                 assert.deepEqual(stage.env, signed.env);
@@ -186,7 +217,7 @@ test("complete local coverage never implies Apple, production credential, or ent
     const localJob = job();
     const manifest = createManifest(localJob);
     const checks = {...Object.fromEntries(manifest.flatMap(stage => stage.requirements).map(name => [name, true])), signing: false, proofKey: false};
-    const stages = manifest.map(stage => ({id: stage.id, status: "passed"}));
+    const stages = passedManifest(manifest);
     const local = coverageReport(localJob, stages, {checks});
     assert.equal(local.status, "complete");
     assert.equal(local.fullSuiteVerified, true);
@@ -219,6 +250,16 @@ test("native stages retain audited result bundles without long-running system di
                         assert.ok(!stage.args.includes("-collect-test-diagnostics"), stage.id);
                         continue;
                     }
+                    if (stage.nativeAudit.kind === "safari") {
+                        assert.equal(stage.command, "node");
+                        assert.equal(stage.args[0], "Scripts/safari/run.mjs");
+                        assert.equal(stage.nativeAudit.configuration, stage.args[stage.args.indexOf("--configuration") + 1]);
+                        assert.equal(stage.resultBundle, true);
+                        assert.equal(stage.scratchDirectory, true);
+                        const command = commandForStage(stage, {destinations: {macos: "macos", ios: "ios"}, artifacts: "/artifacts", scratch: "/scratch/stage"});
+                        assert.equal(command.args[command.args.indexOf("-resultBundlePath") + 1], `/artifacts/${stage.id}.xcresult`);
+                        continue;
+                    }
                     assert.equal(stage.args.filter(arg => arg === "-collect-test-diagnostics").length, 1, stage.id);
                     assert.equal(stage.args[stage.args.indexOf("-collect-test-diagnostics") + 1], "never", stage.id);
                     assert.equal(stage.resultBundle, true, stage.id);
@@ -248,6 +289,8 @@ test("runner fixtures declare their helper compiler and manifest interpreter", (
     const stages = createManifest(job({payload: {stages: ["repository"]}}));
     assert.deepEqual(stages.find(stage => stage.id === "runner.node-tests").requirements, ["bootstrap", "node", "xcode"]);
     assert.deepEqual(stages.find(stage => stage.id === "runner.python-tests").requirements, ["bootstrap", "python", "node"]);
+    assert.deepEqual(stages.find(stage => stage.id === "safari.runner-tests").args, ["--test", "Scripts/safari/tests/*.test.mjs"]);
+    assert.deepEqual(stages.find(stage => stage.id === "safari.runner-tests").dependencies, ["provider.install"]);
 });
 
 test("installed runner evidence fails stale, missing, or user-writable guest tools", async () => {

@@ -535,9 +535,7 @@ actor ExtensionBridge {
     static let responseExpiry: TimeInterval = TimeInterval(WireProtocol.responseExpiryMilliseconds) / 1_000
 
     static let shared = ExtensionBridge(store: ExtensionRequestFileStore(
-        containerURL: FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: SharedDefaults.suiteName
-        )
+        containerURL: SharedDefaults.containerURL
     ))
 
     struct WalletSourceMutator: WalletSourceMutating {
@@ -546,9 +544,7 @@ actor ExtensionBridge {
             beforeCommit: () throws -> Void,
             commit: (Payload) throws -> Result
         ) throws -> Result {
-            let store = ExtensionRequestFileStore(containerURL: FileManager.default.containerURL(
-                forSecurityApplicationGroupIdentifier: SharedDefaults.suiteName
-            ))
+            let store = ExtensionRequestFileStore(containerURL: SharedDefaults.containerURL)
             return try store.perform(
                 preparing: preparing,
                 beforeCommit: beforeCommit,
@@ -681,7 +677,11 @@ actor ExtensionBridge {
         privateBrowsing: Bool = false
     ) -> EnqueueResult {
         guard !privateBrowsing else { return .rejected }
-        return store.enqueue(ingress: ingress, profileIdentifier: profileIdentifier)
+        let result = store.enqueue(ingress: ingress, profileIdentifier: profileIdentifier)
+#if BW_SAFARI_VM_TESTING
+        if case .accepted(let handle, _, _, _, _) = result { SafariVMFixtures.shared.recordOperation(handle: handle) }
+#endif
+        return result
     }
 
     func configurationSnapshot(configurationKey: String, profileIdentifier: UUID?) -> AuthorityReadResult {
@@ -690,8 +690,15 @@ actor ExtensionBridge {
 
     func revoke(configurationKey: String, provider: InpageProvider, attempt: String,
                 expected: AuthorityVersion, profileIdentifier: UUID?) -> AuthorityMutationResult {
-        store.revoke(configurationKey: configurationKey, provider: provider, attempt: attempt,
-                     expected: expected, profileIdentifier: profileIdentifier)
+        let result = store.revoke(configurationKey: configurationKey, provider: provider, attempt: attempt,
+                                  expected: expected, profileIdentifier: profileIdentifier)
+#if BW_SAFARI_VM_TESTING
+        if case .revoked = result {
+            SafariVMFixtures.shared.event("revocation", metadata: ["configurationKey": configurationKey,
+                "provider": provider.rawValue, "profileIdentifier": profileIdentifier.map { $0.uuidString.lowercased() as Any } ?? NSNull()])
+        }
+#endif
+        return result
     }
 
     func listRecoveryRequests(profileIdentifier: UUID?) -> RecoveryRequestsResult {

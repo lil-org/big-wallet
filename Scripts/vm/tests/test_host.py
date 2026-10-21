@@ -414,7 +414,7 @@ class LifecycleTests(unittest.TestCase):
                     def wait(self, timeout=None): return 0
                 def launch(*args, **kwargs):
                     if reason == 'stop':
-                        host.atomic_json(exchange / 'stop.json', {'runId': 'run-fixture'})
+                        host.publish_stop(exchange, 'run-fixture', requested=True)
                     return Child()
                 def finish_during_cleanup(_):
                     host.atomic_json(exchange / 'artifacts/result.json',
@@ -449,7 +449,7 @@ class LifecycleTests(unittest.TestCase):
                     child = Child()
                     def complete(_):
                         if trigger == 'stop':
-                            host.atomic_json(exchange / 'stop.json', {'runId': 'run-fixture'})
+                            host.publish_stop(exchange, 'run-fixture', requested=True)
                         elif trigger == 'timeout':
                             clock[0] = 100
                         else:
@@ -488,7 +488,7 @@ class LifecycleTests(unittest.TestCase):
                         result = read_json(path)
                         if path == result_path:
                             if trigger == 'stop':
-                                host.atomic_json(exchange / 'stop.json', {'runId': 'run-fixture'})
+                                host.publish_stop(exchange, 'run-fixture', requested=True)
                             else:
                                 clock[0] = 100
                         return result
@@ -533,7 +533,7 @@ class LifecycleTests(unittest.TestCase):
                 original = self.partial_report()
                 host.atomic_json(exchange / 'artifacts/result.json', original)
                 if trigger == 'stop':
-                    host.atomic_json(exchange / 'stop.json', {'runId': 'run-fixture'})
+                    host.publish_stop(exchange, 'run-fixture', requested=True)
                 clock = itertools.count()
                 class Child:
                     def poll(self): return 0 if trigger == 'exit' else None
@@ -965,28 +965,35 @@ class SetupViewerTests(unittest.TestCase):
     def test_viewer_is_opt_in_and_only_accepted_for_setup(self):
         self.assertFalse(host.parser().parse_args(['setup']).interactive)
         self.assertTrue(host.parser().parse_args(['setup', '--interactive']).interactive)
+        self.assertFalse(host.parser().parse_args(['run', 'all']).interactive_safari)
+        self.assertTrue(host.parser().parse_args(['run', 'all', '--interactive-safari']).interactive_safari)
         for arguments in (['run', 'all', '--interactive'], ['setup', '--interactive', '--stage-only']):
             with self.subTest(arguments=arguments), patch('sys.stderr'), self.assertRaises(SystemExit) as error:
                 host.parser().parse_args(arguments)
             self.assertEqual(error.exception.code, 2)
 
     def test_only_explicit_interactive_setup_passes_the_window_flag(self):
-        for command, interactive, expected in (('setup', False, False), ('setup', True, True), ('run', True, False)):
+        for command, interactive, safari, expected in (
+                ('setup', False, False, False), ('setup', True, False, True),
+                ('run', True, False, False), ('run', False, True, True), ('setup', False, True, False)):
             with self.subTest(command=command, interactive=interactive), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 exchange = root / 'exchange'
                 (exchange / 'artifacts').mkdir(parents=True)
                 class Child:
                     def poll(self): return 0
-                args = SimpleNamespace(command=command, interactive=interactive, xcode=root / 'Xcode.app')
+                args = SimpleNamespace(command=command, interactive=interactive, interactive_safari=safari, xcode=root / 'Xcode.app')
                 viewer = root / 'Setup.app/Contents/MacOS/VMHost'
                 with patch.object(host.subprocess, 'Popen', return_value=Child()) as launch, \
                         patch.object(host, 'setup_viewer_binary', return_value=viewer) as package:
                     host.monitor_vm(args, root, root / 'fixture.vbvm', exchange, 'fixture', root, {}, 1)
-                self.assertEqual('--setup-window' in launch.call_args.args[0], expected)
+                self.assertEqual('--setup-window' in launch.call_args.args[0], command == 'setup' and interactive)
+                self.assertEqual('--safari-window' in launch.call_args.args[0], command == 'run' and safari)
                 self.assertNotIn('--xcode', launch.call_args.args[0])
                 self.assertEqual(package.called, expected)
                 self.assertEqual(launch.call_args.args[0][0], str(viewer if expected else root / 'VMHost'))
+                if expected:
+                    self.assertEqual(package.call_args.kwargs, {'safari': command == 'run' and safari})
 
     def test_app_wrapper_is_cached_without_mutating_the_cli_binary(self):
         with tempfile.TemporaryDirectory() as temporary:

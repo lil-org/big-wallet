@@ -20,6 +20,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         startupTask = Task { [walletsManager] in
             await walletsManager.start()
             await SafariApprovalVaultHost.shared.start(backgroundTask: backgroundTask)
+#if BW_SAFARI_VM_TESTING
+            await SafariApprovalVaultHost.shared.waitForReconciliation()
+            await SafariVMMutations.shared.processPending()
+#endif
         }
         return true
     }

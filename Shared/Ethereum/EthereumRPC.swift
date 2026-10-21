@@ -287,7 +287,7 @@ final class EthereumRPC: EthereumRPCClient {
 
     init(
         urlSession: URLSession = URLSession(configuration: .default),
-        authorizationProvider: any AlchemyAuthorizationProviding = AlchemyJWTProvider.shared,
+        authorizationProvider: any AlchemyAuthorizationProviding = AlchemyJWTProvider.rpcAuthorizationProvider,
         waitForRetry: @escaping @Sendable () async throws -> Void = {
             try await Task.sleep(for: .milliseconds(500))
         }
@@ -395,6 +395,9 @@ final class EthereumRPC: EthereumRPCClient {
             attempt: while true {
                 try Task.checkCancellation()
                 var request = URLRequest(url: endpoint.url)
+#if BW_SAFARI_VM_TESTING
+                try SafariVMFixtures.shared.authorize(&request)
+#endif
                 request.httpMethod = "POST"
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.httpBody = body

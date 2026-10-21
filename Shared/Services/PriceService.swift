@@ -52,6 +52,10 @@ final class PriceService {
     }
 
     func update() async {
+#if BW_SAFARI_VM_TESTING
+        _ = SafariVMFixtures.shared
+        currentPrices = Prices(eth: Price(usd: 2_000), bnb: nil, matic: nil, ftm: nil, avax: nil)
+#else
         let current: (id: UUID, task: Task<Prices?, Never>)
         if let request {
             current = request
@@ -64,6 +68,7 @@ final class PriceService {
         guard request?.id == current.id else { return }
         request = nil
         if let prices { currentPrices = prices }
+#endif
     }
 
     func forNetwork(_ network: EthereumNetwork) -> Double? {

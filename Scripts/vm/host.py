@@ -27,12 +27,15 @@ ROOT = Path(__file__).resolve().parents[2]
 TOOLS = Path(__file__).resolve().parent
 DEFAULT_VM = Path.home() / 'Library/Application Support/VirtualBuddy/tests machine.vbvm'
 DEFAULT_STATE = Path.home() / 'Library/Application Support/Big Wallet Test VM'
-STAGES = ('build', 'test', 'performance', 'tsan', 'fuzz', 'approval', 'repository', 'worker')
+STAGES = ('build', 'test', 'performance', 'tsan', 'fuzz', 'approval', 'safari', 'repository', 'worker')
 EXCLUDED_PARTS = {'.git', '.asc-runtime', 'node_modules', 'DerivedData', 'build', '.build',
                   '.cache', '.vm-testing', '__pycache__', '.venv', 'venv'}
 SECRET_SUFFIXES = {'.p12', '.p8', '.pem', '.key', '.mobileprovision', '.provisionprofile'}
 MAX_SNAPSHOT_BYTES = 1024 ** 3
 MAX_SNAPSHOT_FILES = 100000
+STOP_FINALIZATION_SECONDS = 600
+STOP_EXPORT_SECONDS = 1800
+STOP_EXTRACT_SECONDS = 900
 
 
 class RunnerError(Exception):
@@ -411,10 +414,10 @@ def hash_regular_file(path):
     return digest.hexdigest()
 
 
-def setup_viewer_binary(state, binaries):
+def setup_viewer_binary(state, binaries, *, safari=False):
     source = Path(binaries) / 'VMHost'
-    identifier = 'org.lil.big-wallet.vm.setup-viewer'
-    name = 'Big Wallet Test VM Setup'
+    identifier = 'org.lil.big-wallet.vm.safari-viewer' if safari else 'org.lil.big-wallet.vm.setup-viewer'
+    name = 'Big Wallet Test VM Safari' if safari else 'Big Wallet Test VM Setup'
     info = {'CFBundleIdentifier': identifier, 'CFBundleName': name, 'CFBundleDisplayName': name,
             'CFBundleExecutable': 'VMHost', 'CFBundlePackageType': 'APPL', 'CFBundleInfoDictionaryVersion': '6.0',
             'CFBundleShortVersionString': '1.0', 'CFBundleVersion': '1', 'CFBundleSupportedPlatforms': ['MacOSX'],
@@ -585,10 +588,11 @@ def stage_planned_result(exchange, job):
     if hash_regular_file(exchange / 'snapshot-manifest.json') != job['source']['sha256']:
         raise RunnerError('The staged source snapshot does not match the planned job')
     snapshot = read_json(exchange / 'snapshot-manifest.json')
-    entries = [entry for entry in snapshot['files'] if entry.get('path') == 'Scripts/vm/test_manifest.mjs']
-    if (len(entries) != 1 or entries[0].get('type') != 'file' or
-            hash_regular_file(manifest_path) != entries[0].get('sha256')):
-        raise RunnerError('The snapshotted test manifest does not match the source identity')
+    for relative in ('Scripts/vm/test_manifest.mjs', 'Scripts/safari/scenarios.mjs'):
+        entries = [entry for entry in snapshot['files'] if entry.get('path') == relative]
+        if (len(entries) != 1 or entries[0].get('type') != 'file' or
+                hash_regular_file(exchange / 'source' / relative) != entries[0].get('sha256')):
+            raise RunnerError(f'The snapshotted test manifest dependency does not match the source identity: {relative}')
     job_path = exchange / 'job.json'
     if read_json(job_path) != job:
         raise RunnerError('The staged job does not match the requested test plan')
@@ -610,7 +614,8 @@ def stage_planned_result(exchange, job):
 def job_selection(job):
     payload = job['payload']
     return {'signing': payload.get('signing', 'local'),
-            **{key: payload[key] for key in ('stages', 'onlyTesting', 'configuration', 'approvalArgs') if key in payload}}
+            **{key: payload[key] for key in ('stages', 'onlyTesting', 'configuration', 'approvalArgs',
+                                            'interactiveSafari', 'prepareSafari', 'preparedSafari') if key in payload}}
 
 
 def host_doctor(args, state, environment):
@@ -905,9 +910,39 @@ def accepted_operation_result(active):
         return False
 
 
-def operation_stop_requested(exchange, run_id):
+def operation_stop_record(exchange, run_id):
     path = exchange / 'stop.json'
-    return path.exists() and read_json(path).get('runId') == run_id
+    if not path.exists():
+        return None
+    value = read_json(path)
+    if (not isinstance(value, dict) or set(value) != {'version', 'runId', 'requestCount'} or
+            type(value['version']) is not int or value['version'] != 1 or
+            not isinstance(value['runId'], str) or type(value['requestCount']) is not int or
+            not 0 <= value['requestCount'] <= 2):
+        raise RunnerError('Invalid host stop record')
+    return value if value['runId'] == run_id else None
+
+
+def operation_stop_requested(exchange, run_id):
+    return operation_stop_record(exchange, run_id) is not None
+
+
+def publish_stop(exchange, run_id, *, requested=False):
+    descriptor = os.open(exchange / 'stop.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        info = os.fstat(descriptor)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or
+                info.st_nlink != 1 or info.st_mode & 0o077):
+            raise RunnerError('Invalid host stop lock')
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        current = operation_stop_record(exchange, run_id)
+        if current is None and (exchange / 'stop.json').exists():
+            raise RunnerError('Host stop record belongs to another operation')
+        count = current['requestCount'] if current else 0
+        atomic_json(exchange / 'stop.json', {'version': 1, 'runId': run_id,
+                                           'requestCount': min(2, count + int(requested))})
+    finally:
+        os.close(descriptor)
 
 
 def finalize_interrupted_result(exchange, run_id, reason, guest_failure=None, host_error=None):
@@ -1018,7 +1053,7 @@ def monitor_vm(args, state, vm, exchange, run_id, binaries, environment, timeout
     if read_json(result_path) != result:
         raise RunnerError('The completed report changed before the host could accept it')
     active['acceptedResultSHA256'] = hash_regular_file(result_path)
-    if setup_hook is not None and setup_hook.exchange_complete is True:
+    if active.get('phase') == 'preparing' or setup_hook is not None and setup_hook.exchange_complete is True:
         active['artifactsExported'] = True
     atomic_json(path, active)
     if not keep_operation:
@@ -1028,26 +1063,32 @@ def monitor_vm(args, state, vm, exchange, run_id, binaries, environment, timeout
 
 def monitor_owned_vm(args, state, vm, exchange, run_id, binaries, environment, timeout, provision_password=None,
                      *, previous_stops=(), setup_hook=None):
-    host_binary = setup_viewer_binary(state, binaries) if args.command == 'setup' and getattr(args, 'interactive', False) else Path(binaries) / 'VMHost'
+    setup_window = args.command == 'setup' and getattr(args, 'interactive', False)
+    safari_window = args.command == 'run' and getattr(args, 'interactive_safari', False)
+    host_binary = setup_viewer_binary(state, binaries, safari=safari_window) if setup_window or safari_window else Path(binaries) / 'VMHost'
     status_path = exchange / 'vm-status.json'
     stop_file = exchange / 'vm-stop'
-    register_operation(state, vm, exchange, run_id, 'starting')
+    register_operation(state, vm, exchange, run_id, 'preparing')
     command = [str(host_binary), '--vm', str(vm),
                '--status', str(status_path), '--stop-file', str(stop_file), '--owner-pid', str(os.getpid())]
-    if args.command == 'setup' and getattr(args, 'interactive', False):
+    if setup_window:
         command.append('--setup-window')
+    if safari_window:
+        command.append('--safari-window')
     if provision_password:
         command += ['--provision-user', args.guest_user, '--provision-password-file', str(provision_password)]
     result_path = exchange / 'artifacts/result.json'
     deadline = time.monotonic() + timeout
     cancelled = False
+    cancellation_signals = 0
+    stop_scopes = tuple(dict.fromkeys(((exchange, run_id), *previous_stops)))
     original_handlers = {}
     def cancel(signum, _):
-        nonlocal cancelled
+        nonlocal cancelled, cancellation_signals
         cancelled = True
+        cancellation_signals += 1
     def cancellation_requested():
-        return cancelled or any(operation_stop_requested(directory, identifier)
-                                for directory, identifier in ((exchange, run_id), *previous_stops))
+        return cancelled or any(operation_stop_requested(*scope) for scope in stop_scopes)
     def result_exported(result):
         return (setup_hook is None or result.get('kind') == 'prepare' or
                 setup_hook.exchange_complete is True)
@@ -1084,6 +1125,7 @@ def monitor_owned_vm(args, state, vm, exchange, run_id, binaries, environment, t
         if interruption_reason() == 'cancelled':
             return finish('cancelled')
         with open(exchange / 'vm.log', 'ab', buffering=0) as log:
+            register_operation(state, vm, exchange, run_id, 'starting')
             process = subprocess.Popen(command, stdout=log, stderr=log, start_new_session=True)
             try:
                 while process.poll() is None:
@@ -1132,18 +1174,51 @@ def monitor_owned_vm(args, state, vm, exchange, run_id, binaries, environment, t
             finally:
                 try:
                     if process.poll() is None and not accepted_result:
-                        atomic_json(exchange / 'stop.json', {'version': 1, 'runId': run_id})
+                        publish_stop(exchange, run_id)
+                        def collection_interrupted():
+                            requests = sum(record['requestCount'] for scope in stop_scopes
+                                           if (record := operation_stop_record(*scope)) is not None)
+                            return requests + cancellation_signals > (1 if reason == 'cancelled' else 0)
                         if setup_hook is not None:
                             setup_hook.request_stop()
-                        cancel_deadline = time.monotonic() + 20
+                        stop_started = time.monotonic()
+                        cancel_deadline = stop_started + 20
+                        collection_deadline = stop_started + STOP_FINALIZATION_SECONDS + STOP_EXPORT_SECONDS + STOP_EXTRACT_SECONDS
+                        collection_phases = set()
                         while time.monotonic() < cancel_deadline and process.poll() is None:
+                            if collection_interrupted():
+                                break
                             if setup_hook is not None:
-                                setup_hook.poll()
+                                prepared = setup_hook.poll()
+                                if prepared is not None and prepared['status'] != 'passed':
+                                    guest_failure = prepared
+                                    break
+                                transport = getattr(setup_hook, 'transport', None)
+                                if transport is not None:
+                                    phase = getattr(transport, 'phase', None)
+                                    if (getattr(transport, 'observed_launch', False) or
+                                            getattr(transport, 'final_seen', False) or phase in ('export', 'extract')):
+                                        cancel_deadline = max(cancel_deadline, stop_started + STOP_FINALIZATION_SECONDS)
+                                    if phase in ('export', 'extract') and phase not in collection_phases:
+                                        collection_phases.add(phase)
+                                        seconds = STOP_EXPORT_SECONDS if phase == 'export' else STOP_EXTRACT_SECONDS
+                                        cancel_deadline = min(collection_deadline, max(cancel_deadline, time.monotonic() + seconds))
+                            if collection_interrupted():
+                                break
                             if result_path.exists():
                                 progress = read_json(result_path)
                                 if isinstance(progress, dict) and progress.get('finishedAt') and result_exported(progress):
                                     break
+                            if setup_hook is not None:
+                                try:
+                                    check_capacity(state, environment['minimumHostFreeBytes'])
+                                except RunnerError as error:
+                                    capacity_error = str(error)
+                                    break
                             time.sleep(1)
+                        if time.monotonic() >= cancel_deadline and collection_phases and not setup_hook.exchange_complete:
+                            guest_failure = {'status': 'failed', 'reason': 'guest_artifact_collection_timeout',
+                                             'phase': getattr(getattr(setup_hook, 'transport', None), 'phase', None)}
                 finally:
                     try:
                         if setup_hook is not None:
@@ -1222,7 +1297,7 @@ def reconcile_interrupted_operation(state):
             if not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != os.getuid():
                 raise RunnerError('Interrupted clone is not an owned directory; preserving it for inspection')
             clone_identity = (metadata.st_dev, metadata.st_ino, metadata.st_uid)
-    atomic_json(exchange / 'stop.json', {'version': 1, 'runId': active['runId']})
+    publish_stop(exchange, active['runId'])
     (exchange / 'vm-stop').touch(exist_ok=True)
     ensure_disk_idle(vm)
     result_path = exchange / 'artifacts/result.json'
@@ -1592,6 +1667,8 @@ def run_setup_doctor(args, state, candidate, environment, operation, record, con
 
 
 def setup(args, state, environment):
+    if getattr(args, 'safari_activation', False) and not args.interactive:
+        raise RunnerError('Safari activation setup requires --interactive for the genuine user activation step')
     validate_vm(args.vm)
     run_id, exchange = new_exchange(state, 'setup')
     operation = {'runId': run_id, 'exchange': exchange, 'previousStops': [], 'monitorCalled': False}
@@ -1607,6 +1684,16 @@ def setup(args, state, environment):
     except KeyboardInterrupt:
         finalization_pending = True
         finalize_owned_interruption(state, operation['exchange'], operation['runId'], 'cancelled')
+        candidate_path = state / 'candidate.json'
+        if getattr(args, 'safari_activation', False) and candidate_path.exists():
+            record = read_json(candidate_path)
+            attempt = record.get('safariActivationAttempt', {})
+            result_path = operation['exchange'] / 'artifacts/result.json'
+            if attempt.get('runId') == operation['runId'] and attempt.get('result') == str(result_path):
+                active = read_json(state / 'active.json')
+                attempt.update({'artifactsExported': active.get('artifactsExported') is True or active.get('phase') == 'preparing',
+                                'resultSHA256': hash_regular_file(result_path)})
+                atomic_json(candidate_path, record)
         completed = True
         print(f'Setup cancelled. Results: {operation["exchange"] / "artifacts/result.json"}')
         return 2
@@ -1621,7 +1708,274 @@ def setup(args, state, environment):
                     clear_owned_operation(state, operation['runId'])
 
 
+def safari_preparation_reference(value):
+    if (not isinstance(value, dict) or set(value) != {'preparationRunID', 'receiptSHA256'} or
+            not isinstance(value['preparationRunID'], str) or
+            re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}', value['preparationRunID']) is None or
+            '..' in value['preparationRunID'] or not isinstance(value['receiptSHA256'], str) or
+            re.fullmatch(r'[a-f0-9]{64}', value['receiptSHA256']) is None):
+        raise RunnerError('Invalid prepared Safari baseline reference; repeat setup --interactive --safari-activation')
+    return dict(value)
+
+
+def prepared_safari_for_job(record, job, plan):
+    payload = job['payload']
+    selects_macos = any(stage.get('nativeAudit', {}).get('kind') == 'safari' and
+                        stage['nativeAudit'].get('platform') == 'macos' for stage in plan['stages'])
+    if (record.get('safariPreparation') is None or payload.get('signing', 'local') != 'local' or
+            not selects_macos):
+        return None
+    if payload.get('interactiveSafari'):
+        raise RunnerError('A prepared Safari baseline uses headless activation checks; omit --interactive-safari')
+    return safari_preparation_reference(record['safariPreparation'])
+
+
+def verify_safari_preparation_result(exchange, result, run_id):
+    filename = 'prepare-safari.macos.debug.safari-preparation.json'
+    stages = [stage for stage in result.get('stages', []) if stage.get('id') == 'prepare-safari.macos.debug']
+    if (len(stages) != 1 or stages[0].get('status') != 'passed' or stages[0].get('preparationResult') != filename or
+            stages[0].get('audit', {}).get('ok') is not True):
+        raise RunnerError('Safari preparation has no passing audited preparation stage')
+    with open_regular(exchange / 'artifacts' / filename) as file:
+        data = file.read(65537)
+    if len(data) > 65536 or hashlib.sha256(data).hexdigest() != stages[0].get('preparationSHA256'):
+        raise RunnerError('Safari preparation result does not match the guest-audited artifact')
+    value = json.loads(data)
+    fields = {'version', 'status', 'preparationRunID', 'platform', 'configuration', 'signingMode',
+              'installationDirectory', 'receiptSHA256', 'receipt'}
+    if (not isinstance(value, dict) or set(value) != fields or type(value['version']) is not int or value['version'] != 1 or
+            value['status'] != 'passed' or value['preparationRunID'] != run_id or value['platform'] != 'macos' or
+            value['configuration'] != 'Debug' or value['signingMode'] != 'local'):
+        raise RunnerError('Safari preparation result has an invalid identity or status')
+    reference = safari_preparation_reference({key: value[key] for key in ('preparationRunID', 'receiptSHA256')})
+    receipt = value['receipt']
+    if (not isinstance(receipt, dict) or set(receipt) != {'version', 'status', 'preparationRunID', 'descriptor',
+            'installationDirectory', 'sourceApp', 'signatures', 'enabledObservation', 'cleanup', 'preparedAt'} or
+            type(receipt['version']) is not int or receipt['version'] != 1 or receipt['status'] != 'passed' or
+            receipt['preparationRunID'] != run_id or
+            hashlib.sha256(json.dumps(receipt, separators=(',', ':'), ensure_ascii=False).encode()).hexdigest() != reference['receiptSHA256']):
+        raise RunnerError('Safari preparation receipt does not match its verified identity or digest')
+    descriptor = {'version': 1, 'runID': run_id, 'root': f'/Volumes/BigWalletBuild/Exchange/{run_id}/safari/macos/Debug',
+                  'platform': 'macos', 'configuration': 'Debug', 'signingMode': 'local'}
+    if receipt['descriptor'] != descriptor or type(receipt['descriptor'].get('version')) is not int:
+        raise RunnerError('Safari preparation receipt does not match the prepared fixture descriptor')
+    def valid_path(path):
+        return (isinstance(path, str) and len(path) <= 4096 and path.startswith('/') and
+                str(PurePosixPath(path)) == path and '..' not in PurePosixPath(path).parts and
+                re.search(r'[\x00-\x1f\x7f]', path) is None)
+    installation = receipt['installationDirectory']
+    source = receipt['sourceApp']
+    if (not valid_path(installation) or not installation.endswith('/Applications/BigWalletSafariVM/Prepared') or
+            installation != value['installationDirectory'] or not valid_path(source) or
+            '/Library/Developer/Xcode/DerivedData/' not in source or not source.endswith('/Big Wallet.app')):
+        raise RunnerError('Safari preparation receipt has invalid installation paths')
+    signatures = receipt['signatures']
+    identifiers = {'app': 'org.lil.wallet', 'extension': 'org.lil.wallet.Safari', 'helper': 'org.lil.wallet.ambient'}
+    if not isinstance(signatures, dict) or set(signatures) != set(identifiers):
+        raise RunnerError('Safari preparation receipt is missing product signature identities')
+    for role, identifier in identifiers.items():
+        signature = signatures[role]
+        if (not isinstance(signature, dict) or set(signature) != {'identifier', 'cdhash'} or
+                signature['identifier'] != identifier or not isinstance(signature['cdhash'], str) or
+                re.fullmatch(r'[a-f0-9]{40}', signature['cdhash']) is None):
+            raise RunnerError(f'Safari preparation receipt has an invalid {role} signature identity')
+    def parsed_time(value):
+        if not isinstance(value, str) or re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z', value) is None:
+            raise RunnerError('Safari preparation receipt has an invalid observation timestamp')
+        return datetime.datetime.fromisoformat(value.replace('Z', '+00:00'))
+    observation = receipt['enabledObservation']
+    if (not isinstance(observation, dict) or set(observation) != {'enabled', 'processID', 'executablePath', 'preparationNonce', 'observedAt'} or
+            observation['enabled'] is not True or type(observation['processID']) is not int or
+            not 1 < observation['processID'] <= 2147483647 or
+            observation['executablePath'] != f'{installation}/Big Wallet.app/Contents/MacOS/Big Wallet' or
+            not isinstance(observation['preparationNonce'], str) or
+            re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', observation['preparationNonce']) is None or
+            parsed_time(observation['observedAt']) > parsed_time(receipt['preparedAt'])):
+        raise RunnerError('Safari preparation receipt has no valid native enabled-state observation')
+    if receipt['cleanup'] != {'status': 'passed'} or stages[0]['audit'].get('preparation') != reference:
+        raise RunnerError('Safari preparation receipt has no matching audit and successful process cleanup')
+    return reference
+
+
+def prepare_safari_activation(args, state, environment, operation):
+    if not args.interactive or args.stage_only or args.provision_config or args.proof_key_bundle or args.provision_new_account:
+        raise RunnerError('Use setup --interactive --safari-activation with an existing verified baseline and no provisioning inputs')
+    baseline_path = state / 'baseline.json'
+    baseline = state / 'baseline.vbvm'
+    candidate_path = state / 'candidate.json'
+    candidate = state / 'candidate.vbvm'
+    if candidate_path.exists() and read_json(candidate_path).get('promotionPending'):
+        pending = read_json(candidate_path)
+        if (not matches_source_vm(pending, args.vm) or pending.get('environment') != environment or
+                pending.get('consoleUser') != selected_console_user(args, pending) or
+                pending.get('bootstrapSourceDigest') != bootstrap_source_digest() or
+                pending.get('bootstrapTools') != bootstrap_tool_hashes(build_tools(state, args.xcode))):
+            raise RunnerError('Pending Safari preparation promotion does not match the current verified environment')
+        reference = safari_preparation_reference(pending.get('safariPreparation'))
+        archived = Path(pending.get('safariPreparationResult', ''))
+        if (not archived.is_absolute() or archived.resolve() != archived or
+                not archived.is_relative_to(state / 'results') or archived.name != 'result.json' or
+                verify_safari_preparation_result(archived.parent.parent, read_json(archived), reference['preparationRunID']) != reference):
+            raise RunnerError('Pending Safari preparation no longer has its verified archived receipt')
+        check_setup_stop(operation)
+        finish_baseline_promotion(state, pending)
+        print('The verified Safari preparation was promoted to the baseline.')
+        return 0
+    if not baseline_path.exists():
+        raise RunnerError('Safari activation requires a verified baseline; run ordinary setup first')
+    existing = read_json(baseline_path)
+    source_digest = bootstrap_source_digest()
+    if (not matches_source_vm(existing, args.vm) or existing.get('environment') != environment or
+            existing.get('bootstrapSourceDigest') != source_digest or existing.get('verificationSigningMode') != 'local' or
+            not existing.get('verifiedAt') or existing.get('consoleUser') != selected_console_user(args, existing)):
+        raise RunnerError('Safari activation requires the current verified baseline and guest account; run ordinary setup first')
+    check_capacity(state, environment['minimumHostFreeBytes'])
+    validate_vm(baseline)
+    ensure_disk_idle(baseline)
+    baseline_info = baseline.lstat()
+    baseline_identity = {'recordSHA256': hash_regular_file(baseline_path), 'fileID': [baseline_info.st_dev, baseline_info.st_ino]}
+    binaries = build_tools(state, args.xcode)
+    bootstrap_tools = bootstrap_tool_hashes(binaries)
+    require_current_bootstrap_sources(source_digest)
+    if existing.get('bootstrapTools') != bootstrap_tools:
+        raise RunnerError('Safari activation requires current verified guest bootstrap tools; run ordinary setup first')
+    check_setup_stop(operation)
+    if candidate_path.exists():
+        record = read_json(candidate_path)
+        if (record.get('safariActivationSource') != baseline_identity or not matches_source_vm(record, args.vm) or
+                record.get('environment') != environment or record.get('bootstrapSourceDigest') != source_digest):
+            raise RunnerError('An unrelated candidate already exists; preserve it and finish its ordinary setup first')
+        if record.get('safariActivationConstructionPending') and (candidate.exists() or candidate.is_symlink()):
+            if candidate.is_symlink() or not candidate.is_dir():
+                raise RunnerError('The unfinished Safari preparation candidate changed type')
+            ensure_disk_idle(candidate)
+            shutil.rmtree(candidate)
+        elif not record.get('safariActivationConstructionPending'):
+            validate_vm(candidate)
+            ensure_disk_idle(candidate)
+            metadata = candidate.lstat()
+            attempt = record.get('safariActivationAttempt', {})
+            archived = Path(attempt.get('result', ''))
+            if ([metadata.st_dev, metadata.st_ino] != record.get('safariActivationFileID') or
+                    attempt.get('artifactsExported') is not True or not archived.is_absolute() or
+                    archived.resolve() != archived or not archived.is_relative_to(state / 'results') or
+                    archived.name != 'result.json' or hash_regular_file(archived) != attempt.get('resultSHA256')):
+                raise RunnerError('The failed Safari candidate has uncollected or unverified diagnostics; preserve it before retrying')
+            previous_result = read_json(archived)
+            if previous_result.get('runId') != attempt.get('runId') or not previous_result.get('finishedAt'):
+                raise RunnerError('The failed Safari candidate has no matching archived final report')
+            record['safariActivationConstructionPending'] = True
+            record.pop('safariActivationAttempt', None)
+            record.pop('safariActivationFileID', None)
+            atomic_json(candidate_path, record)
+            shutil.rmtree(candidate)
+    else:
+        if candidate.exists() or candidate.is_symlink():
+            raise RunnerError('An unrecorded candidate exists; preserve it before preparing Safari')
+        record = {**existing, 'safariActivationSource': baseline_identity, 'safariActivationConstructionPending': True}
+        record.pop('safariPreparation', None)
+        record.pop('safariPreparationResult', None)
+        record.pop('verifiedAt', None)
+        atomic_json(candidate_path, record)
+    if record.get('safariActivationConstructionPending'):
+        check_setup_stop(operation)
+        clone_vm(baseline, candidate)
+        metadata = candidate.lstat()
+        record['safariActivationFileID'] = [metadata.st_dev, metadata.st_ino]
+        atomic_json(candidate_path, record)
+    validate_vm(candidate)
+    ensure_disk_idle(candidate)
+    args.guest_user = record['consoleUser']
+    print('Reusing the verified guest tools for Safari activation; no installer or Xcode archive is staged.', flush=True)
+    validation_result = None
+    result = None
+    for prefix, payload in (
+        ('setup-validation', {'stages': ['test'], 'configuration': 'Debug', 'signing': 'local',
+            'onlyTesting': ['Tests macOS/WindowAuthenticationSessionTests', 'Tests macOS/PasswordStorageTests', 'Tests macOS/SecretHandlingTests']}),
+        ('setup-safari-preparation', {'stages': ['safari'], 'configuration': 'Debug', 'signing': 'local',
+            'onlyTesting': ['Safari UI Tests macOS'], 'prepareSafari': True}),
+    ):
+        run_id, exchange = new_exchange(state, prefix)
+        handoff_setup_operation(state, candidate, operation, run_id, exchange)
+        source = snapshot_source(ROOT, exchange)
+        verify_setup_sources(exchange, source_digest, environment)
+        job = {'version': 1, 'runId': run_id, 'vmId': record['vmId'], 'kind': 'run', 'profile': 'all',
+               'payload': payload, 'source': source, 'bootstrapTools': bootstrap_tools}
+        atomic_json(exchange / 'job.json', job)
+        plan = stage_planned_result(exchange, job)
+        check_setup_stop(operation)
+        hook = prepared_guest_hook(state, candidate, record, exchange)
+        record['safariActivationAttempt'] = {'runId': run_id, 'result': str(exchange / 'artifacts/result.json'),
+                                            'artifactsExported': False}
+        record.pop('safariActivationConstructionPending', None)
+        atomic_json(candidate_path, record)
+        operation['monitorCalled'] = True
+        result = monitor_vm(args, state, candidate, exchange, run_id, binaries, environment, args.timeout or 7200,
+                            keep_operation=True, previous_stops=operation['previousStops'], setup_hook=hook)
+        active = read_json(state / 'active.json')
+        record['safariActivationAttempt'].update({
+            'artifactsExported': active.get('runId') == run_id and active.get('artifactsExported') is True,
+            'resultSHA256': hash_regular_file(exchange / 'artifacts/result.json')})
+        atomic_json(candidate_path, record)
+        require_current_bootstrap_sources(source_digest)
+        if result.get('status') != 'passed':
+            break
+        check_setup_stop(operation)
+        preflight = result.get('preflight', {})
+        actual_stages = result.get('stages', [])
+        verified_source = result.get('source')
+        source_matches = (isinstance(verified_source, dict) and
+                          all(verified_source.get(key) == value for key, value in source.items()) and
+                          type(verified_source.get('files')) is int and verified_source['files'] == source['fileCount'])
+        if (result.get('runId') != run_id or result.get('vmId') != record['vmId'] or not source_matches or
+                setup_provisioning_issue(result, record['vmId'], args.guest_user) or
+                preflight.get('bootstrap', {}).get('available') is not True or
+                preflight.get('bootstrap', {}).get('hashes') != bootstrap_tools or not environment_attested(preflight, environment) or
+                not isinstance(actual_stages, list) or
+                any(not isinstance(stage, dict) for stage in actual_stages) or
+                [stage.get('id') for stage in actual_stages] != [stage['id'] for stage in plan['stages']] or
+                any(stage.get('status') != 'passed' or
+                    planned.get('nativeAudit') and (stage.get('nativeAudit') != planned['nativeAudit'] or stage.get('audit', {}).get('ok') is not True)
+                    for stage, planned in zip(actual_stages, plan['stages']))):
+            result.update({'status': 'blocked', 'reason': 'safari_preparation_guest_validation_did_not_match_requested_setup'})
+            atomic_json(exchange / 'artifacts/result.json', result)
+            break
+        if payload.get('prepareSafari'):
+            try:
+                record['safariPreparation'] = verify_safari_preparation_result(exchange, result, run_id)
+            except (RunnerError, OSError, ValueError, TypeError, KeyError) as error:
+                result.update({'status': 'failed', 'reason': 'safari_preparation_receipt_invalid', 'preparationError': str(error)})
+                atomic_json(exchange / 'artifacts/result.json', result)
+                break
+            record['safariPreparationResult'] = str(exchange / 'artifacts/result.json')
+        else:
+            validation_result = str(exchange / 'artifacts/result.json')
+    print(f'Results: {operation["exchange"] / "artifacts/result.json"}', flush=True)
+    if result is None or result.get('status') != 'passed' or 'safariPreparation' not in record:
+        if result is not None:
+            record['safariActivationAttempt']['resultSHA256'] = hash_regular_file(operation['exchange'] / 'artifacts/result.json')
+            atomic_json(candidate_path, record)
+        print('Safari preparation is incomplete; the existing baseline remains unchanged.')
+        return 2
+    check_setup_stop(operation)
+    ensure_disk_idle(candidate)
+    metadata = candidate.lstat()
+    record.pop('safariActivationSource', None)
+    record.pop('safariActivationAttempt', None)
+    record.pop('safariActivationFileID', None)
+    record.update({'verifiedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                   'validationResult': validation_result,
+                   'promotionPending': {'backup': 'previous-baseline-' + uuid.uuid4().hex + '.vbvm',
+                                        'candidateFileID': [metadata.st_dev, metadata.st_ino]}})
+    atomic_json(candidate_path, record)
+    finish_baseline_promotion(state, record)
+    print('Prepared Safari baseline verified. Normal local macOS Safari runs will check and reuse its activation headlessly.')
+    return 0
+
+
 def prepare_setup(args, state, environment, operation):
+    if getattr(args, 'safari_activation', False):
+        return prepare_safari_activation(args, state, environment, operation)
     run_id, exchange = operation['runId'], operation['exchange']
     check_capacity(state, environment['minimumHostFreeBytes'])
     record_path = state / 'candidate.json'
@@ -1854,10 +2208,20 @@ def run_tests(args, state, environment):
                        'bootstrapTools': bootstrap_tools}
                 if args.configuration:
                     job['payload']['configuration'] = args.configuration
+                if getattr(args, 'interactive_safari', False):
+                    job['payload']['interactiveSafari'] = True
                 if args.approval_arg:
                     job['payload']['approvalArgs'] = stage_approval_arguments(args.approval_arg, exchange)
                 atomic_json(exchange / 'job.json', job)
-                stage_planned_result(exchange, job)
+                plan = stage_planned_result(exchange, job)
+                preparation = prepared_safari_for_job(record, job, plan)
+                if preparation is not None:
+                    job['payload']['preparedSafari'] = preparation
+                    atomic_json(exchange / 'job.json', job)
+                    stage_planned_result(exchange, job)
+                if getattr(args, 'interactive_safari', False):
+                    print('Assisted Safari run: use the owned Safari Activation VM window for extension activation checkpoints. '
+                          'The same disposable guest and installation remain active through browser restart and extension toggles.', flush=True)
                 print(f'Source: {source["sha256"]}', flush=True)
                 if operation_stop_requested(exchange, run_id):
                     raise KeyboardInterrupt
@@ -1910,13 +2274,17 @@ def parser():
     setup_parser.add_argument('--provision-config', type=Path)
     setup_parser.add_argument('--proof-key-bundle', type=Path)
     setup_parser.add_argument('--provision-new-account', action='store_true')
+    setup_parser.add_argument('--safari-activation', action='store_true',
+                              help='Prepare genuine Safari extension activation in a current baseline; requires --interactive')
     setup_mode = setup_parser.add_mutually_exclusive_group()
     setup_mode.add_argument('--stage-only', action='store_true')
     setup_mode.add_argument('--interactive', action='store_true', help='Show only the owned setup VM for one-time guest consent')
     setup_parser.add_argument('--timeout', type=int)
-    run_parser = commands.add_parser('run')
+    run_parser = commands.add_parser('run', allow_abbrev=False)
     run_parser.add_argument('profile', choices=('all', 'extended'), nargs='?', default='all')
     run_parser.add_argument('--candidate', action='store_true', help='Run diagnostics against a base-verified candidate before setup smoke tests pass')
+    run_parser.add_argument('--interactive-safari', action='store_true',
+                            help='Show the disposable test VM for genuine user activation of macOS Safari extensions')
     run_parser.add_argument('--signing', choices=('local', 'apple'), default='local',
                             help='Use credential-free local signing by default, or explicitly verify Apple signing prerequisites')
     run_parser.add_argument('--stage', choices=STAGES, action='append', default=[])
@@ -1950,7 +2318,7 @@ def main(argv=None):
             if exchange.is_symlink() or not any(exchange.resolve().is_relative_to(state / folder) for folder in ('results', 'setup')):
                 raise RunnerError('Active operation points outside runner-owned results')
             if args.command == 'stop':
-                atomic_json(exchange / 'stop.json', {'version': 1, 'runId': active['runId']})
+                publish_stop(exchange, active['runId'], requested=True)
                 print(f'Stop requested for {active["runId"]}. Diagnostics will be retained.')
             else:
                 status_path = exchange / 'vm-status.json'

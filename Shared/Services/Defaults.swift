@@ -16,9 +16,9 @@ struct Defaults {
         static let didMigrateLegacyDefaults = "didMigrateLegacyDefaults"
     }
 
-    private static let userDefaults = Mutex<UserDefaults>({
+    private static let userDefaults = Mutex<any SharedPreferenceStorage>({
         guard let sharedDefaults = SharedDefaults.defaults else {
-            return .standard
+            return UserDefaults.standard
         }
         migrateLegacyDefaultsIfNeeded(to: sharedDefaults)
         return sharedDefaults
@@ -28,7 +28,10 @@ struct Defaults {
         _ = userDefaults.withLock { $0.synchronize() }
     }
 
-    private static func migrateLegacyDefaultsIfNeeded(to sharedDefaults: UserDefaults) {
+    private static func migrateLegacyDefaultsIfNeeded(to sharedDefaults: any SharedPreferenceStorage) {
+#if BW_SAFARI_VM_TESTING
+        if SafariVMFixtures.shared.isLocal { return }
+#endif
         sharedDefaults.synchronize()
         guard !sharedDefaults.bool(forKey: Keys.didMigrateLegacyDefaults) else { return }
 
@@ -41,7 +44,7 @@ struct Defaults {
         sharedDefaults.synchronize()
     }
 
-    private static func migrateWalletNames(to sharedDefaults: UserDefaults) -> Bool {
+    private static func migrateWalletNames(to sharedDefaults: any SharedPreferenceStorage) -> Bool {
         guard let legacyNames = legacyStringDictionary(forKey: Keys.walletsAndAccountsNames) else { return false }
         guard !legacyNames.isEmpty else { return true }
 
@@ -53,7 +56,7 @@ struct Defaults {
         return true
     }
 
-    private static func migrateReviewRequestDate(to sharedDefaults: UserDefaults) -> Bool {
+    private static func migrateReviewRequestDate(to sharedDefaults: any SharedPreferenceStorage) -> Bool {
         guard let legacyDate = legacyDate(forKey: Keys.latestReviewRequestDate) else { return false }
         if let sharedDate = sharedDefaults.object(forKey: Keys.latestReviewRequestDate) as? Date,
            sharedDate >= legacyDate {
@@ -63,7 +66,7 @@ struct Defaults {
         return true
     }
 
-    private static func migrateReviewRequestsCount(to sharedDefaults: UserDefaults) -> Bool {
+    private static func migrateReviewRequestsCount(to sharedDefaults: any SharedPreferenceStorage) -> Bool {
         guard let legacyCount = legacyInteger(forKey: Keys.reviewRequestsGoodMomentsCount) else { return false }
         let sharedObject = sharedDefaults.object(forKey: Keys.reviewRequestsGoodMomentsCount)
         if sharedObject != nil, sharedDefaults.integer(forKey: Keys.reviewRequestsGoodMomentsCount) >= legacyCount {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import fs, {existsSync, readFileSync} from "node:fs";
-import {mkdtemp, readFile, rm} from "node:fs/promises";
+import {mkdtemp, readFile, rm, writeFile} from "node:fs/promises";
 import {syncBuiltinESMExports} from "node:module";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
@@ -8,7 +8,7 @@ import {performance} from "node:perf_hooks";
 import {Writable} from "node:stream";
 import test from "node:test";
 import {setTimeout as delay} from "node:timers/promises";
-import {runProcess} from "../guest.mjs";
+import {runProcess, SAFARI_TERMINATION_GRACE_MILLISECONDS} from "../guest.mjs";
 
 function alive(pid) {
     try { process.kill(pid, 0); return true; }
@@ -133,4 +133,93 @@ test("prelaunch cancellation does not create a process", async () => {
     assert.equal(result.cancelled, true);
     assert.equal(result.timedOut, false);
     assert.equal(result.error, undefined);
+});
+
+test("Safari cancellation allows the actual finalizer to complete cleanup beyond five seconds", {timeout: 15000}, async context => {
+    const root = await mkdtemp(join(tmpdir(), "big-wallet-finalization-unit-"));
+    context.after(() => rm(root, {recursive: true, force: true}));
+    const ready = join(root, "ready");
+    const descriptorPath = join(root, "descriptor.json");
+    await writeFile(descriptorPath, '{"runID":"fixture"}');
+    const wrapper = `
+        import {writeFile} from 'node:fs/promises';
+        import {setTimeout as delay} from 'node:timers/promises';
+        import {finalizeSafariRun} from ${JSON.stringify(new URL("../../safari/run.mjs", import.meta.url).href)};
+        const keepAlive = setInterval(() => {}, 1000);
+        const interrupted = new Promise(resolve => process.once('SIGTERM', resolve));
+        await writeFile(${JSON.stringify(ready)}, 'ready');
+        await interrupted;
+        clearInterval(keepAlive);
+        const server = {token: 'fixture-controller-token', pageToken: 'fixture-page-token', allowedExecutables: new Set(),
+            async close() {
+                await delay(6000);
+                this.cleanup = {status: 'passed'};
+                await writeFile(${JSON.stringify(join(root, "safari.fixture.safari.json"))}, JSON.stringify({cleanup: this.cleanup}));
+            }};
+        try {
+            await finalizeSafariRun({server, descriptorPath: ${JSON.stringify(descriptorPath)}, artifacts: ${JSON.stringify(root)},
+                stageId: 'safari.fixture', platform: 'ios', startedAt: Date.now(), interrupted: true,
+                primaryError: new Error('fixture cancellation')}, async (command, _args, options) => {
+                    if (command !== '/usr/bin/log' || options.timeoutSeconds !== 1) throw new Error('Unexpected finalizer command');
+                    return 'fixture diagnostics';
+                });
+        } catch (error) {
+            if (error.message !== 'fixture cancellation') throw error;
+            process.exitCode = 1;
+        }
+    `;
+    const started = performance.now();
+    const result = await runProcess(process.execPath, ["--input-type=module", "-e", wrapper], {
+        terminationGraceMilliseconds: SAFARI_TERMINATION_GRACE_MILLISECONDS,
+        timeoutSeconds: 12, stopRequested: async () => existsSync(ready),
+    });
+    assert.equal(result.cancelled, true);
+    assert.equal(result.code, 1);
+    assert.equal(result.signal, null);
+    assert.ok(performance.now() - started < 12000);
+    const finalization = JSON.parse(await readFile(join(root, "safari.fixture.safari-finalization.json"), "utf8"));
+    assert.equal(finalization.primaryFailure, "fixture cancellation");
+    assert.equal(finalization.status, "passed");
+    assert.deepEqual(finalization.failures, []);
+    assert.equal(JSON.parse(await readFile(join(root, "safari.fixture.safari.json"), "utf8")).cleanup.status, "passed");
+    assert.equal(await readFile(join(root, "safari.fixture.safari-diagnostics.log"), "utf8"), "fixture diagnostics");
+});
+
+test("extended cancellation grace still kills an uncooperative wrapper at its hard cap", {timeout: 12000}, async context => {
+    const root = await mkdtemp(join(tmpdir(), "big-wallet-grace-cap-unit-"));
+    context.after(() => rm(root, {recursive: true, force: true}));
+    const ready = join(root, "ready");
+    const wrapper = `process.on('SIGTERM', () => {}); require('node:fs').writeFileSync(${JSON.stringify(ready)}, 'ready'); setTimeout(() => process.exit(7), 11000);`;
+    const started = performance.now();
+    const result = await runProcess(process.execPath, ["-e", wrapper], {
+        terminationGraceMilliseconds: 6000, timeoutSeconds: 10, stopRequested: async () => existsSync(ready),
+    });
+    assert.equal(result.cancelled, true);
+    assert.equal(result.signal, "SIGKILL");
+    assert.ok(performance.now() - started >= 6000);
+    assert.ok(performance.now() - started < 10000);
+});
+
+test("graceful wrapper exit cancels extended escalation without a delayed group signal", {timeout: 12000}, async context => {
+    const root = await mkdtemp(join(tmpdir(), "big-wallet-grace-exit-unit-"));
+    context.after(() => rm(root, {recursive: true, force: true}));
+    const ready = join(root, "ready");
+    const kill = process.kill.bind(process);
+    const signals = [];
+    context.mock.method(process, "kill", (pid, signal) => {
+        signals.push({pid, signal});
+        if (signal === "SIGKILL") { return true; }
+        return kill(pid, signal);
+    });
+    const wrapper = `process.on('SIGTERM', () => process.exit(0)); require('node:fs').writeFileSync(${JSON.stringify(ready)}, 'ready'); setTimeout(() => process.exit(7), 10000);`;
+    const started = performance.now();
+    const result = await runProcess(process.execPath, ["-e", wrapper], {
+        terminationGraceMilliseconds: 6000, timeoutSeconds: 10, stopRequested: async () => existsSync(ready),
+    });
+    assert.equal(result.cancelled, true);
+    assert.equal(result.code, 0);
+    assert.equal(result.signal, null);
+    assert.ok(performance.now() - started < 2000);
+    await delay(6500);
+    assert.deepEqual(signals.map(value => value.signal), ["SIGTERM"]);
 });
