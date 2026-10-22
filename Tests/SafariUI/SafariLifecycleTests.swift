@@ -687,7 +687,7 @@ final class SafariLifecycleTests: XCTestCase {
             try await control.fault("rpc-fees", parameters: ["multiplier": 10])
             try await control.gate("authentication", "release")
 #if os(macOS)
-            try self.require(self.passwordField.waitForExistence(timeout: 12), "Held transaction authentication did not resume")
+            try self.require(try await self.waitForPasswordField(timeout: 12), "Held transaction authentication did not resume")
             try await self.authenticateIfPresent(control: control)
 #endif
             try await self.showApproval(control: control)
@@ -868,7 +868,7 @@ final class SafariLifecycleTests: XCTestCase {
                 try await control.gate("authentication", "release")
 #if os(macOS)
                 if self.helperIsRunning { self.helper.activate() }
-                if self.passwordField.waitForExistence(timeout: 8) { try await self.authenticateIfPresent(control: control) }
+                if try await self.waitForPasswordField(timeout: 8) { try await self.authenticateIfPresent(control: control) }
 #endif
                 self.safari.activate()
                 try await control.assertNoSigningOrBroadcast()
@@ -977,6 +977,13 @@ final class SafariLifecycleTests: XCTestCase {
         try require(notice.waitForExistence(timeout: 15), "Updated transaction review did not show \(title)")
     }
 
+#if os(macOS)
+    @MainActor
+    private var transactionEditor: XCUIElement {
+        helper.sheets.containing(.textField, identifier: "transactionNonceField").firstMatch
+    }
+#endif
+
     @MainActor
     private func openTransactionEditor() throws -> XCUIElement {
 #if os(macOS)
@@ -985,7 +992,7 @@ final class SafariLifecycleTests: XCTestCase {
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: editor)
         try require(XCTWaiter.wait(for: [ready], timeout: 15) == .completed, "Transaction preparation never enabled its editor")
         try click(editor, "transaction editor")
-        let field = helper.textFields["transactionNonceField"]
+        let field = transactionEditor.textFields["transactionNonceField"]
 #else
         let summary = popup.buttons["Advanced"]
         if !popup.textFields["Nonce"].exists {
@@ -1015,7 +1022,9 @@ final class SafariLifecycleTests: XCTestCase {
         try require(enteredNonce == nonce,
                     "Nonce entry expected \(nonce), received \(enteredNonce ?? "<unreadable>")")
 #if os(macOS)
-        try click(helper.buttons["Apply"], "apply reviewed transaction edits")
+        let sheet = transactionEditor
+        try click(sheet.buttons["Apply"], "apply reviewed transaction edits")
+        try require(sheet.waitForNonExistence(timeout: 10), "The transaction editor did not close after applying edits")
 #else
         let network = popup.otherElements["Network, region"]
         try revealPopupElement(network, "transaction network")
@@ -1038,7 +1047,9 @@ final class SafariLifecycleTests: XCTestCase {
         let field = try openTransactionEditor()
         guard let value = field.value as? String else { throw SafariUIFailure("Nonce field has no readable value") }
 #if os(macOS)
-        try click(helper.buttons["Cancel"], "close unchanged transaction editor")
+        let sheet = transactionEditor
+        try click(sheet.buttons["Cancel"], "close unchanged transaction editor")
+        try require(sheet.waitForNonExistence(timeout: 10), "The unchanged transaction editor did not close")
 #else
         let summary = popup.buttons["Advanced"]
         try revealPopupElement(summary, "transaction editor disclosure")
@@ -1176,8 +1187,13 @@ final class SafariLifecycleTests: XCTestCase {
         wallet.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         wallet.launch()
         if localSigning {
+#if os(macOS)
+            try require(try await waitForPasswordField(in: wallet, timeout: 12),
+                        "The fixture wallet did not present its real password entry screen")
+#else
             try require(passwordField.waitForExistence(timeout: 12),
                         "The fixture wallet did not present its real password entry screen")
+#endif
         }
         try await authenticateIfPresent(control: control)
         safari.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
@@ -1264,6 +1280,19 @@ final class SafariLifecycleTests: XCTestCase {
 #endif
         return passwordField.exists
     }
+
+#if os(macOS)
+    @MainActor
+    private func waitForPasswordField(in application: XCUIApplication? = nil, timeout: TimeInterval) async throws -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            let field = application?.secureTextFields["safari.authentication.password"] ?? passwordField
+            if field.exists { return true }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        return (application?.secureTextFields["safari.authentication.password"] ?? passwordField).exists
+    }
+#endif
 
     @MainActor
     private func showApproval(control: SafariUIControl) async throws {
@@ -1404,28 +1433,41 @@ final class SafariLifecycleTests: XCTestCase {
         guard passwordIsVisible else { return }
 #if os(macOS)
         let app = helperIsRunning && helper.secureTextFields["safari.authentication.password"].exists ? helper : wallet
+        let field = app.secureTextFields["safari.authentication.password"]
 #else
         let app = wallet
+        let field = passwordField
 #endif
         app.activate()
-        try click(passwordField, "wallet password field")
-        passwordField.typeText("approval-fixture-password")
+        try click(field, "wallet password field")
+        field.typeText("approval-fixture-password")
 #if os(macOS)
         try click(app.buttons["safari.authentication.confirm"], "wallet password confirmation")
 #else
         try click(app.buttons["OK"], "wallet password confirmation")
 #endif
         let deadline = Date().addingTimeInterval(8)
+#if os(macOS)
+        while field.exists && Date() < deadline {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        try require(!field.exists, "The wallet did not accept the fixture password")
+#else
         while passwordIsVisible && Date() < deadline {
             try await Task.sleep(for: .milliseconds(100))
         }
         try require(!passwordIsVisible, "The wallet did not accept the fixture password")
+#endif
     }
 
     @MainActor
     private func perform(_ action: String, control: SafariUIControl) async throws {
         try await control.markAction(action)
+#if os(macOS)
+        safari.activate()
+#else
         if safari.state != .runningForeground { safari.activate() }
+#endif
 #if os(iOS)
         let switchAccount = popup.buttons["Switch Account"]
         if popupDone.exists && switchAccount.exists && switchAccount.isEnabled {
@@ -1498,7 +1540,7 @@ final class SafariLifecycleTests: XCTestCase {
                 wallet.terminate()
                 try await control.post("refresh-extension-registration", [:])
                 wallet.launch()
-                try require(passwordField.waitForExistence(timeout: 12), "The containing wallet did not reopen after unsigned extensions were enabled")
+                try require(try await waitForPasswordField(in: wallet, timeout: 12), "The containing wallet did not reopen after unsigned extensions were enabled")
                 try await authenticateIfPresent(control: control)
                 safari.activate()
             }
@@ -1770,13 +1812,22 @@ final class SafariLifecycleTests: XCTestCase {
 #if os(macOS)
         openSafariSettings()
         try click(safari.buttons["Profiles"], "Safari Profiles settings")
-        let create = safari.buttons["Start Using Profiles"].exists ? safari.buttons["Start Using Profiles"] : safari.buttons["New Profile"]
+        let create = safari.buttons.matching(NSPredicate(
+            format: "identifier == %@ OR label == %@", "StartUsingProfilesButton", "Add Profile"
+        )).firstMatch
         try click(create, "create isolated Safari profile")
-        try click(safari.textFields["Name"], "Safari profile name")
-        safari.textFields["Name"].typeText(profile)
-        try click(safari.buttons["Create Profile"], "save isolated Safari profile")
+        let form = safari.sheets.containing(.textField, identifier: "CreateProfileFormNameTextField").firstMatch
+        let name = form.textFields["CreateProfileFormNameTextField"]
+        try click(name, "Safari profile name")
+        name.typeKey("a", modifierFlags: .command)
+        name.typeText(profile)
+        try require(name.value as? String == profile, "Safari did not receive the exact fixture profile name")
+        try click(form.buttons["CreateProfileFormCreateProfileButton"], "save isolated Safari profile")
+        try require(form.waitForNonExistence(timeout: 10), "Safari did not finish creating the isolated profile")
         closeSafariSettings()
         try click(safari.menuBars.menuBarItems["File"], "Safari File menu")
+        let newWindowSubmenu = safari.menuItems["NewWindowSubmenuItem"]
+        if newWindowSubmenu.exists { try click(newWindowSubmenu, "Safari profile window submenu") }
         try click(safari.menuItems["New \(profile) Window"], "open isolated Safari profile")
 #else
         let settings = try openIOSSafariSettings()
@@ -2129,7 +2180,8 @@ final class SafariLifecycleTests: XCTestCase {
         for _ in 0..<8 {
             try require(popup.exists && element.exists, "The popup closed or changed while revealing \(description)")
             if element.isHittable { return }
-            var viewport = popup.frame.intersection(safari.frame)
+            let applicationFrame = safari.frame
+            var viewport = popup.frame.intersection(applicationFrame)
             let navigation = safari.navigationBars["Wallet"]
             if navigation.exists {
                 let top = max(viewport.minY, navigation.frame.maxY)
@@ -2143,18 +2195,33 @@ final class SafariLifecycleTests: XCTestCase {
             try require(!viewport.isEmpty && !viewport.isNull && !viewport.isInfinite,
                         "The popup has no visible scrolling area for \(description)")
             let previousFrame = element.frame
+            let upward: Bool
             if previousFrame.minY < viewport.minY {
-                popup.swipeDown()
+                upward = false
             } else if previousFrame.maxY > viewport.maxY {
-                popup.swipeUp()
+                upward = true
             } else {
                 let hittable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND hittable == true"), object: element)
                 try require(XCTWaiter.wait(for: [hittable], timeout: 3) == .completed,
                             "The visible \(description) remains blocked in the popup")
                 return
             }
+            let scrollThumb = scrollIndicator.children(matching: .other).firstMatch
+            try require(scrollIndicator.exists && scrollThumb.exists,
+                        "The popup has no outer scroll gutter for \(description)")
+            let gutter = scrollThumb.frame.intersection(viewport)
+            try require(!gutter.isEmpty && !gutter.isNull && !gutter.isInfinite,
+                        "The popup has no visible outer scroll gutter for \(description)")
+            let origin = safari.coordinate(withNormalizedOffset: .zero)
+            let start = origin.withOffset(CGVector(dx: gutter.midX - applicationFrame.minX,
+                dy: viewport.minY - applicationFrame.minY + viewport.height * (upward ? 0.8 : 0.2)))
+            let end = origin.withOffset(CGVector(dx: gutter.midX - applicationFrame.minX,
+                dy: viewport.minY - applicationFrame.minY + viewport.height * (upward ? 0.2 : 0.8)))
+            start.press(forDuration: 0.1, thenDragTo: end)
             try require(popup.exists && element.exists, "The popup closed or changed while scrolling to \(description)")
-            try require(element.isHittable || element.frame != previousFrame,
+            let currentFrame = element.frame
+            let progressed = upward ? currentFrame.minY < previousFrame.minY : currentFrame.maxY > previousFrame.maxY
+            try require(element.isHittable || progressed,
                         "The popup did not scroll toward \(description)")
         }
         try require(popup.exists && element.exists && element.isHittable,
