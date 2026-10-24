@@ -15,20 +15,125 @@ const {keccak_256} = fixtureRequire("@noble/hashes/sha3");
 const {Keypair, Transaction} = fixtureRequire("@solana/web3.js");
 const base58Module = fixtureRequire("bs58");
 const base58 = base58Module.default || base58Module;
+const defaultSynchronization = () => ({schemaVersion: 1, policy: "xctest-default", hookInstalled: false});
+const iosSynchronization = (completed = false) => ({
+    schemaVersion: 1, policy: "safari-event-loop-only", installationID: "c3ad3bc5-47ca-498f-a209-b14e554102df",
+    hookInstalled: true, hookActive: true,
+    framework: {bundleIdentifier: "com.apple.dt.XCUIAutomation", version: "25228", imageUUID: "6C9998E3-2351-34D3-BAAB-B523F500A26A"},
+    selector: "waitForQuiescenceIncludingAnimationsIdle:usingActivity:isPreEvent:", methodEncoding: "v28@0:8B16B20B24",
+    counters: {interceptedCalls: completed ? 3 : 0, originalForwards: completed ? 3 : 0,
+        safariPreRewrites: completed ? 1 : 0, safariPostRewrites: completed ? 1 : 0,
+        nonSafariForwards: completed ? 1 : 0, nonSafariArgumentChanges: 0},
+});
 
 async function harness(context, scenario = "install-native-roundtrip", options = {}) {
     const root = await realpath(await mkdtemp(join(tmpdir(), "safari-fixtures-")));
-    const descriptor = {version: 1, runID: "run-test", root, platform: "macos", signingMode: "local", configuration: "Debug"};
-    const server = await new SafariFixtureServer({descriptor, stageId: "safari.macos.debug", artifacts: join(root, "artifacts"), guestCredentialPath: join(root, "guest-credential.json"), ...options}).start();
+    const {platform = "macos", ...serverOptions} = options;
+    const descriptor = {version: 1, runID: "run-test", root, platform, signingMode: "local", configuration: "Debug"};
+    const server = await new SafariFixtureServer({descriptor, stageId: `safari.${platform}.debug`, artifacts: join(root, "artifacts"), guestCredentialPath: join(root, "guest-credential.json"), ...serverOptions}).start();
     context.after(async () => { await server.close(); await rm(root, {recursive: true, force: true}); });
     const control = (path, value = {}) => fetch(`${server.url}/control/${path}`, {
-        method: "POST", headers: {Authorization: `Bearer ${server.token}`, "Content-Type": "application/json"}, body: JSON.stringify(value),
+        method: "POST", headers: {Authorization: `Bearer ${server.token}`, "Content-Type": "application/json"},
+        body: JSON.stringify(["start", "finish"].includes(path)
+            ? {synchronization: platform === "ios" ? iosSynchronization(path === "finish") : defaultSynchronization(), ...value} : value),
     });
     assert.equal((await control("start", {scenario, iteration: 1})).status, 200);
     const document = await (await fetch(`${server.dappURL}/page-config`)).json();
     const report = value => fetch(`${server.dappURL}/page-result`, {method: "POST", headers: {"X-Page-Token": server.pageToken, "Content-Type": "application/json"}, body: JSON.stringify({origin: server.dappURL, documentId: document.documentId, ...value, scenario: {id: scenario, iteration: 1}})});
     return {server, root, control, report, document};
 }
+
+test("scenario synchronization receipts remain authenticated and are preserved in configuration and final evidence", async context => {
+    for (const platform of ["ios", "macos"]) {
+        const {server, root, control, report} = await harness(context, "authority-revocation", {platform});
+        const before = platform === "ios" ? iosSynchronization() : defaultSynchronization();
+        const after = platform === "ios" ? iosSynchronization(true) : defaultSynchronization();
+        assert.equal((await (await control("config")).json()).synchronizationPolicy, before.policy);
+        assert.deepEqual((await (await control("state")).json()).synchronization, {before, after: null});
+        const finish = {scenario: "authority-revocation", iteration: 1, status: "passed", synchronization: after};
+        assert.equal((await fetch(`${server.url}/control/finish`, {method: "POST", body: JSON.stringify(finish)})).status, 403);
+        assert.equal((await fetch(`${server.dappURL}/control/finish`, {
+            method: "POST", headers: {Authorization: `Bearer ${server.token}`}, body: JSON.stringify(finish),
+        })).status, 403);
+        assert.equal(server.scenarios.length, 0);
+        await appendFile(join(root, "native-events.ndjson"), JSON.stringify({...siteIngress(server),
+            runID: server.descriptor.runID, scenario: "authority-revocation", iteration: 1}) + "\n");
+        assert.equal((await report({phase: "provider-ready"})).status, 200);
+        assert.equal((await control("finish", finish)).status, 200);
+        await server.close();
+        const ledger = JSON.parse(await readFile(join(server.artifacts, `${server.stageId}.safari.json`), "utf8"));
+        const evidence = JSON.parse(await readFile(join(server.artifacts, `${server.stageId}.safari-evidence.json`), "utf8"));
+        assert.equal(ledger.synchronizationPolicy, before.policy);
+        assert.equal(ledger.scenarios[0].status, "passed");
+        assert.deepEqual(ledger.scenarios[0].synchronization, {before, after});
+        assert.deepEqual(evidence[0].synchronization, {before, after});
+    }
+});
+
+test("an invalid start snapshot cannot replace or abandon the active scenario", async context => {
+    for (const platform of ["ios", "macos"]) {
+        const {server, control} = await harness(context, "authority-revocation", {platform});
+        const current = {...server.current};
+        const origins = [...server.scenarioOrigins.keys()];
+        const proof = structuredClone(server.synchronization);
+        for (const synchronization of [undefined, {}, {schemaVersion: 1, policy: "xctest-default", hookInstalled: true}]) {
+            assert.equal((await control("start", {scenario: "profiles-private", iteration: 1, synchronization})).status, 400);
+            assert.deepEqual(server.current, current);
+            assert.deepEqual([...server.scenarioOrigins.keys()], origins);
+            assert.deepEqual(server.synchronization, proof);
+            assert.equal(server.scenarios.length, 0);
+        }
+    }
+});
+
+test("missing or partial finish snapshots preserve the failure without creating passed coverage", async context => {
+    for (const synchronization of [undefined, {schemaVersion: 1, policy: "safari-event-loop-only", hookActive: false}]) {
+        const {server, control, root, report} = await harness(context, "authority-revocation", {platform: "ios"});
+        await appendFile(join(root, "native-events.ndjson"), JSON.stringify({...siteIngress(server),
+            runID: server.descriptor.runID, scenario: "authority-revocation", iteration: 1}) + "\n");
+        assert.equal((await report({phase: "provider-ready"})).status, 200);
+        const response = await control("finish", {scenario: "authority-revocation", iteration: 1,
+            status: "passed", synchronization, evidence: {error: "hook evidence unavailable"}});
+        assert.equal(response.status, 422);
+        const row = await response.json();
+        assert.equal(row.status, "failed");
+        assert.deepEqual(row.synchronization, {before: iosSynchronization(), after: synchronization ?? null});
+        assert.deepEqual(row.evidence, {error: "hook evidence unavailable"});
+        assert.ok(row.issues.length > 0);
+    }
+});
+
+test("duplicate finishes cannot overwrite recorded synchronization proof", async context => {
+    const {server, control} = await harness(context, "authority-revocation", {platform: "ios"});
+    const finish = {scenario: "authority-revocation", iteration: 1, status: "failed"};
+    assert.equal((await control("finish", finish)).status, 422);
+    const recorded = structuredClone(server.scenarios[0]);
+    assert.equal((await control("finish", {...finish, synchronization: null})).status, 400);
+    assert.deepEqual(server.scenarios[0], recorded);
+});
+
+test("abandoned scenarios retain their initial hook snapshot and failed coverage", async context => {
+    const {server, control} = await harness(context, "authority-revocation", {platform: "ios"});
+    assert.equal((await control("start", {scenario: "profiles-private", iteration: 1})).status, 200);
+    assert.equal(server.scenarios[0].status, "failed");
+    assert.deepEqual(server.scenarios[0].synchronization, {before: iosSynchronization(), after: null});
+    assert.equal(server.scenarios[0].evidence.abandoned, true);
+});
+
+test("shutdown records an unfinished scenario with its authenticated initial hook snapshot", async context => {
+    const {server} = await harness(context, "authority-revocation", {platform: "ios"});
+    await server.close();
+    const ledger = JSON.parse(await readFile(join(server.artifacts, `${server.stageId}.safari.json`), "utf8"));
+    const evidence = JSON.parse(await readFile(join(server.artifacts, `${server.stageId}.safari-evidence.json`), "utf8"));
+    assert.equal(ledger.scenarios.length, 1);
+    assert.equal(ledger.scenarios[0].status, "failed");
+    assert.deepEqual(ledger.scenarios[0].synchronization, {before: iosSynchronization(), after: null});
+    assert.equal(ledger.scenarios[0].evidence.abandoned, true);
+    assert.ok(ledger.scenarios[0].issues.includes("XCTest ended without finishing this scenario"));
+    assert.deepEqual(evidence[0].synchronization, ledger.scenarios[0].synchronization);
+    await server.close();
+    assert.equal(server.scenarios.length, 1);
+});
 
 test("interactive activation is opt-in and records ordered observed states without completing a scenario", async context => {
     const {server, control, root} = await harness(context, "install-native-roundtrip", {interactiveActivation: true});
@@ -783,7 +888,7 @@ test("a later stage rejects a reoffered website port before serving any scenario
     };
     const startScenario = server => fetch(server.url + "/control/start", {method: "POST",
         headers: {Authorization: "Bearer " + server.token, "Content-Type": "application/json"},
-        body: JSON.stringify({scenario: "install-native-roundtrip", iteration: 1})});
+        body: JSON.stringify({scenario: "install-native-roundtrip", iteration: 1, synchronization: defaultSynchronization()})});
     const first = await make("safari.macos.release");
     assert.equal((await startScenario(first)).status, 200);
     const priorOrigins = [first.dappURL, first.secondURL];

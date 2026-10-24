@@ -1,7 +1,9 @@
 "use strict";
 
 (async () => {
+    document.getElementById("fixture-origin").textContent = `Fixture origin: ${location.origin}`;
     const config = await (await fetch("/page-config")).json();
+    document.getElementById("fixture-document").textContent = `Fixture document: ${config.documentId}`;
     const resultNode = document.getElementById("result");
     const actions = ["ethereum-connect", "ethereum-sign", "ethereum-send", "ethereum-revoke", "ethereum-chain", "ethereum-mainnet", "ethereum-permissions",
         "ethereum-add-custom", "ethereum-switch-custom", "ethereum-send-custom", "ethereum-send-estimated",

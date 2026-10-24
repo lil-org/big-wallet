@@ -1,5 +1,6 @@
 import {isAbsolute, join, resolve, sep} from "node:path";
 import {SAFARI_SCENARIOS, SAFARI_TEST_CLASS} from "../safari/scenarios.mjs";
+import {expectedSynchronizationPolicy} from "../safari/synchronization.mjs";
 
 export const SELECTORS = ["build", "test", "performance", "tsan", "fuzz", "approval", "safari", "repository", "worker"];
 export const BOOTSTRAP_TOOL_NAMES = ["VMGuestAgent", "guest_runner", "guest_bootstrap.mjs"];
@@ -300,6 +301,7 @@ export function createManifest(job) {
                     dependencies, scratchDirectory: true, resultBundle: true, timeoutSeconds: (iterations === 1 ? 7200 : 21600) + SAFARI_STAGE_OVERHEAD_SECONDS,
                     requirements: ["node", "xcode", platform.requirement, ...(platform.id === "macos" ? ["safariAutomation"] : [])],
                     nativeAudit: {kind: "safari", platform: platform.id, configuration, signing, iterations,
+                        synchronizationPolicy: expectedSynchronizationPolicy(platform.id),
                         activationMode: prepared ? "prepared" : interactive ? "interactive" : "automatic",
                         ...(prepared ? {preparation: structuredClone(prepared)} : {}),
                         requiredTests, requiredScenarios: scenarios.map(scenario => scenario.id),

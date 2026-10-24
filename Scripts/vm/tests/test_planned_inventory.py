@@ -34,6 +34,7 @@ class RunSnapshotBindingTests(unittest.TestCase):
         scenarios = self.tools.parent / 'safari/scenarios.mjs'
         scenarios.parent.mkdir()
         shutil.copyfile(host.TOOLS.parent / 'safari/scenarios.mjs', scenarios)
+        shutil.copyfile(host.TOOLS.parent / 'safari/synchronization.mjs', scenarios.with_name('synchronization.mjs'))
         for arguments in (('init', '-q'), ('config', 'user.email', 'fixture@example.invalid'),
                           ('config', 'user.name', 'Fixture'), ('add', '.'), ('commit', '-qm', 'fixture')):
             subprocess.run(['git', '-C', str(self.repository), *arguments], check=True, capture_output=True)
@@ -291,9 +292,11 @@ class PlannedInventoryTests(unittest.TestCase):
         scenarios = self.exchange / 'source/Scripts/safari/scenarios.mjs'
         scenarios.parent.mkdir()
         shutil.copyfile(host.TOOLS.parent / 'safari/scenarios.mjs', scenarios)
+        synchronization = scenarios.with_name('synchronization.mjs')
+        shutil.copyfile(host.TOOLS.parent / 'safari/synchronization.mjs', synchronization)
         host.atomic_json(self.exchange / 'snapshot-manifest.json', {'version': 1, 'files': [
             {'path': str(path.relative_to(self.exchange / 'source')), 'type': 'file', 'mode': 0o644,
-             'sha256': host.hash_regular_file(path)} for path in (self.manifest, scenarios)]})
+             'sha256': host.hash_regular_file(path)} for path in (self.manifest, scenarios, synchronization)]})
         self.job = {'version': 1, 'runId': 'plan-fixture', 'vmId': 'fixture-vm', 'kind': 'run',
                     'profile': 'all', 'payload': {'stages': [], 'onlyTesting': []},
                     'source': {'sha256': host.hash_regular_file(self.exchange / 'snapshot-manifest.json'), 'commit': 'b' * 40},
@@ -377,7 +380,8 @@ class PlannedInventoryTests(unittest.TestCase):
 
     def test_source_or_guest_manifest_drift_prevents_any_planning_command(self):
         for filename in (self.exchange / 'snapshot-manifest.json', self.manifest,
-                         self.exchange / 'source/Scripts/safari/scenarios.mjs'):
+                         self.exchange / 'source/Scripts/safari/scenarios.mjs',
+                         self.exchange / 'source/Scripts/safari/synchronization.mjs'):
             with self.subTest(filename=filename.name):
                 original = filename.read_bytes()
                 filename.write_bytes(original + b'\n')

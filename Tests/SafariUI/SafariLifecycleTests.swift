@@ -167,6 +167,11 @@ final class SafariLifecycleTests: XCTestCase {
     func testNavigationAndTabClosure() async throws {
         try await scenario("navigation-tab-closure") { control, config in
             try await self.prepare(control: control, config: config)
+#if os(iOS)
+            try self.openTabOverview()
+            try self.open(config.secondOriginURL)
+            try self.open(config.dappURL)
+#endif
             try await self.connect("ethereum", control: control)
             try await self.perform("ethereum-sign", control: control)
             try await self.showApproval(control: control)
@@ -176,6 +181,8 @@ final class SafariLifecycleTests: XCTestCase {
             try self.open(config.secondOriginURL)
             try await self.perform("provider-state", control: control)
             let unrelated = try await control.result("provider-state")
+            try self.require(unrelated["origin"] as? String == config.secondOriginURL,
+                             "Navigation did not load the requested fixture origin")
             let state = unrelated["result"] as? [String: Any]
             try self.require((state?["accounts"] as? [String])?.isEmpty == true,
                              "Navigation exposed the previous document's wallet connection to another origin")
@@ -588,7 +595,7 @@ final class SafariLifecycleTests: XCTestCase {
 #if os(iOS)
             try self.closeApproval()
 #endif
-            try self.open(config.dappURL)
+            try self.reload(config.dappURL)
             let after = try await self.providerState(control: control)
             guard let reloadedDocument = after["documentId"] as? String else {
                 throw SafariUIFailure("The reloaded page omitted its document identity")
@@ -801,7 +808,7 @@ final class SafariLifecycleTests: XCTestCase {
                 throw error
             }
             _ = try await self.applyMutation("restoreEthereumAccount", control: control)
-            try self.open(config.dappURL)
+            try self.reload(config.dappURL)
             try await self.connect("ethereum", control: control)
             try await self.perform("ethereum-sign", control: control)
             try await self.approve(control: control)
@@ -1011,11 +1018,34 @@ final class SafariLifecycleTests: XCTestCase {
     @MainActor
     private func editTransaction(nonce: String) throws {
         let field = try openTransactionEditor()
-        try click(field, "transaction nonce")
 #if os(macOS)
+        try click(field, "transaction nonce")
         field.typeKey("a", modifierFlags: .command)
 #else
+        let deadline = Date().addingTimeInterval(12)
+        _ = try waitForStableTarget(field, "transaction nonce", until: deadline)
+        field.tap()
+        let keyboard = safari.keyboards.firstMatch
+        var previousKeyboardFrame: CGRect?
+        let editableFrame: @MainActor () -> CGRect? = {
+            guard keyboard.exists && field.exists && field.isEnabled && field.isHittable else {
+                previousKeyboardFrame = nil
+                return nil
+            }
+            let keyboardFrame = keyboard.frame
+            let frame = field.frame
+            defer { previousKeyboardFrame = keyboardFrame }
+            guard !keyboardFrame.isEmpty && !keyboardFrame.isNull && !keyboardFrame.isInfinite,
+                  keyboardFrame == previousKeyboardFrame && frame.intersection(keyboardFrame).isEmpty else { return nil }
+            return frame
+        }
+        _ = try waitForStableFrame("focused transaction nonce", until: deadline, frame: editableFrame)
         field.doubleTap()
+        field.typeText(XCUIKeyboardKey.delete.rawValue)
+        _ = try waitForStableFrame("cleared transaction nonce", until: deadline) {
+            guard field.value as? String == "" else { return nil }
+            return editableFrame()
+        }
 #endif
         field.typeText(nonce)
         let enteredNonce = field.value as? String
@@ -1064,6 +1094,11 @@ final class SafariLifecycleTests: XCTestCase {
         continueAfterFailure = false
         let control = try SafariUIControl(bundle: Bundle(for: Self.self))
         let config = try await control.configuration()
+#if os(iOS)
+        var synchronizationError: NSError?
+        try require(BWSafariSynchronizationInstall(&synchronizationError),
+                    synchronizationError?.localizedDescription ?? "Safari synchronization could not be installed")
+#endif
 #if os(macOS)
         try configureApplications(config: config, runID: control.runID)
 #endif
@@ -1077,18 +1112,24 @@ final class SafariLifecycleTests: XCTestCase {
             activeDappURL = nil
             var finishAttempted = false
             do {
+                try await control.post("start", ["scenario": identifier, "iteration": iteration,
+                                                  "synchronization": try synchronizationSnapshot()])
                 if !retainedSafari, safari.state != .notRunning { safari.terminate() }
-                try await control.post("start", ["scenario": identifier, "iteration": iteration])
 #if os(iOS)
-                if iteration == 1 { try await configureReducedMotion() }
+                if iteration == 1 {
+                    try await configureReducedMotion()
+                    try configureSafariTabLayout()
+                }
 #endif
                 let iterationConfig = try await control.configuration()
                 try await body(control, iterationConfig)
                 attachEvidence("\(identifier)-\(iteration)")
                 try await cleanup(retainingSafari: canRetainSafari && iteration < config.iterations,
                                   resettingProfileSession: identifier == "profiles-private")
+                let synchronization = try synchronizationSnapshot()
                 finishAttempted = true
                 try await control.post("finish", ["scenario": identifier, "iteration": iteration,
+                                                  "synchronization": synchronization,
                                                   "status": "passed", "evidence": ["xcresult": name]])
             } catch {
                 attachEvidence("\(identifier)-\(iteration)-failure")
@@ -1096,12 +1137,29 @@ final class SafariLifecycleTests: XCTestCase {
                 do { try await cleanup(resettingProfileSession: identifier == "profiles-private") }
                 catch { evidence["cleanupError"] = String(describing: error) }
                 if !finishAttempted {
-                    try? await control.post("finish", ["scenario": identifier, "iteration": iteration,
-                                                       "status": "failed", "evidence": evidence])
+                    var failure: [String: Any] = ["scenario": identifier, "iteration": iteration,
+                                                   "status": "failed", "evidence": evidence]
+                    failure["synchronization"] = try? synchronizationSnapshot()
+                    try? await control.post("finish", failure)
                 }
                 throw error
             }
         }
+    }
+
+    @MainActor
+    private func synchronizationSnapshot() throws -> [String: Any] {
+#if os(iOS)
+        let value = BWSafariSynchronizationSnapshot()
+        guard value["policy"] as? String == "safari-event-loop-only",
+              value["hookInstalled"] as? Bool == true,
+              value["hookActive"] as? Bool == true else {
+            throw SafariUIFailure("Safari synchronization is no longer installed and active")
+        }
+        return value
+#else
+        ["schemaVersion": 1, "policy": "xctest-default", "hookInstalled": false]
+#endif
     }
 
     @MainActor
@@ -1131,7 +1189,7 @@ final class SafariLifecycleTests: XCTestCase {
         try require(safari.windows.count == 0, "Safari left fixture windows open after scenario cleanup")
 #else
         dismissKeyboardIntroduction(in: safari)
-        if popupDone.exists { popupDone.tap() }
+        if popupDone.exists { try closeApproval() }
         let resetProfileSession = resettingProfileSession && profilesConfigured
         try restoreOrdinaryBrowsing(profile: resetProfileSession ? "Personal" : nil)
         if let activeDappURL {
@@ -1147,12 +1205,7 @@ final class SafariLifecycleTests: XCTestCase {
             if resetProfileSession {
                 try require(ordinaryDocument.waitForExistence(timeout: 10),
                             "Safari did not restore an ordinary tab after the profile cleanup restart")
-                guard let fixtureURL = URL(string: activeDappURL) else {
-                    throw SafariUIFailure("The cleanup fixture page URL is invalid")
-                }
-                safari.open(fixtureURL)
-                try require(safari.buttons["ethereum-connect"].waitForExistence(timeout: 20),
-                            "The cleanup fixture dapp did not load in ordinary Safari")
+                try open(activeDappURL)
                 try require(ordinaryDocument.exists, "Safari did not open the cleanup fixture page in ordinary browsing")
             } else if safari.textViews["TabOverview"].exists || !ordinaryDocument.exists || !safari.buttons["ethereum-connect"].exists {
                 try open(activeDappURL)
@@ -1161,18 +1214,18 @@ final class SafariLifecycleTests: XCTestCase {
         }
         dismissKeyboardIntroduction(in: safari)
         let tabs = safari.buttons["TabOverviewButton"]
-        try require(tabs.waitForExistence(timeout: 8), "Cannot identify Safari's tabs control during scenario cleanup")
+        _ = try waitForStableTarget(tabs, "Safari tabs during cleanup", until: Date().addingTimeInterval(8))
         if tabs.exists {
             tabs.press(forDuration: 1)
-            let closeAll = safari.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Close All")).firstMatch
-            if closeAll.exists {
-                closeAll.tap()
-                let confirmation = safari.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Close All")).firstMatch
-                if confirmation.exists { confirmation.tap() }
-            } else if safari.buttons["Close This Tab"].exists {
-                safari.buttons["Close This Tab"].tap()
-            } else {
-                throw SafariUIFailure("Cannot close the fixture tabs during Safari scenario cleanup")
+            let closeAction = safari.buttons.matching(NSPredicate(
+                format: "label BEGINSWITH %@ OR label == %@", "Close All", "Close This Tab"
+            )).firstMatch
+            _ = try waitForStableTarget(closeAction, "Safari tab-closing menu", until: Date().addingTimeInterval(12))
+            let closesAll = closeAction.label.hasPrefix("Close All")
+            closeAction.tap()
+            if closesAll {
+                let confirmation = safari.sheets["ConfirmCloseAllTabsAlert"].buttons["CloseAllTabsButton"].firstMatch
+                try click(confirmation, "confirm closing fixture tabs")
             }
         }
 #endif
@@ -1198,6 +1251,9 @@ final class SafariLifecycleTests: XCTestCase {
         try await authenticateIfPresent(control: control)
         safari.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         safari.activate()
+#if os(iOS)
+        try dismissStartPageExtensionDiscovery()
+#endif
         if reuseSafari {
 #if os(macOS)
             safari.typeKey("n", modifierFlags: .command)
@@ -1212,8 +1268,15 @@ final class SafariLifecycleTests: XCTestCase {
 #if os(iOS)
         if privateBrowsing { try setPrivateExtensionEnabled() }
         try restoreOrdinaryBrowsing(profile: profilesConfigured ? "Personal" : nil)
-        guard let fixtureURL = URL(string: config.dappURL) else { throw SafariUIFailure("The fixture page URL is invalid") }
-        safari.open(fixtureURL)
+        try dismissStartPageExtensionDiscovery()
+        let previousDocument = try fixtureDocumentIdentity()
+        guard let url = URL(string: config.dappURL), url.scheme == "http", url.host == "127.0.0.1" else {
+            throw SafariUIFailure("The initial fixture page URL is invalid")
+        }
+        XCUIDevice.shared.system.open(url)
+        try require(safari.wait(for: .runningForeground, timeout: 10),
+                    "Safari did not open the initial fixture URL in the foreground")
+        try waitForFixtureDocument(config.dappURL, replacing: previousDocument)
 #else
         try open(config.dappURL)
 #endif
@@ -1224,6 +1287,12 @@ final class SafariLifecycleTests: XCTestCase {
             NSPredicate(format: "identifier BEGINSWITH %@ AND identifier CONTAINS %@", "TabDocument?", "&IsPrivate=false&")
         ).firstMatch
         try require(ordinaryDocument.exists, "Safari did not open the initial fixture page in ordinary browsing")
+        let address = safari.textFields.matching(NSPredicate(
+            format: "identifier IN %@", ["URL", "TabBarItemTitle"]
+        )).firstMatch
+        try require(address.exists && address.frame.height > 0 && address.frame.midY < safari.frame.midY,
+                    "Safari did not apply the expanded Top tab layout")
+        attachEvidence("ios-initial-fixture-ready")
 #endif
         try await allowFixtureWebsite(control: control, url: config.dappURL)
         try await control.waitForProviderReady()
@@ -1331,7 +1400,7 @@ final class SafariLifecycleTests: XCTestCase {
                         "The requested wallet account did not become selected")
         }
         let cluster = popup.switches.matching(NSPredicate(format: "label BEGINSWITH %@", "Devnet")).firstMatch
-        if !approvalButton.isEnabled, cluster.exists { cluster.tap() }
+        if !approvalButton.isEnabled, cluster.exists { try click(cluster, "finish the approval input") }
 #endif
         let deadline = Date().addingTimeInterval(10)
         while !approvalButton.isEnabled && Date() < deadline {
@@ -1342,11 +1411,13 @@ final class SafariLifecycleTests: XCTestCase {
 #if os(macOS)
         if doubleClick { approvalButton.doubleClick() } else { approvalButton.click() }
 #else
-        try revealPopupElement(approvalButton, "popup approval")
-        let title = approvalButton.label
+        let button = popup.buttons.matching(NSPredicate(format: "label IN[c] %@", ["Connect", "OK"] as NSArray)).firstMatch
+        try revealPopupElement(button, "popup approval")
+        _ = try waitForStableTarget(button, "Wallet approval decision", until: Date().addingTimeInterval(12))
+        let title = button.label
         try require(["connect", "ok"].contains(title.lowercased()),
                     "The popup action \(title) restores or edits a review and cannot be treated as approval")
-        if doubleClick { approvalButton.doubleTap() } else { approvalButton.tap() }
+        if doubleClick { button.doubleTap() } else { button.tap() }
 #endif
         try await authenticateIfPresent(control: control)
     }
@@ -1361,7 +1432,7 @@ final class SafariLifecycleTests: XCTestCase {
         }
         safari.activate()
 #if os(iOS)
-        if popupDone.exists { popupDone.tap() }
+        if popupDone.exists { try closeApproval() }
 #endif
     }
 
@@ -1471,30 +1542,164 @@ final class SafariLifecycleTests: XCTestCase {
 #if os(iOS)
         let switchAccount = popup.buttons["Switch Account"]
         if popupDone.exists && switchAccount.exists && switchAccount.isEnabled {
-            try click(popupDone, "dismiss the completed Wallet popup")
-            try require(popup.waitForNonExistence(timeout: 10), "The completed Wallet popup did not close")
+            try closeApproval()
         }
         if !popup.exists && !popupDone.exists { try dismissSafariMoreMenu() }
 #endif
+        try require(fixtureText(exactly: "Providers ready").waitForExistence(timeout: 15),
+                    "The current fixture document did not initialize its providers")
 #if os(macOS)
         let viewport = safari.windows.firstMatch.scrollViews.containing(.webView, identifier: nil).firstMatch
         try require(viewport.waitForExistence(timeout: 12), "Safari did not expose the fixture page viewport")
         let button = viewport.buttons[action]
 #else
-        let button = safari.buttons[action]
+        guard let document = try fixtureDocumentIdentity() else {
+            throw SafariUIFailure("Safari did not expose the current fixture document")
+        }
+        let page = fixtureWindow.webViews.containing(.staticText, identifier: document).firstMatch
+        try require(page.waitForExistence(timeout: 12), "Safari did not expose the current fixture web view")
+        let button = page.buttons[action]
 #endif
         try require(button.waitForExistence(timeout: 15), "The fixture action \(action) is missing")
-        for _ in 0..<8 where !button.isHittable {
 #if os(macOS)
+        for _ in 0..<8 where !button.isHittable {
             let above = button.frame.midY < viewport.frame.midY
             viewport.scroll(byDeltaX: 0, deltaY: above ? 400 : -400)
-#else
-            let above = button.frame.midY < safari.frame.midY
-            if above { safari.swipeDown() } else { safari.swipeUp() }
-#endif
         }
         try click(button, "fixture action \(action)")
+#else
+        try revealFixtureAction(button, in: page, documentIdentity: document, description: action)
+        let frame = try waitForStableTarget(button, "fixture action \(action)", until: Date().addingTimeInterval(12))
+        try require(page.exists && !popup.exists && !popupDone.exists && (try fixtureViewport(in: page)).contains(frame),
+                    "The fixture action changed or became obscured before its tap")
+        button.tap()
+#endif
     }
+
+#if os(iOS)
+    @MainActor
+    private func waitForStableFrame(_ description: String, until deadline: Date,
+                                    frame: @MainActor () throws -> CGRect?) throws -> CGRect {
+        var previous: CGRect?
+        while Date() < deadline {
+            if let current = try frame(), !current.isEmpty && !current.isNull && !current.isInfinite,
+               current.minX.isFinite && current.minY.isFinite && current.width.isFinite && current.height.isFinite {
+                if current == previous { return current }
+                previous = current
+            } else {
+                previous = nil
+            }
+            RunLoop.current.run(until: min(deadline, Date().addingTimeInterval(0.05)))
+        }
+        throw SafariUIFailure("The \(description) did not expose stable, usable geometry")
+    }
+
+    @MainActor
+    private func waitForStableTarget(_ element: XCUIElement, _ description: String, until deadline: Date) throws -> CGRect {
+        try waitForStableFrame(description, until: deadline) {
+            guard element.exists && element.isEnabled && element.isHittable else { return nil }
+            return element.frame
+        }
+    }
+
+    @MainActor
+    private func fixtureViewport(in page: XCUIElement) throws -> CGRect {
+        let bounds = page.frame.intersection(fixtureWindow.frame)
+        try require(!bounds.isEmpty && !bounds.isNull && !bounds.isInfinite,
+                    "The fixture web view has no visible frame")
+        let chrome = fixtureWindow.otherElements["CapsuleViewController"]
+        try require(chrome.exists, "Safari did not expose its browser chrome")
+        var top = bounds.minY
+        var bottom = bounds.maxY
+        for region in chrome.children(matching: .other).allElementsBoundByIndex {
+            let frame = region.frame.intersection(bounds)
+            guard !frame.isEmpty && !frame.isNull && !frame.isInfinite,
+                  frame.minX <= bounds.minX, frame.maxX >= bounds.maxX else { continue }
+            if frame.minY <= bounds.minY { top = max(top, frame.maxY) }
+            if frame.maxY >= bounds.maxY { bottom = min(bottom, frame.minY) }
+        }
+        try require(top > bounds.minY && bottom < bounds.maxY,
+                    "Safari did not expose its top and bottom browser chrome boundaries")
+        let viewport = CGRect(x: bounds.minX, y: top, width: bounds.width,
+                              height: max(0, bottom - top)).insetBy(dx: 8, dy: 8)
+        try require(!viewport.isEmpty && !viewport.isNull && !viewport.isInfinite,
+                    "Safari's browser chrome leaves no unobscured fixture viewport")
+        return viewport
+    }
+
+    @MainActor
+    private func revealFixtureAction(_ button: XCUIElement, in page: XCUIElement, documentIdentity: String, description: String) throws {
+        var actionButtonRightEdge: CGFloat?
+        var scrollIndicatorOwner: XCUIElement?
+        for attempt in 0...8 {
+            try require(!popup.exists && !popupDone.exists, "The Wallet popup blocks the fixture action \(description)")
+            try require(page.exists && button.exists, "The fixture document changed while revealing \(description)")
+            let viewport = try fixtureViewport(in: page)
+            let frame = button.frame
+            try require(!frame.isEmpty && !frame.isNull && !frame.isInfinite,
+                        "The fixture action \(description) has no usable frame")
+            if viewport.contains(frame) && button.isHittable { return }
+            guard attempt < 8 else { break }
+            try require(frame.maxY > viewport.maxY || frame.minY < viewport.minY,
+                        "The fixture action \(description) remains blocked inside its viewport")
+            let rightmostButton: CGFloat
+            if let cached = actionButtonRightEdge {
+                rightmostButton = cached
+            } else {
+                let actions = page.buttons.allElementsBoundByIndex
+                try require(!actions.isEmpty, "The fixture page has no action buttons to establish a safe scrolling corridor")
+                var rightEdge = viewport.minX
+                for action in actions {
+                    let actionFrame = action.frame
+                    try require(!actionFrame.isEmpty && !actionFrame.isNull && !actionFrame.isInfinite &&
+                                actionFrame.minX.isFinite && actionFrame.maxX.isFinite &&
+                                actionFrame.minY.isFinite && actionFrame.maxY.isFinite,
+                                "A fixture action has no usable frame for safe scrolling")
+                    rightEdge = max(rightEdge, actionFrame.maxX)
+                }
+                actionButtonRightEdge = rightEdge
+                rightmostButton = rightEdge
+            }
+            let nativeOwner: XCUIElement
+            if let cached = scrollIndicatorOwner {
+                nativeOwner = cached
+            } else {
+                let owners = fixtureWindow.otherElements.matching(NSPredicate(
+                    format: "identifier BEGINSWITH %@", "TabDocument?"
+                )).containing(.staticText, identifier: documentIdentity)
+                try require(owners.count == 1, "Safari did not expose one native owner for the fixture document")
+                let identifier = owners.firstMatch.identifier
+                nativeOwner = fixtureWindow.otherElements.matching(NSPredicate(format: "identifier == %@", identifier)).firstMatch
+                scrollIndicatorOwner = nativeOwner
+            }
+            try require(nativeOwner.exists, "The fixture document's native scroll owner changed")
+            let indicator = nativeOwner.otherElements.matching(NSPredicate(format: "label BEGINSWITH %@", "Vertical scroll bar")).firstMatch
+            try require(indicator.exists, "Safari did not expose the fixture page's vertical scroll indicator")
+            let indicatorFrame = indicator.frame
+            try require(!indicatorFrame.isEmpty && !indicatorFrame.isNull && !indicatorFrame.isInfinite &&
+                        indicatorFrame.minX.isFinite && indicatorFrame.maxX.isFinite &&
+                        indicatorFrame.minY.isFinite && indicatorFrame.maxY.isFinite && viewport.intersects(indicatorFrame),
+                        "Safari's vertical scroll indicator has no usable frame")
+            let corridorLeft = max(viewport.minX + 12, rightmostButton + 12)
+            let corridorRight = min(viewport.maxX - 12, indicatorFrame.minX - 12)
+            try require(corridorRight - corridorLeft >= 16,
+                        "The fixture page has no safe scrolling corridor between its actions and Safari's scroll indicator")
+            let maximumDistance = viewport.height * 0.4
+            let displacement = max(-maximumDistance, min(maximumDistance, frame.midY - viewport.midY))
+            try require(displacement.isFinite && abs(displacement) >= 1,
+                        "The fixture action has no usable scrolling displacement")
+            let applicationFrame = safari.frame
+            let origin = safari.coordinate(withNormalizedOffset: .zero)
+            let x = (corridorLeft + corridorRight) / 2 - applicationFrame.minX
+            let start = origin.withOffset(CGVector(dx: x,
+                dy: viewport.midY + displacement / 2 - applicationFrame.minY))
+            let end = origin.withOffset(CGVector(dx: x,
+                dy: viewport.midY - displacement / 2 - applicationFrame.minY))
+            start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
+        }
+        throw SafariUIFailure("The fixture action \(description) could not be fully revealed clear of Safari's browser chrome")
+    }
+#endif
 
     @MainActor
     private func enableExtension(control: SafariUIControl, profile: String? = nil) async throws {
@@ -1681,6 +1886,7 @@ final class SafariLifecycleTests: XCTestCase {
     @MainActor
     private func open(_ value: String) throws {
         safari.activate()
+        let previousDocument = try fixtureDocumentIdentity()
 #if os(macOS)
         safari.typeKey("l", modifierFlags: .command)
         let address = safari.windows.firstMatch.textFields["WEB_BROWSER_ADDRESS_AND_SEARCH_FIELD"]
@@ -1701,30 +1907,131 @@ final class SafariLifecycleTests: XCTestCase {
 #else
         if safari.textViews["TabOverview"].exists { try newTab() }
         let deadline = Date().addingTimeInterval(12)
-        while !safari.textFields["URL"].exists && Date() < deadline {
+        let address = fixtureWindow.textFields["URL"]
+        let keyboard = safari.keyboards.firstMatch
+        let addressControl = fixtureWindow.textFields["TabBarItemTitle"]
+        let collapsedAddress = fixtureWindow.otherElements["TabBarItemTitle"]
+        var didExpandAddress = false
+        var didFocusAddress = false
+        while Date() < deadline {
             dismissKeyboardIntroduction(in: safari)
-            let expanded = safari.textFields["TabBarItemTitle"]
-            let collapsed = safari.otherElements["TabBarItemTitle"]
-            if expanded.exists && expanded.isHittable {
-                try click(expanded, "Safari address field")
-            } else if collapsed.exists && collapsed.isHittable {
-                try click(collapsed, "collapsed Safari address field")
+            if address.exists && address.isHittable && keyboard.exists { break }
+            guard Date() < deadline else { break }
+            if !didFocusAddress && !address.exists && addressControl.exists && addressControl.isHittable {
+                _ = try waitForStableTarget(addressControl, "Safari address control", until: deadline)
+                addressControl.tap()
+                didFocusAddress = true
+            } else if !didExpandAddress && !didFocusAddress && !address.exists && collapsedAddress.exists && collapsedAddress.isHittable {
+                _ = try waitForStableTarget(collapsedAddress, "collapsed Safari address control", until: deadline)
+                collapsedAddress.tap()
+                didExpandAddress = true
             } else {
-                _ = safari.textFields["URL"].waitForExistence(timeout: min(0.2, max(0, deadline.timeIntervalSinceNow)))
+                RunLoop.current.run(until: min(deadline, Date().addingTimeInterval(0.05)))
             }
         }
-        dismissKeyboardIntroduction(in: safari)
-        let address = safari.textFields["URL"]
-        try require(address.exists, "Safari did not expose its focused address field")
-        try click(address, "focused Safari address field")
+        let focusedAddressFrame: @MainActor () -> CGRect? = {
+            guard address.exists && address.isEnabled && address.isHittable && keyboard.exists else { return nil }
+            return address.frame
+        }
+        _ = try waitForStableFrame("focused Safari address field", until: deadline, frame: focusedAddressFrame)
         let clear = safari.buttons["ClearTextButton"]
-        if clear.exists && clear.isEnabled { clear.tap() }
+        if clear.exists && clear.isEnabled {
+            let clearDeadline = Date().addingTimeInterval(12)
+            _ = try waitForStableTarget(clear, "clear the Safari address field", until: clearDeadline)
+            clear.tap()
+            _ = try waitForStableFrame("cleared Safari address field", until: clearDeadline, frame: focusedAddressFrame)
+        }
         address.typeText(value)
+        let entered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", value), object: address)
+        try require(XCTWaiter.wait(for: [entered], timeout: 5) == .completed,
+                    "Safari did not receive the exact fixture URL")
         let go = safari.keyboards.buttons["Go"]
-        try require(go.waitForExistence(timeout: 12) && go.isEnabled && go.isHittable,
-                    "Safari did not expose an enabled keyboard Go button")
-        go.tap()
+        try click(go, "Safari keyboard Go button")
+        try require(safari.keyboards.firstMatch.waitForNonExistence(timeout: 10),
+                    "Safari did not dismiss its keyboard after navigation")
 #endif
+        try waitForFixtureDocument(value, replacing: previousDocument)
+    }
+
+    @MainActor
+    private var fixtureWindow: XCUIElement { safari.windows.firstMatch }
+
+    private var fixtureTextAttribute: String {
+#if os(macOS)
+        "value"
+#else
+        "label"
+#endif
+    }
+
+    @MainActor
+    private func fixtureText(_ element: XCUIElement) -> String? {
+#if os(macOS)
+        element.value as? String
+#else
+        element.label
+#endif
+    }
+
+    @MainActor
+    private func fixtureText(exactly value: String) -> XCUIElement {
+        fixtureWindow.staticTexts.matching(NSPredicate(format: "%K == %@", fixtureTextAttribute, value)).firstMatch
+    }
+
+    @MainActor
+    private var fixtureDocument: XCUIElement {
+        fixtureWindow.staticTexts.matching(NSPredicate(format: "%K BEGINSWITH %@", fixtureTextAttribute, "Fixture document: ")).firstMatch
+    }
+
+    @MainActor
+    private func fixtureDocumentIdentity() throws -> String? {
+        let document = fixtureDocument
+        guard document.exists else { return nil }
+        guard let identity = fixtureText(document), identity.count > "Fixture document: ".count else {
+            throw SafariUIFailure("Safari exposed an unreadable fixture document identity")
+        }
+        return identity
+    }
+
+    @MainActor
+    private func reload(_ value: String) throws {
+        safari.activate()
+#if os(iOS)
+        if popupDone.exists { try closeApproval() }
+#endif
+        guard let previousDocument = try fixtureDocumentIdentity() else {
+            throw SafariUIFailure("Safari did not expose the fixture document before reload")
+        }
+#if os(macOS)
+        safari.typeKey("r", modifierFlags: .command)
+#else
+        let reload = fixtureWindow.buttons["ReloadButton"]
+        try click(reload, "reload the current Safari document")
+#endif
+        try waitForFixtureDocument(value, replacing: previousDocument)
+    }
+
+    @MainActor
+    private func waitForFixtureDocument(_ value: String, replacing previousDocument: String?) throws {
+        guard var origin = URLComponents(string: value), origin.scheme != nil, origin.host != nil else {
+            throw SafariUIFailure("The fixture page URL is invalid")
+        }
+        origin.path = ""
+        origin.query = nil
+        origin.fragment = nil
+        guard let expectedOrigin = origin.string else { throw SafariUIFailure("The fixture page origin is invalid") }
+        try require(fixtureText(exactly: "Fixture origin: \(expectedOrigin)").waitForExistence(timeout: 20),
+                    "Safari did not load the requested fixture origin \(expectedOrigin)")
+        let freshDocument = fixtureWindow.staticTexts.matching(NSPredicate(
+            format: "%K BEGINSWITH %@ AND %K != %@", fixtureTextAttribute, "Fixture document: ",
+            fixtureTextAttribute, previousDocument ?? ""
+        )).firstMatch
+        try require(freshDocument.waitForExistence(timeout: 20),
+                    "Safari did not load a fresh fixture document")
+        guard let identity = fixtureText(freshDocument), identity.count > "Fixture document: ".count,
+              identity != previousDocument else {
+            throw SafariUIFailure("Safari did not expose a fresh fixture document identity")
+        }
     }
 
     @MainActor
@@ -1747,7 +2054,7 @@ final class SafariLifecycleTests: XCTestCase {
         safari.typeKey("w", modifierFlags: .command)
 #else
         let tabs = safari.buttons["TabOverviewButton"]
-        try require(tabs.waitForExistence(timeout: 10), "Safari tabs control is unavailable")
+        _ = try waitForStableTarget(tabs, "Safari tabs control", until: Date().addingTimeInterval(10))
         tabs.press(forDuration: 1)
         try click(safari.buttons["Close This Tab"], "close pending request tab")
 #endif
@@ -1763,7 +2070,7 @@ final class SafariLifecycleTests: XCTestCase {
         let tabs = safari.buttons["TabOverviewButton"]
         let collapsed = safari.otherElements["TabBarItemTitle"]
         if !tabs.exists, collapsed.exists { try click(collapsed, "expand Safari's tab controls") }
-        try require(tabs.waitForExistence(timeout: 10) && tabs.isHittable, "Safari tabs control is unavailable")
+        _ = try waitForStableTarget(tabs, "Safari tabs control", until: Date().addingTimeInterval(10))
         tabs.press(forDuration: 1)
         attachEvidence("ios-private-tab-menu")
         try click(safari.buttons["New Private Tab"], "new private Safari tab")
@@ -1801,7 +2108,7 @@ final class SafariLifecycleTests: XCTestCase {
         let close = helper.windows.firstMatch.buttons[XCUIIdentifierCloseWindow]
         try click(close, "close approval window during authentication")
 #else
-        try click(popupDone, "dismiss extension popup during authentication")
+        try click(popupDone, "dismiss the Wallet approval")
         try require(popup.waitForNonExistence(timeout: 10) && popupDone.waitForNonExistence(timeout: 10),
                     "Safari did not dismiss the extension popup")
 #endif
@@ -2012,12 +2319,71 @@ final class SafariLifecycleTests: XCTestCase {
         let reduceMotion = settings.switches.matching(NSPredicate(format: "label == %@", "Reduce Motion")).firstMatch
         try revealSettingsSwitch(reduceMotion, in: settings, description: "Reduce Motion")
         try setSwitch(reduceMotion, enabled: true, description: "Reduce Motion")
+        let crossFade = settings.switches["REDUCE_MOTION_REDUCE_SLIDE_ANIMATIONS"]
+        try revealSettingsSwitch(crossFade, in: settings, description: "Prefer Cross-Fade Transitions")
+        try setSwitch(crossFade, enabled: true, description: "Prefer Cross-Fade Transitions")
         let deadline = Date().addingTimeInterval(5)
-        while !UIAccessibility.isReduceMotionEnabled, Date() < deadline {
+        while (!UIAccessibility.isReduceMotionEnabled || !UIAccessibility.prefersCrossFadeTransitions), Date() < deadline {
             try await Task.sleep(for: .milliseconds(100))
         }
-        try require(UIAccessibility.isReduceMotionEnabled, "The simulator did not apply Reduce Motion")
+        try require(UIAccessibility.isReduceMotionEnabled && UIAccessibility.prefersCrossFadeTransitions,
+                    "The simulator did not apply Reduce Motion and Prefer Cross-Fade Transitions")
         attachEvidence("ios-reduce-motion-enabled")
+        settings.terminate()
+    }
+
+    @MainActor
+    private func configureSafariTabLayout() throws {
+        let settings = try openIOSSafariSettings()
+        let layout = settings.cells["SEARCH_POSITION"]
+        let top = layout.staticTexts["Top"]
+        var revealed = false
+        for attempt in 0...12 {
+            let applicationFrame = settings.frame
+            let viewportTop = settings.navigationBars.firstMatch.frame.maxY + 12
+            var viewportBottom = applicationFrame.maxY - 50
+            let search = settings.searchFields.firstMatch
+            if search.exists && search.frame.height > 0 && search.frame.minY > viewportTop {
+                viewportBottom = min(viewportBottom, search.frame.minY - 12)
+            }
+            let viewport = CGRect(x: applicationFrame.minX + 8, y: viewportTop,
+                                  width: applicationFrame.width - 16, height: viewportBottom - viewportTop)
+            try require(!viewport.isEmpty && !viewport.isNull && !viewport.isInfinite,
+                        "Safari Settings did not expose a usable layout viewport")
+            let layoutFrame = layout.exists ? layout.frame : nil
+            let topFrame = top.exists ? top.frame : nil
+            let validTop = layoutFrame.map { cell in
+                topFrame.map { label in
+                    !cell.isEmpty && !cell.isNull && !cell.isInfinite &&
+                    !label.isEmpty && !label.isNull && !label.isInfinite && cell.contains(label)
+                } ?? false
+            } ?? false
+            if validTop, let topFrame, viewport.contains(topFrame), top.isHittable {
+                revealed = true
+                break
+            }
+            guard attempt < 12 else { break }
+            let target = validTop ? topFrame : layoutFrame
+            let maximumDistance = viewport.height * 0.4
+            let displacement: CGFloat
+            if let target, !target.isEmpty && !target.isNull && !target.isInfinite {
+                displacement = max(-maximumDistance, min(maximumDistance, target.midY - viewport.midY))
+                try require(abs(displacement) >= 1,
+                            "Safari Settings exposed a blocked Top tab layout option")
+            } else {
+                displacement = maximumDistance
+            }
+            let origin = settings.coordinate(withNormalizedOffset: .zero)
+            let x = viewport.maxX - 4 - applicationFrame.minX
+            let start = origin.withOffset(CGVector(dx: x,
+                dy: viewport.midY + displacement / 2 - applicationFrame.minY))
+            let end = origin.withOffset(CGVector(dx: x,
+                dy: viewport.midY - displacement / 2 - applicationFrame.minY))
+            start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
+        }
+        try require(revealed, "Safari Settings did not reveal the Top tab layout option")
+        top.tap()
+        attachEvidence("ios-safari-top-tab-layout")
         settings.terminate()
     }
 
@@ -2084,6 +2450,54 @@ final class SafariLifecycleTests: XCTestCase {
     }
 
     @MainActor
+    private func dismissStartPageExtensionDiscovery() throws {
+        let window = fixtureWindow
+        let startPage = window.collectionViews["StartPageCollectionView"]
+        let startPageExists = startPage.exists
+        if startPageExists { attachEvidence("ios-start-page-inspection") }
+        let card = startPage.cells["onboardingItemIdentifierContent-ExtensionsDiscovery"]
+        let cardExists = card.exists
+        let menu = window.otherElements.matching(NSPredicate(
+            format: "identifier IN %@", ["MoreMenu", "TabBarMoreMenu"]
+        )).firstMatch
+        guard safari.state == .runningForeground, !window.textViews["TabOverview"].exists,
+              !popup.exists, !popupDone.exists, !safari.keyboards.firstMatch.exists,
+              !safari.alerts.firstMatch.exists, !window.sheets.firstMatch.exists, !menu.exists else {
+            print("Safari Start Page Extensions discovery: another surface is active")
+            return
+        }
+        guard startPageExists else {
+            print("Safari Start Page Extensions discovery: Start Page is absent")
+            return
+        }
+        guard cardExists else {
+            print("Safari Start Page Extensions discovery: card is absent")
+            return
+        }
+        let buttons = card.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@", "close", "close"))
+        try require(buttons.count == 1, "Safari's Extensions discovery card has no unambiguous close button")
+        let close = buttons.firstMatch
+        let visible = startPage.frame.intersection(window.frame)
+        let cardFrame = card.frame
+        let closeFrame = close.frame
+        guard !visible.isEmpty && !visible.isNull && !visible.isInfinite &&
+              cardFrame.width > 0 && cardFrame.height > 0 && closeFrame.width > 0 && closeFrame.height > 0 &&
+              visible.contains(closeFrame) && cardFrame.contains(closeFrame) else {
+            print("Safari Start Page Extensions discovery: close button is outside its visible card bounds")
+            return
+        }
+        guard close.isHittable else {
+            print("Safari Start Page Extensions discovery: close button is not hittable")
+            return
+        }
+        print("Safari Start Page Extensions discovery: visible close button found")
+        close.tap()
+        try require(card.waitForNonExistence(timeout: 10),
+                    "Safari did not dismiss its Extensions discovery card")
+        attachEvidence("ios-start-page-extension-discovery-dismissed")
+    }
+
+    @MainActor
     private func dismissPrivateBrowsingIntroduction() throws {
         let introduction = safari.otherElements["TurnOnLockedPrivateBrowsingView"]
         if introduction.waitForExistence(timeout: 2) {
@@ -2094,13 +2508,69 @@ final class SafariLifecycleTests: XCTestCase {
 
     @MainActor
     private func dismissSafariMoreMenu() throws {
-        let menu = safari.otherElements.matching(
+        let window = fixtureWindow
+        let menu = window.otherElements.matching(
             NSPredicate(format: "identifier IN %@", ["MoreMenu", "TabBarMoreMenu"])
         ).firstMatch
-        if menu.exists {
-            safari.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5)).tap()
-            try require(menu.waitForNonExistence(timeout: 10), "Safari did not dismiss its open More menu")
+        guard menu.exists else { return }
+        let windowFrame = window.frame
+        let usableFrame: (CGRect) -> Bool = { frame in
+            !frame.isEmpty && !frame.isNull && !frame.isInfinite &&
+                frame.minX.isFinite && frame.minY.isFinite && frame.width.isFinite && frame.height.isFinite
         }
+        let contentFrame: @MainActor () throws -> CGRect = {
+            let content = menu.collectionViews
+            try self.require(content.count == 1, "Safari's open More menu has no unambiguous content region")
+            var frame = content.firstMatch.frame.intersection(menu.frame).intersection(windowFrame)
+            for ancestor in menu.otherElements.containing(.collectionView, identifier: nil).allElementsBoundByIndex {
+                frame = frame.intersection(ancestor.frame)
+            }
+            try self.require(usableFrame(frame), "Safari's open More menu has no visible content bounds")
+            return frame
+        }
+        let menuFrame = try waitForStableFrame("Safari More menu", until: Date().addingTimeInterval(10)) {
+            try contentFrame()
+        }
+        let interior = windowFrame.insetBy(dx: 12, dy: 12)
+        try require(usableFrame(interior) && usableFrame(menuFrame) && windowFrame.intersects(menuFrame),
+                    "Safari's open More menu has no usable dismissal geometry")
+        let excluded = menuFrame.insetBy(dx: -8, dy: -8)
+        var horizontalGaps: [(lower: CGFloat, upper: CGFloat)] = [
+            (lower: max(interior.minX, excluded.maxX), upper: interior.maxX),
+            (lower: interior.minX, upper: min(interior.maxX, excluded.minX)),
+        ]
+        horizontalGaps.removeAll { gap in gap.upper - gap.lower < 16 }
+        horizontalGaps.sort { first, second in
+            let firstWidth = first.upper - first.lower
+            let secondWidth = second.upper - second.lower
+            return firstWidth > secondWidth
+        }
+        var verticalGaps: [(lower: CGFloat, upper: CGFloat)] = [
+            (lower: max(interior.minY, excluded.maxY), upper: interior.maxY),
+            (lower: interior.minY, upper: min(interior.maxY, excluded.minY)),
+        ]
+        verticalGaps.removeAll { gap in gap.upper - gap.lower < 16 }
+        verticalGaps.sort { first, second in
+            let firstHeight = first.upper - first.lower
+            let secondHeight = second.upper - second.lower
+            return firstHeight > secondHeight
+        }
+        let point: CGPoint
+        if let gap = horizontalGaps.first {
+            point = CGPoint(x: (gap.lower + gap.upper) / 2, y: interior.midY)
+        } else if let gap = verticalGaps.first {
+            point = CGPoint(x: interior.midX, y: (gap.lower + gap.upper) / 2)
+        } else {
+            throw SafariUIFailure("Safari's open More menu leaves no safe outside dismissal point")
+        }
+        guard menu.exists else { return }
+        let currentMenuFrame = try contentFrame()
+        try require(window.frame == windowFrame && usableFrame(currentMenuFrame) && interior.contains(point) &&
+                    !currentMenuFrame.insetBy(dx: -8, dy: -8).contains(point),
+                    "Safari's More menu changed before its outside dismissal tap")
+        window.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: point.x - windowFrame.minX, dy: point.y - windowFrame.minY)).tap()
+        try require(menu.waitForNonExistence(timeout: 10), "Safari did not dismiss its open More menu")
     }
 
     @MainActor
@@ -2277,7 +2747,9 @@ final class SafariLifecycleTests: XCTestCase {
         try openWalletExtensionAction()
         let permission = safari.alerts.firstMatch
         if permission.exists { try grantFixtureWebsitePermission(permission) }
-        try require(popup.waitForExistence(timeout: 12), "Safari did not present the Wallet extension popup")
+        _ = try waitForStableFrame("Wallet extension popup", until: Date().addingTimeInterval(12)) {
+            self.popup.exists && self.popupDone.exists ? self.popup.frame : nil
+        }
     }
 
     @MainActor
@@ -2297,46 +2769,67 @@ final class SafariLifecycleTests: XCTestCase {
     @MainActor
     private func openWalletExtensionAction() throws {
         let menu = safari.buttons["MoreMenuButton"]
+        let pageMenu = safari.otherElements["TabBarMoreMenu"]
         let deadline = Date().addingTimeInterval(15)
         var openedMenu = false
+        var expandedAddress = false
         while Date() < deadline {
             if popup.waitForExistence(timeout: 1) { return }
             if popupDone.exists {
                 try require(popup.waitForExistence(timeout: 12), "Safari presented Wallet popup controls without its extension content")
                 return
             }
-            if safari.otherElements["TabBarMoreMenu"].exists {
+            if pageMenu.exists {
                 openedMenu = true
                 break
             }
             let collapsedAddress = safari.otherElements["TabBarItemTitle"]
-            if !menu.exists, collapsedAddress.exists && collapsedAddress.isHittable {
+            if !expandedAddress, !menu.exists, collapsedAddress.exists && collapsedAddress.isHittable {
                 if popup.exists { return }
                 if popupDone.exists { continue }
+                _ = try waitForStableTarget(collapsedAddress, "collapsed Safari address control", until: deadline)
                 collapsedAddress.tap()
+                expandedAddress = true
             }
             if popup.exists { return }
             if popupDone.exists {
                 try require(popup.waitForExistence(timeout: 12), "Safari presented Wallet popup controls without its extension content")
                 return
             }
-            if safari.otherElements["TabBarMoreMenu"].exists {
+            if pageMenu.exists {
                 openedMenu = true
                 break
             }
             guard menu.exists && menu.isHittable else { continue }
+            _ = try waitForStableTarget(menu, "Safari Page Menu control", until: deadline)
             menu.tap()
             openedMenu = true
             break
         }
         try require(openedMenu, "Safari presented neither its Wallet popup nor an available Page Menu")
         if popup.exists { return }
-        let extensionButton = safari.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Wallet")).firstMatch
-        if !extensionButton.exists, safari.buttons["Extensions"].exists {
-            safari.buttons["Extensions"].tap()
-        }
+        let selectionDeadline = Date().addingTimeInterval(12)
         do {
-            try click(extensionButton, "Big Wallet extension popup")
+            while Date() < selectionDeadline {
+                if popup.exists { return }
+                let extensionButton = pageMenu.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Wallet")).firstMatch
+                let extensions = pageMenu.buttons["Extensions"]
+                if pageMenu.exists && (extensionButton.exists || extensions.exists) {
+                    let opensSubmenu = !extensionButton.exists
+                    let action = opensSubmenu ? extensions : extensionButton
+                    _ = try waitForStableTarget(action, "Safari Wallet extension menu action", until: selectionDeadline)
+                    if popup.exists { return }
+                    try require(pageMenu.exists, "Safari's Page Menu disappeared before selecting its extension action")
+                    action.tap()
+                    if opensSubmenu {
+                        let submenuWallet = safari.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Wallet")).firstMatch
+                        try click(submenuWallet, "Big Wallet extension popup")
+                    }
+                    return
+                }
+                RunLoop.current.run(until: min(selectionDeadline, Date().addingTimeInterval(0.05)))
+            }
+            throw SafariUIFailure("Safari did not expose a Wallet or Extensions action in its Page Menu")
         } catch let error as SafariUIFailure {
             guard popup.waitForExistence(timeout: 12) else { throw error }
         }
@@ -2387,10 +2880,11 @@ final class SafariLifecycleTests: XCTestCase {
 
     @MainActor
     private func click(_ element: XCUIElement, _ description: String) throws {
-        try require(element.waitForExistence(timeout: 12) && element.isHittable, "Missing or blocked \(description)")
 #if os(macOS)
+        try require(element.waitForExistence(timeout: 12) && element.isHittable, "Missing or blocked \(description)")
         element.click()
 #else
+        _ = try waitForStableTarget(element, description, until: Date().addingTimeInterval(12))
         element.tap()
 #endif
     }
@@ -2445,6 +2939,7 @@ private struct SafariUIConfiguration: Decodable, Sendable {
     let customNetwork: CustomNetwork
     let iterations: Int
     let signingMode: String
+    let synchronizationPolicy: String
     let activationMode: String
     let profilePrefix: String
     let requiresApprovalDrain: Bool
@@ -2469,6 +2964,7 @@ private final class SafariUIControl {
     let runID: String
     private let fixtureRoot: String
     let signingMode: String
+    private let synchronizationPolicy: String
     var iteration = 1
     private var checkpointBaselines = [String: Int]()
     private var expectedOccurrences = [String: Int]()
@@ -2482,8 +2978,10 @@ private final class SafariUIControl {
         let descriptor = try JSONDecoder().decode(Descriptor.self, from: Data(contentsOf: descriptorURL))
 #if os(macOS)
         let platform = "macos"
+        let expectedSynchronizationPolicy = "xctest-default"
 #else
         let platform = "ios"
+        let expectedSynchronizationPolicy = "safari-event-loop-only"
 #endif
         guard descriptor.version == 1, !descriptor.runID.isEmpty,
               descriptor.platform == platform,
@@ -2500,11 +2998,13 @@ private final class SafariUIControl {
         runID = descriptor.runID
         fixtureRoot = descriptor.root
         signingMode = descriptor.signingMode
+        synchronizationPolicy = expectedSynchronizationPolicy
     }
 
     func configuration() async throws -> SafariUIConfiguration {
         let config = try JSONDecoder().decode(SafariUIConfiguration.self, from: await request("config"))
         guard (1...10).contains(config.iterations), config.signingMode == signingMode, config.fixtureRoot == fixtureRoot,
+              config.synchronizationPolicy == synchronizationPolicy,
               ["automatic", "interactive", "prepared"].contains(config.activationMode),
               config.activationMode != "prepared" || config.signingMode == "local",
               !config.profilePrefix.isEmpty else { throw SafariUIFailure("Invalid Safari test configuration") }

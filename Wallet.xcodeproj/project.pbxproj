@@ -1065,6 +1065,9 @@
 		DA422125B14FEEBCAEBD4DD7 /* SafariVMFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07C1C8EA0DDBED8CA9501B7A /* SafariVMFixtures.swift */; };
 		38F34B4EB47F8E268C4DCC51 /* SafariLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70060F661C04B73312C924DD /* SafariLifecycleTests.swift */; };
 		5F0D3D5C74D38AE2F9EC9E6B /* SafariLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70060F661C04B73312C924DD /* SafariLifecycleTests.swift */; };
+		B5FA11010000000000000001 /* BWSafariSynchronization.m in Sources */ = {isa = PBXBuildFile; fileRef = F4FA11010000000000000002 /* BWSafariSynchronization.m */; };
+		B5FA11010000000000000002 /* BWSafariSynchronization.m in Sources */ = {isa = PBXBuildFile; fileRef = F4FA11010000000000000002 /* BWSafariSynchronization.m */; };
+		B5FA11010000000000000003 /* BWSafariSynchronizationTests.m in Sources */ = {isa = PBXBuildFile; fileRef = F4FA11010000000000000004 /* BWSafariSynchronizationTests.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1428,6 +1431,10 @@
 		07C1C8EA0DDBED8CA9501B7A /* SafariVMFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariVMFixtures.swift; sourceTree = "<group>"; };
 		BEB260680600F016819B58C4 /* Safari UI Tests macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Safari UI Tests macOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		098EF24E66D70871FB0679A6 /* Safari UI Tests iOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Safari UI Tests iOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F4FA11010000000000000001 /* BWSafariSynchronization.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BWSafariSynchronization.h; sourceTree = "<group>"; };
+		F4FA11010000000000000002 /* BWSafariSynchronization.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BWSafariSynchronization.m; sourceTree = "<group>"; };
+		F4FA11010000000000000003 /* BWSafariSynchronizationInternal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BWSafariSynchronizationInternal.h; sourceTree = "<group>"; };
+		F4FA11010000000000000004 /* BWSafariSynchronizationTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BWSafariSynchronizationTests.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -2111,7 +2118,7 @@
 			path = ApprovalLifecycle;
 			sourceTree = "<group>";
 		};
-		E8E92E120536C98CFE366B19 /* SafariUI */ = {isa = PBXGroup; children = (70060F661C04B73312C924DD /* SafariLifecycleTests.swift */,); path = SafariUI; sourceTree = "<group>"; };
+		E8E92E120536C98CFE366B19 /* SafariUI */ = {isa = PBXGroup; children = (70060F661C04B73312C924DD /* SafariLifecycleTests.swift */, F4FA11010000000000000001 /* BWSafariSynchronization.h */, F4FA11010000000000000002 /* BWSafariSynchronization.m */, F4FA11010000000000000003 /* BWSafariSynchronizationInternal.h */, F4FA11010000000000000004 /* BWSafariSynchronizationTests.m */,); path = SafariUI; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -3915,6 +3922,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B5FA11010000000000000002 /* BWSafariSynchronization.m in Sources */,
+				B5FA11010000000000000003 /* BWSafariSynchronizationTests.m in Sources */,
 				4028B827A1D70E12CF27764D /* AccountPreviewStateTests.swift in Sources */,
 				8FAF3DDD6528F23C3EC2771A /* NativeMessageDispatcherTests.swift in Sources */,
 				DEBC408FFA115904C2E37B9E /* PasswordStorageTests.swift in Sources */,
@@ -4406,7 +4415,7 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		AABAC41FE1AF1B569D4CB41A /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (38F34B4EB47F8E268C4DCC51 /* SafariLifecycleTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
-		74C27D3E74CD4E0C0D436677 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (5F0D3D5C74D38AE2F9EC9E6B /* SafariLifecycleTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		74C27D3E74CD4E0C0D436677 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (5F0D3D5C74D38AE2F9EC9E6B /* SafariLifecycleTests.swift in Sources */, B5FA11010000000000000001 /* BWSafariSynchronization.m in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -5373,6 +5382,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.wallet.safari-ui-tests.ios";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = Tests/SafariUI/BWSafariSynchronization.h;
 				SWIFT_VERSION = 6.0;
 				TEST_TARGET_NAME = "Big Wallet iOS";
 				SDKROOT = iphoneos;
@@ -5395,6 +5405,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.wallet.safari-ui-tests.ios";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = Tests/SafariUI/BWSafariSynchronization.h;
 				SWIFT_VERSION = 6.0;
 				TEST_TARGET_NAME = "Big Wallet iOS";
 				SDKROOT = iphoneos;

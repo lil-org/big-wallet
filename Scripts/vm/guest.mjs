@@ -375,6 +375,38 @@ export async function readSafariEvidence(path) {
     } finally { await file.close(); }
 }
 
+export async function auditSafariLog(path, {stopRequested = async () => false} = {}) {
+    const maximum = 256 * 1024 * 1024;
+    const marker = "app animations complete notification not received";
+    const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    try {
+        const info = await file.stat();
+        if (!info.isFile() || info.size > maximum) { throw new Error("Safari log must be a bounded regular file"); }
+        const bytes = Buffer.alloc(64 * 1024);
+        let bytesScanned = 0;
+        let animationIdleWarnings = 0;
+        let carry = "";
+        for (;;) {
+            if (await stopRequested()) { throw Object.assign(new Error("Safari log auditing was cancelled"), {cancelled: true}); }
+            const {bytesRead} = await file.read(bytes, 0, bytes.length, bytesScanned);
+            if (!bytesRead) { break; }
+            bytesScanned += bytesRead;
+            if (bytesScanned > maximum) { throw new Error("Safari log exceeded its size limit"); }
+            const chunk = carry + bytes.subarray(0, bytesRead).toString("latin1").toLowerCase();
+            let offset = 0;
+            for (;;) {
+                const found = chunk.indexOf(marker, offset);
+                if (found < 0) { break; }
+                animationIdleWarnings += 1;
+                offset = found + marker.length;
+            }
+            carry = chunk.slice(-(marker.length - 1));
+        }
+        const issues = animationIdleWarnings ? [`${animationIdleWarnings} Safari animation-idle warnings in the stage log`] : [];
+        return {ok: !issues.length, issues, animationIdleWarnings, bytesScanned};
+    } finally { await file.close(); }
+}
+
 export async function prepareNativeSimulators(platform, {destinations, artifacts, stageId, execute, writeJSON, stopRequested = async () => false}) {
     const preparation = {platform, status: "running", artifact: `${stageId}.simulators.json`, startedAt: timestamp(), steps: []};
     const invoke = async (args, timeoutSeconds) => {
@@ -564,6 +596,12 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
                 await writeJSON(join(artifacts, `${stage.id}.tests.json`), tree);
                 result.audit = auditNativeResult(summary, tree, stage.nativeAudit);
                 if (stage.nativeAudit.kind === "safari") {
+                    try {
+                        result.audit.safariLog = await auditSafariLog(join(artifacts, result.log), {stopRequested});
+                    } catch (error) {
+                        if (error.cancelled) { throw error; }
+                        result.audit.safariLog = {ok: false, issues: [`Safari stage log could not be audited: ${String(error.message).slice(0, 2048)}`]};
+                    }
                     result.safariEvidence = `${stage.id}.safari.json`;
                     try {
                         const evidence = await readSafariEvidence(join(artifacts, result.safariEvidence));
@@ -572,7 +610,8 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
                         result.audit.safari = {ok: false, issues: [`Safari browser evidence is unavailable: ${String(error.message).slice(0, 2048)}`], scenarioCount: 0, cleanup: "missing"};
                     }
                     result.audit.issues.push(...result.audit.safari.issues);
-                    result.audit.ok = result.audit.ok && result.audit.safari.ok;
+                    result.audit.issues.push(...result.audit.safariLog.issues);
+                    result.audit.ok = result.audit.ok && result.audit.safari.ok && result.audit.safariLog.ok;
                 }
                 if (!result.audit.ok) { result.status = "failed"; result.reason = result.audit.issues; }
             }

@@ -319,10 +319,22 @@ XCTest's default and maximum allowances are ten minutes per scenario iteration,
 so a ten-iteration method has a 100-minute allowance. The browser stage still has
 a two-hour normal or six-hour soak limit, and individual UI waits stay bounded.
 
-The ten-iteration profile/private-browsing soak remains incomplete on the pinned
-iOS 27.0 (24A434) runtime. XCTest has timed out after 60 seconds waiting for
-Safari's animation-idle callback during navigation; successful normal runs and
-earlier completed iterations do not establish the full soak.
+The pinned iOS 27.0 (24A434) runtime can leave XCTest waiting for Safari's
+animation-idle callback after the app's event loop is idle. The iOS Safari
+UI-test target uses a private XCTest hook restricted to the pinned XCUIAutomation
+image and method ABI. For `com.apple.mobilesafari` only, it calls the original
+quiescence implementation with animation waiting disabled; the event-loop wait,
+timeouts, and other applications' synchronization remain unchanged. An unsupported
+framework or replaced hook fails setup instead of falling back.
+
+Reports identify this as `safari-event-loop-only` synchronization, with per-scenario
+before/after receipts proving Safari pre/post interception and unchanged forwarding
+for other applications. macOS reports `xctest-default`. Safari controls must expose
+stable geometry and the expected UI state before interaction. These results do not
+establish that Safari's own animation-idle notification works. The hook is linked
+only into iOS test bundles, never the wallet or extension. Normal runner audits
+reject animation-idle log warnings, XCTest runtime warnings, missing hook proof,
+or failed cleanup, including during the ten-iteration soak.
 
 On macOS 27.0.1 (26A434), Safari rejected XCTest's extension-activation click with
 its security alert about an app or service interfering with clicking. The test
@@ -372,6 +384,12 @@ the required browser scenario inventory from that selection. Safari builds use
 `safari.<platform>.<configuration>`. The extended Release stages are
 `safari.soak-macos.release` and `safari.soak-ios.release`. A repeated scenario must
 pass every iteration; repetitions do not retry or conceal failures.
+
+iOS Safari scenarios enable Reduce Motion and Prefer Cross-Fade Transitions and
+select the Top tab layout through Settings. They verify both motion preferences
+through public UIAccessibility APIs and the upper address bar before exercising
+the fixture. These runs cover the expanded Top layout; Compact layout is outside
+this test configuration.
 
 Website origin reservations are stored privately per run and platform.
 Apple-signed builds share reservations across configurations because they share

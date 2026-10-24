@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
-import {mkdtemp, mkdir, realpath, rm, symlink, writeFile} from "node:fs/promises";
+import {mkdtemp, mkdir, realpath, rm, symlink, truncate, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import test from "node:test";
 import {SAFARI_SCENARIOS, SAFARI_TEST_CLASS} from "../../safari/scenarios.mjs";
-import {coverageReport, executeStages, readSafariEvidence, SAFARI_TERMINATION_GRACE_MILLISECONDS} from "../guest.mjs";
+import {auditSafariLog, coverageReport, executeStages, readSafariEvidence, SAFARI_TERMINATION_GRACE_MILLISECONDS} from "../guest.mjs";
 import {atomicJSON, hashFile, EXCHANGE_PATH} from "../guest_bootstrap.mjs";
 import {auditNativeResult, auditResults, auditSafariPreparation, auditSafariResult} from "../result_audit.mjs";
 import {BOOTSTRAP_TOOL_NAMES, commandForStage, createManifest, SAFARI_PLATFORMS, validateJob} from "../test_manifest.mjs";
@@ -19,13 +19,24 @@ const fixtureStage = (configuration = "Debug") => runtimeStages(createManifest(j
     .find(stage => stage.nativeAudit.platform === "macos");
 const nativeResult = policy => ({summary: {totalTestCount: policy.requiredTests.length, passedTests: policy.requiredTests.length, failedTests: 0, skippedTests: 0},
     tree: {testNodes: policy.requiredTests.map(identifier => ({nodeType: "Test Case", nodeIdentifier: `${identifier}()`, result: "Passed"}))}});
+const synchronizationSnapshot = (platform, count) => platform === "macos" ?
+    {schemaVersion: 1, policy: "xctest-default", hookInstalled: false} :
+    {schemaVersion: 1, policy: "safari-event-loop-only", installationID: "12345678-1234-4123-8123-123456789abc",
+        hookInstalled: true, hookActive: true,
+        framework: {bundleIdentifier: "com.apple.dt.XCUIAutomation", version: "25228", imageUUID: "6C9998E3-2351-34D3-BAAB-B523F500A26A"},
+        selector: "waitForQuiescenceIncludingAnimationsIdle:usingActivity:isPreEvent:", methodEncoding: "v28@0:8B16B20B24",
+        counters: {interceptedCalls: count * 3, originalForwards: count * 3, safariPreRewrites: count,
+            safariPostRewrites: count, nonSafariForwards: count, nonSafariArgumentChanges: 0}};
 const evidence = stage => ({version: 1, runId: job().runId, stageId: stage.id, platform: stage.nativeAudit.platform,
     configuration: stage.nativeAudit.configuration, signing: stage.nativeAudit.signing, iterations: stage.nativeAudit.iterations,
     activationMode: stage.nativeAudit.activationMode, activationRequests: [],
+    synchronizationPolicy: stage.nativeAudit.synchronizationPolicy,
     browser: {bundleIdentifier: stage.nativeAudit.platform === "macos" ? "com.apple.Safari" : "com.apple.mobilesafari", version: "27.0"},
     extensionIdentifier: "org.lil.wallet.Safari", extension: {bundleIdentifier: "org.lil.wallet.Safari", version: "0.1", build: "23"},
     runtime: {macOS: {version: "27.0", build: "26A123"}}, handshake: {provider: true, native: true}, cleanup: {status: "passed"},
-    scenarios: stage.nativeAudit.requiredScenarios.flatMap(id => Array.from({length: stage.nativeAudit.iterations}, (_, index) => ({id, iteration: index + 1, status: "passed"})))});
+    scenarios: stage.nativeAudit.requiredScenarios.flatMap(id => Array.from({length: stage.nativeAudit.iterations}, (_, index) => ({id, iteration: index + 1, status: "passed",
+        synchronization: {before: synchronizationSnapshot(stage.nativeAudit.platform, index),
+            after: synchronizationSnapshot(stage.nativeAudit.platform, index + 1)}})))});
 const auditEvidence = (value, stage) => auditSafariResult(value, stage.nativeAudit, {runId: job().runId, stageId: stage.id});
 const success = output => ({code: 0, signal: null, stdout: output ?? "", output: output ?? "", timedOut: false, cancelled: false});
 const fixture = async action => {
@@ -199,9 +210,11 @@ test("Safari selection includes both platforms and configurations with credentia
     }
     for (const stage of runtimeStages(manifest)) {
         assert.equal(stage.nativeAudit.iterations, 1);
+        assert.equal(stage.nativeAudit.synchronizationPolicy, stage.nativeAudit.platform === "ios" ? "safari-event-loop-only" : "xctest-default");
         const scenarios = SAFARI_SCENARIOS.filter(scenario => scenario.platforms.includes(stage.nativeAudit.platform));
         assert.deepEqual(stage.nativeAudit.requiredScenarios, scenarios.map(scenario => scenario.id));
         assert.deepEqual(stage.nativeAudit.requiredTests, scenarios.map(scenario => `${SAFARI_TEST_CLASS}/${scenario.method}`));
+        assert.equal(stage.nativeAudit.requiredTests.length, stage.nativeAudit.platform === "ios" ? 26 : 24);
         assert.equal(stage.scratchDirectory, true);
         assert.equal(stage.resultBundle, true);
         assert.equal(stage.requirements.includes("safariAutomation"), stage.nativeAudit.platform === "macos");
@@ -375,6 +388,76 @@ test("Safari audits surface bounded XCTest startup and UI failure details withou
     assert.ok(details.every(issue => issue.length <= "Safari XCTest failure: ".length + 2048));
 });
 
+test("Safari XCTest audits reject runtime warnings even when every test passed", () => {
+    const stage = fixtureStage();
+    const {summary, tree} = nativeResult(stage.nativeAudit);
+    assert.equal(auditNativeResult({...summary, runtimeWarnings: []}, tree, stage.nativeAudit).ok, true);
+    for (const runtimeWarnings of [[{warningText: "App animations complete notification not received"}],
+        [{warningText: "Another XCTest runtime warning"}], "invalid", null, {}]) {
+        const audit = auditNativeResult({...summary, runtimeWarnings}, tree, stage.nativeAudit);
+        assert.equal(audit.ok, false);
+        assert.ok(audit.issues.some(issue => /runtime.warning/.test(issue)));
+    }
+});
+
+test("every iOS iteration proves the hook while unchanged non-Safari forwarding is required across the stage", () => {
+    const stage = runtimeStages(createManifest(job({profile: "extended"}))).find(stage => stage.id === "safari.soak-ios.release");
+    const valid = evidence(stage);
+    assert.equal(auditEvidence(valid, stage).ok, true);
+    for (const mutate of [
+        value => { delete value.synchronizationPolicy; },
+        value => { value.synchronizationPolicy = "xctest-default"; },
+        value => { delete value.scenarios[1].synchronization; },
+        value => { value.scenarios[1].synchronization.after.hookActive = false; },
+        value => { value.scenarios[1].synchronization.after.counters.originalForwards -= 1; },
+        value => { value.scenarios[1].synchronization.after.counters.safariPreRewrites = value.scenarios[1].synchronization.before.counters.safariPreRewrites; },
+        value => { value.scenarios[1].synchronization.after.counters.safariPostRewrites = value.scenarios[1].synchronization.before.counters.safariPostRewrites; },
+        value => { value.scenarios[1].synchronization.after.counters.nonSafariArgumentChanges = 1; },
+    ]) {
+        const invalid = structuredClone(valid);
+        mutate(invalid);
+        assert.equal(auditEvidence(invalid, stage).ok, false);
+    }
+    for (const scenario of valid.scenarios) {
+        scenario.synchronization.after.counters.nonSafariForwards = scenario.synchronization.before.counters.nonSafariForwards;
+    }
+    assert.equal(auditEvidence(valid, stage).ok, false);
+    valid.scenarios[0].synchronization.after.counters.nonSafariForwards += 1;
+    assert.equal(auditEvidence(valid, stage).ok, true);
+    assert.equal(auditSafariResult(valid, {...stage.nativeAudit, synchronizationPolicy: "xctest-default"},
+        {runId: job().runId, stageId: stage.id}).ok, false);
+});
+
+test("Safari stage audits reject impossible synchronization counters", () => {
+    const stage = runtimeStages(createManifest(job())).find(stage => stage.nativeAudit.platform === "ios");
+    const value = evidence(stage);
+    assert.equal(auditEvidence(value, stage).ok, true);
+    const scenario = value.scenarios[0];
+    for (const calls of [0, 2]) {
+        scenario.synchronization = {before: synchronizationSnapshot("ios", 0), after: synchronizationSnapshot("ios", 1)};
+        scenario.synchronization.after.counters.interceptedCalls = scenario.synchronization.after.counters.originalForwards = calls;
+        const audit = auditEvidence(value, stage);
+        assert.equal(audit.ok, false);
+        assert.equal(audit.scenarioCount, value.scenarios.length);
+        assert.ok(audit.issues.length > 0);
+        assert.ok(audit.issues.every(issue =>
+            issue.startsWith(`Safari scenario ${scenario.id}:${scenario.iteration} synchronization after`) && /counter/.test(issue)));
+    }
+
+    for (const calls of [10, 12]) {
+        scenario.synchronization = {before: synchronizationSnapshot("ios", 1), after: synchronizationSnapshot("ios", 2)};
+        const {before, after} = scenario.synchronization;
+        before.counters.interceptedCalls = before.counters.originalForwards = 10;
+        after.counters.interceptedCalls = after.counters.originalForwards = calls;
+        const transitionAudit = auditEvidence(value, stage);
+        assert.equal(transitionAudit.ok, false);
+        assert.equal(transitionAudit.scenarioCount, value.scenarios.length);
+        assert.ok(transitionAudit.issues.length > 0);
+        assert.ok(transitionAudit.issues.every(issue =>
+            issue.startsWith(`Safari scenario ${scenario.id}:${scenario.iteration} synchronization`) && /counter/.test(issue)));
+    }
+});
+
 test("Safari evidence requires a fresh native handshake and each scenario iteration exactly once", () => {
     const stage = runtimeStages(createManifest(job({profile: "extended"}))).find(stage => stage.id === "safari.soak-macos.release");
     const valid = evidence(stage);
@@ -387,6 +470,8 @@ test("Safari evidence requires a fresh native handshake and each scenario iterat
         value => { value.platform = "ios"; },
         value => { value.configuration = "Debug"; },
         value => { value.iterations = 1; },
+        value => { delete value.synchronizationPolicy; },
+        value => { value.synchronizationPolicy = "safari-event-loop-only"; },
         value => { value.browser.bundleIdentifier = "com.apple.SafariTechnologyPreview"; },
         value => { value.browser.version = ""; },
         value => { value.extensionIdentifier = ""; },
@@ -420,6 +505,7 @@ test("Safari evidence requires a fresh native handshake and each scenario iterat
         value => { value.scenarios[0].iteration = 11; },
         value => { value.scenarios[0].status = "skipped"; },
         value => { value.scenarios[0].status = "failed"; },
+        value => { delete value.scenarios[0].synchronization; },
     ];
     for (const mutate of mutations) {
         const changed = structuredClone(valid);
@@ -445,6 +531,29 @@ test("Safari sidecars reject missing, malformed, oversized, nonregular, and redi
     await assert.rejects(readSafariEvidence(path), /bounded regular file/);
 }));
 
+test("Safari logs detect animation warnings across chunks and beyond captured output with bounded reads", async () => fixture(async directory => {
+    const path = join(directory, "safari.log");
+    const marker = "App animations complete notification not received";
+    const bytes = Buffer.alloc(17 * 1024 * 1024, " ");
+    bytes.write(marker, 64 * 1024 - 10);
+    bytes.write(marker.toUpperCase(), 16 * 1024 * 1024 + 1);
+    await writeFile(path, bytes);
+    const result = await auditSafariLog(path);
+    assert.equal(result.ok, false);
+    assert.equal(result.animationIdleWarnings, 2);
+    assert.equal(result.bytesScanned, bytes.length);
+    await writeFile(path, "No animation warning\n");
+    assert.equal((await auditSafariLog(path)).ok, true);
+    await assert.rejects(auditSafariLog(path, {stopRequested: async () => true}), error => error.cancelled === true);
+    const link = join(directory, "redirected.log");
+    await symlink(path, link);
+    await assert.rejects(auditSafariLog(link));
+    await assert.rejects(auditSafariLog(directory), /bounded regular file/);
+    await assert.rejects(auditSafariLog(join(directory, "missing.log")));
+    await truncate(path, 256 * 1024 * 1024 + 1);
+    await assert.rejects(auditSafariLog(path), /bounded regular file/);
+}));
+
 test("Safari execution cannot pass from XCTest alone and retains separate browser evidence", async () => fixture(async directory => {
     const workspace = join(directory, "workspace");
     const artifacts = join(directory, "artifacts");
@@ -454,8 +563,8 @@ test("Safari execution cannot pass from XCTest alone and retains separate browse
     const native = nativeResult(stage.nativeAudit);
     const options = {workspace, artifacts, runId: job().runId, exchange: EXCHANGE_PATH,
         preflight: {checks: {}, destinations: {macos: "platform=macOS,arch=arm64"}}, writeJSON: atomicJSON, hashFile,
-        execute: async (command, args) => {
-            if (command === "node") { return success(); }
+        execute: async (command, args, invocation) => {
+            if (command === "node") { await writeFile(invocation.logPath, "Safari fixture passed\n"); return success(); }
             assert.equal(command, "xcrun");
             assert.equal(args[0], "xcresulttool");
             return success(JSON.stringify(args.includes("summary") ? native.summary : native.tree));
@@ -476,9 +585,24 @@ test("Safari execution cannot pass from XCTest alone and retains separate browse
     const passed = await executeStages([stage], options);
     assert.equal(passed[0].status, "passed");
     assert.equal(passed[0].audit.safari.ok, true);
+    assert.equal(passed[0].audit.safariLog.ok, true);
+    assert.equal(passed[0].audit.safariLog.animationIdleWarnings, 0);
     assert.equal(passed[0].safariEvidence, `${stage.id}.safari.json`);
     assert.equal(auditResults(passed).status, "passed");
     assert.equal(auditResults([{...passed[0], audit: undefined}]).status, "failed");
+    assert.equal(auditResults([{...passed[0], audit: {...passed[0].audit, safariLog: undefined}}]).status, "failed");
+    const warned = await executeStages([stage], {...options, execute: async (command, args, invocation) => {
+        const result = await options.execute(command, args, invocation);
+        if (command === "node") { await writeFile(invocation.logPath, "App animations complete notification not received\n"); }
+        return result;
+    }});
+    assert.equal(warned[0].status, "failed");
+    assert.equal(warned[0].audit.safari.ok, true);
+    assert.equal(warned[0].audit.safariLog.animationIdleWarnings, 1);
+    native.summary.runtimeWarnings = [{warningText: "XCTest runtime warning"}];
+    const runtimeWarning = await executeStages([stage], options);
+    assert.equal(runtimeWarning[0].status, "failed");
+    assert.ok(runtimeWarning[0].reason.includes("1 Safari XCTest runtime warnings"));
 }));
 
 test("XCTest audit queries honor cancellation and cannot pass after a timed-out or failed probe", async () => fixture(async directory => {

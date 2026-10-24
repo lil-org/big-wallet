@@ -9,6 +9,7 @@ import {execFile} from "node:child_process";
 import {promisify} from "node:util";
 import {SAFARI_SCENARIOS} from "./scenarios.mjs";
 import {NativeEvidenceReader} from "./native_evidence.mjs";
+import {expectedSynchronizationPolicy, auditSynchronizationSnapshot, auditSynchronizationProof} from "./synchronization.mjs";
 import {assertEthereumSignature, assertEthereumTransaction, assertSolanaSignature, assertSolanaTransaction} from "../approval_lifecycle/crypto_assertions.mjs";
 
 const require = createRequire(new URL("../../Safari Shared/Inpage Provider/package.json", import.meta.url));
@@ -141,6 +142,7 @@ export class SafariFixtureServer {
             typeof preparationNonce !== "string" || !canonicalUUID.test(preparationNonce))) {
             throw new Error("Safari activation preparation requires a canonical macOS preparation nonce");
         }
+        this.synchronizationPolicy = expectedSynchronizationPolicy(descriptor.platform);
         this.interactiveActivation = interactiveActivation;
         this.activationMode = preparedActivation ? "prepared" : interactiveActivation ? "interactive" : "automatic";
         this.preparation = preparation === undefined ? undefined : {...preparation};
@@ -167,6 +169,7 @@ export class SafariFixtureServer {
         this.fixture = fixtures();
         this.fixture.solanaBlockhash = base58.encode(keccak_256(Buffer.from(`${descriptor.runID}:${stageId}`)));
         this.current = null;
+        this.synchronization = null;
         this.recoveryRequired = false;
         this.requiresApprovalDrain = false;
         this.results = [];
@@ -400,7 +403,7 @@ export class SafariFixtureServer {
     async state() {
         const events = (await this.nativeEvents()).slice(this.scenarioEventOffset).filter(event => event.scenario === this.current?.id &&
             event.iteration === this.current?.iteration);
-        return {scenario: this.current, results: this.results, events, broadcasts: this.broadcasts, errors: this.errors, processFaults: this.processFaults,
+        return {scenario: this.current, synchronization: this.synchronization, results: this.results, events, broadcasts: this.broadcasts, errors: this.errors, processFaults: this.processFaults,
             registrationRefreshes: this.registrationRefreshes,
             activationRequests: this.activationRequests,
             lockProbe: this.lockProbe,
@@ -418,6 +421,7 @@ export class SafariFixtureServer {
                 respond(response, 200, {...this.fixture, dappURL: this.dappURL ?? this.url, secondOriginURL: this.secondURL ?? this.url,
                     fixtureRoot: this.descriptor.root, platform: this.descriptor.platform, iterations: this.iterations,
                     signingMode: this.descriptor.signingMode,
+                    synchronizationPolicy: this.synchronizationPolicy,
                     activationMode: this.activationMode,
                     interactiveActivation: this.interactiveActivation,
                     requiresApprovalDrain: this.requiresApprovalDrain,
@@ -487,6 +491,9 @@ export class SafariFixtureServer {
                 if (!SAFARI_SCENARIOS.some(scenario => scenario.id === id && scenario.platforms.includes(this.descriptor.platform)) ||
                     !Number.isInteger(value.iteration) || value.iteration < 1 || value.iteration > this.iterations ||
                     this.scenarioStarts.has(`${id}:${value.iteration}`)) { throw new Error("Invalid or repeated scenario"); }
+                const synchronizationIssues = auditSynchronizationSnapshot(value.synchronization,
+                    {policy: this.synchronizationPolicy, label: "Safari scenario start"});
+                if (synchronizationIssues.length) { throw new Error(synchronizationIssues.join("; ")); }
                 if (this.registrationRefresh) { throw new Error("Safari registration refresh is unfinished"); }
                 if (this.current && !this.scenarios.some(scenario => scenario.id === this.current.id && scenario.iteration === this.current.iteration)) {
                     this.recoveryRequired = true;
@@ -503,6 +510,7 @@ export class SafariFixtureServer {
                 }
                 this.scenarioStarts.add(`${id}:${value.iteration}`);
                 this.current = {id, iteration: value.iteration};
+                this.synchronization = {before: structuredClone(value.synchronization), after: null};
                 this.requiresApprovalDrain = requiresApprovalDrain;
                 this.dappURL = await this.listen({...this.current});
                 this.secondURL = await this.listen({...this.current});
@@ -553,6 +561,12 @@ export class SafariFixtureServer {
             case "/control/finish": {
                 if (this.registrationRefresh) { throw new Error("Safari registration refresh is unfinished"); }
                 if (value.scenario !== this.current?.id || value.iteration !== this.current?.iteration) { throw new Error("Scenario result identity mismatch"); }
+                if (!this.synchronization || this.scenarios.some(scenario => scenario.id === this.current.id && scenario.iteration === this.current.iteration)) {
+                    throw new Error("Scenario has already finished or was not started");
+                }
+                const snapshot = value.synchronization ?? null;
+                this.synchronization.after = Buffer.byteLength(json(snapshot)) <= 8192
+                    ? structuredClone(snapshot) : {error: "Synchronization snapshot exceeds its size limit"};
                 const row = await this.recordScenario(value.status, value.evidence ?? []);
                 respond(response, row.status === "passed" ? 200 : 422, row); return;
             }
@@ -1018,8 +1032,10 @@ export class SafariFixtureServer {
             throw new Error("Scenario has already finished or was not started");
         }
         const state = await this.state();
-        const issues = this.check(state);
+        const issues = [...this.check(state), ...auditSynchronizationProof(state.synchronization,
+            {policy: this.synchronizationPolicy, label: `Safari scenario ${this.current.id}:${this.current.iteration}`})];
         const row = {...this.current, status: status === "passed" && !issues.length ? "passed" : "failed", issues, evidence,
+            synchronization: state.synchronization,
             resultCount: state.results.length, nativeEventCount: state.events.length, broadcasts: state.broadcasts.length};
         this.scenarios.push(row);
         this.evidence.push({...row, ...state});
@@ -1032,7 +1048,8 @@ export class SafariFixtureServer {
         const nativeEvents = (nativeRecords ?? await this.nativeEvents()).slice(this.stageEventOffset);
         for (const evidence of this.evidence) {
             evidence.events = nativeEvents.filter(event => event.scenario === evidence.id && event.iteration === evidence.iteration);
-            const issues = this.check(evidence, evidence.id);
+            const issues = [...this.check(evidence, evidence.id), ...auditSynchronizationProof(evidence.synchronization,
+                {policy: this.synchronizationPolicy, label: `Safari scenario ${evidence.id}:${evidence.iteration}`})];
             const row = this.scenarios.find(row => row.id === evidence.id && row.iteration === evidence.iteration);
             if (issues.length) { row.status = evidence.status = "failed"; row.issues = evidence.issues = issues; }
         }
@@ -1041,6 +1058,7 @@ export class SafariFixtureServer {
         await atomicJSON(join(this.artifacts, `${this.stageId}.safari.json`), {
             version: 1, runId: this.descriptor.runID, stageId: this.stageId, platform: this.descriptor.platform,
             configuration: this.descriptor.configuration, signing: this.descriptor.signingMode, iterations: this.iterations,
+            synchronizationPolicy: this.synchronizationPolicy,
             activationMode: this.activationMode, ...(this.preparation === undefined ? {} : {preparation: this.preparation}),
             activationRequests: this.activationRequests,
             extensionIdentifier: "org.lil.wallet.Safari", extension: this.extension, browser: this.browser, runtime: this.runtime,
@@ -1067,6 +1085,11 @@ export class SafariFixtureServer {
             await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });
         }
         await Promise.allSettled(this.activeRequests);
+        if (this.current && !this.scenarios.some(scenario => scenario.id === this.current.id && scenario.iteration === this.current.iteration)) {
+            this.errors.push("XCTest ended without finishing this scenario");
+            try { await this.recordScenario("failed", {abandoned: true, reason: "XCTest ended before scenario completion"}); }
+            catch (error) { failure ??= error; }
+        }
         try { await this.nativeReader.finish(); }
         catch (error) { failure ??= error; }
         this.cleanup = failure ? {status: "failed", reason: failure.message} : {status: "passed"};

@@ -588,7 +588,7 @@ def stage_planned_result(exchange, job):
     if hash_regular_file(exchange / 'snapshot-manifest.json') != job['source']['sha256']:
         raise RunnerError('The staged source snapshot does not match the planned job')
     snapshot = read_json(exchange / 'snapshot-manifest.json')
-    for relative in ('Scripts/vm/test_manifest.mjs', 'Scripts/safari/scenarios.mjs'):
+    for relative in ('Scripts/vm/test_manifest.mjs', 'Scripts/safari/scenarios.mjs', 'Scripts/safari/synchronization.mjs'):
         entries = [entry for entry in snapshot['files'] if entry.get('path') == relative]
         if (len(entries) != 1 or entries[0].get('type') != 'file' or
                 hash_regular_file(exchange / 'source' / relative) != entries[0].get('sha256')):

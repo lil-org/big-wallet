@@ -77,7 +77,7 @@ class SafariPreparationTests(unittest.TestCase):
 
     def snapshot(self, repository, exchange):
         paths = []
-        for relative in ['Scripts/vm/test_manifest.mjs', 'Scripts/safari/scenarios.mjs']:
+        for relative in ['Scripts/vm/test_manifest.mjs', 'Scripts/safari/scenarios.mjs', 'Scripts/safari/synchronization.mjs']:
             destination = exchange / 'source' / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(host.ROOT / relative, destination)

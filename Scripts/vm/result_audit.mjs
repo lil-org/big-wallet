@@ -1,6 +1,7 @@
 import {createHash} from "node:crypto";
 import {isAbsolute, resolve} from "node:path";
 import {PERFORMANCE_TESTS, validSafariPreparationReference} from "./test_manifest.mjs";
+import {auditSynchronizationProof, expectedSynchronizationPolicy} from "../safari/synchronization.mjs";
 
 const finiteCount = value => Number.isSafeInteger(value) && value >= 0;
 const count = (summary, name) => finiteCount(summary[name]) ? summary[name] : undefined;
@@ -67,6 +68,11 @@ export function auditNativeResult(summary, tree, policy) {
         for (const name of PERFORMANCE_TESTS) { if (!performancePassed.includes(name)) { issues.push(`Release performance gate did not pass: ${name}`); } }
     }
     if (policy.kind === "safari") {
+        if (summary.runtimeWarnings !== undefined && !Array.isArray(summary.runtimeWarnings)) {
+            issues.push("Safari XCTest summary has an invalid runtime-warning inventory");
+        } else if (summary.runtimeWarnings?.length) {
+            issues.push(`${summary.runtimeWarnings.length} Safari XCTest runtime warnings`);
+        }
         const expected = policy.requiredTests;
         if (!Array.isArray(expected) || !expected.length || expected.some(name => typeof name !== "string") || new Set(expected).size !== expected.length) {
             issues.push("Safari audit requires a nonempty, unique expected-test inventory");
@@ -100,8 +106,13 @@ export function auditSafariResult(evidence, policy, {runId, stageId} = {}) {
     if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
         return {ok: false, issues: ["Missing Safari browser evidence"], scenarioCount: 0};
     }
+    if (!["ios", "macos"].includes(policy.platform) ||
+        policy.synchronizationPolicy !== expectedSynchronizationPolicy(policy.platform)) {
+        issues.push("Safari audit has an invalid synchronization policy");
+    }
     for (const [key, value] of Object.entries({version: 1, runId, stageId, platform: policy.platform,
-        configuration: policy.configuration, signing: policy.signing, iterations: policy.iterations, activationMode: policy.activationMode})) {
+        configuration: policy.configuration, signing: policy.signing, iterations: policy.iterations, activationMode: policy.activationMode,
+        synchronizationPolicy: policy.synchronizationPolicy})) {
         if (value === undefined || evidence[key] !== value) { issues.push(`Safari evidence has an invalid ${key}`); }
     }
     if (policy.activationMode === "prepared") {
@@ -156,6 +167,7 @@ export function auditSafariResult(evidence, policy, {runId, stageId} = {}) {
     }
     const scenarios = evidence.scenarios;
     const inventory = new Map();
+    let nonSafariForwards = 0;
     if (!Array.isArray(scenarios)) { issues.push("Missing Safari scenario evidence"); }
     else {
         for (const scenario of scenarios) {
@@ -167,6 +179,13 @@ export function auditSafariResult(evidence, policy, {runId, stageId} = {}) {
             const key = `${scenario.id}:${scenario.iteration}`;
             inventory.set(key, (inventory.get(key) ?? 0) + 1);
             if (scenario.status !== "passed") { issues.push(`Safari scenario did not pass: ${key}`); }
+            const synchronizationIssues = auditSynchronizationProof(scenario.synchronization,
+                {policy: policy.synchronizationPolicy, label: `Safari scenario ${key} synchronization`});
+            issues.push(...synchronizationIssues);
+            if (!synchronizationIssues.length && policy.synchronizationPolicy === "safari-event-loop-only") {
+                nonSafariForwards += scenario.synchronization.after.counters.nonSafariForwards -
+                    scenario.synchronization.before.counters.nonSafariForwards;
+            }
         }
     }
     for (const id of expected) {
@@ -175,9 +194,13 @@ export function auditSafariResult(evidence, policy, {runId, stageId} = {}) {
             if (inventory.get(key) !== 1) { issues.push(`Safari scenario must pass exactly once: ${key}`); }
         }
     }
+    if (policy.synchronizationPolicy === "safari-event-loop-only" && nonSafariForwards <= 0) {
+        issues.push("Safari synchronization did not prove any unchanged non-Safari forwarding during the stage");
+    }
     return {ok: issues.length === 0, issues, scenarioCount: inventory.size,
         iterations: policy.iterations, browser: evidence.browser, extensionIdentifier: evidence.extensionIdentifier,
         extension: evidence.extension, runtime: evidence.runtime, activationMode: evidence.activationMode,
+        synchronizationPolicy: evidence.synchronizationPolicy,
         ...(policy.activationMode === "prepared" ? {preparation: evidence.preparation} : {}),
         cleanup: evidence.cleanup?.status ?? "missing"};
 }
@@ -264,7 +287,7 @@ export function auditResults(stages) {
             if (stage.preparationResult && stage.audit?.ok !== true) {
                 issues.push(`${stage.id} has no passing Safari preparation audit`);
             }
-            if (stage.nativeAudit?.kind === "safari" && (stage.audit?.ok !== true || stage.audit.safari?.ok !== true)) {
+            if (stage.nativeAudit?.kind === "safari" && (stage.audit?.ok !== true || stage.audit.safari?.ok !== true || stage.audit.safariLog?.ok !== true)) {
                 issues.push(`${stage.id} has no passing Safari browser audit`);
             }
             for (const skipped of stage.audit?.expectedSkips ?? []) {

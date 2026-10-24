@@ -5,16 +5,20 @@ import vm from "node:vm";
 
 const pageSource = await readFile(new URL("../page.js", import.meta.url), "utf8");
 
-async function page(initialProviders = {}) {
+async function page(initialProviders = {}, configOverrides = {}, {deferConfiguration = false} = {}) {
     let now = 0;
     let nextTimer = 0;
     const timers = new Map();
     const reports = [];
     const window = {...initialProviders};
-    const elements = new Map(["result", "actions", "provider-status"].map(id =>
-        [id, {textContent: "Waiting for providers", append() {}}]));
+    const elements = new Map(["result", "actions", "provider-status", "fixture-origin", "fixture-document"].map(id =>
+        [id, {textContent: id === "provider-status" ? "Waiting for providers" : "", append() {}}]));
     const config = {pageToken: "fixture-token", documentId: "fixture-document",
-        scenario: {id: "nonce-editor", iteration: 1}};
+        scenario: {id: "nonce-editor", iteration: 1}, ...configOverrides};
+    let resolveConfiguration;
+    const configuration = deferConfiguration
+        ? new Promise(resolve => { resolveConfiguration = resolve; })
+        : Promise.resolve(config);
     const origin = "http://127.0.0.1:12345";
     const schedule = (callback, delay, interval = 0) => {
         assert.ok(Number.isFinite(delay) && delay > 0);
@@ -22,7 +26,7 @@ async function page(initialProviders = {}) {
         timers.set(id, {callback, due: now + delay, interval});
         return id;
     };
-    await vm.runInNewContext(pageSource, {
+    const initialized = vm.runInNewContext(pageSource, {
         window, location: {origin}, TextEncoder,
         document: {
             getElementById: id => elements.get(id),
@@ -32,7 +36,7 @@ async function page(initialProviders = {}) {
         clearInterval: id => timers.delete(id),
         setTimeout: (callback, delay) => schedule(callback, delay),
         fetch: async (url, options) => {
-            if (url === "/page-config") { return {json: async () => config}; }
+            if (url === "/page-config") { return {json: () => configuration}; }
             assert.equal(url, "/page-result");
             assert.equal(options.method, "POST");
             assert.equal(options.headers["X-Page-Token"], config.pageToken);
@@ -40,10 +44,17 @@ async function page(initialProviders = {}) {
             return {ok: true};
         },
     });
+    if (!deferConfiguration) { await initialized; }
     return {
         window,
         reports,
+        fixtureOrigin: () => elements.get("fixture-origin").textContent,
+        fixtureDocument: () => elements.get("fixture-document").textContent,
         status: () => elements.get("provider-status").textContent,
+        async finishConfiguration() {
+            resolveConfiguration?.(config);
+            await initialized;
+        },
         async advanceTo(target) {
             assert.ok(target >= now);
             while (true) {
@@ -66,6 +77,30 @@ async function page(initialProviders = {}) {
         },
     };
 }
+
+test("fixture identity shows the actual document origin before providers are ready", async () => {
+    const fixture = await page({}, {origin: "http://127.0.0.1:54321"});
+    assert.equal(fixture.fixtureOrigin(), "Fixture origin: http://127.0.0.1:12345");
+    assert.equal(fixture.status(), "Waiting for providers");
+    assert.deepEqual(fixture.reports, []);
+    await fixture.advanceTo(5000);
+    assert.equal(fixture.fixtureOrigin(), "Fixture origin: http://127.0.0.1:12345");
+    assert.equal(fixture.status(), "provider-unavailable");
+    assert.deepEqual(fixture.reports, []);
+});
+
+test("a new document identifies itself only after its configuration arrives", async () => {
+    const previous = await page({}, {documentId: "previous-document"});
+    const current = await page({}, {documentId: "current-document"}, {deferConfiguration: true});
+    assert.equal(previous.fixtureOrigin(), current.fixtureOrigin());
+    assert.equal(previous.fixtureDocument(), "Fixture document: previous-document");
+    assert.equal(current.fixtureDocument(), "");
+    assert.deepEqual(current.reports, []);
+    await current.finishConfiguration();
+    assert.equal(current.fixtureDocument(), "Fixture document: current-document");
+    assert.equal(current.status(), "Waiting for providers");
+    assert.deepEqual(current.reports, []);
+});
 
 test("providers injected after the five-second diagnostic still report readiness within the controller deadline", async () => {
     const fixture = await page();

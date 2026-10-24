@@ -10,10 +10,119 @@ import {appleFixtureEntitlements, signAppleFixtureProducts, commandTimeoutSecond
     collectSafariDiagnostics, collectSafariRegistration, collectSafariCodeSigning, finalizeSafariRun, safariDiagnosticPredicate,
     readExtensionMetadata, readMacOSRuntime, refreshSafariExtensionRegistration,
     safariMacInstallation, installSafariMacProducts, removeSafariMacInstallation, rebuildSafariMacProducts,
-    deregisterSafariExtension} from "../run.mjs";
+    deregisterSafariExtension, removeHostedUnitTestBundle, verifySynchronizationHookExclusion} from "../run.mjs";
 
 const root = "/Volumes/BigWalletBuild/Exchange/signing-test/safari/macos/Release";
 const fileAccess = "com.apple.security.temporary-exception.files.absolute-path.read-write";
+const machO = (content = "ordinary product binary") => {
+    const header = Buffer.alloc(32);
+    header.writeUInt32LE(0xfeedfacf, 0);
+    header.writeUInt32LE(0x0100000c, 4);
+    header.writeUInt32LE(2, 12);
+    return Buffer.concat([header, Buffer.from(content)]);
+};
+
+test("Safari removes only the hosted iOS unit-test bundle before checking production binaries", async context => {
+    const directory = await realpath(await mkdtemp(join(tmpdir(), "safari-hosted-tests-")));
+    context.after(() => rm(directory, {recursive: true, force: true}));
+    const app = join(directory, "Wallet.app"), extension = join(app, "PlugIns/Safari.appex");
+    const products = {app, extension};
+    const hosted = join(app, "PlugIns/Tests iOS.xctest");
+    const hostedBinary = join(hosted, "Tests iOS");
+    const binaries = [join(app, "fixture"), join(extension, "fixture"), join(app, "PlugIns/Other.xctest/fixture")];
+    for (const path of [...binaries, hostedBinary]) {
+        await mkdir(dirname(path), {recursive: true});
+        await writeFile(path, machO(path === hostedBinary ? "BWSafariSynchronizationState" : undefined));
+    }
+    const inspect = async () => "fixture";
+    await assert.rejects(verifySynchronizationHookExclusion(products, "ios", inspect), /must not be linked/);
+    await removeHostedUnitTestBundle(products, "macos");
+    assert.ok((await stat(hostedBinary)).isFile());
+    await removeHostedUnitTestBundle(products, "ios");
+    await assert.rejects(stat(hosted), {code: "ENOENT"});
+    await removeHostedUnitTestBundle(products, "ios");
+    assert.deepEqual(new Set((await verifySynchronizationHookExclusion(products, "ios", inspect)).executables), new Set(binaries));
+    for (const binary of binaries.slice(0, 2)) {
+        await writeFile(binary, machO("BWSafariSynchronizationState"));
+        await removeHostedUnitTestBundle(products, "ios");
+        await assert.rejects(verifySynchronizationHookExclusion(products, "ios", inspect), error =>
+            /must not be linked/.test(error.message) && error.message.includes(binary));
+        await writeFile(binary, machO());
+    }
+    const outside = join(directory, "outside.xctest");
+    await mkdir(outside);
+    await symlink(outside, hosted);
+    await removeHostedUnitTestBundle(products, "ios");
+    assert.ok((await stat(outside)).isDirectory());
+    assert.ok(!(await readdir(join(app, "PlugIns"))).includes("Tests iOS.xctest"));
+});
+
+test("wallet, extension, and helper binaries exclude the UI test synchronization hook", async context => {
+    const directory = await realpath(await mkdtemp(join(tmpdir(), "safari-hook-exclusion-")));
+    context.after(() => rm(directory, {recursive: true, force: true}));
+    for (const platform of ["ios", "macos"]) {
+        const products = {app: join(directory, platform, "Wallet.app"), extension: join(directory, platform, "Safari.appex"),
+            ...(platform === "macos" ? {helper: join(directory, platform, "Helper.app")} : {})};
+        const binaries = [];
+        for (const bundle of Object.values(products)) {
+            const executable = join(bundle, ...(platform === "macos" ? ["Contents", "MacOS"] : []), "fixture");
+            await mkdir(dirname(executable), {recursive: true});
+            await writeFile(executable, machO());
+            binaries.push(executable);
+        }
+        const inspect = async (command, args) => {
+            assert.equal(command, "/usr/bin/plutil");
+            assert.deepEqual(args.slice(0, 5), ["-extract", "CFBundleExecutable", "raw", "-o", "-"]);
+            return "fixture";
+        };
+        assert.deepEqual(await verifySynchronizationHookExclusion(products, platform, inspect),
+            {status: "passed", executables: binaries});
+        for (const binary of binaries) {
+            await writeFile(binary, machO("binary\0BWSafariSynchronizationState\0tail"));
+            await assert.rejects(verifySynchronizationHookExclusion(products, platform, inspect), /must not be linked/);
+            await writeFile(binary, machO());
+        }
+        await writeFile(binaries[0], "not a Mach-O executable");
+        await assert.rejects(verifySynchronizationHookExclusion(products, platform, inspect), /is not Mach-O/);
+        await rm(binaries[0]);
+        await assert.rejects(verifySynchronizationHookExclusion(products, platform, inspect), {code: "ENOENT"});
+    }
+});
+
+test("a clean launcher cannot hide hook code in Debug libraries or nested framework executables", async context => {
+    const directory = await realpath(await mkdtemp(join(tmpdir(), "safari-hook-loadable-code-")));
+    context.after(() => rm(directory, {recursive: true, force: true}));
+    const app = join(directory, "Wallet.app"), extension = join(app, "Contents/PlugIns/Safari.appex");
+    const products = {app, extension};
+    const binaries = [join(app, "Contents/MacOS/fixture"), join(extension, "Contents/MacOS/fixture")];
+    const debug = join(app, "Contents/MacOS/Wallet.debug.dylib");
+    const extensionDebug = join(extension, "Contents/MacOS/Safari.debug.dylib");
+    const framework = join(app, "Contents/Frameworks/Nested.framework");
+    const nested = join(framework, "Versions/A/Nested");
+    for (const path of [...binaries, debug, extensionDebug, nested]) {
+        await mkdir(dirname(path), {recursive: true});
+        await writeFile(path, machO());
+    }
+    await symlink("A", join(framework, "Versions/Current"));
+    await symlink("Versions/Current/Nested", join(framework, "Nested"));
+    const resource = join(app, "Contents/Resources/synchronization.txt");
+    await mkdir(dirname(resource), {recursive: true});
+    await writeFile(resource, "BWSafariSynchronization appears in this ordinary text resource");
+    const inspect = async () => "fixture";
+    const clean = await verifySynchronizationHookExclusion(products, "macos", inspect);
+    assert.deepEqual(new Set(clean.executables), new Set([...binaries, debug, extensionDebug, nested]));
+    for (const path of [debug, extensionDebug, nested]) {
+        const prefix = Buffer.alloc(64 * 1024 - 32 - 5);
+        await writeFile(path, machO(Buffer.concat([prefix, Buffer.from("BWSafariSynchronizationState")])));
+        await assert.rejects(verifySynchronizationHookExclusion(products, "macos", inspect), error =>
+            /must not be linked/.test(error.message) && error.message.includes(path));
+        await writeFile(path, machO());
+    }
+    const outside = join(directory, "outside.dylib");
+    await writeFile(outside, machO());
+    await symlink(outside, join(app, "Contents/Frameworks/Outside.dylib"));
+    await assert.rejects(verifySynchronizationHookExclusion(products, "macos", inspect), /symlink escapes/);
+});
 const originalEntitlements = role => ({
     "com.apple.security.app-sandbox": true,
     "com.apple.security.application-groups": ["TEAM.group.org.lil.wallet"],

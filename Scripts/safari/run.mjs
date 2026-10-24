@@ -2,7 +2,8 @@
 
 import {spawn} from "node:child_process";
 import {createHash, randomUUID} from "node:crypto";
-import {readFile, writeFile, mkdir, realpath, lstat, access, copyFile, rename, rm} from "node:fs/promises";
+import {constants} from "node:fs";
+import {readFile, writeFile, mkdir, realpath, lstat, access, copyFile, rename, rm, readdir, open} from "node:fs/promises";
 import {join, dirname, basename, resolve} from "node:path";
 import {userInfo} from "node:os";
 import {pathToFileURL} from "node:url";
@@ -332,6 +333,76 @@ async function executablePaths(bundles, platform, command = execute) {
         paths.add(await realpath(path));
     }
     return [...paths];
+}
+
+export async function removeHostedUnitTestBundle(products, platform) {
+    if (platform !== "ios") { return; }
+    await rm(join(products.app, "PlugIns", "Tests iOS.xctest"), {recursive: true, force: true});
+}
+
+export async function verifySynchronizationHookExclusion(products, platform, command = execute) {
+    if (!["ios", "macos"].includes(platform)) { throw new Error("Invalid Safari product platform"); }
+    const bundles = [products.app, products.extension, ...(products.helper ? [products.helper] : [])];
+    const required = new Set(await Promise.all((await executablePaths(bundles, platform, command)).map(path => realpath(path))));
+    const roots = [...new Set(await Promise.all(bundles.map(path => realpath(path))))];
+    const magic = new Set([0xfeedface, 0xcefaedfe, 0xfeedfacf, 0xcffaedfe, 0xcafebabe, 0xbebafeca, 0xcafebabf, 0xbfbafeca]);
+    const marker = Buffer.from("BWSafariSynchronization");
+    const visited = new Set(), executables = [];
+    let entries = 0, codeBytes = 0;
+    const visit = async (path, root, depth = 0) => {
+        if (visited.has(path)) { return; }
+        visited.add(path);
+        if (++entries > 20000 || depth > 32) { throw new Error("Safari product code inspection exceeded its traversal limit"); }
+        const info = await lstat(path);
+        if (info.isSymbolicLink()) {
+            const target = await realpath(path);
+            if (target !== root && !target.startsWith(root + "/")) { throw new Error("Safari product symlink escapes its bundle: " + path); }
+            return;
+        }
+        if (info.isDirectory()) {
+            for (const name of (await readdir(path)).sort()) { await visit(join(path, name), root, depth + 1); }
+            return;
+        }
+        if (!info.isFile()) { throw new Error("Safari product contains an unsupported file: " + path); }
+        const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+        try {
+            const opened = await file.stat();
+            if (!opened.isFile() || opened.dev !== info.dev || opened.ino !== info.ino || opened.size !== info.size) {
+                throw new Error("Safari product changed during code inspection: " + path);
+            }
+            const header = Buffer.alloc(4);
+            const {bytesRead} = await file.read(header, 0, header.length, 0);
+            if (bytesRead !== 4 || !magic.has(header.readUInt32BE(0))) {
+                if (required.has(path)) { throw new Error("Safari product executable is not Mach-O: " + path); }
+                return;
+            }
+            codeBytes += opened.size;
+            if (opened.size > 512 * 1024 * 1024 || codeBytes > 2 * 1024 * 1024 * 1024) {
+                throw new Error("Safari product code inspection exceeded its byte limit");
+            }
+            const chunk = Buffer.alloc(64 * 1024);
+            let offset = 0, tail = Buffer.alloc(0);
+            while (offset < opened.size) {
+                const {bytesRead} = await file.read(chunk, 0, Math.min(chunk.length, opened.size - offset), offset);
+                if (!bytesRead) { throw new Error("Safari product changed during code inspection: " + path); }
+                const content = Buffer.concat([tail, chunk.subarray(0, bytesRead)]);
+                if (content.includes(marker)) {
+                    throw new Error("Safari synchronization hook must not be linked into wallet or extension products: " + path);
+                }
+                tail = Buffer.from(content.subarray(Math.max(0, content.length - marker.length + 1)));
+                offset += bytesRead;
+            }
+            executables.push(path);
+        } finally {
+            await file.close();
+        }
+    };
+    for (const root of roots) {
+        if (!(await lstat(root)).isDirectory()) { throw new Error("Safari product bundle is not a directory: " + root); }
+        await visit(root, root);
+    }
+    if ([...required].some(path => !executables.includes(path))) { throw new Error("Safari product executable was not inspected"); }
+    return {status: "passed", executables};
 }
 
 export function safariDiagnosticPredicate(platform, allowedExecutables = []) {
@@ -880,10 +951,12 @@ export async function main(args = process.argv.slice(2)) {
         `BW_TEST_VM_RUN_ID=${runID}`, "BW_TEST_VM_EXCHANGE=/Volumes/BigWalletBuild/Exchange",
         `SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) BW_SAFARI_VM_TESTING${options.configuration === "Debug" ? " DEBUG" : ""}`];
     if (options.phase === "build") {
-        await execute("xcodebuild", ["-jobs", "2", "build-for-testing", ...buildArgs, "ENABLE_TESTABILITY=YES"]);
         const paths = await products(buildArgs, options);
+        await removeHostedUnitTestBundle(paths, options.platform);
+        await execute("xcodebuild", ["-jobs", "2", "build-for-testing", ...buildArgs, "ENABLE_TESTABILITY=YES"]);
         await access(paths.extension);
         await verifyFixtureProducts(paths, options.platform, descriptor);
+        paths.synchronizationHookExclusion = await verifySynchronizationHookExclusion(paths, options.platform);
         if (options.platform === "macos" && options.signing === "local") {
             await signLocalMacFixtureProducts(paths, root);
         }
