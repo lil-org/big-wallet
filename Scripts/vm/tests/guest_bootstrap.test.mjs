@@ -65,11 +65,13 @@ async function fixture(operation) {
 
 const harness = `import {selected} from "./test_manifest.mjs";
 import {result} from "./result_audit.mjs";
+import {lifecycle} from "../process_lifecycle.mjs";
 export async function runJob(context) {
-    return {runId: context.job.runId, status: "passed", selected, result, source: context.source.sha256, entry: "snapshot"};
+    return {runId: context.job.runId, status: "passed", selected, result, lifecycle, source: context.source.sha256, entry: "snapshot"};
 }`;
 const sources = {
     "Scripts/vm/guest.mjs": harness,
+    "Scripts/process_lifecycle.mjs": 'export const lifecycle = "snapshot lifecycle";',
     "Scripts/vm/test_manifest.mjs": 'export const selected = "current manifest";',
     "Scripts/vm/result_audit.mjs": 'export const result = "current audit";',
 };
@@ -131,6 +133,7 @@ test("the installed bootstrap executes the current verified snapshot after every
     assert.equal(report.entry, "snapshot");
     assert.equal(report.selected, "current manifest");
     assert.equal(report.result, "current audit");
+    assert.equal(report.lifecycle, "snapshot lifecycle");
     assert.equal(report.source, selected.source.sha256);
     assert.deepEqual(events, ["exchange", "identity", "bootstrap", "lock", "provision", "volume", "materialize", "import", "release"]);
 }));

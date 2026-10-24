@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import XCTest
 @testable import Big_Wallet
 
@@ -8,10 +9,10 @@ final class AccountPreviewStateTests: XCTestCase {
         let original = wallet(accounts: [account(8), account(0), account(9)])
         let initial = PreviewRequest()
         let next = PreviewRequest()
-        let pager = PreviewPager(initial: [initial], additional: [next])
-        defer { pager.finishPendingRequests() }
+        let sessions = PreviewSessions(initial: [initial], additional: [next])
+        defer { sessions.finishPendingRequests() }
         let changes = PreviewChanges()
-        let state = makeState(wallet: original, pager: pager, changes: changes)
+        let state = makeState(wallet: original, sessions: sessions, changes: changes)
         state.reset()
 
         XCTAssertTrue(state.hasEnabledAccounts)
@@ -42,10 +43,10 @@ final class AccountPreviewStateTests: XCTestCase {
 
     func testDisablingAndRestoringTheLastSelection() async {
         let initial = PreviewRequest()
-        let pager = PreviewPager(initial: [initial])
-        defer { pager.finishPendingRequests() }
+        let sessions = PreviewSessions(initial: [initial])
+        defer { sessions.finishPendingRequests() }
         let changes = PreviewChanges()
-        let state = makeState(wallet: wallet(accounts: [account(0)]), pager: pager, changes: changes)
+        let state = makeState(wallet: wallet(accounts: [account(0)]), sessions: sessions, changes: changes)
         state.reset()
         await finish(initial, with: [account(0), account(1)])
         await expectEventually { changes.generations.count == 1 }
@@ -62,23 +63,23 @@ final class AccountPreviewStateTests: XCTestCase {
     func testPagingWaitsForLayoutAndCoalescesViewportRequests() async throws {
         let initial = PreviewRequest()
         let next = PreviewRequest()
-        let pager = PreviewPager(initial: [initial], additional: [next])
-        defer { pager.finishPendingRequests() }
+        let sessions = PreviewSessions(initial: [initial], additional: [next])
+        defer { sessions.finishPendingRequests() }
         let changes = PreviewChanges()
-        let state = makeState(wallet: wallet(accounts: [account(0)]), pager: pager, changes: changes)
+        let state = makeState(wallet: wallet(accounts: [account(0)]), sessions: sessions, changes: changes)
         state.reset()
         state.loadMore()
         await finish(initial, with: [account(0)])
         await expectEventually { changes.generations.count == 1 }
         state.loadMore()
-        XCTAssertEqual(pager.additionalCalls, 0)
+        XCTAssertEqual(sessions.additionalCalls, 0)
 
         XCTAssertTrue(state.activatePaging(for: try XCTUnwrap(changes.generations.last)))
         state.loadMore()
         state.loadMore()
         await fulfillment(of: [next.entered], timeout: 2)
         state.loadMore()
-        XCTAssertEqual(pager.additionalCalls, 1)
+        XCTAssertEqual(sessions.additionalCalls, 1)
         next.resolve([account(1), account(2)])
         await expectEventually { changes.insertions.count == 1 }
         XCTAssertEqual(state.accounts, [account(0), account(1), account(2)])
@@ -88,10 +89,10 @@ final class AccountPreviewStateTests: XCTestCase {
     func testResetRejectsLateFirstPageWithoutClearingTheReplacementLoad() async throws {
         let first = PreviewRequest()
         let replacement = PreviewRequest()
-        let pager = PreviewPager(initial: [first, replacement])
-        defer { pager.finishPendingRequests() }
+        let sessions = PreviewSessions(initial: [first, replacement])
+        defer { sessions.finishPendingRequests() }
         let changes = PreviewChanges()
-        let state = makeState(wallet: wallet(accounts: [account(0)]), pager: pager, changes: changes)
+        let state = makeState(wallet: wallet(accounts: [account(0)]), sessions: sessions, changes: changes)
         state.reset()
         await fulfillment(of: [first.entered], timeout: 2)
         state.reset()
@@ -105,7 +106,7 @@ final class AccountPreviewStateTests: XCTestCase {
         await expectEventually { changes.generations.count == 1 }
         XCTAssertEqual(state.accounts, [account(0)])
         XCTAssertTrue(state.activatePaging(for: try XCTUnwrap(changes.generations.last)))
-        XCTAssertEqual(pager.initialCalls, 2)
+        XCTAssertEqual(sessions.initialCalls, 2)
     }
 
     func testResetRejectsLateAdditionalPageAndOldLayoutActivation() async throws {
@@ -113,10 +114,10 @@ final class AccountPreviewStateTests: XCTestCase {
         let obsolete = PreviewRequest()
         let replacement = PreviewRequest()
         let current = PreviewRequest()
-        let pager = PreviewPager(initial: [initial, replacement], additional: [obsolete, current])
-        defer { pager.finishPendingRequests() }
+        let sessions = PreviewSessions(initial: [initial, replacement], additional: [obsolete, current])
+        defer { sessions.finishPendingRequests() }
         let changes = PreviewChanges()
-        let state = makeState(wallet: wallet(accounts: [account(0)]), pager: pager, changes: changes)
+        let state = makeState(wallet: wallet(accounts: [account(0)]), sessions: sessions, changes: changes)
         state.reset()
         await finish(initial, with: [account(0)])
         await expectEventually { changes.generations.count == 1 }
@@ -137,7 +138,7 @@ final class AccountPreviewStateTests: XCTestCase {
         obsolete.resolve([account(7)])
         await fulfillment(of: [obsolete.returned], timeout: 2)
         state.loadMore()
-        XCTAssertEqual(pager.additionalCalls, 2)
+        XCTAssertEqual(sessions.additionalCalls, 2)
         XCTAssertEqual(state.accounts, [account(3)])
         current.resolve([account(4)])
         await expectEventually { changes.insertions.count == 1 }
@@ -148,10 +149,10 @@ final class AccountPreviewStateTests: XCTestCase {
     func testInvalidationCancelsWorkAndSilencesLateResults() async throws {
         let initial = PreviewRequest()
         let next = PreviewRequest()
-        let pager = PreviewPager(initial: [initial], additional: [next])
-        defer { pager.finishPendingRequests() }
+        let sessions = PreviewSessions(initial: [initial], additional: [next])
+        defer { sessions.finishPendingRequests() }
         let changes = PreviewChanges()
-        let state = makeState(wallet: wallet(accounts: [account(0)]), pager: pager, changes: changes)
+        let state = makeState(wallet: wallet(accounts: [account(0)]), sessions: sessions, changes: changes)
         state.reset()
         await finish(initial, with: [account(0)])
         await expectEventually { changes.generations.count == 1 }
@@ -171,8 +172,7 @@ final class AccountPreviewStateTests: XCTestCase {
         XCTAssertEqual(state.accounts, [account(0)])
         XCTAssertEqual(state.enabledAccounts, [account(0)])
         XCTAssertEqual(changes.values, previousChanges)
-        XCTAssertEqual(pager.additionalCalls, 1)
-        XCTAssertEqual(pager.invalidations, 1)
+        XCTAssertEqual(sessions.additionalCalls, 1)
     }
 
     func testFailuresPreserveSelectionAndAllowLaterPageRetryWithoutEmptyInsertions() async throws {
@@ -181,12 +181,12 @@ final class AccountPreviewStateTests: XCTestCase {
         let failedPage = PreviewRequest()
         let successfulPage = PreviewRequest()
         let emptyPage = PreviewRequest()
-        let pager = PreviewPager(
+        let sessions = PreviewSessions(
             initial: [failedInitial, initial], additional: [failedPage, successfulPage, emptyPage]
         )
-        defer { pager.finishPendingRequests() }
+        defer { sessions.finishPendingRequests() }
         let changes = PreviewChanges()
-        let state = makeState(wallet: wallet(accounts: [account(0), account(8)]), pager: pager, changes: changes)
+        let state = makeState(wallet: wallet(accounts: [account(0), account(8)]), sessions: sessions, changes: changes)
         state.reset()
         await finish(failedInitial, with: nil)
         state.loadMore()
@@ -195,7 +195,7 @@ final class AccountPreviewStateTests: XCTestCase {
         XCTAssertFalse(state.hasChanges)
         XCTAssertEqual(state.enabledAccounts, [account(0), account(8)])
         XCTAssertTrue(changes.generations.isEmpty)
-        XCTAssertEqual(pager.additionalCalls, 0)
+        XCTAssertEqual(sessions.additionalCalls, 0)
 
         state.reset()
         await finish(initial, with: [account(0), account(1)])
@@ -206,7 +206,7 @@ final class AccountPreviewStateTests: XCTestCase {
         await finish(failedPage, with: nil)
         await expectEventually {
             state.loadMore()
-            return pager.additionalCalls == 2
+            return sessions.additionalCalls == 2
         }
         XCTAssertEqual(state.enabledAccounts, [account(0), account(1), account(8)])
         await finish(successfulPage, with: [account(8)])
@@ -221,11 +221,11 @@ final class AccountPreviewStateTests: XCTestCase {
     func testRefreshKeepsMetadataChangesAndResetsPristineAccountChanges() async throws {
         let initial = PreviewRequest()
         let replacement = PreviewRequest()
-        let pager = PreviewPager(initial: [initial, replacement])
-        defer { pager.finishPendingRequests() }
+        let sessions = PreviewSessions(initial: [initial, replacement])
+        defer { sessions.finishPendingRequests() }
         let changes = PreviewChanges()
         let original = wallet(accounts: [account(0)])
-        let state = makeState(wallet: original, pager: pager, changes: changes)
+        let state = makeState(wallet: original, sessions: sessions, changes: changes)
         state.reset()
         await finish(initial, with: [account(0), account(1)])
         await expectEventually { changes.generations.count == 1 }
@@ -238,7 +238,7 @@ final class AccountPreviewStateTests: XCTestCase {
         XCTAssertEqual(state.wallet.accounts, [refreshedAccount])
         XCTAssertTrue(state.hasChanges)
         XCTAssertTrue(state.isEnabled(account(1)))
-        XCTAssertEqual(pager.initialCalls, 1)
+        XCTAssertEqual(sessions.initialCalls, 1)
         XCTAssertTrue(state.activatePaging(for: generation))
         state.toggle(at: 1)
         XCTAssertFalse(state.hasChanges)
@@ -249,16 +249,16 @@ final class AccountPreviewStateTests: XCTestCase {
         await finish(replacement, with: [account(0), account(1), account(2)])
         await expectEventually { changes.generations.count == 2 }
         XCTAssertEqual(state.enabledAccounts, [account(0), account(2)])
-        XCTAssertEqual(pager.initialCalls, 2)
+        XCTAssertEqual(sessions.initialCalls, 2)
     }
 
     func testRefreshClosesDirtyChangesOrRemovedWallets() async throws {
         for removed in [false, true] {
             let initial = PreviewRequest()
-            let pager = PreviewPager(initial: [initial])
-            defer { pager.finishPendingRequests() }
+            let sessions = PreviewSessions(initial: [initial])
+            defer { sessions.finishPendingRequests() }
             let changes = PreviewChanges()
-            let state = makeState(wallet: wallet(accounts: [account(0)]), pager: pager, changes: changes)
+            let state = makeState(wallet: wallet(accounts: [account(0)]), sessions: sessions, changes: changes)
             state.reset()
             await finish(initial, with: [account(0), account(1)])
             await expectEventually { changes.generations.count == 1 }
@@ -269,20 +269,19 @@ final class AccountPreviewStateTests: XCTestCase {
             XCTAssertEqual(state.refresh(wallet: removed ? nil : wallet(accounts: [account(2)])), .close)
             XCTAssertFalse(state.activatePaging(for: generation))
             XCTAssertEqual(changes.values, previousChanges)
-            XCTAssertEqual(pager.initialCalls, 1)
-            XCTAssertEqual(pager.invalidations, 1)
+            XCTAssertEqual(sessions.initialCalls, 1)
         }
     }
 
     func testLoadingDoesNotRetainStateAndDeinitializationCancelsTheRequest() async {
         let initial = PreviewRequest()
-        let pager = PreviewPager(initial: [initial])
-        defer { pager.finishPendingRequests() }
+        let sessions = PreviewSessions(initial: [initial])
+        defer { sessions.finishPendingRequests() }
         let changes = PreviewChanges()
         var state: AccountPreviewState? = makeState(
-            wallet: wallet(accounts: [account(0)]), pager: pager, changes: changes
+            wallet: wallet(accounts: [account(0)]), sessions: sessions, changes: changes
         )
-        weak var weakState = state
+        weak let weakState = state
         state?.reset()
         await fulfillment(of: [initial.entered], timeout: 2)
 
@@ -292,30 +291,175 @@ final class AccountPreviewStateTests: XCTestCase {
         initial.resolve([account(0)])
         await fulfillment(of: [initial.returned], timeout: 2)
         XCTAssertEqual(changes.values, [.reload])
-        XCTAssertEqual(pager.invalidations, 1)
     }
 
     func testReloadCallbackCanInvalidateBeforeTheLoadStarts() {
         let initial = PreviewRequest()
-        let pager = PreviewPager(initial: [initial])
-        defer { pager.finishPendingRequests() }
+        let sessions = PreviewSessions(initial: [initial])
+        defer { sessions.finishPendingRequests() }
         weak var observedState: AccountPreviewState?
         let state = AccountPreviewState(
-            wallet: wallet(accounts: [account(0)]), makePager: { _ in pager },
+            wallet: wallet(accounts: [account(0)]), makeSession: { _ in await sessions.makeSession() },
             didChange: { _ in observedState?.invalidate() }
         )
         observedState = state
         state.reset()
-        XCTAssertEqual(pager.invalidations, 1)
-        XCTAssertEqual(pager.initialCalls, 0)
+        XCTAssertEqual(sessions.initialCalls, 0)
+    }
+
+    func testResetDiscardsLateSessionCreationWithoutStartingItsFirstPage() async throws {
+        let obsoletePage = PreviewRequest()
+        let replacementPage = PreviewRequest()
+        let sessions = PreviewSessions(initial: [obsoletePage, replacementPage])
+        defer { sessions.finishPendingRequests() }
+        let obsolete = sessions.makeSession()
+        let creation = TestGate<any AccountPreviewSession>()
+        let entered = expectation(description: "Session creation started")
+        let cancelled = expectation(description: "Session creation cancelled")
+        let returned = expectation(description: "Session creation returned")
+        let calls = Mutex(0)
+        let changes = PreviewChanges()
+        let state = AccountPreviewState(wallet: wallet(accounts: [account(0)]), makeSession: { _ in
+            let first = calls.withLock { count in defer { count += 1 }; return count == 0 }
+            guard first else { return await sessions.makeSession() }
+            return await withTaskCancellationHandler {
+                entered.fulfill()
+                let session = await creation.wait()
+                returned.fulfill()
+                return session
+            } onCancel: { cancelled.fulfill() }
+        }, didChange: changes.receive)
+        defer { creation.resolve(obsolete) }
+        state.reset()
+        await fulfillment(of: [entered], timeout: 2)
+        state.reset()
+        await fulfillment(of: [cancelled, replacementPage.entered], timeout: 2)
+        creation.resolve(obsolete)
+        await fulfillment(of: [returned], timeout: 2)
+        XCTAssertTrue(state.accounts.isEmpty)
+        XCTAssertTrue(changes.generations.isEmpty)
+        replacementPage.resolve([account(2)])
+        await expectEventually { state.accounts == [self.account(2)] }
+        XCTAssertEqual(obsoletePage.calls, 0)
+        XCTAssertEqual(changes.generations.count, 1)
+    }
+
+    func testDeinitializationCancelsSessionCreation() async {
+        let initial = PreviewRequest()
+        let sessions = PreviewSessions(initial: [initial])
+        let session = sessions.makeSession()
+        let creation = TestGate<any AccountPreviewSession>()
+        let entered = expectation(description: "Session creation started")
+        let cancelled = expectation(description: "Session creation cancelled")
+        let returned = expectation(description: "Session creation returned")
+        let changes = PreviewChanges()
+        var state: AccountPreviewState? = AccountPreviewState(wallet: wallet(accounts: [account(0)]), makeSession: { _ in
+            await withTaskCancellationHandler {
+                entered.fulfill()
+                let session = await creation.wait()
+                returned.fulfill()
+                return session
+            } onCancel: { cancelled.fulfill() }
+        }, didChange: changes.receive)
+        weak let observed = state
+        state?.reset()
+        await fulfillment(of: [entered], timeout: 2)
+        state = nil
+        XCTAssertNil(observed)
+        await fulfillment(of: [cancelled], timeout: 2)
+        creation.resolve(session)
+        await fulfillment(of: [returned], timeout: 2)
+        XCTAssertEqual(initial.calls, 0)
+        XCTAssertEqual(changes.values, [.reload])
+    }
+
+    func testThrottleUsesSuccessfulCompletionAndRemainingDelay() async throws {
+        let initial = PreviewRequest()
+        let next = PreviewRequest()
+        let last = PreviewRequest()
+        let sessions = PreviewSessions(initial: [initial], additional: [next, last])
+        defer { sessions.finishPendingRequests() }
+        let changes = PreviewChanges()
+        let clock = TestClock()
+        let state = makeState(wallet: wallet(accounts: [account(0)]), sessions: sessions,
+            changes: changes, timing: timing(clock))
+        state.reset()
+        await finish(initial, with: [account(0)])
+        await expectEventually { changes.generations.count == 1 }
+        XCTAssertTrue(clock.registrations.isEmpty)
+        XCTAssertTrue(state.activatePaging(for: try XCTUnwrap(changes.generations.last)))
+        clock.advance(by: 100_000_000)
+        state.loadMore()
+        await expectEventually { clock.pendingSleeps.count == 1 }
+        XCTAssertEqual(clock.pendingSleeps.first?.durationNanoseconds, 130_000_000)
+        clock.advance(by: 129_000_000)
+        XCTAssertEqual(sessions.additionalCalls, 0)
+        clock.advance(by: 1_000_000)
+        await fulfillment(of: [next.entered], timeout: 2)
+        clock.advance(by: 1_000_000_000)
+        next.resolve([account(1)])
+        await expectEventually { changes.insertions.count == 1 }
+        state.loadMore()
+        await expectEventually { clock.pendingSleeps.count == 1 }
+        XCTAssertEqual(clock.pendingSleeps.first?.durationNanoseconds, 230_000_000)
+        state.invalidate()
+        await expectEventually { clock.activeSleepCount == 0 }
+        clock.advance(by: 230_000_000)
+        XCTAssertEqual(sessions.additionalCalls, 1)
+        XCTAssertEqual(state.accounts, [account(0), account(1)])
+    }
+
+    func testElapsedThrottleAndExhaustionDoNotScheduleExtraWork() async throws {
+        let initial = PreviewRequest()
+        let failed = PreviewRequest()
+        let empty = PreviewRequest()
+        let sessions = PreviewSessions(initial: [initial], additional: [failed, empty])
+        defer { sessions.finishPendingRequests() }
+        let changes = PreviewChanges()
+        let clock = TestClock()
+        let state = makeState(wallet: wallet(accounts: [account(0)]), sessions: sessions,
+            changes: changes, timing: timing(clock))
+        state.reset()
+        await finish(initial, with: [account(0)])
+        await expectEventually { changes.generations.count == 1 }
+        XCTAssertTrue(state.activatePaging(for: try XCTUnwrap(changes.generations.last)))
+        clock.advance(by: 230_000_000)
+        state.loadMore()
+        await finish(failed, with: nil)
+        await expectEventually { state.loadMore(); return sessions.additionalCalls == 2 }
+        XCTAssertEqual(sessions.requestedPages, [1, 1])
+        XCTAssertTrue(clock.registrations.isEmpty)
+        await finish(empty, with: [])
+        await expectEventually { state.activatePaging(for: changes.generations[0]) }
+        let extraPage = expectation(description: "Exhausted session does not derive another page")
+        extraPage.isInverted = true
+        sessions.onAdditionalRequest = { extraPage.fulfill() }
+        clock.advance(by: 1_000_000_000)
+        state.loadMore()
+        state.loadMore()
+        await fulfillment(of: [extraPage], timeout: 0.05)
+        XCTAssertEqual(sessions.additionalCalls, 2)
+        XCTAssertTrue(changes.insertions.isEmpty)
+        XCTAssertEqual(state.enabledAccounts, [account(0)])
+    }
+
+    private func timing(_ clock: TestClock) -> AccountPreviewState.Timing {
+        let anchor = clock.instant
+        let uptime = clock.uptimeNanoseconds
+        return .init(now: { clock.instant }, sleepUntil: { deadline in
+            let duration = anchor.duration(to: deadline).components
+            let nanoseconds = UInt64(duration.seconds) * 1_000_000_000 + UInt64(duration.attoseconds / 1_000_000_000)
+            try await clock.sleep(until: uptime + nanoseconds)
+        })
     }
 
     private func makeState(
         wallet: WalletSnapshot,
-        pager: PreviewPager,
-        changes: PreviewChanges
+        sessions: PreviewSessions,
+        changes: PreviewChanges,
+        timing: AccountPreviewState.Timing = .init(now: { .now }, sleepUntil: { _ in try Task.checkCancellation() })
     ) -> AccountPreviewState {
-        AccountPreviewState(wallet: wallet, makePager: { _ in pager }, didChange: changes.receive)
+        AccountPreviewState(wallet: wallet, makeSession: { _ in await sessions.makeSession() }, timing: timing, didChange: changes.receive)
     }
 
     private func finish(_ request: PreviewRequest, with accounts: [WalletAccount]?) async {
@@ -355,44 +499,58 @@ private final class PreviewChanges {
 }
 
 @MainActor
-private final class PreviewPager: AccountPreviewPaging {
+private final class PreviewSessions {
+    enum Failure: Error { case unavailable }
+
     let initial: [PreviewRequest]
     let additional: [PreviewRequest]
     private(set) var initialCalls = 0
     private(set) var additionalCalls = 0
-    private(set) var invalidations = 0
+    private(set) var requestedPages = [Int]()
+    var onAdditionalRequest: (() -> Void)?
 
     init(initial: [PreviewRequest], additional: [PreviewRequest] = []) {
         self.initial = initial
         self.additional = additional
     }
 
-    func reset() async -> [WalletAccount]? {
+    func makeSession() -> any AccountPreviewSession {
         let index = initialCalls
         initialCalls += 1
-        guard initial.indices.contains(index) else {
-            XCTFail("Unexpected initial-page request")
-            return nil
-        }
-        return await initial[index].run()
+        return PreviewSession(source: self, initial: initial.indices.contains(index) ? initial[index] : nil)
     }
 
-    func previewMoreIfNeeded() async -> [WalletAccount]? {
+    func additionalRequest(page: Int) -> PreviewRequest? {
+        onAdditionalRequest?()
+        requestedPages.append(page)
         let index = additionalCalls
         additionalCalls += 1
-        guard additional.indices.contains(index) else {
-            XCTFail("Unexpected additional-page request")
-            return nil
-        }
-        return await additional[index].run()
-    }
-
-    func invalidate() {
-        invalidations += 1
+        return additional.indices.contains(index) ? additional[index] : nil
     }
 
     func finishPendingRequests() {
         (initial + additional).forEach { $0.resolve(nil) }
+    }
+}
+
+@MainActor
+private final class PreviewSession: AccountPreviewSession {
+    let source: PreviewSessions
+    let initial: PreviewRequest?
+
+    init(source: PreviewSessions, initial: PreviewRequest?) {
+        self.source = source
+        self.initial = initial
+    }
+
+    func previewAccounts(page: Int) async throws -> [WalletAccount] {
+        let requested = if page == 0 { initial } else { await source.additionalRequest(page: page) }
+        guard let request = requested else {
+            XCTFail("Unexpected preview page \(page)")
+            throw PreviewSessions.Failure.unavailable
+        }
+        guard let accounts = await request.run() else { throw PreviewSessions.Failure.unavailable }
+        return accounts
     }
 }
 
@@ -401,9 +559,12 @@ private final class PreviewRequest: Sendable {
     let returned = XCTestExpectation(description: "Preview returned")
     let cancelled = XCTestExpectation(description: "Preview cancelled")
     private let result = TestGate<[WalletAccount]?>()
+    private let callCount = Mutex(0)
+    var calls: Int { callCount.withLock { $0 } }
 
     func run() async -> [WalletAccount]? {
-        await withTaskCancellationHandler {
+        callCount.withLock { $0 += 1 }
+        return await withTaskCancellationHandler {
             entered.fulfill()
             let accounts = await result.wait()
             returned.fulfill()

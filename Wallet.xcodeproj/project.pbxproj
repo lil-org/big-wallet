@@ -1068,6 +1068,19 @@
 		B5FA11010000000000000001 /* BWSafariSynchronization.m in Sources */ = {isa = PBXBuildFile; fileRef = F4FA11010000000000000002 /* BWSafariSynchronization.m */; };
 		B5FA11010000000000000002 /* BWSafariSynchronization.m in Sources */ = {isa = PBXBuildFile; fileRef = F4FA11010000000000000002 /* BWSafariSynchronization.m */; };
 		B5FA11010000000000000003 /* BWSafariSynchronizationTests.m in Sources */ = {isa = PBXBuildFile; fileRef = F4FA11010000000000000004 /* BWSafariSynchronizationTests.m */; };
+		3888896D6D0D4CB2913FD7D0 /* NativeAccountSelectionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B9B2B85C5744FBAE93FA10 /* NativeAccountSelectionSession.swift */; };
+		0ED82609802A4755BDAEC58F /* NativeAccountSelectionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B9B2B85C5744FBAE93FA10 /* NativeAccountSelectionSession.swift */; };
+		D20BF626D66242C099B486DC /* NativeAccountSelectionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ECB9F30D118429582F7ADFE /* NativeAccountSelectionViewController.swift */; };
+		F373122568574D768895AC6B /* NativeAccountSelectionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ECB9F30D118429582F7ADFE /* NativeAccountSelectionViewController.swift */; };
+		A7F6C10CBDD74DFDBB9CC23B /* AccountsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 847EE1BF93344CDCB0F08440 /* AccountsListView.swift */; };
+		BC41F94104564BB5A6A4B07A /* AccountsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 847EE1BF93344CDCB0F08440 /* AccountsListView.swift */; };
+		2059A45F78BE4061A634B4CD /* NativeSecretAlertPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C620A501CB814E7D9410F35E /* NativeSecretAlertPresentation.swift */; };
+		53635E8FA34B41B88584D998 /* NativeSecretAlertPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C620A501CB814E7D9410F35E /* NativeSecretAlertPresentation.swift */; };
+		C6BBED856FAC4A119966C358 /* AccountsListView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 23D116B7C41C4C0AA130031C /* AccountsListView.xib */; };
+		3E17AD9DA972485D81F63BCB /* AccountsListView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 23D116B7C41C4C0AA130031C /* AccountsListView.xib */; };
+		38DF90652362410C85F2CB83 /* AccountListTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D2BD8A918244C2E912AB4FD /* AccountListTestSupport.swift */; };
+		98E83BE356EA4EB7B18B0918 /* AccountsListViewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4D122C57B784F1FAD95503A /* AccountsListViewControllerTests.swift */; };
+		BACA9765ED38497A90BDBD2F /* NativeAccountSelectionViewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E479D4ED7EC406196C853C0 /* NativeAccountSelectionViewControllerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1435,6 +1448,14 @@
 		F4FA11010000000000000002 /* BWSafariSynchronization.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BWSafariSynchronization.m; sourceTree = "<group>"; };
 		F4FA11010000000000000003 /* BWSafariSynchronizationInternal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BWSafariSynchronizationInternal.h; sourceTree = "<group>"; };
 		F4FA11010000000000000004 /* BWSafariSynchronizationTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BWSafariSynchronizationTests.m; sourceTree = "<group>"; };
+		47B9B2B85C5744FBAE93FA10 /* NativeAccountSelectionSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAccountSelectionSession.swift; sourceTree = "<group>"; };
+		0ECB9F30D118429582F7ADFE /* NativeAccountSelectionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAccountSelectionViewController.swift; sourceTree = "<group>"; };
+		847EE1BF93344CDCB0F08440 /* AccountsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListView.swift; sourceTree = "<group>"; };
+		C620A501CB814E7D9410F35E /* NativeSecretAlertPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeSecretAlertPresentation.swift; sourceTree = "<group>"; };
+		1D13ABFE51AC4B9CB3E54695 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/AccountsListView.xib; sourceTree = "<group>"; };
+		5D2BD8A918244C2E912AB4FD /* AccountListTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountListTestSupport.swift; sourceTree = "<group>"; };
+		D4D122C57B784F1FAD95503A /* AccountsListViewControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListViewControllerTests.swift; sourceTree = "<group>"; };
+		8E479D4ED7EC406196C853C0 /* NativeAccountSelectionViewControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAccountSelectionViewControllerTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1575,6 +1596,9 @@
 				2F2A00000000000000000019 /* WalletsManagerPrivateKeyImportTests.swift */,
 				2F2A0000000000000000001D /* WalletsManagerPreviewTests.swift */,
 				A8B200002FC3000000000001 /* NativeApprovalCoordinatorTests.swift */,
+				8E479D4ED7EC406196C853C0 /* NativeAccountSelectionViewControllerTests.swift */,
+				D4D122C57B784F1FAD95503A /* AccountsListViewControllerTests.swift */,
+				5D2BD8A918244C2E912AB4FD /* AccountListTestSupport.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -1641,6 +1665,8 @@
 		2C19953E2674C4B900A8E370 /* App macOS */ = {
 			isa = PBXGroup;
 			children = (
+				23D116B7C41C4C0AA130031C /* AccountsListView.xib */,
+				56F7D7A7099D40F08819742C /* Library */,
 				2C19953F2674C4B900A8E370 /* AppDelegate.swift */,
 				2C8A09C5267513FC00993638 /* Agent.swift */,
 				A8F100012FC9000000000001 /* ApprovalInbox.swift */,
@@ -1787,6 +1813,8 @@
 		2C8A09C92675142700993638 /* Screens */ = {
 			isa = PBXGroup;
 			children = (
+				0ECB9F30D118429582F7ADFE /* NativeAccountSelectionViewController.swift */,
+				47B9B2B85C5744FBAE93FA10 /* NativeAccountSelectionSession.swift */,
 				2C1995412674C4B900A8E370 /* ImportViewController.swift */,
 				2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */,
 				2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */,
@@ -1802,6 +1830,7 @@
 		2C8A09E5267595C200993638 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				847EE1BF93344CDCB0F08440 /* AccountsListView.swift */,
 				2C8A09E226757FC000993638 /* AccountCellView.swift */,
 				2C4768A8282598C5005E8D4D /* PreviewAccountCellView.swift */,
 				2CB4031A281C99C800BAEBEE /* AccountsHeaderRowView.swift */,
@@ -2119,6 +2148,14 @@
 			sourceTree = "<group>";
 		};
 		E8E92E120536C98CFE366B19 /* SafariUI */ = {isa = PBXGroup; children = (70060F661C04B73312C924DD /* SafariLifecycleTests.swift */, F4FA11010000000000000001 /* BWSafariSynchronization.h */, F4FA11010000000000000002 /* BWSafariSynchronization.m */, F4FA11010000000000000003 /* BWSafariSynchronizationInternal.h */, F4FA11010000000000000004 /* BWSafariSynchronizationTests.m */,); path = SafariUI; sourceTree = "<group>"; };
+		56F7D7A7099D40F08819742C /* Library */ = {
+			isa = PBXGroup;
+			children = (
+				C620A501CB814E7D9410F35E /* NativeSecretAlertPresentation.swift */,
+			);
+			path = Library;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -2543,6 +2580,7 @@
 				2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */,
 				2C9264292E11D32900FBF476 /* AppIcon.icon in Resources */,
 				2C1995472674C4BA00A8E370 /* Main.storyboard in Resources */,
+				C6BBED856FAC4A119966C358 /* AccountsListView.xib in Resources */,
 				2C4768AE2826ECE5005E8D4D /* SharedAssets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -2602,6 +2640,7 @@
 				8D275FFC7EB18A79860B53BB /* Localizable.xcstrings in Resources */,
 				ABBDE2131FBE25B6456C7F6E /* AppIcon.icon in Resources */,
 				FC7CDB5CFEC2D6AB8BF28CB3 /* Main.storyboard in Resources */,
+				3E17AD9DA972485D81F63BCB /* AccountsListView.xib in Resources */,
 				05250C3E4C747AA2FC37ECFE /* SharedAssets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -3684,6 +3723,10 @@
 				2CC79DF82AFD4BD6002B5A2D /* TransactionInspector.swift in Sources */,
 				2C8944CE2AEC34EB006A711F /* Blockies.swift in Sources */,
 				2C8A09DF267579EA00993638 /* AccountsListViewController.swift in Sources */,
+				2059A45F78BE4061A634B4CD /* NativeSecretAlertPresentation.swift in Sources */,
+				A7F6C10CBDD74DFDBB9CC23B /* AccountsListView.swift in Sources */,
+				D20BF626D66242C099B486DC /* NativeAccountSelectionViewController.swift in Sources */,
+				3888896D6D0D4CB2913FD7D0 /* NativeAccountSelectionSession.swift in Sources */,
 				2C917429267D2A6E00049075 /* Keychain.swift in Sources */,
 				954716660F1C28F809E485F9 /* Browser.swift in Sources */,
 				625264DBCEAE01A2E231C075 /* NativeApprovalCoordinator.swift in Sources */,
@@ -4084,6 +4127,10 @@
 				EC8C27B0D576EDD7856BAFC2 /* TransactionInspector.swift in Sources */,
 				12F017E9D18E5B60277ABB5C /* Blockies.swift in Sources */,
 				D9AC903EA1DAF053972DCFEF /* AccountsListViewController.swift in Sources */,
+				53635E8FA34B41B88584D998 /* NativeSecretAlertPresentation.swift in Sources */,
+				BC41F94104564BB5A6A4B07A /* AccountsListView.swift in Sources */,
+				F373122568574D768895AC6B /* NativeAccountSelectionViewController.swift in Sources */,
+				0ED82609802A4755BDAEC58F /* NativeAccountSelectionSession.swift in Sources */,
 				7D856928A8D3B8B22F36F4EA /* Keychain.swift in Sources */,
 				FB0F5B37D913E78CAB23D589 /* Browser.swift in Sources */,
 				EFD994CD1769D972C8882520 /* NativeApprovalCoordinator.swift in Sources */,
@@ -4253,6 +4300,9 @@
 				2CE02C832BAA0F9800381D70 /* TransactionInspectorTests.swift in Sources */,
 				2C0000032FA7000000000001 /* BigUIntTests.swift in Sources */,
 				A8B201012FC3000000000001 /* NativeApprovalCoordinatorTests.swift in Sources */,
+				BACA9765ED38497A90BDBD2F /* NativeAccountSelectionViewControllerTests.swift in Sources */,
+				98E83BE356EA4EB7B18B0918 /* AccountsListViewControllerTests.swift in Sources */,
+				38DF90652362410C85F2CB83 /* AccountListTestSupport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4481,6 +4531,14 @@
 				2C5FF97D26C84F7C00B32ACC /* Base */,
 			);
 			name = LaunchScreen.storyboard;
+			sourceTree = "<group>";
+		};
+		23D116B7C41C4C0AA130031C /* AccountsListView.xib */ = {
+			isa = PBXVariantGroup;
+			children = (
+				1D13ABFE51AC4B9CB3E54695 /* Base */,
+			);
+			name = AccountsListView.xib;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */

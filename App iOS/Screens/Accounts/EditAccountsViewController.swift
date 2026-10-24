@@ -33,7 +33,7 @@ class EditAccountsViewController: UIViewController {
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: Strings.cancel, style: .plain, target: self, action: #selector(dismissAnimated))
         previewState = AccountPreviewState(
             wallet: wallet,
-            makePager: { [walletsManager] in walletsManager.previewAccountsPager(wallet: $0) },
+            makeSession: { [repository = walletsManager.repository] in try await repository.previewSession(wallet: $0) },
             didChange: { [weak self] in self?.previewDidChange($0) }
         )
         previewState.reset()

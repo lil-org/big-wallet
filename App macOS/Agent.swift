@@ -401,7 +401,7 @@ class Agent: NSObject {
             Window.reactivateWindow(walletWindowController)
             return
         }
-        let accountsList = instantiate(AccountsListViewController.self)
+        let accountsList = AccountsListViewController()
         let windowController = Window.showNew(closeOthers: CurrentApp.isDockApp)
         windowController.contentViewController = accountsList
         walletWindowController = windowController
@@ -582,7 +582,6 @@ extension Agent.ActiveApproval {
         mode: NativeAccountSelectionMode,
         review: NativeApprovalReview
     ) {
-        let accountsList = instantiate(AccountsListViewController.self)
         let session = NativeAccountSelectionSession(action: action, mode: mode, review: review) {
             [weak self] accounts, network in
             guard let self, acceptsActions(for: review) else { return }
@@ -595,8 +594,7 @@ extension Agent.ActiveApproval {
             } ? network : nil
             coordinator.approveAccounts(accounts, ethereumNetwork: ethereumNetwork, review: review)
         }
-        accountsList.accountSelection = session
-        approvalWindow().contentViewController = accountsList
+        approvalWindow().contentViewController = NativeAccountSelectionViewController(accountSelection: session)
     }
 
     private func showApproveMessage(

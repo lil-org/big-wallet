@@ -4,12 +4,14 @@ import test from "node:test";
 import {fileURLToPath} from "node:url";
 
 const sourcePath = fileURLToPath(new URL("../run.mjs", import.meta.url));
+const lifecycleSourcePath = fileURLToPath(new URL("../../process_lifecycle.mjs", import.meta.url));
 
-async function mainFixture({sourcePath, phase, priorFailure}) {
+async function mainFixture({sourcePath, lifecycleSourcePath, phase, priorFailure}) {
     const [{readFile}, vm, {EventEmitter}, {PassThrough}] = await Promise.all([
         import("node:fs/promises"), import("node:vm"), import("node:events"), import("node:stream"),
     ]);
     const source = await readFile(sourcePath, "utf8");
+    const lifecycleSource = await readFile(lifecycleSourcePath, "utf8");
     const runID = "cancellation-fixture";
     const platform = phase === "diagnostics" ? "macos" : "ios";
     const root = `/Volumes/BigWalletBuild/Exchange/${runID}/safari/${platform}/Debug`;
@@ -73,6 +75,10 @@ async function mainFixture({sourcePath, phase, priorFailure}) {
             };
         } else if (name === "./prepare.mjs") {
             exports = {runSafariPreparation: async () => { throw new Error("Unexpected preparation in a normal cancellation fixture"); }};
+        } else if (name === "../process_lifecycle.mjs") {
+            const linked = new vm.SourceTextModule(lifecycleSource, {context, identifier: "file:///fixture/process_lifecycle.mjs"});
+            cache.set(name, linked);
+            return linked;
         } else {
             exports = {...await import(name)};
             if (name === "node:fs/promises") {
@@ -154,7 +160,7 @@ async function mainFixture({sourcePath, phase, priorFailure}) {
 
 async function cancelledFixture(context, {signal, phase, priorFailure = false}) {
     const child = spawn(process.execPath, ["--no-warnings", "--experimental-vm-modules", "--input-type=module", "-e",
-        `(${mainFixture.toString()})(${JSON.stringify({sourcePath, phase, priorFailure})})`],
+        `(${mainFixture.toString()})(${JSON.stringify({sourcePath, lifecycleSourcePath, phase, priorFailure})})`],
     {stdio: ["ignore", "pipe", "pipe", "ipc"]});
     let output = "", stderr = "", ready, resumeTimer;
     context.after(() => {

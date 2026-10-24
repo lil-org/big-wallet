@@ -35,7 +35,7 @@ class EditAccountsViewController: NSViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
         previewState = AccountPreviewState(
             wallet: wallet,
-            makePager: { [walletsManager] in walletsManager.previewAccountsPager(wallet: $0) },
+            makeSession: { [repository = walletsManager.repository] in try await repository.previewSession(wallet: $0) },
             didChange: { [weak self] in self?.previewDidChange($0) }
         )
         previewState.reset()
@@ -100,7 +100,7 @@ class EditAccountsViewController: NSViewController {
         mutationTask?.cancel()
         invalidatePreviewAccounts()
         NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
-        let accountsListViewController = instantiate(AccountsListViewController.self)
+        let accountsListViewController = AccountsListViewController()
         accountsListViewController.getBackToRect = getBackToRect
         view.window?.contentViewController = accountsListViewController
     }

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import {spawn} from "node:child_process";
+import {observeProcess} from "../process_lifecycle.mjs";
 import {createHash} from "node:crypto";
 import {constants, createWriteStream} from "node:fs";
 import {lstat, mkdir, open, realpath, writeFile} from "node:fs/promises";
@@ -57,80 +58,49 @@ export async function runProcess(command, args, {cwd, env = cleanEnvironment(), 
     let launchError;
     let interval;
     let deadline;
-    let escalationDone = Promise.resolve();
-    let escalationTimer;
-    let resolveEscalation;
-    let exited = false;
-    let stopping = false;
     let polling = false;
     const log = logPath ? createWriteStream(logPath, {flags: "wx", mode: 0o600}) : null;
     const child = spawn(command, args, {cwd, env, shell: false, detached: true, stdio: ["ignore", "pipe", "pipe"]});
-    const closed = new Promise(resolveClose => child.once("close", resolveClose));
-    const ended = new Promise(resolveExit => {
-        const finish = (code, signal) => {
-            if (exited) { return; }
-            exited = true;
-            clearTimeout(deadline);
-            clearInterval(interval);
-            if (terminationGraceMilliseconds > 5000) {
-                clearTimeout(escalationTimer);
-                resolveEscalation?.();
-            }
-            resolveExit({code, signal});
-        };
-        child.once("exit", finish);
-        child.on("error", error => { launchError = error.message; finish(null, null); });
+    const lifecycle = observeProcess(child, {
+        policy: terminationGraceMilliseconds === 5000 ? "vm-command" : "vm-finalizer",
+        terminationGraceMilliseconds,
+        signalGroup: (pid, signal) => process.kill(-pid, signal),
+        onStop: reason => {
+            timedOut = reason === "timeout";
+            cancelled = reason === "cancel";
+        },
+        onFailure: (kind, error) => {
+            if (kind === "spawn") { launchError = error.message; }
+            else { launchError ??= error.message; }
+        },
+        onExit: () => { clearTimeout(deadline); clearInterval(interval); },
     });
-    const kill = signal => {
-        if (!child.pid) { return; }
-        try { process.kill(-child.pid, signal); } catch (error) { if (error.code !== "ESRCH") { launchError ??= error.message; } }
-    };
-    const stop = reason => {
-        if (exited || stopping) { return; }
-        stopping = true;
-        timedOut = reason === "timeout";
-        cancelled = reason === "cancel";
-        kill("SIGTERM");
-        if (child.pid) {
-            escalationDone = new Promise(resolve => {
-                resolveEscalation = resolve;
-                escalationTimer = setTimeout(() => {
-                    if (terminationGraceMilliseconds === 5000 || !exited) { kill("SIGKILL"); }
-                    resolve();
-                }, terminationGraceMilliseconds);
-            });
-        }
-    };
     const capture = data => {
         log?.write(data);
         if (output.length < MAX_JSON_BYTES) { output += data.toString("utf8").slice(0, MAX_JSON_BYTES - output.length); }
     };
     child.stdout.on("data", data => { stdout += data.toString("utf8").slice(0, MAX_JSON_BYTES - stdout.length); capture(data); });
     child.stderr.on("data", data => { stderr += data.toString("utf8").slice(0, MAX_JSON_BYTES - stderr.length); capture(data); });
-    log?.on("error", error => { launchError = `Stage log failed: ${error.message}`; stop("failure"); });
-    deadline = setTimeout(() => stop("timeout"), timeoutSeconds * 1000);
+    log?.on("error", error => { launchError = `Stage log failed: ${error.message}`; lifecycle.stop("failure"); });
+    deadline = setTimeout(() => lifecycle.stop("timeout"), timeoutSeconds * 1000);
     interval = setInterval(async () => {
         if (polling) { return; }
         polling = true;
-        try { if (await stopRequested()) { stop("cancel"); } }
-        catch { stop("cancel"); }
+        try { if (await stopRequested()) { lifecycle.stop("cancel"); } }
+        catch { lifecycle.stop("cancel"); }
         finally { polling = false; }
     }, 500);
-    const outcome = await ended;
-    let drainTimer;
-    let outputDrainTimedOut = false;
-    await Promise.race([closed, new Promise(resolveDrain => {
-        drainTimer = setTimeout(() => {
-            outputDrainTimedOut = true;
-            child.stdout.destroy();
-            child.stderr.destroy();
-            resolveDrain();
-        }, 1000);
-    })]);
-    clearTimeout(drainTimer);
-    await escalationDone;
-    if (log) { await new Promise(resolveLog => log.end(resolveLog)); }
-    return {...outcome, output, stdout, stderr, timedOut, cancelled, outputDrainTimedOut, ...(launchError ? {error: launchError} : {})};
+    try {
+        const outcome = await lifecycle.exit;
+        const outputDrainTimedOut = await lifecycle.drainOutput(1000);
+        await lifecycle.waitForEscalation();
+        if (log) { await new Promise(resolveLog => log.end(resolveLog)); }
+        return {...outcome, output, stdout, stderr, timedOut, cancelled, outputDrainTimedOut, ...(launchError ? {error: launchError} : {})};
+    } finally {
+        clearTimeout(deadline);
+        clearInterval(interval);
+        lifecycle.dispose();
+    }
 }
 
 export function chooseDestinations(simulators) {

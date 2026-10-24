@@ -103,7 +103,7 @@ class ImportViewController: NSViewController {
     
 
     private func showAccountsList(newWalletId: String?) {
-        let accountsListViewController = instantiate(AccountsListViewController.self)
+        let accountsListViewController = AccountsListViewController()
         accountsListViewController.newWalletId = newWalletId
         view.window?.contentViewController = accountsListViewController
     }

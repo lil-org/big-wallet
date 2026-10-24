@@ -5,7 +5,7 @@ import {EventEmitter} from "node:events";
 import {mkdtemp, readFile, realpath, rm, writeFile, mkdir, readdir, cp, stat, symlink} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {basename, dirname, join} from "node:path";
-import {PassThrough} from "node:stream";
+import {PassThrough, Writable} from "node:stream";
 import {appleFixtureEntitlements, signAppleFixtureProducts, commandTimeoutSeconds, safariTestTimeouts, execute,
     collectSafariDiagnostics, collectSafariRegistration, collectSafariCodeSigning, finalizeSafariRun, safariDiagnosticPredicate,
     readExtensionMetadata, readMacOSRuntime, refreshSafariExtensionRegistration,
@@ -742,6 +742,63 @@ test("Command capture closes inherited pipes and removes cancellation handlers",
     assert.equal(fixture.child.stderr.destroyed, true);
     assert.deepEqual(fixture.signals, []);
     assert.deepEqual([process.listenerCount("SIGTERM"), process.listenerCount("SIGINT")], before);
+});
+
+test("Command capture preserves split UTF-8 bytes and independently forwards uncaptured stderr", async () => {
+    const stderr = new PassThrough();
+    const forwarded = [];
+    stderr.on("data", value => forwarded.push(Buffer.from(value)));
+    const fixture = processFixture(child => {
+        const bytes = Buffer.from("€");
+        child.stdout.write(bytes.subarray(0, 1));
+        child.stderr.write("diagnostic");
+        child.stdout.write(bytes.subarray(1));
+        child.emit("exit", 0, null);
+        child.emit("close", 0, null);
+    });
+    const output = await execute("fixture-command", [], {...fixture.options, capture: true,
+        outputStreams: {...fixture.options.outputStreams, stderr}});
+    assert.equal(output, "€");
+    assert.equal(Buffer.concat(forwarded).toString("utf8"), "diagnostic");
+    assert.deepEqual(fixture.signals, []);
+});
+
+test("Uncaptured command output pauses until the destination drains and removes its listeners", async () => {
+    let started, completeWrite;
+    const ready = new Promise(resolve => { started = resolve; });
+    const forwarded = [];
+    const stdout = new Writable({highWaterMark: 1, write(chunk, _encoding, callback) {
+        forwarded.push(Buffer.from(chunk));
+        completeWrite = callback;
+        started();
+    }});
+    const fixture = processFixture(child => child.stdout.write("forwarded"));
+    const operation = execute("fixture-command", [], {...fixture.options,
+        outputStreams: {...fixture.options.outputStreams, stdout}});
+    await ready;
+    assert.equal(fixture.child.stdout.isPaused(), true);
+    completeWrite();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(fixture.child.stdout.isPaused(), false);
+    fixture.child.emit("exit", 0, null);
+    fixture.child.emit("close", 0, null);
+    assert.equal(await operation, "");
+    assert.equal(Buffer.concat(forwarded).toString("utf8"), "forwarded");
+    assert.equal(stdout.listenerCount("drain"), 0);
+    assert.equal(stdout.listenerCount("error"), 0);
+});
+
+test("Destination write failures terminate the group and retain the first diagnostic", async () => {
+    const stdout = new Writable({write(_chunk, _encoding, callback) { callback(new Error("fixture output failure")); }});
+    const fixture = processFixture(child => child.stdout.write("forwarded"));
+    await assert.rejects(execute("fixture-command", [], {...fixture.options,
+        outputStreams: {...fixture.options.outputStreams, stdout}}), error => {
+        assert.match(error.message, /log output failed: fixture output failure/);
+        assert.equal(error.signal, "SIGKILL");
+        return true;
+    });
+    assert.deepEqual(fixture.signals, ["SIGTERM", "SIGKILL"]);
+    assert.equal(stdout.listenerCount("error"), 0);
 });
 
 test("Oversized command output is capped and terminates the entire owned process group", async () => {

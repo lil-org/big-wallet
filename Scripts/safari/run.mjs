@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import {spawn} from "node:child_process";
+import {observeProcess} from "../process_lifecycle.mjs";
 import {createHash, randomUUID} from "node:crypto";
 import {constants} from "node:fs";
 import {readFile, writeFile, mkdir, realpath, lstat, access, copyFile, rename, rm, readdir, open} from "node:fs/promises";
@@ -89,42 +90,17 @@ export async function execute(command, args, {capture = false, captureStderr = f
     let tail = Buffer.alloc(0);
     let length = 0;
     let failure;
-    let stopped = false;
-    let exited = false;
     let deadline;
-    let drainTimer;
-    let escalation = Promise.resolve();
-    let finish;
     const child = spawnProcess(command, args, {env, detached: true, stdio: ["ignore", "pipe", "pipe"]});
-    const closed = new Promise(resolveClose => child.once("close", resolveClose));
-    const ended = new Promise(resolveExit => {
-        finish = outcome => {
-            if (exited) { return; }
-            exited = true;
-            clearTimeout(deadline);
-            resolveExit(outcome);
-        };
-        child.once("exit", (code, signal) => finish({code, signal}));
-        child.once("error", error => { failure ??= error; finish({code: null, signal: null}); });
+    const lifecycle = observeProcess(child, {
+        policy: "safari-command",
+        terminationGraceMilliseconds,
+        signalGroup,
+        onStop: error => { failure ??= error; },
+        onFailure: (_kind, error) => { failure ??= error; },
+        onExit: () => { clearTimeout(deadline); },
     });
-    const signal = value => {
-        if (!child.pid) { return; }
-        try { signalGroup(child.pid, value); }
-        catch (error) { if (error.code !== "ESRCH") { failure ??= error; } }
-    };
-    const stop = error => {
-        if (stopped) { return; }
-        stopped = true;
-        failure ??= error;
-        signal("SIGTERM");
-        escalation = new Promise(resolveEscalation => {
-            setTimeout(() => {
-                signal("SIGKILL");
-                finish({code: null, signal: "SIGKILL"});
-                resolveEscalation();
-            }, terminationGraceMilliseconds);
-        });
-    };
+    const stop = error => lifecycle.stop(error);
     const terminate = () => stop(Object.assign(new Error(`${basename(command)} was cancelled`), {cancelled: true}));
     const outputFailed = error => stop(new Error(`${basename(command)} log output failed: ${error.message}`));
     const destinations = new Set([["stdout", capture], ["stderr", captureStderr]].filter(([, retained]) => !retained).map(([name]) => outputStreams[name]));
@@ -161,15 +137,9 @@ export async function execute(command, args, {capture = false, captureStderr = f
     process.once("SIGINT", terminate);
     deadline = setTimeout(() => stop(Object.assign(new Error(`${basename(command)} timed out after ${timeoutSeconds}s`), {timedOut: true})), timeoutSeconds * 1000);
     try {
-        const outcome = await ended;
-        await escalation;
-        await Promise.race([closed, new Promise(resolveDrain => {
-            drainTimer = setTimeout(() => {
-                child.stdout?.destroy();
-                child.stderr?.destroy();
-                resolveDrain();
-            }, outputDrainMilliseconds);
-        })]);
+        const outcome = await lifecycle.exit;
+        await lifecycle.waitForEscalation();
+        await lifecycle.drainOutput(outputDrainMilliseconds);
         const output = Buffer.concat(chunks, length).toString("utf8");
         if (!failure && outcome.code !== 0) { failure = new Error(`${basename(command)} failed with ${outcome.signal ? `signal ${outcome.signal}` : `exit code ${outcome.code}`}`); }
         if (failure) {
@@ -182,13 +152,13 @@ export async function execute(command, args, {capture = false, captureStderr = f
         return output;
     } finally {
         clearTimeout(deadline);
-        clearTimeout(drainTimer);
         process.removeListener("SIGTERM", terminate);
         process.removeListener("SIGINT", terminate);
         for (const destination of destinations) { destination.removeListener("error", outputFailed); }
         for (const {destination, resume} of pendingDrains) { destination.removeListener("drain", resume); }
         child.stdout?.destroy();
         child.stderr?.destroy();
+        lifecycle.dispose();
     }
 }
 

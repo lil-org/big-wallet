@@ -39,6 +39,7 @@ export const TSAN_TESTS = [
 export const EXTENDED_TSAN_TESTS = [
     "ExtensionBridgeStoredRequestTests", "PopupRequestSessionsTests", "DurableProfilePersistenceTests",
     "WalletAuthorityRevocationLedgerTests", "NativeApprovalCoordinatorTests", "WalletsManagerPrivateKeyImportTests",
+    "AccountsListViewControllerTests", "NativeAccountSelectionViewControllerTests",
     "TransactionApprovalCoordinatorTests",
 ];
 export const SHELL_TESTS = [

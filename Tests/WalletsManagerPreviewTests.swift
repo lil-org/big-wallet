@@ -35,7 +35,7 @@ final class WalletsManagerPreviewTests: XCTestCase {
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet"])
     }
 
-    func testInvalidatedPreviewDiscardsItsPendingFirstPage() async throws {
+    func testCancelledPreviewPreparationDoesNotReturnASession() async throws {
         let reader = KeychainCopyMatchingStub()
         reader.attributes = [reader.walletAttributes(id: "wallet")]
         reader.walletData = ["wallet": Vectors.walletCoreJSONMnemonicFixture]
@@ -53,17 +53,37 @@ final class WalletsManagerPreviewTests: XCTestCase {
         }))
         await assertWalletReload(manager)
         let wallet = try XCTUnwrap(manager.wallets.first)
-        let pager = manager.previewAccountsPager(wallet: wallet)
-        let preview = Task { await pager.reset() }
+        let preview = Task { try await manager.repository.previewSession(wallet: wallet) }
         await fulfillment(of: [readingPassword], timeout: 2)
 
-        pager.invalidate()
+        preview.cancel()
         releaseRead.signal()
 
-        let accounts = await preview.value
-        XCTAssertNil(accounts)
-        let nextPage = await pager.previewMoreIfNeeded()
-        XCTAssertNil(nextPage)
+        do {
+            _ = try await preview.value
+            XCTFail("Cancelled preparation returned a session")
+        } catch is CancellationError {
+        }
+    }
+
+    func testPreviewSessionRejectsSourceChangedDuringPreparation() async throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.walletData = ["wallet": Vectors.walletCoreJSONMnemonicFixture]
+        reader.passwordData = Vectors.walletCoreJSONMnemonicPassword
+        let repository = WalletRepository(keychain: Keychain(copyMatching: { query, result in
+            let attributes = query as NSDictionary
+            if attributes[kSecAttrAccount as String] as? String == "org.lil.wallet.wallet.wallet",
+               reader.walletReadCount > 0 {
+                result?.pointee = (Vectors.walletCoreJSONMnemonicFixture + Data([32])) as CFData
+                return errSecSuccess
+            }
+            return reader.copyMatching(query, result)
+        }))
+        do {
+            _ = try await repository.previewSession(wallet: WalletSnapshot(id: "wallet", isMnemonic: true, accounts: []))
+            XCTFail("Changed wallet source produced a preview session")
+        } catch WalletsManager.Error.keychainAccessFailure {
+        }
     }
 
     func testReviewCatalogPreservesAccountMetadataAndSurvivesSourceReload() async throws {
