@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {auditSynchronizationProof, auditSynchronizationSnapshot, expectedSynchronizationPolicy} from "../synchronization.mjs";
+import {auditSynchronizationProof, auditSynchronizationSnapshot, expectedSynchronizationFramework, expectedSynchronizationPolicy} from "../synchronization.mjs";
 
 const policy = "safari-event-loop-only";
 const snapshot = (count = 0) => ({schemaVersion: 1, policy, installationID: "12345678-1234-4123-8123-123456789abc",
     hookInstalled: true, hookActive: true,
-    framework: {bundleIdentifier: "com.apple.dt.XCUIAutomation", version: "25228", imageUUID: "6C9998E3-2351-34D3-BAAB-B523F500A26A"},
+    framework: {...expectedSynchronizationFramework},
     selector: "waitForQuiescenceIncludingAnimationsIdle:usingActivity:isPreEvent:", methodEncoding: "v28@0:8B16B20B24",
     counters: {interceptedCalls: 3 * count, originalForwards: 3 * count, safariPreRewrites: count,
         safariPostRewrites: count, nonSafariForwards: count, nonSafariArgumentChanges: 0}});
@@ -27,7 +27,7 @@ test("iOS synchronization requires an installed active hook with the exact runti
         value => { value.hookActive = false; },
         value => { delete value.framework; },
         value => { value.framework.bundleIdentifier = "com.apple.dt.XCTest"; },
-        value => { value.framework.version = "25229"; },
+        value => { value.framework.version += "0"; },
         value => { value.framework.imageUUID = "00000000-0000-0000-0000-000000000000"; },
         value => { value.selector = "waitForQuiescenceIncludingAnimationsIdle:isPreEvent:"; },
         value => { value.methodEncoding = "v24@0:8B16B20"; },

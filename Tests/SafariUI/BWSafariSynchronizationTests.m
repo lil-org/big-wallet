@@ -1,5 +1,6 @@
 #import <XCTest/XCTest.h>
 #import "BWSafariSynchronizationInternal.h"
+#import "BWSafariSynchronizationPin.generated.h"
 #import <objc/message.h>
 
 @interface BWSafariProcessSpy : NSObject
@@ -34,8 +35,8 @@ static void BWUnexpectedReplacement(id receiver, SEL selector, BOOL animations, 
 
 @implementation BWSafariSynchronizationTests
 - (void)testForwardingAndRuntimeGuards {
-    NSDictionary *identity = @{@"bundleIdentifier": @"com.apple.dt.XCUIAutomation", @"version": @"25228",
-        @"imageUUID": @"6C9998E3-2351-34D3-BAAB-B523F500A26A"};
+    NSDictionary *identity = @{@"bundleIdentifier": BW_SAFARI_FRAMEWORK_IDENTIFIER,
+        @"version": BW_SAFARI_FRAMEWORK_VERSION, @"imageUUID": BW_SAFARI_FRAMEWORK_UUID};
     SEL selector = @selector(waitForQuiescenceIncludingAnimationsIdle:usingActivity:isPreEvent:);
     Method central = class_getInstanceMethod(BWSafariProcessSpy.class, selector);
     IMP original = method_getImplementation(central);

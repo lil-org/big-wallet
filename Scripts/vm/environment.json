@@ -1,6 +1,9 @@
 {
   "version": 1,
-  "xcode": {"version": "27.0", "buildVersion": "27A266a"},
+  "xcode": {"version": "27.1", "buildVersion": "27A9275"},
+  "safariSynchronization": {
+    "framework": {"bundleIdentifier": "com.apple.dt.XCUIAutomation", "version": "25229", "imageUUID": "8BF9E0BC-F620-35F8-9F7E-49542744F323"}
+  },
   "node": {"version": "24.22.0", "npmVersion": "11.16.0"},
   "jq": {"version": "1.8.1", "sha256": "a9fe3ea2f86dfc72f6728417521ec9067b343277152b114f4e98d8cb0e263603"},
   "runtimes": [

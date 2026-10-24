@@ -77,7 +77,8 @@ class SafariPreparationTests(unittest.TestCase):
 
     def snapshot(self, repository, exchange):
         paths = []
-        for relative in ['Scripts/vm/test_manifest.mjs', 'Scripts/safari/scenarios.mjs', 'Scripts/safari/synchronization.mjs']:
+        for relative in ['Scripts/vm/test_manifest.mjs', 'Scripts/safari/scenarios.mjs', 'Scripts/safari/synchronization.mjs',
+                         'Scripts/vm/environment.json']:
             destination = exchange / 'source' / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(host.ROOT / relative, destination)
@@ -98,7 +99,7 @@ class SafariPreparationTests(unittest.TestCase):
             self.assertEqual(job['payload'], {'stages': ['safari'], 'configuration': 'Debug', 'signing': 'local',
                                               'onlyTesting': ['Safari UI Tests macOS'], 'prepareSafari': True})
             self.assertEqual([stage['id'] for stage in plan['stages']], [
-                'provider.install', 'protocol.check', 'build-safari.macos.debug', 'prepare-safari.macos.debug'])
+                'provider.install', 'protocol.check', 'pins.check', 'build-safari.macos.debug', 'prepare-safari.macos.debug'])
             self.assertTrue(all('nativeAudit' not in stage for stage in plan['stages']))
         else:
             self.assertTrue(all(selector.startswith('Tests macOS/') for selector in job['payload']['onlyTesting']))
@@ -268,6 +269,113 @@ class SafariPreparationTests(unittest.TestCase):
         self.assertEqual(attempt['resultSHA256'], host.hash_regular_file(Path(attempt['result'])))
         self.assertEqual(host.setup(self.args, self.state, self.environment), 0)
 
+    def test_cancel_during_promotion_preserves_completed_preparation_for_retry(self):
+        write = host.atomic_json
+        accepted_report = None
+        def cancel_after_backup_journal(path, value):
+            nonlocal accepted_report
+            write(path, value)
+            if path == self.state / 'candidate.json' and value.get('promotionPending', {}).get('backupRecordSHA256'):
+                accepted_report = Path(value['safariPreparationResult']).read_bytes()
+                raise KeyboardInterrupt
+
+        with patch.object(host, 'atomic_json', side_effect=cancel_after_backup_journal):
+            self.assertEqual(host.setup(self.args, self.state, self.environment), 2)
+        pending = host.read_json(self.state / 'candidate.json')
+        archived = Path(pending['safariPreparationResult'])
+        self.assertEqual(archived.read_bytes(), accepted_report)
+        self.assertEqual(host.read_json(archived)['status'], 'passed')
+        self.assertEqual((self.state / 'baseline.json').read_bytes(), self.original_record_bytes)
+        self.assertFalse((self.state / 'active.json').exists())
+        self.assertEqual(host.setup(self.args, self.state, self.environment), 0)
+        promoted = host.read_json(self.state / 'baseline.json')
+        self.assertEqual(host.inherited_safari_preparation(self.state, promoted, 'wallet-test'),
+                         {key: promoted[key] for key in ('safariPreparation', 'safariPreparationResult')})
+        ordinary = host.parser().parse_args(['--vm', str(self.original), 'setup'])
+        self.assertEqual(host.setup(ordinary, self.state, self.environment), 0)
+        self.assertEqual(len(self.calls), 2)
+
+    def test_cancel_after_promotion_preserves_completed_preparation(self):
+        promote = host.finish_baseline_promotion
+        def cancel_after_promotion(*args):
+            promote(*args)
+            raise KeyboardInterrupt
+
+        with patch.object(host, 'finish_baseline_promotion', side_effect=cancel_after_promotion):
+            self.assertEqual(host.setup(self.args, self.state, self.environment), 2)
+        self.assertFalse((self.state / 'candidate.json').exists())
+        promoted = host.read_json(self.state / 'baseline.json')
+        self.assertEqual(host.read_json(Path(promoted['safariPreparationResult']))['status'], 'passed')
+        ordinary = host.parser().parse_args(['--vm', str(self.original), 'setup'])
+        self.assertEqual(host.setup(ordinary, self.state, self.environment), 0)
+        self.assertEqual(len(self.calls), 2)
+
+    def interrupt_preparation_process(self, after_promotion=False):
+        run_id, exchange = host.new_exchange(self.state, 'setup')
+        operation = {'runId': run_id, 'exchange': exchange, 'previousStops': [], 'monitorCalled': False}
+        host.register_operation(self.state, self.state / 'candidate.vbvm', exchange, run_id, 'preparing')
+        promote = host.finish_baseline_promotion
+        def interrupt(*args):
+            if after_promotion:
+                promote(*args)
+            raise OSError('fixture abrupt process exit')
+        with patch.object(host, 'finish_baseline_promotion', side_effect=interrupt):
+            with self.assertRaisesRegex(OSError, 'abrupt process exit'):
+                host.prepare_setup(self.args, self.state, self.environment, operation)
+        return operation['exchange'] / 'artifacts/result.json'
+
+    def test_crash_reconciliation_preserves_pending_preparation_for_retry(self):
+        archived = self.interrupt_preparation_process()
+        original = archived.read_bytes()
+        host.reconcile_interrupted_operation(self.state)
+        self.assertEqual(archived.read_bytes(), original)
+        self.assertFalse((self.state / 'active.json').exists())
+        self.assertEqual((self.state / 'baseline.json').read_bytes(), self.original_record_bytes)
+        self.assertEqual(host.setup(self.args, self.state, self.environment), 0)
+        ordinary = host.parser().parse_args(['--vm', str(self.original), 'setup'])
+        self.assertEqual(host.setup(ordinary, self.state, self.environment), 0)
+        self.assertEqual(len(self.calls), 2)
+
+    def test_crash_reconciliation_preserves_just_promoted_preparation(self):
+        archived = self.interrupt_preparation_process(after_promotion=True)
+        original = archived.read_bytes()
+        host.reconcile_interrupted_operation(self.state)
+        self.assertEqual(archived.read_bytes(), original)
+        self.assertFalse((self.state / 'active.json').exists())
+        ordinary = host.parser().parse_args(['--vm', str(self.original), 'setup'])
+        self.assertEqual(host.setup(ordinary, self.state, self.environment), 0)
+        self.assertEqual(len(self.calls), 2)
+
+    def test_crash_reconciliation_does_not_preserve_unaccepted_preparation(self):
+        archived = self.interrupt_preparation_process()
+        active = host.read_json(self.state / 'active.json')
+        active.pop('acceptedResultSHA256')
+        host.atomic_json(self.state / 'active.json', active)
+        host.reconcile_interrupted_operation(self.state)
+        self.assertEqual(host.read_json(archived)['status'], 'blocked')
+        with self.assertRaisesRegex(host.RunnerError, 'does not match'):
+            host.setup(self.args, self.state, self.environment)
+
+    def test_pending_safari_promotion_rejects_failed_and_cancelled_reports(self):
+        with patch.object(host, 'finish_baseline_promotion', side_effect=OSError('fixture interruption')):
+            with self.assertRaisesRegex(OSError, 'fixture interruption'):
+                host.setup(self.args, self.state, self.environment)
+        pending_bytes = (self.state / 'candidate.json').read_bytes()
+        pending = host.read_json(self.state / 'candidate.json')
+        archived = Path(pending['safariPreparationResult'])
+        report = host.read_json(archived)
+        ordinary = host.parser().parse_args(['--vm', str(self.original), 'setup'])
+        for status in ('failed', 'cancelled'):
+            for args in (self.args, ordinary):
+                with self.subTest(status=status, safari_activation=args.safari_activation):
+                    host.atomic_json(archived, {**report, 'status': status})
+                    with patch.object(host, 'finish_baseline_promotion', side_effect=AssertionError('Invalid evidence must not promote')):
+                        with self.assertRaisesRegex(host.RunnerError, 'does not match'):
+                            host.setup(args, self.state, self.environment)
+                    self.assertEqual((self.state / 'baseline.json').read_bytes(), self.original_record_bytes)
+                    self.assertEqual((self.state / 'candidate.json').read_bytes(), pending_bytes)
+        self.assertEqual(len(self.calls), 2)
+
     def test_cancel_after_uncollected_report_preserves_the_candidate(self):
         self.exported = False
 
@@ -320,6 +428,74 @@ class SafariPreparationTests(unittest.TestCase):
         self.assertIsNone(host.prepared_safari_for_job(record, {'payload': {'signing': 'apple'}}, macos))
         with self.assertRaisesRegex(host.RunnerError, 'omit --interactive-safari'):
             host.prepared_safari_for_job(record, {'payload': {'interactiveSafari': True}}, macos)
+
+    def test_verified_safari_seed_can_be_inherited_across_environment_changes(self):
+        self.assertEqual(host.setup(self.args, self.state, self.environment), 0)
+        record = host.read_json(self.state / 'baseline.json')
+        record['environment'] = {'xcode': {'version': '27.0', 'buildVersion': 'old-build'}}
+        inherited = host.inherited_safari_preparation(self.state, record, 'wallet-test')
+        self.assertEqual(inherited, {key: record[key] for key in ('safariPreparation', 'safariPreparationResult')})
+        self.assertNotIn('verifiedAt', inherited)
+        self.assertNotIn('bootstrapTools', inherited)
+
+    def test_safari_inheritance_rejects_changed_identity_or_missing_evidence(self):
+        self.assertEqual(host.setup(self.args, self.state, self.environment), 0)
+        original = host.read_json(self.state / 'baseline.json')
+        changed_records = [
+            {**original, 'vmId': 'another-vm'},
+            {**original, 'consoleUser': 'another-user'},
+            {**original, 'safariPreparation': {**original['safariPreparation'], 'receiptSHA256': '0' * 64}},
+            {key: value for key, value in original.items() if key != 'safariPreparationResult'},
+            {key: value for key, value in original.items() if key != 'safariPreparation'},
+        ]
+        for record in changed_records:
+            with self.subTest(record=record), self.assertRaises(host.RunnerError):
+                host.inherited_safari_preparation(self.state, record, 'wallet-test')
+        with self.assertRaisesRegex(host.RunnerError, 'another guest account'):
+            host.inherited_safari_preparation(self.state, original, 'another-user')
+        archived = Path(original['safariPreparationResult'])
+        evidence = archived.parent / 'prepare-safari.macos.debug.safari-preparation.json'
+        evidence.write_text('{}')
+        with self.assertRaisesRegex(host.RunnerError, 'guest-audited artifact'):
+            host.inherited_safari_preparation(self.state, original, 'wallet-test')
+
+    def test_safari_inheritance_rejects_unowned_archives_and_failed_reports(self):
+        self.assertEqual(host.setup(self.args, self.state, self.environment), 0)
+        record = host.read_json(self.state / 'baseline.json')
+        archived = Path(record['safariPreparationResult'])
+        outside = self.state / 'outside/artifacts/result.json'
+        outside.parent.mkdir(parents=True)
+        shutil.copyfile(archived, outside)
+        linked = archived.parent / 'linked-result.json'
+        linked.symlink_to(archived)
+        for path in (outside, linked, Path('relative/artifacts/result.json')):
+            with self.subTest(path=path), self.assertRaisesRegex(host.RunnerError, 'runner-owned results'):
+                host.inherited_safari_preparation(self.state, {**record, 'safariPreparationResult': str(path)}, 'wallet-test')
+        report = host.read_json(archived)
+        report['status'] = 'failed'
+        host.atomic_json(archived, report)
+        with self.assertRaisesRegex(host.RunnerError, 'does not match'):
+            host.inherited_safari_preparation(self.state, record, 'wallet-test')
+
+    def test_ordinary_setup_rejects_a_prepared_account_change_before_cloning(self):
+        self.assertEqual(host.setup(self.args, self.state, self.environment), 0)
+        baseline_bytes = (self.state / 'baseline.json').read_bytes()
+        args = host.parser().parse_args(['--vm', str(self.original), 'setup', '--guest-user', 'another-user'])
+        with patch.object(host, 'clone_vm', side_effect=AssertionError('Do not clone an incompatible Safari seed')):
+            with self.assertRaisesRegex(host.RunnerError, 'another guest account'):
+                host.setup(args, self.state, self.environment)
+        self.assertEqual((self.state / 'baseline.json').read_bytes(), baseline_bytes)
+        self.assertFalse((self.state / 'candidate.json').exists())
+
+    def test_unchanged_ordinary_setup_still_validates_the_prepared_receipt(self):
+        self.assertEqual(host.setup(self.args, self.state, self.environment), 0)
+        record = host.read_json(self.state / 'baseline.json')
+        record['safariPreparation']['receiptSHA256'] = '0' * 64
+        host.atomic_json(self.state / 'baseline.json', record)
+        args = host.parser().parse_args(['--vm', str(self.original), 'setup'])
+        with self.assertRaisesRegex(host.RunnerError, 'does not match'):
+            host.setup(args, self.state, self.environment)
+        self.assertFalse((self.state / 'candidate.json').exists())
 
 
 if __name__ == '__main__':

@@ -165,6 +165,47 @@ class CloneRetentionTests(unittest.TestCase):
                 self.assertFalse(self.receipt.exists())
                 self.assertEqual((self.exchange / 'artifacts/test.log').read_text(), 'verified exported diagnostics')
 
+    def test_cleanup_failure_still_reports_the_archived_result(self):
+        observed = []
+        failure = OSError('fixture clone cleanup failed')
+        with self.run_fixture(status='passed', exported=True) as (args, environment), \
+                patch.object(host.shutil, 'rmtree', side_effect=failure):
+            with self.assertRaises(OSError) as raised:
+                host.run_tests(args, self.root, environment, result_callback=lambda *value: observed.append(value))
+        self.assertIs(raised.exception, failure)
+        self.assertEqual(observed, [(self.result_path, host.read_json(self.result_path))])
+        self.assertEqual(observed[0][1]['status'], 'passed')
+        self.assertTrue(self.active_path.exists())
+        self.assertTrue(self.clone.exists())
+
+    def test_reporting_failure_cannot_skip_clone_cleanup(self):
+        def report(*args):
+            raise ValueError('fixture callback failed')
+        with self.run_fixture(status='passed', exported=True) as (args, environment):
+            with self.assertRaisesRegex(ValueError, 'callback failed'):
+                host.run_tests(args, self.root, environment, result_callback=report)
+        self.assertFalse(self.clone.exists())
+        self.assertFalse(self.active_path.exists())
+
+    def test_reporting_failure_preserves_the_original_monitor_exception(self):
+        observed = []
+        failure = OSError('fixture monitor failed after result')
+        def report(*args):
+            observed.append(args)
+            raise ValueError('fixture callback failed')
+        with self.run_fixture(status='passed', exported=True) as (args, environment):
+            monitor = host.monitor_vm.side_effect
+            def fail_after_result(*args, **kwargs):
+                monitor(*args, **kwargs)
+                raise failure
+            host.monitor_vm.side_effect = fail_after_result
+            with self.assertRaises(OSError) as raised:
+                host.run_tests(args, self.root, environment, result_callback=report)
+        self.assertIs(raised.exception, failure)
+        self.assertEqual(observed, [(self.result_path, host.read_json(self.result_path))])
+        self.assertFalse(self.clone.exists())
+        self.assertTrue(self.active_path.exists())
+
     def test_interrupted_run_keeps_guest_disk_through_reconciliation(self):
         with self.run_fixture(crash=True) as (args, environment):
             with self.assertRaisesRegex(OSError, 'lost the VM'):

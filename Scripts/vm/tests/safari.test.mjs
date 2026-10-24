@@ -5,6 +5,7 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import test from "node:test";
 import {SAFARI_SCENARIOS, SAFARI_TEST_CLASS} from "../../safari/scenarios.mjs";
+import {expectedSynchronizationFramework} from "../../safari/synchronization.mjs";
 import {auditSafariLog, coverageReport, executeStages, readSafariEvidence, SAFARI_TERMINATION_GRACE_MILLISECONDS} from "../guest.mjs";
 import {atomicJSON, hashFile, EXCHANGE_PATH} from "../guest_bootstrap.mjs";
 import {auditNativeResult, auditResults, auditSafariPreparation, auditSafariResult} from "../result_audit.mjs";
@@ -23,7 +24,7 @@ const synchronizationSnapshot = (platform, count) => platform === "macos" ?
     {schemaVersion: 1, policy: "xctest-default", hookInstalled: false} :
     {schemaVersion: 1, policy: "safari-event-loop-only", installationID: "12345678-1234-4123-8123-123456789abc",
         hookInstalled: true, hookActive: true,
-        framework: {bundleIdentifier: "com.apple.dt.XCUIAutomation", version: "25228", imageUUID: "6C9998E3-2351-34D3-BAAB-B523F500A26A"},
+        framework: {...expectedSynchronizationFramework},
         selector: "waitForQuiescenceIncludingAnimationsIdle:usingActivity:isPreEvent:", methodEncoding: "v28@0:8B16B20B24",
         counters: {interceptedCalls: count * 3, originalForwards: count * 3, safariPreRewrites: count,
             safariPostRewrites: count, nonSafariForwards: count, nonSafariArgumentChanges: 0}};
@@ -66,7 +67,7 @@ const preparationEvidence = runId => {
 test("Safari preparation plans only the fixed local build and a native-consent probe without XCTest", () => {
     const selected = preparationJob();
     const manifest = createManifest(selected);
-    assert.deepEqual(manifest.map(stage => stage.id), ["provider.install", "protocol.check", "build-safari.macos.debug", "prepare-safari.macos.debug"]);
+    assert.deepEqual(manifest.map(stage => stage.id), ["provider.install", "protocol.check", "pins.check", "build-safari.macos.debug", "prepare-safari.macos.debug"]);
     assert.ok(manifest.every(stage => !stage.nativeAudit && !stage.resultBundle));
     const stage = manifest.at(-1);
     assert.equal(stage.preparationResult, true);

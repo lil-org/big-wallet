@@ -7,6 +7,7 @@ import {join} from "node:path";
 import {createRequire} from "node:module";
 import {SafariFixtureServer, inspectProcess} from "../fixture_server.mjs";
 import {extensionEntitlements, parseArguments} from "../run.mjs";
+import {expectedSynchronizationFramework} from "../synchronization.mjs";
 
 const fixtureRequire = createRequire(new URL("../../../Safari Shared/Inpage Provider/package.json", import.meta.url));
 const {ed25519} = fixtureRequire("@noble/curves/ed25519");
@@ -19,7 +20,7 @@ const defaultSynchronization = () => ({schemaVersion: 1, policy: "xctest-default
 const iosSynchronization = (completed = false) => ({
     schemaVersion: 1, policy: "safari-event-loop-only", installationID: "c3ad3bc5-47ca-498f-a209-b14e554102df",
     hookInstalled: true, hookActive: true,
-    framework: {bundleIdentifier: "com.apple.dt.XCUIAutomation", version: "25228", imageUUID: "6C9998E3-2351-34D3-BAAB-B523F500A26A"},
+    framework: {...expectedSynchronizationFramework},
     selector: "waitForQuiescenceIncludingAnimationsIdle:usingActivity:isPreEvent:", methodEncoding: "v28@0:8B16B20B24",
     counters: {interceptedCalls: completed ? 3 : 0, originalForwards: completed ? 3 : 0,
         safariPreRewrites: completed ? 1 : 0, safariPostRewrites: completed ? 1 : 0,

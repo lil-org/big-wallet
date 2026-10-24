@@ -171,6 +171,7 @@ export function createManifest(job) {
     const worker = "Workers/alchemy-jwt";
     add("provider.install", "repository", "npm", ["ci", "--include=dev", "--include=optional", "--no-audit"], {cwd: provider});
     add("protocol.check", "repository", "node", ["Scripts/generate_wire_protocol.mjs", "--check"]);
+    add("pins.check", "repository", "python3", ["Scripts/vm/environment_pins.py", "--check"], {requirements: ["python"]});
     add("provider.bundle", "repository", "npm", ["run", "build"], {cwd: provider, dependencies: ["provider.install", "protocol.check"], unchanged: ["Safari Shared/Resources/inpage.js"]});
     add("provider.test", "test", "node", ["--test", "--test-concurrency=1", "--test-reporter=tap", "../Tests/*.test.mjs"], {
         cwd: provider, dependencies: ["provider.install", "protocol.check"],
@@ -284,7 +285,7 @@ export function createManifest(job) {
             const base = ["Scripts/safari/run.mjs", "--platform", platform.id, "--configuration", configuration,
                 "--signing", signing, "--destination", `$destination:${platform.id}`];
             add(`build-safari.${slug}`, "build", "node", [...base, "--phase", "build"], {
-                dependencies: ["provider.install", "protocol.check"], scratchDirectory: true, timeoutSeconds: 3600 + SAFARI_STAGE_OVERHEAD_SECONDS,
+                dependencies: ["provider.install", "protocol.check", "pins.check"], scratchDirectory: true, timeoutSeconds: 3600 + SAFARI_STAGE_OVERHEAD_SECONDS,
                 requirements: ["node", "xcode", platform.requirement, ...(signing === "apple" ? ["proofKey", ...(platform.id === "macos" ? ["signing"] : [])] : [])],
                 ...(signing === "apple" ? {proofKey: true} : {}),
             });

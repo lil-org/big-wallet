@@ -204,14 +204,29 @@ class SetupPreparationTests(unittest.TestCase):
     def test_unchanged_setup_records_its_verified_identity_and_reuses_the_baseline(self):
         with SetupFixture(self) as fixture:
             captured = host.bootstrap_source_digest()
-            self.assertEqual(fixture.run(), 0)
+            observed = []
+            def report(path, result):
+                observed.append((path, result))
+            self.assertEqual(host.setup(fixture.args, fixture.state, fixture.environment, result_callback=report), 0)
             baseline = host.read_json(fixture.state / 'baseline.json')
             self.assertEqual(baseline['bootstrapSourceDigest'], captured)
             self.assertEqual(baseline['verificationSigningMode'], 'local')
             self.assertEqual(fixture.launches, ['doctor', 'run'])
             fixture.launches.clear()
-            self.assertEqual(fixture.run(), 0)
+            self.assertEqual(host.setup(fixture.args, fixture.state, fixture.environment, result_callback=report), 0)
             self.assertEqual(fixture.launches, [])
+            validation_path = Path(baseline['validationResult'])
+            self.assertEqual(observed, [(validation_path, host.read_json(validation_path))] * 2)
+
+    def test_result_callback_failure_still_clears_owned_operation(self):
+        with SetupFixture(self) as fixture:
+            def report(path, result):
+                raise ValueError('fixture callback failed')
+            with self.assertRaisesRegex(ValueError, 'callback failed'):
+                host.setup(fixture.args, fixture.state, fixture.environment, result_callback=report)
+            self.assertEqual(fixture.launches, ['doctor', 'run'])
+            self.assertTrue((fixture.state / 'baseline.json').exists())
+            self.assertFalse((fixture.state / 'active.json').exists())
 
     def test_failed_local_smoke_tests_do_not_promote_a_baseline(self):
         with SetupFixture(self) as fixture:
@@ -319,6 +334,81 @@ class SetupPreparationTests(unittest.TestCase):
 
 
 class BaselinePromotionTests(unittest.TestCase):
+    def test_failed_promotion_still_reports_archived_validation(self):
+        with SetupFixture(self, baseline=True) as fixture:
+            observed = []
+            def report(path, result):
+                observed.append((path, result))
+            failure = OSError('fixture promotion cleanup failed')
+            with patch.object(host, 'clear_applied_provisioning_packages', side_effect=failure):
+                with self.assertRaises(OSError) as raised:
+                    host.setup(fixture.args, fixture.state, fixture.environment, result_callback=report)
+            self.assertIs(raised.exception, failure)
+            pending = host.read_json(fixture.state / 'candidate.json')
+            validation_path = Path(pending['validationResult'])
+            self.assertEqual(observed, [(validation_path, host.read_json(validation_path))])
+            self.assertEqual(observed[0][1]['status'], 'passed')
+            self.assertEqual(observed[0][1]['source'], host.read_json(validation_path.parent.parent / 'job.json')['source'])
+            self.assertFalse((fixture.state / 'active.json').exists())
+
+    def test_reporting_failures_preserve_original_setup_exception(self):
+        for reporting_failure in ('callback', 'unreadable'):
+            with self.subTest(reporting_failure=reporting_failure), SetupFixture(self, baseline=True) as fixture:
+                failure = OSError('fixture promotion cleanup failed')
+                promotion_failed = False
+                read = host.read_json
+                def fail_promotion(*args):
+                    nonlocal promotion_failed
+                    promotion_failed = True
+                    raise failure
+                def read_report(path):
+                    if promotion_failed and reporting_failure == 'unreadable' and Path(path).name == 'result.json':
+                        raise OSError('fixture report unreadable')
+                    return read(path)
+                def report(path, result):
+                    raise ValueError('fixture callback failed')
+                with patch.object(host, 'clear_applied_provisioning_packages', side_effect=fail_promotion), \
+                        patch.object(host, 'read_json', side_effect=read_report):
+                    with self.assertRaises(OSError) as raised:
+                        host.setup(fixture.args, fixture.state, fixture.environment, result_callback=report)
+                self.assertIs(raised.exception, failure)
+                self.assertEqual((fixture.state / 'active.json').exists(), reporting_failure == 'unreadable')
+
+    def test_upgrade_inherits_only_verified_safari_metadata_and_backs_up_the_old_record(self):
+        with SetupFixture(self, baseline=True) as fixture:
+            baseline_path = fixture.state / 'baseline.json'
+            baseline = host.read_json(baseline_path)
+            preparation = {'safariPreparation': {'preparationRunID': 'prepared-fixture', 'receiptSHA256': 'a' * 64},
+                           'safariPreparationResult': str(fixture.state / 'results/prepared-fixture/artifacts/result.json')}
+            baseline.update({**preparation, 'verifiedAt': 'old-verification', 'validationResult': 'old-result'})
+            host.atomic_json(baseline_path, baseline)
+            observed = []
+            def inherit(state, record, user):
+                self.assertEqual(user, 'wallet-test')
+                observed.append(dict(record))
+                return preparation if record.get('safariPreparation') else {}
+            with patch.object(host, 'inherited_safari_preparation', side_effect=inherit):
+                self.assertEqual(fixture.run(), 0)
+            self.assertEqual(observed, [baseline])
+            promoted = host.read_json(baseline_path)
+            self.assertEqual({key: promoted[key] for key in preparation}, preparation)
+            self.assertNotEqual(promoted['verifiedAt'], baseline['verifiedAt'])
+            self.assertNotEqual(promoted['validationResult'], baseline['validationResult'])
+            backup = next(fixture.state.glob('previous-baseline-*.vbvm'))
+            self.assertEqual(host.read_json(backup.with_suffix('.json')), baseline)
+            self.assertEqual((backup / 'Disk.img').read_bytes(), b'old-baseline')
+
+    def test_invalid_safari_inheritance_stops_before_cloning_the_baseline(self):
+        with SetupFixture(self, baseline=True) as fixture:
+            original = (fixture.state / 'baseline.json').read_bytes()
+            with patch.object(host, 'inherited_safari_preparation', side_effect=host.RunnerError('invalid seed')), \
+                    patch.object(host, 'clone_vm', side_effect=AssertionError('No clone for an invalid seed')):
+                with self.assertRaisesRegex(host.RunnerError, 'invalid seed'):
+                    fixture.run()
+            self.assertEqual((fixture.state / 'baseline.json').read_bytes(), original)
+            self.assertFalse(fixture.candidate.exists())
+            self.assertFalse((fixture.state / 'candidate.json').exists())
+
     def test_candidate_inherits_and_promotes_baseline_credentials_without_new_inputs(self):
         access = host.guest_access_module()
         with SetupFixture(self, baseline=True) as fixture:
@@ -388,9 +478,10 @@ class BaselinePromotionTests(unittest.TestCase):
             self.assertEqual(access.read_private_password(old_password), b'fixture baseline password')
 
     def test_interrupted_promotion_resumes_without_retesting_or_losing_either_vm(self):
-        phases = ('old-baseline-moved', 'candidate-moved', 'config-write', 'baseline-record', 'cleanup')
+        phases = ('backup-record', 'backup-journal', 'old-baseline-moved', 'candidate-moved', 'config-write', 'baseline-record', 'cleanup')
         for phase in phases:
             with self.subTest(phase=phase), SetupFixture(self, baseline=True) as fixture:
+                previous_record = host.read_json(fixture.state / 'baseline.json')
                 rename = Path.rename
                 write = host.atomic_json
                 dump = host.plistlib.dump
@@ -402,7 +493,12 @@ class BaselinePromotionTests(unittest.TestCase):
                 def write_record(path, value):
                     if phase == 'baseline-record' and path == fixture.state / 'baseline.json':
                         raise OSError('fixture: promotion interrupted')
-                    return write(path, value)
+                    result = write(path, value)
+                    if (phase == 'backup-record' and path.name.startswith('previous-baseline-') or
+                            phase == 'backup-journal' and path == fixture.state / 'candidate.json' and
+                            value.get('promotionPending', {}).get('backupRecordSHA256')):
+                        raise OSError('fixture: promotion interrupted')
+                    return result
                 def write_config(value, file, **kwargs):
                     if phase == 'config-write' and Path(file.name).parent == fixture.baseline / '.vbdata':
                         file.write(b'partial plist')
@@ -421,12 +517,31 @@ class BaselinePromotionTests(unittest.TestCase):
                 self.assertEqual(fixture.run(), 0)
                 self.assertEqual(fixture.launches, ['doctor', 'run'])
                 self.assertEqual((backup / 'Disk.img').read_bytes(), b'old-baseline')
+                self.assertEqual(host.read_json(backup.with_suffix('.json')), previous_record)
                 self.assertEqual((fixture.baseline / 'Disk.img').read_bytes(), b'verified-candidate')
                 self.assertEqual((fixture.original / 'Disk.img').read_bytes(), b'original')
                 self.assertFalse((fixture.state / 'candidate.json').exists())
                 self.assertFalse((fixture.state / 'active.json').exists())
                 self.assertNotIn('promotionPending', host.read_json(fixture.state / 'baseline.json'))
                 self.assertEqual(host.validate_vm(fixture.baseline)['sharedFolders'], [])
+
+    def test_changed_backup_metadata_blocks_interrupted_promotion(self):
+        with SetupFixture(self, baseline=True) as fixture:
+            rename = Path.rename
+            def interrupt_after_backup(path, destination):
+                result = rename(path, destination)
+                if path == fixture.baseline:
+                    raise OSError('fixture: promotion interrupted')
+                return result
+            with patch.object(Path, 'rename', interrupt_after_backup), self.assertRaises(OSError):
+                fixture.run()
+            pending = host.read_json(fixture.state / 'candidate.json')
+            backup = fixture.state / pending['promotionPending']['backup']
+            host.atomic_json(backup.with_suffix('.json'), {'changed': True})
+            with self.assertRaisesRegex(host.RunnerError, 'metadata backup changed'):
+                fixture.run()
+            self.assertTrue(fixture.candidate.exists())
+            self.assertEqual((backup / 'Disk.img').read_bytes(), b'old-baseline')
 
     def test_recovery_does_not_adopt_a_replaced_baseline(self):
         with SetupFixture(self) as fixture:

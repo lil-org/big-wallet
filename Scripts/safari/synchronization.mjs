@@ -1,9 +1,19 @@
+import {readFileSync} from "node:fs";
+
 const objectWithKeys = (value, keys) => value !== null && typeof value === "object" && !Array.isArray(value) &&
     Object.keys(value).sort().join(",") === [...keys].sort().join(",");
 const counterNames = ["interceptedCalls", "originalForwards", "safariPreRewrites", "safariPostRewrites",
     "nonSafariForwards", "nonSafariArgumentChanges"];
-const framework = {bundleIdentifier: "com.apple.dt.XCUIAutomation", version: "25228",
-    imageUUID: "6C9998E3-2351-34D3-BAAB-B523F500A26A"};
+const environment = JSON.parse(readFileSync(new URL("../vm/environment.json", import.meta.url), "utf8"));
+const framework = environment.safariSynchronization?.framework;
+if (!objectWithKeys(environment.safariSynchronization, ["framework"]) ||
+    !objectWithKeys(framework, ["bundleIdentifier", "version", "imageUUID"]) ||
+    framework.bundleIdentifier !== "com.apple.dt.XCUIAutomation" ||
+    typeof framework.version !== "string" || !/^[1-9][0-9]*$/.test(framework.version) ||
+    typeof framework.imageUUID !== "string" || !/^[0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12}$/.test(framework.imageUUID)) {
+    throw new Error("Invalid pinned Safari synchronization framework");
+}
+export const expectedSynchronizationFramework = Object.freeze({...framework});
 const selector = "waitForQuiescenceIncludingAnimationsIdle:usingActivity:isPreEvent:";
 const methodEncoding = "v28@0:8B16B20B24";
 

@@ -116,7 +116,7 @@ test("all matrix includes every native configuration/platform and all repository
         assert.ok(stage);
         assert.ok(stage.requirements.includes("jq"));
     }
-    for (const id of ["provider.test", "provider.bundle", "protocol.check", "scripts.approval-worker-target", "metadata.localizations", "runner.node-tests", "runner.python-tests", "safari.runner-tests",
+    for (const id of ["provider.test", "provider.bundle", "protocol.check", "pins.check", "scripts.approval-worker-target", "metadata.localizations", "runner.node-tests", "runner.python-tests", "safari.runner-tests",
         "worker.check", "worker.test", "worker.validate-self", "worker.validate-dry-run", "worker.deploy-dry-run", "worker.startup", "performance.release",
         "tsan.focused", "fuzz.default", "fuzz.regressions", "approval.debug", "approval.release"]) { assert.ok(ids.has(id), id); }
     assert.equal(stages.length, ids.size);

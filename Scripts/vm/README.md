@@ -13,6 +13,8 @@ host playback. There is no microphone or other audio input stream.
 Scripts/test_vm.sh doctor
 Scripts/test_vm.sh setup
 Scripts/test_vm.sh setup --interactive --safari-activation
+Scripts/test_vm.sh upgrade-xcode --check
+Scripts/test_vm.sh upgrade-xcode
 Scripts/test_vm.sh run all
 Scripts/test_vm.sh run extended
 Scripts/test_vm.sh run all --signing apple
@@ -110,8 +112,8 @@ the available-space concept in Storage settings. `doctor` reports both that
 estimate and currently free bytes. If the macOS estimate is unavailable, the
 runner falls back to currently free bytes. Capacity is checked again during runs.
 
-The pinned environment is in `environment.json`: Xcode 27.0 (27A266a), Node
-24.22.0, npm 11.16.0, jq 1.8.1, iOS 27.0 (24A434), and visionOS 27.0 (24M362).
+The pinned environment is in `environment.json`, including exact Xcode, Node,
+npm, jq, iOS Simulator, and visionOS Simulator versions and build identities.
 Xcode is archived into the private host cache, keyed by its pinned version,
 build and CodeResources seal. The runner stages an APFS clone of the tar and
 its SHA-256; the guest verifies and extracts it, preserving framework symlinks.
@@ -192,6 +194,90 @@ or failed suites remain incomplete; the runner does not waive their checks.
 Unattended runs require automatic login to the guest test account and an
 unlocked graphical session. This is guest-only setup; no host login, screen
 locking, permissions, or Keychain settings are changed.
+
+## Upgrading the pinned Xcode
+
+After installing the intended Xcode on the host, use the upgrade command to
+adopt it for VM testing:
+
+```sh
+Scripts/test_vm.sh upgrade-xcode --check
+Scripts/test_vm.sh upgrade-xcode
+```
+
+The existing global `--xcode` option selects the installed bundle and defaults
+to `/Applications/Xcode.app`. Put it before the command when using another
+location:
+
+```sh
+Scripts/test_vm.sh --xcode /Applications/Next/Xcode.app upgrade-xcode --check
+Scripts/test_vm.sh --xcode /Applications/Next/Xcode.app upgrade-xcode
+```
+
+`--check` inspects the selected Xcode and the proposed upgrade without changing
+files, creating caches, or starting a VM. It reports the installed toolchain
+identity and the XCUIAutomation image identity required by the iOS Safari
+synchronization hook. Inspection alone does not establish that the new image
+supports the hook or that the test suites pass.
+
+An upgrade updates the checked-in Xcode version/build and the hook's matching
+XCUIAutomation identity. It preserves the pinned simulator runtimes, Node,
+npm, jq, and other environment settings. The old baseline VM and its matching
+`baseline.json` record are retained together before replacing that baseline.
+Keep this pair together when investigating a failure; a VM bundle without its
+matching environment and verification record is not a usable verified baseline.
+The original VirtualBuddy VM remains unchanged.
+
+Verification runs through the normal VM runner in this order:
+
+1. Setup provisions the selected Xcode and runs the native setup smoke tests.
+2. The focused iOS Safari synchronization-hook tests verify the new framework
+   identity and method behavior.
+3. The macOS and iOS Safari installation/native-message roundtrips exercise the
+   browser and extension with the new toolchain.
+4. `run all` completes the full matrix with local signing.
+
+A passing setup smoke test makes the new baseline available for further
+verification. It does not make the complete Xcode upgrade verified. Changed
+pins, a prepared candidate, or successful focused tests also leave the upgrade
+incomplete until every required stage, including the full local matrix, passes.
+Reports identify the source snapshots actually tested.
+
+Repeating `upgrade-xcode` reuses safe setup progress and matching cached inputs,
+then verifies the current source again. A previous passing report does not waive
+verification of subsequent source changes. Failures preserve diagnostics and
+the old baseline pair; the command does not roll back files or VMs automatically
+and does not create a commit. Inspect the reported setup or test result and its
+logs to distinguish provisioning, hook compatibility, browser prerequisites,
+test failures, and incomplete artifact collection before retrying.
+
+Safari activation is an independent prerequisite. If a live Wallet extension
+grant is unavailable after the toolchain change, the upgrade stops with that
+prerequisite. A baseline without Safari preparation can first complete the
+native Xcode upgrade, then stops for activation before browser verification.
+Complete the existing explicit guest interaction workflow, then
+repeat the upgrade:
+
+```sh
+Scripts/test_vm.sh setup --interactive --safari-activation
+Scripts/test_vm.sh upgrade-xcode
+```
+
+Use the same global `--vm`, `--state-dir`, and `--xcode` values for recovery as
+for the upgrade. Enable Wallet in the owned guest Setup window when prompted;
+the upgrade does not synthesize consent or turn an assisted run into a headless
+verification result.
+
+Allow space for the new uncompressed Xcode archive, its guest staging copy,
+the extracted new Xcode, and the previous guest Xcode retained by provisioning.
+The old baseline and diagnostic clones also retain disk blocks. APFS clones
+share existing blocks initially, but installing Xcode and running the full
+matrix allocate additional blocks; adding the sizes printed by `du` for cloned
+VM bundles overstates their unique host usage. The host's 30 GiB capacity reserve
+still applies, and passing that check does not prove that the guest's 96 GiB
+build volume has enough free space for extraction and builds. Capacity failures
+require diagnosis before retrying; the upgrade does not discard baseline
+backups or diagnostic clones to make room.
 
 ## Existing signing input
 

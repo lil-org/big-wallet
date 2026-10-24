@@ -20,6 +20,7 @@ import stat
 import subprocess
 import sys
 import time
+from types import SimpleNamespace
 import uuid
 
 
@@ -53,6 +54,13 @@ def checked(command, **kwargs):
 def read_json(path):
     with open_regular(path) as file:
         return json.load(file)
+
+
+def xcode_upgrade_module():
+    spec = importlib.util.spec_from_file_location('vm_xcode_upgrade', TOOLS / 'xcode_upgrade.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def normalize_source_vm(value):
@@ -588,7 +596,8 @@ def stage_planned_result(exchange, job):
     if hash_regular_file(exchange / 'snapshot-manifest.json') != job['source']['sha256']:
         raise RunnerError('The staged source snapshot does not match the planned job')
     snapshot = read_json(exchange / 'snapshot-manifest.json')
-    for relative in ('Scripts/vm/test_manifest.mjs', 'Scripts/safari/scenarios.mjs', 'Scripts/safari/synchronization.mjs'):
+    for relative in ('Scripts/vm/test_manifest.mjs', 'Scripts/safari/scenarios.mjs', 'Scripts/safari/synchronization.mjs',
+                     'Scripts/vm/environment.json'):
         entries = [entry for entry in snapshot['files'] if entry.get('path') == relative]
         if (len(entries) != 1 or entries[0].get('type') != 'file' or
                 hash_regular_file(exchange / 'source' / relative) != entries[0].get('sha256')):
@@ -633,10 +642,13 @@ def host_doctor(args, state, environment):
     def xcode():
         with open_regular(args.xcode / 'Contents/version.plist') as file:
             version = plistlib.load(file)
+        installed = {'version': version.get('CFBundleShortVersionString'), 'buildVersion': version.get('ProductBuildVersion')}
         if (version.get('CFBundleShortVersionString'), version.get('ProductBuildVersion')) != (
                 environment['xcode']['version'], environment['xcode']['buildVersion']):
-            raise RunnerError('Installed Xcode does not match Scripts/vm/environment.json')
-        return environment['xcode']
+            raise RunnerError(f'Installed Xcode {installed["version"]} ({installed["buildVersion"]}) does not match '
+                              f'pinned Xcode {environment["xcode"]["version"]} ({environment["xcode"]["buildVersion"]}); '
+                              'run Scripts/test_vm.sh upgrade-xcode --check, then upgrade-xcode')
+        return {'installed': installed, 'pinned': environment['xcode']}
     check('xcode', xcode)
     def baseline():
         record = read_json(state / 'baseline.json')
@@ -908,6 +920,24 @@ def accepted_operation_result(active):
                 result.get('status') in ('passed', 'failed', 'blocked', 'cancelled') and hash_regular_file(path) == expected)
     except (OSError, ValueError, RunnerError):
         return False
+
+
+def completed_safari_preparation(state, active):
+    if active.get('vm') != str(state / 'candidate.vbvm') or not accepted_operation_result(active):
+        return False
+    result_path = Path(active['exchange']) / 'artifacts/result.json'
+    if read_json(result_path).get('status') != 'passed':
+        return False
+    for path in (state / 'candidate.json', state / 'baseline.json'):
+        if not path.exists():
+            continue
+        record = read_json(path)
+        if (isinstance(record, dict) and (record.get('promotionPending') or record.get('verifiedAt')) and
+                record.get('safariPreparationResult') == str(result_path) and
+                isinstance(record.get('safariPreparation'), dict) and
+                record.get('safariPreparation', {}).get('preparationRunID') == active['runId']):
+            return True
+    return False
 
 
 def operation_stop_record(exchange, run_id):
@@ -1307,7 +1337,8 @@ def reconcile_interrupted_operation(state):
             result = {}
     except ValueError:
         result = {}
-    if active.get('cloneOwned') is not True or not accepted_operation_result(active):
+    if not completed_safari_preparation(state, active) and (
+            active.get('cloneOwned') is not True or not accepted_operation_result(active)):
         pending = active.get('pendingTermination')
         if not pending:
             pending = {'reason': 'host_runner_interrupted'}
@@ -1348,6 +1379,48 @@ def environment_attested(preflight, environment):
     return True
 
 
+def preserve_previous_baseline_record(state, record, promoted, backup):
+    pending = record['promotionPending']
+    baseline = state / 'baseline.vbvm'
+    backup_record = backup.with_suffix('.json')
+    expected_hash = pending.get('backupRecordSHA256')
+    expected_identity = pending.get('backupFileID')
+    if expected_hash is None and expected_identity is None:
+        if backup.exists() or backup.is_symlink():
+            raise RunnerError('Pending promotion has an unrecorded VM backup; preserving all baselines')
+        if promoted == state / 'candidate.vbvm' and (baseline.exists() or baseline.is_symlink()):
+            validate_vm(baseline)
+            ensure_disk_idle(baseline)
+            previous = read_json(state / 'baseline.json')
+            if not isinstance(previous, dict) or previous.get('promotionPending'):
+                raise RunnerError('The previous baseline record is invalid; preserving both baselines')
+            if backup_record.exists() or backup_record.is_symlink():
+                if read_json(backup_record) != previous:
+                    raise RunnerError('The previous baseline metadata backup already contains another record')
+            else:
+                atomic_json(backup_record, previous)
+            metadata = baseline.lstat()
+            pending.update({'backupRecordSHA256': hash_regular_file(backup_record),
+                            'backupFileID': [metadata.st_dev, metadata.st_ino]})
+            atomic_json(state / 'candidate.json', record)
+        elif backup_record.exists() or backup_record.is_symlink():
+            raise RunnerError('Pending promotion has metadata without a previous baseline')
+        else:
+            return
+    expected_hash = pending.get('backupRecordSHA256')
+    expected_identity = pending.get('backupFileID')
+    if (not isinstance(expected_hash, str) or re.fullmatch(r'[a-f0-9]{64}', expected_hash) is None or
+            not isinstance(expected_identity, list) or len(expected_identity) != 2 or
+            any(type(value) is not int for value in expected_identity) or
+            hash_regular_file(backup_record) != expected_hash):
+        raise RunnerError('The previous baseline metadata backup changed; preserving all VM bundles')
+    previous_vm = backup if backup.exists() or backup.is_symlink() else baseline
+    validate_vm(previous_vm)
+    metadata = previous_vm.lstat()
+    if [metadata.st_dev, metadata.st_ino] != expected_identity:
+        raise RunnerError('The previous baseline backup no longer matches its metadata; preserving all VM bundles')
+
+
 def finish_baseline_promotion(state, record):
     pending = record['promotionPending']
     backup_name = pending.get('backup')
@@ -1362,6 +1435,7 @@ def finish_baseline_promotion(state, record):
     if [metadata.st_dev, metadata.st_ino] != pending.get('candidateFileID'):
         raise RunnerError('Pending promotion no longer owns the candidate; preserving all VM bundles')
     ensure_disk_idle(promoted)
+    preserve_previous_baseline_record(state, record, promoted, backup)
     if promoted == candidate:
         if baseline.exists() or baseline.is_symlink():
             if backup.exists() or backup.is_symlink():
@@ -1666,7 +1740,7 @@ def run_setup_doctor(args, state, candidate, environment, operation, record, con
         run_id, exchange = next_setup_exchange(state, candidate, operation, record)
 
 
-def setup(args, state, environment):
+def setup(args, state, environment, *, result_callback=None):
     if getattr(args, 'safari_activation', False) and not args.interactive:
         raise RunnerError('Safari activation setup requires --interactive for the genuine user activation step')
     validate_vm(args.vm)
@@ -1676,6 +1750,7 @@ def setup(args, state, environment):
     register_operation(state, candidate, exchange, run_id, 'preparing')
     completed = False
     finalization_pending = False
+    result = None
     try:
         with clone_cancellation_signals():
             result = prepare_setup(args, state, environment, operation)
@@ -1683,12 +1758,22 @@ def setup(args, state, environment):
         return result
     except KeyboardInterrupt:
         finalization_pending = True
-        finalize_owned_interruption(state, operation['exchange'], operation['runId'], 'cancelled')
         candidate_path = state / 'candidate.json'
-        if getattr(args, 'safari_activation', False) and candidate_path.exists():
-            record = read_json(candidate_path)
+        result_path = operation['exchange'] / 'artifacts/result.json'
+        record = {}
+        if getattr(args, 'safari_activation', False):
+            record_path = candidate_path if candidate_path.exists() else state / 'baseline.json'
+            if record_path.exists():
+                record = read_json(record_path)
+        active = read_json(state / 'active.json')
+        completed_preparation = (
+            getattr(args, 'safari_activation', False) and
+            active.get('runId') == operation['runId'] and active.get('exchange') == str(operation['exchange']) and
+            active.get('ownerPID') == os.getpid() and completed_safari_preparation(state, active))
+        if not completed_preparation:
+            finalize_owned_interruption(state, operation['exchange'], operation['runId'], 'cancelled')
+        if record and candidate_path.exists():
             attempt = record.get('safariActivationAttempt', {})
-            result_path = operation['exchange'] / 'artifacts/result.json'
             if attempt.get('runId') == operation['runId'] and attempt.get('result') == str(result_path):
                 active = read_json(state / 'active.json')
                 attempt.update({'artifactsExported': active.get('artifactsExported') is True or active.get('phase') == 'preparing',
@@ -1698,14 +1783,25 @@ def setup(args, state, environment):
         print(f'Setup cancelled. Results: {operation["exchange"] / "artifacts/result.json"}')
         return 2
     finally:
-        active_path = state / 'active.json'
-        if active_path.exists():
-            active = read_json(active_path)
-            if active.get('runId') == operation['runId'] and active.get('ownerPID') == os.getpid():
-                if operation['monitorCalled']:
-                    ensure_disk_idle(Path(active['vm']))
-                if completed or not finalization_pending and (accepted_operation_result(active) or not operation['monitorCalled']):
-                    clear_owned_operation(state, operation['runId'])
+        try:
+            if result_callback is not None:
+                result_path = operation['exchange'] / 'artifacts/result.json'
+                if not result_path.exists() and result == 0 and (state / 'baseline.json').exists():
+                    result_path = Path(read_json(state / 'baseline.json')['validationResult'])
+                if result_path.exists():
+                    result_callback(result_path, read_json(result_path))
+        except Exception:
+            if completed:
+                raise
+        finally:
+            active_path = state / 'active.json'
+            if active_path.exists():
+                active = read_json(active_path)
+                if active.get('runId') == operation['runId'] and active.get('ownerPID') == os.getpid():
+                    if operation['monitorCalled']:
+                        ensure_disk_idle(Path(active['vm']))
+                    if completed or not finalization_pending and (accepted_operation_result(active) or not operation['monitorCalled']):
+                        clear_owned_operation(state, operation['runId'])
 
 
 def safari_preparation_reference(value):
@@ -1811,11 +1907,7 @@ def prepare_safari_activation(args, state, environment, operation):
                 pending.get('bootstrapSourceDigest') != bootstrap_source_digest() or
                 pending.get('bootstrapTools') != bootstrap_tool_hashes(build_tools(state, args.xcode))):
             raise RunnerError('Pending Safari preparation promotion does not match the current verified environment')
-        reference = safari_preparation_reference(pending.get('safariPreparation'))
-        archived = Path(pending.get('safariPreparationResult', ''))
-        if (not archived.is_absolute() or archived.resolve() != archived or
-                not archived.is_relative_to(state / 'results') or archived.name != 'result.json' or
-                verify_safari_preparation_result(archived.parent.parent, read_json(archived), reference['preparationRunID']) != reference):
+        if not inherited_safari_preparation(state, pending, pending['consoleUser']):
             raise RunnerError('Pending Safari preparation no longer has its verified archived receipt')
         check_setup_stop(operation)
         finish_baseline_promotion(state, pending)
@@ -1973,6 +2065,32 @@ def prepare_safari_activation(args, state, environment, operation):
     return 0
 
 
+def inherited_safari_preparation(state, record, console_user):
+    fields = ('safariPreparation', 'safariPreparationResult')
+    if not any(field in record for field in fields):
+        return {}
+    if console_user != record.get('consoleUser'):
+        raise RunnerError('Prepared Safari belongs to another guest account; preserve this baseline and use another state directory')
+    reference = safari_preparation_reference(record.get('safariPreparation'))
+    result_path = record.get('safariPreparationResult')
+    if not isinstance(result_path, str):
+        raise RunnerError('Prepared Safari has no archived verification result')
+    archived = Path(result_path)
+    if (not archived.is_absolute() or archived.resolve() != archived or
+            not archived.is_relative_to(state / 'results') or archived.name != 'result.json' or
+            archived.parent.name != 'artifacts'):
+        raise RunnerError('Prepared Safari verification must remain in the runner-owned results directory')
+    result = read_json(archived)
+    if (not isinstance(result, dict) or result.get('status') != 'passed' or not result.get('finishedAt') or
+            result.get('runId') != reference['preparationRunID'] or result.get('vmId') != record.get('vmId') or
+            not isinstance(result.get('identity'), dict) or
+            result['identity'].get('vmId') != record.get('vmId') or
+            result['identity'].get('consoleUser') != console_user or
+            verify_safari_preparation_result(archived.parent.parent, result, reference['preparationRunID']) != reference):
+        raise RunnerError('Prepared Safari verification does not match this VM and guest account')
+    return {'safariPreparation': reference, 'safariPreparationResult': str(archived)}
+
+
 def prepare_setup(args, state, environment, operation):
     if getattr(args, 'safari_activation', False):
         return prepare_safari_activation(args, state, environment, operation)
@@ -1984,6 +2102,7 @@ def prepare_setup(args, state, environment, operation):
         if pending.get('promotionPending'):
             if not matches_source_vm(pending, args.vm):
                 raise RunnerError('Pending promotion belongs to another source VM')
+            inherited_safari_preparation(state, pending, pending.get('consoleUser'))
             check_setup_stop(operation)
             finish_baseline_promotion(state, pending)
     source_digest = bootstrap_source_digest()
@@ -2000,6 +2119,7 @@ def prepare_setup(args, state, environment, operation):
                 existing.get('consoleUser') == selected_console_user(args, existing) and
                 existing.get('verificationSigningMode') == 'local'):
             validate_vm(state / 'baseline.vbvm')
+            inherited_safari_preparation(state, existing, selected_console_user(args, existing))
             print('The prepared baseline already passed local verification with the pinned environment and guest bootstrap.')
             print('Run Scripts/test_vm.sh run all; each run checks live guest readiness again.')
             return 0
@@ -2012,9 +2132,16 @@ def prepare_setup(args, state, environment, operation):
         if existing_record is not None and not matches_source_vm(existing_record, args.vm):
             raise RunnerError('Baseline belongs to another source VM; use a different --state-dir')
         existing_record = existing_record or {}
+        inheritance_user = selected_console_user(args, record or existing_record)
+        if record and record.get('constructionPending') and args.guest_user is None and args.provision_config is None:
+            inheritance_user = record['constructionConsoleUser']
+        inherited_preparation = inherited_safari_preparation(state, existing_record, inheritance_user)
+        if inherited_preparation and record is not None and record.get('vmId') != existing_record.get('vmId'):
+            raise RunnerError('Prepared Safari candidate belongs to another VM; preserving the candidate')
     if record is not None:
         if not matches_source_vm(record, args.vm):
             raise RunnerError('Candidate belongs to another source VM; use a different --state-dir')
+        inherited_safari_preparation(state, record, selected_console_user(args, record))
         if record.get('constructionPending'):
             if candidate.is_symlink() or candidate.exists() and not candidate.is_dir():
                 raise RunnerError('The unfinished candidate path changed type; preserving it for inspection')
@@ -2023,6 +2150,7 @@ def prepare_setup(args, state, environment, operation):
                 shutil.rmtree(candidate)
             if args.guest_user is None and args.provision_config is None:
                 args.guest_user = record['constructionConsoleUser']
+            record.update(inherited_preparation)
         else:
             validate_vm(candidate)
             ensure_disk_idle(candidate)
@@ -2041,6 +2169,7 @@ def prepare_setup(args, state, environment, operation):
             record['consoleUser'] = existing_record['consoleUser']
         if existing_record.get('guestAccessID'):
             record['guestAccessID'] = existing_record['guestAccessID']
+        record.update(inherited_preparation)
         atomic_json(record_path, record)
     if record.get('constructionPending'):
         check_setup_stop(operation)
@@ -2167,7 +2296,7 @@ def prepare_setup(args, state, environment, operation):
     return 0
 
 
-def run_tests(args, state, environment):
+def run_tests(args, state, environment, *, result_callback=None):
     candidate_record = state / 'candidate.json'
     if candidate_record.exists() and read_json(candidate_record).get('promotionPending'):
         raise RunnerError('Baseline promotion is incomplete. Run setup to finish it before testing.')
@@ -2244,18 +2373,26 @@ def run_tests(args, state, environment):
                                 args.timeout or (48 * 3600 if args.profile == 'extended' else 24 * 3600),
                                 keep_operation=True, setup_hook=hook)
     finally:
-        if clone_owned and (clone.exists() or clone.is_symlink()):
-            if clone.is_symlink() or not clone.is_dir():
-                raise RunnerError('The clone path changed type; preserving it for inspection')
-            active = read_json(state / 'active.json')
-            if (active.get('runId') != run_id or active.get('vm') != str(clone) or
-                    active.get('exchange') != str(exchange) or active.get('ownerPID') != os.getpid()):
-                raise RunnerError('Another operation owns the clone; preserving it for inspection')
-            ensure_disk_idle(clone)
-            if not retain_clone_diagnostics(active):
-                shutil.rmtree(clone)
-        if result is not None:
-            clear_owned_operation(state, run_id)
+        try:
+            result_path = exchange / 'artifacts/result.json'
+            if result_callback is not None and result_path.exists():
+                result_callback(result_path, read_json(result_path))
+        except Exception:
+            if result is not None:
+                raise
+        finally:
+            if clone_owned and (clone.exists() or clone.is_symlink()):
+                if clone.is_symlink() or not clone.is_dir():
+                    raise RunnerError('The clone path changed type; preserving it for inspection')
+                active = read_json(state / 'active.json')
+                if (active.get('runId') != run_id or active.get('vm') != str(clone) or
+                        active.get('exchange') != str(exchange) or active.get('ownerPID') != os.getpid()):
+                    raise RunnerError('Another operation owns the clone; preserving it for inspection')
+                ensure_disk_idle(clone)
+                if not retain_clone_diagnostics(active):
+                    shutil.rmtree(clone)
+            if result is not None:
+                clear_owned_operation(state, run_id)
     print(f'{result["status"].upper()}: {exchange / "artifacts/result.json"}')
     return 0 if result['status'] == 'passed' else 1
 
@@ -2269,6 +2406,10 @@ def parser():
     commands.add_parser('doctor')
     commands.add_parser('status')
     commands.add_parser('stop')
+    upgrade_parser = commands.add_parser('upgrade-xcode', allow_abbrev=False,
+                                        help='Adopt installed Xcode, prepare the VM, and verify the full local suite')
+    upgrade_parser.add_argument('--check', action='store_true', help='Preview pins and prerequisites without writing files or starting a VM')
+    upgrade_parser.add_argument('--timeout', type=int, help='Per-setup/run timeout in seconds')
     setup_parser = commands.add_parser('setup')
     setup_parser.add_argument('--guest-user')
     setup_parser.add_argument('--provision-config', type=Path)
@@ -2303,6 +2444,11 @@ def main(argv=None):
             raise RunnerError('The host VM launcher requires an Apple silicon Mac')
         args.vm = normalize_source_vm(args.vm)
         args.xcode = args.xcode.expanduser().resolve()
+        if getattr(args, 'timeout', None) is not None and args.timeout <= 0:
+            raise RunnerError('Timeout must be positive')
+        if args.command == 'upgrade-xcode' and args.check:
+            state = args.state_dir.expanduser().absolute().resolve()
+            return xcode_upgrade_module().upgrade(SimpleNamespace(**globals()), args, state)
         state = private_directory(args.state_dir.expanduser().absolute()).resolve()
         environment = read_json(TOOLS / 'environment.json')
         if args.command == 'doctor':
@@ -2326,12 +2472,12 @@ def main(argv=None):
                     active['vmStatus'] = read_json(status_path)
                 print(json.dumps(active, indent=2))
             return 0
-        if args.timeout is not None and args.timeout <= 0:
-            raise RunnerError('Timeout must be positive')
         with execution_lock(state):
             reconcile_interrupted_operation(state)
             if args.command == 'setup':
                 return setup(args, state, environment)
+            if args.command == 'upgrade-xcode':
+                return xcode_upgrade_module().upgrade(SimpleNamespace(**globals()), args, state)
             return run_tests(args, state, environment)
     except (RunnerError, OSError, ValueError, KeyError, RuntimeError) as error:
         print(f'VM testing blocked: {error}', file=sys.stderr)

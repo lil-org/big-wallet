@@ -1,13 +1,14 @@
 #import "BWSafariSynchronizationInternal.h"
+#import "BWSafariSynchronizationPin.generated.h"
 #import <TargetConditionals.h>
 #import <dlfcn.h>
 #import <mach-o/dyld.h>
 #import <mach-o/loader.h>
 #import <objc/message.h>
 
-static NSString *const BWFrameworkIdentifier = @"com.apple.dt.XCUIAutomation";
-static NSString *const BWFrameworkVersion = @"25228";
-static NSString *const BWFrameworkUUID = @"6C9998E3-2351-34D3-BAAB-B523F500A26A";
+static NSString *const BWFrameworkIdentifier = BW_SAFARI_FRAMEWORK_IDENTIFIER;
+static NSString *const BWFrameworkVersion = BW_SAFARI_FRAMEWORK_VERSION;
+static NSString *const BWFrameworkUUID = BW_SAFARI_FRAMEWORK_UUID;
 static const char *const BWQuiescenceSelector = "waitForQuiescenceIncludingAnimationsIdle:usingActivity:isPreEvent:";
 static const char *const BWQuiescenceEncoding = "v28@0:8B16B20B24";
 static const uint64_t BWMaximumJSONInteger = 9007199254740991ULL;
