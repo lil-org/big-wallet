@@ -8,8 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		69ABA361B8BA9583BCE28739 /* AccountPreviewStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA36AB064B8AEBD6648A1157 /* AccountPreviewStateTests.swift */; };
+		F9553931C49C4743A7FA4366 /* EditAccountsViewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980F2D0B6F454056859A8FC6 /* EditAccountsViewControllerTests.swift */; };
 		4028B827A1D70E12CF27764D /* AccountPreviewStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA36AB064B8AEBD6648A1157 /* AccountPreviewStateTests.swift */; };
+		E7BC080D1B0743D89EA857B8 /* EditAccountsViewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980F2D0B6F454056859A8FC6 /* EditAccountsViewControllerTests.swift */; };
 		F2F2A682389EC2746EF90EC6 /* AccountPreviewStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA36AB064B8AEBD6648A1157 /* AccountPreviewStateTests.swift */; };
+		49DF4C0DE00D4980A85E40DD /* EditAccountsViewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980F2D0B6F454056859A8FC6 /* EditAccountsViewControllerTests.swift */; };
 		D4050F4B448B91327C672D88 /* AccountPreviewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 568B98EA09A27D0AF83EA186 /* AccountPreviewState.swift */; };
 		AF2B9A978726DB86600DBE9F /* AccountPreviewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 568B98EA09A27D0AF83EA186 /* AccountPreviewState.swift */; };
 		7A22D7161651202D624C5E26 /* AccountPreviewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 568B98EA09A27D0AF83EA186 /* AccountPreviewState.swift */; };
@@ -452,8 +455,11 @@
 		2F4D00A62FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
 		2F4D00A72FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
 		2F4E01012FAC000000000000 /* GasServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4E01002FAC000000000000 /* GasServiceTests.swift */; };
+		520CF96D0369420C91DC6B34 /* RPCRequestAuthorizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE174BBDEB564D779ED9205E /* RPCRequestAuthorizationTests.swift */; };
 		2F4E01022FAC000000000000 /* GasServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4E01002FAC000000000000 /* GasServiceTests.swift */; };
+		BA2A2DF678D14B32B5290580 /* RPCRequestAuthorizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE174BBDEB564D779ED9205E /* RPCRequestAuthorizationTests.swift */; };
 		2F4E01032FAC000000000000 /* GasServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4E01002FAC000000000000 /* GasServiceTests.swift */; };
+		7B23FFF956F04CF883C1F149 /* RPCRequestAuthorizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE174BBDEB564D779ED9205E /* RPCRequestAuthorizationTests.swift */; };
 		2FA100000000000000000002 /* SafariRPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA100000000000000000001 /* SafariRPCClient.swift */; };
 		2FA100000000000000000006 /* SafariRPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA100000000000000000001 /* SafariRPCClient.swift */; };
 		2FA100000000000000000008 /* SafariRPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA100000000000000000001 /* SafariRPCClient.swift */; };
@@ -464,14 +470,23 @@
 		2FA200000000000000000003 /* CustomNetworkStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA200000000000000000001 /* CustomNetworkStorageTests.swift */; };
 		2FA200000000000000000004 /* CustomNetworkStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA200000000000000000001 /* CustomNetworkStorageTests.swift */; };
 		2FA300000000000000000002 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		61442A8F717A476FB6E38B05 /* RPCRequestAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57E8A7259DB41708E5ED03A /* RPCRequestAuthorization.swift */; };
 		2FA300000000000000000003 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		266917F1DEFA4C4983E5ECB1 /* RPCRequestAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57E8A7259DB41708E5ED03A /* RPCRequestAuthorization.swift */; };
 		2FA300000000000000000004 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		C5A09D685B7B4F8EBC132418 /* RPCRequestAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57E8A7259DB41708E5ED03A /* RPCRequestAuthorization.swift */; };
 		2FA300000000000000000005 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		85CF63C3DDB64E8CA651B4B6 /* RPCRequestAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57E8A7259DB41708E5ED03A /* RPCRequestAuthorization.swift */; };
 		2FA300000000000000000006 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		11943FEA404F463BBF185B3C /* RPCRequestAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57E8A7259DB41708E5ED03A /* RPCRequestAuthorization.swift */; };
 		2FA300000000000000000007 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		417141853B944D12B42D7323 /* RPCRequestAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57E8A7259DB41708E5ED03A /* RPCRequestAuthorization.swift */; };
 		2FA300000000000000000009 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		DF16EBEB993B441488458EA1 /* RPCRequestAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57E8A7259DB41708E5ED03A /* RPCRequestAuthorization.swift */; };
 		2FA30000000000000000000A /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		17940AA3D5FE4589B35574BE /* RPCRequestAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57E8A7259DB41708E5ED03A /* RPCRequestAuthorization.swift */; };
 		2FA30000000000000000000B /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		F062D42BEA424A37B97E5592 /* RPCRequestAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57E8A7259DB41708E5ED03A /* RPCRequestAuthorization.swift */; };
 		2FA400000000000000000002 /* AlchemyJWTProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA400000000000000000001 /* AlchemyJWTProviderTests.swift */; };
 		2FA400000000000000000003 /* AlchemyJWTProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA400000000000000000001 /* AlchemyJWTProviderTests.swift */; };
 		2FA400000000000000000004 /* AlchemyJWTProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA400000000000000000001 /* AlchemyJWTProviderTests.swift */; };
@@ -882,6 +897,7 @@
 		E3611E2FC012CBCB83205A93 /* ApprovalSubject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D059AD126C2796200EE3023 /* ApprovalSubject.swift */; };
 		E74A31A983CB9212656DFB0B /* AuthenticationReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC850E626B73A5900809E82 /* AuthenticationReason.swift */; };
 		E8151404E96AB047338B7D81 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		0528C4AE9CAB411C8B0B852F /* RPCRequestAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57E8A7259DB41708E5ED03A /* RPCRequestAuthorization.swift */; };
 		EADDB1F78474357F9A899BEA /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
 		EB50B337638E4EC1CAA8CCBB /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CFAE56928BE6292001D0799 /* NSImage.swift */; };
 		EB54D0F9473D4FE08E967FC6 /* NetworkCatalog.json in Resources */ = {isa = PBXBuildFile; fileRef = DB2B8110AC144397915962B1 /* NetworkCatalog.json */; };
@@ -989,6 +1005,7 @@
 		3D6171B12A5C9BDE4D09969F /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C728B602AFBFAF100E4DD47 /* Image.swift */; };
 		54FCA0EB1E1628AC8D807120 /* URL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D39727623EC600687301 /* URL.swift */; };
 		9CC6C274C609CDC558DA2E40 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		58E6BF540A9C459DB5F75718 /* RPCRequestAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57E8A7259DB41708E5ED03A /* RPCRequestAuthorization.swift */; };
 		D88626F45AED841B383B81A7 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
 		381AC1D5BEC5C981714EF60A /* UnknownSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BCF27B2F30C00234393 /* UnknownSafariRequest.swift */; };
 		C38F43B46CAF9110DA7BB549 /* InpageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BD427B5806200234393 /* InpageProvider.swift */; };
@@ -1175,6 +1192,7 @@
 
 /* Begin PBXFileReference section */
 		EA36AB064B8AEBD6648A1157 /* AccountPreviewStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountPreviewStateTests.swift; sourceTree = "<group>"; };
+		980F2D0B6F454056859A8FC6 /* EditAccountsViewControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditAccountsViewControllerTests.swift; sourceTree = "<group>"; };
 		568B98EA09A27D0AF83EA186 /* AccountPreviewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountPreviewState.swift; sourceTree = "<group>"; };
 		C359A5323A2E444E97DED478 /* StartupCredentialCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupCredentialCoordinator.swift; sourceTree = "<group>"; };
 		7B72F05A3BFC42A48FF6D0F4 /* WindowAuthenticationSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAuthenticationSession.swift; sourceTree = "<group>"; };
@@ -1367,9 +1385,11 @@
 		2F4D007B2FAA000000000000 /* precomputed_ecmult_gen.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c; sourceTree = "<group>"; };
 		2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ScryptBackend/big_wallet_scrypt_shim.c; sourceTree = "<group>"; };
 		2F4E01002FAC000000000000 /* GasServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasServiceTests.swift; sourceTree = "<group>"; };
+		BE174BBDEB564D779ED9205E /* RPCRequestAuthorizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RPCRequestAuthorizationTests.swift; sourceTree = "<group>"; };
 		2FA100000000000000000001 /* SafariRPCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariRPCClient.swift; sourceTree = "<group>"; };
 		2FA200000000000000000001 /* CustomNetworkStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomNetworkStorageTests.swift; sourceTree = "<group>"; };
 		2FA300000000000000000001 /* AlchemyJWTProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlchemyJWTProvider.swift; sourceTree = "<group>"; };
+		C57E8A7259DB41708E5ED03A /* RPCRequestAuthorization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RPCRequestAuthorization.swift; sourceTree = "<group>"; };
 		2FA400000000000000000001 /* AlchemyJWTProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlchemyJWTProviderTests.swift; sourceTree = "<group>"; };
 		2FA700012FBD000000000001 /* EthereumAccessListEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumAccessListEntry.swift; sourceTree = "<group>"; };
 		2FA801002FBE000000000001 /* TransactionApprovalCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionApprovalCoordinator.swift; sourceTree = "<group>"; };
@@ -1548,6 +1568,7 @@
 			children = (
 				E8E92E120536C98CFE366B19 /* SafariUI */,
 				EA36AB064B8AEBD6648A1157 /* AccountPreviewStateTests.swift */,
+				980F2D0B6F454056859A8FC6 /* EditAccountsViewControllerTests.swift */,
 				D0D9D762A778D6D42FC747A1 /* NativeMessageDispatcherTests.swift */,
 				49639FB766301B747C6439F2 /* ApprovalLifecycle */,
 				9FD0D903F81791CE40249653 /* OnboardingCancellationTests.swift */,
@@ -1584,6 +1605,7 @@
 				BF5C00102FB5000000000000 /* PopupRequestSessionsTests.swift */,
 				D42A00002FA0000000000001 /* ApprovalStoreTestFixture.swift */,
 				2F4E01002FAC000000000000 /* GasServiceTests.swift */,
+				BE174BBDEB564D779ED9205E /* RPCRequestAuthorizationTests.swift */,
 				2FA802002FBE000000000001 /* TransactionApprovalCoordinatorTests.swift */,
 				2F2A00000000000000000011 /* SolanaOptionsTests.swift */,
 				2F2A0000000000000000000D /* SolanaPreparedTransactionTests.swift */,
@@ -2049,6 +2071,7 @@
 				F6BCB55F1F949D0DBC9AD6A2 /* SecretClipboard.swift */,
 				D0A100012FD1000000000001 /* WalletAccess.swift */,
 				2FA300000000000000000001 /* AlchemyJWTProvider.swift */,
+				C57E8A7259DB41708E5ED03A /* RPCRequestAuthorization.swift */,
 				2C528A15267FA8EB00CA3ADD /* Defaults.swift */,
 				BF3C00012FB2000000000000 /* DeviceAuthentication.swift */,
 				2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */,
@@ -3467,6 +3490,7 @@
 				BF3D002C2FB3000000000000 /* Image.swift in Sources */,
 				BF3D002D2FB3000000000000 /* URL.swift in Sources */,
 				2FA300000000000000000002 /* AlchemyJWTProvider.swift in Sources */,
+				61442A8F717A476FB6E38B05 /* RPCRequestAuthorization.swift in Sources */,
 				2FA100000000000000000002 /* SafariRPCClient.swift in Sources */,
 				2CF255B2275A4A7200AE54B9 /* UserDefaults.swift in Sources */,
 				2C264BD227B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
@@ -3527,6 +3551,7 @@
 				BF5C00062FB5000000000000 /* InternalSafariRequest.swift in Sources */,
 				BF3E00032FB4000000000000 /* DeviceAuthentication.swift in Sources */,
 				2FA300000000000000000003 /* AlchemyJWTProvider.swift in Sources */,
+				266917F1DEFA4C4983E5ECB1 /* RPCRequestAuthorization.swift in Sources */,
 				2C773FC72D53A59800879A1F /* InpageProvider.swift in Sources */,
 				2C773FE92D53C17000879A1F /* Defaults.swift in Sources */,
 				2C773FEA2D53C17000879A1F /* PriceService.swift in Sources */,
@@ -3642,6 +3667,7 @@
 				BF5C00042FB5000000000000 /* InternalSafariRequest.swift in Sources */,
 				BF3E00012FB4000000000000 /* DeviceAuthentication.swift in Sources */,
 				2FA300000000000000000004 /* AlchemyJWTProvider.swift in Sources */,
+				C5A09D685B7B4F8EBC132418 /* RPCRequestAuthorization.swift in Sources */,
 				2CB4031B281C99C800BAEBEE /* AccountsHeaderRowView.swift in Sources */,
 				2C728B612AFBFAF100E4DD47 /* Image.swift in Sources */,
 				2C3024FC28C1193100C304ED /* Account.swift in Sources */,
@@ -3782,6 +3808,7 @@
 				BF5C00052FB5000000000000 /* InternalSafariRequest.swift in Sources */,
 				BF3E00022FB4000000000000 /* DeviceAuthentication.swift in Sources */,
 				2FA300000000000000000005 /* AlchemyJWTProvider.swift in Sources */,
+				85CF63C3DDB64E8CA651B4B6 /* RPCRequestAuthorization.swift in Sources */,
 				2C6F6D5A28273FE500D6E8FB /* EditAccountsViewController.swift in Sources */,
 				2C9B2C6E2D38416800D56607 /* SharedDefaults.swift in Sources */,
 				2C3024FD28C1193100C304ED /* Account.swift in Sources */,
@@ -3893,6 +3920,7 @@
 				A2F104032FC1000000000001 /* SolanaDappRequestProcessor.swift in Sources */,
 				BF3C00032FB2000000000000 /* DeviceAuthentication.swift in Sources */,
 				2FA300000000000000000006 /* AlchemyJWTProvider.swift in Sources */,
+				11943FEA404F463BBF185B3C /* RPCRequestAuthorization.swift in Sources */,
 				2FA100000000000000000006 /* SafariRPCClient.swift in Sources */,
 				2C773FCD2D53A5A300879A1F /* ResponseToExtension.swift in Sources */,
 				2C773FFB2D53C1BD00879A1F /* FixedWidthInteger.swift in Sources */,
@@ -3968,6 +3996,7 @@
 				B5FA11010000000000000002 /* BWSafariSynchronization.m in Sources */,
 				B5FA11010000000000000003 /* BWSafariSynchronizationTests.m in Sources */,
 				4028B827A1D70E12CF27764D /* AccountPreviewStateTests.swift in Sources */,
+				E7BC080D1B0743D89EA857B8 /* EditAccountsViewControllerTests.swift in Sources */,
 				8FAF3DDD6528F23C3EC2771A /* NativeMessageDispatcherTests.swift in Sources */,
 				DEBC408FFA115904C2E37B9E /* PasswordStorageTests.swift in Sources */,
 				30C1FE53E2DDBDE640E59529 /* SecretAlertPresentationTests.swift in Sources */,
@@ -3987,10 +4016,12 @@
 				2FB200000000000000000002 /* AlchemyJWTProductionContractTests.swift in Sources */,
 				2FA400000000000000000002 /* AlchemyJWTProviderTests.swift in Sources */,
 				2FA300000000000000000007 /* AlchemyJWTProvider.swift in Sources */,
+				417141853B944D12B42D7323 /* RPCRequestAuthorization.swift in Sources */,
 				31B7B994991C4E64B5DF44B5 /* NetworkCatalogTests.swift in Sources */,
 				2FA100000000000000000009 /* SafariRPCClient.swift in Sources */,
 				2FA200000000000000000002 /* CustomNetworkStorageTests.swift in Sources */,
 				2F4E01012FAC000000000000 /* GasServiceTests.swift in Sources */,
+				520CF96D0369420C91DC6B34 /* RPCRequestAuthorizationTests.swift in Sources */,
 				2FA802012FBE000000000001 /* TransactionApprovalCoordinatorTests.swift in Sources */,
 				2F2A00000000000000000002 /* SolanaTestFixtures.swift in Sources */,
 				C2D100012FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */,
@@ -4047,6 +4078,7 @@
 				3353DB2C803596E5F2F920DE /* InternalSafariRequest.swift in Sources */,
 				7DCCBCFA6D593AFB7DCF22A8 /* DeviceAuthentication.swift in Sources */,
 				E8151404E96AB047338B7D81 /* AlchemyJWTProvider.swift in Sources */,
+				0528C4AE9CAB411C8B0B852F /* RPCRequestAuthorization.swift in Sources */,
 				82AFA7614D86BB4B43024B0B /* AccountsHeaderRowView.swift in Sources */,
 				FF404425774AF3AE0D7F2B3E /* Image.swift in Sources */,
 				A2D6B78DC94587656BE92ECC /* Account.swift in Sources */,
@@ -4179,6 +4211,7 @@
 				A2F104022FC1000000000001 /* SolanaDappRequestProcessor.swift in Sources */,
 				BF3C00022FB2000000000000 /* DeviceAuthentication.swift in Sources */,
 				2FA300000000000000000009 /* AlchemyJWTProvider.swift in Sources */,
+				DF16EBEB993B441488458EA1 /* RPCRequestAuthorization.swift in Sources */,
 				2FA100000000000000000008 /* SafariRPCClient.swift in Sources */,
 				2CE0594627640F470042D844 /* UserDefaults.swift in Sources */,
 				2C264BD327B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
@@ -4252,6 +4285,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F2F2A682389EC2746EF90EC6 /* AccountPreviewStateTests.swift in Sources */,
+				49DF4C0DE00D4980A85E40DD /* EditAccountsViewControllerTests.swift in Sources */,
 				E22338598B6A2F5FE5598880 /* NativeMessageDispatcherTests.swift in Sources */,
 				2A041DA7B5322FEE7D8068FD /* OnboardingCancellationTests.swift in Sources */,
 				485AE8E32BAF4FACBC5772D6 /* WindowAuthenticationSessionTests.swift in Sources */,
@@ -4273,10 +4307,12 @@
 				2FB200000000000000000003 /* AlchemyJWTProductionContractTests.swift in Sources */,
 				2FA400000000000000000003 /* AlchemyJWTProviderTests.swift in Sources */,
 				2FA30000000000000000000A /* AlchemyJWTProvider.swift in Sources */,
+				17940AA3D5FE4589B35574BE /* RPCRequestAuthorization.swift in Sources */,
 				80762825D41E4714A724F485 /* NetworkCatalogTests.swift in Sources */,
 				2FA10000000000000000000A /* SafariRPCClient.swift in Sources */,
 				2FA200000000000000000003 /* CustomNetworkStorageTests.swift in Sources */,
 				2F4E01022FAC000000000000 /* GasServiceTests.swift in Sources */,
+				BA2A2DF678D14B32B5290580 /* RPCRequestAuthorizationTests.swift in Sources */,
 				2FA802022FBE000000000001 /* TransactionApprovalCoordinatorTests.swift in Sources */,
 				2F2A00000000000000000003 /* SolanaTestFixtures.swift in Sources */,
 				C2D100022FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */,
@@ -4311,6 +4347,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				69ABA361B8BA9583BCE28739 /* AccountPreviewStateTests.swift in Sources */,
+				F9553931C49C4743A7FA4366 /* EditAccountsViewControllerTests.swift in Sources */,
 				75DF6A7B7B194C42E799E7A2 /* NativeMessageDispatcherTests.swift in Sources */,
 				5437CD9FC0D7C097A8830E54 /* PasswordStorageTests.swift in Sources */,
 				6B819B9E76242B268EEB3AE1 /* SecretAlertPresentationTests.swift in Sources */,
@@ -4330,10 +4367,12 @@
 				2FB200000000000000000004 /* AlchemyJWTProductionContractTests.swift in Sources */,
 				2FA400000000000000000004 /* AlchemyJWTProviderTests.swift in Sources */,
 				2FA30000000000000000000B /* AlchemyJWTProvider.swift in Sources */,
+				F062D42BEA424A37B97E5592 /* RPCRequestAuthorization.swift in Sources */,
 				AAD675E18CDB4174B2B92C3D /* NetworkCatalogTests.swift in Sources */,
 				2FA10000000000000000000B /* SafariRPCClient.swift in Sources */,
 				2FA200000000000000000004 /* CustomNetworkStorageTests.swift in Sources */,
 				2F4E01032FAC000000000000 /* GasServiceTests.swift in Sources */,
+				7B23FFF956F04CF883C1F149 /* RPCRequestAuthorizationTests.swift in Sources */,
 				2FA802032FBE000000000001 /* TransactionApprovalCoordinatorTests.swift in Sources */,
 				2F2A00000000000000000004 /* SolanaTestFixtures.swift in Sources */,
 				C2D100032FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */,
@@ -4432,6 +4471,7 @@
 				3D6171B12A5C9BDE4D09969F /* Image.swift in Sources */,
 				54FCA0EB1E1628AC8D807120 /* URL.swift in Sources */,
 				9CC6C274C609CDC558DA2E40 /* AlchemyJWTProvider.swift in Sources */,
+				58E6BF540A9C459DB5F75718 /* RPCRequestAuthorization.swift in Sources */,
 				D88626F45AED841B383B81A7 /* UserDefaults.swift in Sources */,
 				381AC1D5BEC5C981714EF60A /* UnknownSafariRequest.swift in Sources */,
 				C38F43B46CAF9110DA7BB549 /* InpageProvider.swift in Sources */,

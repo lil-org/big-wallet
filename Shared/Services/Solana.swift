@@ -1024,13 +1024,6 @@ final class Solana: Sendable {
         )
     }
 
-    private struct ConfirmationAuthorizationBudget: Sendable {
-
-        let replacementAttempt = OneShotGate()
-        let freshAuthorizationPoll = OneShotGate()
-
-    }
-
     private struct SendTransactionResponse: Decodable, Sendable {
         let result: String?
         private let error: RPCResponseError?
@@ -1734,7 +1727,11 @@ final class Solana: Sendable {
         )
         let outcome: RPCRequestOutcome<SendTransactionResponse> = try await performRequest(
             request: request,
-            endpoint: endpoint,
+            requestAuthorization: RPCRequestAuthorization(
+                url: endpoint.url,
+                allowsAlchemyAuthorization: endpoint.allowsAlchemyAuthorization,
+                provider: authorizationProvider
+            ),
             acceptsUnauthorizedResponse: { $0.result != nil }
         )
         switch outcome {
@@ -1763,7 +1760,12 @@ final class Solana: Sendable {
         commitment: Commitment,
         endpoint: RPCConfiguration.Endpoint
     ) async throws -> String {
-        let authorizationBudget = ConfirmationAuthorizationBudget()
+        let requestAuthorization = RPCRequestAuthorization(
+            url: endpoint.url,
+            allowsAlchemyAuthorization: endpoint.allowsAlchemyAuthorization,
+            provider: authorizationProvider
+        )
+        let freshAuthorizationPoll = OneShotGate()
         let deadline = timing.now().addingTimeInterval(signatureStatusPollTimeout)
         var pollInterval = signatureStatusInitialPollInterval
         var lastFailure: SendTransactionError?
@@ -1779,8 +1781,7 @@ final class Solana: Sendable {
             }
             let outcome: RPCRequestOutcome<SignatureStatusesResponse> = try await performRequest(
                 request: request,
-                endpoint: endpoint,
-                authorizationRecoveryBudget: authorizationBudget.replacementAttempt
+                requestAuthorization: requestAuthorization
             )
             switch outcome {
             case .retryableFailure:
@@ -1788,7 +1789,7 @@ final class Solana: Sendable {
             case .authorizationAcquisitionFailed:
                 let failure = confirmationFailure(signature: signature, failure: .rpcUnavailable)
                 lastFailure = failure
-                guard authorizationBudget.freshAuthorizationPoll.claim() else { throw failure }
+                guard freshAuthorizationPoll.claim() else { throw failure }
             case .authorizationRecoveryFailed(let statusCode, let response),
                  .authorizationRejectedAfterRecovery(let statusCode, let response):
                 let failure = confirmationFailure(
@@ -1796,7 +1797,7 @@ final class Solana: Sendable {
                     failure: response?.failure ?? .rpcError(message: Strings.failedToSend, code: statusCode)
                 )
                 lastFailure = failure
-                guard authorizationBudget.freshAuthorizationPoll.claim() else { throw failure }
+                guard freshAuthorizationPoll.claim() else { throw failure }
             case .response(let response):
                 if let failure = response.failure {
                     lastFailure = confirmationFailure(signature: signature, failure: failure)
@@ -1878,34 +1879,29 @@ final class Solana: Sendable {
 
     private func performRequest<Response: Decodable & Sendable>(
         request: URLRequest,
-        endpoint: RPCConfiguration.Endpoint,
-        authorizationRecoveryBudget: OneShotGate = OneShotGate(),
+        requestAuthorization: RPCRequestAuthorization,
         acceptsUnauthorizedResponse: @Sendable (Response) -> Bool = { _ in false }
     ) async throws -> RPCRequestOutcome<Response> {
         try Task.checkCancellation()
         let authorization: AlchemyAuthorization?
         do {
-            authorization = endpoint.allowsAlchemyAuthorization
-                ? try await authorizationProvider.authorization(for: endpoint.url)
-                : nil
+            authorization = try await requestAuthorization.acquire()
         } catch {
             try Task.checkCancellation()
             return .authorizationAcquisitionFailed
         }
         return try await executeRequest(
             request: request,
-            endpoint: endpoint,
             authorization: authorization,
-            authorizationRecoveryBudget: authorizationRecoveryBudget,
+            requestAuthorization: requestAuthorization,
             acceptsUnauthorizedResponse: acceptsUnauthorizedResponse
         )
     }
 
     private func executeRequest<Response: Decodable & Sendable>(
         request: URLRequest,
-        endpoint: RPCConfiguration.Endpoint,
         authorization: AlchemyAuthorization?,
-        authorizationRecoveryBudget: OneShotGate,
+        requestAuthorization: RPCRequestAuthorization,
         acceptsUnauthorizedResponse: @Sendable (Response) -> Bool
     ) async throws -> RPCRequestOutcome<Response> {
         try Task.checkCancellation()
@@ -1924,24 +1920,18 @@ final class Solana: Sendable {
            httpResponse.statusCode == 401,
            let authorization {
             if let decodedResponse, acceptsUnauthorizedResponse(decodedResponse) {
-                await authorizationProvider.invalidateAuthorization(
-                    afterUnauthorized: authorization, for: endpoint.url
-                )
+                await requestAuthorization.invalidate(afterUnauthorized: authorization)
                 try Task.checkCancellation()
                 return .response(decodedResponse)
             }
-            guard authorizationRecoveryBudget.claim() else {
-                await authorizationProvider.invalidateAuthorization(
-                    afterUnauthorized: authorization, for: endpoint.url
-                )
+            guard requestAuthorization.reserveUnauthorizedRecovery() else {
+                await requestAuthorization.invalidate(afterUnauthorized: authorization)
                 try Task.checkCancellation()
                 return .authorizationRejectedAfterRecovery(statusCode: 401, response: decodedResponse)
             }
             let replacement: AlchemyAuthorization?
             do {
-                replacement = try await authorizationProvider.replacementAuthorization(
-                    afterUnauthorized: authorization, for: endpoint.url
-                )
+                replacement = try await requestAuthorization.replacement(afterUnauthorized: authorization)
             } catch {
                 try Task.checkCancellation()
                 return .authorizationRecoveryFailed(statusCode: 401, response: decodedResponse)
@@ -1952,9 +1942,8 @@ final class Solana: Sendable {
             }
             return try await executeRequest(
                 request: request,
-                endpoint: endpoint,
                 authorization: replacement,
-                authorizationRecoveryBudget: authorizationRecoveryBudget,
+                requestAuthorization: requestAuthorization,
                 acceptsUnauthorizedResponse: acceptsUnauthorizedResponse
             )
         }

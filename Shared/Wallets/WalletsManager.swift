@@ -91,6 +91,9 @@ final class WalletsManager: NSObject {
 
     static let shared = WalletsManager()
     nonisolated let repository: WalletRepository
+#if os(iOS) || os(visionOS)
+    lazy var approvalVaultHost = SafariApprovalVaultHost.shared
+#endif
     private let reloadMetadata: @MainActor () -> Void
     private let publishLocalChange: @MainActor () -> Void
     private nonisolated let notifications: WalletStoreChangeNotifications
@@ -241,7 +244,7 @@ final class WalletsManager: NSObject {
     ) async throws -> WalletSnapshot {
         let change: WalletRepository.Change
 #if os(iOS) || os(visionOS)
-        change = try await SafariApprovalVaultHost.shared.performSourceMutation(operation)
+        change = try await approvalVaultHost.performSourceMutation(operation)
 #else
         change = try await operation({})
 #endif

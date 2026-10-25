@@ -372,15 +372,19 @@ final class EthereumRPC: EthereumRPCClient {
             throw retryPolicy.failureBeforeDispatch(EthereumRPCError.unknown)
         }
         var retryCount = 0
-        var didAttemptAuthorizationRecovery = false
+        let requestAuthorization = RPCRequestAuthorization(
+            url: endpoint.url,
+            allowsAlchemyAuthorization: endpoint.allowsAlchemyAuthorization,
+            provider: authorizationProvider
+        )
 
         while true {
             try Task.checkCancellation()
             var authorization: AlchemyAuthorization?
             var failure: Error = EthereumRPCError.unknown
             do {
+                authorization = try await requestAuthorization.acquire()
                 if endpoint.allowsAlchemyAuthorization {
-                    authorization = try await authorizationProvider.authorization(for: endpoint.url)
                     guard authorization != nil else { throw EthereumRPCError.unknown }
                 }
             } catch {
@@ -416,8 +420,7 @@ final class EthereumRPC: EthereumRPCClient {
                 try Task.checkCancellation()
                 if response.statusCode == 401, retryPolicy == .never {
                     if let rejected = authorization {
-                        await authorizationProvider.invalidateAuthorization(
-                            afterUnauthorized: rejected, for: endpoint.url)
+                        await requestAuthorization.invalidate(afterUnauthorized: rejected)
                         try Task.checkCancellation()
                     }
                     if let result = decoded?.result { return result }
@@ -427,16 +430,13 @@ final class EthereumRPC: EthereumRPCClient {
                     throw EthereumRPCError.unknown
                 }
                 if response.statusCode == 401, let rejected = authorization {
-                    guard !didAttemptAuthorizationRecovery else {
-                        await authorizationProvider.invalidateAuthorization(
-                            afterUnauthorized: rejected, for: endpoint.url)
+                    guard requestAuthorization.reserveUnauthorizedRecovery() else {
+                        await requestAuthorization.invalidate(afterUnauthorized: rejected)
                         try Task.checkCancellation()
                         throw EthereumRPCError.unknown
                     }
-                    didAttemptAuthorizationRecovery = true
                     do {
-                        let replacement = try await authorizationProvider.replacementAuthorization(
-                            afterUnauthorized: rejected, for: endpoint.url)
+                        let replacement = try await requestAuthorization.replacement(afterUnauthorized: rejected)
                         try Task.checkCancellation()
                         guard let replacement else {
                             failure = EthereumRPCError.unknown

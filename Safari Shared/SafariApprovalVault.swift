@@ -1030,14 +1030,14 @@ final class SafariApprovalVault: Sendable {
     @concurrent
     func unlockResult(
         reason: String,
-        authorization: WalletSigningAuthorization
+        scope: WalletSigningScope
     ) async -> WalletUnlockResult {
-        let approvedAccount = authorization.approvedAccount
+        let approvedAccount = scope.approvedAccount
 #if BW_SAFARI_VM_TESTING
-        let fixtureOperation = SafariVMFixtures.shared.capture(handle: authorization.handle)
+        let fixtureOperation = SafariVMFixtures.shared.capture(handle: scope.handle)
 #endif
         guard !Task.isCancelled,
-              Date() < authorization.signingDeadline,
+              Date() < scope.signingDeadline,
               approvedAccount.isValid,
               let record = withLock({ loadEnvelopeRecordLocked() }),
               let encryptedAccount = record.envelope.accounts.first(where: {
@@ -1075,7 +1075,7 @@ final class SafariApprovalVault: Sendable {
             )
 #endif
 #if BW_SAFARI_VM_TESTING
-            SafariVMFixtures.shared.event("authenticationCompleted", requestID: authorization.handle.id,
+            SafariVMFixtures.shared.event("authenticationCompleted", requestID: scope.handle.id,
                 metadata: ["succeeded": authenticated, "authentication": SafariVMFixtures.shared.isLocal ? "fixture" : "system"],
                 operation: fixtureOperation)
 #endif
@@ -1085,7 +1085,7 @@ final class SafariApprovalVault: Sendable {
                 encryptedAccount,
                 in: record,
                 context: context,
-                authorization: authorization
+                scope: scope
             ) else { return .unavailable }
             let source = SigningSource(
                 vault: self,
@@ -1095,15 +1095,12 @@ final class SafariApprovalVault: Sendable {
             )
             guard source.isCurrent(),
                   !Task.isCancelled,
-                  Date() < authorization.signingDeadline else {
+                  Date() < scope.signingDeadline else {
                 source.invalidate()
                 return .unavailable
             }
-            let session = WalletSigningSession(
-                source: source,
-                authorization: authorization
-            )
-            return .unlocked(catalog: unlocked.catalog, session: session)
+            let preparation = WalletSigningPreparation(source: source, scope: scope)
+            return .unlocked(catalog: unlocked.catalog, preparation: preparation)
         } onCancel: {
             context.invalidate()
         }
@@ -1113,21 +1110,21 @@ final class SafariApprovalVault: Sendable {
         _ encryptedAccount: EncryptedAccount,
         in record: EnvelopeRecord,
         context: SafariApprovalAuthenticationContext,
-        authorization: WalletSigningAuthorization
+        scope: WalletSigningScope
     ) -> (catalog: WalletReviewCatalog, signer: UnlockedAccountSigner)? {
         guard !Task.isCancelled,
-              Date() < authorization.signingDeadline else { return nil }
+              Date() < scope.signingDeadline else { return nil }
         let envelope = record.envelope
-        let approvedAccount = authorization.approvedAccount
+        let approvedAccount = scope.approvedAccount
         var key: Data
         do {
             let identity = SafariApprovalKeyIdentity(generation: envelope.generation, account: approvedAccount)
             key = try context.read { try keyStore.load(identity: identity, context: $0) }
 #if BW_SAFARI_VM_TESTING
-            SafariVMFixtures.shared.event("protectedKeyRead", requestID: authorization.handle.id,
+            SafariVMFixtures.shared.event("protectedKeyRead", requestID: scope.handle.id,
                 metadata: ["account": approvedAccount.normalizedAddress, "generation": envelope.generation.uuidString.lowercased(),
                            "storage": SafariVMFixtures.shared.isLocal ? "fixture" : "production"],
-                operation: SafariVMFixtures.shared.capture(handle: authorization.handle))
+                operation: SafariVMFixtures.shared.capture(handle: scope.handle))
 #endif
         } catch {
             SafariApprovalDiagnostics.record("load approval key", error: error)
@@ -1136,7 +1133,7 @@ final class SafariApprovalVault: Sendable {
         defer { key.resetBytes(in: 0..<key.count) }
         guard key.count == 32,
               !Task.isCancelled,
-              Date() < authorization.signingDeadline else { return nil }
+              Date() < scope.signingDeadline else { return nil }
 
         guard let sealed = try? AES.GCM.SealedBox(
                   nonce: AES.GCM.Nonce(data: encryptedAccount.nonce),
@@ -1158,7 +1155,7 @@ final class SafariApprovalVault: Sendable {
         defer { decrypted.resetBytes(in: 0..<decrypted.count) }
         guard decrypted.count == 32,
               !Task.isCancelled,
-              Date() < authorization.signingDeadline,
+              Date() < scope.signingDeadline,
               let privateKey = WalletPrivateKey(data: decrypted),
               let signer = UnlockedAccountSigner(
                   approvedAccount: approvedAccount,

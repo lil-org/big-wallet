@@ -6798,7 +6798,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                         clock: { [clock = clock!] in clock.date }
                     )
                 )
-                let signing = makeWalletSigningSessionForTesting(authorization: .init(
+                let signing = makeWalletSigningPreparationForTesting(scope: .init(
                     handle: claim.handle,
                     approvedAccount: try XCTUnwrap(approval.signingAccount),
                     signingDeadline: claim.executionDeadline
@@ -7428,7 +7428,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 clock: { [clock = clock!] in clock.date }
             )
         )
-        let signing = makeWalletSigningSessionForTesting(authorization: .init(
+        let signing = makeWalletSigningPreparationForTesting(scope: .init(
             handle: claim.handle,
             approvedAccount: try XCTUnwrap(approval.signingAccount),
             signingDeadline: claim.executionDeadline

@@ -103,7 +103,7 @@ Actual task cancellation stops uncommitted work on both native and popup approva
 
 The final cancellation check precedes synchronous durable publication. Once a checkpoint or terminal write starts, its outcome wins: a successful broadcast checkpoint may dispatch once even if cancellation arrives during the write. An uncertain checkpoint never dispatches from that attempt and is resolved through durable observation or recovery. Confirmed checkpoints and completed results survive caller cancellation; recovery cannot repeat signing, restore consumed consent, or send the transaction again.
 
-Each signing session owns one source that binds the account, signing material, freshness checks, and any commit lease. Retiring a vault source's key leaves its captured identity available for result publication; invalidating the source prevents further use. A commit lease arriving after cancellation is released instead of transferred.
+Unlocking produces a request-scoped signing preparation that cannot sign or acquire a commit lease. After authorization, the executor consumes that preparation once to create a session bound to the approved operation. Failed consumption retires the source; validation failures do not consume the permit's signing slot. After transfer, the session owns the source, and invalidating the old preparation has no effect on it. Retiring a vault source's key leaves its captured identity available for result publication; invalidating the source prevents further use. A commit lease arriving after cancellation is released instead of transferred.
 
 The execution lifecycle alone admits and consumes signing attempts; the session
 owns key retirement and commit-lease cleanup. Signing produces execution-bound
@@ -125,6 +125,8 @@ The worker retrieves responses through one native poll, with maintenance selecte
 Removing a wallet or account durably records its revocation before changing the wallet and clears its saved names. Each Safari profile applies outstanding revocations before its next authoritative operation, so an unrelated damaged profile does not block removal. Reimporting or re-enabling the account requires reconnecting. Committed transaction results remain available for recovery until their normal expiry.
 
 Revocation history retains the latest removal of each wallet or account without expiry; repeated removals coalesce. If that history is lost or structurally corrupted, a new history generation invalidates old site permissions as profiles are accessed while preserving request and transaction recovery records. Unreadable storage or a failed durable write still prevents removal.
+
+The account editor merges external account changes into its open draft. Local additions and removals are reapplied to the latest wallet; untouched accounts follow that wallet's current state. An edit already satisfied externally becomes clean, so later external changes apply normally. Existing preview pages remain available, and only removal or replacement of the wallet closes the editor. Saving still merges against current storage and cannot remove the final account.
 
 ### Password setup and secret exports
 

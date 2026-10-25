@@ -166,7 +166,7 @@ struct WalletCatalogIdentity: Equatable, Sendable {
 }
 
 enum WalletUnlockResult: Sendable {
-    case unlocked(catalog: WalletReviewCatalog, session: WalletSigningSession)
+    case unlocked(catalog: WalletReviewCatalog, preparation: WalletSigningPreparation)
     case canceled
     case unavailable
 }
@@ -223,8 +223,8 @@ protocol WalletSigningSource: AnyObject, Sendable {
     func sign(_ operation: ApprovedWalletSigningOperation) async ->
         Result<WalletSigningOutput, WalletSigningFailure>
 
+    // Cleanup is idempotent; retirement preserves the separate commit capability.
     func retireSigningMaterial()
-
     func invalidate()
 }
 
@@ -247,13 +247,13 @@ enum WalletSigningOutput: Sendable {
 
 }
 
-struct WalletSigningAuthorization: Equatable, Sendable {
+struct WalletSigningScope: Equatable, Sendable {
     let handle: ExtensionBridge.Handle
     let approvedAccount: WalletAccountDescriptor
     let signingDeadline: Date
 }
 
-extension WalletSigningAuthorization {
+extension WalletSigningScope {
     init?(permit: ExtensionBridge.ApprovedExecutionPermit) {
         guard case .signing(let approvedAccount, let payload) = permit.approval.kind,
               permit.request.id == permit.handle.id,
@@ -449,23 +449,23 @@ struct ApprovedWalletSigningOperation: Sendable {
         }
     }
 
-    let authorization: WalletSigningAuthorization
+    let scope: WalletSigningScope
     let payload: Payload
     fileprivate let permit: ExtensionBridge.ApprovedExecutionPermit
 
-    var handle: ExtensionBridge.Handle { authorization.handle }
-    var approvedAccount: WalletAccountDescriptor { authorization.approvedAccount }
-    var deadline: Date { authorization.signingDeadline }
+    var handle: ExtensionBridge.Handle { scope.handle }
+    var approvedAccount: WalletAccountDescriptor { scope.approvedAccount }
+    var deadline: Date { scope.signingDeadline }
     var isAuthorizedToSign: Bool { permit.isSigningAuthorized }
 
     fileprivate init?(
         permit: ExtensionBridge.ApprovedExecutionPermit,
-        authorization: WalletSigningAuthorization
+        scope: WalletSigningScope
     ) {
         guard case .signing(_, let payload) = permit.approval.kind,
               permit.issueSigningOperation() else { return nil }
         self.permit = permit
-        self.authorization = authorization
+        self.scope = scope
         self.payload = payload
     }
 
@@ -845,103 +845,135 @@ final class UnlockedAccountSigner: Sendable {
     }
 }
 
-@MainActor
-final class WalletSigningSession: WalletSigning {
-    private enum ResourcePhase: Sendable {
-        case materialAvailable
-        case materialRetired
-        case acquiringCommit
-        case commitConsumed
-        case invalidated
-
-        var permitsCommit: Bool {
-            switch self {
-            case .materialAvailable, .materialRetired: true
-            case .acquiringCommit, .commitConsumed, .invalidated: false
-            }
-        }
-    }
-
-    private struct State: Sendable {
-        var phase = ResourcePhase.materialAvailable
-        var operation: ApprovedWalletSigningOperation?
-    }
-
-    nonisolated let authorization: WalletSigningAuthorization
-    nonisolated var approvedAccount: WalletAccountDescriptor { authorization.approvedAccount }
-    nonisolated let commit: WalletSigningCommit
-
-    private nonisolated let state = Mutex(State())
-    private nonisolated let source: any WalletSigningSource
+final class WalletSigningPreparation: Sendable {
+    let scope: WalletSigningScope
+    private let source: Mutex<(any WalletSigningSource)?>
+    private let commit: WalletSigningCommit
     private let clock: @MainActor @Sendable () -> Date
 
-    nonisolated init(
+    var approvedAccount: WalletAccountDescriptor { scope.approvedAccount }
+    var requiresCommitLease: Bool {
+        if case .vault = commit { return true }
+        return false
+    }
+
+    init(
         source: any WalletSigningSource,
-        authorization: WalletSigningAuthorization,
+        scope: WalletSigningScope,
         clock: @escaping @MainActor @Sendable () -> Date = Date.init
     ) {
-        self.source = source
-        self.authorization = authorization
+        self.source = Mutex(source)
+        self.scope = scope
         commit = source.commit
         self.clock = clock
     }
 
+    @MainActor
     static func fromSource(
-        authorization: WalletSigningAuthorization,
+        scope: WalletSigningScope,
         walletsManager: WalletsManager = .shared,
         clock: @escaping @MainActor @Sendable () -> Date = Date.init
-    ) -> WalletSigningSession {
-        let source = RepositoryWalletSigningSource(approvedAccount: authorization.approvedAccount, repository: walletsManager.repository)
-        return WalletSigningSession(
-            source: source, authorization: authorization, clock: clock
-        )
+    ) -> WalletSigningPreparation {
+        let source = RepositoryWalletSigningSource(approvedAccount: scope.approvedAccount, repository: walletsManager.repository)
+        return WalletSigningPreparation(source: source, scope: scope, clock: clock)
     }
 
     func validateCurrent() -> Bool {
-        guard source.approvedAccount == approvedAccount, source.isCurrent() else {
+        guard let current = source.withLock({ $0 }) else { return false }
+        guard current.approvedAccount == approvedAccount, current.isCurrent() else {
             invalidate()
             return false
         }
-        return state.withLock { $0.phase.permitsCommit }
+        return source.withLock { $0 === current }
     }
 
-    func attach(permit: ExtensionBridge.ApprovedExecutionPermit) -> Bool {
-        guard WalletSigningAuthorization(permit: permit) == authorization,
-              clock() < authorization.signingDeadline, validateCurrent() else { return false }
-        return state.withLock { state in
-            guard state.operation == nil, case .materialAvailable = state.phase,
-                  let operation = ApprovedWalletSigningOperation(
-                    permit: permit, authorization: authorization
-                  ) else { return false }
-            state.operation = operation
-            return true
+    @MainActor
+    func consume(permit: ExtensionBridge.ApprovedExecutionPermit) -> WalletSigningSession? {
+        guard let source = takeSource() else { return nil }
+        var transferred = false
+        defer { if !transferred { source.invalidate() } }
+        guard !Task.isCancelled,
+              WalletSigningScope(permit: permit) == scope,
+              source.approvedAccount == approvedAccount,
+              clock() < scope.signingDeadline,
+              source.isCurrent(),
+              !Task.isCancelled,
+              clock() < scope.signingDeadline,
+              let operation = ApprovedWalletSigningOperation(permit: permit, scope: scope)
+        else { return nil }
+        let session = WalletSigningSession(source: source, commit: commit, operation: operation, clock: clock)
+        transferred = true
+        return session
+    }
+
+    func invalidate() {
+        takeSource()?.invalidate()
+    }
+
+    private func takeSource() -> (any WalletSigningSource)? {
+        source.withLock { source in
+            defer { source = nil }
+            return source
         }
+    }
+
+    deinit { invalidate() }
+}
+
+@MainActor
+final class WalletSigningSession: WalletSigning {
+    private enum Phase: Sendable {
+        case active
+        case acquiringCommit
+        case closed
+    }
+
+    private nonisolated let phase = Mutex(Phase.active)
+    private nonisolated let source: any WalletSigningSource
+    private nonisolated let operation: ApprovedWalletSigningOperation
+    private let commit: WalletSigningCommit
+    private let clock: @MainActor @Sendable () -> Date
+
+    nonisolated var approvedAccount: WalletAccountDescriptor { operation.approvedAccount }
+
+    fileprivate nonisolated init(
+        source: any WalletSigningSource,
+        commit: WalletSigningCommit,
+        operation: ApprovedWalletSigningOperation,
+        clock: @escaping @MainActor @Sendable () -> Date
+    ) {
+        self.source = source
+        self.commit = commit
+        self.operation = operation
+        self.clock = clock
     }
 
     func sign() async -> Result<WalletSigningOutput, WalletSigningFailure> {
 #if BW_SAFARI_VM_TESTING
-        let operation = SafariVMFixtures.shared.capture(handle: authorization.handle)
-        return await SafariVMFixtures.$operation.withValue(operation) { await performSigning() }
+        let fixtureOperation = SafariVMFixtures.shared.capture(handle: operation.handle)
+        return await SafariVMFixtures.$operation.withValue(fixtureOperation) { await performSigning() }
 #else
         return await performSigning()
 #endif
     }
 
     private func performSigning() async -> Result<WalletSigningOutput, WalletSigningFailure> {
-        let binding = state.withLock { state -> ApprovedWalletSigningOperation? in
-            guard let operation = state.operation, operation.beginAttempt() else { return nil }
-            return operation
+        guard phase.withLock({ phase in
+            guard case .active = phase else { return false }
+            return operation.beginAttempt()
+        }) else { return .failure(.authorizationUnavailable) }
+        defer {
+            operation.finishAttempt()
+            source.retireSigningMaterial()
         }
-        guard let binding else { return .failure(.authorizationUnavailable) }
-        defer { finishSigningAttempt(binding) }
         return await withTaskCancellationHandler {
 #if BW_SAFARI_VM_TESTING
-            do { try await SafariVMFixtures.shared.checkpoint("beforeSigning", requestID: authorization.handle.id) }
+            do { try await SafariVMFixtures.shared.checkpoint("beforeSigning", requestID: operation.handle.id) }
             catch { return .failure(.authorizationUnavailable) }
 #endif
-            guard await authorizationIsCurrent(binding) else { return .failure(.authorizationUnavailable) }
+            guard await authorizationIsCurrent() else { return .failure(.authorizationUnavailable) }
 #if BW_SAFARI_VM_TESTING
-            if case .ethereumTransaction(let transaction, let network) = binding.payload {
+            if case .ethereumTransaction(let transaction, let network) = operation.payload {
                 var approved = EthereumRPC.estimateGasTransactionObject(for: transaction)
                 approved["chainId"] = network.network.chainIdHexString
                 approved["nonce"] = transaction.nonce.flatMap { EthereumQuantity.parseUInt256($0, allowPrefixless: true)?.toHexString(withPrefix: true) }
@@ -949,48 +981,37 @@ final class WalletSigningSession: WalletSigning {
                 approved["to"] = approved["to"] ?? "0x"
                 approved["type"] = approved["type"] ?? "0x0"
                 approved["accessList"] = approved["accessList"] ?? []
-                SafariVMFixtures.shared.event("authorizedTransaction", requestID: authorization.handle.id,
-                    metadata: ["executionID": binding.permit.executionID.uuidString.lowercased(), "transaction": approved])
+                SafariVMFixtures.shared.event("authorizedTransaction", requestID: operation.handle.id,
+                    metadata: ["executionID": operation.permit.executionID.uuidString.lowercased(), "transaction": approved])
             }
-            SafariVMFixtures.shared.event("signingStarted", requestID: authorization.handle.id,
-                metadata: ["executionID": binding.permit.executionID.uuidString.lowercased(), "account": approvedAccount.normalizedAddress])
+            SafariVMFixtures.shared.event("signingStarted", requestID: operation.handle.id,
+                metadata: ["executionID": operation.permit.executionID.uuidString.lowercased(), "account": approvedAccount.normalizedAddress])
 #endif
-            let result = await source.sign(binding)
+            let result = await source.sign(operation)
 #if BW_SAFARI_VM_TESTING
-            SafariVMFixtures.shared.event("signingFinished", requestID: authorization.handle.id,
-                metadata: ["executionID": binding.permit.executionID.uuidString.lowercased()])
-            do { try await SafariVMFixtures.shared.checkpoint("afterSigning", requestID: authorization.handle.id) }
+            SafariVMFixtures.shared.event("signingFinished", requestID: operation.handle.id,
+                metadata: ["executionID": operation.permit.executionID.uuidString.lowercased()])
+            do { try await SafariVMFixtures.shared.checkpoint("afterSigning", requestID: operation.handle.id) }
             catch { return .failure(.authorizationUnavailable) }
 #endif
             if case .failure(.authorizationUnavailable) = result { return result }
-            guard await authorizationIsCurrent(binding) else { return .failure(.authorizationUnavailable) }
+            guard await authorizationIsCurrent() else { return .failure(.authorizationUnavailable) }
             return result
         } onCancel: {
             self.invalidate()
         }
     }
 
-    private func authorizationIsCurrent(_ operation: ApprovedWalletSigningOperation) async -> Bool {
-        guard isLocallyAuthorizedToSign(operation) else { return false }
-        guard await awaitBackgroundOperation({ [source] in
+    private func authorizationIsCurrent() async -> Bool {
+        guard isLocallyAuthorizedToSign else { return false }
+        guard await awaitBackgroundOperation({ [source, operation] in
             operation.withCurrentAuthority { source.isCurrent() } ?? false
         }) == true else { return false }
-        return isLocallyAuthorizedToSign(operation)
+        return isLocallyAuthorizedToSign
     }
 
-    private func isLocallyAuthorizedToSign(_ binding: ApprovedWalletSigningOperation) -> Bool {
-        !Task.isCancelled && clock() < authorization.signingDeadline &&
-            binding.isAttemptCurrent
-    }
-
-    private nonisolated func finishSigningAttempt(_ binding: ApprovedWalletSigningOperation) {
-        let retiresMaterial = state.withLock { state in
-            binding.finishAttempt()
-            guard case .materialAvailable = state.phase else { return false }
-            state.phase = .materialRetired
-            return true
-        }
-        if retiresMaterial { source.retireSigningMaterial() }
+    private var isLocallyAuthorizedToSign: Bool {
+        !Task.isCancelled && clock() < operation.deadline && operation.isAttemptCurrent
     }
 
     func takeCommit() async -> WalletSigningCommit.Outcome {
@@ -998,20 +1019,13 @@ final class WalletSigningSession: WalletSigning {
             invalidate()
             return .unavailable
         }
-        guard source.approvedAccount == approvedAccount else { return .unavailable }
-        let retired = state.withLock { state -> (operation: ApprovedWalletSigningOperation?, phase: ResourcePhase)? in
-            guard state.phase.permitsCommit else { return nil }
-            let operation = state.operation
-            operation?.finishAttempt()
-            state.operation = nil
-            let phase = state.phase
-            state.phase = .acquiringCommit
-            return (operation, phase)
-        }
-        guard let retired else { return .unavailable }
-        withExtendedLifetime(retired.operation) {
-            if case .materialAvailable = retired.phase { source.retireSigningMaterial() }
-        }
+        guard phase.withLock({ phase in
+            guard case .active = phase else { return false }
+            phase = .acquiringCommit
+            operation.finishAttempt()
+            return true
+        }) else { return .unavailable }
+        source.retireSigningMaterial()
         return await withTaskCancellationHandler {
             let outcome: WalletSigningCommit.Outcome
             switch commit {
@@ -1024,9 +1038,9 @@ final class WalletSigningSession: WalletSigning {
                     outcome = .unavailable
                 }
             }
-            let canTransfer = state.withLock { state in
-                guard case .acquiringCommit = state.phase else { return false }
-                state.phase = .commitConsumed
+            let canTransfer = phase.withLock { phase in
+                guard case .acquiringCommit = phase else { return false }
+                phase = .closed
                 return !Task.isCancelled
             }
             guard canTransfer else {
@@ -1040,20 +1054,12 @@ final class WalletSigningSession: WalletSigning {
     }
 
     nonisolated func invalidate() {
-        let retired = state.withLock { state -> (operation: ApprovedWalletSigningOperation?, invalidatesSource: Bool) in
-            if case .invalidated = state.phase { return (nil, false) }
-            let operation = state.operation
-            operation?.finishAttempt()
-            state.operation = nil
-            state.phase = .invalidated
-            return (operation, true)
+        phase.withLock { phase in
+            phase = .closed
+            operation.finishAttempt()
         }
-        withExtendedLifetime(retired.operation) {
-            if retired.invalidatesSource { source.invalidate() }
-        }
+        source.invalidate()
     }
 
-    deinit {
-        invalidate()
-    }
+    deinit { invalidate() }
 }

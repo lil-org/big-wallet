@@ -91,9 +91,13 @@ final class AccountPreviewState {
     }
 
     func reset() {
+        selectedKeys = Set(wallet.accounts.map(\.previewAccountKey))
+        restartInitialPreview()
+    }
+
+    private func restartInitialPreview() {
         invalidate()
         accounts.removeAll()
-        selectedKeys = Set(wallet.accounts.map(\.previewAccountKey))
         let wallet = wallet
         let makeSession = makeSession
         let generation = generation
@@ -162,15 +166,14 @@ final class AccountPreviewState {
         }
         let previousKeys = Set(self.wallet.accounts.map(\.previewAccountKey))
         let currentKeys = Set(wallet.accounts.map(\.previewAccountKey))
-        if previousKeys == currentKeys {
-            self.wallet = wallet
+        let addedKeys = selectedKeys.subtracting(previousKeys)
+        let removedKeys = previousKeys.subtracting(selectedKeys)
+        selectedKeys = currentKeys.subtracting(removedKeys).union(addedKeys)
+        self.wallet = wallet
+        if session != nil {
             didChange(.reload)
-        } else if hasChanges {
-            invalidate()
-            return .close
         } else {
-            self.wallet = wallet
-            reset()
+            restartInitialPreview()
         }
         return .keepEditing
     }

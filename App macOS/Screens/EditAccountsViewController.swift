@@ -7,8 +7,8 @@ class EditAccountsViewController: NSViewController {
     var wallet: WalletSnapshot!
     var getBackToRect: CGRect?
 
-    private let walletsManager = WalletsManager.shared
-    private var previewState: AccountPreviewState!
+    var walletsManager = WalletsManager.shared
+    private(set) var previewState: AccountPreviewState!
     private let previewAccountsPreloadThreshold = 4
     private var previewLayoutTask: Task<Void, Never>?
     private var mutationTask: Task<Void, Never>?
@@ -32,13 +32,13 @@ class EditAccountsViewController: NSViewController {
         okButton.title = Strings.ok
         cancelButton.title = Strings.cancel
         titleLabel.stringValue = Strings.editAccounts.replacingOccurrences(of: " ", with: "\n")
-        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
         previewState = AccountPreviewState(
             wallet: wallet,
             makeSession: { [repository = walletsManager.repository] in try await repository.previewSession(wallet: $0) },
             didChange: { [weak self] in self?.previewDidChange($0) }
         )
         previewState.reset()
+        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
     }
 
     override func viewDidAppear() {

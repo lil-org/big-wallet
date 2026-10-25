@@ -29,17 +29,18 @@ final class SafariRPCClient: Sendable {
     ) async throws -> RPCResponseToExtension {
         do {
             try execution.checkCancellationAndDeadline()
-            let authorization: AlchemyAuthorization?
-            if endpoint.allowsAlchemyAuthorization {
-                authorization = try await authorizationProvider.authorization(for: endpoint.url)
-            } else {
-                authorization = nil
-            }
+            let requestAuthorization = RPCRequestAuthorization(
+                url: endpoint.url,
+                allowsAlchemyAuthorization: endpoint.allowsAlchemyAuthorization,
+                provider: authorizationProvider
+            )
+            let authorization = try await requestAuthorization.acquire()
             try execution.checkCancellationAndDeadline()
             return try await performSend(
                 endpoint: endpoint,
                 rpcRequest: request,
                 authorization: authorization,
+                requestAuthorization: requestAuthorization,
                 execution: execution
             )
         } catch {
@@ -54,24 +55,21 @@ final class SafariRPCClient: Sendable {
         endpoint: EthereumRPCEndpoint,
         rpcRequest: ValidatedRPCRequest,
         authorization: AlchemyAuthorization?,
+        requestAuthorization: RPCRequestAuthorization,
         execution: SafariRPCExecution
     ) async throws -> RPCResponseToExtension {
         var authorization = authorization
-        var didRetryUnauthorized = false
         while true {
             try execution.checkCancellationAndDeadline()
             switch try await performAttempt(
                 endpoint: endpoint, rpcRequest: rpcRequest, authorization: authorization,
-                didRetryUnauthorized: didRetryUnauthorized, execution: execution
+                requestAuthorization: requestAuthorization, execution: execution
             ) {
             case .retryUnauthorized:
                 guard let rejected = authorization else { throw SafariRPCFailure.transport }
-                authorization = try await authorizationProvider.replacementAuthorization(
-                    afterUnauthorized: rejected, for: endpoint.url
-                )
+                authorization = try await requestAuthorization.replacement(afterUnauthorized: rejected)
                 try execution.checkCancellationAndDeadline()
                 guard authorization != nil else { throw SafariRPCFailure.transport }
-                didRetryUnauthorized = true
             case .completed(let result):
                 return result
             }
@@ -82,7 +80,7 @@ final class SafariRPCClient: Sendable {
         endpoint: EthereumRPCEndpoint,
         rpcRequest: ValidatedRPCRequest,
         authorization: AlchemyAuthorization?,
-        didRetryUnauthorized: Bool,
+        requestAuthorization: RPCRequestAuthorization,
         execution: SafariRPCExecution
     ) async throws -> AttemptResult {
         var request = URLRequest(url: endpoint.url)
@@ -109,13 +107,15 @@ final class SafariRPCClient: Sendable {
             try execution.checkCancellationAndDeadline()
         } catch {
             if transfer.receivedUnauthorized, let authorization {
-                await authorizationProvider.invalidateAuthorization(afterUnauthorized: authorization, for: endpoint.url)
+                await requestAuthorization.invalidate(afterUnauthorized: authorization)
             }
             throw error
         }
         if received.response.statusCode == 401, let authorization {
-            if !didRetryUnauthorized, rpcRequest.allowsUnauthorizedReplay { return .retryUnauthorized }
-            await authorizationProvider.invalidateAuthorization(afterUnauthorized: authorization, for: endpoint.url)
+            if rpcRequest.allowsUnauthorizedReplay, requestAuthorization.reserveUnauthorizedRecovery() {
+                return .retryUnauthorized
+            }
+            await requestAuthorization.invalidate(afterUnauthorized: authorization)
             try execution.checkCancellationAndDeadline()
         }
         // Exclude UTF-16/32 autodetection so parsing uses the encoding scanned below.

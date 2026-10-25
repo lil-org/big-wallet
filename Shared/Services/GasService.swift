@@ -3,18 +3,6 @@
 import Foundation
 import Synchronization
 
-final class OneShotGate: Sendable {
-    private let isAvailable = Mutex(true)
-
-    func claim() -> Bool {
-        isAvailable.withLock { available in
-            guard available else { return false }
-            available = false
-            return true
-        }
-    }
-}
-
 actor GasService {
 
     struct Info: Equatable, Sendable {

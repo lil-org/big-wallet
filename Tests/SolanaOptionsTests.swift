@@ -604,6 +604,75 @@ final class SolanaOptionsTests: XCTestCase {
         XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
     }
 
+    func testSubmissionAndConfirmationHaveIndependentRecoveryBudgets() async throws {
+        let recorder = SolanaRPCRequestRecorder()
+        let requestCount = LockedSolanaCounter()
+        let session = makeRPCSession { request in
+            _ = try recorder.record(request)
+            switch requestCount.increment() {
+            case 1, 3, 4:
+                return (
+                    try Self.httpResponse(for: request, statusCode: 401),
+                    Data(#"{"jsonrpc":"2.0","id":1,"error":{"code":401,"message":"unauthorized"}}"#.utf8)
+                )
+            case 2:
+                return (
+                    try Self.httpResponse(for: request),
+                    Data(#"{"jsonrpc":"2.0","id":1,"result":"test-signature"}"#.utf8)
+                )
+            case 5:
+                return (
+                    try Self.httpResponse(for: request),
+                    Data(#"{"jsonrpc":"2.0","id":1,"result":{"value":[{"confirmations":null,"err":null,"confirmationStatus":"finalized"}]}}"#.utf8)
+                )
+            default:
+                throw SolanaRPCStubError.unexpectedRequest
+            }
+        }
+        defer {
+            session.invalidateAndCancel()
+            SolanaOptionsURLProtocol.removeRequestHandler()
+        }
+        let provider = SolanaAuthorizationProviderStub(
+            token: "initial",
+            replacementTokens: ["submission-replacement", "confirmation-replacement"],
+            tokenAfterInvalidation: "fresh"
+        )
+        let clock = TestClock()
+        let solana = Solana(
+            urlSession: session,
+            rpcConfiguration: .bundled,
+            authorizationProvider: provider,
+            timing: .init(now: { clock.date }, sleep: { interval in
+                try Task.checkCancellation()
+                clock.advance(by: UInt64(interval * 1_000_000_000))
+            })
+        )
+        let signedTransaction = try signedTransactionFixture()
+
+        let signature = try await solana.sendSignedTransaction(
+            signedTransaction,
+            cluster: .mainnetBeta,
+            sendOptions: .init(confirmationCommitment: .finalized)
+        )
+
+        XCTAssertEqual(signature, "test-signature")
+        let requests = recorder.snapshot()
+        XCTAssertEqual(requests.map(\.method), [
+            "sendTransaction", "sendTransaction",
+            "getSignatureStatuses", "getSignatureStatuses", "getSignatureStatuses",
+        ])
+        XCTAssertEqual(requests.map(\.authorization), [
+            "Bearer initial", "Bearer submission-replacement", "Bearer submission-replacement",
+            "Bearer confirmation-replacement", "Bearer fresh",
+        ])
+        XCTAssertEqual(provider.authorizationCallCount, 3)
+        XCTAssertEqual(provider.replacementCallCount, 2)
+        XCTAssertEqual(provider.invalidatedTokens, ["confirmation-replacement"])
+        XCTAssertEqual(Set(requests.filter { $0.method == "sendTransaction" }.map(\.body)).count, 1)
+        XCTAssertEqual(Set(requests.filter { $0.method == "getSignatureStatuses" }.map(\.body)).count, 1)
+    }
+
     func testSolanaPersistentSubmission401IsTerminalAfterOneReplacement()
         async throws {
         let configuration = Solana.RPCConfiguration.bundled
@@ -1588,16 +1657,18 @@ private final class SolanaAuthorizationProviderStub: Big_Wallet.AlchemyAuthoriza
     }
     private let state: Mutex<State>
     private let replacementToken: String?
+    private let replacementTokens: [String]?
     private let replacementError: Error?
     private let tokenAfterInvalidation: String?
     private let authorizationErrorStartingAtCall: Int?
     private let authorizedHosts = Set(["solana-mainnet.g.alchemy.com", "solana-devnet.g.alchemy.com"])
 
-    init(token: String? = nil, replacementToken: String? = nil,
+    init(token: String? = nil, replacementToken: String? = nil, replacementTokens: [String]? = nil,
          replacementError: Error? = nil, tokenAfterInvalidation: String? = nil,
          authorizationErrorStartingAtCall: Int? = nil) {
         self.state = Mutex(State(currentToken: token))
         self.replacementToken = replacementToken
+        self.replacementTokens = replacementTokens
         self.replacementError = replacementError
         self.tokenAfterInvalidation = tokenAfterInvalidation
         self.authorizationErrorStartingAtCall = authorizationErrorStartingAtCall
@@ -1626,8 +1697,10 @@ private final class SolanaAuthorizationProviderStub: Big_Wallet.AlchemyAuthoriza
         let token = state.withLock { state -> String? in
             state.replacementCalls += 1
             guard authorizedHosts.contains(url.host ?? "") else { return nil }
-            state.currentToken = replacementToken
-            return replacementToken
+            let index = state.replacementCalls - 1
+            let replacement = replacementTokens.flatMap { $0.indices.contains(index) ? $0[index] : nil } ?? replacementToken
+            state.currentToken = replacement
+            return replacement
         }
         if let replacementError { throw replacementError }
         return token.map { Big_Wallet.AlchemyAuthorization(token: $0) }

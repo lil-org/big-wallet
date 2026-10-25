@@ -28,6 +28,9 @@ var isPendingRequestAvailable = BigWalletBridgeWire.isPendingRequestAvailable;
 var isRecord = BigWalletBridgeWire.isRecord;
 var isValidRequestId = BigWalletBridgeWire.isValidRequestId;
 var withTimeout = BigWalletBridgeWire.withTimeout;
+const sendNativeMessage = BigWalletBridgeWire.createTrustedNativeMessageSender({
+    sendRawNativeMessage: message => browser.runtime.sendNativeMessage("org.lil.wallet", message),
+});
 
 function canonicalJSONString(value) {
     return JSON.stringify(value, (_, item) => isRecord(item)
@@ -1041,10 +1044,6 @@ async function captureNativeContext() {
     return BigWalletBridgeWire.popupNativeContext(tab, extensionPrivateBrowsing());
 }
 
-function sendRawNativeMessage(message) {
-    return browser.runtime.sendNativeMessage("org.lil.wallet", message);
-}
-
 async function nativeMessage(
     subject,
     id,
@@ -1078,11 +1077,7 @@ async function nativeMessage(
     const command = decodeWireMessage("NativeCommand", message);
     if (!command) { return Promise.reject(new TypeError("Invalid native request")); }
     const context = await captureNativeContext();
-    if (!context) { return Promise.reject(new TypeError("Native request context is unavailable")); }
-    return sendRawNativeMessage({
-        ...command,
-        [BigWalletBridgeWire.NATIVE_CONTEXT_KEY]: context,
-    });
+    return sendNativeMessage(command, context);
 }
 
 async function settleNativeMessage(pendingResponse, nativeOperation = false) {

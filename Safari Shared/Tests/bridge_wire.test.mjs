@@ -652,6 +652,29 @@ test("stamps validated context on the real first native message", async () => {
     assert.equal(messages[1].__bwContext.privateBrowsing, true);
 });
 
+test("native sender preserves popup approval tokens and transport failures", async () => {
+    const messages = [];
+    const failure = new Error("Native transport unavailable");
+    const send = wire.createTrustedNativeMessageSender({
+        async sendRawNativeMessage(message) {
+            messages.push(normalized(message));
+            if (messages.length === 2) { throw failure; }
+            return {id: message.id, result: true};
+        },
+    });
+    const context = wire.popupNativeContext({incognito: false}, false);
+    const command = {
+        subject: "approveRequest", id: 7, requestToken: token,
+        reviewToken: "223e4567-e89b-12d3-a456-426614174000",
+        payload: {cluster: "devnet"}, workflowVersion: 4,
+    };
+
+    assert.deepEqual(await send(command, context), {id: 7, result: true});
+    assert.deepEqual(messages[0], {...command, __bwContext: normalized(context)});
+    await assert.rejects(send(command, context), error => error === failure);
+    assert.deepEqual(messages[1], messages[0]);
+});
+
 test("source contexts preserve optional document metadata and reject conflicting origins", () => {
     const request = {subject: "rpc"};
     const sender = {...runtimeSenders.content, origin: "https://wallet.example", documentId: "document-one"};

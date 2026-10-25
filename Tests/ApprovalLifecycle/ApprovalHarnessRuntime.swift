@@ -229,8 +229,8 @@ final class HarnessRuntime {
 
     private lazy var finalizer = NativeApprovalFinalizer(store: store, executionEnvironment: executionEnvironment,
         refreshWalletCatalog: { [wallets] in guard await wallets.reloadFromStore() else { return nil }; return wallets.reviewCatalog() },
-        makeSigningSession: { [wallets, clock = fixtures.clock] authorization in
-            WalletSigningSession.fromSource(authorization: authorization, walletsManager: wallets, clock: clock.now)
+        makeSigningPreparation: { [wallets, clock = fixtures.clock] authorization in
+            WalletSigningPreparation.fromSource(scope: authorization, walletsManager: wallets, clock: clock.now)
         }, networkResolver: networks.approval, customDefinitionResult: networks.matches)
 
     private lazy var admission = DappRequestAdmission(store: store, requestProcessor: processor,
@@ -245,7 +245,7 @@ final class HarnessRuntime {
             guard authenticationResult else { return .canceled }
             guard await wallets.reloadFromStore(), let catalog = wallets.reviewCatalog() else { return .unavailable }
             let source = HarnessPopupSigningSource(approvedAccount: authorization.approvedAccount, repository: wallets.repository)
-            return .unlocked(catalog: catalog, session: WalletSigningSession(source: source, authorization: authorization, clock: fixtures.clock.now))
+            return .unlocked(catalog: catalog, preparation: WalletSigningPreparation(source: source, scope: authorization, clock: fixtures.clock.now))
         }, reloadMetadata: {}), loadsTransactionContext: false, transactionApprovalOperations: transactionOperations,
         invalidateNetworkCache: {}, selectionNetworkResolver: { [networks] in networks.network($0) },
         approvalNetworkResolver: networks.approval, executionEnvironment: executionEnvironment,

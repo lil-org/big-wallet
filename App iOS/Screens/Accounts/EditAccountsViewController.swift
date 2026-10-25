@@ -5,9 +5,9 @@ import UIKit
 class EditAccountsViewController: UIViewController {
 
     var wallet: WalletSnapshot!
-    private let walletsManager = WalletsManager.shared
+    var walletsManager = WalletsManager.shared
     private var layoutTask: Task<Void, Never>?
-    private var previewState: AccountPreviewState!
+    private(set) var previewState: AccountPreviewState!
     private let previewAccountsPreloadThreshold = 4
     private var previewLayoutTask: Task<Void, Never>?
     private var mutationTask: Task<Void, Never>?
@@ -30,13 +30,14 @@ class EditAccountsViewController: UIViewController {
         super.viewDidLoad()
         okButton.setTitle(Strings.ok, for: .normal)
         configureAdaptiveLargeTitle(Strings.editAccounts, tableView: tableView)
-        navigationItem.leftBarButtonItem = UIBarButtonItem(title: Strings.cancel, style: .plain, target: self, action: #selector(dismissAnimated))
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: Strings.cancel, style: .plain, target: self, action: #selector(closeEditor))
         previewState = AccountPreviewState(
             wallet: wallet,
             makeSession: { [repository = walletsManager.repository] in try await repository.previewSession(wallet: $0) },
             didChange: { [weak self] in self?.previewDidChange($0) }
         )
         previewState.reset()
+        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
     }
 
     override func viewDidLayoutSubviews() {
@@ -49,6 +50,7 @@ class EditAccountsViewController: UIViewController {
         layoutTask?.cancel()
         mutationTask?.cancel()
         previewState?.invalidate()
+        NotificationCenter.default.removeObserver(self)
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -73,6 +75,7 @@ class EditAccountsViewController: UIViewController {
         mutationTask?.cancel()
 
         if isBeingDismissed || navigationController?.isBeingDismissed == true {
+            NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
             invalidatePreviewAccounts()
         }
     }
@@ -89,7 +92,7 @@ class EditAccountsViewController: UIViewController {
     @IBAction func okButtonTapped(_ sender: Any) {
         guard !isSaving, let previewState else { return }
         guard previewState.hasChanges else {
-            dismissAnimated()
+            closeEditor()
             return
         }
         let wallet = previewState.wallet
@@ -105,7 +108,7 @@ class EditAccountsViewController: UIViewController {
                 guard let self else { return }
                 finishSaving()
                 guard !Task.isCancelled else { return }
-                dismissAnimated()
+                closeEditor()
             } catch {
                 guard let self else { return }
                 finishSaving()
@@ -127,6 +130,21 @@ class EditAccountsViewController: UIViewController {
         previewLayoutTask?.cancel()
         previewLayoutTask = nil
         previewState.invalidate()
+    }
+
+    @objc private func closeEditor() {
+        mutationTask?.cancel()
+        NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
+        invalidatePreviewAccounts()
+        let presenter = navigationController?.presentingViewController ?? presentingViewController
+        (presenter ?? self).dismiss(animated: true)
+    }
+
+    @objc private func walletsChanged() {
+        let currentWallet = walletsManager.currentWallet(id: previewState.wallet.id)
+        if case .close = previewState.refresh(wallet: currentWallet) {
+            closeEditor()
+        }
     }
 
     private func previewDidChange(_ change: AccountPreviewState.Change) {

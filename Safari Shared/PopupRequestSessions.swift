@@ -249,7 +249,7 @@ final class PopupRequestSession {
 final class PopupRequestSessions {
 
     private enum AuthenticationOutcome: Sendable {
-        case unlocked(catalog: WalletReviewCatalog, session: WalletSigningSession)
+        case unlocked(catalog: WalletReviewCatalog, preparation: WalletSigningPreparation)
         case authenticationCancelled
         case rejected(ImmediateResolution)
         case abandoned(feedback: String?)
@@ -291,7 +291,7 @@ final class PopupRequestSessions {
             reviewCatalog: { SafariApprovalVault.shared.reviewCatalog() },
             approvalCatalog: { SafariApprovalVault.shared.approvalCatalog() },
             unlockWallets: {
-                await SafariApprovalVault.shared.unlockResult(reason: $0, authorization: $1)
+                await SafariApprovalVault.shared.unlockResult(reason: $0, scope: $1)
             }
         )
         let operations = TransactionApprovalOperations.live(ethereum: .shared)
@@ -899,7 +899,7 @@ final class PopupRequestSessions {
         }
         return await runClaimedApproval(for: session) { context, token in
             let executionDeadline = context.executionDeadline
-            let authorization = WalletSigningAuthorization(
+            let scope = WalletSigningScope(
                 handle: context.handle,
                 approvedAccount: approvedAccount,
                 signingDeadline: executionDeadline
@@ -912,10 +912,10 @@ final class PopupRequestSessions {
                 session: session,
                 token: token,
                 reason: reason,
-                authorization: authorization,
+                scope: scope,
                 context: context
             )
-            guard case .unlocked(let catalog, let signer) = authentication else {
+            guard case .unlocked(let catalog, let preparation) = authentication else {
                 if let transactionSession, let transactionReservation {
                     transactionSession.releaseReservation(transactionReservation)
                 }
@@ -933,13 +933,13 @@ final class PopupRequestSessions {
                 }
                 return .abandon
             }
-            var untransferredSigner: WalletSigningSession? = signer
-            defer { untransferredSigner?.invalidate() }
+            var untransferredPreparation: WalletSigningPreparation? = preparation
+            defer { untransferredPreparation?.invalidate() }
             let transactionExecution: DappApprovalDecision.TransactionExecution?
             if let transactionSession, let transactionReservation,
                case .approveTransaction(let reviewedAction) = action {
                 let preflight = await context.runBeforeDeadline(onStop: {
-                    signer.invalidate()
+                    preparation.invalidate()
                     transactionSession.invalidate()
                 }) {
                     await transactionSession.preflight(transactionReservation)
@@ -962,7 +962,7 @@ final class PopupRequestSessions {
                 transactionExecution = nil
             }
             switch await self.validateSigningAccess(
-                for: session, token: token, catalog: catalog, signer: signer
+                for: session, token: token, catalog: catalog, preparation: preparation
             ) {
             case .unlocked:
                 break
@@ -978,8 +978,8 @@ final class PopupRequestSessions {
                 consent = session.acceptMessage(cluster: cluster, approvedAt: self.clock())
             }
             guard let consent else { return .abandon }
-            untransferredSigner = nil
-            return .ready(consent: consent, signing: signer)
+            untransferredPreparation = nil
+            return .ready(consent: consent, signing: preparation)
         }
     }
 
@@ -987,21 +987,21 @@ final class PopupRequestSessions {
         for session: PopupRequestSession,
         token: UUID,
         catalog: WalletReviewCatalog,
-        signer: WalletSigningSession
+        preparation: WalletSigningPreparation
     ) async -> AuthenticationOutcome {
         guard isCurrent(session, token: token) else { return .abandoned(feedback: nil) }
         let authorityIsCurrent = await store.authorityIsCurrent(handle: session.handle)
         guard isCurrent(session, token: token), authorityIsCurrent,
-              clock() < signer.authorization.signingDeadline else { return .abandoned(feedback: nil) }
+              clock() < preparation.scope.signingDeadline else { return .abandoned(feedback: nil) }
         if let failure = signingAccountFailure(
-            signer.approvedAccount, request: session.request,
+            preparation.approvedAccount, request: session.request,
             catalog: walletEnvironment.currentApprovalCatalog()
         ) { return failure }
         guard session.reviewCatalog?.identity == catalog.identity,
-              signer.validateCurrent(), isCurrent(session, token: token) else {
+              preparation.validateCurrent(), isCurrent(session, token: token) else {
             return .abandoned(feedback: nil)
         }
-        return .unlocked(catalog: catalog, session: signer)
+        return .unlocked(catalog: catalog, preparation: preparation)
     }
 
     private func signingAccountFailure(
@@ -1062,14 +1062,14 @@ final class PopupRequestSessions {
         session: PopupRequestSession,
         token: UUID,
         reason: String,
-        authorization: WalletSigningAuthorization,
+        scope: WalletSigningScope,
         context: DurableApprovalExecutor.ClaimContext
     ) async -> AuthenticationOutcome {
         guard session.beginAuthentication(token: token) else { return .abandoned(feedback: nil) }
         let result = await context.runBeforeDeadline(discardValue: { outcome in
-            if case .unlocked(_, let signer) = outcome { signer.invalidate() }
+            if case .unlocked(_, let preparation) = outcome { preparation.invalidate() }
         }) {
-            await self.authenticate(session: session, reason: reason, authorization: authorization)
+            await self.authenticate(session: session, reason: reason, scope: scope)
         }
         let outcome: AuthenticationOutcome
         switch result {
@@ -1078,8 +1078,8 @@ final class PopupRequestSessions {
         }
         guard !Task.isCancelled, isCurrent(session, token: token),
               session.finishAuthentication(token: token) else {
-            if case .unlocked(_, let signer) = outcome {
-                signer.invalidate()
+            if case .unlocked(_, let preparation) = outcome {
+                preparation.invalidate()
             }
             return .abandoned(feedback: nil)
         }
@@ -1089,32 +1089,32 @@ final class PopupRequestSessions {
     private func authenticate(
         session: PopupRequestSession,
         reason: String,
-        authorization: WalletSigningAuthorization
+        scope: WalletSigningScope
     ) async -> AuthenticationOutcome {
-        switch await walletEnvironment.unlock(reason, authorization) {
+        switch await walletEnvironment.unlock(reason, scope) {
         case .canceled:
             return Task.isCancelled ? .abandoned(feedback: nil) : .authenticationCancelled
         case .unavailable:
             if let failure = signingAccountFailure(
-                authorization.approvedAccount, request: session.request,
+                scope.approvedAccount, request: session.request,
                 catalog: walletEnvironment.currentApprovalCatalog()
             ) { return failure }
             return .abandoned(feedback: Strings.somethingWentWrong)
-        case .unlocked(let catalog, let signer):
+        case .unlocked(let catalog, let preparation):
             if let failure = signingAccountFailure(
-                authorization.approvedAccount, request: session.request, catalog: catalog
+                scope.approvedAccount, request: session.request, catalog: catalog
             ) {
-                signer.invalidate()
+                preparation.invalidate()
                 return failure
             }
             guard let reviewedIdentity = session.reviewCatalog?.identity,
                   catalog.identity == reviewedIdentity,
-                  signer.authorization == authorization,
-                  signer.validateCurrent() else {
-                signer.invalidate()
+                  preparation.scope == scope,
+                  preparation.validateCurrent() else {
+                preparation.invalidate()
                 return .abandoned(feedback: nil)
             }
-            return .unlocked(catalog: catalog, session: signer)
+            return .unlocked(catalog: catalog, preparation: preparation)
         }
     }
 

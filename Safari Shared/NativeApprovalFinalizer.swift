@@ -8,13 +8,13 @@ enum NativeApprovalFinalizationResult: Equatable {
 
 @MainActor
 final class NativeApprovalFinalizer {
-    typealias SigningSessionFactory = @MainActor @Sendable (WalletSigningAuthorization) -> WalletSigningSession
+    typealias SigningPreparationFactory = @MainActor @Sendable (WalletSigningScope) -> WalletSigningPreparation
 
     static let shared = NativeApprovalFinalizer(store: ExtensionBridge.shared)
 
     private let store: NativeApprovalStore
     private let refreshWalletCatalog: @MainActor () async -> WalletReviewCatalog?
-    private let makeSigningSession: SigningSessionFactory
+    private let makeSigningPreparation: SigningPreparationFactory
     private let networkResolver: (Int) -> ApprovalNetworkResolution
     private let customDefinitionResult: @MainActor @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult
     private let executor: DurableApprovalExecutor
@@ -26,7 +26,7 @@ final class NativeApprovalFinalizer {
             guard await WalletsManager.shared.start() else { return nil }
             return WalletsManager.shared.reviewCatalog()
         },
-        makeSigningSession: SigningSessionFactory? = nil,
+        makeSigningPreparation: SigningPreparationFactory? = nil,
         networkResolver: @escaping (Int) -> ApprovalNetworkResolution = {
             NetworkResolver.main.approvalResolution(chainId: $0)
         },
@@ -37,9 +37,9 @@ final class NativeApprovalFinalizer {
         self.store = store
         self.refreshWalletCatalog = refreshWalletCatalog
         let clock = executionEnvironment.clock
-        self.makeSigningSession = makeSigningSession ?? { authorization in
-            WalletSigningSession.fromSource(
-                authorization: authorization,
+        self.makeSigningPreparation = makeSigningPreparation ?? { scope in
+            WalletSigningPreparation.fromSource(
+                scope: scope,
                 clock: clock
             )
         }
@@ -71,13 +71,13 @@ final class NativeApprovalFinalizer {
         let outcome = await executor.execute(
             claim: claim,
             prepare: { _ -> DurableApprovalExecutor.Preparation<Never> in
-                let signing = consent.intent.action.signingAccount.map { account in
-                    self.makeSigningSession(WalletSigningAuthorization(
+                let preparation = consent.intent.action.signingAccount.map { account in
+                    self.makeSigningPreparation(WalletSigningScope(
                         handle: claim.handle, approvedAccount: account,
                         signingDeadline: claim.authority.signingDeadline(for: claim.request)
                     ))
                 }
-                return .ready(consent: consent, signing: signing)
+                return .ready(consent: consent, signing: preparation)
             },
             resolve: resolve
         )

@@ -307,7 +307,9 @@ async function executablePaths(bundles, platform, command = execute) {
 
 export async function removeHostedUnitTestBundle(products, platform) {
     if (platform !== "ios") { return; }
-    await rm(join(products.app, "PlugIns", "Tests iOS.xctest"), {recursive: true, force: true});
+    const bundle = join(products.app, "PlugIns", "Tests iOS.xctest");
+    await rm(bundle, {recursive: true, force: true});
+    await rm(`${bundle}.dSYM`, {recursive: true, force: true});
 }
 
 export async function verifySynchronizationHookExclusion(products, platform, command = execute) {

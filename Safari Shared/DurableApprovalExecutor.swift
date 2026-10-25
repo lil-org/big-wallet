@@ -73,7 +73,7 @@ final class DurableApprovalExecutor {
     }
 
     enum Preparation<Stop: Sendable> {
-        case ready(consent: ReviewConsent, signing: WalletSigningSession?)
+        case ready(consent: ReviewConsent, signing: WalletSigningPreparation?)
         case rejected(ImmediateResolution)
         case abandon
         case stopped(Stop)
@@ -173,7 +173,7 @@ final class DurableApprovalExecutor {
             waitForDeadline: waitForExecutionDeadline
         )
         let consent: ReviewConsent
-        let signing: WalletSigningSession?
+        let signing: WalletSigningPreparation?
         switch await prepare(context) {
         case .ready(let preparedConsent, let preparedSigning):
             consent = preparedConsent
@@ -190,7 +190,7 @@ final class DurableApprovalExecutor {
             return .finished(await abandon(claim: claim))
         }
         defer { consent.invalidateAuthorization() }
-        guard signingSessionMatches(signing, consent: consent, claim: claim),
+        guard signingPreparationMatches(signing, consent: consent, claim: claim),
               claim.authority.allowsExecution(at: clock(), isCancelled: Task.isCancelled) else {
             return .finished(await abandon(claim: claim))
         }
@@ -222,43 +222,43 @@ final class DurableApprovalExecutor {
         }
     }
 
-    private func signingSessionMatches(
-        _ session: WalletSigningSession?,
+    private func signingPreparationMatches(
+        _ preparation: WalletSigningPreparation?,
         consent: ReviewConsent,
         claim: ExtensionBridge.ApprovalClaim
     ) -> Bool {
-        guard let account = consent.intent.action.signingAccount else { return session == nil }
-        let expected = WalletSigningAuthorization(
+        guard let account = consent.intent.action.signingAccount else { return preparation == nil }
+        let expected = WalletSigningScope(
             handle: claim.handle, approvedAccount: account,
             signingDeadline: claim.authority.signingDeadline(for: claim.request)
         )
-        guard let session, session.authorization == expected else { return false }
+        guard let preparation, preparation.scope == expected else { return false }
         if case .ordinary = claim.authority {
-            guard case .vault = session.commit else { return false }
+            guard preparation.requiresCommitLease else { return false }
         }
-        return true
+        return preparation.validateCurrent()
     }
 
     private func executeApproved(
         claim: ExtensionBridge.ApprovalClaim,
         approval: ResolvedDappApproval,
-        signing: WalletSigningSession?,
+        signing preparation: WalletSigningPreparation?,
         context: ClaimContext
     ) async -> Result {
 #if BW_SAFARI_VM_TESTING
         let operation = SafariVMFixtures.shared.capture(handle: claim.handle)
         return await SafariVMFixtures.$operation.withValue(operation) {
-            await performApproved(claim: claim, approval: approval, signing: signing, context: context)
+            await performApproved(claim: claim, approval: approval, signing: preparation, context: context)
         }
 #else
-        return await performApproved(claim: claim, approval: approval, signing: signing, context: context)
+        return await performApproved(claim: claim, approval: approval, signing: preparation, context: context)
 #endif
     }
 
     private func performApproved(
         claim: ExtensionBridge.ApprovalClaim,
         approval: ResolvedDappApproval,
-        signing: WalletSigningSession?,
+        signing preparation: WalletSigningPreparation?,
         context: ClaimContext
     ) async -> Result {
         guard claim.authority.allowsExecution(at: clock(), isCancelled: Task.isCancelled) else {
@@ -281,9 +281,17 @@ final class DurableApprovalExecutor {
                        "configurationKey": permit.request.configurationKey,
                        "profileIdentifier": permit.handle.profileIdentifier.map { $0.uuidString.lowercased() as Any } ?? NSNull()])
 #endif
-        guard signing?.attach(permit: permit) ?? (approval.signingAccount == nil) else {
-            return await abandon(permit: permit)
+        let signing: WalletSigningSession?
+        if let preparation {
+            guard let session = preparation.consume(permit: permit) else {
+                return await abandon(permit: permit)
+            }
+            signing = session
+        } else {
+            guard approval.signingAccount == nil else { return await abandon(permit: permit) }
+            signing = nil
         }
+        defer { signing?.invalidate() }
         guard case .value(let operationResult) = await context.runBeforeDeadline(operation: {
             await self.requestProcessor.execute(permit: permit, signer: signing)
         }) else {

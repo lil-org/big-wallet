@@ -22,27 +22,34 @@ const machO = (content = "ordinary product binary") => {
     return Buffer.concat([header, Buffer.from(content)]);
 };
 
-test("Safari removes only the hosted iOS unit-test bundle before checking production binaries", async context => {
+test("Safari removes only the hosted iOS unit-test bundle and its debug symbols before checking production binaries", async context => {
     const directory = await realpath(await mkdtemp(join(tmpdir(), "safari-hosted-tests-")));
     context.after(() => rm(directory, {recursive: true, force: true}));
     const app = join(directory, "Wallet.app"), extension = join(app, "PlugIns/Safari.appex");
     const products = {app, extension};
     const hosted = join(app, "PlugIns/Tests iOS.xctest");
-    const hostedBinary = join(hosted, "Tests iOS");
-    const binaries = [join(app, "fixture"), join(extension, "fixture"), join(app, "PlugIns/Other.xctest/fixture")];
-    for (const path of [...binaries, hostedBinary]) {
+    const hostedSymbols = `${hosted}.dSYM`;
+    const hostedBinaries = [join(hosted, "Tests iOS"), join(hostedSymbols, "Contents/Resources/DWARF/Tests iOS")];
+    const binaries = [join(app, "fixture"), join(extension, "fixture"), join(app, "PlugIns/Other.xctest/fixture"),
+        join(app, "PlugIns/Other.xctest.dSYM/Contents/Resources/DWARF/fixture")];
+    for (const path of [...binaries, ...hostedBinaries]) {
         await mkdir(dirname(path), {recursive: true});
-        await writeFile(path, machO(path === hostedBinary ? "BWSafariSynchronizationState" : undefined));
+        await writeFile(path, machO(hostedBinaries.includes(path) ? "BWSafariSynchronizationState" : undefined));
     }
     const inspect = async () => "fixture";
     await assert.rejects(verifySynchronizationHookExclusion(products, "ios", inspect), /must not be linked/);
     await removeHostedUnitTestBundle(products, "macos");
-    assert.ok((await stat(hostedBinary)).isFile());
+    for (const binary of hostedBinaries) { assert.ok((await stat(binary)).isFile()); }
+    await rm(hosted, {recursive: true});
+    await assert.rejects(verifySynchronizationHookExclusion(products, "ios", inspect), error =>
+        /must not be linked/.test(error.message) && error.message.includes(hostedBinaries[1]));
+    await mkdir(hosted);
+    await writeFile(hostedBinaries[0], machO("BWSafariSynchronizationState"));
     await removeHostedUnitTestBundle(products, "ios");
-    await assert.rejects(stat(hosted), {code: "ENOENT"});
+    for (const path of [hosted, hostedSymbols]) { await assert.rejects(stat(path), {code: "ENOENT"}); }
     await removeHostedUnitTestBundle(products, "ios");
     assert.deepEqual(new Set((await verifySynchronizationHookExclusion(products, "ios", inspect)).executables), new Set(binaries));
-    for (const binary of binaries.slice(0, 2)) {
+    for (const binary of binaries) {
         await writeFile(binary, machO("BWSafariSynchronizationState"));
         await removeHostedUnitTestBundle(products, "ios");
         await assert.rejects(verifySynchronizationHookExclusion(products, "ios", inspect), error =>
@@ -51,10 +58,12 @@ test("Safari removes only the hosted iOS unit-test bundle before checking produc
     }
     const outside = join(directory, "outside.xctest");
     await mkdir(outside);
-    await symlink(outside, hosted);
-    await removeHostedUnitTestBundle(products, "ios");
-    assert.ok((await stat(outside)).isDirectory());
-    assert.ok(!(await readdir(join(app, "PlugIns"))).includes("Tests iOS.xctest"));
+    for (const path of [hosted, hostedSymbols]) {
+        await symlink(outside, path);
+        await removeHostedUnitTestBundle(products, "ios");
+        assert.ok((await stat(outside)).isDirectory());
+        assert.ok(!(await readdir(join(app, "PlugIns"))).includes(basename(path)));
+    }
 });
 
 test("wallet, extension, and helper binaries exclude the UI test synchronization hook", async context => {

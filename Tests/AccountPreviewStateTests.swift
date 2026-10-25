@@ -218,10 +218,9 @@ final class AccountPreviewStateTests: XCTestCase {
         XCTAssertTrue(state.hasChanges)
     }
 
-    func testRefreshKeepsMetadataChangesAndResetsPristineAccountChanges() async throws {
+    func testRefreshKeepsMetadataChangesAndPristinePreviewPages() async throws {
         let initial = PreviewRequest()
-        let replacement = PreviewRequest()
-        let sessions = PreviewSessions(initial: [initial, replacement])
+        let sessions = PreviewSessions(initial: [initial])
         defer { sessions.finishPendingRequests() }
         let changes = PreviewChanges()
         let original = wallet(accounts: [account(0)])
@@ -243,17 +242,128 @@ final class AccountPreviewStateTests: XCTestCase {
         state.toggle(at: 1)
         XCTAssertFalse(state.hasChanges)
         XCTAssertEqual(state.refresh(wallet: wallet(accounts: [account(0), account(2)])), .keepEditing)
-        XCTAssertFalse(state.activatePaging(for: generation))
-        XCTAssertTrue(state.accounts.isEmpty)
+        XCTAssertTrue(state.activatePaging(for: generation))
+        XCTAssertEqual(state.accounts, [account(0), account(1)])
         XCTAssertFalse(state.hasChanges)
-        await finish(replacement, with: [account(0), account(1), account(2)])
-        await expectEventually { changes.generations.count == 2 }
         XCTAssertEqual(state.enabledAccounts, [account(0), account(2)])
+        XCTAssertEqual(sessions.initialCalls, 1)
+    }
+
+    func testRefreshRebasesDraftAndOffPageSelectionsWithoutRestartingPendingPagination() async throws {
+        let initial = PreviewRequest()
+        let next = PreviewRequest()
+        let last = PreviewRequest()
+        let sessions = PreviewSessions(initial: [initial], additional: [next, last])
+        defer { sessions.finishPendingRequests() }
+        let changes = PreviewChanges()
+        let state = makeState(wallet: wallet(accounts: [account(0), account(8), account(9)]), sessions: sessions, changes: changes)
+        state.reset()
+        await finish(initial, with: [account(0), account(1), account(2)])
+        await expectEventually { changes.generations.count == 1 }
+        let generation = try XCTUnwrap(changes.generations.last)
+        state.toggle(at: 0)
+        state.toggle(at: 1)
+        XCTAssertTrue(state.activatePaging(for: generation))
+        state.loadMore()
+        await fulfillment(of: [next.entered], timeout: 2)
+
+        XCTAssertEqual(state.refresh(wallet: wallet(accounts: [account(0), account(8), account(7)])), .keepEditing)
+        XCTAssertEqual(state.enabledAccounts, [account(1), account(8), account(7)])
+        XCTAssertTrue(state.hasChanges)
+        XCTAssertEqual(state.accounts, [account(0), account(1), account(2)])
+        XCTAssertEqual(sessions.initialCalls, 1)
+        next.resolve([account(8), account(7), account(3)])
+        await expectEventually { changes.insertions.count == 1 }
+        XCTAssertEqual(state.enabledAccounts, [account(1), account(8), account(7)])
+        XCTAssertTrue(state.activatePaging(for: generation))
+        state.loadMore()
+        await finish(last, with: [account(4)])
+        await expectEventually { changes.insertions.count == 2 }
+        XCTAssertEqual(sessions.requestedPages, [1, 2])
+        XCTAssertEqual(changes.generations, [generation])
+    }
+
+    func testExternallyFulfilledEditsBecomeCleanAndLaterChangesFollowTheNewBaseline() async throws {
+        let initial = PreviewRequest()
+        let sessions = PreviewSessions(initial: [initial])
+        defer { sessions.finishPendingRequests() }
+        let changes = PreviewChanges()
+        let state = makeState(wallet: wallet(accounts: [account(0), account(8)]), sessions: sessions, changes: changes)
+        state.reset()
+        await finish(initial, with: [account(0), account(1)])
+        await expectEventually { changes.generations.count == 1 }
+        state.toggle(at: 0)
+        state.toggle(at: 1)
+
+        XCTAssertEqual(state.refresh(wallet: wallet(accounts: [account(1), account(8)])), .keepEditing)
+        XCTAssertFalse(state.hasChanges)
+        XCTAssertEqual(state.enabledAccounts, [account(1), account(8)])
+        XCTAssertEqual(state.refresh(wallet: wallet(accounts: [account(0), account(8)])), .keepEditing)
+        XCTAssertFalse(state.hasChanges)
+        XCTAssertEqual(state.enabledAccounts, [account(0), account(8)])
+        XCTAssertEqual(sessions.initialCalls, 1)
+    }
+
+    func testRefreshCanLeaveAnEmptyDraftForTheUserToRepair() async throws {
+        let initial = PreviewRequest()
+        let sessions = PreviewSessions(initial: [initial])
+        defer { sessions.finishPendingRequests() }
+        let changes = PreviewChanges()
+        let state = makeState(wallet: wallet(accounts: [account(0), account(1)]), sessions: sessions, changes: changes)
+        state.reset()
+        await finish(initial, with: [account(0), account(1)])
+        await expectEventually { changes.generations.count == 1 }
+        state.toggle(at: 0)
+
+        XCTAssertEqual(state.refresh(wallet: wallet(accounts: [account(0)])), .keepEditing)
+        XCTAssertFalse(state.hasEnabledAccounts)
+        XCTAssertTrue(state.hasChanges)
+        state.toggle(at: 1)
+        XCTAssertEqual(state.enabledAccounts, [account(1)])
+    }
+
+    func testRefreshRestartsPendingFirstPageAndIgnoresItsLateResult() async throws {
+        let obsolete = PreviewRequest()
+        let replacement = PreviewRequest()
+        let sessions = PreviewSessions(initial: [obsolete, replacement])
+        defer { sessions.finishPendingRequests() }
+        let changes = PreviewChanges()
+        let state = makeState(wallet: wallet(accounts: [account(0)]), sessions: sessions, changes: changes)
+        state.reset()
+        await fulfillment(of: [obsolete.entered], timeout: 2)
+
+        XCTAssertEqual(state.refresh(wallet: wallet(accounts: [account(1), account(8)])), .keepEditing)
+        await fulfillment(of: [obsolete.cancelled, replacement.entered], timeout: 2)
+        obsolete.resolve([account(0)])
+        await fulfillment(of: [obsolete.returned], timeout: 2)
+        XCTAssertTrue(state.accounts.isEmpty)
+        XCTAssertEqual(state.enabledAccounts, [account(1), account(8)])
+        replacement.resolve([account(0), account(1)])
+        await expectEventually { changes.generations.count == 1 }
+        XCTAssertEqual(state.enabledAccounts, [account(1), account(8)])
+        XCTAssertFalse(state.hasChanges)
+    }
+
+    func testRefreshRetriesFailedInitialPreparationWithTheLatestWallet() async {
+        let failed = PreviewRequest()
+        let replacement = PreviewRequest()
+        let sessions = PreviewSessions(initial: [failed, replacement])
+        defer { sessions.finishPendingRequests() }
+        let changes = PreviewChanges()
+        let state = makeState(wallet: wallet(accounts: [account(0)]), sessions: sessions, changes: changes)
+        state.reset()
+        await finish(failed, with: nil)
+
+        XCTAssertEqual(state.refresh(wallet: wallet(accounts: [account(1)])), .keepEditing)
+        await finish(replacement, with: [account(0), account(1)])
+        await expectEventually { changes.generations.count == 1 }
+        XCTAssertEqual(state.enabledAccounts, [account(1)])
+        XCTAssertFalse(state.hasChanges)
         XCTAssertEqual(sessions.initialCalls, 2)
     }
 
-    func testRefreshClosesDirtyChangesOrRemovedWallets() async throws {
-        for removed in [false, true] {
+    func testRefreshClosesOnlyRemovedOrDifferentWallets() async throws {
+        for replacement in [nil, WalletSnapshot(id: "other", isMnemonic: true, accounts: [account(2)])] {
             let initial = PreviewRequest()
             let sessions = PreviewSessions(initial: [initial])
             defer { sessions.finishPendingRequests() }
@@ -263,10 +373,10 @@ final class AccountPreviewStateTests: XCTestCase {
             await finish(initial, with: [account(0), account(1)])
             await expectEventually { changes.generations.count == 1 }
             let generation = try XCTUnwrap(changes.generations.last)
-            if !removed { state.toggle(at: 1) }
+            state.toggle(at: 1)
             let previousChanges = changes.values
 
-            XCTAssertEqual(state.refresh(wallet: removed ? nil : wallet(accounts: [account(2)])), .close)
+            XCTAssertEqual(state.refresh(wallet: replacement), .close)
             XCTAssertFalse(state.activatePaging(for: generation))
             XCTAssertEqual(changes.values, previousChanges)
             XCTAssertEqual(sessions.initialCalls, 1)
@@ -307,7 +417,7 @@ final class AccountPreviewStateTests: XCTestCase {
         XCTAssertEqual(sessions.initialCalls, 0)
     }
 
-    func testResetDiscardsLateSessionCreationWithoutStartingItsFirstPage() async throws {
+    func testRefreshDiscardsLateSessionCreationWithoutStartingItsFirstPage() async throws {
         let obsoletePage = PreviewRequest()
         let replacementPage = PreviewRequest()
         let sessions = PreviewSessions(initial: [obsoletePage, replacementPage])
@@ -318,8 +428,10 @@ final class AccountPreviewStateTests: XCTestCase {
         let cancelled = expectation(description: "Session creation cancelled")
         let returned = expectation(description: "Session creation returned")
         let calls = Mutex(0)
+        let creationAccounts = Mutex([[WalletAccount]]())
         let changes = PreviewChanges()
-        let state = AccountPreviewState(wallet: wallet(accounts: [account(0)]), makeSession: { _ in
+        let state = AccountPreviewState(wallet: wallet(accounts: [account(0)]), makeSession: { wallet in
+            creationAccounts.withLock { $0.append(wallet.accounts) }
             let first = calls.withLock { count in defer { count += 1 }; return count == 0 }
             guard first else { return await sessions.makeSession() }
             return await withTaskCancellationHandler {
@@ -332,7 +444,7 @@ final class AccountPreviewStateTests: XCTestCase {
         defer { creation.resolve(obsolete) }
         state.reset()
         await fulfillment(of: [entered], timeout: 2)
-        state.reset()
+        XCTAssertEqual(state.refresh(wallet: wallet(accounts: [account(2)])), .keepEditing)
         await fulfillment(of: [cancelled, replacementPage.entered], timeout: 2)
         creation.resolve(obsolete)
         await fulfillment(of: [returned], timeout: 2)
@@ -342,6 +454,9 @@ final class AccountPreviewStateTests: XCTestCase {
         await expectEventually { state.accounts == [self.account(2)] }
         XCTAssertEqual(obsoletePage.calls, 0)
         XCTAssertEqual(changes.generations.count, 1)
+        XCTAssertEqual(creationAccounts.withLock { $0 }, [[account(0)], [account(2)]])
+        XCTAssertEqual(state.enabledAccounts, [account(2)])
+        XCTAssertFalse(state.hasChanges)
     }
 
     func testDeinitializationCancelsSessionCreation() async {
