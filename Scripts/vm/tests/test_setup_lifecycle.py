@@ -108,7 +108,7 @@ class SetupFixture:
         self.launches.append(job['kind'])
         if job['kind'] == 'run':
             self.test.assertEqual(job['payload'], {
-                'stages': ['test'], 'configuration': 'Debug', 'signing': 'local',
+                'stages': ['test'], 'configuration': 'Debug', 'signing': 'local', 'runtimePlatforms': ['macos'],
                 'onlyTesting': ['WindowAuthenticationSessionTests', 'PasswordStorageTests', 'SecretHandlingTests']})
         if job['kind'] == 'doctor':
             self.doctor_control = (exchange, job['runId'])

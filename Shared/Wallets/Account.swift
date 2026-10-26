@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 #if os(iOS) || os(visionOS)
@@ -6,33 +9,8 @@ import UIKit
 import Cocoa
 #endif
 
-struct WalletPreviewAccountKey: Hashable, Sendable {
-    let coin: WalletCoin
-    let derivationPath: String
-}
-
 extension WalletAccount {
 
-    var previewAccountKey: WalletPreviewAccountKey {
-        return WalletPreviewAccountKey(coin: coin, derivationPath: derivationPath)
-    }
-
-    var previewDerivationIndex: Int {
-        return WalletCrypto.previewDerivationIndex(derivationPath: derivationPath, coin: coin)
-    }
-
-    var croppedAddress: String {
-        let dropFirstCount: Int
-        switch coin {
-        case .ethereum:
-            dropFirstCount = 2
-        case .solana:
-            dropFirstCount = 0
-        }
-        let withoutCommonPart = String(address.dropFirst(dropFirstCount))
-        return withoutCommonPart.prefix(4) + "..." + withoutCommonPart.suffix(4)
-    }
-    
     @MainActor
     var image: PlatformSpecificImage? {
         switch coin {
@@ -44,12 +22,14 @@ extension WalletAccount {
         }
     }
     
+    @MainActor
     func nameOrCroppedAddress(walletId: String) -> String {
-        return WalletsMetadataService.getAccountName(walletId: walletId, account: self) ?? croppedAddress
+        return ApplicationServices.shared.metadata.getAccountName(walletId: walletId, account: self) ?? croppedAddress
     }
     
+    @MainActor
     func name(walletId: String) -> String? {
-        return WalletsMetadataService.getAccountName(walletId: walletId, account: self)
+        return ApplicationServices.shared.metadata.getAccountName(walletId: walletId, account: self)
     }
     
 }

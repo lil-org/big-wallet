@@ -60,7 +60,7 @@ test("Debug skip proof requires passing Release gates on the corresponding platf
 
 test("filtered Debug manifests pass captured skip audits only when their scheduled Release proof passes", () => {
     const release = passedGates();
-    for (const target of [undefined, ...PLATFORMS.map(platform => platform.target)]) {
+    for (const target of [undefined, "WalletAuthorityTests"]) {
         for (const method of [undefined, ...PERFORMANCE_TESTS]) {
             const selector = `${target ? `${target}/` : ""}WalletCoreProxyPerformanceGateTests${method ? `/${method}()` : ""}`;
             const manifest = createManifest({version: 1, runId: "filtered-gates", vmId: "fixture-vm", kind: "run", profile: "all",
@@ -76,7 +76,8 @@ test("filtered Debug manifests pass captured skip audits only when their schedul
             }
             const results = manifest.map(stage => {
                 if (!stage.nativeAudit) { return {id: stage.id, status: "passed"}; }
-                const fixture = stage.nativeAudit.configuration === "Debug" ? debug : release;
+                const fixture = structuredClone(stage.nativeAudit.configuration === "Debug" ? debug : release);
+                if (stage.nativeAudit.runtime) { fixture.tree.testNodes[0].children[0].name = "WalletAuthorityTests"; }
                 return {id: stage.id, status: "passed", nativeAudit: stage.nativeAudit,
                     audit: auditNativeResult(fixture.summary, fixture.tree, stage.nativeAudit)};
             });

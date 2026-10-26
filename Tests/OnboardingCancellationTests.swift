@@ -1,3 +1,5 @@
+import WalletDomain
+@testable import WalletAuthority
 import AppKit
 import Security
 import Synchronization
@@ -19,7 +21,7 @@ final class OnboardingCancellationTests: XCTestCase {
             let reads = fixture.passwordReads
             for _ in 0..<3 {
                 agent.applicationDidBecomeActive()
-                NotificationCenter.default.post(name: .walletsChanged, object: nil)
+                NotificationCenter.default.post(name: Notification.Name("walletsChanged"), object: nil)
             }
             XCTAssertEqual(fixture.passwordReads, reads)
             XCTAssertFalse(NSApp.windows.contains {
@@ -107,7 +109,7 @@ final class OnboardingCancellationTests: XCTestCase {
             for _ in 0..<3 {
                 agent.open()
                 agent.applicationDidBecomeActive()
-                NotificationCenter.default.post(name: .walletsChanged, object: nil)
+                NotificationCenter.default.post(name: Notification.Name("walletsChanged"), object: nil)
             }
             oldForm?.actionButtonTapped(oldForm?.okButton as Any)
             if let oldForm { oldForm.cancelButtonTapped(oldForm.cancelButton) }
@@ -330,7 +332,9 @@ final class OnboardingCancellationTests: XCTestCase {
     }
 
     func testCommittedPasswordCreationNotifiesAfterItsFlowCloses() async throws {
-        let fixture = OnboardingKeychainFixture()
+        let fixture = OnboardingKeychainFixture(postCreation: {
+            NotificationCenter.default.post(name: Notification.Name("walletsChanged"), object: nil)
+        })
         fixture.allowsCreation = true
         let agent = makeAgent(fixture)
         let window = try await openOnboarding(agent)
@@ -339,7 +343,7 @@ final class OnboardingCancellationTests: XCTestCase {
         let password = try XCTUnwrap(window.contentViewController as? PasswordViewController)
         let changed = expectation(description: "Committed password notifies storage")
         changed.assertForOverFulfill = false
-        let observer = NotificationCenter.default.addObserver(forName: .walletsChanged, object: nil, queue: nil) { _ in changed.fulfill() }
+        let observer = NotificationCenter.default.addObserver(forName: Notification.Name("walletsChanged"), object: nil, queue: nil) { _ in changed.fulfill() }
         defer { NotificationCenter.default.removeObserver(observer) }
         fixture.afterInsertion = { [weak window] in MainActor.assumeIsolated { window?.close() } }
         defer { fixture.afterInsertion = nil }
@@ -381,13 +385,42 @@ final class OnboardingCancellationTests: XCTestCase {
         XCTAssertEqual(fixture.addCount, 0)
     }
 
+    func testReplacingAnExistingCredentialRequiresAFreshStartupSession() async throws {
+        let fixture = OnboardingKeychainFixture()
+        fixture.password = "original"
+        let flow = makeFlow(fixture)
+        defer { flow.cancel() }
+        flow.requestAccess()
+        await waitUntil { flow.windowController?.contentViewController is PasswordViewController }
+        let first = try XCTUnwrap(flow.windowController?.contentViewController as? PasswordViewController)
+        first.passwordTextField.stringValue = "original"
+        first.actionButtonTapped(first.okButton as Any)
+        let previous = try XCTUnwrap(flow.accessSession)
+        XCTAssertTrue(fixture.credentials.isCurrent(previous))
+
+        fixture.password = "replacement"
+        flow.requestAccess()
+
+        XCTAssertNil(flow.accessSession)
+        XCTAssertFalse(fixture.credentials.isCurrent(previous))
+        await waitUntil { flow.windowController?.contentViewController is PasswordViewController }
+        let second = try XCTUnwrap(flow.windowController?.contentViewController as? PasswordViewController)
+        second.passwordTextField.stringValue = "replacement"
+        second.actionButtonTapped(second.okButton as Any)
+        let current = try XCTUnwrap(flow.accessSession)
+        XCTAssertFalse(current === previous)
+        XCTAssertTrue(fixture.credentials.isCurrent(current))
+    }
+
     private enum Stage { case welcome, create, repeatPassword, returnedWelcome }
 
     private func dependencies(_ fixture: OnboardingKeychainFixture, authentication: AuthenticationGate? = nil) -> StartupCredentialCoordinator.Dependencies {
         var dependencies = StartupCredentialCoordinator.Dependencies()
-        dependencies.keychain = fixture.keychain
+        dependencies.credentials = fixture.credentials
         dependencies.canCreatePassword = true
-        dependencies.attemptBiometrics = { _ in await authentication?.attempt() }
+        dependencies.attemptBiometrics = { _, challenge in
+            fixture.authentication(await authentication?.attempt(), challenge: challenge)
+        }
         return dependencies
     }
 
@@ -439,14 +472,14 @@ final class OnboardingCancellationTests: XCTestCase {
 private final class AuthenticationGate {
     private(set) var count = 0
     private(set) var cancelledAtReturn = [Int: Bool]()
-    private var pending = [Int: TestGate<DeviceAuthentication.Outcome?>]()
+    private var pending = [Int: TestGate<WalletAuthenticationOutcome?>]()
     private var entries = [Int: XCTestExpectation]()
     private var returns = [Int: XCTestExpectation]()
 
-    func attempt() async -> DeviceAuthentication.Outcome? {
+    func attempt() async -> WalletAuthenticationOutcome? {
         count += 1
         let identifier = count
-        let gate = TestGate<DeviceAuthentication.Outcome?>()
+        let gate = TestGate<WalletAuthenticationOutcome?>()
         pending[identifier] = gate
         entries.removeValue(forKey: identifier)?.fulfill()
         let outcome = await gate.wait()
@@ -454,7 +487,7 @@ private final class AuthenticationGate {
         returns.removeValue(forKey: identifier)?.fulfill()
         return outcome
     }
-    func complete(_ identifier: Int, outcome: DeviceAuthentication.Outcome?) {
+    func complete(_ identifier: Int, outcome: WalletAuthenticationOutcome?) {
         pending.removeValue(forKey: identifier)?.resolve(outcome)
     }
     func completeAll() {
@@ -530,6 +563,29 @@ private final class OnboardingKeychainFixture: Sendable {
         var afterInsertion: (@Sendable () -> Void)?
     }
     private let state = Mutex(State())
+    private let authorityID = UUID()
+    private let postCreation: @MainActor @Sendable () -> Void
+
+    init(postCreation: @escaping @MainActor @Sendable () -> Void = {}) {
+        self.postCreation = postCreation
+    }
+
+    var credentials: WalletCredentials {
+        WalletCredentials(keychain: keychain, messages: .testingEnglish, authorityID: authorityID,
+            postCreation: postCreation)
+    }
+
+    func authentication(_ outcome: WalletAuthenticationOutcome?, challenge: WalletAuthenticationChallenge) -> WalletAuthenticationResult? {
+        switch outcome {
+        case .succeeded?:
+            guard let password,
+                  let grant = try? credentials.verify(password: password, challenge: challenge) else { return .failed }
+            return .granted(grant)
+        case .failed?: return .failed
+        case .interactionUnavailable?: return .interactionUnavailable
+        case nil: return nil
+        }
+    }
 
     var password: String? {
         get { state.withLock { $0.password } }

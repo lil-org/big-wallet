@@ -1,22 +1,27 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import Cocoa
 
 @MainActor
 final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown {
+    @MainActor
     struct Dependencies {
-        var keychain = Keychain.shared
-        var attemptBiometrics: @MainActor (String) async -> DeviceAuthentication.Outcome? = {
-            await WindowAuthenticationSession.attemptBiometrics(reason: $0)
+        var credentials = ApplicationServices.shared.credentials
+        var attemptBiometrics: @MainActor (String, WalletAuthenticationChallenge) async -> WalletAuthenticationResult? = {
+            await WindowAuthenticationSession.attemptBiometrics(reason: $0, challenge: $1)
         }
     }
 
     private enum State {
-        case idle, biometrics, password, unavailable, ending(Bool), finished
+        case idle, biometrics, password, unavailable, ending(WalletAuthenticationGrant?), finished
     }
 
     private weak var owner: NSWindow?
     private let reason: AuthenticationReason
+    private let challenge: WalletAuthenticationChallenge
     private let review: NativeApprovalReview?
     private let dependencies: Dependencies
 #if BW_SAFARI_VM_TESTING
@@ -24,22 +29,24 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
 #endif
     private var state = State.idle
     private var task: Task<Void, Never>?
-    private var continuation: CheckedContinuation<Bool, Never>?
+    private var continuation: CheckedContinuation<WalletAuthenticationGrant?, Never>?
     private var closeObserver: NativeApprovalWindowCloseObserver?
     private(set) var sheet: NSWindow?
 
     init(
         owner: NSWindow,
         reason: AuthenticationReason,
+        challenge: WalletAuthenticationChallenge,
         review: NativeApprovalReview?,
         dependencies: Dependencies = Dependencies()
     ) {
         self.owner = owner
         self.reason = reason
+        self.challenge = challenge
         self.review = review
         self.dependencies = dependencies
 #if BW_SAFARI_VM_TESTING
-        fixtureOperation = review?.fixtureOperation ?? SafariVMFixtures.shared.capture()
+        fixtureOperation = review.map { SafariVMFixtures.shared.capture(handle: $0.handle) } ?? SafariVMFixtures.shared.capture()
 #endif
         super.init()
     }
@@ -50,18 +57,22 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
         NotificationCenter.default.removeObserver(self)
     }
 
-    static func attemptBiometrics(reason: String) async -> DeviceAuthentication.Outcome? {
-        guard DeviceAuthentication.canUseBiometrics else { return nil }
-        return await DeviceAuthentication.attemptBiometrics(reason: reason)
+    static func attemptBiometrics(reason: String, challenge: WalletAuthenticationChallenge) async -> WalletAuthenticationResult? {
+        let credentials = ApplicationServices.shared.credentials
+        guard credentials.canUseBiometrics else { return nil }
+        return await credentials.attemptBiometrics(reason: reason, challenge: challenge)
     }
 
-    func run() async -> Bool {
-        guard case .idle = state, !Task.isCancelled, ownerIsAvailable else { return false }
+    func run() async -> WalletAuthenticationGrant? {
+        guard case .idle = state, !Task.isCancelled, ownerIsAvailable else {
+            challenge.invalidate()
+            return nil
+        }
         let result = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 self.continuation = continuation
                 guard !Task.isCancelled, ownerIsAvailable else {
-                    finish(false)
+                    finish(nil)
                     return
                 }
                 start()
@@ -69,11 +80,15 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
         } onCancel: {
             Task { @MainActor in self.cancel() }
         }
-        return result && !Task.isCancelled && ownerIsAvailable
+        guard !Task.isCancelled, ownerIsAvailable else {
+            result?.invalidate()
+            return nil
+        }
+        return result
     }
 
     func cancel() {
-        finish(false)
+        finish(nil)
     }
 
     func invalidateNativeApprovalReview() {
@@ -87,7 +102,7 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
 
     private func start() {
         guard let owner else {
-            finish(false)
+            finish(nil)
             return
         }
         state = .biometrics
@@ -104,26 +119,33 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
         )
         let attempt = dependencies.attemptBiometrics
         let reason = reason.title
+        let challenge = challenge
         task = Task { [weak self] in
 #if BW_SAFARI_VM_TESTING
             do { try await SafariVMFixtures.shared.checkpoint("beforeAuthentication", requestID: self?.review?.request.id, operation: self?.fixtureOperation) }
-            catch { self?.finish(false); return }
+            catch { self?.finish(nil); return }
 #endif
-            let outcome = await attempt(reason)
-            guard let self, !Task.isCancelled, case .biometrics = state else { return }
-            task = nil
-            guard ownerIsAvailable else {
-                finish(false)
+            let outcome = await attempt(reason, challenge)
+            guard let self, !Task.isCancelled, case .biometrics = state else {
+                if case .granted(let grant)? = outcome { grant.invalidate() }
                 return
             }
-            if let outcome { finish(outcome == .succeeded) }
-            else { presentPassword() }
+            task = nil
+            guard ownerIsAvailable else {
+                finish(nil)
+                return
+            }
+            switch outcome {
+            case .granted(let grant)?: finish(grant)
+            case .failed?, .interactionUnavailable?: finish(nil)
+            case nil: presentPassword()
+            }
         }
     }
 
     private func presentPassword() {
         guard ownerIsAvailable, let owner else {
-            finish(false)
+            finish(nil)
             return
         }
         state = .password
@@ -138,7 +160,7 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
         guard self.sheet === sheet else { return }
         owner.beginSheet(sheet) { [weak self, weak sheet] _ in
             guard let self, let sheet, self.sheet === sheet else { return }
-            if case .ending = state {} else { state = .ending(false) }
+            if case .ending = state {} else { state = .ending(nil) }
             passwordController?.retire()
             sheet.orderOut(nil)
             self.sheet = nil
@@ -152,14 +174,14 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
         default: return
         }
         guard ownerIsAvailable else {
-            finish(false)
+            finish(nil)
             return
         }
         let wasUnavailable: Bool
         if case .unavailable = state { wasUnavailable = true }
         else { wasUnavailable = false }
         do {
-            guard try dependencies.keychain.passwordState() == .present else {
+            guard try dependencies.credentials.passwordState() == .present else {
                 showUnavailable()
                 return
             }
@@ -188,7 +210,7 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
         }
         switch action {
         case .cancel:
-            finish(false)
+            finish(nil)
         case .retry:
             refreshPassword()
         case .submit(let password):
@@ -196,24 +218,31 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
             refreshPassword()
             guard case .password = state else { return }
             do {
-                if try DeviceAuthentication.verify(password: password, keychain: dependencies.keychain) {
-                    finish(true)
+                if let grant = try dependencies.credentials.verify(password: password, challenge: challenge) {
+                    finish(grant)
                 }
+            } catch WalletCredentialError.authorizationUnavailable {
+                finish(nil)
             } catch {
                 showUnavailable()
             }
         }
     }
 
-    private func finish(_ result: Bool) {
+    private func finish(_ result: WalletAuthenticationGrant?) {
         switch state {
         case .finished: return
-        case .ending:
-            if !result { state = .ending(false) }
+        case .ending(let previous):
+            if result == nil {
+                previous?.invalidate()
+                challenge.invalidate()
+                state = .ending(nil)
+            }
             return
         default: break
         }
         state = .ending(result)
+        if result == nil { challenge.invalidate() }
         task?.cancel()
         task = nil
         passwordController?.retire()
@@ -236,7 +265,7 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
         state = .finished
 #if BW_SAFARI_VM_TESTING
         SafariVMFixtures.shared.event("authenticationCompleted", requestID: review?.request.id,
-            metadata: ["succeeded": result, "authentication": SafariVMFixtures.shared.isLocal ? "password-sheet" : "system"], operation: fixtureOperation)
+            metadata: ["succeeded": result != nil, "authentication": SafariVMFixtures.shared.isLocal ? "password-sheet" : "system"], operation: fixtureOperation)
 #endif
         closeObserver?.disable()
         closeObserver = nil

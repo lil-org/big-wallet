@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import Cocoa
@@ -7,7 +10,7 @@ class EditAccountsViewController: NSViewController {
     var wallet: WalletSnapshot!
     var getBackToRect: CGRect?
 
-    var walletsManager = WalletsManager.shared
+    var walletsManager = ApplicationServices.shared.wallets
     private(set) var previewState: AccountPreviewState!
     private let previewAccountsPreloadThreshold = 4
     private var previewLayoutTask: Task<Void, Never>?
@@ -34,7 +37,7 @@ class EditAccountsViewController: NSViewController {
         titleLabel.stringValue = Strings.editAccounts.replacingOccurrences(of: " ", with: "\n")
         previewState = AccountPreviewState(
             wallet: wallet,
-            makeSession: { [repository = walletsManager.repository] in try await repository.previewSession(wallet: $0) },
+            makeSession: { [walletsManager] in try await walletsManager.previewSession(wallet: $0) },
             didChange: { [weak self] in self?.previewDidChange($0) }
         )
         previewState.reset()

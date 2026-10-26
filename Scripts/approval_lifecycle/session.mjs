@@ -21,6 +21,8 @@ const pause = () => new Promise(resolve => setImmediate(resolve));
 export class LifecycleSession {
     constructor(options) {
         this.options = options;
+        this.sourceIdentity = options.sourceIdentity;
+        this.originalSourceIdentity = options.originalSourceIdentity ?? options.sourceIdentity;
         this.mode = options.mode;
         this.seed = options.seed;
         this.trace = [];
@@ -41,6 +43,7 @@ export class LifecycleSession {
         this.popupApprovals = new Map;
         this.background = new Set;
         this.backgroundLifetimes = new Map;
+        this.walletMutations = new Map;
         this.asyncFailure = null;
         this.currentAction = null;
         this.savedConsents = [];
@@ -137,6 +140,48 @@ export class LifecycleSession {
         const profile = this.browser.profile(profileIdentifier);
         const popup = profile.popup;
         return this.track(promise, () => !!popup?.alive && profile.popup === popup);
+    }
+    queueWalletMutation(kind, account) {
+        const child = this.child("bridge");
+        const sourceAction = this.actionIndex;
+        const target = structuredClone(account);
+        const observe = (exercised, status, error) => this.record({type: "wallet-mutation-result", sourceAction, kind,
+            account: target, epoch: child.epoch, exercised, status, ...(error ? {error: error.message} : {})});
+        const previous = this.walletMutations.get(child) ?? Promise.resolve();
+        const completion = previous.then(async () => {
+            if (child.expectedExit) { observe(false, "interrupted"); return; }
+            try {
+                this.check();
+                if (this.children.get("bridge") !== child) {
+                    throw new LifecycleFailure("ownership", "Wallet mutation lost its native process before dispatch", {epoch: child.epoch});
+                }
+                this.record({type: "wallet-mutation-start", sourceAction, kind, account: target, epoch: child.epoch});
+                const result = await child.command("wallet", {action: kind === "removeAccount" ? "removeAccount" : "restore",
+                    walletID: target.walletID, coin: target.coin, address: target.address});
+                if (typeof result?.changed !== "boolean") {
+                    throw new LifecycleFailure("protocol", "Wallet mutation omitted its settlement result", {sourceAction, kind, result});
+                }
+                const exercised = result.changed;
+                if (exercised) {
+                    this.coverage.add(`action:${kind}`);
+                    if (kind === "removeAccount") {
+                        for (const profileIdentifier of profiles) {
+                            this.oracle.revoke({profileIdentifier, provider: target.coin, account: target.address, definite: false});
+                        }
+                    }
+                }
+                observe(exercised, exercised ? "completed" : "unchanged");
+            } catch (error) {
+                const unavailable = error.native === true && error.details === "unavailable";
+                const interrupted = child.expectedExit && error.invariant === "process-restarted";
+                if (!unavailable && !interrupted) { this.asyncFailure ??= error; }
+                observe(false, unavailable ? "unavailable" : interrupted ? "interrupted" : "failed", error);
+            }
+        }).finally(() => {
+            if (this.walletMutations.get(child) === completion) { this.walletMutations.delete(child); }
+        });
+        this.walletMutations.set(child, completion);
+        this.track(completion);
     }
     observeNativeMessage({profileIdentifier, owner, message}) {
         if (!message.subject) {
@@ -238,6 +283,17 @@ export class LifecycleSession {
     async nativeEvent(event, child) {
         const details = {...event.details, epoch: child.epoch, role: child.role};
         if (event.event === "ready") { return; }
+        if (event.event === "task") {
+            if (typeof details.id !== "string" || typeof details.label !== "string" || typeof details.active !== "boolean") {
+                throw new LifecycleFailure("protocol", "Malformed tracked native task", {details});
+            }
+            this.record({type: "native-task", ...details});
+            return;
+        }
+        if (event.event === "gateRetired") {
+            this.gates.delete(`${child.epoch}:${details.gate}`);
+            return;
+        }
         if (event.event === "timer") {
             const key = `${child.epoch}:${details.id}`;
             if (details.active) { this.nativeTimers.set(key, {...details, monotonicDeadline: this.scheduler.monotonic + Math.max(0, details.deadlineMilliseconds - this.scheduler.now)}); }
@@ -245,6 +301,15 @@ export class LifecycleSession {
             return;
         }
         if (event.event === "presentation") { this.record({type: "presentation", ...details}); return; }
+        if (event.event === "authority.event") {
+            if (!["requestAdmitted", "consentAccepted", "authorization", "signingStarted", "signingFinished", "broadcastCheckpoint",
+                "broadcastDispatch", "completion", "authenticationCompleted", "protectedKeyRead", "vaultPublication"].includes(details.kind)) {
+                throw new LifecycleFailure("protocol", "Unknown authority observation", {details});
+            }
+            this.coverage.add(`authority:${details.kind}`);
+            this.ledger.append({type: "authority.event", ...details});
+            return;
+        }
         if (event.event === "admission") {
             const admitted = this.admissions.get(details.enqueueAttempt);
             if (!admitted) { throw new LifecycleFailure("isolation", "Native admission has no captured browser attempt", details); }
@@ -277,16 +342,16 @@ export class LifecycleSession {
                 if (approval?.expectedExit && !approval.exited) { throw new LifecycleFailure("process-restarted", "Approval launch raced an intentional restart"); }
                 if (!approval || approval.exited) { approval = await this.start("approval"); }
                 if (details.url) { await approval.command("route", {url: details.url}); }
-                if (!child.exited && !child.expectedExit) { child.release(event.gate, {success: true, identity: approval.ready.identity}); }
+                if (!child.exited && !child.expectedExit && child.gates.has(event.gate)) { child.release(event.gate, {success: true, identity: approval.ready.identity}); }
             } catch (error) {
                 if (error?.invariant !== "process-restarted") { throw error; }
-                if (!child.exited && !child.expectedExit) { child.release(event.gate, {success: false}); }
+                if (!child.exited && !child.expectedExit && child.gates.has(event.gate)) { child.release(event.gate, {success: false}); }
             }
             return;
         }
         if (event.event === "rpc") {
             const result = await this.rpc.respond(details);
-            if (!child.exited && !child.expectedExit) { child.release(event.gate, result); }
+            if (!child.exited && !child.expectedExit && child.gates.has(event.gate)) { child.release(event.gate, result); }
             return;
         }
         if (event.event === "consent") {
@@ -327,7 +392,7 @@ export class LifecycleSession {
                 else {
                     const request = details.handle && this.nativeRequests.get(handleKey(details.handle));
                     this.scheduler.schedule(() => {
-                        if (!child.exited && !child.expectedExit) { child.release(event.gate, null); }
+                        if (!child.exited && !child.expectedExit && child.gates.has(event.gate)) { child.release(event.gate, null); }
                     }, 0, `native:${child.epoch}`, "native-gate", {subject: name, handle: details.handle,
                         transportKey: details.enqueueAttempt || request?.enqueueAttempt || ""});
                 }
@@ -399,11 +464,15 @@ export class LifecycleSession {
             if (performance.now() >= deadline) { throw new LifecycleFailure("watchdog", "Lifecycle progress checkpoint was not reached", {action: this.currentAction, gates: [...this.gates.keys()], browser: this.browser?.snapshot()}); }
             if (await this.scheduler.deliver()) { continue; }
             await pause();
-            if (advance && iteration % 100 === 99 && !predicate()) {
-                const nearest = [...this.nativeTimers.values()].map(timer => timer.monotonicDeadline)
+            const browserOnly = this.children.size === 0;
+            if (advance && (browserOnly || iteration % 100 === 99) && !predicate()) {
+                const nearest = (browserOnly ? [] : [...this.nativeTimers.values()].map(timer => timer.monotonicDeadline))
                     .concat(this.scheduler.pending().filter(task => !task.held).map(task => task.due))
                     .filter(value => value > this.scheduler.monotonic).sort((a, b) => a - b)[0];
-                if (nearest !== undefined) { await this.advance(Math.min(250, nearest - this.scheduler.monotonic)); }
+                if (nearest !== undefined) {
+                    const remaining = nearest - this.scheduler.monotonic;
+                    await this.advance(browserOnly ? remaining : Math.min(250, remaining));
+                }
             }
         }
         throw new LifecycleFailure("progress", "Lifecycle scheduler exceeded its action budget", {action: this.currentAction});
@@ -512,6 +581,7 @@ export class LifecycleSession {
         return requests.length ? requests[(action.selector || 0) % requests.length] : null;
     }
     gateIdentity(gate) {
+        if (gate.details.gateKey) { return `${gate.child?.role || "external"}|${gate.details.gateKey}`; }
         const request = gate.details.handle && this.nativeRequests.get(handleKey(gate.details.handle));
         return `${gate.child?.role || "external"}|${gate.details.name}|${request?.enqueueAttempt || ""}`;
     }
@@ -675,8 +745,14 @@ export class LifecycleSession {
     decision(type, proposed) {
         const ordinal = this.decisions.filter(value => value.phase === this.scheduler.phase && value.type === type).length;
         const saved = this.options.decisions?.[this.decisions.length];
+        if (this.options.decisions !== undefined && !saved) {
+            throw new LifecycleFailure("replay-schedule", "Replay reached an unrecorded scheduling decision", {
+                expected: this.options.decisions.length, consumed: this.decisions.length,
+                actual: {type, phase: this.scheduler.phase, ordinal},
+            });
+        }
         if (saved && (saved.phase !== this.scheduler.phase || saved.type !== type || saved.ordinal !== ordinal)) {
-            throw new LifecycleFailure("replay-schedule", "Explicit scheduling decision diverged from the saved prefix", {
+            throw new LifecycleFailure("replay-schedule", "Explicit scheduling decision diverged from the saved schedule", {
                 expected: saved, actual: {type, phase: this.scheduler.phase, ordinal},
             });
         }
@@ -701,11 +777,13 @@ export class LifecycleSession {
     }
     async action(action) {
         await this.barrier("before-action");
-        this.scheduler.phase = ++this.actionIndex;
+        this.actionIndex += 1;
+        this.scheduler.phase = this.options.actionPhases?.[this.actionIndex] ?? this.actionIndex;
         this.currentAction = structuredClone(action);
         this.record({type: "action", action});
         const tab = this.tabs[action.tab];
         let exercised = true;
+        let pending = false;
         switch (action.kind) {
         case "request": this.request(action); break;
         case "holdNative": await this.holdNative(action); break;
@@ -735,8 +813,18 @@ export class LifecycleSession {
         case "focus": this.browser.focus(tab.id); break;
         case "delay":
         case "drop":
-        case "duplicate": this.browser.addFault({...action, action: action.kind, sourceAction: this.actionIndex,
-            target: this.options.faultTargets?.[this.actionIndex]}); exercised = false; break;
+        case "duplicate": {
+            const targets = this.options.faultTargets;
+            if (targets === undefined || Object.hasOwn(targets, this.actionIndex)) {
+                const target = targets?.[this.actionIndex];
+                if (targets !== undefined && (typeof target !== "string" || !target.length)) {
+                    throw new LifecycleFailure("replay-schedule", "Recorded transport fault has no target", {sourceAction: this.actionIndex, target});
+                }
+                this.browser.addFault({...action, action: action.kind, sourceAction: this.actionIndex, target});
+            }
+            exercised = false;
+            break;
+        }
         case "deliver": {
             const available = this.scheduler.pending({kind: "message", ready: true});
             const selected = this.decision("delivery", available.length ? available[action.selector % available.length].key : null);
@@ -768,17 +856,9 @@ export class LifecycleSession {
                     currentAccounts.filter(other => other.walletID === account.walletID).length > 1);
             if (!available.length) { exercised = false; break; }
             const account = available[action.selector % available.length];
-            let result;
-            try { result = await this.child("bridge").command("wallet", {action: action.kind === "removeAccount" ? "removeAccount" : "restore", walletID: account.walletID, coin: account.coin, address: account.address}); }
-            catch (error) {
-                if (!error.native || error.details !== "unavailable") { throw error; }
-                exercised = false;
-                break;
-            }
-            exercised = result?.changed !== false;
-            if (action.kind === "removeAccount" && result?.changed !== false) {
-                for (const profileIdentifier of profiles) { this.oracle.revoke({profileIdentifier, provider: account.coin, account: account.address, definite: false}); }
-            }
+            this.queueWalletMutation(action.kind, account);
+            exercised = false;
+            pending = true;
             break;
         }
         case "changeNetwork": await this.child("bridge").command("network", {chainId: 1337, action: action.selector % 2 ? "replace" : "remove", rpcURL: "https://chain-1337.lifecycle.invalid"}); break;
@@ -839,7 +919,7 @@ export class LifecycleSession {
         }
         default: throw new Error(`Unhandled action ${action.kind}`);
         }
-        this.record({type: "action-result", kind: action.kind, exercised});
+        this.record({type: "action-result", kind: action.kind, exercised, ...(pending ? {pending} : {})});
         if (exercised) { this.coverage.add(`action:${action.kind}`); }
         await this.pump();
         await this.inspect();
@@ -953,7 +1033,8 @@ export class LifecycleSession {
         await this.freeze();
         await mkdir(target, {recursive: true});
         await writeFile(join(target, "scenario.json"), JSON.stringify(scenario, null, 2) + "\n");
-        await writeFile(join(target, "failure.json"), JSON.stringify({invariant: error.invariant || "unexpected", message: error.message,
+        await writeFile(join(target, "failure.json"), JSON.stringify({sourceIdentity: this.originalSourceIdentity,
+            reproduction: {sourceIdentity: this.sourceIdentity}, invariant: error.invariant || "unexpected", message: error.message,
             details: error.details, stack: error.stack, checkpoint: checkpoints,
             processes: [...this.children].map(([role, child]) => ({role, epoch: child.epoch, pid: child.pid, stderr: child.stderr})),
             coverage: [...this.coverage], oracleCoverage: [...this.oracle.coverage], storeRoot: this.storeRoot}, null, 2) + "\n");

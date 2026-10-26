@@ -1717,24 +1717,32 @@ assert_bundle_phase_after_cleanup() {
         -v target_id="$target_id" \
         -v cleanup_id="$cleanup_id" \
         -v bundle_id="$bundle_id" '
-        !active &&
-            index($0, target_id " /*") &&
-            index($0, " = {") {
+        !active && $1 == target_id && index($0, " = {") {
             active = 1
         }
-        active && index($0, cleanup_id " /*") {
+        active && /^[[:space:]]*buildPhases = \(/ {
+            in_phases = 1
+            next
+        }
+        in_phases && $1 == cleanup_id {
             cleanup_line = NR
+            cleanup_count += 1
         }
-        active && index($0, bundle_id " /*") {
+        in_phases && $1 == bundle_id {
             bundle_line = NR
+            bundle_count += 1
         }
-        active && /productType =/ {
+        in_phases && /^[[:space:]]*\);/ {
             finished = 1
+            exit
+        }
+        active && /^\t\t};/ {
             exit
         }
         END {
             if (!finished ||
-                cleanup_line == 0 ||
+                cleanup_count != 1 ||
+                bundle_count != 1 ||
                 bundle_line != cleanup_line + 1) {
                 exit 1
             }

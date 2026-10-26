@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 enum Browser: String, CaseIterable {

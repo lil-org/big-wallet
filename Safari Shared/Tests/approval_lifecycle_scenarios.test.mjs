@@ -93,6 +93,15 @@ test("Lifecycle replay rejects actions that cannot execute their selected behavi
     assert.throws(() => validateScenario({...scenario([action("restartNative", {role: "approval"})]), mode: "popup"}));
 });
 
+test("Lifecycle replay requires one increasing safe phase identity per action", () => {
+    const original = scenario([action("wake"), action("deliver")]);
+    assert.deepEqual(validateScenario({...original, actionPhases: [3, 8]}).actionPhases, [3, 8]);
+    for (const actionPhases of [null, {}, [], [0], [0, 1, 2], [-1, 0], [1, 1], [2, 1], [0, 1.5],
+        [0, Infinity], [0, Number.MAX_SAFE_INTEGER + 1], Array(2)]) {
+        assert.throws(() => validateScenario({...original, actionPhases}));
+    }
+});
+
 test("Lifecycle reduction preserves the violated invariant and required preceding actions", async () => {
     const original = scenario([action("wake"), action("request", {provider: "ethereum", method: "connect"}), action("focus"), action("approve"), action("deliver"), action("duplicate", {channel: "native", phase: "reply", delay: 500, selector: 18}), action("wake")]);
     const unchanged = structuredClone(original);
@@ -107,11 +116,33 @@ test("Lifecycle reduction preserves the violated invariant and required precedin
     const reduced = await minimizeScenario(original, "broadcast", replay);
     assert.deepEqual(original, unchanged);
     assert.deepEqual(reduced.scenario.actions.map(value => value.kind), ["request", "approve", "duplicate"]);
+    assert.deepEqual(reduced.scenario.actionPhases, [1, 3, 5]);
     assert.equal(reduced.scenario.actions[2].selector, 0);
     assert.equal(reduced.scenario.actions[2].delay, 0);
     assert.equal(reduced.attempts, calls);
     assert.ok(calls <= 200);
     await assert.rejects(replay(reduced.scenario), error => error.invariant === "broadcast");
+});
+
+test("Lifecycle reduction projects deleted action metadata and retains setup and recovery choices", async () => {
+    const original = {...scenario([action("drop", {channel: "native", phase: "reply"}), action("deliver"), action("releaseNative")]),
+        actionPhases: [2, 4, 7], faultTargets: {0: "4|captured-target"}, decisions: [
+            {phase: "setup", type: "native-gate", ordinal: 0, choice: "setup-gate"},
+            {phase: 4, type: "delivery", ordinal: 0, choice: "captured-delivery"},
+            {phase: 7, type: "release-gate", ordinal: 0, choice: null},
+            {phase: "recovery", type: "native-gate", ordinal: 0, choice: "recovery-gate"},
+        ]};
+    const unchanged = structuredClone(original);
+    const reduced = await minimizeScenario(original, "broadcast", async candidate => {
+        validateScenario(candidate);
+        if (!candidate.actions.some(value => value.kind === "releaseNative")) { return; }
+        throw new LifecycleFailure("broadcast", "Independent failure");
+    });
+    assert.deepEqual(original, unchanged);
+    assert.deepEqual(reduced.scenario.actions, [action("releaseNative")]);
+    assert.deepEqual(reduced.scenario.actionPhases, [7]);
+    assert.deepEqual(reduced.scenario.faultTargets, {});
+    assert.deepEqual(reduced.scenario.decisions, original.decisions.filter(value => value.phase !== 4));
 });
 
 test("Lifecycle reduction cannot replace a failure with a different invariant or an exception", async () => {
@@ -170,6 +201,7 @@ test("Mandatory corpus contains success, process competition, capability replay,
         assert.equal(cases.some(({mandatory}) => mandatory.kind === "manualSwitchCoalescing"), mode === "native");
         assert.equal(cases.some(({mandatory}) => mandatory.kind === "editedReview"), mode === "popup");
         assert.equal(cases.some(({mandatory}) => mandatory.kind === "abandonedPopupReview"), mode === "popup");
+        assert.equal(cases.some(({mandatory}) => mandatory.kind === "walletReconciliationAfterClockJump"), mode === "popup");
         for (const provider of ["ethereum", "solana"]) {
             for (const operation of ["claim", "completion", "acknowledgement"]) {
                 for (const side of ["before", "after"]) {
@@ -198,4 +230,6 @@ test("Mandatory replay rejects unknown scenarios and altered crash target identi
     assert.throws(() => validateMandatoryScenario({...manualSwitchCoalescing, mode: "popup"}));
     const abandonedPopupReview = mandatoryScenarios("popup").find(({mandatory}) => mandatory.kind === "abandonedPopupReview");
     assert.throws(() => validateMandatoryScenario({...abandonedPopupReview, mode: "native"}));
+    const walletReconciliation = mandatoryScenarios("popup").find(({mandatory}) => mandatory.kind === "walletReconciliationAfterClockJump");
+    assert.throws(() => validateMandatoryScenario({...walletReconciliation, mode: "native"}));
 });

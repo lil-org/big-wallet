@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import SwiftUI
@@ -13,7 +16,7 @@ struct Big_Wallet_visionOSApp: App {
     private let isTestHost = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 
     init() {
-        AlchemyJWTProvider.prewarmForApplicationLifecycle()
+        ApplicationServices.shared.prewarm()
     }
     
     var body: some Scene {
@@ -37,18 +40,18 @@ struct Big_Wallet_visionOSApp: App {
             }
             .task {
                 guard !isTestHost else { return }
-                await WalletsManager.shared.start()
+                await ApplicationServices.shared.wallets.start()
                 guard !Task.isCancelled else { return }
-                let backgroundTask = SafariApprovalVaultHost.backgroundTask(using: .shared)
-                await SafariApprovalVaultHost.shared.start(backgroundTask: backgroundTask)
+                let backgroundTask = ApprovalBackgroundActivity.make(using: .shared)
+                await ApplicationServices.shared.authority.startVaultReconciliation(backgroundTask: backgroundTask, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
             }
             .task(id: scenePhase) {
                 guard !isTestHost, scenePhase == .active else { return }
-                AlchemyJWTProvider.prewarmForApplicationLifecycle()
-                await WalletsManager.shared.handleExternalWalletStoreChange()
+                ApplicationServices.shared.prewarm()
+                _ = await ApplicationServices.shared.wallets.reloadFromStore()
                 guard !Task.isCancelled else { return }
-                await SafariApprovalVaultHost.shared.reconcile()
-                await ExtensionBridge.shared.performMaintenance()
+                await ApplicationServices.shared.authority.reconcileVault()
+                await ApplicationServices.shared.requests.performMaintenance()
             }
         }
         .defaultSize(CGSize(width: 420, height: 555))

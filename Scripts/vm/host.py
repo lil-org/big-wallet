@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 TOOLS = Path(__file__).resolve().parent
 DEFAULT_VM = Path.home() / 'Library/Application Support/VirtualBuddy/tests machine.vbvm'
 DEFAULT_STATE = Path.home() / 'Library/Application Support/Big Wallet Test VM'
-STAGES = ('build', 'test', 'performance', 'tsan', 'fuzz', 'approval', 'safari', 'repository', 'worker')
+STAGES = ('build', 'test', 'performance', 'tsan', 'fuzz', 'approval', 'safari', 'repository', 'worker', 'runtime')
 EXCLUDED_PARTS = {'.git', '.asc-runtime', 'node_modules', 'DerivedData', 'build', '.build',
                   '.cache', '.vm-testing', '__pycache__', '.venv', 'venv'}
 SECRET_SUFFIXES = {'.p12', '.p8', '.pem', '.key', '.mobileprovision', '.provisionprofile'}
@@ -597,7 +597,7 @@ def stage_planned_result(exchange, job):
         raise RunnerError('The staged source snapshot does not match the planned job')
     snapshot = read_json(exchange / 'snapshot-manifest.json')
     for relative in ('Scripts/vm/test_manifest.mjs', 'Scripts/safari/scenarios.mjs', 'Scripts/safari/synchronization.mjs',
-                     'Scripts/vm/environment.json'):
+                     'Scripts/vm/environment.json', 'Scripts/vm/runtime_inventory.mjs', 'Scripts/vm/runtime-test-inventory.json'):
         entries = [entry for entry in snapshot['files'] if entry.get('path') == relative]
         if (len(entries) != 1 or entries[0].get('type') != 'file' or
                 hash_regular_file(exchange / 'source' / relative) != entries[0].get('sha256')):
@@ -623,7 +623,7 @@ def stage_planned_result(exchange, job):
 def job_selection(job):
     payload = job['payload']
     return {'signing': payload.get('signing', 'local'),
-            **{key: payload[key] for key in ('stages', 'onlyTesting', 'configuration', 'approvalArgs',
+            **{key: payload[key] for key in ('stages', 'onlyTesting', 'configuration', 'approvalArgs', 'runtimePlatforms',
                                             'interactiveSafari', 'prepareSafari', 'preparedSafari') if key in payload}}
 
 
@@ -1982,8 +1982,9 @@ def prepare_safari_activation(args, state, environment, operation):
     validation_result = None
     result = None
     for prefix, payload in (
-        ('setup-validation', {'stages': ['test'], 'configuration': 'Debug', 'signing': 'local',
-            'onlyTesting': ['Tests macOS/WindowAuthenticationSessionTests', 'Tests macOS/PasswordStorageTests', 'Tests macOS/SecretHandlingTests']}),
+        ('setup-validation', {'stages': ['test'], 'configuration': 'Debug', 'signing': 'local', 'runtimePlatforms': ['macos'],
+            'onlyTesting': ['Tests macOS/WindowAuthenticationSessionTests', 'Tests macOS/PasswordStorageTests',
+                            'WalletAuthorityTests/PasswordStorageTests', 'Tests macOS/SecretHandlingTests']}),
         ('setup-safari-preparation', {'stages': ['safari'], 'configuration': 'Debug', 'signing': 'local',
             'onlyTesting': ['Safari UI Tests macOS'], 'prepareSafari': True}),
     ):
@@ -2251,7 +2252,7 @@ def prepare_setup(args, state, environment, operation):
         verify_setup_sources(verification_exchange, source_digest, environment)
         verification_job = {'version': 1, 'runId': verification_id,
                     'vmId': record['vmId'], 'kind': 'run', 'profile': 'all',
-                    'payload': {'stages': ['test'], 'configuration': 'Debug', 'signing': 'local',
+                    'payload': {'stages': ['test'], 'configuration': 'Debug', 'signing': 'local', 'runtimePlatforms': ['macos'],
                                 'onlyTesting': ['WindowAuthenticationSessionTests', 'PasswordStorageTests', 'SecretHandlingTests']},
                     'source': source, 'bootstrapTools': bootstrap_tools}
         atomic_json(verification_exchange / 'job.json', verification_job)
@@ -2337,6 +2338,8 @@ def run_tests(args, state, environment, *, result_callback=None):
                        'bootstrapTools': bootstrap_tools}
                 if args.configuration:
                     job['payload']['configuration'] = args.configuration
+                if getattr(args, 'runtime_platform', None):
+                    job['payload']['runtimePlatforms'] = args.runtime_platform
                 if getattr(args, 'interactive_safari', False):
                     job['payload']['interactiveSafari'] = True
                 if args.approval_arg:
@@ -2430,6 +2433,8 @@ def parser():
                             help='Use credential-free local signing by default, or explicitly verify Apple signing prerequisites')
     run_parser.add_argument('--stage', choices=STAGES, action='append', default=[])
     run_parser.add_argument('--only-testing', action='append', default=[])
+    run_parser.add_argument('--runtime-platform', choices=('macos', 'ios', 'visionos'), action='append', default=[],
+                            help='Limit package XCTest destinations; repeat to select multiple platforms (default: all three)')
     run_parser.add_argument('--configuration', choices=('Debug', 'Release'))
     run_parser.add_argument('--approval-arg', action='append', default=[])
     run_parser.add_argument('--timeout', type=int)

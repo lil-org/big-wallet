@@ -1,3 +1,5 @@
+import WalletDomain
+@testable import WalletAuthority
 import AppKit
 import XCTest
 @testable import Big_Wallet
@@ -41,7 +43,7 @@ func accountSelectionController(
 ) throws -> NativeAccountSelectionViewController {
     let session = NativeAccountSelectionSession(
         action: .init(coinType: coinType, selectedAccounts: selectedAccounts,
-            initiallyConnectedProviders: [], network: Networks.ethereum),
+            initiallyConnectedProviders: [], network: ApplicationServices.shared.networks.network(chainId: 1)),
         mode: mode, review: try nativeReviewForTesting(), completion: completion
     )
     let controller = NativeAccountSelectionViewController(accountSelection: session, walletsManager: manager)

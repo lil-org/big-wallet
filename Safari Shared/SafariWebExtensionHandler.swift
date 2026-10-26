@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import SafariServices
@@ -5,16 +8,25 @@ import SafariServices
 let SFExtensionMessageKey = "message"
 
 final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
-    private static let dispatcher: NativeMessageDispatcher = {
-        let bridge = ExtensionBridge.shared
-        let rpcClient = SafariRPCClient()
+    @MainActor
+    private static let dispatcher = makeDispatcher()
+
+    @MainActor
+    private static func makeDispatcher() -> NativeMessageDispatcher {
+        let services = ApplicationServices.shared
+        let system = services.authority
+        let bridge = system.requests
+        let networks = system.networks
+#if os(macOS)
+        let nativeApprovals = services.nativeApprovals
+#else
+        let popupSessions = services.popupSessions
+#endif
         let poller = ResponseDeliveryPoller(
-            responseStatus: { handle, configurationKey in
-                await bridge.responseStatus(handle: handle, configurationKey: configurationKey)
-            },
+            responseStatus: { await bridge.responseStatus(handle: $0, configurationKey: $1) },
             maintain: { handle, configurationKey, maintenance in
 #if os(macOS)
-                let result = await NativeApprovalService.live.reconcile(
+                let result = await nativeApprovals.reconcile(
                     .init(handle: handle, configurationKey: configurationKey),
                     intent: .maintenance(allowDelivery: maintenance == .interactive)
                 )
@@ -30,12 +42,8 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 #endif
             },
             prepareDelivery: { handle, configurationKey in
-                await bridge.prepareResponseDelivery(
-                    id: handle.id,
-                    configurationKey: configurationKey,
-                    requestToken: handle.requestToken,
-                    profileIdentifier: handle.profileIdentifier
-                )
+                await bridge.prepareResponseDelivery(id: handle.id, configurationKey: configurationKey,
+                    requestToken: handle.requestToken, profileIdentifier: handle.profileIdentifier)
             }
         )
 #if os(macOS)
@@ -45,49 +53,44 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 #endif
         return NativeMessageDispatcher(policy: policy, dependencies: .init(
             bridge: bridge,
-            materialize: { await DappRequestAdmission.shared.materialize(handle: $0) },
+            materialize: { await system.admission.materialize(handle: $0) },
             reconcile: { reference, intent in
 #if os(macOS)
-                let nativeIntent: NativeApprovalService.ReconciliationIntent
-                switch intent {
-                case .admission: nativeIntent = .admission
-                case .focus: nativeIntent = .focus
-                }
-                        return await NativeApprovalService.live.reconcile(
+                await nativeApprovals.reconcile(
                     .init(handle: reference.handle, configurationKey: reference.configurationKey, expectedNonce: reference.expectedNonce),
-                    intent: nativeIntent
+                    intent: intent == .admission ? .admission : .focus
                 )
 #else
-                return .unavailable
+                .unavailable
 #endif
             },
             pollResponse: { await poller.poll(handle: $0, configurationKey: $1, maintenance: $2) },
-            rpcNetwork: { Nodes.resolution(chainId: $0).resolvedNetwork },
-            sendRPC: { try await rpcClient.send(endpoint: $0, request: $1, execution: $2) },
+            rpc: PublicRPCForwarder(service: SafariRPCService(limits: .live, clock: .live, serializeRequest: { try $0.serialize() }), client: services.safariRPC,
+                network: { networks.resolve(chainId: $0).resolvedNetwork }),
             popup: { request, profileIdentifier in
 #if os(macOS)
                 .command(.init(status: .ignored, approvalState: nil))
 #else
-                await PopupRequestSessions.dispatch(request: request, profileIdentifier: profileIdentifier)
+                await popupSessions.dispatch(request: request, profileIdentifier: profileIdentifier)
 #endif
             },
             privatePopup: { request in
 #if os(macOS)
                 .command(.init(status: .ignored, approvalState: nil))
 #else
-                await PopupRequestSessions.dispatchPrivateBrowsing(request: request)
+                await popupSessions.privateBrowsingResponse(for: request)
 #endif
             },
             openApp: {
 #if os(macOS)
-                await NativeApprovalService.live.openWallet()
+                await nativeApprovals.openWallet()
 #else
                 false
 #endif
             },
-            invalidateNetworkCache: { CustomNetworkCache.shared.invalidate() }
-        ))
-    }()
+            invalidateNetworkCache: { system.invalidateNetworkCache() }
+        ), messages: system.messages)
+    }
 
     func beginRequest(with context: NSExtensionContext) {
 #if BW_SAFARI_VM_TESTING

@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import Cocoa
@@ -171,7 +174,7 @@ class Agent: NSObject {
     }
     private var walletWindowController: NSWindowController?
     private var pendingWalletOpenIntent = PendingWalletOpenIntent()
-    private var nativeDeliveryOwner: ExtensionBridge.NativeDeliveryOwner?
+    private var nativeDeliveryOwner: NativeDeliveryOwner?
     private var approvalInbox = ApprovalInbox<ActiveApproval>()
 
 #if BW_SAFARI_VM_TESTING
@@ -316,7 +319,7 @@ class Agent: NSObject {
                 }
                 return
             }
-            let coordinator = NativeApprovalCoordinator(
+            let coordinator = ApplicationServices.shared.authority.makeNativeApprovalCoordinator(
                 handle: handle,
                 nativeDeliveryNonce: nativeDeliveryNonce
             )
@@ -379,8 +382,9 @@ class Agent: NSObject {
     }
 
     private func activateAwaitingApprovals() {
+        guard let authorization = startupCredentials.accessSession else { return }
         for key in approvalInbox.awaitingAuthenticationKeys {
-            activateApproval(key)
+            activateApproval(key, authorization: authorization)
         }
     }
 
@@ -407,16 +411,18 @@ class Agent: NSObject {
         walletWindowController = windowController
     }
 
-    private func activateApproval(_ key: ApprovalRouteKey) {
+    private func activateApproval(_ key: ApprovalRouteKey, authorization: WalletAccessSession) {
         guard let coordinator = approvalInbox.coordinator(for: key),
               coordinator.isAwaitingAuthentication else { return }
-        let approval = ActiveApproval(coordinator: coordinator)
-        guard approvalInbox.activate(approval, for: key) else { return }
-        coordinator.resumeAfterAuthentication()
+        if approvalInbox.active(for: key) == nil {
+            let approval = ActiveApproval(coordinator: coordinator)
+            guard approvalInbox.activate(approval, for: key) else { return }
+        }
+        coordinator.resumeAfterAuthentication(authorization: authorization)
     }
 
     func renderCurrentPresentation(
-        for handle: ExtensionBridge.Handle,
+        for handle: RequestHandle,
         coordinator: NativeApprovalCoordinator,
         allowNewWaitingWindow: Bool = false
     ) {
@@ -455,7 +461,7 @@ class Agent: NSObject {
     }
 
     private func activeApproval(
-        for handle: ExtensionBridge.Handle,
+        for handle: RequestHandle,
         coordinator: NativeApprovalCoordinator
     ) -> ActiveApproval? {
         let key = ApprovalRouteKey(
@@ -519,13 +525,17 @@ extension Agent.ActiveApproval {
                 account: action.account,
                 walletId: action.walletId,
                 review: review
-            ) { [weak self] transaction in
-                guard let self, acceptsActions(for: review) else { return }
-                if let transaction {
+            ) { [weak self] approval in
+                guard let self, acceptsActions(for: review) else {
+                    approval?.authorization.invalidate()
+                    return
+                }
+                if let approval {
                     coordinator.approveTransaction(
-                        transaction,
+                        approval.transaction,
                         reviewedNetwork: action.resolvedNetwork,
-                        review: review
+                        review: review,
+                        authorization: approval.authorization
                     )
                 } else {
                     coordinator.reject(review: review)
@@ -624,18 +634,25 @@ extension Agent.ActiveApproval {
                 coordinator.reject(review: review)
                 return
             }
+            guard case .approved(let cluster) = decision,
+                  let challenge = review.makeMessageAuthenticationChallenge(solanaCluster: cluster) else {
+                coordinator.reject(review: review)
+                return
+            }
             authenticationTask?.cancel()
             authenticationTask = Task { [weak self, weak window] in
-                let success = await Window.authenticate(
+                defer { challenge.invalidate() }
+                let authorization = await Window.authenticate(
                     in: window,
                     reason: action.subject.asAuthenticationReason,
+                    challenge: challenge,
                     review: review
                 )
                 guard let self, !Task.isCancelled, acceptsActions(for: review), !didResolveAuthentication else { return }
                 didResolveAuthentication = true
                 authenticationTask = nil
-                if success, case .approved(let cluster) = decision {
-                    coordinator.approveMessage(solanaCluster: cluster, review: review)
+                if let authorization {
+                    coordinator.approveMessage(solanaCluster: cluster, review: review, authorization: authorization)
                     (window?.contentViewController as? ApproveViewController)?.enableWaiting()
                 } else {
                     coordinator.reject(review: review)

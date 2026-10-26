@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import Cocoa
@@ -23,9 +26,15 @@ class ApproveTransactionViewController: NSViewController {
     @IBOutlet weak var fastSpeedLabel: NSTextField!
     @IBOutlet weak var peerNameLabel: NSTextField!
     
-    private let ethereum = Ethereum.shared
-    private let priceService = PriceService.shared
+    private let ethereum = ApplicationServices.shared.ethereum
+    private let priceService = ApplicationServices.shared.prices
+    struct ApprovedTransaction {
+        let transaction: Transaction
+        let authorization: WalletAuthenticationGrant
+    }
+
     private struct ApprovalAttempt {
+        let challenge: WalletAuthenticationChallenge
         let reservation: TransactionApprovalReservation
         let task: Task<Void, Never>
     }
@@ -48,7 +57,7 @@ class ApproveTransactionViewController: NSViewController {
     private var coordinator: TransactionApprovalCoordinator!
     private var approvalSnapshot: TransactionApprovalSnapshot!
     private var chain: EthereumNetwork!
-    private var completion: ((Transaction?) -> Void)?
+    private var completion: ((ApprovedTransaction?) -> Void)?
     private var account: WalletAccount!
     private var walletId: String!
     private var balance: String?
@@ -62,7 +71,7 @@ class ApproveTransactionViewController: NSViewController {
         approvalSnapshot.transaction
     }
     
-    static func with(transaction: Transaction, chain: EthereumNetwork, account: WalletAccount, walletId: String, review: NativeApprovalReview, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, chain: EthereumNetwork, account: WalletAccount, walletId: String, review: NativeApprovalReview, completion: @escaping (ApprovedTransaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self)
         new.walletId = walletId
         new.review = review
@@ -71,7 +80,8 @@ class ApproveTransactionViewController: NSViewController {
         new.completion = completion
         new.coordinator = TransactionApprovalCoordinator(
             transaction: transaction,
-            network: chain
+            network: chain,
+            operations: ApplicationServices.shared.ethereum.makePreparationOperations()
         )
         new.approvalSnapshot = new.coordinator.snapshot
         new.coordinator.onSnapshot = { [weak new] snapshot in
@@ -157,8 +167,17 @@ class ApproveTransactionViewController: NSViewController {
               let reservation = coordinator.reserveForPreflight() else { return }
         let coordinator = coordinator!
         let lifetime = review!
+        guard case .approveTransaction(let action) = lifetime.action,
+              let challenge = lifetime.makeTransactionAuthenticationChallenge(
+                transaction: coordinator.snapshot.transaction,
+                reviewedNetwork: action.resolvedNetwork
+              ) else {
+            coordinator.releaseReservation(reservation)
+            return
+        }
         let task = Task { [weak self, weak window] in
-            let succeeded = await Window.authenticate(in: window, reason: .sendTransaction, review: lifetime)
+            defer { challenge.invalidate() }
+            let authorization = await Window.authenticate(in: window, reason: .sendTransaction, challenge: challenge, review: lifetime)
             guard let self, !Task.isCancelled, lifetime.isActive,
                   approvalAttempt?.reservation == reservation else { return }
             defer {
@@ -167,7 +186,7 @@ class ApproveTransactionViewController: NSViewController {
                     updateInterface()
                 }
             }
-            guard succeeded else {
+            guard let authorization else {
                 coordinator.releaseReservation(reservation)
                 return
             }
@@ -176,26 +195,27 @@ class ApproveTransactionViewController: NSViewController {
                   approvalAttempt?.reservation == reservation else { return }
             if case .approved(let transaction) = outcome {
                 approvalAttempt = nil
-                complete(transaction)
+                complete(ApprovedTransaction(transaction: transaction, authorization: authorization))
             }
         }
-        approvalAttempt = ApprovalAttempt(reservation: reservation, task: task)
+        approvalAttempt = ApprovalAttempt(challenge: challenge, reservation: reservation, task: task)
     }
 
     private func cancelApproval() {
         let attempt = approvalAttempt
         approvalAttempt = nil
+        attempt?.challenge.invalidate()
         attempt?.task.cancel()
     }
 
-    private func complete(_ transaction: Transaction?) {
+    private func complete(_ approval: ApprovedTransaction?) {
         guard review.isActive, let completion else { return }
         self.completion = nil
         cancelApproval()
         coordinator.invalidate()
         sheetState = .idle
         resetGasSliderInteraction()
-        completion(transaction)
+        completion(approval)
     }
 
     static func primaryAction(for snapshot: TransactionApprovalSnapshot) -> PrimaryAction {

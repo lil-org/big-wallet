@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // https://github.com/Boilertalk/BlockiesSwift
 
 //

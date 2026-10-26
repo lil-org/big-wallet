@@ -1,0 +1,345 @@
+// ∅ 2026 lil org
+
+import XCTest
+import CryptoKit
+import WalletDomain
+import WalletRuntimeTestSupport
+@testable import WalletAuthority
+
+private typealias Vectors = WalletCoreProxyTestVectors
+
+private func assertValidSolanaSignature(_ signature: Data,
+                                        message: Data,
+                                        publicKeyData: Data,
+                                        file: StaticString = #filePath,
+                                        line: UInt = #line) throws {
+    XCTAssertEqual(signature.count, 64, file: file, line: line)
+    XCTAssertEqual(publicKeyData.count, 32, file: file, line: line)
+    let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData)
+    XCTAssertTrue(publicKey.isValidSignature(signature, for: message), file: file, line: line)
+}
+
+private func assertValidSolanaSignature(_ signatureBase58: String?,
+                                        message: Data,
+                                        publicKeyHex: String,
+                                        file: StaticString = #filePath,
+                                        line: UInt = #line) throws {
+    let signatureBase58 = try XCTUnwrap(signatureBase58, file: file, line: line)
+    let signature = try XCTUnwrap(WalletCrypto.base58Decode(string: signatureBase58), file: file, line: line)
+    let publicKeyData = try XCTUnwrap(WalletCrypto.hexData(string: publicKeyHex), file: file, line: line)
+    try assertValidSolanaSignature(signature, message: message, publicKeyData: publicKeyData, file: file, line: line)
+}
+
+final class SolanaPreparedTransactionTests: XCTestCase {
+
+    private let serializedTransactionSignerPublicKey = "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi"
+
+    func testTransactionSignatureUsesFirstWireSignature() {
+        let firstSignature = Data((1...64).map(UInt8.init))
+        let secondSignature = Data((65...128).map(UInt8.init))
+        var transaction = Data.encodeLength(2)
+        transaction.append(firstSignature)
+        transaction.append(secondSignature)
+        transaction.append(0)
+
+        XCTAssertEqual(
+            SolanaSigner.transactionSignature(
+                signedTransaction: transaction.base64EncodedString()
+            ),
+            WalletCrypto.base58Encode(data: firstSignature)
+        )
+        XCTAssertNil(SolanaSigner.transactionSignature(signedTransaction: "not-base64"))
+        XCTAssertNil(SolanaSigner.transactionSignature(
+            signedTransaction: Data([0, 1]).base64EncodedString()
+        ))
+        XCTAssertNil(SolanaSigner.transactionSignature(
+            signedTransaction: (Data([1]) + Data(repeating: 1, count: 63) + Data([0]))
+                .base64EncodedString()
+        ))
+        XCTAssertNil(SolanaSigner.transactionSignature(
+            signedTransaction: (Data([1]) + Data(repeating: 0, count: 64) + Data([0]))
+                .base64EncodedString()
+        ))
+        XCTAssertNil(SolanaSigner.transactionSignature(
+            signedTransaction: (
+                Data([0x81, 0]) + firstSignature + Data([0])
+            ).base64EncodedString()
+        ))
+    }
+
+    func testSolanaMessageSigningWrappersProduceValidSignatures() throws {
+        let privateKey = try XCTUnwrap(WalletPrivateKey(data: Vectors.solanaSigningPrivateKey))
+
+        try assertValidSolanaSignature(SolanaSigner.sign(messageData: Vectors.solanaMessage, privateKey: privateKey),
+                                       message: Vectors.solanaMessage,
+                                       publicKeyHex: Vectors.solanaSigningPublicKey)
+        try assertValidSolanaSignature(SolanaSigner().sign(message: Vectors.solanaMessageBase58,
+                                                          asHex: false,
+                                                          privateKey: privateKey),
+                                       message: Vectors.solanaMessage,
+                                       publicKeyHex: Vectors.solanaSigningPublicKey)
+        try assertValidSolanaSignature(SolanaSigner().sign(message: Vectors.solanaMessageHex,
+                                                          asHex: true,
+                                                          privateKey: privateKey),
+                                       message: Vectors.solanaMessage,
+                                       publicKeyHex: Vectors.solanaSigningPublicKey)
+        try assertValidSolanaSignature(SolanaSigner.sign(messageData: Data(), privateKey: privateKey),
+                                       message: Data(),
+                                       publicKeyHex: Vectors.solanaSigningPublicKey)
+        try assertValidSolanaSignature(SolanaSigner().sign(message: "", asHex: true, privateKey: privateKey),
+                                       message: Data(),
+                                       publicKeyHex: Vectors.solanaSigningPublicKey)
+        try assertValidSolanaSignature(SolanaSigner.sign(messageData: Data(repeating: 0, count: 32), privateKey: privateKey),
+                                       message: Data(repeating: 0, count: 32),
+                                       publicKeyHex: Vectors.solanaSigningPublicKey)
+
+        XCTAssertNil(SolanaSigner().sign(message: "", asHex: false, privateKey: privateKey))
+        XCTAssertNil(SolanaSigner().sign(message: "0OIl", asHex: false, privateKey: privateKey))
+        XCTAssertNil(SolanaSigner().sign(message: "abc", asHex: true, privateKey: privateKey))
+        XCTAssertNil(SolanaSigner().sign(message: "0X00", asHex: true, privateKey: privateKey))
+    }
+
+    func testSerializedSolanaSignAndSendRejectsMissingCosignerSignature() {
+        let publicKey = serializedTransactionSignerPublicKey
+        let serializedTransaction = "6t24vfGqc3gdHL1msMPmHDkE7aRCWD9nwgMFGiSsLMEkN3z3fK6hCk41Y9kYxHKYM4SfgppbThLWmvfrjdSwfB2eRFgvxsb26BrJZFGYm8EHNbjnzRQ3m2pjkiXd5xTBdgFFNviEF8hrVsLS9cqtGd3ktVSthWL1wbj4nkCVPGjkkCcTay1bWoVCLEZvzcLFbn1BDCMYMAhThjbQKYGpDR1TVEB6x4VR8Ha6umVUxGDQXMRcVrHdGZKT8xtf7YWn5JNNZGE3aeTMGBE75PdC3BsX8TfJbgzomc1DZnceVKN2WtWgarT3uXCf47jRCYrHj5WVAMBRagqYMBYV5Aw74iTkmUbTA1vpU1BScs7ozyW7"
+
+        switch SolanaSigner().preparedSerializedTransactionForSignAndSend(serializedTransaction: serializedTransaction,
+                                                                         publicKey: publicKey) {
+        case .failure(.unsupportedMultiSignature):
+            break
+        case .failure(let error):
+            XCTFail("Expected unsupportedMultiSignature, got \(error)")
+        case .success:
+            XCTFail("Expected missing cosigner signature to be rejected")
+        }
+    }
+
+    func testSerializedSolanaSignAndSendAcceptsPresentCosignerSignature() {
+        let publicKey = serializedTransactionSignerPublicKey
+        let serializedTransaction = "6t24vfGqc3gdHL1msMPmHDkE7aRCWD9nwgMFGiSsLMEkN3z3fK6hCk41Y9kYxHKYM4SfgppbThLWmvfrjdSwfB2eRPFZ3pbJhMNrBA2Gzbg3GUEMMvEPu3aukDxNtYzVDC8jNnyhAvC41eDA5aFCXdxba7TDo8qxrw7AmHXyPTVymxmJinebHHcukjJK8GHcqGJaknfeBUQyspxamAFcw8MqKtNNR18bBbqyzNrwr2MmA3bkbV9Vyko39uuVn3iz1vWXRVmoS8v4t5qXXFiMiKHyfuTwdpS5pHA7p9TeNFrqgC2TatFggbDWNogbGnV8gN52qc9Mjgs7S7ZDoWhPzhb4cPRH9Mj2RemE5ay7SmUj"
+
+        switch SolanaSigner().preparedSerializedTransactionForSignAndSend(serializedTransaction: serializedTransaction,
+                                                                         publicKey: publicKey) {
+        case .success:
+            break
+        case .failure(let error):
+            XCTFail("Expected prepared transaction, got \(error)")
+        }
+    }
+
+    func testSerializedSolanaSignAndSendRejectsNoncanonicalSignatureCount()
+        throws {
+        var transactionData = try XCTUnwrap(
+            WalletCrypto.base58Decode(
+                string: Vectors.solanaPreparedSerializedTransaction
+            )
+        )
+        XCTAssertEqual(transactionData.removeFirst(), 1)
+        transactionData.insert(
+            contentsOf: [0x81, 0x00],
+            at: transactionData.startIndex
+        )
+        let serializedTransaction = WalletCrypto.base58Encode(
+            data: transactionData
+        )
+
+        switch SolanaSigner().preparedSerializedTransactionForSignAndSend(
+            serializedTransaction: serializedTransaction,
+            publicKey: Vectors.solanaPreparedSignerPublicKey
+        ) {
+        case .failure(.invalidMessage):
+            break
+        case .failure(let error):
+            XCTFail("Expected invalidMessage, got \(error)")
+        case .success:
+            XCTFail("Expected noncanonical signature count to be rejected")
+        }
+    }
+
+    func testSerializedSolanaSignAndSendProducesValidSignedTransaction() throws {
+        let privateKey = try XCTUnwrap(WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey))
+
+        switch SolanaSigner().preparedSerializedTransactionForSignAndSend(serializedTransaction: Vectors.solanaPreparedSerializedTransaction,
+                                                                         publicKey: Vectors.solanaPreparedSignerPublicKey) {
+        case .success(let preparedTransaction):
+            let preparedMessage = preparedTransaction.preparedMessage
+            XCTAssertEqual(preparedTransaction.approvalMessage, Vectors.solanaPreparedApprovalMessage)
+            XCTAssertEqual(WalletCrypto.base58Encode(data: preparedMessage.messageData), Vectors.solanaPreparedApprovalMessage)
+
+            let signedTransaction = try XCTUnwrap(SolanaSigner.signedTransactionForSignAndSend(
+                preparedSerializedTransaction: preparedTransaction,
+                privateKey: privateKey
+            ))
+            let signedData = try XCTUnwrap(Data(base64Encoded: signedTransaction))
+            let signedParts = try signerSignature(in: signedData, signerPublicKey: Vectors.solanaPreparedSignerPublicKey)
+
+            XCTAssertEqual(signedParts.messageData, preparedMessage.messageData)
+            try assertValidSolanaSignature(signedParts.signature,
+                                           message: signedParts.messageData,
+                                           publicKeyData: signedParts.publicKeyData)
+        case .failure(let error):
+            XCTFail("Expected prepared transaction, got \(error)")
+        }
+    }
+
+    func testPreparedTransactionMessageForSigningFormatsSameApprovalAsReparsedMessage() throws {
+        let signerPublicKey = try XCTUnwrap(WalletCrypto.base58Decode(string: Vectors.solanaPreparedSignerPublicKey))
+        let messageData = SolanaMessageFixture.wireMessage(accountKeys: [signerPublicKey],
+                                                           bodyAfterBlockhash: Data.encodeLength(0))
+        let encodedMessage = WalletCrypto.base58Encode(data: messageData)
+
+        switch SolanaSigner().preparedTransactionMessageForSigning(message: encodedMessage,
+                                                                  publicKey: Vectors.solanaPreparedSignerPublicKey) {
+        case .success(let preparedMessage):
+            XCTAssertEqual(preparedMessage.messageData, messageData)
+            XCTAssertEqual(preparedMessage.parsedMessage.requiredSignaturesCount, 1)
+            let reparsedApproval = SolanaTransactionSummaryFormatter.approvalMessage(messageData: messageData,
+                                                                                     encodedMessages: [encodedMessage])
+            let reusedApproval = SolanaTransactionSummaryFormatter.approvalMessage(encodedMessages: [encodedMessage],
+                                                                                   preparedMessages: [preparedMessage])
+
+            XCTAssertEqual(reusedApproval, reparsedApproval)
+        case .failure(let error):
+            XCTFail("Expected prepared transaction message, got \(error)")
+        }
+    }
+
+    func testPreparedTransactionMessageRejectsNoncanonicalAccountCount() throws {
+        let signerPublicKey = try XCTUnwrap(
+            WalletCrypto.base58Decode(
+                string: Vectors.solanaPreparedSignerPublicKey
+            )
+        )
+        var messageData = SolanaMessageFixture.wireMessage(
+            accountKeys: [signerPublicKey],
+            bodyAfterBlockhash: Data.encodeLength(0)
+        )
+        let accountCountIndex = messageData.index(
+            messageData.startIndex,
+            offsetBy: 3
+        )
+        XCTAssertEqual(messageData.remove(at: accountCountIndex), 1)
+        messageData.insert(
+            contentsOf: [0x81, 0x00],
+            at: accountCountIndex
+        )
+
+        switch SolanaSigner().preparedTransactionMessageForSigning(
+            message: WalletCrypto.base58Encode(data: messageData),
+            publicKey: Vectors.solanaPreparedSignerPublicKey
+        ) {
+        case .failure(.invalidMessage):
+            break
+        case .failure(let error):
+            XCTFail("Expected invalidMessage, got \(error)")
+        case .success:
+            XCTFail("Expected noncanonical account count to be rejected")
+        }
+    }
+
+    func testSerializedSolanaSignAndSendRejectsOverlongBase58Transaction() {
+        let serializedTransaction = String(repeating: "z", count: Solana.maxBase58EncodedWirePayloadLength + 1)
+
+        switch SolanaSigner().preparedSerializedTransactionForSignAndSend(serializedTransaction: serializedTransaction,
+                                                                         publicKey: serializedTransactionSignerPublicKey) {
+        case .failure(.invalidMessage):
+            break
+        case .failure(let error):
+            XCTFail("Expected invalidMessage, got \(error)")
+        case .success:
+            XCTFail("Expected overlong serialized transaction to be rejected")
+        }
+    }
+
+    func testSerializedSolanaSignAndSendRejectsOverlongDecodedTransaction() throws {
+        let signerPublicKey = try XCTUnwrap(WalletCrypto.base58Decode(string: serializedTransactionSignerPublicKey))
+        let message = SolanaMessageFixture.wireMessage(readOnlyUnsignedAccounts: 1,
+                                                        accountKeys: [signerPublicKey, Data(repeating: 0, count: 32)],
+                                                        bodyAfterBlockhash: SolanaMessageFixture.instruction(programIdIndex: 1,
+                                                                                                             accountIndices: [0],
+                                                                                                             data: Data(repeating: 7, count: 1_062)))
+        var transactionData = Data.encodeLength(1)
+        transactionData += Data(repeating: 0, count: 64)
+        transactionData += message
+        XCTAssertEqual(transactionData.count, Solana.maxWirePayloadLength + 1)
+
+        let serializedTransaction = WalletCrypto.base58Encode(data: transactionData)
+        XCTAssertLessThanOrEqual(serializedTransaction.utf8.count, Solana.maxBase58EncodedWirePayloadLength)
+
+        switch SolanaSigner().preparedSerializedTransactionForSignAndSend(serializedTransaction: serializedTransaction,
+                                                                         publicKey: serializedTransactionSignerPublicKey) {
+        case .failure(.invalidMessage):
+            break
+        case .failure(let error):
+            XCTFail("Expected invalidMessage, got \(error)")
+        case .success:
+            XCTFail("Expected overlong decoded transaction to be rejected")
+        }
+    }
+
+    private func signerSignature(in transactionData: Data,
+                                 signerPublicKey: String,
+                                 file: StaticString = #filePath,
+                                 line: UInt = #line) throws -> (signature: Data, messageData: Data, publicKeyData: Data) {
+        let publicKeyData = try XCTUnwrap(WalletCrypto.base58Decode(string: signerPublicKey), file: file, line: line)
+        let signaturesCount = try XCTUnwrap(Self.decodeCompactLength(transactionData, startingAt: transactionData.startIndex),
+                                            file: file,
+                                            line: line)
+        let signaturesByteLength = signaturesCount.length * 64
+        let messageStart = try XCTUnwrap(transactionData.index(signaturesCount.nextIndex,
+                                                               offsetBy: signaturesByteLength,
+                                                               limitedBy: transactionData.endIndex),
+                                         file: file,
+                                         line: line)
+        let messageData = transactionData.subdata(in: messageStart..<transactionData.endIndex)
+        let parsedMessage = try XCTUnwrap(SolanaWireMessageParser.parse(messageData), file: file, line: line)
+        let signerIndex = try XCTUnwrap(parsedMessage.accountKeys.prefix(parsedMessage.requiredSignaturesCount).firstIndex(of: publicKeyData),
+                                        file: file,
+                                        line: line)
+
+        let boundedSignerIndex = try XCTUnwrap(signerIndex < signaturesCount.length ? signerIndex : nil,
+                                               file: file,
+                                               line: line)
+        let signatureStart = try XCTUnwrap(transactionData.index(signaturesCount.nextIndex,
+                                                                 offsetBy: boundedSignerIndex * 64,
+                                                                 limitedBy: transactionData.endIndex),
+                                           file: file,
+                                           line: line)
+        let signatureEnd = try XCTUnwrap(transactionData.index(signatureStart, offsetBy: 64, limitedBy: transactionData.endIndex),
+                                         file: file,
+                                         line: line)
+
+        return (transactionData.subdata(in: signatureStart..<signatureEnd), messageData, publicKeyData)
+    }
+
+    private static func decodeCompactLength(_ data: Data, startingAt startIndex: Data.Index) -> (length: Int, nextIndex: Data.Index)? {
+        guard startIndex < data.endIndex else { return nil }
+
+        var length: UInt = 0
+        var shift = 0
+        var index = startIndex
+
+        while index < data.endIndex {
+            let element = data[index]
+            index = data.index(after: index)
+
+            guard shift < UInt.bitWidth else { return nil }
+            let multiplier = UInt(1) << shift
+            let (component, componentOverflow) = UInt(element & 0x7f).multipliedReportingOverflow(by: multiplier)
+            guard !componentOverflow else { return nil }
+            let (newLength, didOverflow) = length.addingReportingOverflow(component)
+            guard !didOverflow else { return nil }
+            length = newLength
+
+            if element & 0x80 == 0 {
+                guard let intLength = Int(exactly: length) else { return nil }
+                return (length: intLength, nextIndex: index)
+            }
+
+            shift += 7
+        }
+
+        return nil
+    }
+
+}

@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import UIKit
@@ -5,7 +8,7 @@ import UIKit
 class EditAccountsViewController: UIViewController {
 
     var wallet: WalletSnapshot!
-    var walletsManager = WalletsManager.shared
+    var walletsManager = ApplicationServices.shared.wallets
     private var layoutTask: Task<Void, Never>?
     private(set) var previewState: AccountPreviewState!
     private let previewAccountsPreloadThreshold = 4
@@ -33,7 +36,7 @@ class EditAccountsViewController: UIViewController {
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: Strings.cancel, style: .plain, target: self, action: #selector(closeEditor))
         previewState = AccountPreviewState(
             wallet: wallet,
-            makeSession: { [repository = walletsManager.repository] in try await repository.previewSession(wallet: $0) },
+            makeSession: { [walletsManager] in try await walletsManager.previewSession(wallet: $0) },
             didChange: { [weak self] in self?.previewDidChange($0) }
         )
         previewState.reset()

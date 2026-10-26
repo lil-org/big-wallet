@@ -1,0 +1,265 @@
+import WalletDomain
+import WalletStorageSupport
+// ∅ 2026 lil org
+
+import Foundation
+
+struct ExtensionRequestProfileCodec: Sendable {
+    typealias ProfileState = ExtensionRequestProfile.State
+    typealias OriginState = ExtensionRequestProfile.OriginState
+    typealias ValidatedProfile = ExtensionRequestProfile
+
+    private var cachedProfile: (data: Data, profile: ValidatedProfile)?
+
+    func bind(_ request: SafariRequest, data: Data, authority: RequestAuthoritySnapshot) -> (request: SafariRequest, payload: ExtensionRequestProfile.ActiveRequestPayload)? {
+        guard var raw = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        raw["authority"] = authority.version.json
+        if case .unknown = request.body {
+            raw["body"] = [String: Any]()
+        }
+        guard let data = ExtensionBridge.payloadData(raw, options: [.sortedKeys]),
+              data.count <= ExtensionBridge.maximumPayloadBytes,
+              let body = raw["body"] as? [String: Any] else { return nil }
+        var bound = request
+        bound.authority = authority.version
+        bound.authorizedAccount = nil
+        bound.manualSwitchContext = nil
+        switch request.body {
+        case .ethereum:
+            bound.authorizedAccount = authority.ethereumAccount
+        case .solana:
+            bound.authorizedAccount = authority.solanaAccount
+        case .unknown:
+            bound.manualSwitchContext = .init(authority: authority)
+        }
+        guard let payload = ExtensionRequestProfile.ActiveRequestPayload(request: bound, body: body) else { return nil }
+        return (bound, payload)
+    }
+
+    static func interruptionResponseData(for request: SafariRequest?) -> Data? {
+        guard let request else { return nil }
+        return boundedResponseData(
+            ResponseToExtension(for: request, payload: .error(.approvalInterrupted)),
+            request: request
+        )
+    }
+
+    static func expirationResponseData(for request: SafariRequest) -> Data? {
+        boundedResponseData(
+            ResponseToExtension(for: request, payload: .error(.userRejected)),
+            request: request
+        )
+    }
+
+    private func resetAuthority(
+        _ stored: ProfileState,
+        expectedIdentifier: UUID?,
+        now: Date
+    ) -> ValidatedProfile? {
+        guard let state = ExtensionRequestProfile.resetAuthorityState(stored, expectedIdentifier: expectedIdentifier),
+              var profile = validate(state, expectedIdentifier: expectedIdentifier) else { return nil }
+        for key in profile.state.origins.keys {
+            guard profile.invalidateStaleRequests(configurationKey: key, excluding: nil, now: now) else { return nil }
+        }
+        return profile
+    }
+
+    private func permissionsAreValid(_ profile: ProfileState) -> Bool {
+        guard !profile.permissionDecodingFailed,
+              profile.origins.count <= ExtensionRequestProfile.maximumOrigins,
+              (try? Self.encode(profile.origins).count).map({ $0 <= ExtensionRequestProfile.maximumAuthorityBytes }) == true,
+              profile.origins.allSatisfy({ key, origin in
+                  ExtensionRequestProfile.validConfigurationKey(key) &&
+                      ExtensionRequestProfile.validOrigin(origin, sequence: profile.authoritySequence)
+              }),
+              profile.mutationReceipts.allSatisfy({ profile.origins[$0.configurationKey] != nil }) else { return false }
+        return profile.records.allSatisfy { record in
+            guard profile.origins[record.configurationKey] != nil else { return false }
+            switch record.state {
+            case .pending, .claimed:
+                return ExtensionRequestProfile.authorityStatus(record, in: profile) != .inconsistentGrant
+            case .broadcastPrepared, .completed:
+                return true
+            }
+        }
+    }
+
+    private func validate(
+        _ profile: ProfileState,
+        expectedIdentifier: UUID?
+    ) -> ValidatedProfile? {
+        let active = profile.records.filter(\.state.isActive)
+        guard profile.schemaVersion == ExtensionRequestProfile.profileSchemaVersion,
+              profile.workflowVersion == ExtensionBridge.workflowVersion,
+              profile.profileIdentifier == expectedIdentifier,
+              profile.revocationCursor.sequence >= 0,
+              permissionsAreValid(profile),
+              profile.authoritySequence >= 0, profile.authoritySequence <= ExtensionRequestProfile.maximumRevision,
+              profile.reclaimedAuthorityRevision >= 0,
+              profile.reclaimedAuthorityRevision <= profile.authoritySequence,
+              profile.mutationReceipts.count <= ExtensionRequestProfile.maximumMutationReceipts,
+              Set(profile.mutationReceipts.map(\.attempt)).count == profile.mutationReceipts.count,
+              profile.mutationReceipts.allSatisfy({ receipt in
+                  ExtensionRequestProfile.validConfigurationKey(receipt.configurationKey) &&
+                    (receipt.provider == .ethereum || receipt.provider == .solana) &&
+                    ExtensionBridge.isValidEnqueueAttempt(receipt.attempt) &&
+                    receipt.createdAt.timeIntervalSince1970.isFinite &&
+                    receipt.expected.context == ExtensionRequestProfile.authoritySnapshot(profile, configurationKey: receipt.configurationKey).version.context
+              }),
+              (try? Self.encode(profile.mutationReceipts).count).map({ $0 <= ExtensionRequestProfile.maximumMutationReceiptBytes }) == true,
+              active.count <= ExtensionBridge.maximumRequests,
+              Dictionary(grouping: active, by: \.configurationKey).values.allSatisfy({
+                  $0.count <= ExtensionBridge.maximumRequestsPerHost
+              }),
+              Set(profile.records.map(\.requestToken)).count == profile.records.count,
+              Set(profile.records.map(\.nativeDeliveryNonce)).count ==
+                profile.records.count,
+              Set(profile.records.flatMap {
+                  [$0.requestToken, $0.nativeDeliveryNonce.value]
+              }).count == profile.records.count * 2,
+              Set(profile.records.map(\.enqueueAttempt)).count == profile.records.count else {
+            return nil
+        }
+        for record in profile.records {
+            guard record.profileIdentifier == expectedIdentifier,
+                  !record.host.isEmpty,
+                  record.authority.context == ExtensionRequestProfile.authoritySnapshot(profile, configurationKey: record.configurationKey).version.context,
+                  record.authorizedAccount.map(\.isValid) ?? true,
+                  record.revisions.ethereum <= profile.authoritySequence,
+                  record.revisions.solana <= profile.authoritySequence,
+                  (record.claimedApproval?.deadline).map({ $0.timeIntervalSince1970.isFinite }) ?? true,
+                  ExtensionBridge.isValidIdentity(
+                      host: record.host,
+                      configurationKey: record.configurationKey
+                  ),
+                  ExtensionBridge.isValidEnqueueAttempt(record.enqueueAttempt),
+                  record.createdAt <= record.admissionCreatedAt,
+                  record.nativeApproval.map({
+                      $0.approvedAt.timeIntervalSince1970.isFinite &&
+                        $0.approvedAt >= record.createdAt
+                  }) ?? true,
+                  record.nativeExecutionContext.map({ context in
+                      context.observedAt.timeIntervalSince1970.isFinite &&
+                        context.executionDeadline.timeIntervalSince1970.isFinite &&
+                        record.nativeApproval.map {
+                            context.observedAt >= $0.approvedAt
+                      } == true &&
+                        context.executionDeadline >= context.observedAt
+                  }) ?? true,
+                  record.nativeDeliveryReceipt.map({
+                      $0.nativeDeliveryNonce == record.nativeDeliveryNonce &&
+                        $0.owner.isValid
+                  }) ?? true else {
+                return nil
+            }
+            if let payload = record.state.request {
+                guard let object = payload.wireObject(for: record),
+                      let data = ExtensionBridge.payloadData(object, options: [.sortedKeys]),
+                      data.count <= ExtensionBridge.maximumPayloadBytes,
+                      ExtensionBridge.correlationFingerprint(object) == record.requestFingerprint,
+                      ExtensionBridge.admissionDeadlineDisposition(
+                          payload.request(for: record).admissionDeadline,
+                          now: record.admissionCreatedAt
+                      ) == .admissible else {
+                    return nil
+                }
+            }
+            if let responseData = record.state.responseData,
+               Self.decodeResponseData(responseData, id: record.id) == nil {
+                return nil
+            }
+            switch record.state {
+            case .completed(let since, _, _):
+                guard since >= record.createdAt else { return nil }
+            case .pending, .claimed, .broadcastPrepared:
+                break
+            }
+        }
+        return ValidatedProfile(state: profile)
+    }
+
+    static func boundedResponseData(
+        _ response: ResponseToExtension,
+        request: SafariRequest,
+        recoveryResponseData: Data? = nil
+    ) -> Data? {
+        if let data = exactResponseData(response) { return data }
+        if let recoveryResponseData { return recoveryResponseData }
+        var fallback = ResponseToExtension(
+            for: request,
+            payload: .error(.internalError)
+        )
+        if response.approvalCommitted {
+            fallback = fallback.markingApprovalCommitted()
+        }
+        return exactResponseData(fallback)
+    }
+
+    static func exactResponseData(_ response: ResponseToExtension) -> Data? {
+        guard let data = ExtensionBridge.payloadData(response.json, options: [.sortedKeys]),
+              data.count <= ExtensionBridge.maximumPayloadBytes,
+              decodeResponseData(data, id: response.id) != nil else { return nil }
+        return data
+    }
+
+    static func responseJSON(_ data: Data, id: Int) -> [String: Any]? {
+        decodeResponseData(data, id: id)?.json
+    }
+
+    static func decodeResponseData(_ data: Data, id: Int) -> ResponseToExtension? {
+        guard data.count <= ExtensionBridge.maximumPayloadBytes,
+              let response = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let decoded = ResponseToExtension(json: response),
+              decoded.id == id else { return nil }
+        return decoded
+    }
+
+    static func encode<Value: Encodable>(_ value: Value) throws -> Data {
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        return try encoder.encode(value)
+    }
+
+    struct DecodedProfile: Sendable {
+        let profile: ExtensionRequestProfile
+        let requiresAuthorityPublication: Bool
+    }
+
+    mutating func decodeProfile(
+        _ data: Data,
+        expectedIdentifier: UUID?,
+        recoverAuthority: Bool,
+        now: Date
+    ) -> DecodedProfile? {
+        if let cachedProfile,
+           cachedProfile.profile.state.profileIdentifier == expectedIdentifier,
+           cachedProfile.data == data {
+            return DecodedProfile(profile: cachedProfile.profile, requiresAuthorityPublication: false)
+        }
+        cachedProfile = nil
+        guard let state = try? PropertyListDecoder().decode(ProfileState.self, from: data),
+              state.revocationCursor.sequence >= 0,
+              state.authoritySequence >= 0,
+              state.authoritySequence <= ExtensionRequestProfile.maximumRevision,
+              state.reclaimedAuthorityRevision >= 0,
+              state.reclaimedAuthorityRevision <= state.authoritySequence else { return nil }
+        if let profile = validate(state, expectedIdentifier: expectedIdentifier) {
+            cachedProfile = (data, profile)
+            return DecodedProfile(profile: profile, requiresAuthorityPublication: false)
+        }
+        guard recoverAuthority, !permissionsAreValid(state),
+              let repaired = resetAuthority(state, expectedIdentifier: expectedIdentifier, now: now) else {
+            return nil
+        }
+        return DecodedProfile(profile: repaired, requiresAuthorityPublication: true)
+    }
+
+    static func profileData(_ profile: ExtensionRequestProfile) -> Data? {
+        guard let authorityData = try? encode(profile.state.origins),
+              authorityData.count <= ExtensionRequestProfile.maximumAuthorityBytes,
+              let data = try? encode(profile.state),
+              data.count <= ExtensionRequestProfile.maximumProfileBytes else { return nil }
+        return data
+    }
+}
+

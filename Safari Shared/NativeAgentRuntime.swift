@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import Foundation
@@ -102,7 +105,8 @@ enum NativeAgentRuntime {
     @MainActor
     static func launchApplication(
         target: NativeAgentLauncher.HelperTarget,
-        routeURL: URL
+        routeURL: URL,
+        runtimeIdentityDirectoryURL: URL?
     ) async -> Bool {
 #if os(macOS)
         switch target {
@@ -115,7 +119,9 @@ enum NativeAgentRuntime {
                   let processStartDate = AmbientRuntimeIdentity.processStartDate(
                       processIdentifier: processIdentifier
                   ),
-                  let identity = AmbientRuntimeIdentity.load(processIdentifier: processIdentifier),
+                  let identity = AmbientRuntimeIdentity.load(
+                    processIdentifier: processIdentifier, directoryURL: runtimeIdentityDirectoryURL
+                  ),
                   identity.matches(
                       processIdentifier: processIdentifier,
                       bundleURL: helperURL,

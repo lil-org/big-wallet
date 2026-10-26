@@ -1,24 +1,8 @@
-// ∅ 2026 lil org
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 
-enum ApprovalSubject: Sendable {
-    case signMessage
-    case signPersonalMessage
-    case signTypedData
-    case approveTransaction
-    
-    var asAuthenticationReason: AuthenticationReason {
-        switch self {
-        case .signMessage:
-            return .signMessage
-        case .signPersonalMessage:
-            return .signPersonalMessage
-        case .signTypedData:
-            return .signTypedData
-        case .approveTransaction:
-            return .approveTransaction
-        }
-    }
-    
+extension ApprovalSubject {
     var title: String {
         switch self {
         case .signMessage:

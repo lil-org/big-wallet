@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import Cocoa
@@ -8,11 +11,12 @@ final class StartupCredentialCoordinator: NSObject {
         case authenticated, cancelled, setupRequiredInDockApp, handedOff
     }
 
+    @MainActor
     struct Dependencies {
-        var keychain = Keychain.shared
+        var credentials = ApplicationServices.shared.credentials
         var canCreatePassword = CurrentApp.canCreatePassword
-        var attemptBiometrics: @MainActor (String) async -> DeviceAuthentication.Outcome? = {
-            await WindowAuthenticationSession.attemptBiometrics(reason: $0)
+        var attemptBiometrics: @MainActor (String, WalletAuthenticationChallenge) async -> WalletAuthenticationResult? = {
+            await WindowAuthenticationSession.attemptBiometrics(reason: $0, challenge: $1)
         }
         var openDock: @MainActor () async -> Bool = DockAppLauncher.openDockApp
     }
@@ -27,6 +31,8 @@ final class StartupCredentialCoordinator: NSObject {
     private var state = State.idle
     private var generation: UInt64 = 0
     private var task: Task<Void, Never>?
+    private var authenticationChallenge: WalletAuthenticationChallenge?
+    private(set) var accessSession: WalletAccessSession?
     private var closeObserver: NativeApprovalWindowCloseObserver?
     private(set) var windowController: WalletWindowController?
 
@@ -41,6 +47,8 @@ final class StartupCredentialCoordinator: NSObject {
 
     isolated deinit {
         task?.cancel()
+        authenticationChallenge?.invalidate()
+        accessSession?.invalidate()
         closeObserver?.disable()
         retirePresentation()
         NotificationCenter.default.removeObserver(self)
@@ -77,7 +85,7 @@ final class StartupCredentialCoordinator: NSObject {
 
     private func reconcile() {
         do {
-            switch try dependencies.keychain.passwordState() {
+            switch try dependencies.credentials.passwordState() {
             case .missing:
                 if dependencies.canCreatePassword {
                     switch state {
@@ -90,7 +98,11 @@ final class StartupCredentialCoordinator: NSObject {
             case .present:
                 switch state {
                 case .authenticated:
-                    onEvent(.authenticated)
+                    if let accessSession, dependencies.credentials.isCurrent(accessSession) {
+                        onEvent(.authenticated)
+                    } else {
+                        beginAuthentication()
+                    }
                 case .authenticating, .enteringPassword:
                     break
                 default:
@@ -105,6 +117,10 @@ final class StartupCredentialCoordinator: NSObject {
     @discardableResult
     private func transition(to state: State) -> UInt64 {
         generation &+= 1
+        authenticationChallenge?.invalidate()
+        authenticationChallenge = nil
+        accessSession?.invalidate()
+        accessSession = nil
         self.state = state
         let previousTask = task
         task = nil
@@ -206,10 +222,15 @@ final class StartupCredentialCoordinator: NSObject {
                 guard password == draft, password.isOkAsPassword else { return }
                 savePassword(password)
             case .enteringPassword:
+                authenticationChallenge?.invalidate()
+                let challenge = dependencies.credentials.makeWalletAccessChallenge()
+                authenticationChallenge = challenge
                 do {
-                    if try DeviceAuthentication.verify(password: password, keychain: dependencies.keychain) {
-                        completeAuthentication()
+                    if let grant = try dependencies.credentials.verify(password: password, challenge: challenge) {
+                        completeAuthentication(grant)
                     }
+                } catch WalletCredentialError.authorizationUnavailable {
+                    cancel()
                 } catch {
                     showUnavailable()
                 }
@@ -221,20 +242,25 @@ final class StartupCredentialCoordinator: NSObject {
 
     private func beginAuthentication() {
         let generation = transition(to: .authenticating)
+        let challenge = dependencies.credentials.makeWalletAccessChallenge()
+        authenticationChallenge = challenge
         if windowController != nil {
             present(WaitingViewController.with(reason: Strings.loading), generation: generation)
         }
         let attempt = dependencies.attemptBiometrics
         task = Task { [weak self] in
-            let outcome = await attempt(AuthenticationReason.start.title)
-            guard let self, !Task.isCancelled, accepts(generation) else { return }
+            let outcome = await attempt(AuthenticationReason.start.title, challenge)
+            guard let self, !Task.isCancelled, accepts(generation) else {
+                if case .granted(let grant)? = outcome { grant.invalidate() }
+                return
+            }
             task = nil
             do {
-                guard try dependencies.keychain.passwordState() == .present else {
+                guard try dependencies.credentials.passwordState() == .present else {
                     reconcile()
                     return
                 }
-                if outcome == .succeeded { completeAuthentication() }
+                if case .granted(let grant)? = outcome { completeAuthentication(grant) }
                 else { showPassword(mode: .enter) }
             } catch {
                 showUnavailable()
@@ -242,9 +268,10 @@ final class StartupCredentialCoordinator: NSObject {
         }
     }
 
-    private func completeAuthentication() {
+    private func completeAuthentication(_ grant: WalletAuthenticationGrant) {
+        defer { grant.invalidate() }
         do {
-            guard try dependencies.keychain.passwordState() == .present else {
+            guard try dependencies.credentials.passwordState() == .present else {
                 reconcile()
                 return
             }
@@ -252,7 +279,13 @@ final class StartupCredentialCoordinator: NSObject {
             showUnavailable()
             return
         }
+        guard let session = dependencies.credentials.accessSession(authorization: grant),
+              dependencies.credentials.isCurrent(session) else {
+            beginAuthentication()
+            return
+        }
         transition(to: .authenticated)
+        accessSession = session
         closeWindow()
         onEvent(.authenticated)
     }
@@ -262,18 +295,25 @@ final class StartupCredentialCoordinator: NSObject {
         let controller = windowController?.contentViewController as? PasswordViewController
         let generation = transition(to: .saving)
         controller?.render(.init(mode: .repeatAfterCreate, availability: .saving))
-        let keychain = dependencies.keychain
+        let credentials = dependencies.credentials
         task = Task { [weak self] in
-            let result: Result<Keychain.PasswordCreationResult, Error>
-            do { result = .success(try await keychain.createPasswordIfMissing(password)) }
+            let result: Result<WalletPasswordCreationResult, Error>
+            do { result = .success(try await credentials.createPasswordIfMissing(password)) }
             catch { result = .failure(error) }
-            defer {
-                if case .success(.created) = result { WalletStoreSync.postLocalAndExternalChange() }
-            }
             guard let self, !Task.isCancelled, accepts(generation) else { return }
             task = nil
             switch result {
-            case .success(.created): completeAuthentication()
+            case .success(.created):
+                do {
+                    let challenge = credentials.makeWalletAccessChallenge()
+                    guard let grant = try credentials.verify(password: password, challenge: challenge) else {
+                        reconcile()
+                        return
+                    }
+                    completeAuthentication(grant)
+                } catch {
+                    showUnavailable()
+                }
             case .success(.alreadyExists): reconcile()
             case .failure: showUnavailable()
             }

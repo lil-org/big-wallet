@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import Cocoa
@@ -8,8 +11,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private let isTestHost = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
     private lazy var agent = Agent.shared
-    private lazy var priceService = PriceService.shared
-    private lazy var walletsManager = WalletsManager.shared
+    private lazy var priceService = ApplicationServices.shared.prices
+    private lazy var walletsManager = ApplicationServices.shared.wallets
     private var quitKeyboardShortcutMonitor: Any?
     private var startupTask: Task<Void, Never>?
     private var foregroundTask: Task<Void, Never>?
@@ -35,7 +38,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 #if DEBUG
         AmbientPseudoLocalizationLaunchMode.recordFromEnvironment()
 #endif
-        AlchemyJWTProvider.prewarmForApplicationLifecycle()
+        ApplicationServices.shared.prewarm()
         installQuitKeyboardShortcutMonitor()
         priceService.start()
         startupTask = Task { [walletsManager, agent] in
@@ -53,16 +56,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 #if BW_SAFARI_VM_TESTING
         guard SafariVMFixtures.shared.activationPreparation == nil else { return }
 #endif
-        AlchemyJWTProvider.prewarmForApplicationLifecycle()
+        ApplicationServices.shared.prewarm()
         agent.applicationDidBecomeActive()
         foregroundTask?.cancel()
         foregroundTask = Task { [walletsManager] in
-            await walletsManager.handleExternalWalletStoreChange()
+            _ = await walletsManager.reloadFromStore()
 #if BW_SAFARI_VM_TESTING
             await SafariVMMutations.shared.processPending()
 #endif
             guard !Task.isCancelled else { return }
-            await ExtensionBridge.shared.performMaintenance()
+            await ApplicationServices.shared.requests.performMaintenance()
         }
     }
     

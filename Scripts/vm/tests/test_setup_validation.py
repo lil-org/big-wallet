@@ -30,6 +30,9 @@ class SetupValidationInventoryTests(unittest.TestCase):
         manifest = exchange / 'source/Scripts/vm/test_manifest.mjs'
         manifest.parent.mkdir(parents=True)
         shutil.copyfile(host.TOOLS / 'test_manifest.mjs', manifest)
+        runtime_files = [manifest.with_name(name) for name in ('runtime_inventory.mjs', 'runtime-test-inventory.json')]
+        for path in runtime_files:
+            shutil.copyfile(host.TOOLS / path.name, path)
         scenarios = exchange / 'source/Scripts/safari/scenarios.mjs'
         scenarios.parent.mkdir()
         shutil.copyfile(host.TOOLS.parent / 'safari/scenarios.mjs', scenarios)
@@ -39,7 +42,7 @@ class SetupValidationInventoryTests(unittest.TestCase):
         shutil.copyfile(host.TOOLS / 'environment.json', environment)
         host.atomic_json(exchange / 'snapshot-manifest.json', {'version': 1, 'files': [
             {'path': str(path.relative_to(exchange / 'source')), 'type': 'file', 'mode': 0o644,
-             'sha256': host.hash_regular_file(path)} for path in (manifest, scenarios, synchronization, environment)]})
+             'sha256': host.hash_regular_file(path)} for path in (manifest, scenarios, synchronization, environment, *runtime_files)]})
         return {'sha256': host.hash_regular_file(exchange / 'snapshot-manifest.json'), 'commit': 'b' * 40}
 
     def test_validation_launch_failure_keeps_selected_inventory_and_cannot_promote_baseline(self):
@@ -101,13 +104,15 @@ class SetupValidationInventoryTests(unittest.TestCase):
         self.assertEqual(result['reason'], 'vm_launch_failed')
         self.assertEqual(result['plannedResult'], 'planned-result.json')
         self.assertEqual(result['selection'], {
-            'stages': ['test'], 'configuration': 'Debug', 'signing': 'local',
+            'stages': ['test'], 'configuration': 'Debug', 'signing': 'local', 'runtimePlatforms': ['macos'],
             'onlyTesting': ['WindowAuthenticationSessionTests', 'PasswordStorageTests', 'SecretHandlingTests'],
         })
         self.assertEqual(result['source'], job['source'])
         self.assertEqual([stage['id'] for stage in result['stages']], [stage['id'] for stage in planned['stages']])
         self.assertEqual({stage['id'] for stage in result['stages']}, {
-            'provider.install', 'protocol.check', 'provider.test',
+            'provider.install', 'protocol.check', 'provider.test', 'runtime.inventory', 'runtime.boundaries',
+            'runtime.WalletDomain.debug', 'runtime.WalletNetworking.debug', 'runtime.WalletAuthority.debug', 'runtime.api.debug',
+            'build-runtime-tests.macos.debug', 'test-runtime.macos.debug',
             'build-tests.macos.debug', 'test.macos.debug', 'build-tests.ios.debug', 'test.ios.debug',
             'build-tests.visionos.debug', 'test.visionos.debug',
         })

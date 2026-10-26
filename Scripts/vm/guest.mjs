@@ -9,7 +9,7 @@ import {availableParallelism, cpus, freemem, loadavg, totalmem, userInfo} from "
 import {dirname, isAbsolute, join, resolve, sep} from "node:path";
 import {pathToFileURL} from "node:url";
 import {createManifest, validateJob, commandForStage} from "./test_manifest.mjs";
-import {auditNativeResult, auditResults, auditSafariPreparation, auditSafariResult} from "./result_audit.mjs";
+import {auditApprovalResult, auditNativeResult, auditResults, auditSafariPreparation, auditSafariResult} from "./result_audit.mjs";
 
 const EXCHANGE_PATH = "/Volumes/BigWalletBuild/Exchange";
 const MAX_JSON_BYTES = 16 * 1024 * 1024;
@@ -271,7 +271,7 @@ function credentialCoverage(job, stages, preflight) {
 
 export function coverageReport(job, stages, preflight) {
     const options = job.payload;
-    const selected = options.stages.length > 0 || options.onlyTesting.length > 0 || Boolean(options.configuration) || Boolean(options.approvalArgs?.length);
+    const selected = options.stages.length > 0 || options.onlyTesting.length > 0 || Boolean(options.configuration) || Boolean(options.approvalArgs?.length) || Boolean(options.runtimePlatforms?.length);
     const missingPrerequisites = requiredPrerequisites(job).filter(name => preflight?.checks?.[name] !== true);
     const signingMode = options.signing ?? "local";
     const credentials = credentialCoverage(job, stages, preflight);
@@ -301,6 +301,7 @@ export function coverageReport(job, stages, preflight) {
         status: fullSuiteVerified ? "complete" : "partial",
         executionMode: options.interactiveSafari ? "assisted" : options.prepareSafari ? "preparation" : "unattended",
         selectedStageGroups: options.stages.length ? [...options.stages] : ["all"], onlyTesting: [...options.onlyTesting],
+        runtimePlatforms: options.runtimePlatforms?.length ? [...options.runtimePlatforms] : ["macos", "ios", "visionos"],
         missingPrerequisites, incompleteStages, fullSuiteVerified, signingMode, credentialCoverage: credentials, safari,
         ...(options.prepareSafari ? {safariPreparation: {status: preparation?.status === "passed" && preparation.audit?.ok === true ? "passed" : "incomplete",
             ...(preparation?.audit?.preparation ? {preparation: preparation.audit.preparation} : {})}} : {})};
@@ -436,6 +437,7 @@ export async function prepareNativeSimulators(platform, {destinations, artifacts
 export function pendingStageResults(manifest) {
     return manifest.map(stage => ({id: stage.id, group: stage.group, status: "pending",
         ...(stage.nativeAudit ? {nativeAudit: stage.nativeAudit} : {}),
+        ...(stage.approvalAudit ? {approvalAudit: stage.approvalAudit} : {}),
         ...(stage.preparationResult ? {preparationResult: true} : {})}));
 }
 
@@ -535,8 +537,16 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
             result.signal = outcome.signal;
             if (outcome.outputDrainTimedOut) { result.outputDrainTimedOut = true; }
             result.status = outcome.cancelled ? "cancelled" : outcome.timedOut || outcome.error || outcome.code !== 0 ? "failed" : "passed";
+            if (stage.runtimeTestability && result.status === "passed") {
+                result.testability = {modules: stage.runtimeTestability, evidence: "compiled-testable-imports"};
+            }
             if (outcome.timedOut) { result.reason = `Timed out after ${stage.timeoutSeconds}s`; }
             if (outcome.error) { result.reason = outcome.error; }
+            if (stage.approvalAudit && !outcome.cancelled && !outcome.timedOut) {
+                result.approvalEvidence = join("failures", stage.id, "systematic-coverage.json");
+                result.audit = auditApprovalResult(await readSafariEvidence(join(artifacts, result.approvalEvidence)), stage.approvalAudit);
+                if (!result.audit.ok) { result.status = "failed"; result.reason = result.audit.issues; }
+            }
             if (stage.preparationResult && !outcome.cancelled && !outcome.timedOut) {
                 if (await stopRequested()) { throw Object.assign(new Error("Safari preparation auditing was cancelled"), {cancelled: true}); }
                 result.preparationResult = `${stage.id}.safari-preparation.json`;

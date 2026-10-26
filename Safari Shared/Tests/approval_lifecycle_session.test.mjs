@@ -5,6 +5,7 @@ import {BrowserLifecycle} from "../../Scripts/approval_lifecycle/browser.mjs";
 import {LifecycleSession} from "../../Scripts/approval_lifecycle/session.mjs";
 import {LifecycleFailure} from "../../Scripts/approval_lifecycle/scheduler.mjs";
 import {handleKey} from "../../Scripts/approval_lifecycle/oracle.mjs";
+import {deferred} from "./test_helpers.mjs";
 
 const require = createRequire(new URL("../Inpage Provider/package.json", import.meta.url));
 const {keccak_256} = require("@noble/hashes/sha3");
@@ -14,13 +15,26 @@ const {Keypair, SystemProgram, Transaction} = require("@solana/web3.js");
 const base58Module = require("bs58");
 const base58 = base58Module.default || base58Module;
 
+test("authority observations retain module events without substituting signing checkpoints", async () => {
+    const session = new LifecycleSession({seed: 1, mode: "popup"});
+    const observed = [];
+    session.ledger = {append: event => observed.push(event)};
+    const child = {role: "bridge", epoch: "bridge-1"};
+    await session.nativeEvent({event: "authority.event", details: {kind: "protectedKeyRead", generation: "fixture-generation"}}, child);
+    assert.equal(observed[0].type, "authority.event");
+    assert.equal(observed[0].kind, "protectedKeyRead");
+    assert.ok(session.coverage.has("authority:protectedKeyRead"));
+    assert.equal(session.coverage.has("signer.before"), false);
+    await assert.rejects(session.nativeEvent({event: "authority.event", details: {kind: "unexpected"}}, child), error => error.invariant === "protocol");
+});
+
 test("launch acknowledgement does not require a fresh receipt when an existing route is reused", async () => {
     const session = new LifecycleSession({seed: 1, mode: "native"});
     const commands = [], releases = [];
     const identity = {instanceIdentifier: "fixture-runtime"};
     session.children.set("approval", {ready: {identity}, command: async (...arguments_) => { commands.push(arguments_); },
         waitEvent: async () => { throw new Error("A reused route need not publish another receipt"); }});
-    const bridge = {epoch: "bridge-1", role: "bridge", release: (...arguments_) => releases.push(arguments_)};
+    const bridge = {epoch: "bridge-1", role: "bridge", gates: new Set(["launch-one"]), release: (...arguments_) => releases.push(arguments_)};
     await session.nativeEvent({event: "launch", gate: "launch-one", details: {url: "bigwallet://agent/approval?workflowVersion=4&id=1"}}, bridge);
     assert.deepEqual(commands, [["route", {url: "bigwallet://agent/approval?workflowVersion=4&id=1"}]]);
     assert.deepEqual(releases, [["launch-one", {success: true, identity}]]);
@@ -32,7 +46,7 @@ test("an intentional peer restart returns launch failure without killing the hea
         const releases = [];
         session.children.set("approval", {expectedExit: !duringCommand,
             command: async () => { throw new LifecycleFailure("process-restarted", "Intentional peer restart"); }});
-        const bridge = {epoch: "bridge-1", role: "bridge", release: (...arguments_) => releases.push(arguments_)};
+        const bridge = {epoch: "bridge-1", role: "bridge", gates: new Set(["launch-one"]), release: (...arguments_) => releases.push(arguments_)};
         await session.nativeEvent({event: "launch", gate: "launch-one", details: {url: "bigwallet://agent/approval"}}, bridge);
         assert.deepEqual(releases, [["launch-one", {success: false}]]);
     }
@@ -54,6 +68,63 @@ test("fault coverage records actual message loss rather than an unused fault rul
     browser.close();
 });
 
+async function faultActionSession(kind, faultTargets) {
+    const session = new LifecycleSession({seed: 1, mode: "popup", faultTargets});
+    session.browser = new BrowserLifecycle({scheduler: session.scheduler, trace: event => session.record(event), native: async () => ({})});
+    session.tabs = [{profile: {id: null}}];
+    session.pump = () => session.scheduler.drain();
+    session.inspect = async () => [];
+    await session.action({kind, tab: 0, selector: 0, channel: "native", phase: "reply", delay: 500});
+    return session;
+}
+
+for (const kind of ["drop", "delay", "duplicate"]) {
+    test(`an unapplied recorded ${kind} cannot become a wildcard fault during recovery`, async () => {
+        const session = await faultActionSession(kind, {1: "other-action-target"});
+        assert.equal(session.browser.faults.length, 0);
+        assert.equal(session.trace.find(event => event.type === "action-result").exercised, false);
+        assert.equal(session.actionIndex, 0);
+        session.scheduler.phase = "recovery";
+        let delivered = 0;
+        session.browser.queue("worker", "native", "reply", {subject: "pollResponse", id: 1}, () => { delivered += 1; });
+        await session.scheduler.drain();
+        assert.equal(delivered, 1);
+        await session.scheduler.advance(1000);
+        assert.equal(delivered, 1);
+        assert.deepEqual(session.faultTargets, {});
+        assert.equal(session.coverage.has(`action:${kind}`), false);
+        session.browser.close();
+    });
+
+    test(`a recorded ${kind} applies only to its saved transport while fresh generation selects a target`, async () => {
+        const fresh = await faultActionSession(kind);
+        const target = fresh.browser.queue("worker", "native", "reply", {subject: "pollResponse", id: 1}, () => {});
+        assert.deepEqual(fresh.faultTargets, {0: target});
+        assert.equal(fresh.coverage.has(`action:${kind}`), true);
+        fresh.browser.close();
+
+        const replay = await faultActionSession(kind, {0: target});
+        const delivered = [];
+        replay.browser.queue("worker", "native", "reply", {subject: "pollResponse", id: 99}, () => delivered.push("unrelated"));
+        await replay.scheduler.drain();
+        assert.deepEqual(delivered, ["unrelated"]);
+        assert.deepEqual(replay.faultTargets, {});
+        assert.equal(replay.browser.faults.length, 1);
+        assert.equal(replay.browser.queue("worker", "native", "reply", {subject: "pollResponse", id: 1}, () => delivered.push("target")), target);
+        await replay.scheduler.drain();
+        assert.equal(delivered.filter(value => value === "target").length, kind === "duplicate" ? 2 : 0);
+        await replay.scheduler.advance(500);
+        assert.equal(delivered.filter(value => value === "target").length, kind === "drop" ? 0 : kind === "delay" ? 1 : 2);
+        assert.deepEqual(replay.faultTargets, {0: target});
+        assert.equal(replay.browser.faults.length, 0);
+        replay.browser.close();
+    });
+}
+
+test("an empty recorded fault target is rejected before it can arm a wildcard", async () => {
+    await assert.rejects(faultActionSession("drop", {0: ""}), error => error.invariant === "replay-schedule");
+});
+
 test("revocation includes automatic signer checkpoints only while their release is pending", async () => {
     const key = Buffer.alloc(32, 2), message = Buffer.from([1, 2, 3]);
     const address = Keypair.fromSeed(key).publicKey.toBase58();
@@ -65,7 +136,7 @@ test("revocation includes automatic signer checkpoints only while their release 
             for (const removal of [false, true]) {
                 const session = new LifecycleSession({seed: 1, mode: "native"});
                 session.ledger = {append() {}};
-                const child = {role: "approval", epoch: "approval-1", release() {}};
+                const child = {role: "approval", epoch: "approval-1", gates: new Set(["before", "after"]), release(gate) { this.gates.delete(gate); }};
                 session.oracle.register({handle, configurationKey, provider: "solana", name: "signMessage", account: address});
                 session.oracle.approvalIntent({handle, label: "approved"});
                 session.oracle.acceptConsent({handle, label: "approved"});
@@ -102,13 +173,49 @@ test("revocation includes automatic signer checkpoints only while their release 
 
 test("readiness recovery advances to transport timers more than one second away", async () => {
     const session = new LifecycleSession({seed: 1, mode: "native", timeout: 1000});
+    const initialTime = session.scheduler.now;
     let delivered = false;
     session.scheduler.schedule(() => { delivered = true; }, 5000, "document");
     await session.pumpUntil(() => delivered, {advance: true});
     assert.equal(session.scheduler.monotonic, 5000);
+    assert.deepEqual(session.trace.filter(event => event.type === "clock").map(event => event.time - initialTime), [5000]);
 });
 
-test("saved scheduling decisions form an ordered prefix that permits healthy continuation", () => {
+test("browser-only readiness advances through unheld timers without consuming a held timer", async () => {
+    const session = new LifecycleSession({seed: 1, mode: "popup", timeout: 1000});
+    const initialTime = session.scheduler.now;
+    const delivered = [];
+    const held = session.scheduler.schedule(() => delivered.push("held"), 1000, "document");
+    session.scheduler.hold(held);
+    session.scheduler.schedule(() => delivered.push("first"), 3000, "document");
+    session.scheduler.schedule(() => delivered.push("second"), 5000, "document");
+    await session.pumpUntil(() => delivered.includes("second"), {advance: true});
+    assert.deepEqual(delivered, ["first", "second"]);
+    assert.deepEqual(session.trace.filter(event => event.type === "clock").map(event => event.time - initialTime), [3000, 5000]);
+    assert.equal(session.scheduler.pending().find(task => task.id === held)?.held, true);
+    session.scheduler.release(held);
+    await session.pumpUntil(() => delivered.includes("held"), {advance: true});
+    assert.deepEqual(delivered, ["first", "second", "held"]);
+    assert.equal(session.scheduler.monotonic, 5000);
+});
+
+test("browser-only readiness preserves the exact replayed clock and delivery schedule", async () => {
+    const session = new LifecycleSession({seed: 1, mode: "popup", timeout: 1000});
+    const initialTime = session.scheduler.now;
+    let delivered = false;
+    const id = session.scheduler.schedule(() => { delivered = true; }, 5000, "document");
+    session.scheduler.replay = [
+        {phase: "setup", type: "clock", time: initialTime + 1000},
+        {phase: "setup", type: "clock", time: initialTime + 5000},
+        {phase: "setup", type: "schedule", key: session.scheduler.tasks.get(id).key},
+    ];
+    await session.pumpUntil(() => delivered, {advance: true});
+    assert.equal(session.scheduler.replayIndex, 3);
+    assert.deepEqual(session.trace.filter(event => event.type === "clock").map(event => event.time - initialTime), [1000, 5000]);
+    assert.equal(session.scheduler.monotonic, 5000);
+});
+
+test("saved scheduling decisions form an exact ordered schedule", () => {
     const decisions = [
         {phase: 0, type: "delivery", ordinal: 0, choice: "saved-delivery"},
         {phase: 1, type: "release-gate", ordinal: 0, choice: null},
@@ -118,16 +225,13 @@ test("saved scheduling decisions form an ordered prefix that permits healthy con
     assert.equal(session.decision("delivery", "proposed-delivery"), "saved-delivery");
     session.scheduler.phase = 1;
     assert.equal(session.decision("release-gate", "proposed-gate"), null);
-    assert.equal(session.decision("release-gate", "new-gate"), "new-gate");
+    assert.throws(() => session.decision("release-gate", "new-gate"), error => error.invariant === "replay-schedule");
     session.scheduler.phase = 2;
-    assert.equal(session.decision("delivery", "new-delivery"), "new-delivery");
-    assert.deepEqual(session.decisions, [...decisions,
-        {phase: 1, type: "release-gate", ordinal: 1, choice: "new-gate"},
-        {phase: 2, type: "delivery", ordinal: 0, choice: "new-delivery"},
-    ]);
+    assert.throws(() => session.decision("delivery", "new-delivery"), error => error.invariant === "replay-schedule");
+    assert.deepEqual(session.decisions, decisions);
 });
 
-test("recorded scheduling decisions cannot be skipped or reordered before the prefix ends", () => {
+test("recorded scheduling decisions cannot be skipped or reordered", () => {
     for (const change of [{phase: 1}, {type: "release-gate"}, {ordinal: 1}]) {
         const session = new LifecycleSession({seed: 1, mode: "native", decisions: [
             {phase: 0, type: "delivery", ordinal: 0, choice: "first", ...change},
@@ -570,6 +674,128 @@ test("persistence fault coverage requires an observed injected failure", async (
     await session.nativeEvent({event: "checkpoint", details: {name: "persistence.rename.after", fault: true}}, child);
     assert.equal(session.coverage.has("action:failPersistence"), true);
     assert.equal(session.coverage.has("fault:persistence:persistence.rename.after"), true);
+});
+
+function walletActionSession(command) {
+    const session = recoverySession([]);
+    session.accounts = ["ethereum", "solana"].map(coin => ({walletID: "fixture-multicoin", coin, address: coin}));
+    session.tabs = [{profile: {id: null}, alive: false}];
+    session.snapshots.set(null, {accounts: session.accounts});
+    session.pump = () => session.scheduler.flush();
+    session.browser.check = () => {};
+    const child = {role: "bridge", epoch: "bridge-1", command};
+    session.children.set("bridge", child);
+    const revocations = [];
+    session.oracle.revoke = value => revocations.push(value);
+    return {session, child, revocations};
+}
+
+test("a pending wallet mutation lets a later action release the competing native gate", {timeout: 1000}, async () => {
+    const mutation = deferred();
+    const {session, child, revocations} = walletActionSession(async operation => {
+        assert.equal(operation, "wallet");
+        return mutation.promise;
+    });
+    child.release = gate => { assert.equal(gate, "held"); mutation.resolve({changed: true}); };
+    session.gates.set("held", {child, event: {gate: "held"}, details: {gateKey: "broadcast-prepared"}});
+    await session.action({kind: "removeAccount", tab: 0, selector: 0});
+    assert.equal(session.background.size, 1);
+    assert.equal(session.walletMutations.size, 1);
+    assert.equal(session.coverage.has("action:removeAccount"), false);
+    assert.equal(revocations.length, 0);
+    assert.equal(session.trace.find(event => event.type === "action-result").pending, true);
+    await session.action({kind: "releaseNative", tab: 0, selector: 0});
+    await Promise.all([...session.background]);
+    session.check();
+    assert.equal(session.background.size, 0);
+    assert.equal(session.walletMutations.size, 0);
+    assert.equal(session.coverage.has("action:removeAccount"), true);
+    assert.equal(revocations.length, 2);
+    const result = session.trace.find(event => event.type === "wallet-mutation-result");
+    assert.equal(result.sourceAction, 0);
+    assert.equal(result.status, "completed");
+    assert.deepEqual(result.account, session.accounts[0]);
+});
+
+test("wallet mutations serialize publication within their native process", {timeout: 1000}, async () => {
+    const first = deferred(), second = deferred();
+    const calls = [];
+    const {session} = walletActionSession(async (_, payload) => {
+        calls.push(payload.action);
+        return calls.length === 1 ? first.promise : second.promise;
+    });
+    await session.action({kind: "removeAccount", tab: 0, selector: 0});
+    await session.action({kind: "restoreAccount", tab: 0, selector: 0});
+    assert.deepEqual(calls, ["removeAccount"]);
+    assert.equal(session.background.size, 2);
+    first.resolve({changed: true});
+    await session.scheduler.flush();
+    assert.deepEqual(calls, ["removeAccount", "restore"]);
+    assert.equal(session.coverage.has("action:removeAccount"), true);
+    assert.equal(session.coverage.has("action:restoreAccount"), false);
+    second.resolve({changed: true});
+    await Promise.all([...session.background]);
+    assert.equal(session.walletMutations.size, 0);
+    assert.deepEqual(session.trace.filter(event => event.type === "wallet-mutation-result").map(event => [event.sourceAction, event.kind, event.status]),
+        [[0, "removeAccount", "completed"], [1, "restoreAccount", "completed"]]);
+});
+
+test("fault-free recovery releases the native gate and advances timers before settling a wallet mutation", {timeout: 1000}, async () => {
+    const mutation = deferred();
+    let released = false, clocks = 0;
+    const {session, child} = walletActionSession(async operation => {
+        if (operation === "wallet") { return mutation.promise; }
+        if (operation === "clock") {
+            clocks += 1;
+            assert.equal(released, true);
+            mutation.resolve({changed: true});
+        } else { assert.equal(operation, "checkpoints"); }
+        return {};
+    });
+    child.release = () => { released = true; };
+    session.gates.set("held", {child, event: {gate: "held"}, details: {gateKey: "broadcast-prepared"}});
+    session.advance = LifecycleSession.prototype.advance.bind(session);
+    await session.action({kind: "removeAccount", tab: 0, selector: 0});
+    await session.quiesce();
+    assert.ok(clocks > 0);
+    assert.equal(session.background.size, 0);
+    assert.equal(session.walletMutations.size, 0);
+    assert.equal(session.coverage.has("action:removeAccount"), true);
+});
+
+test("wallet mutation settlement tolerates only a deliberately retired process incarnation", {timeout: 1000}, async () => {
+    for (const expectedExit of [true, false]) {
+        const mutation = deferred();
+        let calls = 0;
+        const {session, child, revocations} = walletActionSession(async () => { calls += 1; return mutation.promise; });
+        await session.action({kind: "removeAccount", tab: 0, selector: 0});
+        await session.action({kind: "restoreAccount", tab: 0, selector: 0});
+        child.expectedExit = expectedExit;
+        child.exited = true;
+        const failure = new LifecycleFailure("process-restarted", "Fixture process retired");
+        mutation.reject(failure);
+        await Promise.all([...session.background]);
+        assert.equal(calls, 1);
+        assert.equal(revocations.length, 0);
+        assert.equal(session.walletMutations.size, 0);
+        assert.equal(session.coverage.has("action:removeAccount"), false);
+        assert.equal(session.coverage.has("action:restoreAccount"), false);
+        if (expectedExit) {
+            assert.doesNotThrow(() => session.check());
+            assert.deepEqual(session.trace.filter(event => event.type === "wallet-mutation-result").map(event => event.status), ["interrupted", "interrupted"]);
+            session.children.set("bridge", {role: "bridge", epoch: "bridge-2", command: async () => ({changed: true})});
+            await session.action({kind: "restoreAccount", tab: 0, selector: 0});
+            await Promise.all([...session.background]);
+            assert.equal(session.coverage.has("action:restoreAccount"), true);
+            assert.equal(session.trace.filter(event => event.type === "wallet-mutation-result").at(-1).epoch, "bridge-2");
+        } else { assert.throws(() => session.check(), error => error === failure); }
+    }
+});
+
+test("wallet mutation coverage requires an explicit native changed result", async () => {
+    const {session} = walletActionSession(async () => ({}));
+    await assert.rejects(session.action({kind: "removeAccount", tab: 0, selector: 0}), error => error.invariant === "protocol");
+    assert.equal(session.coverage.has("action:removeAccount"), false);
 });
 
 test("wallet actions recover only from the expected native store-unavailable error", async () => {
@@ -1419,4 +1645,38 @@ test("Solana public signing results must retain the approved account", () => {
             else { assert.throws(settle, error => error.invariant === "payload"); }
         }
     }
+});
+
+for (const kind of ["rpc", "launch"]) {
+    test(`retiring a gate while ${kind} is pending discards its late release`, async () => {
+        const session = new LifecycleSession({seed: 1, mode: "native"});
+        let complete;
+        const pending = new Promise(resolve => { complete = resolve; });
+        const releases = [];
+        const child = {epoch: "bridge-1", role: "bridge", gates: new Set(["pending"]),
+            release: (...arguments_) => releases.push(arguments_)};
+        if (kind === "rpc") { session.rpc = {respond: () => pending}; }
+        else { session.children.set("approval", {ready: {identity: {}}, command: () => pending}); }
+        const event = session.nativeEvent({event: kind, gate: "pending", details: {url: "bigwallet://agent/approval"}}, child);
+        child.gates.delete("pending");
+        session.gates.set("bridge-1:pending", {});
+        await session.nativeEvent({event: "gateRetired", details: {gate: "pending"}}, child);
+        complete({result: "late"});
+        await event;
+        assert.deepEqual(releases, []);
+        assert.equal(session.gates.has("bridge-1:pending"), false);
+    });
+}
+
+test("retired automatic native checkpoints cannot be released by an already queued callback", async () => {
+    const session = new LifecycleSession({seed: 1, mode: "native"});
+    session.ledger = {append() {}};
+    const releases = [];
+    const child = {epoch: "bridge-1", role: "bridge", gates: new Set(["pending"]),
+        release: (...arguments_) => releases.push(arguments_)};
+    await session.nativeEvent({event: "checkpoint", gate: "pending", details: {name: "authentication.before"}}, child);
+    child.gates.delete("pending");
+    await session.nativeEvent({event: "gateRetired", details: {gate: "pending"}}, child);
+    await session.scheduler.drain();
+    assert.deepEqual(releases, []);
 });

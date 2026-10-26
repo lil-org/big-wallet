@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 import Cocoa
 
 enum NativeAccountSelectionMode {
@@ -33,7 +36,7 @@ final class NativeAccountSelectionSession {
         selectedAccounts = action.selectedAccounts
         initiallyConnectedProviders = action.initiallyConnectedProviders
         self.mode = mode
-        network = action.network ?? Networks.ethereum
+        network = action.network ?? ApplicationServices.shared.networks.network(chainId: 1)
         self.completion = completion
     }
 

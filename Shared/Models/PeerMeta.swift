@@ -1,23 +1,10 @@
-// ∅ 2026 lil org
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 
-struct PeerMeta {
-    
-    let title: String?
-    
+extension PeerMeta {
     var name: String {
         return title ?? Strings.unknownWebsite
-    }
-    
-    init(title: String?) {
-        self.title = title
-    }
-    
-}
-
-extension SafariRequest {
-    
-    var peerMeta: PeerMeta {
-        return PeerMeta(title: host)
     }
     
 }

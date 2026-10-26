@@ -1,3 +1,4 @@
+import WalletDomain
 #if os(iOS) || os(visionOS)
 import UIKit
 import XCTest

@@ -1,16 +1,8 @@
-// ∅ 2026 lil org
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 
-enum AuthenticationReason {
-    case start
-    case sendTransaction
-    case removeWallet
-    case showPrivateKey
-    case showSecretWords
-    case signMessage
-    case signPersonalMessage
-    case signTypedData
-    case approveTransaction
-    
+extension AuthenticationReason {
     var title: String {
         switch self {
         case .start:

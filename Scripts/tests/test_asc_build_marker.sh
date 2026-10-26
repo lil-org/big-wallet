@@ -46,7 +46,7 @@ for relative_file in \
     "Safari macOS/Resources/manifest.json" \
     "Safari Shared/Resources/bridge_wire.js" \
     "Safari Shared/Protocol/wire-protocol.json" \
-    "Safari Shared/Protocol/WireProtocol.generated.swift" \
+    "Packages/WalletRuntime/Sources/WalletDomain/WireProtocol.generated.swift" \
     "Safari Shared/Resources/protocol.generated.js" \
     "Safari Shared/Resources/inpage.js" \
     "Workers/alchemy-jwt/.nvmrc"
@@ -255,7 +255,7 @@ prepare_bump_fixture() {
         "Safari macOS/Resources/manifest.json" \
         "Safari Shared/Resources/bridge_wire.js" \
         "Safari Shared/Protocol/wire-protocol.json" \
-        "Safari Shared/Protocol/WireProtocol.generated.swift" \
+        "Packages/WalletRuntime/Sources/WalletDomain/WireProtocol.generated.swift" \
         "Safari Shared/Resources/protocol.generated.js" \
         "Safari Shared/Resources/inpage.js" \
         "Workers/alchemy-jwt/.nvmrc"

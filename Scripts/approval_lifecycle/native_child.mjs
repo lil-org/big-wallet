@@ -14,6 +14,7 @@ export class NativeChild {
         this.gates = new Set;
         this.serial = 0;
         this.sequence = 0;
+        this.eventWork = new Map;
         this.stderr = "";
         this.output = "";
         this.failure = null;
@@ -88,6 +89,10 @@ export class NativeChild {
             this.fail("watchdog", "Native checkpoint acknowledgement timed out", message.details);
             return;
         }
+        if (message.event === "gateRetired") {
+            if (typeof message.details?.gate !== "string") { throw new Error("Malformed gate retirement"); }
+            this.gates.delete(message.details.gate);
+        }
         if (message.gate !== undefined) {
             if (typeof message.gate !== "string" || this.gates.has(message.gate)) { throw new Error("Invalid or duplicate native gate"); }
             this.gates.add(message.gate);
@@ -96,10 +101,11 @@ export class NativeChild {
         for (const waiter of [...this.waiters]) {
             if (waiter.predicate(message)) { this.waiters.delete(waiter); clearTimeout(waiter.timer); waiter.resolve(message); }
         }
-        Promise.resolve(this.onEvent(message, this)).catch(error => {
+        const work = Promise.resolve(this.onEvent(message, this)).catch(error => {
             if (this.expectedExit && error?.invariant === "process-restarted") { return; }
             this.fail(error.invariant || "oracle", error.message, error.details);
-        });
+        }).finally(() => this.eventWork.delete(message.sequence));
+        this.eventWork.set(message.sequence, {event: message.event, work});
     }
     write(message) {
         if (this.failure) { throw this.failure; }
@@ -107,15 +113,42 @@ export class NativeChild {
         this.trace({type: "native-out", role: this.role, ...message});
         this.process.stdin.write(JSON.stringify(message) + "\n");
     }
-    command(operation, payload = {}, {timeout = this.timeout} = {}) {
+    command(operation, payload = {}, options = {}) {
+        return this.request("command", operation, payload, options);
+    }
+    control(operation, payload = {}, options = {}) {
+        return this.request("control", operation, payload, options);
+    }
+    request(kind, operation, payload, {timeout = this.timeout, label} = {}) {
         if (this.failure) { return Promise.reject(this.failure); }
         const id = ++this.serial;
         return new Promise((resolve, reject) => {
             const timer = setTimeout(() => this.fail("watchdog", "Native control/message timed out", {id, operation}), timeout);
             this.pending.set(id, {resolve, reject, timer, operation});
-            try { this.write({kind: "command", id, epoch: this.epoch, operation, payload}); }
+            try { this.write({kind, id, epoch: this.epoch, operation, payload, ...(label === undefined ? {} : {label})}); }
             catch (error) { this.pending.delete(id); clearTimeout(timer); reject(error); }
         });
+    }
+    async fence() {
+        const snapshot = await this.control("fence");
+        if (!snapshot || !Number.isSafeInteger(snapshot.sequence) || snapshot.sequence < 0 || snapshot.sequence > this.sequence ||
+            !Array.isArray(snapshot.tasks) || !Array.isArray(snapshot.gates)) {
+            throw this.fail("protocol", "Malformed native control fence", {snapshot});
+        }
+        const observed = [...this.eventWork].filter(([sequence, value]) => sequence <= snapshot.sequence &&
+            value.event !== "rpc" && value.event !== "launch");
+        await Promise.all(observed.map(([, value]) => value.work));
+        if (this.failure) { throw this.failure; }
+        return {...snapshot, pendingEvents: [...this.eventWork].filter(([sequence]) => sequence <= snapshot.sequence)
+            .map(([sequence, value]) => ({sequence, event: value.event}))};
+    }
+    async cancelTask(taskID) {
+        if (typeof taskID !== "string" || !taskID.length) { throw new Error("A tracked native task is required"); }
+        const result = await this.control("cancel", {taskID});
+        if (result?.taskID !== taskID || typeof result.cancelled !== "boolean") {
+            throw this.fail("protocol", "Malformed task cancellation acknowledgement", {result});
+        }
+        return result.cancelled;
     }
     release(gate, value = null) {
         if (!this.gates.delete(gate)) { throw new LifecycleFailure("protocol", "Releasing an unknown native gate", {gate, epoch: this.epoch}); }

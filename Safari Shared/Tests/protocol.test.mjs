@@ -15,7 +15,7 @@ const execute = promisify(execFile);
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const generator = join(root, "Scripts/generate_wire_protocol.mjs");
 const definitionPath = "Safari Shared/Protocol/wire-protocol.json";
-const artifacts = ["Safari Shared/Resources/protocol.generated.js", "Safari Shared/Protocol/WireProtocol.generated.swift"];
+const artifacts = ["Safari Shared/Resources/protocol.generated.js", "Packages/WalletRuntime/Sources/WalletDomain/WireProtocol.generated.swift"];
 const fixtures = JSON.parse(await readFile(new URL("fixtures/wire_protocol_contract.json", import.meta.url), "utf8"));
 const source = await readFile(join(root, artifacts[0]), "utf8");
 const normalize = value => JSON.parse(JSON.stringify(value));

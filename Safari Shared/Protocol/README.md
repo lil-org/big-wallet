@@ -1,6 +1,6 @@
 # Safari wire protocol
 
-`wire-protocol.json` defines the messages owned by Big Wallet, their shared constants, and browser routing subjects. The dependency-free Node generator emits the browser codec in `Resources/protocol.generated.js` and the native codec in `WireProtocol.generated.swift`.
+`wire-protocol.json` defines the messages owned by Big Wallet, their shared constants, and browser routing subjects. The dependency-free Node generator emits the browser codec in `Resources/protocol.generated.js` and the native codec in `Packages/WalletRuntime/Sources/WalletDomain/WireProtocol.generated.swift`.
 
 From the repository root:
 

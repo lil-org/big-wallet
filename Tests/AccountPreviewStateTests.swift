@@ -1,3 +1,4 @@
+import WalletDomain
 import Foundation
 import Synchronization
 import XCTest

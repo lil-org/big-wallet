@@ -1,3 +1,5 @@
+import WalletDomain
+@testable import WalletAuthority
 // ∅ 2026 lil org
 
 import XCTest
@@ -59,7 +61,7 @@ final class PopupStringsTests: XCTestCase {
     private func oversizedResponse() -> PopupResponse {
         reviewResponse(.signMessage(PopupMessageReview(
             meta: String(repeating: "x", count: PopupResponseEncoder.maximumResponseBytes),
-            account: .init(name: "Primary", croppedAddress: "1111...1111"),
+            account: .init(name: "Primary", croppedAddress: "1111...1111", icon: nil),
             clusterSelection: nil
         )))
     }
@@ -95,7 +97,7 @@ final class PopupStringsTests: XCTestCase {
         _ response: PopupResponse,
         for request: InternalSafariRequest
     ) throws -> [String: Any] {
-        let object = try PopupResponseEncoder.encode(response, for: request)
+        let object = try encode(response, for: request)
         XCTAssertEqual(object.contract, .popupResponse)
         let json = object.json
         let data = try JSONSerialization.data(withJSONObject: json)
@@ -103,6 +105,36 @@ final class PopupStringsTests: XCTestCase {
         if case .popup(.getPendingRequests) = request.command { return json }
         XCTAssertEqual(Set(json.keys), ["status", "approval"])
         return try XCTUnwrap(json["approval"] as? [String: Any])
+    }
+
+    private var messages: AuthorityMessages {
+        AuthorityMessages(values: Dictionary(uniqueKeysWithValues: AuthorityMessages.Key.allCases.map { key in
+            let value: String
+            switch key {
+            case .somethingWentWrong: value = Strings.somethingWentWrong
+            case .secureApprovalSetupRequired: value = Strings.secureApprovalSetupRequired
+            default: value = AuthorityMessages.testingEnglish[key]
+            }
+            return (key, value)
+        }))
+    }
+
+    private func encode(_ response: PopupResponse, for request: InternalSafariRequest) throws -> WireProtocol.ValidatedObject {
+        try AuthorityMessageContext.$current.withValue(messages) {
+            try PopupResponseEncoder.encode(response, for: request)
+        }
+    }
+
+    @MainActor
+    private func presentationEnvironment() -> PopupApprovalStatePresenter.Environment {
+        .init(networks: { [] }, customNetworks: { [] }, price: { _ in nil },
+            accountName: { _, account in account.croppedAddress }, icon: { _ in nil },
+            transactionValue: { $0.valueWithSymbol(chain: $1, price: $2, withLabel: true) },
+            transactionFeeLines: { $0.feeSummaryLines(chain: $1, price: $2) },
+            transactionDataInterpretation: { $0.diplayDataInterpretation },
+            solanaClusterDescription: { $0.description(for: $1) }, approvalSubjectTitle: { $0.title },
+            transactionNotice: { PopupTransactionNotice(title: $0.title, message: $0.message) },
+            popupStrings: Strings.popup, layoutDirection: .ltr)
     }
 
     private func resource(_ name: String) throws -> String {
@@ -218,8 +250,10 @@ final class PopupStringsTests: XCTestCase {
 
     @MainActor
     func testSecureSetupRequiredStateAllowsRefreshAndRejection() {
-        let approval = PopupApprovalStatePresenter()
-            .secureSetupRequiredState(id: 91, host: "wallet.example")
+        let approval = AuthorityMessageContext.$current.withValue(messages) {
+            PopupApprovalStatePresenter(environment: presentationEnvironment())
+                .secureSetupRequiredState(id: 91, host: "wallet.example")
+        }
         let state = popupApprovalJSON(approval)
 
         XCTAssertEqual(
@@ -252,14 +286,16 @@ final class PopupStringsTests: XCTestCase {
         let session = PopupRequestSession(intent: try reviewIntentForTesting(
             binding: XCTUnwrap(snapshot.requestBinding), action: action
         ), transactionApprovalOperations: unusedPopupTransactionOperations())
-        let presenter = PopupApprovalStatePresenter()
+        let presenter = PopupApprovalStatePresenter(environment: presentationEnvironment())
         func renderedPresentation(transactionMutationAllowed: Bool) -> [String: Any] {
-            popupApprovalJSON(presenter.state(
-                id: session.handle.id,
-                host: session.request.host,
-                presentation: session.presentation,
-                transactionMutationAllowed: transactionMutationAllowed
-            ))
+            AuthorityMessageContext.$current.withValue(messages) {
+                popupApprovalJSON(presenter.state(
+                    id: session.handle.id,
+                    host: session.request.host,
+                    presentation: session.presentation,
+                    transactionMutationAllowed: transactionMutationAllowed
+                ))
+            }
         }
         let review = renderedPresentation(transactionMutationAllowed: false)
         XCTAssertEqual(review["actions"] as? [String], ["approve", "reject"])
@@ -438,7 +474,7 @@ final class PopupStringsTests: XCTestCase {
     func testOversizedIgnoredCommandPreservesDispositionAndRecovery() throws {
         let state = try XCTUnwrap(oversizedResponse().approvalState)
         let request = try popupRequest(subject: "approveRequest", payload: [:])
-        let object = try PopupResponseEncoder.encode(.command(.init(status: .ignored, approvalState: state)), for: request)
+        let object = try encode(.command(.init(status: .ignored, approvalState: state)), for: request)
         XCTAssertEqual(object.contract, .popupResponse)
         let reply = object.json
         let data = try JSONSerialization.data(withJSONObject: reply)
@@ -508,7 +544,7 @@ final class PopupStringsTests: XCTestCase {
 
     private func transactionReview(position: Double = 100, type2: Bool = false) -> PopupTransactionReview {
         .init(
-            account: .init(name: "Primary", croppedAddress: "0x1111…1111"),
+            account: .init(name: "Primary", croppedAddress: "0x1111…1111", icon: nil),
             networkName: "Ethereum",
             balance: type2 ? nil : "1 ETH",
             valueLine: type2 ? nil : "0.1 ETH",
@@ -546,7 +582,7 @@ final class PopupStringsTests: XCTestCase {
             "rejectError": .command(.init(status: .ok(), approvalState: .init(id: 91, content: .error(message: "Review unavailable", actions: [.reject])))),
             "selectAccount": reviewResponse(.accountSelection(.init(
                 accounts: [.init(
-                    display: .init(name: "Primary", croppedAddress: "0x1111…1111"),
+                    display: .init(name: "Primary", croppedAddress: "0x1111…1111", icon: nil),
                     walletId: "wallet-1", address: "0x" + String(repeating: "1", count: 40), coin: .ethereum,
                     derivationPath: "m/44'/60'/0'/0/0", isSelected: true
                 )],
@@ -562,7 +598,7 @@ final class PopupStringsTests: XCTestCase {
                 clusterSelection: nil
             )), title: "Sign Message"),
             "solanaSignMessage": reviewResponse(.signMessage(.init(
-                meta: "Transaction", account: .init(name: "Solana", croppedAddress: "1111…1111"),
+                meta: "Transaction", account: .init(name: "Solana", croppedAddress: "1111…1111", icon: nil),
                 clusterSelection: .init(clusters: [
                     .init(value: .mainnetBeta, label: "Mainnet", isSelected: false),
                     .init(value: .devnet, label: "Devnet", isSelected: false),

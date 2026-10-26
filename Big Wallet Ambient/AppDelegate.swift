@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import Cocoa
@@ -17,8 +20,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private let agent = Agent.shared
-    private let walletsManager = WalletsManager.shared
+    private let walletsManager = ApplicationServices.shared.wallets
     private let runtimeIdentity = AmbientRuntimeIdentity.current()
+    private let runtimeIdentityDirectoryURL = ApplicationServices.shared.runtimeIdentityDirectoryURL
 
     private var commandQBlockerMonitor: Any?
     private var startupTask: Task<Void, Never>?
@@ -51,7 +55,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             NSApplication.shared.terminate(nil)
             return
         }
-        guard runtimeIdentity.persistForCurrentProcess() else {
+        guard runtimeIdentity.persistForCurrentProcess(directoryURL: runtimeIdentityDirectoryURL) else {
             Self.logger.error("Cannot persist helper runtime identity")
             allowsProgrammaticTermination = true
             NSApplication.shared.terminate(nil)
@@ -61,7 +65,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             await walletsManager.start()
             guard !Task.isCancelled else { return }
             agent.start(openOnLaunch: false, runtimeIdentity: runtimeIdentity)
-            await ExtensionBridge.shared.performMaintenance()
+            await ApplicationServices.shared.requests.performMaintenance()
         }
     }
 
@@ -101,7 +105,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     func applicationWillTerminate(_ notification: Notification) {
         startupTask?.cancel()
-        _ = runtimeIdentity?.clearForCurrentProcess()
+        _ = runtimeIdentity?.clearForCurrentProcess(directoryURL: runtimeIdentityDirectoryURL)
         if let commandQBlockerMonitor {
             NSEvent.removeMonitor(commandQBlockerMonitor)
         }
@@ -119,7 +123,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func prewarmAlchemy() {
-        AlchemyJWTProvider.prewarmForApplicationLifecycle()
+        ApplicationServices.shared.prewarm()
     }
 
     private func installCommandQBlocker() {

@@ -1,6 +1,9 @@
+import WalletDomain
 import Foundation
 import XCTest
 @testable import Big_Wallet
+@testable import WalletAuthority
+@testable import WalletNetworking
 
 @MainActor
 final class NativeMessageDispatcherTests: XCTestCase {
@@ -70,7 +73,7 @@ final class NativeMessageDispatcherTests: XCTestCase {
             XCTAssertEqual(try canonical(result), try canonical([
                 "id": 1, "name": "requestAccounts", "provider": "ethereum",
                 "kind": "error", "approvalCommitted": false, "authorizationFailure": false,
-                "error": ["code": 4200, "message": Strings.privateBrowsingUnsupported],
+                "error": ["code": 4200, "message": AuthorityStrings.privateBrowsingUnsupported],
             ]))
             XCTAssertTrue(fixture.calls.value.isEmpty)
             guard case .available(let requests) = await fixture.bridge.listRecoveryRequests(profileIdentifier: nil) else {
@@ -97,7 +100,7 @@ final class NativeMessageDispatcherTests: XCTestCase {
                 "response": [
                     "id": 1, "name": "signPersonalMessage", "provider": "ethereum",
                     "kind": "error", "approvalCommitted": false, "authorizationFailure": false,
-                    "error": ["code": 4100, "message": Strings.providerNotReady],
+                    "error": ["code": 4100, "message": AuthorityStrings.providerNotReady],
                 ],
                 "state": authority.json,
             ]))
@@ -133,8 +136,8 @@ final class NativeMessageDispatcherTests: XCTestCase {
     func testTerminalDeliveryAndAcknowledgementUseTheSameStoredResponse() async throws {
         try await withFixture { fixture in
             let admitted = try await fixture.dispatch(try await fixture.connectionMessage())
-            let token = try XCTUnwrap(ExtensionBridge.RequestToken(rawValue: admitted["requestToken"] as? String ?? ""))
-            let handle = ExtensionBridge.Handle(id: 1, token: token, profileIdentifier: nil)
+            let token = try XCTUnwrap(RequestToken(rawValue: admitted["requestToken"] as? String ?? ""))
+            let handle = RequestHandle(id: 1, token: token, profileIdentifier: nil)
             let completed = await fixture.bridge.completeImmediate(handle: handle, resolution: .failure(.userRejected))
             XCTAssertEqual(completed, .persisted)
             let identity: [String: Any] = ["configurationKey": fixture.origin, "requestToken": token.rawValue]
@@ -338,10 +341,10 @@ final class NativeMessageDispatcherTests: XCTestCase {
 
             let admission = try await fixture.dispatch(try await fixture.connectionMessage())
             let token = try XCTUnwrap(admission["requestToken"] as? String)
-            guard let requestToken = ExtensionBridge.RequestToken(rawValue: token) else {
+            guard let requestToken = RequestToken(rawValue: token) else {
                 return XCTFail("Expected request token")
             }
-            let handle = ExtensionBridge.Handle(id: 1, token: requestToken, profileIdentifier: nil)
+            let handle = RequestHandle(id: 1, token: requestToken, profileIdentifier: nil)
             let rejected = await fixture.bridge.reject(handle: handle)
             XCTAssertEqual(rejected, .persisted)
             let recovery = try await fixture.dispatch(fixture.command("getRecoveryRequests"), source: "worker")
@@ -444,8 +447,8 @@ final class NativeMessageDispatcherTests: XCTestCase {
             let queuedOrigin = "https://queued.example"
             let message = try await fixture.connectionMessage(origin: queuedOrigin, profile: profile)
             let admitted = try await fixture.dispatch(message, profile: profile, siteOrigin: queuedOrigin)
-            let token = try XCTUnwrap(ExtensionBridge.RequestToken(rawValue: admitted["requestToken"] as? String ?? ""))
-            let handle = ExtensionBridge.Handle(id: 1, token: token, profileIdentifier: profile)
+            let token = try XCTUnwrap(RequestToken(rawValue: admitted["requestToken"] as? String ?? ""))
+            let handle = RequestHandle(id: 1, token: token, profileIdentifier: profile)
             let completion = await fixture.bridge.completeImmediate(handle: handle, resolution: .failure(.userRejected))
             XCTAssertEqual(completion, .persisted)
             let identity: [String: Any] = ["configurationKey": queuedOrigin, "requestToken": token.rawValue]
@@ -599,6 +602,24 @@ final class NativeMessageDispatcherTests: XCTestCase {
             let popup: @Sendable () -> PopupResponse = {
                 .queue(.init(requests: [], completedResponses: [], strings: Strings.popup, layoutDirection: .ltr))
             }
+            let rpc = PublicRPCForwarder(service: rpcService,
+                network: { chain in
+                    rpcNetworkCalls.withValue { $0 += 1 }
+                    guard rpcNetworkAvailable else { return nil }
+                    return .init(network: EthereumNetwork(chainId: chain, name: "Fixture", symbol: "ETH",
+                        rpcEndpoint: .unauthenticated(URL(string: "https://rpc.example")!),
+                        isTestnet: true, mightShowPrice: false, explorer: nil), source: .custom)
+                },
+                send: { _, request, execution in
+                    if let rpcOperation { return try await rpcOperation(request, execution) }
+                    try execution.markDispatched()
+                    calls.withValue { $0.append("rpc") }
+                    return RPCResponseToExtension(
+                        upstream: ["id": request.id, "result": "0x1", "privateUpstreamField": "discard"],
+                        expectedResponseID: request.id
+                    )!
+                }
+            )
             let dispatcher = NativeMessageDispatcher(policy: policy, dependencies: .init(
                 bridge: TrackingBridge(bridge: bridge, calls: bridgeCalls),
                 materialize: { _ in calls.withValue { $0.append("materialize") }; return .approvalRequired },
@@ -608,27 +629,12 @@ final class NativeMessageDispatcherTests: XCTestCase {
                     return await bridge.prepareResponseDelivery(id: handle.id, configurationKey: origin,
                         requestToken: handle.requestToken, profileIdentifier: handle.profileIdentifier)
                 },
-                rpcNetwork: { chain in
-                    rpcNetworkCalls.withValue { $0 += 1 }
-                    guard rpcNetworkAvailable else { return nil }
-                    return .init(network: EthereumNetwork(chainId: chain, name: "Fixture", symbol: "ETH",
-                        rpcEndpoint: .unauthenticated(URL(string: "https://rpc.example")!),
-                        isTestnet: true, mightShowPrice: false, explorer: nil), source: .custom)
-                },
-                sendRPC: { _, request, execution in
-                    if let rpcOperation { return try await rpcOperation(request, execution) }
-                    try execution.markDispatched()
-                    calls.withValue { $0.append("rpc") }
-                    return RPCResponseToExtension(
-                        upstream: ["id": request.id, "result": "0x1", "privateUpstreamField": "discard"],
-                        expectedResponseID: request.id
-                    )!
-                },
+                rpc: rpc,
                 popup: { _, _ in calls.withValue { $0.append("popup") }; return popup() },
                 privatePopup: { _ in calls.withValue { $0.append("privatePopup") }; return popup() },
                 openApp: { calls.withValue { $0.append("open") }; return true },
                 invalidateNetworkCache: { calls.withValue { $0.append("invalidate") } }
-            ), rpcService: rpcService)
+            ), messages: .testingEnglish)
             var transportContext: [String: Any] = ["source": source, "privateBrowsing": privateBrowsing]
             if source == "site" {
                 let origin = siteOrigin ?? self.origin
@@ -662,7 +668,7 @@ final class NativeMessageDispatcherTests: XCTestCase {
         }
 
         func revoke(configurationKey: String, provider: InpageProvider, attempt: String,
-                    expected: ExtensionBridge.AuthorityVersion, profileIdentifier: UUID?) async -> ExtensionBridge.AuthorityMutationResult {
+                    expected: RequestAuthorityVersion, profileIdentifier: UUID?) async -> ExtensionBridge.AuthorityMutationResult {
             calls.withValue { $0.append("revoke") }
             return await bridge.revoke(configurationKey: configurationKey, provider: provider, attempt: attempt,
                                        expected: expected, profileIdentifier: profileIdentifier)
@@ -673,12 +679,12 @@ final class NativeMessageDispatcherTests: XCTestCase {
             return await bridge.listRecoveryRequests(profileIdentifier: profileIdentifier)
         }
 
-        func load(handle: ExtensionBridge.Handle) async -> ExtensionBridge.SnapshotResult {
+        func load(handle: RequestHandle) async -> ExtensionBridge.SnapshotResult {
             calls.withValue { $0.append("load") }
             return await bridge.load(handle: handle)
         }
 
-        func acknowledgeResponse(handle: ExtensionBridge.Handle, configurationKey: String) async -> ExtensionBridge.StoreMutationResult {
+        func acknowledgeResponse(handle: RequestHandle, configurationKey: String) async -> ExtensionBridge.StoreMutationResult {
             calls.withValue { $0.append("acknowledge") }
             return await bridge.acknowledgeResponse(handle: handle, configurationKey: configurationKey)
         }

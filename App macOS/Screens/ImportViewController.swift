@@ -1,10 +1,13 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import Cocoa
 
 class ImportViewController: NSViewController {
     
-    private let walletsManager = WalletsManager.shared
+    private let walletsManager = ApplicationServices.shared.wallets
     private var validationTask: Task<Void, Never>?
     private var importTask: Task<Void, Never>?
     private var inputValidationResult = WalletsManager.InputValidationResult.invalid

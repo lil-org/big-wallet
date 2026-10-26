@@ -280,7 +280,7 @@ async function main() {
     try {
         const executable = join(directory, "protocol-oracle");
         await execute("xcrun", ["swiftc", "-swift-version", "6", "-parse-as-library",
-            join(root, "Safari Shared/Protocol/WireProtocol.generated.swift"),
+            join(root, "Packages/WalletRuntime/Sources/WalletDomain/WireProtocol.generated.swift"),
             join(root, "Scripts/ProtocolFuzzOracle.swift"), "-o", executable], {timeout: 120000, maxBuffer: 1024 * 1024});
         const {stdout} = await execute(executable, ["--list-types"], {timeout: options.timeout});
         assert.deepEqual(JSON.parse(stdout).sort(), contracts, "Swift and schema contract inventories differ");

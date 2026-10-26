@@ -26,6 +26,12 @@ Scripts/test_vm.sh run all --stage safari --only-testing 'Safari UI Tests iOS'
 Scripts/test_vm.sh run all --stage test --configuration Debug \
   --only-testing 'Tests macOS/WindowAuthenticationSessionTests'
 Scripts/test_vm.sh run all --stage test --only-testing 'Tests visionOS'
+Scripts/test_vm.sh run all --stage test --runtime-platform macos \
+  --only-testing 'WalletNetworkingTests'
+Scripts/test_vm.sh run all --stage runtime --configuration Debug \
+  --only-testing WalletNetworkingTests
+Scripts/test_vm.sh run all --stage runtime --configuration Debug \
+  --only-testing ApprovalCrashWorker
 Scripts/test_vm.sh status
 Scripts/test_vm.sh stop
 ```
@@ -35,6 +41,52 @@ an Apple signing identity, provisioning profiles, or the production RPC proof ke
 Runnable macOS and simulator test hosts use ad-hoc signatures. Generic iOS and
 visionOS device builds compile without signing. The VM applies these settings
 per build invocation; the project's normal Debug and Release settings stay intact.
+
+The `test` stage includes the `WalletRuntime-Package` XCTest scheme in Debug and
+Release on macOS, iOS Simulator, and visionOS Simulator. Package selectors use
+`WalletDomainTests`, `WalletAuthorityTests`, or `WalletNetworkingTests`, optionally
+followed by a class and method. `--runtime-platform` limits only this package
+XCTest matrix and may be repeated; omitted platforms remain unverified in a
+filtered report. App and Safari selectors keep their platform-specific targets.
+
+Package test builds explicitly enable testability. Each test target must compile
+an `@testable` import of its own module; production module builds and ordinary
+import API contracts remain separate. The committed
+`Scripts/vm/runtime-test-inventory.json` lists every XCTest declaration and its
+platform/configuration variants. Run `node Scripts/vm/runtime_inventory.mjs --write`
+after adding or moving package tests. The VM checks that inventory against source
+before building and requires each selected test to appear exactly once in the
+result bundle. Empty, omitted, duplicated, unexpected, or skipped tests fail;
+the existing Debug performance skips still require passing Release gates.
+
+`--stage runtime --only-testing WalletNetworkingTests` compiles one package test
+target without running it or requiring unrelated package targets to compile.
+The three production module names are also accepted. `ApprovalCrashWorker`
+validates the closed package dependency graph and builds the standalone harness.
+These focused compilation runs do not establish runtime test coverage.
+
+The crash worker lives in the separate `Packages/WalletRuntimeHarness` package.
+Its guest build enables testability only for that invocation; app products never
+depend on this package or its fixture code. The prebuild validator rejects app or
+extension entry points, copied resources, plugins, production proof material,
+entitlements, and production dependencies on test support. Fixtures use real
+module authorization with fake credentials and protected-key storage in their
+disposable directory.
+
+Every default approval run includes bounded systematic exploration with at most
+256 traces, one preemption, one fault, two overlapping requests, and 64 transitions. Extended
+runs add a dedicated 4096-trace pass with two preemptions, two faults, three
+overlapping requests, and 128 transitions. Each request is parked at an acknowledged
+native task boundary before exploration starts. A second approved request runs
+in another Safari profile; the extended pass also holds a third admission from
+another origin. Recovery cannot grant fresh consent to that queued request.
+The report records observed request overlap and applied faults for each scenario,
+and the auditor rejects missing evidence. The existing random soak remains separate.
+`--approval-arg=--systematic`, followed by `--approval-arg=all`, `extended`, or
+`off`, selects a diagnostic profile; `--systematic-only` and `--trace-limit` are
+also forwarded through `--approval-arg`. An unfinished frontier or missing
+mode/provider/template evidence fails the run and retains
+`systematic-coverage.json` beside its replay artifacts.
 
 The existing `check_swift6.sh` and `check_approval_lifecycle.sh` commands route
 host invocations here. `check_swift6.sh` is a host-only alias; the guest executes
@@ -454,7 +506,7 @@ helper, extension, and containing app using their existing identities. Reports
 identify this additional test-only file access explicitly; these results establish
 coverage of modified Apple-signed test products, with distribution validation kept separate.
 
-Selectors are `build`, `test`, `performance`, `tsan`, `fuzz`, `approval`, `safari`,
+Selectors are `build`, `test`, `runtime`, `performance`, `tsan`, `fuzz`, `approval`, `safari`,
 `repository`, and `worker`. Repeat `--stage` to select more than one. Dependencies
 are included automatically. Repeat `--only-testing` for XCTest classes or
 methods, or an entire test target; a target-qualified filter limits testing to

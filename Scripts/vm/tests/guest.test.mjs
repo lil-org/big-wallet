@@ -7,7 +7,7 @@ import test from "node:test";
 import {auditNativeResult, auditResults, performanceTestName} from "../result_audit.mjs";
 import {chooseDestinations, cleanEnvironment, coverageReport, executeStages, pendingStageResults, pinnedEnvironmentEvidence, prepareStageScratch, resourceSnapshot} from "../guest.mjs";
 import {atomicJSON, hashFile, BUILD_VOLUME, EXCHANGE_PATH, materializeSource, provisioningEvidence, readGuestProvision, bootstrapToolsEvidence, validateGuestEvidence, validateSnapshotManifest, verifyBuildVolume, verifyExchangeDirectory} from "../guest_bootstrap.mjs";
-import {commandForStage, createManifest, PERFORMANCE_ENV, PERFORMANCE_TESTS, PLATFORMS, SHELL_TESTS, TSAN_TESTS, EXTENDED_TSAN_TESTS, BOOTSTRAP_TOOL_NAMES, validateJob} from "../test_manifest.mjs";
+import {approvalArguments, commandForStage, createManifest, PERFORMANCE_ENV, PERFORMANCE_TESTS, PLATFORMS, SHELL_TESTS, TSAN_TESTS, EXTENDED_TSAN_TESTS, BOOTSTRAP_TOOL_NAMES, validateJob} from "../test_manifest.mjs";
 
 const digest = data => createHash("sha256").update(data).digest("hex");
 const job = ({payload, ...overrides} = {}) => ({version: 1, runId: "2026-10-13-test", vmId: "fixture-vm", kind: "run", profile: "all", payload: {stages: [], onlyTesting: [], ...payload},
@@ -53,7 +53,10 @@ const nativeTree = cases => ({testNodes: [{name: "Tests macOS", nodeType: "Test 
 const summary = (passed, skipped = 0, failed = 0) => ({totalTestCount: passed + skipped + failed, passedTests: passed, skippedTests: skipped, failedTests: failed});
 const success = output => ({code: 0, signal: null, output: output ?? "", timedOut: false, cancelled: false});
 const passedManifest = manifest => manifest.map(stage => ({id: stage.id, status: "passed",
-    ...(stage.nativeAudit?.kind === "safari" ? {audit: {ok: true, safari: {ok: true}}} : {})}));
+    ...(stage.nativeAudit ? {nativeAudit: stage.nativeAudit} : {}),
+    ...(stage.approvalAudit ? {approvalAudit: stage.approvalAudit} : {}),
+    ...(stage.nativeAudit?.runtime || stage.approvalAudit ? {audit: {ok: true}} : {}),
+    ...(stage.nativeAudit?.kind === "safari" ? {audit: {ok: true, safari: {ok: true}, safariLog: {ok: true}}} : {})}));
 
 test("job validation admits the host snapshot contract and rejects execution injection", () => {
     assert.deepEqual(validateJob(job({source: {...job().source, fileCount: 4, bytes: 100}})).source.fileCount, 4);
@@ -193,6 +196,14 @@ test("local and Apple modes retain the complete same test workload with explicit
                 assert.equal(stage.proofKey, undefined);
                 assert.ok(!stage.requirements.includes("proofKey"));
                 assert.ok(!stage.requirements.includes("signing"));
+                if (stage.cwd === "Packages/WalletRuntime") {
+                    assert.ok(signed.args.includes("CODE_SIGN_IDENTITY=-"));
+                    assert.ok(signed.args.includes("CODE_SIGN_STYLE=Manual"));
+                    assert.equal(signed.proofKey, undefined);
+                    assert.ok(!signed.requirements.includes("proofKey") && !signed.requirements.includes("signing"));
+                    assert.deepEqual(stage.args.filter(arg => arg.startsWith("-only-testing:")), signed.args.filter(arg => arg.startsWith("-only-testing:")));
+                    continue;
+                }
                 for (const setting of ["CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "PROVISIONING_PROFILE=",
                     "PROVISIONING_PROFILE_SPECIFIER=", "CODE_SIGN_ENTITLEMENTS=", "ENABLE_APP_SANDBOX=NO",
                     "ENABLE_HARDENED_RUNTIME=NO", "REGISTER_APP_GROUPS=NO", "BW_VM_VERIFICATION_BUILD=YES"]) {
@@ -313,8 +324,8 @@ test("extended matrix retains baseline checks and adds bounded seeds, soak, and 
         const fuzz = extended.find(stage => stage.id === `fuzz.seed-${seed}`);
         assert.ok(fuzz.args.includes("20000"));
     }
-    const tsan = extended.find(stage => stage.id === "tsan.extended");
-    for (const name of EXTENDED_TSAN_TESTS) { assert.ok(tsan.args.includes(`-only-testing:Tests macOS/${name}`)); }
+    const tsan = extended.filter(stage => stage.id.startsWith("tsan.extended"));
+    for (const name of EXTENDED_TSAN_TESTS) { assert.ok(tsan.some(stage => stage.args.some(arg => arg === `-only-testing:Tests macOS/${name}` || arg.includes(`/${name}/`)))); }
     for (const config of ["debug", "release"]) {
         assert.equal(basic.find(stage => stage.id === `approval.${config}`).timeoutSeconds, 7200);
         assert.equal(extended.find(stage => stage.id === `approval.${config}`).timeoutSeconds, 7200);
@@ -322,7 +333,7 @@ test("extended matrix retains baseline checks and adds bounded seeds, soak, and 
         assert.ok(soak.args.includes("--soak"));
         assert.equal(soak.timeoutSeconds, 21600);
     }
-    for (const name of TSAN_TESTS) { assert.ok(extended.find(stage => stage.id === "tsan.focused").args.includes(`-only-testing:Tests macOS/${name}`)); }
+    for (const name of TSAN_TESTS) { assert.ok(extended.filter(stage => stage.id.startsWith("tsan.focused")).some(stage => stage.args.some(arg => arg === `-only-testing:Tests macOS/${name}` || arg.includes(`/${name}/`)))); }
     assert.deepEqual(extended.find(stage => stage.id === "performance.release").env, PERFORMANCE_ENV);
 });
 
@@ -334,7 +345,7 @@ test("explicit approval soaks use the six-hour budget without adding duplicate w
                 .filter(stage => stage.group === "approval");
             assert.equal(stages.length, 1);
             assert.equal(stages[0].id, `approval.${configuration.toLowerCase()}`);
-            assert.deepEqual(stages[0].args, ["Scripts/check_approval_lifecycle.sh", ...approvalArgs]);
+            assert.deepEqual(stages[0].args, ["Scripts/check_approval_lifecycle.sh", ...approvalArguments(approvalArgs)]);
             assert.equal(stages[0].timeoutSeconds, 21600);
         }
     }
@@ -347,9 +358,9 @@ test("diagnostics-only approval arguments retain the extended workload and reach
         assert.deepEqual(stages.map(stage => stage.id), baseline.map(stage => stage.id));
         for (const configuration of ["debug", "release"]) {
             assert.deepEqual(stages.find(stage => stage.id === `approval.${configuration}`).args,
-                ["Scripts/check_approval_lifecycle.sh", ...approvalArgs]);
+                ["Scripts/check_approval_lifecycle.sh", ...approvalArguments(approvalArgs)]);
             const soak = stages.find(stage => stage.id === `approval.soak-${configuration}`);
-            assert.deepEqual(soak.args, ["Scripts/check_approval_lifecycle.sh", "--soak", "--seed", "42", ...approvalArgs]);
+            assert.deepEqual(soak.args, ["Scripts/check_approval_lifecycle.sh", "--soak", "--seed", "42", "--systematic", "off", ...approvalArgs]);
             assert.deepEqual(soak.dependencies, [`approval.${configuration}`]);
         }
     }
@@ -363,7 +374,7 @@ test("custom approval workloads and replays still replace the default extended s
             assert.ok(!stages.some(stage => stage.id.startsWith("approval.soak-")));
             for (const configuration of ["debug", "release"]) {
                 assert.deepEqual(stages.find(stage => stage.id === `approval.${configuration}`).args,
-                    ["Scripts/check_approval_lifecycle.sh", ...approvalArgs]);
+                    ["Scripts/check_approval_lifecycle.sh", ...approvalArguments(approvalArgs)]);
             }
         }
     }

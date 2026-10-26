@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import UIKit
@@ -9,58 +12,86 @@ struct LocalAuthentication {
     }
 
     static func attempt(reason: String, presentPasswordAlertFrom presenter: @escaping @MainActor @Sendable () -> UIViewController?, passwordReason: String?) async -> Bool {
-        await attempt(
-            passwordReason: passwordReason,
-            biometrics: { await DeviceAuthentication.attemptBiometrics(reason: reason) },
-            passwordState: { try Keychain.shared.passwordState() },
-            verifyPassword: { try DeviceAuthentication.verify(password: $0) }
-        ) { prompt in
-            switch prompt {
-            case .password(let reason):
-                await AlertRequest().present(from: presenter, title: Strings.enterPassword, message: reason, requestsPassword: true)
-            case .unavailable:
-                await AlertRequest().present(from: presenter, title: Strings.failedToLoad, message: nil, requestsPassword: false, retry: true)
-            case .mismatch:
-                await AlertRequest().present(from: presenter, title: Strings.passwordDoesNotMatch, message: nil, requestsPassword: false)
-            }
-        }
+        let credentials = ApplicationServices.shared.credentials
+        let challenge = credentials.makeWalletAccessChallenge()
+        guard let grant = await authorize(reason: reason, presentPasswordAlertFrom: presenter, passwordReason: passwordReason, challenge: challenge, credentials: credentials) else { return false }
+        return credentials.accessSession(authorization: grant) != nil
     }
 
-    static func attempt(
+    static func authorize(
+        reason: String,
+        presentPasswordAlertFrom presenter: @escaping @MainActor @Sendable () -> UIViewController?,
         passwordReason: String?,
-        biometrics: () async -> DeviceAuthentication.Outcome,
-        passwordState: () throws -> Keychain.PasswordState,
-        verifyPassword: (String) throws -> Bool,
-        prompt: (Prompt) async -> String?
-    ) async -> Bool {
-        let outcome = await biometrics()
-        guard !Task.isCancelled else { return false }
-        if outcome == .succeeded {
-            while !Task.isCancelled {
-                do {
-                    guard try passwordState() == .present else {
-                        throw Keychain.KeychainError.failedToRead(errSecItemNotFound)
+        challenge: WalletAuthenticationChallenge,
+        credentials: WalletCredentials
+    ) async -> WalletAuthenticationGrant? {
+        let grant = await withTaskCancellationHandler {
+            await authorize(
+                passwordReason: passwordReason,
+                biometrics: {
+                    guard try credentials.passwordState() == .present else {
+                        throw WalletCredentialError.failedToRead(errSecItemNotFound)
                     }
-                    return true
-                } catch {
-                    guard await prompt(.unavailable) != nil else { return false }
+                    let result = await credentials.attemptBiometrics(reason: reason, challenge: challenge)
+                    if case .granted(let grant) = result { return grant }
+                    guard try credentials.passwordState() == .present else {
+                        throw WalletCredentialError.failedToRead(errSecItemNotFound)
+                    }
+                    return nil
+                },
+                verifyPassword: { try credentials.verify(password: $0, challenge: challenge) }
+            ) { prompt in
+                switch prompt {
+                case .password(let reason):
+                    await AlertRequest().present(from: presenter, title: Strings.enterPassword, message: reason, requestsPassword: true)
+                case .unavailable:
+                    await AlertRequest().present(from: presenter, title: Strings.failedToLoad, message: nil, requestsPassword: false, retry: true)
+                case .mismatch:
+                    await AlertRequest().present(from: presenter, title: Strings.passwordDoesNotMatch, message: nil, requestsPassword: false)
                 }
             }
-            return false
+        } onCancel: {
+            challenge.invalidate()
         }
-        guard let password = await prompt(.password(reason: passwordReason)),
-              !Task.isCancelled else { return false }
+        guard !Task.isCancelled, let grant else {
+            challenge.invalidate()
+            return nil
+        }
+        return grant
+    }
+
+    static func authorize<Value: Sendable>(
+        passwordReason: String?,
+        biometrics: () async throws -> Value?,
+        verifyPassword: (String) throws -> Value?,
+        prompt: (Prompt) async -> String?
+    ) async -> Value? {
         while !Task.isCancelled {
             do {
-                if try verifyPassword(password) { return true }
+                if let value = try await biometrics() { return Task.isCancelled ? nil : value }
                 break
+            } catch WalletCredentialError.authorizationUnavailable {
+                return nil
             } catch {
-                guard await prompt(.unavailable) != nil else { return false }
+                guard await prompt(.unavailable) != nil else { return nil }
             }
         }
-        guard !Task.isCancelled else { return false }
+        guard !Task.isCancelled,
+              let password = await prompt(.password(reason: passwordReason)),
+              !Task.isCancelled else { return nil }
+        while !Task.isCancelled {
+            do {
+                if let value = try verifyPassword(password) { return Task.isCancelled ? nil : value }
+                break
+            } catch WalletCredentialError.authorizationUnavailable {
+                return nil
+            } catch {
+                guard await prompt(.unavailable) != nil else { return nil }
+            }
+        }
+        guard !Task.isCancelled else { return nil }
         _ = await prompt(.mismatch)
-        return false
+        return nil
     }
 
     @MainActor

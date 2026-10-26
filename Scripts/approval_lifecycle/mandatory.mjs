@@ -16,7 +16,7 @@ export function mandatoryScenarios(mode, seed = 1) {
         {kind: "success"}, {kind: "competition"}, {kind: "consentReplay"}, {kind: "revocationCrash"},
         {kind: "authenticationCancellation"}, {kind: "revocationBeforeSigning"},
         ...(mode === "native" ? [{kind: "retryRequiredFocus"}, {kind: "chainSwitchAuthentication"}, {kind: "manualSwitchCoalescing"}] : []),
-        ...(mode === "popup" ? [{kind: "editedReview"}, {kind: "abandonedPopupReview"}] : []),
+        ...(mode === "popup" ? [{kind: "editedReview"}, {kind: "abandonedPopupReview"}, {kind: "walletReconciliationAfterClockJump"}] : []),
     ];
     for (const provider of ["ethereum", "solana"]) {
         for (const checkpoint of [...semanticStages, ...(mode === "native" ? ["receipt.after"] : [])]) {
@@ -61,7 +61,7 @@ function countEffects(session) {
     };
 }
 
-async function awaitReview(session, provider, {tab = 0, name} = {}) {
+export async function awaitReview(session, provider, {tab = 0, name} = {}) {
     const deadline = performance.now() + session.options.timeout;
     while (performance.now() < deadline) {
         await session.pump();
@@ -94,7 +94,7 @@ async function releaseExternal(session) {
     await session.pump();
 }
 
-async function approveOnce(session, request) {
+export async function approveOnce(session, request) {
     const deadline = performance.now() + session.options.timeout;
     while (performance.now() < deadline) {
         if (await session.decide({}, "approve", request)) { return; }
@@ -464,6 +464,64 @@ async function abandonedPopupReview(session) {
     session.coverage.add("abandoned-popup-review");
 }
 
+async function walletReconciliationAfterClockJump(session) {
+    await session.connect(0, "ethereum");
+    const operation = session.request({tab: 0, provider: "ethereum", method: "broadcast"});
+    const request = await awaitReview(session, "ethereum");
+    const child = session.child("bridge");
+    await child.command("checkpoints", {rules: [{name: "broadcast.prepared", requestToken: request.handle.token,
+        label: "wallet-reconciliation-broadcast", occurrence: 1, action: "hold"}]});
+    await approveOnce(session, request);
+    const held = () => [...session.gates.values()].find(gate => gate.child === child &&
+        gate.details.name === "broadcast.prepared" && handleKey(gate.details.handle) === handleKey(request.handle));
+    await session.pumpUntil(() => held() !== undefined, {advance: true});
+    const gate = held();
+    const checkpointed = (await child.command("inspect", {profileIdentifier: profiles[0]})).requests.find(value =>
+        handleKey(value.handle) === handleKey(request.handle));
+    assert.equal(typeof checkpointed?.transactionID, "string", "The held request must expose its durable transaction identity");
+    const account = session.accounts.find(value => value.walletID === "fixture-multicoin" && value.coin === "solana");
+    assert.ok(account, "The fixture must contain an unrelated removable account");
+    const eventOffset = child.events.length;
+    session.queueWalletMutation("removeAccount", account);
+    const mutation = session.walletMutations.get(child);
+    assert.ok(mutation, "Wallet publication must remain tracked while its lease is held");
+    let settled = false;
+    void mutation.then(() => { settled = true; });
+    const waiting = () => child.events.slice(eventOffset).filter(event => event.event === "checkpoint" &&
+        event.details.name === "vault.reconciliation.waiting");
+    await session.pumpUntil(() => waiting().length > 0);
+    const mutationTask = waiting()[0].details.taskID;
+    assert.equal(typeof mutationTask, "string");
+    const later = session.scheduler.now + 180001;
+    await session.advance(180001);
+    await session.pumpUntil(() => waiting().some(event => event.details.clockMilliseconds >= later));
+    assert.equal(settled, false, "A logical expiry must not turn a deliberately held fixture lease into a mutation failure");
+    const fence = await child.fence();
+    assert.ok(fence.tasks.some(task => task.id === mutationTask), "The waiting mutation must still own its tracked task");
+    assert.ok(fence.gates.some(value => value.gate === gate.event.gate), "The competing broadcast gate must remain held");
+    child.release(gate.event.gate);
+    session.gates.delete(`${child.epoch}:${gate.event.gate}`);
+    await session.pumpUntil(() => settled, {advance: true});
+    session.check();
+    const result = session.trace.findLast(event => event.type === "wallet-mutation-result" && event.epoch === child.epoch);
+    assert.equal(result?.status, "completed");
+    assert.equal(result.exercised, true);
+    await session.quiesce();
+    const state = await child.command("inspect", {profileIdentifier: profiles[0]});
+    assert.equal(state.accounts.some(value => value.walletID === account.walletID && value.coin === account.coin && value.address === account.address), false);
+    assert.notEqual(operation.status, "pending");
+    const effects = session.ledger.events.filter(event => event.handle && handleKey(event.handle) === handleKey(request.handle));
+    assert.equal(effects.filter(event => event.name === "signer.before").length, 1);
+    assert.equal(effects.filter(event => event.type === "consent").length, 1);
+    assert.ok(effects.filter(event => event.type === "rpc.received").length <= 1);
+    const completed = state.requests.find(value => handleKey(value.handle) === handleKey(request.handle));
+    assert.equal(completed?.transactionID, checkpointed.transactionID);
+    const finalFence = await child.fence();
+    assert.equal(finalFence.tasks.some(task => task.id === mutationTask), false);
+    assert.equal(session.walletMutations.size, 0);
+    session.coverage.add("wallet-reconciliation-after-clock-jump");
+}
+
 async function manualSwitchCoalescing(session) {
     const tab = session.tabs[0];
     const child = session.child("bridge");
@@ -502,6 +560,7 @@ export async function runMandatory(session, scenario) {
     case "retryRequiredFocus": await retryRequiredFocus(session); break;
     case "editedReview": await editedReview(session); break;
     case "abandonedPopupReview": await abandonedPopupReview(session); break;
+    case "walletReconciliationAfterClockJump": await walletReconciliationAfterClockJump(session); break;
     case "manualSwitchCoalescing": await manualSwitchCoalescing(session); break;
     default: throw new Error("Unknown mandatory scenario");
     }

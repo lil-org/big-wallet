@@ -78,7 +78,7 @@ class SafariPreparationTests(unittest.TestCase):
     def snapshot(self, repository, exchange):
         paths = []
         for relative in ['Scripts/vm/test_manifest.mjs', 'Scripts/safari/scenarios.mjs', 'Scripts/safari/synchronization.mjs',
-                         'Scripts/vm/environment.json']:
+                         'Scripts/vm/environment.json', 'Scripts/vm/runtime_inventory.mjs', 'Scripts/vm/runtime-test-inventory.json']:
             destination = exchange / 'source' / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(host.ROOT / relative, destination)
@@ -102,7 +102,8 @@ class SafariPreparationTests(unittest.TestCase):
                 'provider.install', 'protocol.check', 'pins.check', 'build-safari.macos.debug', 'prepare-safari.macos.debug'])
             self.assertTrue(all('nativeAudit' not in stage for stage in plan['stages']))
         else:
-            self.assertTrue(all(selector.startswith('Tests macOS/') for selector in job['payload']['onlyTesting']))
+            self.assertEqual(job['payload']['runtimePlatforms'], ['macos'])
+            self.assertTrue(all(selector.startswith(('Tests macOS/', 'WalletAuthorityTests/')) for selector in job['payload']['onlyTesting']))
             self.assertTrue(all(stage.get('nativeAudit', {}).get('platform', 'macos') == 'macos' for stage in plan['stages']))
         stages = [{**stage, 'status': 'passed', **({'audit': {'ok': True}} if 'nativeAudit' in stage else {})}
                   for stage in plan['stages']]

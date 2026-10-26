@@ -1,3 +1,4 @@
+import WalletDomain
 import AppKit
 import XCTest
 @testable import Big_Wallet

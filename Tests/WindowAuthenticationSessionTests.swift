@@ -1,3 +1,5 @@
+import WalletDomain
+@testable import WalletAuthority
 import AppKit
 import Security
 import Synchronization
@@ -17,7 +19,11 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         XCTAssertTrue(sheet.sheetParent === controller.window)
         submit("x", to: form)
         let result = await authentication.value
-        XCTAssertTrue(result)
+        let grant = try XCTUnwrap(result)
+        let access = try XCTUnwrap(fixture.credentials.accessSession(authorization: grant))
+        XCTAssertTrue(fixture.credentials.isCurrent(access))
+        XCTAssertNil(fixture.credentials.accessSession(authorization: grant))
+        access.invalidate()
         XCTAssertNil(sheet.sheetParent)
         XCTAssertFalse(sheet.isVisible)
         XCTAssertTrue(form.passwordTextField.stringValue.isEmpty)
@@ -26,6 +32,25 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         form.actionButtonTapped(form.okButton as Any)
         form.cancelButtonTapped(form.cancelButton)
         XCTAssertTrue(controller.contentViewController === original)
+    }
+
+    func testCancellationInvalidatesTheChallengeBeforeAuthenticationReturns() async throws {
+        let fixture = AuthenticationKeychainFixture(password: "password")
+        let dependencies = dependencies(fixture)
+        let challenge = dependencies.credentials.makeWalletAccessChallenge()
+        let controller = makeWindow()
+        defer { controller.close() }
+        let authentication = Task {
+            await controller.authenticate(reason: .showPrivateKey, challenge: challenge, dependencies: dependencies)
+        }
+        let (_, form) = try await passwordSheet(in: controller)
+        form.cancelButtonTapped(form.cancelButton)
+        await assertResult(authentication, equals: false)
+        XCTAssertThrowsError(try dependencies.credentials.verify(password: "password", challenge: challenge)) { error in
+            guard case WalletCredentialError.authorizationUnavailable = error else {
+                return XCTFail("Expected retired authorization, received \(error)")
+            }
+        }
     }
 
     func testPasswordAuthenticationRestoresSecretOwnerEligibilityBeforeReturning() async throws {
@@ -41,7 +66,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         var wasDismissedAtReturn = false
         var ownerWasEligibleAtReturn = false
         let authentication = Task {
-            let result = await controller.authenticate(reason: .showPrivateKey, dependencies: dependencies)
+            let result = await controller.authenticate(reason: .showPrivateKey, challenge: dependencies.credentials.makeWalletAccessChallenge(), dependencies: dependencies)
             wasDismissedAtReturn = authenticationSheet?.sheetParent == nil && authenticationSheet?.isVisible == false
             ownerWasEligibleAtReturn = NSApp.isActive && NativeSecretAlertPresentation.acceptsKeyWindow(
                 NSApp.keyWindow, owner: owner, presentation: nil
@@ -75,7 +100,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         var ownerWasEligibleAtReturn = true
         var otherWasKeyAtReturn = false
         let authentication = Task {
-            let result = await controller.authenticate(reason: .showPrivateKey, dependencies: dependencies)
+            let result = await controller.authenticate(reason: .showPrivateKey, challenge: dependencies.credentials.makeWalletAccessChallenge(), dependencies: dependencies)
             wasDismissedAtReturn = authenticationSheet?.sheetParent == nil && authenticationSheet?.isVisible == false
             ownerWasEligibleAtReturn = NativeSecretAlertPresentation.acceptsKeyWindow(
                 NSApp.keyWindow, owner: owner, presentation: nil
@@ -122,8 +147,8 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         let first = begin(controller, fixture: fixture)
         let (sheet, form) = try await passwordSheet(in: controller)
         let originalSession = controller.currentAuthenticationSession
-        let duplicate = await controller.authenticate(reason: .removeWallet, dependencies: dependencies(fixture))
-        XCTAssertFalse(duplicate)
+        let duplicate = await controller.authenticate(reason: .removeWallet, challenge: fixture.credentials.makeWalletAccessChallenge(), dependencies: dependencies(fixture))
+        XCTAssertNil(duplicate)
         XCTAssertTrue(controller.currentAuthenticationSession === originalSession)
         XCTAssertTrue(controller.currentAuthenticationSession?.sheet === sheet)
         form.cancelButtonTapped(form.cancelButton)
@@ -251,10 +276,12 @@ final class WindowAuthenticationSessionTests: XCTestCase {
             let review = try nativeReviewForTesting()
             let gate = BiometricGate()
             let dependencies = WindowAuthenticationSession.Dependencies(
-                keychain: fixture.keychain, attemptBiometrics: { _ in await gate.attempt() }
+                credentials: fixture.credentials, attemptBiometrics: { _, challenge in
+                    fixture.authentication(await gate.attempt(), challenge: challenge)
+                }
             )
             let authentication = Task {
-                await controller.authenticate(reason: .sendTransaction, review: review, dependencies: dependencies)
+                await controller.authenticate(reason: .sendTransaction, challenge: dependencies.credentials.makeWalletAccessChallenge(), review: review, dependencies: dependencies)
             }
             await gate.waitForEntry()
             if invalidatesReview { review.invalidate() }
@@ -300,14 +327,14 @@ final class WindowAuthenticationSessionTests: XCTestCase {
 
     func testActionBiometricsNeverFallBackAfterFailedAvailableAttempt() async throws {
         let fixture = AuthenticationKeychainFixture(password: "password")
-        for outcome in [DeviceAuthentication.Outcome.failed, .interactionUnavailable, .succeeded] {
+        for outcome in [WalletAuthenticationOutcome.failed, .interactionUnavailable, .succeeded] {
             let controller = makeWindow()
             defer { controller.close() }
             let original = controller.contentViewController
             var dependencies = dependencies(fixture)
-            dependencies.attemptBiometrics = { _ in outcome }
-            let result = await controller.authenticate(reason: .removeWallet, dependencies: dependencies)
-            XCTAssertEqual(result, outcome == .succeeded)
+            dependencies.attemptBiometrics = { _, challenge in fixture.authentication(outcome, challenge: challenge) }
+            let result = await controller.authenticate(reason: .removeWallet, challenge: dependencies.credentials.makeWalletAccessChallenge(), dependencies: dependencies)
+            XCTAssertEqual(result != nil, outcome == .succeeded)
             XCTAssertTrue(controller.window?.sheets.isEmpty == true)
             XCTAssertTrue(controller.contentViewController === original)
         }
@@ -320,15 +347,15 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         review.invalidate()
         var calls = 0
         var dependencies = WindowAuthenticationSession.Dependencies()
-        dependencies.attemptBiometrics = { _ in calls += 1; return .succeeded }
-        let absent = await Window.authenticate(in: nil, reason: .removeWallet)
-        let closed = await controller.authenticate(reason: .removeWallet, dependencies: dependencies)
+        dependencies.attemptBiometrics = { _, _ in calls += 1; return .failed }
+        let absent = await Window.authenticate(in: nil, reason: .removeWallet, challenge: dependencies.credentials.makeWalletAccessChallenge())
+        let closed = await controller.authenticate(reason: .removeWallet, challenge: dependencies.credentials.makeWalletAccessChallenge(), dependencies: dependencies)
         let other = makeWindow()
         defer { other.close() }
-        let retired = await other.authenticate(reason: .sendTransaction, review: review, dependencies: dependencies)
-        XCTAssertFalse(absent)
-        XCTAssertFalse(closed)
-        XCTAssertFalse(retired)
+        let retired = await other.authenticate(reason: .sendTransaction, challenge: dependencies.credentials.makeWalletAccessChallenge(), review: review, dependencies: dependencies)
+        XCTAssertNil(absent)
+        XCTAssertNil(closed)
+        XCTAssertNil(retired)
         XCTAssertEqual(calls, 0)
         XCTAssertNil(controller.currentAuthenticationSession)
         XCTAssertNil(other.currentAuthenticationSession)
@@ -425,15 +452,15 @@ final class WindowAuthenticationSessionTests: XCTestCase {
 
     private func dependencies(_ fixture: AuthenticationKeychainFixture) -> WindowAuthenticationSession.Dependencies {
         var dependencies = WindowAuthenticationSession.Dependencies()
-        dependencies.keychain = fixture.keychain
-        dependencies.attemptBiometrics = { _ in nil }
+        dependencies.credentials = fixture.credentials
+        dependencies.attemptBiometrics = { _, _ in nil }
         return dependencies
     }
 
-    private func begin(_ controller: WalletWindowController, fixture: AuthenticationKeychainFixture, review: NativeApprovalReview? = nil) -> Task<Bool, Never> {
+    private func begin(_ controller: WalletWindowController, fixture: AuthenticationKeychainFixture, review: NativeApprovalReview? = nil) -> Task<WalletAuthenticationGrant?, Never> {
         let dependencies = dependencies(fixture)
         return Task {
-            await controller.authenticate(reason: .showPrivateKey, review: review, dependencies: dependencies)
+            await controller.authenticate(reason: .showPrivateKey, challenge: dependencies.credentials.makeWalletAccessChallenge(), review: review, dependencies: dependencies)
         }
     }
 
@@ -450,9 +477,9 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         form.actionButtonTapped(form.okButton as Any)
     }
 
-    private func assertResult(_ task: Task<Bool, Never>, equals expected: Bool, file: StaticString = #filePath, line: UInt = #line) async {
+    private func assertResult(_ task: Task<WalletAuthenticationGrant?, Never>, equals expected: Bool, file: StaticString = #filePath, line: UInt = #line) async {
         let result = await task.value
-        XCTAssertEqual(result, expected, file: file, line: line)
+        XCTAssertEqual(result != nil, expected, file: file, line: line)
     }
 
     private func waitUntil(_ predicate: () -> Bool, file: StaticString = #filePath, line: UInt = #line) async {
@@ -466,19 +493,19 @@ private struct WindowFocusFailure: Error, CustomStringConvertible {
 
 @MainActor
 private final class BiometricGate {
-    private let gate = TestGate<DeviceAuthentication.Outcome?>()
+    private let gate = TestGate<WalletAuthenticationOutcome?>()
     private let entered = XCTestExpectation(description: "biometrics entered")
     private let returned = XCTestExpectation(description: "biometrics returned")
     private(set) var cancelledAtReturn: Bool?
 
-    func attempt() async -> DeviceAuthentication.Outcome? {
+    func attempt() async -> WalletAuthenticationOutcome? {
         entered.fulfill()
         let result = await gate.wait()
         cancelledAtReturn = Task.isCancelled
         returned.fulfill()
         return result
     }
-    func complete(_ outcome: DeviceAuthentication.Outcome?) { gate.resolve(outcome) }
+    func complete(_ outcome: WalletAuthenticationOutcome?) { gate.resolve(outcome) }
     func waitForEntry() async {
         let result = await XCTWaiter.fulfillment(of: [entered], timeout: 2)
         XCTAssertEqual(result, .completed)
@@ -496,6 +523,23 @@ private final class AuthenticationKeychainFixture: Sendable {
         var readCount = 0
     }
     private let state: Mutex<State>
+    private let authorityID = UUID()
+
+    var credentials: WalletCredentials {
+        WalletCredentials(keychain: keychain, messages: .testingEnglish, authorityID: authorityID)
+    }
+
+    func authentication(_ outcome: WalletAuthenticationOutcome?, challenge: WalletAuthenticationChallenge) -> WalletAuthenticationResult? {
+        switch outcome {
+        case .succeeded?:
+            guard let password = state.withLock({ $0.password }),
+                  let grant = try? credentials.verify(password: password, challenge: challenge) else { return .failed }
+            return .granted(grant)
+        case .failed?: return .failed
+        case .interactionUnavailable?: return .interactionUnavailable
+        case nil: return nil
+        }
+    }
 
     init(password: String?) { state = Mutex(State(password: password)) }
 

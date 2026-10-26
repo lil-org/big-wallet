@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import UIKit
@@ -5,7 +8,7 @@ import UIKit
 class ImportViewController: UIViewController {
     
     var completion: ((Bool) -> Void)?
-    private let walletsManager = WalletsManager.shared
+    private let walletsManager = ApplicationServices.shared.wallets
     private var layoutTask: Task<Void, Never>?
     
     @IBOutlet weak var placeholderLabel: UILabel! {

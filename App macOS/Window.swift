@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import Cocoa
@@ -8,14 +11,18 @@ final class WalletWindowController: NSWindowController {
 
     func authenticate(
         reason: AuthenticationReason,
+        challenge: WalletAuthenticationChallenge,
         review: NativeApprovalReview? = nil,
         dependencies: WindowAuthenticationSession.Dependencies = .init()
-    ) async -> Bool {
+    ) async -> WalletAuthenticationGrant? {
         guard currentAuthenticationSession == nil, !Task.isCancelled,
               review?.isActive != false,
-              let window, Window.isVisibleContentWindow(window) else { return false }
+              let window, Window.isVisibleContentWindow(window) else {
+            challenge.invalidate()
+            return nil
+        }
         let session = WindowAuthenticationSession(
-            owner: window, reason: reason, review: review,
+            owner: window, reason: reason, challenge: challenge, review: review,
             dependencies: dependencies
         )
         currentAuthenticationSession = session
@@ -34,10 +41,14 @@ struct Window {
     static func authenticate(
         in window: NSWindow?,
         reason: AuthenticationReason,
+        challenge: WalletAuthenticationChallenge,
         review: NativeApprovalReview? = nil
-    ) async -> Bool {
-        guard let controller = window?.windowController as? WalletWindowController else { return false }
-        return await controller.authenticate(reason: reason, review: review)
+    ) async -> WalletAuthenticationGrant? {
+        guard let controller = window?.windowController as? WalletWindowController else {
+            challenge.invalidate()
+            return nil
+        }
+        return await controller.authenticate(reason: reason, challenge: challenge, review: review)
     }
     
     static func showNew(

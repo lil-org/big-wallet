@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 import Cocoa
 
 final class AccountsListView: NSView {

@@ -20,7 +20,7 @@ spec.loader.exec_module(host)
 
 class RunSnapshotBindingTests(unittest.TestCase):
     sources = ('VMGuestAgent.swift', 'guest_runner', 'guest_bootstrap.mjs', 'provision_guest.sh', 'environment.json')
-    harness = ('guest.mjs', 'test_manifest.mjs', 'result_audit.mjs')
+    harness = ('guest.mjs', 'test_manifest.mjs', 'result_audit.mjs', 'runtime_inventory.mjs', 'runtime-test-inventory.json')
 
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -177,7 +177,7 @@ class RunSnapshotBindingTests(unittest.TestCase):
             with self.subTest(source=name):
                 path = self.tools / name
                 original = path.read_bytes()
-                changed = original + b'\nexport const fixtureHarnessRevision = "current snapshot";\n'
+                changed = original + (b'\n ' if name.endswith('.json') else b'\nexport const fixtureHarnessRevision = "current snapshot";\n')
                 exchanges = []
                 def capture(repository, exchange):
                     exchanges.append(exchange)
@@ -219,8 +219,8 @@ class RunSnapshotBindingTests(unittest.TestCase):
         path = self.tools / 'test_manifest.mjs'
         original = path.read_text()
         changed = original.replace(
-            'new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "signing", "interactiveSafari", "prepareSafari", "preparedSafari"])',
-            'new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "signing", "interactiveSafari", "prepareSafari", "preparedSafari", "fixtureOption"])'
+            'new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "signing", "interactiveSafari", "prepareSafari", "preparedSafari", "runtimePlatforms"])',
+            'new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "signing", "interactiveSafari", "prepareSafari", "preparedSafari", "runtimePlatforms", "fixtureOption"])'
         ).replace('["check", "check", []]', '[options.fixtureOption ? "option-check" : "check", "check", []]')
         self.assertNotEqual(changed, original)
         path.write_text(changed)
@@ -289,6 +289,9 @@ class PlannedInventoryTests(unittest.TestCase):
         self.manifest = self.exchange / 'source/Scripts/vm/test_manifest.mjs'
         self.manifest.parent.mkdir(parents=True)
         shutil.copyfile(host.TOOLS / 'test_manifest.mjs', self.manifest)
+        runtime_files = [self.manifest.with_name(name) for name in ('runtime_inventory.mjs', 'runtime-test-inventory.json')]
+        for path in runtime_files:
+            shutil.copyfile(host.TOOLS / path.name, path)
         scenarios = self.exchange / 'source/Scripts/safari/scenarios.mjs'
         scenarios.parent.mkdir()
         shutil.copyfile(host.TOOLS.parent / 'safari/scenarios.mjs', scenarios)
@@ -298,7 +301,7 @@ class PlannedInventoryTests(unittest.TestCase):
         shutil.copyfile(host.TOOLS / 'environment.json', environment)
         host.atomic_json(self.exchange / 'snapshot-manifest.json', {'version': 1, 'files': [
             {'path': str(path.relative_to(self.exchange / 'source')), 'type': 'file', 'mode': 0o644,
-             'sha256': host.hash_regular_file(path)} for path in (self.manifest, scenarios, synchronization, environment)]})
+             'sha256': host.hash_regular_file(path)} for path in (self.manifest, scenarios, synchronization, environment, *runtime_files)]})
         self.job = {'version': 1, 'runId': 'plan-fixture', 'vmId': 'fixture-vm', 'kind': 'run',
                     'profile': 'all', 'payload': {'stages': [], 'onlyTesting': []},
                     'source': {'sha256': host.hash_regular_file(self.exchange / 'snapshot-manifest.json'), 'commit': 'b' * 40},
@@ -371,7 +374,8 @@ class PlannedInventoryTests(unittest.TestCase):
                 ids = {stage['id'] for stage in plan['stages']}
                 if selection.get('onlyTesting') == ['Tests visionOS']:
                     self.assertTrue({'provider.install', 'protocol.check', 'build-tests.visionos.debug',
-                                     'test.visionos.debug', 'performance.visionos.release'} <= ids)
+                                     'test.visionos.debug'} <= ids)
+                    self.assertFalse(any(identifier.startswith('performance.') for identifier in ids))
                     self.assertFalse(any('.ios.' in identifier or '.macos.' in identifier for identifier in ids))
                 if any(test.startswith('Tests iOS/') for test in selection['onlyTesting']):
                     self.assertIn('build-tests.ios.debug', ids)

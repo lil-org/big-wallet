@@ -1,0 +1,3 @@
+import WalletStorageSupport
+
+typealias AuthorityFileLock = CrossProcessFileLock

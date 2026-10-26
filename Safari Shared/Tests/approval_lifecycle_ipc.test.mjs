@@ -133,3 +133,99 @@ test("restart preserves an oracle failure from a complete frame drained during S
         await worker.close();
     }
 });
+
+test("out-of-band task cancellation and fences remain responsive at a held gate", async () => {
+    const worker = child(`
+        let held, active = false, gate = false;
+        lines.on('line', line => {
+            const call = JSON.parse(line);
+            if (call.operation === 'hold') {
+                held = call; active = true; gate = true;
+                send({kind:'event', sequence:++sequence, event:'task', details:{id:'work#1', label:'work', active:true}});
+                send({kind:'event', sequence:++sequence, event:'checkpoint', gate:'held', details:{name:'held', hold:true, taskID:'work#1'}});
+            } else if (call.kind === 'control' && call.operation === 'fence') {
+                send({kind:'reply', id:call.id, ok:true, result:{sequence,
+                    tasks:active ? [{id:'work#1', label:'work'}] : [], gates:gate ? [{gate:'held', name:'held', taskID:'work#1'}] : []}});
+            } else if (call.kind === 'control' && call.operation === 'cancel') {
+                const cancelled = active && call.payload.taskID === 'work#1';
+                if (cancelled) {
+                    gate = false;
+                    send({kind:'event', sequence:++sequence, event:'gateRetired', details:{gate:'held'}});
+                    active = false;
+                    send({kind:'event', sequence:++sequence, event:'task', details:{id:'work#1', label:'work', active:false}});
+                    send({kind:'reply', id:held.id, ok:true, result:'cancelled'});
+                }
+                send({kind:'reply', id:call.id, ok:true, result:{cancelled, taskID:call.payload.taskID}});
+            }
+        });
+    `);
+    try {
+        await worker.waitEvent(event => event.event === "ready");
+        const pending = worker.command("hold");
+        await worker.waitEvent(event => event.gate === "held");
+        const before = await worker.fence();
+        assert.deepEqual(before.tasks, [{id: "work#1", label: "work"}]);
+        assert.equal(before.gates[0].gate, "held");
+        assert.equal(await worker.cancelTask("work#1"), true);
+        const after = await worker.fence();
+        assert.deepEqual(after.tasks, []);
+        assert.deepEqual(after.gates, []);
+        assert.equal(worker.gates.has("held"), false);
+        assert.ok(worker.events.some(event => event.event === "task" && event.details.active === false && event.sequence <= after.sequence));
+        assert.equal(await worker.cancelTask("work#1"), false);
+        assert.equal(await pending, "cancelled");
+    } finally { await worker.close(); }
+});
+
+test("a native fence waits for earlier observations while exposing pending external RPC work", async () => {
+    let releaseObservation, releaseRPC, observationFinished = false;
+    const observation = new Promise(resolve => { releaseObservation = resolve; });
+    const rpc = new Promise(resolve => { releaseRPC = resolve; });
+    const worker = child(`
+        lines.on('line', line => {
+            const call = JSON.parse(line);
+            if (call.operation === 'observe') {
+                send({kind:'event', sequence:++sequence, event:'observation', details:{}});
+                send({kind:'event', sequence:++sequence, event:'rpc', gate:'rpc', details:{}});
+                send({kind:'reply', id:call.id, ok:true, result:null});
+            } else if (call.kind === 'control' && call.operation === 'fence') {
+                send({kind:'reply', id:call.id, ok:true, result:{sequence, tasks:[], gates:[{gate:'rpc'}]}});
+            }
+        });
+    `, {onEvent: async event => {
+        if (event.event === "observation") { await observation; observationFinished = true; }
+        if (event.event === "rpc") { await rpc; }
+    }});
+    try {
+        await worker.waitEvent(event => event.event === "ready");
+        await worker.command("observe");
+        let fenced = false;
+        const fence = worker.fence().then(result => { fenced = true; return result; });
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(fenced, false);
+        releaseObservation();
+        const snapshot = await fence;
+        assert.equal(observationFinished, true);
+        assert.deepEqual(snapshot.pendingEvents.map(event => event.event), ["rpc"]);
+        releaseRPC();
+    } finally { releaseObservation(); releaseRPC(); await worker.close(); }
+});
+
+for (const [operation, result] of [
+    ["fence", {sequence: 100000, tasks: [], gates: []}],
+    ["fence", {sequence: 1, tasks: {}, gates: []}],
+    ["cancel", {taskID: "other-task", cancelled: true}],
+    ["cancel", {taskID: "work#1", cancelled: "yes"}],
+]) {
+    test(`native ${operation} rejects malformed control acknowledgements ${JSON.stringify(result)}`, async () => {
+        const worker = child(`lines.on('line', line => {
+            const call = JSON.parse(line);
+            send({kind:'reply', id:call.id, ok:true, result:${JSON.stringify(result)}});
+        });`);
+        try {
+            await worker.waitEvent(event => event.event === "ready");
+            await assert.rejects(operation === "fence" ? worker.fence() : worker.cancelTask("work#1"),
+                error => error.invariant === "protocol");
+        } finally { await worker.close(); }
+    });
+}

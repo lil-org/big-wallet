@@ -1,11 +1,12 @@
+import WalletDomain
+import WalletNetworking
 #if BW_SAFARI_VM_TESTING
+@testable import WalletAuthority
 import Darwin
 import Foundation
 import Security
 import Synchronization
-#if os(iOS)
 import LocalAuthentication
-#endif
 
 @_silgen_name("flock")
 private func safariVMFlock(_ descriptor: Int32, _ operation: Int32) -> Int32
@@ -65,7 +66,7 @@ final class SafariVMFixtures: Sendable {
     let root: URL
     let activationPreparation: ActivationPreparation?
     let incarnation = UUID().uuidString.lowercased()
-    private let storageLock: CrossProcessFileLock
+    private let storageLock: AuthorityFileLock
     private let storageMutex = Mutex(())
     private let eventMutex = Mutex(())
     var isLocal: Bool { descriptor.signingMode == "local" }
@@ -106,7 +107,7 @@ final class SafariVMFixtures: Sendable {
         else { throw Failure.invalidFixture }
         self.descriptor = descriptor
         self.root = root
-        storageLock = CrossProcessFileLock(fileURL: root.appendingPathComponent("fixture-storage.lock"))
+        storageLock = AuthorityFileLock(fileURL: root.appendingPathComponent("fixture-storage.lock"))
         let role = Bundle.main.bundleURL.pathExtension == "appex" ? "extension"
             : Bundle.main.bundleIdentifier == "org.lil.wallet.ambient" ? "helper" : "app"
         activationPreparation = platform == "macos" && role == "app"
@@ -150,7 +151,7 @@ final class SafariVMFixtures: Sendable {
         return Operation(requestID: requestID, scenarioID: scenario?["id"] as? String, iteration: scenario?["iteration"] as? Int)
     }
 
-    func capture(handle: ExtensionBridge.Handle) -> Operation {
+    func capture(handle: RequestHandle) -> Operation {
         do {
             return try withStorage {
                 if let data = try dataRecords("request-operations.plist")[operationKey(handle)] {
@@ -161,7 +162,7 @@ final class SafariVMFixtures: Sendable {
         } catch { fatalError("Safari VM request evidence is unavailable") }
     }
 
-    func recordOperation(handle: ExtensionBridge.Handle) {
+    func recordOperation(handle: RequestHandle) {
         do {
             try withStorage {
                 var records = try dataRecords("request-operations.plist")
@@ -176,7 +177,7 @@ final class SafariVMFixtures: Sendable {
         } catch { fatalError("Safari VM request evidence could not be saved") }
     }
 
-    private func operationKey(_ handle: ExtensionBridge.Handle) -> String {
+    private func operationKey(_ handle: RequestHandle) -> String {
         "\(handle.profileIdentifier?.uuidString ?? "default"):\(handle.id):\(handle.requestToken)"
     }
 
@@ -236,10 +237,6 @@ final class SafariVMFixtures: Sendable {
             default: throw Failure.invalidFixture
             }
         }
-    }
-
-    func ethereumEndpoint(chainID: Int, sourceURL: URL) -> EthereumRPCEndpoint {
-        .fixture(url: rpcURL(path: "ethereum", query: URLQueryItem(name: "chainId", value: String(chainID))), sourceURL: sourceURL)
     }
 
     func rpcURL(path: String, query: URLQueryItem? = nil) -> URL {
@@ -615,7 +612,7 @@ actor SafariVMLockProbe {
     }
 
     private func hold(_ probe: Probe, fixtures: SafariVMFixtures) async throws {
-        let lock = CrossProcessFileLock(fileURL: fixtures.root.appendingPathComponent(lockName))
+        let lock = AuthorityFileLock(fileURL: fixtures.root.appendingPathComponent(lockName))
         guard try lock.tryAcquire() else { throw Failure.alreadyLocked }
         defer { lock.release() }
         let held = Acknowledgement(probeID: probe.id, holderProcessID: ProcessInfo.processInfo.processIdentifier,
@@ -640,7 +637,7 @@ actor SafariVMLockProbe {
         let processID = ProcessInfo.processInfo.processIdentifier
         guard held.holderProcessID != processID, held.holderIncarnation != fixtures.incarnation,
               held.contenderProcessID == nil, held.contenderIncarnation == nil else { throw Failure.invalidAcknowledgement }
-        let lock = CrossProcessFileLock(fileURL: fixtures.root.appendingPathComponent(lockName))
+        let lock = AuthorityFileLock(fileURL: fixtures.root.appendingPathComponent(lockName))
         if try lock.tryAcquire() {
             lock.release()
             throw Failure.exclusionFailed
@@ -737,7 +734,7 @@ final class SafariVMMutations {
     }
 
     private func perform(_ mutation: SafariVMFixtures.Mutation, fixtures: SafariVMFixtures) async throws -> [String: String] {
-        let wallets = WalletsManager.shared
+        let wallets = ApplicationServices.shared.wallets
         guard await wallets.start() else { throw SafariVMFixtures.Failure.unavailable }
         switch mutation.operation {
         case .removeEthereumAccount:
@@ -745,10 +742,10 @@ final class SafariVMMutations {
                   wallet.accounts.count == 1, wallet.accounts[0].coin == .ethereum else { throw SafariVMFixtures.Failure.invalidFixture }
             try await wallets.delete(wallet: wallet)
         case .restoreEthereumAccount:
-            try await wallets.restoreSafariVMFixtureWallet()
+            try await SafariVMApplicationServices.restoreWallet(system: ApplicationServices.shared.authority, fixtures: fixtures)
         case .replaceVaultGeneration:
 #if os(iOS)
-            let generations = try await SafariApprovalVaultHost.shared.replaceSafariVMGeneration()
+            let generations = try await SafariVMApplicationServices.replaceVaultGeneration(system: ApplicationServices.shared.authority, fixtures: fixtures)
             return ["previousGeneration": generations.previous, "generation": generations.current]
 #else
             throw SafariVMFixtures.Failure.invalidFixture
@@ -756,10 +753,11 @@ final class SafariVMMutations {
         case .replaceCustomNetwork:
             guard let chainID = mutation.chainId, let rawURL = mutation.rpcURL else { throw SafariVMFixtures.Failure.invalidFixture }
             let rpcURL = try fixtures.validateMutationRPCURL(rawURL)
-            try SharedDefaults.replaceSafariVMCustomNetwork(chainID: chainID, rpcURL: rpcURL)
+            try SafariVMApplicationServices.replaceCustomNetwork(chainID: chainID, rpcURL: rpcURL,
+                system: ApplicationServices.shared.authority, fixtures: fixtures)
         }
 #if os(iOS)
-        await SafariApprovalVaultHost.shared.waitForReconciliation()
+        await ApplicationServices.shared.authority.waitForVaultReconciliation()
 #endif
         return [:]
     }
@@ -776,13 +774,6 @@ final class SafariVMPreferenceStorage: SharedPreferenceStorage, Sendable {
     func synchronize() -> Bool { true }
 }
 
-struct SafariVMRPCForbiddenAuthorization: AlchemyAuthorizationProviding {
-    func authorization(for url: URL) async throws -> AlchemyAuthorization? { throw SafariVMFixtures.Failure.rejected }
-    func replacementAuthorization(afterUnauthorized rejected: AlchemyAuthorization, for url: URL) async throws -> AlchemyAuthorization? { throw SafariVMFixtures.Failure.rejected }
-    func invalidateAuthorization(afterUnauthorized rejected: AlchemyAuthorization, for url: URL) async {}
-}
-
-#if os(iOS)
 final class SafariVMApprovalKeyStore: SafariApprovalKeyStoring, SafariApprovalIntegrityKeyStoring {
     private let fixtures = SafariVMFixtures.shared
 
@@ -833,5 +824,310 @@ final class SafariVMApprovalKeyStore: SafariApprovalKeyStoring, SafariApprovalIn
         }
     }
 }
+
+@MainActor
+struct SafariVMApplicationServices {
+    let authority: WalletAuthoritySystem
+    let authorization: any AlchemyAuthorizationProviding
+    let ethereumRPC: EthereumRPC
+    let ethereum: EthereumTransactionPreparation
+    let solana: SolanaRPCClient
+    let safariRPC: SafariRPCClient
+    let prices: PriceService
+
+    static func make(
+        catalog: NetworkCatalog?,
+        catalogOwnedChainIds: Set<Int>,
+        decodedChainIds: Set<Int>,
+        messages: AuthorityMessages
+    ) -> SafariVMApplicationServices {
+        let fixtures = SafariVMFixtures.shared
+        let storage = fixtures.isLocal ? AuthorityStorageConfiguration(containerURL: fixtures.root) : .application
+        let preferences = preferenceStorage(fixtures)
+        let routing = SafariVMRPCRouting(fixtures: fixtures, catalog: catalog)
+        let custom = SafariVMCustomNetworks(preferences: preferences, containerURL: storage.containerURL, routing: routing)
+        let cache = CustomNetworkCache(loader: custom.load, observesDarwinChanges: true)
+        _ = cache.snapshot()
+        let hooks = executionHooks(fixtures)
+        let authorization = SafariVMRPCFixtureAuthorization()
+        let rpc = EthereumRPC(authorizationProvider: authorization, authorizeRequest: routing.authorize)
+        let ethereum = EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil })
+        let solana = SolanaRPCClient(urlSession: URLSession(configuration: .default),
+            authorizationProvider: authorization, messages: .init(failedToSend: Strings.failedToSend,
+                blockhashNotFound: Strings.solanaBlockhashNotFound),
+            authorizeRequest: routing.authorize, rejectsRedirects: true)
+        let safariRPC = SafariRPCClient(urlSession: URLSession(configuration: .default), authorizationProvider: authorization,
+            authorizeRequest: routing.authorize)
+        let vault: SafariApprovalVault
+        let integrity: any SafariApprovalIntegrityKeyStoring
+        if fixtures.isLocal {
+            let keys = SafariVMApprovalKeyStore()
+            integrity = keys
+            vault = SafariApprovalVault(fileURL: fixtures.root.appendingPathComponent("SafariApprovalVault.v1"), keyStore: keys,
+                canEvaluateAuthentication: { _, _ in true }, authentication: { _, _, _ in !Task.isCancelled }, hooks: hooks)
+        } else {
+            integrity = SafariApprovalIntegrityKeychainStore()
+            vault = SafariApprovalVault(fileURL: storage.containerURL?.appendingPathComponent("SafariApprovalVault.v1"), hooks: hooks)
+        }
+        let metadata = fixtures.isLocal ? WalletsMetadataService(storage: preferences, postChange: {
+            WalletStoreSync.postLocalAndExternalChange(defaultsAlreadySynchronized: true)
+        }) : WalletsMetadataService.live()
+        let notifications: WalletStoreChangeNotifications = fixtures.isLocal ? WalletStoreChangeNotifications(
+            postLocalChange: { WalletStoreSync.postLocalChange() },
+            postMutation: { WalletStoreSync.postLocalAndExternalChange(defaultsAlreadySynchronized: true) },
+            startObserving: { WalletStoreSync.startObserving($0, selector: $1) },
+            stopObserving: { WalletStoreSync.stopObserving($0) },
+            isExternalChange: { WalletStoreSync.isExternalChange($0) }
+        ) : .live
+        let publicationStorage: any SharedPreferenceStorage = fixtures.isLocal ? preferences : UserDefaultsPreferenceStorage.standard
+        let authority = WalletAuthoritySystem.testing(
+            catalog: catalog, catalogOwnedChainIds: catalogOwnedChainIds, decodedChainIds: decodedChainIds,
+            solanaEndpoints: SolanaRPCClient.RPCConfiguration.bundled,
+            broadcaster: SignedBroadcastClient(ethereum: EthereumBroadcastClient(rpc: rpc), solana: solana),
+            preparation: ethereum.makePreparationOperations(), storage: storage, messages: messages,
+            keychain: fixtures.isLocal ? fixtures.keychain : Keychain(), metadata: metadata, vault: vault, integrityKeyStore: integrity,
+            vaultHostDefaults: publicationStorage,
+            customSnapshot: { cache.snapshot() }, freshCustomSnapshot: { cache.refreshSnapshot() },
+            definitionResult: { network in
+                guard let chainID = Int(hexString: network.chainId), let entry = cache.snapshot().entriesByChainId[chainID] else { return .unavailable }
+                let urls = CustomNetworkDefinition.requestedRPCURLs(for: network)
+                guard !urls.isEmpty else { return .unavailable }
+                return urls.contains {
+                    CustomNetworkDefinition.matches(requested: network, requestedRPCURL: $0,
+                        existing: entry.definition, existingRPCURL: entry.rpcURL)
+                } ? .matching : .conflict
+            },
+            insertNetwork: { network in
+                let result = custom.insert(network)
+                if result.succeeded {
+                    cache.invalidate()
+                    _ = cache.snapshot()
+                    CustomNetworkChangeNotification.post()
+                }
+                return result
+            },
+            invalidateCache: { cache.invalidate() }, notifications: notifications,
+            credentialAuthentication: fixtures.isLocal
+                ? .init(canUseBiometrics: { false }, attemptBiometrics: { _ in .failed }) : .live,
+            hooks: hooks
+        )
+        return SafariVMApplicationServices(authority: authority, authorization: authorization, ethereumRPC: rpc,
+            ethereum: ethereum, solana: solana, safariRPC: safariRPC, prices: PriceService(fetchPrices: { ["ETH": 2_000] }))
+    }
+
+    private static func preferenceStorage(_ fixtures: SafariVMFixtures) -> any SharedPreferenceStorage {
+        if fixtures.isLocal { return SafariVMPreferenceStorage.shared }
+        guard let defaults = SharedDefaults.defaults else { fatalError("Safari VM application preferences are unavailable") }
+        return defaults
+    }
+
+    static func restoreWallet(system: WalletAuthoritySystem, fixtures: SafariVMFixtures) async throws {
+        let wallets = system.wallets
+        guard !wallets.wallets.contains(where: { $0.id == "fixture-ethereum" }) else { return }
+        let prepared = WalletRepository.PreparedCreation(walletID: "fixture-ethereum",
+            data: try fixtures.originalWalletData(id: "fixture-ethereum"), password: Data("approval-fixture-password".utf8))
+        let repository = wallets.repository
+#if os(iOS)
+        _ = try await wallets.approvalVaultHost.performSourceMutation { willMutate in
+            try await repository.saveNewWallet(prepared, willMutateSource: willMutate)
+        }
+#else
+        _ = try await repository.saveNewWallet(prepared, willMutateSource: {})
 #endif
+        guard await wallets.reloadFromStore() else { throw SafariVMFixtures.Failure.unavailable }
+#if os(macOS)
+        DistributedNotificationCenter.default().post(name: .walletStoreChanged, object: String(ProcessInfo.processInfo.processIdentifier))
+#endif
+    }
+
+#if os(iOS)
+    static func replaceVaultGeneration(system: WalletAuthoritySystem, fixtures: SafariVMFixtures) async throws -> (previous: String, current: String) {
+        let preferences: any SharedPreferenceStorage = fixtures.isLocal ? preferenceStorage(fixtures) : UserDefaultsPreferenceStorage.standard
+        let key = "SafariApprovalVault.hostPublicationMetadata.v1"
+        func generation() throws -> UUID {
+            guard let data = preferences.object(forKey: key) as? Data,
+                  let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let raw = object["generation"] as? String, let generation = UUID(uuidString: raw) else {
+                throw SafariVMFixtures.Failure.unavailable
+            }
+            return generation
+        }
+        await system.waitForVaultReconciliation()
+        let previous = try generation()
+        try await system.invalidateVaultForTesting()
+        let current = try generation()
+        guard current != previous else { throw SafariVMFixtures.Failure.unavailable }
+        return (previous.uuidString.lowercased(), current.uuidString.lowercased())
+    }
+#endif
+
+    static func replaceCustomNetwork(chainID: Int, rpcURL: URL, system: WalletAuthoritySystem, fixtures: SafariVMFixtures) throws {
+        let container = fixtures.isLocal ? fixtures.root : AuthorityStorageConfiguration.application.containerURL
+        let storage = SafariVMCustomNetworks(preferences: preferenceStorage(fixtures), containerURL: container)
+        try storage.replace(chainID: chainID, rpcURL: rpcURL)
+        system.invalidateNetworkCache()
+        CustomNetworkChangeNotification.post()
+    }
+
+    private static func executionHooks(_ fixtures: SafariVMFixtures) -> AuthorityExecutionHooks {
+        AuthorityExecutionHooks(checkpoint: { point, context in
+            let operation = context.map { fixtures.capture(handle: $0.handle) }
+            try await fixtures.checkpoint(point.rawValue, requestID: context?.handle.id, operation: operation)
+        }, event: { value in
+            if value.kind == .requestAdmitted {
+                guard let handle = value.handle else { fatalError("Safari admission omitted its request identity") }
+                fixtures.recordOperation(handle: handle)
+                return
+            }
+            let operation = value.handle.map { fixtures.capture(handle: $0) }
+            var metadata = [String: Any]()
+            if let handle = value.handle {
+                metadata["requestToken"] = handle.requestToken
+                metadata["profileIdentifier"] = handle.profileIdentifier.map { $0.uuidString.lowercased() as Any } ?? NSNull()
+            }
+            if let context = value.context {
+                metadata["executionID"] = context.executionID?.uuidString.lowercased()
+                metadata["configurationKey"] = context.configurationKey
+            }
+            if let consentID = value.consentID { metadata["consentID"] = consentID.uuidString.lowercased() }
+            if let account = value.account { metadata["account"] = account.normalizedAddress }
+            if let generation = value.generation { metadata["generation"] = generation.uuidString.lowercased() }
+            if let succeeded = value.succeeded { metadata["succeeded"] = succeeded }
+            if value.kind == .authenticationCompleted { metadata["authentication"] = fixtures.isLocal ? "fixture" : "system" }
+            if value.kind == .protectedKeyRead { metadata["storage"] = fixtures.isLocal ? "fixture" : "production" }
+            if value.kind == .signingStarted, let transaction = value.context?.transaction, let network = value.context?.network {
+                var approved = EthereumRPC.estimateGasTransactionObject(for: transaction)
+                approved["chainId"] = network.network.chainIdHexString
+                approved["nonce"] = transaction.nonce.flatMap { EthereumQuantity.parseUInt256($0, allowPrefixless: true)?.toHexString(withPrefix: true) }
+                approved["value"] = approved["value"] ?? "0x0"
+                approved["to"] = approved["to"] ?? "0x"
+                approved["type"] = approved["type"] ?? "0x0"
+                approved["accessList"] = approved["accessList"] ?? []
+                fixtures.event("authorizedTransaction", requestID: value.handle?.id,
+                    metadata: ["executionID": value.context?.executionID?.uuidString.lowercased() ?? "", "transaction": approved], operation: operation)
+            }
+            fixtures.event(value.kind.rawValue, requestID: value.handle?.id, metadata: metadata, operation: operation)
+        })
+    }
+}
+
+private final class SafariVMRPCRouting: Sendable {
+    private enum Destination: Hashable, Sendable {
+        case ethereum(Int), solana(Solana.Cluster)
+    }
+    private let fixtures: SafariVMFixtures
+    private let destinations = Mutex([String: Set<Destination>]())
+
+    init(fixtures: SafariVMFixtures, catalog: NetworkCatalog?) {
+        self.fixtures = fixtures
+        for record in catalog?.records ?? [] {
+            if let url = record.rpcURL() { register(url, destination: .ethereum(record.chainId)) }
+        }
+        for cluster in [Solana.Cluster.mainnetBeta, .devnet, .testnet] {
+            if let endpoint = SolanaRPCClient.RPCConfiguration.bundled.endpoint(for: cluster) {
+                register(endpoint.url, destination: .solana(cluster))
+            }
+        }
+    }
+
+    func register(_ snapshot: CustomNetworkSnapshot) {
+        for (chainID, entry) in snapshot.entriesByChainId { register(entry.rpcURL, destination: .ethereum(chainID)) }
+    }
+
+    private func register(_ url: URL, destination: Destination) {
+        _ = destinations.withLock { $0[url.absoluteString, default: []].insert(destination) }
+    }
+
+    func authorize(_ request: inout URLRequest) throws {
+        guard let original = request.url,
+              let candidates = destinations.withLock({ $0[original.absoluteString] }), candidates.count == 1,
+              let destination = candidates.first else { throw SafariVMFixtures.Failure.invalidFixture }
+        switch destination {
+        case .ethereum(let chainID):
+            request.url = fixtures.rpcURL(path: "ethereum", query: URLQueryItem(name: "chainId", value: String(chainID)))
+        case .solana(let cluster):
+            request.url = fixtures.rpcURL(path: "solana", query: URLQueryItem(name: "cluster", value: cluster.rawValue))
+        }
+        try fixtures.authorize(&request)
+    }
+}
+
+private final class SafariVMCustomNetworks: Sendable {
+    private let preferences: any SharedPreferenceStorage
+    private let preferencesMutex = Mutex(())
+    private let fileLock: AuthorityFileLock
+    private let routing: SafariVMRPCRouting?
+
+    init(preferences: any SharedPreferenceStorage, containerURL: URL?, routing: SafariVMRPCRouting? = nil) {
+        self.preferences = preferences
+        fileLock = AuthorityFileLock(fileURL: containerURL?.appendingPathComponent(".custom-ethereum-networks.lock"))
+        self.routing = routing
+    }
+
+    func load() -> CustomNetworkSnapshotLoadResult {
+        do {
+            try fileLock.acquire(timeoutNanoseconds: 1_000_000_000, pollNanoseconds: 10_000_000)
+            defer { fileLock.release() }
+            let result = preferencesMutex.withLock { _ in SharedDefaults.loadCustomNetworkSnapshotResult(from: preferences) }
+            if case .loaded(let snapshot) = result { routing?.register(snapshot) }
+            return result
+        } catch { return .unavailable }
+    }
+
+    func insert(_ network: EthereumNetworkFromDapp) -> CustomNetworkInsertionResult {
+        do {
+            try fileLock.acquire(timeoutNanoseconds: 1_000_000_000, pollNanoseconds: 10_000_000)
+            defer { fileLock.release() }
+            return preferencesMutex.withLock { _ in SharedDefaults.insertNetwork(network, to: preferences) }
+        } catch { return .unavailable }
+    }
+
+    func replace(chainID: Int, rpcURL: URL) throws {
+        guard (64_000...64_999).contains(chainID),
+              let parameters = URLComponents(url: rpcURL, resolvingAgainstBaseURL: false)?.queryItems?.filter({ $0.name == "chainId" }),
+              parameters.count == 1, parameters[0].value == String(chainID) else { throw SafariVMFixtures.Failure.invalidFixture }
+        try fileLock.acquire(timeoutNanoseconds: 1_000_000_000, pollNanoseconds: 10_000_000)
+        defer { fileLock.release() }
+        try preferencesMutex.withLock { _ in
+            let storage = preferences
+            guard storage.synchronize(), let data = storage.object(forKey: SharedDefaults.customEthereumNetworksKey) as? Data,
+                  let values = try JSONSerialization.jsonObject(with: data) as? [Any] else { throw SafariVMFixtures.Failure.unavailable }
+            let decoder = JSONDecoder()
+            var records = values.compactMap { value -> EthereumNetworkFromDapp? in
+                guard JSONSerialization.isValidJSONObject(value), let data = try? JSONSerialization.data(withJSONObject: value),
+                      let record = try? decoder.decode(EthereumNetworkFromDapp.self, from: data),
+                      let identifier = Int(hexString: record.chainId), identifier > 0,
+                      CustomNetworkDefinition.storedRPCURL(for: record,
+                        legacyOverride: storage.string(forKey: SharedDefaults.customEthereumNetworkNodeKey(chainId: identifier))) != nil else { return nil }
+                return record
+            }
+            guard records.filter({ Int(hexString: $0.chainId) == chainID }).count == 1,
+                  let index = records.firstIndex(where: { Int(hexString: $0.chainId) == chainID }) else { throw SafariVMFixtures.Failure.unavailable }
+            let archiveKey = SharedDefaults.customEthereumNetworksKey
+            let overrideKey = SharedDefaults.customEthereumNetworkNodeKey(chainId: chainID)
+            let previousArchive = storage.object(forKey: archiveKey)
+            let previousOverride = storage.object(forKey: overrideKey)
+            records[index].rpcUrls = [rpcURL.absoluteString]
+            storage.set(try JSONEncoder().encode(records), forKey: archiveKey)
+            storage.removeObject(forKey: overrideKey)
+            guard storage.synchronize() else {
+                if let previousArchive { storage.set(previousArchive, forKey: archiveKey) } else { storage.removeObject(forKey: archiveKey) }
+                if let previousOverride { storage.set(previousOverride, forKey: overrideKey) } else { storage.removeObject(forKey: overrideKey) }
+                _ = storage.synchronize()
+                throw SafariVMFixtures.Failure.unavailable
+            }
+        }
+    }
+}
+
+private struct SafariVMRPCFixtureAuthorization: AlchemyAuthorizationProviding {
+    func authorization(for url: URL) async throws -> AlchemyAuthorization? {
+        guard AlchemyJWTProvider.isAlchemyRPCURL(url) else { throw SafariVMFixtures.Failure.rejected }
+        return AlchemyAuthorization(token: "safari-vm-fixture")
+    }
+    func replacementAuthorization(afterUnauthorized rejected: AlchemyAuthorization, for url: URL) async throws -> AlchemyAuthorization? {
+        throw SafariVMFixtures.Failure.rejected
+    }
+    func invalidateAuthorization(afterUnauthorized rejected: AlchemyAuthorization, for url: URL) async {}
+}
 #endif

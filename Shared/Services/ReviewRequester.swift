@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 #if os(macOS)
@@ -21,7 +24,7 @@ struct ReviewRequster {
     }
     
     private static func didRequestReview() {
-        Defaults.latestReviewRequestDate = Date()
+        ApplicationServices.shared.authority.recordReviewRequest(at: Date())
     }
     
 }

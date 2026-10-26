@@ -1,0 +1,129 @@
+[
+  {
+    "path": "Positive/DomainContract.swift",
+    "succeeds": true
+  },
+  {
+    "path": "Positive/AuthorityContract.swift",
+    "succeeds": true
+  },
+  {
+    "path": "Positive/NetworkingContract.swift",
+    "succeeds": true
+  },
+  {
+    "path": "Negative/RawPrivateKey.swift",
+    "succeeds": false,
+    "diagnostic": "cannot find 'WalletPrivateKey'|WalletPrivateKey.*inaccessible"
+  },
+  {
+    "path": "Negative/StoredWalletSource.swift",
+    "succeeds": false,
+    "diagnostic": "cannot find 'WalletRepository'|WalletRepository.*inaccessible"
+  },
+  {
+    "path": "Negative/RepositoryAccess.swift",
+    "succeeds": false,
+    "diagnostic": "repository.*inaccessible"
+  },
+  {
+    "path": "Negative/ExecutionPermit.swift",
+    "succeeds": false,
+    "diagnostic": "ApprovedExecutionPermit.*inaccessible"
+  },
+  {
+    "path": "Negative/SigningSession.swift",
+    "succeeds": false,
+    "diagnostic": "cannot find 'WalletSigningSession'|WalletSigningSession.*inaccessible"
+  },
+  {
+    "path": "Negative/RawSigner.swift",
+    "succeeds": false,
+    "diagnostic": "cannot find 'EthereumSigner'|EthereumSigner.*inaccessible"
+  },
+  {
+    "path": "Negative/ChallengeConstructor.swift",
+    "succeeds": false,
+    "diagnostic": "initializer.*inaccessible|WalletAuthenticationChallenge.*inaccessible"
+  },
+  {
+    "path": "Negative/GrantConstructor.swift",
+    "succeeds": false,
+    "diagnostic": "initializer.*inaccessible|WalletAuthenticationGrant.*inaccessible"
+  },
+  {
+    "path": "Negative/AccessSessionConstructor.swift",
+    "succeeds": false,
+    "diagnostic": "initializer.*inaccessible|WalletAccessSession.*inaccessible"
+  },
+  {
+    "path": "Negative/GrantIssuer.swift",
+    "succeeds": false,
+    "diagnostic": "issueGrant.*inaccessible"
+  },
+  {
+    "path": "Negative/ResumeWithoutAccess.swift",
+    "succeeds": false,
+    "diagnostic": "missing argument for parameter 'authorization'"
+  },
+  {
+    "path": "Negative/ApproveWithoutGrant.swift",
+    "succeeds": false,
+    "diagnostic": "missing argument for parameter 'authorization'"
+  },
+  {
+    "path": "Negative/VerifyWithoutChallenge.swift",
+    "succeeds": false,
+    "diagnostic": "missing argument for parameter 'challenge'"
+  },
+  {
+    "path": "Negative/ExportWithoutGrant.swift",
+    "succeeds": false,
+    "diagnostic": "missing argument for parameter 'authorization'"
+  },
+  {
+    "path": "Negative/CredentialReader.swift",
+    "succeeds": false,
+    "diagnostic": "has no member 'readPasswordData'"
+  },
+  {
+    "path": "Negative/RawCSymbol.swift",
+    "succeeds": false,
+    "diagnostic": "cannot find 'bw_secp256k1_sign_recoverable'"
+  },
+  {
+    "path": "Negative/KeychainConstructor.swift",
+    "succeeds": false,
+    "diagnostic": "cannot find 'Keychain'|Keychain.*inaccessible"
+  },
+  {
+    "path": "Negative/ApprovalVault.swift",
+    "succeeds": false,
+    "diagnostic": "cannot find 'SafariApprovalVault'|SafariApprovalVault.*inaccessible"
+  },
+  {
+    "path": "Negative/SigningPreparation.swift",
+    "succeeds": false,
+    "diagnostic": "cannot find 'WalletSigningPreparation'|WalletSigningPreparation.*inaccessible"
+  },
+  {
+    "path": "Negative/Consent.swift",
+    "succeeds": false,
+    "diagnostic": "cannot find 'ReviewConsent'|ReviewConsent.*inaccessible"
+  },
+  {
+    "path": "Negative/DispatchPermit.swift",
+    "succeeds": false,
+    "diagnostic": "BroadcastDispatchPermit.*inaccessible"
+  },
+  {
+    "path": "Negative/IngressFactory.swift",
+    "succeeds": false,
+    "diagnostic": "dappIngressResult.*inaccessible"
+  },
+  {
+    "path": "Negative/IngressConstructor.swift",
+    "succeeds": false,
+    "diagnostic": "initializer.*inaccessible|Ingress.*inaccessible"
+  }
+]

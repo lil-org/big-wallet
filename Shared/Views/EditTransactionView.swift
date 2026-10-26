@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import SwiftUI
@@ -14,12 +17,12 @@ struct EditTransactionView: View {
         case eip1559
     }
 
-    private let initialTransaction: Transaction
+    private let initialTransaction: WalletDomain.Transaction
     private let chain: EthereumNetwork
     private let feeMode: FeeMode
     private let suggestedNonce: String?
     private let suggestedFee: PreparedTransactionFee?
-    private let completion: (Transaction.Edits?) -> Void
+    private let completion: (WalletDomain.Transaction.Edits?) -> Void
 
     @State private var gasPrice: String
     @State private var maxPriorityFee: String
@@ -27,7 +30,7 @@ struct EditTransactionView: View {
     @State private var nonce: String
     @State private var selectedSuggestedFee: PreparedTransactionFee?
 
-    private var pendingEdits: Transaction.Edits? {
+    private var pendingEdits: WalletDomain.Transaction.Edits? {
         edits(nonce: nonce)
     }
 
@@ -38,7 +41,7 @@ struct EditTransactionView: View {
 
     private var suggestedGasPriceText: String? {
         guard case .legacy(let gasPrice) = suggestedFee else { return nil }
-        return Transaction.editableGwei(fromWei: gasPrice)
+        return WalletDomain.Transaction.editableGwei(fromWei: gasPrice)
     }
 
     private var shouldOfferSuggestedLegacyFee: Bool {
@@ -49,8 +52,8 @@ struct EditTransactionView: View {
 
     private var suggestedEIP1559Texts: (priority: String, cap: String)? {
         guard case let .eip1559(priority, cap) = suggestedFee,
-              let priorityText = Transaction.editableGwei(fromWei: priority),
-              let capText = Transaction.editableGwei(fromWei: cap) else {
+              let priorityText = WalletDomain.Transaction.editableGwei(fromWei: priority),
+              let capText = WalletDomain.Transaction.editableGwei(fromWei: cap) else {
             return nil
         }
         return (priorityText, capText)
@@ -71,11 +74,11 @@ struct EditTransactionView: View {
     }
 
     init(
-        initialTransaction: Transaction,
+        initialTransaction: WalletDomain.Transaction,
         chain: EthereumNetwork,
         suggestedNonce: String?,
         suggestedFee: PreparedTransactionFee?,
-        completion: @escaping (Transaction.Edits?) -> Void
+        completion: @escaping (WalletDomain.Transaction.Edits?) -> Void
     ) {
         let feeMode: FeeMode = initialTransaction.usesEIP1559Fees
             ? .eip1559
@@ -278,9 +281,9 @@ struct EditTransactionView: View {
         completion(pendingEdits)
     }
 
-    private func edits(nonce: String) -> Transaction.Edits? {
+    private func edits(nonce: String) -> WalletDomain.Transaction.Edits? {
         initialTransaction.edits(
-            from: Transaction.EditableFields(
+            from: WalletDomain.Transaction.EditableFields(
                 nonce: nonce,
                 gasPriceGwei: gasPrice,
                 maxPriorityFeePerGasGwei: maxPriorityFee,

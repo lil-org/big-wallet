@@ -1,5 +1,9 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
+@MainActor
 struct Networks {
     
     static var ethereum: EthereumNetwork? {
@@ -8,36 +12,7 @@ struct Networks {
     
     static func withChainId(_ chainId: Int?) -> EthereumNetwork? {
         guard let chainId = chainId else { return nil }
-        return NetworkResolver.main.network(chainId: chainId)
-    }
-    
-    @discardableResult
-    static func add(
-        networkFromDapp: EthereumNetworkFromDapp
-    ) -> CustomNetworkInsertionResult {
-        return SharedDefaults.insertNetwork(networkFromDapp)
-    }
-
-    static func existingCustomDefinitionResult(
-        networkFromDapp: EthereumNetworkFromDapp
-    ) -> CustomNetworkInsertionResult {
-        guard let chainId = Int(hexString: networkFromDapp.chainId),
-              let entry = CustomNetworkCache.shared.snapshot()
-                  .entriesByChainId[chainId] else {
-            return .unavailable
-        }
-        let requestedRPCURLs = CustomNetworkDefinition.requestedRPCURLs(
-            for: networkFromDapp
-        )
-        guard !requestedRPCURLs.isEmpty else { return .unavailable }
-        return requestedRPCURLs.contains(where: { requestedRPCURL in
-            CustomNetworkDefinition.matches(
-                requested: networkFromDapp,
-                requestedRPCURL: requestedRPCURL,
-                existing: entry.definition,
-                existingRPCURL: entry.rpcURL
-            )
-        }) ? .matching : .conflict
+        return ApplicationServices.shared.networks.network(chainId: chainId)
     }
     
     static func withChainIdHex(_ chainIdHex: String?) -> EthereumNetwork? {
@@ -52,7 +27,7 @@ struct Networks {
     }()
     
     static var custom: [EthereumNetwork] {
-        return NetworkResolver.main.visibleCustomNetworks
+        return ApplicationServices.shared.networks.visibleCustomNetworks
     }
     
     static let mainnets: [EthereumNetwork] = {
@@ -65,7 +40,7 @@ struct Networks {
     }()
     
     private static let allBundled: [EthereumNetwork] = {
-        return NetworkResolver.main.bundledNetworks
+        return ApplicationServices.shared.networks.bundledNetworks
     }()
     
     // The order networks are offered in, everywhere. Not cached: custom networks are read live,

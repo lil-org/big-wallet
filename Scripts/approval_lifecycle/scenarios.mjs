@@ -51,6 +51,10 @@ export function validateScenario(scenario) {
         !Array.isArray(scenario.actions) || scenario.actions.length > 10000) {
         throw new Error("Invalid approval lifecycle replay scenario");
     }
+    if (scenario.actionPhases !== undefined && (!Array.isArray(scenario.actionPhases) || scenario.actionPhases.length !== scenario.actions.length ||
+        Array.from(scenario.actionPhases).some((phase, index) => !Number.isSafeInteger(phase) || phase < 0 || index > 0 && phase <= scenario.actionPhases[index - 1]))) {
+        throw new Error("Invalid approval lifecycle action phases");
+    }
     for (const action of scenario.actions) {
         if (!action || !actionKinds.includes(action.kind) || !Number.isInteger(action.tab) || action.tab < 0 || action.tab > 3 ||
             !Number.isSafeInteger(action.selector) || action.selector < 0) {
@@ -73,6 +77,21 @@ export function validateScenario(scenario) {
     return scenario;
 }
 
+function removeActions(scenario, offset, width) {
+    const phases = scenario.actionPhases ?? scenario.actions.map((_, index) => index);
+    const removedPhases = new Set(phases.slice(offset, offset + width));
+    const indices = scenario.actions.map((_, index) => index).filter(index => index < offset || index >= offset + width);
+    const candidate = {...scenario, actions: indices.map(index => scenario.actions[index]), actionPhases: indices.map(index => phases[index])};
+    if (scenario.decisions !== undefined) {
+        candidate.decisions = scenario.decisions.filter(decision => !removedPhases.has(decision.phase));
+    }
+    if (scenario.faultTargets !== undefined) {
+        candidate.faultTargets = Object.fromEntries(indices.flatMap((index, reducedIndex) =>
+            Object.hasOwn(scenario.faultTargets, index) ? [[reducedIndex, scenario.faultTargets[index]]] : []));
+    }
+    return candidate;
+}
+
 export async function minimizeScenario(original, invariant, replay, maximumAttempts = 200) {
     if (!Number.isSafeInteger(maximumAttempts) || maximumAttempts < 0 || maximumAttempts > 200) { throw new Error("Invalid minimization budget"); }
     let attempts = 0;
@@ -87,7 +106,7 @@ export async function minimizeScenario(original, invariant, replay, maximumAttem
     while (width >= 1 && attempts < maximumAttempts) {
         let changed = false;
         for (let offset = 0; offset < current.actions.length && attempts < maximumAttempts; offset += width) {
-            const candidate = {...current, actions: current.actions.filter((_, index) => index < offset || index >= offset + width)};
+            const candidate = removeActions(current, offset, width);
             if (await failsSame(candidate)) { current = candidate; changed = true; break; }
         }
         if (!changed) { width = Math.floor(width / 2); }
@@ -105,7 +124,7 @@ export async function minimizeScenario(original, invariant, replay, maximumAttem
 }
 
 export function parseOptions(arguments_) {
-    const options = {seed: 1, sequences: 32, steps: 64, mode: "alternate", timeout: 15000, minimize: true, mandatory: true};
+    const options = {seed: 1, sequences: 32, steps: 64, mode: "alternate", timeout: 15000, minimize: true, mandatory: true, systematic: "all"};
     let soak = false;
     const specified = new Set;
     for (let index = 0; index < arguments_.length; index += 1) {
@@ -114,15 +133,17 @@ export function parseOptions(arguments_) {
         if (flag === "--help") { options.help = true; continue; }
         if (flag === "--no-minimize") { options.minimize = false; continue; }
         if (flag === "--random-only") { options.mandatory = false; continue; }
+        if (flag === "--systematic-only") { options.systematicOnly = true; continue; }
         const names = {"--worker": "worker", "--seed": "seed", "--sequences": "sequences", "--steps": "steps", "--mode": "mode",
-            "--timeout-ms": "timeout", "--replay": "replay", "--failure-dir": "failureDirectory", "--scratch-dir": "scratchDirectory"};
+            "--timeout-ms": "timeout", "--replay": "replay", "--failure-dir": "failureDirectory", "--scratch-dir": "scratchDirectory",
+            "--systematic": "systematic", "--trace-limit": "traceLimit"};
         const name = names[flag];
         const value = arguments_[++index];
         if (!name || value === undefined || value.startsWith("--")) { throw new Error(`Invalid argument ${flag}`); }
         specified.add(name);
-        if (["seed", "sequences", "steps", "timeout"].includes(name)) {
+        if (["seed", "sequences", "steps", "timeout", "traceLimit"].includes(name)) {
             const number = Number(value);
-            const maximum = name === "seed" ? 0xffffffff : name === "sequences" ? 1000 : name === "steps" ? 10000 : 120000;
+            const maximum = name === "seed" ? 0xffffffff : name === "sequences" ? 1000 : name === "steps" ? 10000 : name === "traceLimit" ? 4096 : 120000;
             if (!/^(?:0x[0-9a-f]+|[0-9]+)$/i.test(value) || !Number.isSafeInteger(number) || number < (name === "seed" ? 0 : 1) || number > maximum) {
                 throw new Error(`Invalid value for ${flag}`);
             }
@@ -130,6 +151,19 @@ export function parseOptions(arguments_) {
         } else { options[name] = value; }
     }
     if (soak) { if (!specified.has("sequences")) { options.sequences = 1000; } if (!specified.has("steps")) { options.steps = 200; } }
+    if (!["all", "extended", "off"].includes(options.systematic)) { throw new Error("Invalid systematic profile"); }
+    if (!options.mandatory) {
+        if (options.systematicOnly) { throw new Error("--random-only and --systematic-only cannot be combined"); }
+        options.systematic = "off";
+    }
+    if (options.systematicOnly) {
+        if (options.systematic === "off") { throw new Error("Systematic-only runs require an exploration profile"); }
+        options.mandatory = false;
+        options.sequences = 0;
+    }
+    if (options.traceLimit !== undefined && (options.systematic === "off" || options.systematic === "all" && options.traceLimit > 256)) {
+        throw new Error("Trace limit exceeds the selected systematic profile");
+    }
     if (!["alternate", "native", "popup"].includes(options.mode)) { throw new Error("Invalid approval surface"); }
     if (!options.help && !options.worker) { throw new Error("--worker is required"); }
     return options;

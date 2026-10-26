@@ -1,7 +1,8 @@
 import {createHash} from "node:crypto";
 import {isAbsolute, resolve} from "node:path";
-import {PERFORMANCE_TESTS, validSafariPreparationReference} from "./test_manifest.mjs";
+import {PERFORMANCE_TESTS, RUNTIME_TEST_TARGETS, validSafariPreparationReference} from "./test_manifest.mjs";
 import {auditSynchronizationProof, expectedSynchronizationPolicy} from "../safari/synchronization.mjs";
+import {validateSourceIdentity} from "../approval_lifecycle/source_identity.mjs";
 
 const finiteCount = value => Number.isSafeInteger(value) && value >= 0;
 const count = (summary, name) => finiteCount(summary[name]) ? summary[name] : undefined;
@@ -9,18 +10,19 @@ const bundleMetadata = value => typeof value === "string" && value.trim().length
 
 export function testCases(tree) {
     const cases = [];
-    const visit = value => {
+    const visit = (value, target) => {
         if (!value || typeof value !== "object") { return; }
-        if (Array.isArray(value)) { for (const item of value) { visit(item); } return; }
+        if (Array.isArray(value)) { for (const item of value) { visit(item, target); } return; }
+        if (value.nodeType === "Unit test bundle" && typeof value.name === "string") { target = value.name; }
         if (value.nodeType === "Test Case") {
             if (typeof value.nodeIdentifier === "string" && typeof value.result === "string") {
                 const messages = (value.children ?? []).filter(child => child.nodeType === "Skip Message" && typeof child.name === "string");
-                cases.push({identifier: value.nodeIdentifier, result: value.result.toLowerCase(),
+                cases.push({identifier: value.nodeIdentifier, result: value.result.toLowerCase(), ...(target ? {target} : {}),
                     details: messages.length ? messages.map(child => child.name).join("\n") : undefined});
             }
             return;
         }
-        if (Array.isArray(value.children)) { visit(value.children); }
+        if (Array.isArray(value.children)) { visit(value.children, target); }
     };
     if (Array.isArray(tree?.testNodes)) { visit(tree.testNodes); }
     return cases;
@@ -67,6 +69,34 @@ export function auditNativeResult(summary, tree, policy) {
     if (policy.kind === "performance") {
         for (const name of PERFORMANCE_TESTS) { if (!performancePassed.includes(name)) { issues.push(`Release performance gate did not pass: ${name}`); } }
     }
+    if (policy.runtime === true) {
+        const expected = policy.requiredTests;
+        if (!Array.isArray(expected) || !expected.length || expected.some(name => typeof name !== "string" ||
+            !RUNTIME_TEST_TARGETS.some(target => name.startsWith(`${target}/`))) || new Set(expected).size !== expected.length) {
+            issues.push("Runtime audit requires a nonempty, unique expected-test inventory");
+        } else {
+            const inventory = new Map();
+            for (const test of cases) {
+                let identifier = test.identifier.replace(/\(\)$/, "");
+                if (!(identifier.split("/").length === 3 && RUNTIME_TEST_TARGETS.some(target => identifier.startsWith(`${target}/`)))) {
+                    if (RUNTIME_TEST_TARGETS.includes(test.target)) { identifier = `${test.target}/${identifier}`; }
+                    else if (!test.target) {
+                        const matches = expected.filter(name => name.endsWith(`/${identifier}`));
+                        if (matches.length === 1) { identifier = matches[0]; }
+                    }
+                }
+                inventory.set(identifier, (inventory.get(identifier) ?? 0) + 1);
+                if (!expected.includes(identifier)) { issues.push(`Unexpected runtime test: ${test.identifier}`); }
+                if (test.result !== "passed" && !(test.result === "skipped" && policy.configuration === "Debug" &&
+                    policy.kind === "full" && performanceTestName(identifier))) {
+                    issues.push(`Runtime test did not pass: ${test.identifier} (${test.result})`);
+                }
+            }
+            for (const identifier of expected) {
+                if (inventory.get(identifier) !== 1) { issues.push(`Runtime test must execute exactly once: ${identifier}`); }
+            }
+        }
+    }
     if (policy.kind === "safari") {
         if (summary.runtimeWarnings !== undefined && !Array.isArray(summary.runtimeWarnings)) {
             issues.push("Safari XCTest summary has an invalid runtime-warning inventory");
@@ -91,6 +121,59 @@ export function auditNativeResult(summary, tree, policy) {
         }
     }
     return {ok: issues.length === 0, counts, issues, skipped: skipped.map(test => test.identifier), expectedSkips, performancePassed};
+}
+
+export function auditApprovalResult(report, policy) {
+    const issues = [];
+    const bounds = policy?.profile === "extended"
+        ? {preemptions: 2, transitions: 128, traces: 4096, faults: 2, actors: 3}
+        : {preemptions: 1, transitions: 64, traces: 256, faults: 1, actors: 2};
+    if (!["all", "extended"].includes(policy?.profile) || !Number.isSafeInteger(policy.traceLimit) ||
+        policy.traceLimit < 1 || policy.traceLimit > bounds.traces || !Array.isArray(policy.modes) || !policy.modes.length ||
+        new Set(policy.modes).size !== policy.modes.length || policy.modes.some(mode => !["native", "popup"].includes(mode))) {
+        return {ok: false, issues: ["Invalid approval exploration policy"]};
+    }
+    if (!report || report.version !== 1 || report.status !== "complete" || report.profile !== policy.profile || report.frontier !== 0 ||
+        !Number.isSafeInteger(report.traces) || report.traces < 1 || report.traces > policy.traceLimit ||
+        !Array.isArray(report.scenarios) || !report.scenarios.length) {
+        return {ok: false, issues: ["Approval exploration did not exhaust a nonempty bounded frontier"]};
+    }
+    try { validateSourceIdentity(report.sourceIdentity); }
+    catch { issues.push("Approval exploration omitted a valid source and worker identity"); }
+    const scenarios = new Set();
+    const families = new Map();
+    let traces = 0;
+    for (const scenario of report.scenarios) {
+        const identity = /^(native|popup)\/systematic\/(ethereum|solana)\/([a-z0-9-]+)$/.exec(scenario?.scenario ?? "");
+        if (!identity || !policy.modes.includes(identity[1]) || scenarios.has(scenario.scenario)) {
+            issues.push("Approval exploration has an invalid or duplicated scenario"); continue;
+        }
+        scenarios.add(scenario.scenario);
+        const family = `${identity[1]}/${identity[2]}`;
+        const templates = families.get(family) ?? new Set();
+        templates.add(identity[3]); families.set(family, templates);
+        if (scenario.profile !== policy.profile || scenario.frontier !== 0 || !finiteCount(scenario.completed) || scenario.completed < 1 ||
+            !finiteCount(scenario.pruned) || !finiteCount(scenario.finished) || scenario.finished < 1 ||
+            scenario.finished + scenario.pruned !== scenario.completed || !scenario.bounds ||
+            scenario.requests !== (policy.profile === "extended" ? 3 : 2) || scenario.faultsApplied !== bounds.faults ||
+            !Number.isSafeInteger(scenario.bounds.traces) || scenario.bounds.traces < 1 || scenario.bounds.traces > policy.traceLimit ||
+            scenario.completed > scenario.bounds.traces || ["preemptions", "transitions", "faults", "actors"].some(key => scenario.bounds[key] !== bounds[key])) {
+            issues.push(`Approval exploration has incomplete bounds or outcomes: ${scenario.scenario}`);
+        }
+        traces += scenario.completed;
+    }
+    const expectedTemplates = ["authentication-cancellation", "signing-cancellation", "signing-revocation", "publication-cancellation",
+        "checkpoint-cancellation", "dispatch-cancellation", "completion-cancellation", "delivery-cancellation"].sort();
+    for (const mode of policy.modes) {
+        for (const provider of ["ethereum", "solana"]) {
+            if (JSON.stringify([...(families.get(`${mode}/${provider}`) ?? [])].sort()) !== JSON.stringify(expectedTemplates)) {
+                issues.push(`Approval exploration omitted a mode/provider family: ${mode}/${provider}`);
+            }
+        }
+    }
+    if (traces !== report.traces) { issues.push("Approval trace totals do not match the scenario inventory"); }
+    return {ok: issues.length === 0, issues, sourceIdentity: report.sourceIdentity,
+        profile: policy.profile, traces: report.traces, scenarios: scenarios.size, frontier: report.frontier};
 }
 
 export function auditSafariResult(evidence, policy, {runId, stageId} = {}) {
@@ -284,6 +367,12 @@ export function auditResults(stages) {
     }
     for (const stage of stages) {
         if (stage.status === "passed") {
+            if (stage.nativeAudit?.runtime === true && stage.audit?.ok !== true) {
+                issues.push(`${stage.id} has no passing runtime XCTest audit`);
+            }
+            if (stage.approvalAudit && stage.audit?.ok !== true) {
+                issues.push(`${stage.id} has no passing approval exploration audit`);
+            }
             if (stage.preparationResult && stage.audit?.ok !== true) {
                 issues.push(`${stage.id} has no passing Safari preparation audit`);
             }
@@ -303,5 +392,5 @@ export function auditResults(stages) {
         else { issues.push(`${stage.id} has no terminal outcome`); }
     }
     const status = counts.cancelled ? "cancelled" : counts.failed || counts.blocked || issues.length || !stages.length ? "failed" : "passed";
-    return {status, counts, issues, tests: stages.filter(stage => stage.audit).map(stage => ({stage: stage.id, ...stage.audit.counts, skippedTests: stage.audit.skipped}))};
+    return {status, counts, issues, tests: stages.filter(stage => stage.audit?.counts).map(stage => ({stage: stage.id, ...stage.audit.counts, skippedTests: stage.audit.skipped}))};
 }

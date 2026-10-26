@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import UIKit
@@ -24,7 +27,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private var sections = [Section]()
-    private let walletsManager = WalletsManager.shared
+    private let walletsManager = ApplicationServices.shared.wallets
     private var layoutTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
     private var authenticationTask: Task<Void, Never>?
@@ -281,7 +284,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
 
-    private func showKey(wallet: WalletSnapshot, specificAccount: WalletAccount?) {
+    private func showKey(wallet: WalletSnapshot, specificAccount: WalletAccount?, authorization: WalletAuthenticationGrant) {
         guard let token = beginSecretPresentation() else { return }
         let showingMnemonic = wallet.isMnemonic && specificAccount == nil
         keyExportTask?.cancel()
@@ -289,9 +292,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             let secret: String
             do {
                 if showingMnemonic {
-                    secret = try await walletsManager.exportMnemonic(wallet: wallet)
+                    secret = try await walletsManager.exportMnemonic(wallet: wallet, authorization: authorization)
                 } else {
-                    secret = try await walletsManager.exportPrivateKey(wallet: wallet, account: specificAccount)
+                    secret = try await walletsManager.exportPrivateKey(wallet: wallet, account: specificAccount, authorization: authorization)
                 }
             } catch {
                 self?.secretPresentation.finish(token, copying: false)
@@ -343,7 +346,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func showActionsForWallet(wallet: WalletSnapshot, headerView: AccountsHeaderView) {
-        let currentName = WalletsMetadataService.getWalletName(wallet: wallet)
+        let currentName = ApplicationServices.shared.metadata.getWalletName(wallet: wallet)
         
         let actionSheet = UIAlertController(title: currentName ?? Strings.multicoinWallet, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = headerView.editSectionButton
@@ -379,10 +382,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func didSelectNameActionForWallet(_ wallet: WalletSnapshot) {
-        let initialText = WalletsMetadataService.getWalletName(wallet: wallet)
+        let initialText = ApplicationServices.shared.metadata.getWalletName(wallet: wallet)
         showTextInputAlert(title: initialText == nil ? Strings.setName : Strings.editName, message: nil, initialText: initialText, placeholder: Strings.multicoinWallet) { [weak self] newName in
             if let newName = newName {
-                WalletsMetadataService.saveWalletName(newName, wallet: wallet)
+                ApplicationServices.shared.metadata.saveWalletName(newName, wallet: wallet)
                 self?.tableView.reloadData()
             }
         }
@@ -393,7 +396,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let nameActionTitle = initialText == nil ? Strings.setName : Strings.editName
         showTextInputAlert(title: nameActionTitle, message: nil, initialText: initialText, placeholder: account.croppedAddress) { [weak self] newName in
             if let newName = newName {
-                WalletsMetadataService.saveAccountName(newName, wallet: wallet, account: account)
+                ApplicationServices.shared.metadata.saveAccountName(newName, wallet: wallet, account: account)
                 self?.tableView.reloadData()
             }
         }
@@ -531,9 +534,13 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
 
     private func exportCreatedWalletSecret(_ wallet: WalletSnapshot, token: SecretAlertPresentation.Token) {
+        guard let authorization = walletsManager.takeInitialBackupAuthorization(wallet: wallet) else {
+            secretPresentation.finish(token, copying: false)
+            return
+        }
         keyExportTask?.cancel()
         keyExportTask = Task { [weak self, walletsManager] in
-            let secret = try? await walletsManager.exportMnemonic(wallet: wallet)
+            let secret = try? await walletsManager.exportMnemonic(wallet: wallet, authorization: authorization)
             guard let self, !Task.isCancelled, secretPresentation.accepts(token) else { return }
             guard let secret else {
                 secretPresentation.finish(token, copying: false)
@@ -559,11 +566,22 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             let reason = willExportMnemonic ? Strings.showSecretWords : Strings.showPrivateKey
             let passwordReason = willExportMnemonic ? Strings.toShowSecretWords : Strings.toShowPrivateKey
             authenticationTask?.cancel()
-            authenticationTask = Task { [weak self, weak scene] in
-                let success = await LocalAuthentication.attempt(reason: reason, presentPasswordAlertFrom: { [weak self] in self }, passwordReason: passwordReason)
-                guard let self, let scene, success, !Task.isCancelled,
+            authenticationTask = Task { [weak self, weak scene, walletsManager] in
+                let challenge: WalletAuthenticationChallenge
+                do {
+                    challenge = try await walletsManager.makeExportChallenge(
+                        wallet: wallet, account: specificAccount,
+                        kind: willExportMnemonic ? .mnemonic : .privateKey
+                    )
+                } catch { return }
+                let authorization = await LocalAuthentication.authorize(
+                    reason: reason, presentPasswordAlertFrom: { [weak self] in self },
+                    passwordReason: passwordReason, challenge: challenge,
+                    credentials: ApplicationServices.shared.credentials
+                )
+                guard let self, let scene, let authorization, !Task.isCancelled,
                       viewIfLoaded?.window?.windowScene === scene, canPresentSecret else { return }
-                showKey(wallet: wallet, specificAccount: specificAccount)
+                showKey(wallet: wallet, specificAccount: specificAccount, authorization: authorization)
             }
         }
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
@@ -640,7 +658,7 @@ extension AccountsListViewController: UITableViewDataSource {
             showsButton = false
         case .mnemonicWallet(_, let index):
             let wallet = wallets[index]
-            let name = WalletsMetadataService.getWalletName(wallet: wallet)
+            let name = ApplicationServices.shared.metadata.getWalletName(wallet: wallet)
             title = name ?? Strings.multicoinWallet
             showsButton = true
         }

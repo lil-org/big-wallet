@@ -1,3 +1,5 @@
+import WalletDomain
+@testable import WalletAuthority
 import AppKit
 import XCTest
 @testable import Big_Wallet
@@ -246,9 +248,9 @@ final class NativeAccountSelectionViewControllerTests: XCTestCase {
             coinType: .ethereum,
             selectedAccounts: [],
             initiallyConnectedProviders: [],
-            network: Networks.ethereum
+            network: ApplicationServices.shared.networks.network(chainId: 1)
         )
-        let changedNetwork = try XCTUnwrap(Networks.withChainId(10))
+        let changedNetwork = try XCTUnwrap(ApplicationServices.shared.networks.network(chainId: 10))
         var completedNetwork: EthereumNetwork?
         let session = NativeAccountSelectionSession(
             action: action,
@@ -264,7 +266,7 @@ final class NativeAccountSelectionViewControllerTests: XCTestCase {
     }
 
     func testAccountSelectionUsesCompactNetworkButtonWithAccessibleIdentity() async throws {
-        let template = try XCTUnwrap(Networks.withChainId(58_008))
+        let template = try XCTUnwrap(ApplicationServices.shared.networks.network(chainId: 58_008))
         let network = EthereumNetwork(
             chainId: template.chainId,
             name: "Public Goods Network Sepolia With A Very Long Custom Name",
@@ -313,7 +315,7 @@ final class NativeAccountSelectionViewControllerTests: XCTestCase {
             coinType: .ethereum,
             selectedAccounts: [],
             initiallyConnectedProviders: [],
-            network: Networks.ethereum
+            network: ApplicationServices.shared.networks.network(chainId: 1)
         )
         var completionCount = 0
         let session = NativeAccountSelectionSession(

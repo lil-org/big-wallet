@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import UIKit
@@ -10,7 +13,7 @@ class PasswordViewController: UIViewController, DataStateContainer {
     
     var showAccountsListOnVision: (() -> Void)?
     
-    var keychain = Keychain.shared
+    var credentials = ApplicationServices.shared.credentials
     private var mode = Mode.unavailable
     private var isSaving = false
     private var authenticationTask: Task<Void, Never>?
@@ -127,7 +130,7 @@ class PasswordViewController: UIViewController, DataStateContainer {
     private func refreshPasswordState() -> Bool {
         guard !isSaving else { return false }
         do {
-            switch try keychain.passwordState() {
+            switch try credentials.passwordState() {
             case .present:
                 if mode != .enter {
                     shouldDiscardCreationStack = mode == .create || mode == .repeatAfterCreate || shouldDiscardCreationStack
@@ -236,7 +239,7 @@ class PasswordViewController: UIViewController, DataStateContainer {
             if passwordTextField.text?.isOkAsPassword == true {
                 let passwordViewController = instantiate(PasswordViewController.self, from: .main)
                 passwordViewController.passwordToRepeat = passwordTextField.text
-                passwordViewController.keychain = keychain
+                passwordViewController.credentials = credentials
                 passwordViewController.showAccountsListOnVision = showAccountsListOnVision
                 passwordTextField.text = nil
                 navigationController?.pushViewController(passwordViewController, animated: true)
@@ -248,13 +251,10 @@ class PasswordViewController: UIViewController, DataStateContainer {
                 isSaving = true
                 okButton.isEnabled = false
                 navigationController?.view.isUserInteractionEnabled = false
-                saveTask = Task { [weak self, keychain] in
-                    let result: Result<Keychain.PasswordCreationResult, Error>
-                    do { result = .success(try await keychain.createPasswordIfMissing(password)) }
+                saveTask = Task { [weak self, credentials] in
+                    let result: Result<WalletPasswordCreationResult, Error>
+                    do { result = .success(try await credentials.createPasswordIfMissing(password)) }
                     catch { result = .failure(error) }
-                    defer {
-                        if case .success(.created) = result { WalletStoreSync.postLocalAndExternalChange() }
-                    }
                     guard let self else { return }
                     isSaving = false
                     okButton.isEnabled = true
@@ -278,7 +278,9 @@ class PasswordViewController: UIViewController, DataStateContainer {
             }
         case .enter:
             do {
-                if try DeviceAuthentication.verify(password: passwordTextField.text ?? "", keychain: keychain) {
+                let challenge = credentials.makeWalletAccessChallenge()
+                if let authorization = try credentials.verify(password: passwordTextField.text ?? "", challenge: challenge),
+                   credentials.accessSession(authorization: authorization) != nil {
                     showAccountsList()
                 } else {
                     showMessageAlert(text: Strings.passwordDoesNotMatch)

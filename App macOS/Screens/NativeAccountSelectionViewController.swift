@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 import Cocoa
 
 final class NativeAccountSelectionViewController: NSViewController {
@@ -26,7 +29,7 @@ final class NativeAccountSelectionViewController: NSViewController {
 
     init(
         accountSelection: NativeAccountSelectionSession,
-        walletsManager: WalletsManager = .shared,
+        walletsManager: WalletsManager = ApplicationServices.shared.wallets,
         openWalletManagement: @escaping @MainActor () async -> Bool = DockAppLauncher.openDockApp
     ) {
         self.accountSelection = accountSelection
@@ -352,7 +355,7 @@ extension NativeAccountSelectionViewController: NSTableViewDataSource {
             return rowView
         case .wallet(.mnemonicWalletHeader(let wallet)):
             let rowView = tableView.makeViewOfType(AccountsHeaderRowView.self)
-            rowView.setup(walletName: WalletsMetadataService.getWalletName(wallet: wallet), multicoinWallet: true, delegate: nil)
+            rowView.setup(walletName: ApplicationServices.shared.metadata.getWalletName(wallet: wallet), multicoinWallet: true, delegate: nil)
             return rowView
         case .wallet(.privateKeyWalletsHeader):
             let rowView = tableView.makeViewOfType(AccountsHeaderRowView.self)

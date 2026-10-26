@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import UIKit
@@ -30,17 +33,17 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneWillEnterForeground(_ scene: UIScene) {
         guard !isXCTestHostedLaunch else { return }
-        AlchemyJWTProvider.prewarmForApplicationLifecycle()
+        ApplicationServices.shared.prewarm()
         foregroundTask?.cancel()
         foregroundTask = Task {
-            await WalletsManager.shared.handleExternalWalletStoreChange()
+            _ = await ApplicationServices.shared.wallets.reloadFromStore()
             guard !Task.isCancelled else { return }
-            await SafariApprovalVaultHost.shared.reconcile()
+            await ApplicationServices.shared.authority.reconcileVault()
 #if BW_SAFARI_VM_TESTING
-            await SafariApprovalVaultHost.shared.waitForReconciliation()
+            await ApplicationServices.shared.authority.waitForVaultReconciliation()
             await SafariVMMutations.shared.processPending()
 #endif
-            await ExtensionBridge.shared.performMaintenance()
+            await ApplicationServices.shared.requests.performMaintenance()
         }
     }
     

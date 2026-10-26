@@ -357,24 +357,32 @@ assert_target_phase_order() {
         -v target_id="$target_id" \
         -v resources_id="$resources_id" \
         -v cleanup_id="$cleanup_id" '
-        !active &&
-            index($0, target_id " /*") &&
-            index($0, " = {") {
+        !active && $1 == target_id && index($0, " = {") {
             active = 1
         }
-        active && index($0, resources_id " /*") {
+        active && /^[[:space:]]*buildPhases = \(/ {
+            in_phases = 1
+            next
+        }
+        in_phases && $1 == resources_id {
             resources_line = NR
+            resources_count += 1
         }
-        active && index($0, cleanup_id " /*") {
+        in_phases && $1 == cleanup_id {
             cleanup_line = NR
+            cleanup_count += 1
         }
-        active && /productType =/ {
+        in_phases && /^[[:space:]]*\);/ {
             finished = 1
+            exit
+        }
+        active && /^\t\t};/ {
             exit
         }
         END {
             if (!finished ||
-                resources_line == 0 ||
+                resources_count != 1 ||
+                cleanup_count != 1 ||
                 cleanup_line != resources_line + 1) {
                 exit 1
             }
@@ -518,7 +526,7 @@ do
 done
 for protocol_file in \
     "Safari Shared/Protocol/wire-protocol.json" \
-    "Safari Shared/Protocol/WireProtocol.generated.swift" \
+    "Packages/WalletRuntime/Sources/WalletDomain/WireProtocol.generated.swift" \
     "Safari Shared/Resources/protocol.generated.js"
 do
     mkdir -p "$publish_fixture_root/${protocol_file%/*}"

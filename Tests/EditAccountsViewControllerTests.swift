@@ -1,3 +1,5 @@
+import WalletDomain
+@testable import WalletAuthority
 import Security
 import Synchronization
 import XCTest
@@ -52,7 +54,7 @@ final class EditAccountsViewControllerTests: XCTestCase {
         var departuresDuringPublication = [Int]()
         var cancellationDuringPublication = [Bool]()
         let fixture = try AccountEditorFixture {
-            NotificationCenter.default.post(name: .walletsChanged, object: nil)
+            NotificationCenter.default.post(name: Notification.Name("walletsChanged"), object: nil)
             departuresDuringPublication.append(observedHost?.departures ?? -1)
             cancellationDuringPublication.append(Task.isCancelled)
         }
@@ -142,7 +144,7 @@ private final class AccountEditorFixture {
 #endif
 
     init(postMutation: @escaping @MainActor @Sendable () -> Void = {
-        NotificationCenter.default.post(name: .walletsChanged, object: nil)
+        NotificationCenter.default.post(name: Notification.Name("walletsChanged"), object: nil, userInfo: nil)
     }) throws {
         let reader = KeychainCopyMatchingStub()
         let sourceMutator = AccountEditorSourceMutator()
@@ -159,7 +161,7 @@ private final class AccountEditorFixture {
         let keys = AccountEditorApprovalKeys()
         let vaultHost = SafariApprovalVaultHost(
             vault: SafariApprovalVault(fileURL: vaultURL, keyStore: keys),
-            defaults: UserDefaults(suiteName: defaultsSuite)!, integrityKeyStore: keys, sourceSnapshot: { nil }
+            defaults: UserDefaultsPreferenceStorage(suiteName: defaultsSuite)!, integrityKeyStore: keys, sourceSnapshot: { nil }
         )
         self.defaultsSuite = defaultsSuite
         self.directory = directory
@@ -184,7 +186,7 @@ private final class AccountEditorFixture {
             keychain: keychain,
             walletSourceMutator: sourceMutator,
             notifications: WalletStoreChangeNotifications(
-                postLocalChange: { NotificationCenter.default.post(name: .walletsChanged, object: nil) },
+                postLocalChange: { NotificationCenter.default.post(name: Notification.Name("walletsChanged"), object: nil) },
                 postMutation: postMutation,
                 startObserving: { _, _ in }, stopObserving: { _ in }, isExternalChange: { _ in false }
             ),

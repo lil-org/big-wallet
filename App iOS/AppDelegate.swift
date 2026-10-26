@@ -1,3 +1,6 @@
+import WalletDomain
+import WalletAuthority
+import WalletNetworking
 // ∅ 2026 lil org
 
 import UIKit
@@ -8,20 +11,20 @@ let isXCTestHostedLaunch = ProcessInfo.processInfo.environment["XCTestConfigurat
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
-    private lazy var walletsManager = WalletsManager.shared
-    private lazy var priceService = PriceService.shared
+    private lazy var walletsManager = ApplicationServices.shared.wallets
+    private lazy var priceService = ApplicationServices.shared.prices
     private var startupTask: Task<Void, Never>?
     
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         guard !isXCTestHostedLaunch else { return true }
-        AlchemyJWTProvider.prewarmForApplicationLifecycle()
+        ApplicationServices.shared.prewarm()
         priceService.start()
-        let backgroundTask = SafariApprovalVaultHost.backgroundTask(using: application)
+        let backgroundTask = ApprovalBackgroundActivity.make(using: application)
         startupTask = Task { [walletsManager] in
             await walletsManager.start()
-            await SafariApprovalVaultHost.shared.start(backgroundTask: backgroundTask)
+            await ApplicationServices.shared.authority.startVaultReconciliation(backgroundTask: backgroundTask, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
 #if BW_SAFARI_VM_TESTING
-            await SafariApprovalVaultHost.shared.waitForReconciliation()
+            await ApplicationServices.shared.authority.waitForVaultReconciliation()
             await SafariVMMutations.shared.processPending()
 #endif
         }
