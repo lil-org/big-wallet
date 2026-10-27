@@ -31,7 +31,7 @@ public struct EthereumTransactionPreparation: TransactionPreparing {
         guard network.supportsNativeBalance else { return nil }
         let encoded = try await rpc.getBalance(endpoint: network.rpcEndpoint, for: address)
         try Task.checkCancellation()
-        guard let balance = BigUInt(hexString: encoded) else { throw EthereumRPCError.unknown }
+        guard let balance = EthereumQuantity.parseUInt256(encoded) else { throw EthereumRPCError.unknown }
         return balance
     }
 
