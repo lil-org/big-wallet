@@ -239,6 +239,320 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
 
+    func testAccessLockRejectsRequestsAwaitingAuthentication() async throws {
+        let fixture = try makeFixture(attemptNativeDecision: { _ in
+            XCTFail("A request locked before authentication must not execute")
+            return .responseReady
+        })
+        let key = fixture.key
+        let runtime = fixture.runtime
+        var rejections = 0
+        fixture.store.rejectHandler = { handle, nonce, owner in
+            XCTAssertEqual(handle, key.handle)
+            XCTAssertEqual(nonce, key.nativeDeliveryNonce)
+            XCTAssertEqual(owner, runtime)
+            rejections += 1
+            return .persisted
+        }
+        fixture.store.unownedRejectHandler = { _ in
+            XCTFail("Lock rejection must retain the acquired receipt")
+            return .ownershipLost
+        }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        let oldAccess = NativeApprovalTestAuthorization.accessSession()
+        oldAccess.invalidate()
+        fixture.coordinator.resumeAfterAuthentication(authorization: oldAccess)
+        XCTAssertTrue(fixture.coordinator.isAwaitingAuthentication)
+
+        fixture.coordinator.reject()
+        fixture.coordinator.resumeAfterAuthentication(authorization: NativeApprovalTestAuthorization.accessSession())
+        fixture.coordinator.reject()
+        await waitForState(fixture.coordinator, .finished)
+
+        XCTAssertEqual(rejections, 1)
+        XCTAssertEqual(fixture.store.recordCount, 1)
+        XCTAssertEqual(fixture.events.authenticationCount, 1)
+        XCTAssertFalse(fixture.coordinator.hasAuthenticated)
+        XCTAssertFalse(fixture.events.presentations.contains { if case .approval = $0 { return true }; return false })
+    }
+
+
+    func testAccessLockDuringWalletReloadRejectsAndDiscardsLateReview() async throws {
+        let clock = TestClock(uptimeNanoseconds: 0)
+        let reload = TestGate<Bool>()
+        let started = expectation(description: "Wallet reload started")
+        let returned = expectation(description: "Locked wallet reload returned")
+        var preparations = 0
+        var catalogReads = 0
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
+            uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 },
+            wait: { _ in try? await TestDeferred<Void>().value() },
+            prepare: { binding, catalog in
+                guard catalog != nil else { return .needsCatalog }
+                preparations += 1
+                return self.approvalPreparation(binding)
+            },
+            reloadWallets: {
+                started.fulfill()
+                let result = await reload.wait()
+                returned.fulfill()
+                return result
+            },
+            currentReviewCatalog: {
+                catalogReads += 1
+                return reviewCatalogForTesting(action: self.accountSelectionAction())
+            },
+            attemptNativeDecision: { _ in
+                XCTFail("Locked loading work must not execute")
+                return .responseReady
+            }
+        ))
+        defer { reload.resolve(false) }
+        var rejections = 0
+        fixture.store.rejectHandler = { _, _, _ in rejections += 1; return .persisted }
+        let access = NativeApprovalTestAuthorization.accessSession()
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication(authorization: access)
+        await fulfillment(of: [started], timeout: 1)
+        XCTAssertEqual(fixture.coordinator.phase, .loading)
+
+        access.invalidate()
+        fixture.coordinator.reject()
+        fixture.coordinator.resumeAfterAuthentication(authorization: NativeApprovalTestAuthorization.accessSession())
+        await waitForState(fixture.coordinator, .finished)
+        await expectNoFurtherWork(events: fixture.events, store: fixture.store, returned: returned) {
+            reload.resolve(true)
+        }
+
+        XCTAssertEqual(rejections, 1)
+        XCTAssertEqual(preparations, 0)
+        XCTAssertEqual(catalogReads, 0)
+        XCTAssertFalse(fixture.events.presentations.contains { if case .approval = $0 { return true }; return false })
+    }
+
+
+    func testAccessLockRetiresReviewChallengesAndRejectsTheOwnedRequest() async throws {
+        let account = WalletAccount(
+            address: "0x0000000000000000000000000000000000000001", coin: .ethereum,
+            derivation: .custom, derivationPath: "m/44'/60'/0'/0/7", publicKey: "", extendedPublicKey: ""
+        )
+        let action = DappRequestAction.approveMessage(SignMessageAction(
+            subject: .signPersonalMessage, walletId: "wallet", account: account,
+            meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
+        ))
+        for expiresAccess in [false, true] {
+            let clock = TestClock(uptimeNanoseconds: 0)
+            let started = ContinuousClock.now
+            let monotonic = LockedTestValue(started)
+            let access = NativeApprovalTestAuthorization.accessSession(accessClock: { monotonic.value })
+            var decisions = 0
+            let fixture = try makeFixture(clock: clock, environment: .init(
+                now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
+                uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 },
+                wait: { _ in try? await TestDeferred<Void>().value() },
+                prepare: { binding, _ in self.approvalPreparation(binding, action: action) },
+                attemptNativeDecision: { _ in decisions += 1; return .responseReady }
+            ), requestAction: action)
+            let key = fixture.key
+            let runtime = fixture.runtime
+            var rejections = 0
+            fixture.store.rejectHandler = { handle, nonce, owner in
+                XCTAssertEqual(handle, key.handle)
+                XCTAssertEqual(nonce, key.nativeDeliveryNonce)
+                XCTAssertEqual(owner, runtime)
+                rejections += 1
+                return .persisted
+            }
+            fixture.store.unownedRejectHandler = { _ in
+                XCTFail("Expired access must not downgrade an owned rejection")
+                return .ownershipLost
+            }
+            start(fixture)
+            await waitForState(fixture.coordinator, .awaitingAuthentication)
+            fixture.coordinator.resumeAfterAuthentication(authorization: access)
+            await waitForState(fixture.coordinator, .reviewing)
+            let review = try presentedReview(fixture.coordinator)
+            let challenge = try XCTUnwrap(review.makeMessageAuthenticationChallenge(solanaCluster: nil))
+            XCTAssertTrue(challenge.isPending(for: NativeApprovalTestAuthorization.authorityID))
+
+            if expiresAccess { monotonic.value = started + .seconds(900) }
+            else { access.invalidate() }
+            fixture.coordinator.reject()
+            XCTAssertFalse(review.isActive)
+            XCTAssertFalse(fixture.coordinator.hasAuthenticated)
+            XCTAssertFalse(challenge.isPending(for: NativeApprovalTestAuthorization.authorityID))
+            XCTAssertNil(challenge.issueGrant(for: NativeApprovalTestAuthorization.authorityID,
+                credentialIdentity: .init(status: { .current })))
+            XCTAssertNil(review.makeMessageAuthenticationChallenge(solanaCluster: nil))
+            fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: review)
+            fixture.coordinator.resumeAfterAuthentication(authorization: NativeApprovalTestAuthorization.accessSession())
+            await waitForState(fixture.coordinator, .finished)
+
+            XCTAssertEqual(rejections, 1)
+            XCTAssertEqual(decisions, 0)
+            XCTAssertEqual(fixture.store.interruptionCount, 0)
+        }
+    }
+
+
+    func testExpiredAccessCannotAcceptReviewBeforeTheLockCallbackRuns() async throws {
+        let started = ContinuousClock.now
+        let clock = LockedTestValue(started)
+        let access = NativeApprovalTestAuthorization.accessSession(accessClock: { clock.value })
+        var decisions = 0
+        let fixture = try makeFixture(attemptNativeDecision: { _ in decisions += 1; return .responseReady })
+        var rejections = 0
+        fixture.store.rejectHandler = { _, _, _ in rejections += 1; return .persisted }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication(authorization: access)
+        await waitForState(fixture.coordinator, .reviewing)
+        let review = try presentedReview(fixture.coordinator)
+
+        clock.value = started + .seconds(900)
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: review)
+        XCTAssertFalse(review.isActive)
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertEqual(rejections, 1)
+        XCTAssertEqual(decisions, 0)
+    }
+
+
+    func testAccessLockPreservesAcceptedFinalizationAndExecutionObservation() async throws {
+        for locksDuringObservation in [false, true] {
+            let clock = TestClock(uptimeNanoseconds: 0)
+            let waits = ScheduledWaits()
+            let finalizer = TestGate<NativeApprovalFinalizationResult>()
+            let started = expectation(description: "Accepted finalization started")
+            var decisions = 0
+            var capturedConsent: ReviewConsent?
+            let fixture = try makeFixture(clock: clock, environment: .init(
+                now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
+                uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 }, wait: waits.wait,
+                prepare: { binding, _ in self.approvalPreparation(binding) },
+                attemptNativeDecision: { consent in
+                    decisions += 1
+                    capturedConsent = consent
+                    XCTAssertFalse(Task.isCancelled)
+                    started.fulfill()
+                    let result = await finalizer.wait()
+                    XCTAssertFalse(Task.isCancelled)
+                    return result
+                }
+            ))
+            defer { finalizer.resolve(.responseReady); waits.resumeAll() }
+            fixture.store.rejectHandler = { _, _, _ in
+                XCTFail("Lock must not reject accepted consent")
+                return .persisted
+            }
+            fixture.store.unownedRejectHandler = { _ in
+                XCTFail("Lock must not reject accepted consent")
+                return .persisted
+            }
+            let access = NativeApprovalTestAuthorization.accessSession()
+            start(fixture)
+            await waitForState(fixture.coordinator, .awaitingAuthentication)
+            fixture.coordinator.resumeAfterAuthentication(authorization: access)
+            await waitForState(fixture.coordinator, .reviewing)
+            let review = try presentedReview(fixture.coordinator)
+            await waitForScheduledWait(waits, count: 1)
+            fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: review)
+            if !locksDuringObservation {
+                access.invalidate()
+                fixture.coordinator.reject()
+            }
+            await fulfillment(of: [started], timeout: 1)
+            XCTAssertTrue(try XCTUnwrap(capturedConsent).authorizationIsAvailable)
+            fixture.store.snapshot = try ownedSnapshot(fixture, phase: .approving)
+            finalizer.resolve(.pending)
+            await waitForScheduledWait(waits, count: 2)
+
+            access.invalidate()
+            fixture.coordinator.reject()
+            fixture.coordinator.cancelBeforeAuthentication()
+            fixture.coordinator.resumeAfterAuthentication(authorization: NativeApprovalTestAuthorization.accessSession())
+            XCTAssertEqual(fixture.coordinator.phase, .waiting)
+            XCTAssertFalse(fixture.coordinator.hasAuthenticated)
+            XCTAssertFalse(review.isActive)
+            fixture.store.snapshot = try ownedSnapshot(fixture, phase: .responded)
+            waits.resume(1)
+            await waitForState(fixture.coordinator, .finished)
+
+            XCTAssertEqual(decisions, 1)
+            XCTAssertEqual(fixture.store.interruptionCount, 0)
+            XCTAssertTrue(try XCTUnwrap(capturedConsent).authorizationIsAvailable)
+        }
+    }
+
+
+    func testAccessLockRejectionFailureCannotRestoreReviewAfterFreshAuthentication() async throws {
+        let clock = TestClock(uptimeNanoseconds: 0)
+        var preparations = 0
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
+            uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 },
+            wait: { _ in try? await TestDeferred<Void>().value() },
+            prepare: { binding, _ in preparations += 1; return self.approvalPreparation(binding) },
+            attemptNativeDecision: { _ in
+                XCTFail("A locked rejection must never return to execution")
+                return .responseReady
+            }
+        ))
+        let retry = TestGate<ExtensionBridge.StoreMutationResult>()
+        let retryStarted = expectation(description: "Lock rejection retried")
+        defer { retry.resolve(.persisted) }
+        let key = fixture.key
+        let runtime = fixture.runtime
+        var rejections = 0
+        fixture.store.rejectHandler = { handle, nonce, owner in
+            XCTAssertEqual(handle, key.handle)
+            XCTAssertEqual(nonce, key.nativeDeliveryNonce)
+            XCTAssertEqual(owner, runtime)
+            rejections += 1
+            if rejections == 1 {
+                clock.advance(to: clock.date.addingTimeInterval(11))
+                return .retryablePersistenceFailure
+            }
+            retryStarted.fulfill()
+            return await retry.wait()
+        }
+        let access = NativeApprovalTestAuthorization.accessSession()
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        fixture.coordinator.resumeAfterAuthentication(authorization: access)
+        await waitForState(fixture.coordinator, .reviewing)
+        let review = try presentedReview(fixture.coordinator)
+
+        access.invalidate()
+        fixture.coordinator.reject()
+        await waitForState(fixture.coordinator, .paused)
+        XCTAssertTrue(fixture.coordinator.isDormant)
+        XCTAssertFalse(review.isActive)
+        fixture.coordinator.resumeAfterAuthentication(authorization: NativeApprovalTestAuthorization.accessSession())
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: review)
+        fixture.coordinator.reject()
+        XCTAssertTrue(fixture.coordinator.isPaused)
+        XCTAssertEqual(rejections, 1)
+        fixture.coordinator.retryRecovery()
+        await fulfillment(of: [retryStarted], timeout: 1)
+        fixture.coordinator.resumeAfterAuthentication(authorization: NativeApprovalTestAuthorization.accessSession())
+        fixture.coordinator.retryRecovery()
+        XCTAssertEqual(fixture.coordinator.phase, .rejecting)
+        XCTAssertFalse(fixture.coordinator.hasAuthenticated)
+        retry.resolve(.persisted)
+        await waitForState(fixture.coordinator, .finished)
+
+        XCTAssertEqual(preparations, 1)
+        XCTAssertEqual(rejections, 2)
+        XCTAssertEqual(fixture.store.recordCount, 1)
+        XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
+        XCTAssertEqual(fixture.events.authenticationCount, 1)
+    }
+
+
     func testRegistrationWaitsForRuntimeAndStartIsIdempotent() async throws {
         let fixture = try makeFixture()
         fixture.coordinator.resumeAfterAuthentication(authorization: NativeApprovalTestAuthorization.accessSession())

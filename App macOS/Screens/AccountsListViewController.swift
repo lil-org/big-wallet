@@ -6,9 +6,10 @@ import WalletNetworking
 import Cocoa
 import SafariServices
 
-class AccountsListViewController: NSViewController {
+class AccountsListViewController: NSViewController, NativeWalletProtectedContent {
 
     var walletsManager = ApplicationServices.shared.wallets
+    var walletAccess = NativeWalletAccess()
     private var cellModels = [CellModel]()
     private var preferencesButton: NSButton?
     private var authenticationTask: Task<Void, Never>?
@@ -58,7 +59,25 @@ class AccountsListViewController: NSViewController {
 
     private var shouldShowPreferencesButton: Bool { CurrentApp.isDockApp }
 
-    private var acceptsManagementActions: Bool { !isClosed }
+    private var acceptsManagementActions: Bool { walletAccess.isCurrent && !isClosed }
+
+    func retireForWalletLock() {
+        retireManagement()
+    }
+
+    private func retireManagement() {
+        guard !isClosed else { return }
+        isClosed = true
+        if isViewLoaded {
+            closeManagement()
+            cellModels.removeAll()
+            tableView.reloadData()
+            Window.clearText(in: view)
+        }
+        newWalletId = nil
+        getBackToRect = nil
+        NotificationCenter.default.removeObserver(self)
+    }
 
     isolated deinit {
         secretSession.invalidate()
@@ -73,6 +92,10 @@ class AccountsListViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         guard acceptsManagementActions else { return }
+        (tableView.enclosingScrollView?.verticalScroller as? WalletActivityScroller)?.accessibilityInteraction = { [weak self] in
+            guard let self, !isClosed, viewIfLoaded?.window?.contentViewController === self else { return false }
+            return walletAccess.beginAction()
+        }
         addButton.target = self
         addButton.action = #selector(addButtonTapped(_:))
         addButton.menu = NSMenu()
@@ -109,6 +132,7 @@ class AccountsListViewController: NSViewController {
     
     override func viewDidAppear() {
         super.viewDidAppear()
+        guard acceptsManagementActions else { return }
         reloadHeader()
         getBackToRectIfNeeded()
         blinkNewWalletCellIfNeeded()
@@ -231,6 +255,7 @@ class AccountsListViewController: NSViewController {
     }
     
     @IBAction func addButtonTapped(_ sender: NSButton) {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         let menu = sender.menu
         let createItem = NSMenuItem(title: AddAccountOption.createNew.title, action: #selector(didClickCreateAccount), keyEquivalent: "")
@@ -248,6 +273,7 @@ class AccountsListViewController: NSViewController {
     }
 
     @objc private func preferencesButtonTapped(_ sender: NSButton) {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions,
               shouldShowPreferencesButton,
               let menu = sender.menu else { return }
@@ -271,6 +297,7 @@ class AccountsListViewController: NSViewController {
     }
 
     @objc private func didClickCreateAccount() {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         let alert = Alert()
         alert.messageText = Strings.backUpNewWallet
@@ -281,7 +308,7 @@ class AccountsListViewController: NSViewController {
         presentAlert(alert) { [weak self] response in
             guard let self,
                   acceptsManagementActions else { return }
-            if response == .alertFirstButtonReturn {
+            if response == .alertFirstButtonReturn, walletAccess.beginAction() {
                 createNewAccountAndShowSecretWords()
             }
         }
@@ -293,9 +320,12 @@ class AccountsListViewController: NSViewController {
         _ operation: @escaping @MainActor () async throws -> WalletSnapshot?
     ) {
         let id = UUID()
+        let access = walletAccess
         walletMutationTasks[id] = Task { [weak self] in
             defer { self?.walletMutationTasks.removeValue(forKey: id) }
+            guard !Task.isCancelled, self?.acceptsManagementActions == true else { return }
             do {
+                try access.requireCurrentCredentials()
                 let created = try await operation()
                 guard let self, !Task.isCancelled, acceptsManagementActions else { return }
                 if let created {
@@ -345,10 +375,16 @@ class AccountsListViewController: NSViewController {
     }
     
     @objc private func didClickImportAccount() {
-        guard acceptsManagementActions else { return }
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
+        guard acceptsManagementActions, let destination = viewIfLoaded?.window else { return }
         let importViewController = instantiate(ImportViewController.self)
-        view.window?.contentViewController = importViewController
-        endAllSheets()
+        importViewController.walletAccess = walletAccess
+        if let window = destination.windowController as? WalletWindowController {
+            window.installProtectedContent(importViewController, access: walletAccess)
+        } else {
+            destination.contentViewController = importViewController
+        }
+        retireManagement()
     }
 
     private func walletForRow(_ row: Int) -> WalletSnapshot? {
@@ -362,6 +398,7 @@ class AccountsListViewController: NSViewController {
     }
     
     @objc private func didClickViewOnExplorer(_ sender: NSMenuItem) {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         if let url = sender.representedObject as? URL {
             NSWorkspace.shared.open(url)
@@ -369,39 +406,46 @@ class AccountsListViewController: NSViewController {
     }
 
     @objc private func didClickEnableSafariExtension() {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         safariPreferencesTask?.cancel()
         safariPreferencesTask = Task { [weak self] in
+            guard let self, !Task.isCancelled, acceptsManagementActions else { return }
             do {
                 try await SFSafariApplication.showPreferencesForExtension(withIdentifier: Identifiers.safariExtensionBundle)
             } catch {
-                guard let self, !Task.isCancelled, acceptsManagementActions else { return }
+                guard !Task.isCancelled, acceptsManagementActions else { return }
                 NSWorkspace.shared.open(URL.iosSafariGuide)
             }
         }
     }
 
     @objc private func didClickRateOnTheAppStore() {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         ReviewRequster.didClickAppStoreReviewButton()
     }
 
     @objc private func didClickViewOnGithub() {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         NSWorkspace.shared.open(URL.github)
     }
 
     @objc private func didClickDropUsALine() {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         NSWorkspace.shared.open(URL.email)
     }
 
     @objc private func didClickViewOnX() {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         NSWorkspace.shared.open(URL.x)
     }
     
     @objc private func didClickCopyAddress(_ sender: AnyObject) {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         let row = tableView.deselectedRow
         guard let address = accountForRow(row)?.address else { return }
@@ -409,6 +453,7 @@ class AccountsListViewController: NSViewController {
     }
 
     @objc private func didClickRemoveWallet(_ sender: AnyObject) {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         let row = tableView.deselectedRow
         if let wallet = walletForRow(row) {
@@ -417,6 +462,7 @@ class AccountsListViewController: NSViewController {
     }
     
     @objc private func didClickRemoveAccount(_ sender: AnyObject) {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         let row = tableView.deselectedRow
         guard let wallet = walletForRow(row), let account = accountForRow(row) else { return }
@@ -442,7 +488,7 @@ class AccountsListViewController: NSViewController {
         presentAlert(alert) { [weak self] response in
             guard let self,
                   acceptsManagementActions else { return }
-            if response != .alertFirstButtonReturn {
+            if response == .alertSecondButtonReturn, walletAccess.beginAction() {
                 warnBeforeRemoving(wallet: wallet)
             }
         }
@@ -457,15 +503,16 @@ class AccountsListViewController: NSViewController {
         presentAlert(alert) { [weak self] response in
             guard let self,
                   acceptsManagementActions else { return }
-            if response == .alertFirstButtonReturn {
+            if response == .alertFirstButtonReturn, walletAccess.beginAction() {
                 let window = viewIfLoaded?.window
                 authenticationTask?.cancel()
                 authenticationTask = Task { [weak self, weak window] in
+                    guard let self, !Task.isCancelled, acceptsManagementActions else { return }
                     let credentials = ApplicationServices.shared.credentials
                     let challenge = credentials.makeWalletAccessChallenge()
                     defer { challenge.invalidate() }
                     let authorization = await Window.authenticate(in: window, reason: .removeWallet, challenge: challenge)
-                    guard let self, let authorization, !Task.isCancelled, acceptsManagementActions,
+                    guard let authorization, !Task.isCancelled, acceptsManagementActions,
                           let access = credentials.accessSession(authorization: authorization) else { return }
                     defer { access.invalidate() }
                     Window.activateWindow(view.window)
@@ -490,6 +537,7 @@ class AccountsListViewController: NSViewController {
     }
     
     @objc private func didClickShowKey(_ sender: AnyObject) {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         let row = tableView.deselectedRow
         guard let wallet = walletForRow(row) else { return }
@@ -497,6 +545,7 @@ class AccountsListViewController: NSViewController {
     }
     
     @objc private func didClickEditAccountName(_ sender: AnyObject) {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         let row = tableView.deselectedRow
         guard let wallet = walletForRow(row), let account = accountForRow(row) else { return }
@@ -509,7 +558,7 @@ class AccountsListViewController: NSViewController {
         ) { [weak self] newName in
             guard let self,
                   acceptsManagementActions else { return }
-            if let newName {
+            if let newName, walletAccess.beginAction() {
                 ApplicationServices.shared.metadata.saveAccountName(newName, wallet: wallet, account: account)
                 tableView.reloadData()
             }
@@ -517,6 +566,7 @@ class AccountsListViewController: NSViewController {
     }
     
     @objc private func didClickShowSpecificPrivateKey(_ sender: AnyObject) {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         let row = tableView.deselectedRow
         guard let wallet = walletForRow(row), let account = accountForRow(row) else { return }
@@ -533,7 +583,7 @@ class AccountsListViewController: NSViewController {
         presentAlert(alert) { [weak self] response in
             guard let self,
                   acceptsManagementActions else { return }
-            if response == .alertFirstButtonReturn {
+            if response == .alertFirstButtonReturn, walletAccess.beginAction() {
                 guard let token = beginSecretPresentation() else { return }
                 let reason: AuthenticationReason = showingMnemonic
                     ? .showSecretWords
@@ -542,6 +592,7 @@ class AccountsListViewController: NSViewController {
                 authenticationTask?.cancel()
                 secretAuthenticationToken = token
                 authenticationTask = Task { [weak self, weak window, walletsManager] in
+                    guard self?.acceptsManagementActions == true, !Task.isCancelled else { return }
                     let challenge: WalletAuthenticationChallenge
                     do {
                         challenge = try await walletsManager.makeExportChallenge(
@@ -589,6 +640,7 @@ class AccountsListViewController: NSViewController {
         keyExportTask?.cancel()
         keyExportTask = Task { [weak self, walletsManager] in
             defer { authorization.invalidate() }
+            guard self?.canPresentSecret(for: token) == true, !Task.isCancelled else { return }
             let secret: String
             do {
                 if showingMnemonic {
@@ -614,6 +666,10 @@ class AccountsListViewController: NSViewController {
             token: token,
             title: showingMnemonic ? Strings.secretWords : Strings.privateKey,
             canCopy: { [weak self] in self?.canPresentSecret(for: token) == true },
+            copy: { [weak self] secret in
+                guard self?.walletAccess.beginAction() == true else { return }
+                SecretClipboard.shared.copy(secret)
+            },
             didEnd: { [weak self] in
                 guard let self, secretToken == token else { return }
                 invalidateSecretPresentation()
@@ -624,13 +680,14 @@ class AccountsListViewController: NSViewController {
     }
     
     private func updateCellModels() {
+        guard !isClosed else { return }
         cellModels = wallets.isEmpty
             ? [.addAccountOption(.createNew), .addAccountOption(.importExisting)]
             : WalletAccountListRow.makeRows(wallets: wallets).map(CellModel.wallet)
     }
     
     private func showMenuOnCellSelection(row: Int) {
-        guard acceptsManagementActions else { return }
+        guard !isClosed else { return }
         menuTask?.cancel()
         menuTask = Task { [weak self] in
             do { try await Task.sleep(for: .milliseconds(10)) } catch { return }
@@ -663,6 +720,7 @@ class AccountsListViewController: NSViewController {
     }
 
     private func activateRow(at row: Int) {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions, cellModels.indices.contains(row) else { return }
         switch cellModels[row] {
         case .addAccountOption(let option):
@@ -724,6 +782,7 @@ extension AccountsListViewController: TableViewMenuSource {
 extension AccountsListViewController: AccountsHeaderDelegate {
     
     func didClickEditName(sender: NSTableRowView) {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         let row = tableView.row(for: sender)
         guard let wallet = walletForRow(row) else { return }
@@ -737,7 +796,7 @@ extension AccountsListViewController: AccountsHeaderDelegate {
         ) { [weak self] newName in
             guard let self,
                   acceptsManagementActions else { return }
-            if let newName {
+            if let newName, walletAccess.beginAction() {
                 ApplicationServices.shared.metadata.saveWalletName(newName, wallet: wallet)
                 tableView.reloadData()
             }
@@ -745,18 +804,25 @@ extension AccountsListViewController: AccountsHeaderDelegate {
     }
     
     func didClickEditAccounts(sender: NSTableRowView) {
-        guard acceptsManagementActions else { return }
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
+        guard acceptsManagementActions, let destination = viewIfLoaded?.window else { return }
         let row = tableView.row(for: sender)
         guard let wallet = walletForRow(row) else { return }
         
         let editAccountsViewController = instantiate(EditAccountsViewController.self)
+        editAccountsViewController.walletAccess = walletAccess
         editAccountsViewController.wallet = wallet
         editAccountsViewController.getBackToRect = tableView.visibleRect
-        view.window?.contentViewController = editAccountsViewController
-        endAllSheets()
+        if let window = destination.windowController as? WalletWindowController {
+            window.installProtectedContent(editAccountsViewController, access: walletAccess)
+        } else {
+            destination.contentViewController = editAccountsViewController
+        }
+        retireManagement()
     }
     
     func didClickShowSecretWords(sender: NSTableRowView) {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         let row = tableView.row(for: sender)
         guard let wallet = walletForRow(row) else { return }
@@ -764,6 +830,7 @@ extension AccountsListViewController: AccountsHeaderDelegate {
     }
     
     func didClickRemoveWallet(sender: NSTableRowView) {
+        guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
         let row = tableView.row(for: sender)
         guard let wallet = walletForRow(row) else { return }
@@ -775,7 +842,7 @@ extension AccountsListViewController: AccountsHeaderDelegate {
 extension AccountsListViewController: NSTableViewDelegate {
 
     func tableViewSelectionDidChange(_ notification: Notification) {
-        guard acceptsManagementActions,
+        guard !isClosed,
               NSApp.currentEvent?.type == .keyDown,
               tableView.selectedRow >= 0,
               accountForRow(tableView.selectedRow) != nil else { return }
@@ -783,7 +850,7 @@ extension AccountsListViewController: NSTableViewDelegate {
     }
     
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-        guard acceptsManagementActions, cellModels.indices.contains(row) else { return false }
+        guard !isClosed, cellModels.indices.contains(row) else { return false }
         if case .addAccountOption = cellModels[row] { return self.tableView.isHandlingKeyDown }
         guard accountForRow(row) != nil else { return false }
         return tableView.selectedRow < 0
@@ -793,6 +860,7 @@ extension AccountsListViewController: NSTableViewDelegate {
 
 extension AccountsListViewController: NSTableViewDataSource {
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        guard !isClosed, cellModels.indices.contains(row) else { return nil }
         switch cellModels[row] {
         case .wallet(.account(let wallet, let account)):
             let rowView = tableView.makeViewOfType(AccountCellView.self)
@@ -801,7 +869,7 @@ extension AccountsListViewController: NSTableViewDataSource {
         case .wallet(.mnemonicWalletHeader(let wallet)):
             let rowView = tableView.makeViewOfType(AccountsHeaderRowView.self)
             rowView.setup(walletName: ApplicationServices.shared.metadata.getWalletName(wallet: wallet),
-                multicoinWallet: true, delegate: acceptsManagementActions ? self : nil)
+                multicoinWallet: true, delegate: isClosed ? nil : self)
             return rowView
         case .wallet(.privateKeyWalletsHeader):
             let rowView = tableView.makeViewOfType(AccountsHeaderRowView.self)
@@ -815,14 +883,15 @@ extension AccountsListViewController: NSTableViewDataSource {
     }
 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        switch cellModels[row] {
+        guard !isClosed, cellModels.indices.contains(row) else { return tableView.rowHeight }
+        return switch cellModels[row] {
         case .wallet(.account): 50
         case .wallet: 27
         case .addAccountOption: 44
         }
     }
 
-    func numberOfRows(in tableView: NSTableView) -> Int { cellModels.count }
+    func numberOfRows(in tableView: NSTableView) -> Int { isClosed ? 0 : cellModels.count }
 }
 
 extension AccountsListViewController {

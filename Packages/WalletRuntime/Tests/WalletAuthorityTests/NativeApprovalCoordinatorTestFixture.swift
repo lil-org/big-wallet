@@ -16,8 +16,10 @@ enum NativeApprovalTestAuthorization {
         return challenge.issueGrant(for: challenge.authorityID, credentialIdentity: .init(status: { .current }))!
     }
 
-    static func accessSession() -> WalletAccessSession {
-        grant().accessSession(authorityID: authorityID)!
+    static func accessSession(
+        accessClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }
+    ) -> WalletAccessSession {
+        grant().accessSession(authorityID: authorityID, accessClock: accessClock)!
     }
 }
 

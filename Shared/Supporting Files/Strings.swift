@@ -19,6 +19,8 @@ struct Strings {
     static let failedToSend = loc("Failed to send")
     static let failedToSign = loc("Failed to sign")
     static let enterWallet = loc("Enter Wallet")
+    static let unlock = loc("Unlock")
+    static let walletLocked = loc("Wallet Locked")
     static let enableSafariExtension = loc("Enable Safari Extension")
     static let dropUsALine = loc("Mail")
     static let start = loc("Start")

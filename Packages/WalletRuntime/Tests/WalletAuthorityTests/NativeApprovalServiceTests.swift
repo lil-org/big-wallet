@@ -12,6 +12,250 @@ final class NativeApprovalServiceTests: XCTestCase {
         return fixture
     }
 
+    func testVerifiedToolbarIntentUsesIndependentAdmissionAndFocusDelivery() async throws {
+        for explicit in [false, true] {
+            for intent in [NativeApprovalService.ReconciliationIntent.admission, .focus] {
+                let f = try fixture()
+                let request = try f.request(manual: true)
+                f.onLaunch = { _, _, completion in f.deliver(request); completion(true) }
+                let service = f.service()
+                let result = try await f.finish {
+                    await service.reconcile(.init(request, isToolbarAction: explicit), intent: intent)
+                }
+                XCTAssertTrue(result == .pending || result == .opened)
+                let expected = explicit
+                    ? NativeAgentRoute.toolbarApproval(workflowVersion: ExtensionBridge.workflowVersion,
+                        handle: request.handle, nativeDeliveryNonce: request.nativeDeliveryNonce)
+                    : f.route(request)
+                XCTAssertEqual(f.launches.map(\.route), [expected])
+            }
+        }
+    }
+
+    func testToolbarFocusSendsToTheRunningHelper() async throws {
+        let f = try fixture()
+        let request = try f.request(manual: true)
+        let owner = f.runtime(pid: 43)
+        f.deliver(request, runtime: owner)
+        f.processes[42] = f.runtime()
+        f.onLaunch = { _, _, completion in completion(true) }
+        let service = f.service()
+        let result = try await f.finish {
+            await service.reconcile(.init(request, isToolbarAction: true), intent: .focus)
+        }
+        XCTAssertEqual(result, .opened)
+        XCTAssertEqual(f.launches.map(\.route), [.toolbarApproval(workflowVersion: ExtensionBridge.workflowVersion,
+            handle: request.handle, nativeDeliveryNonce: request.nativeDeliveryNonce)])
+        XCTAssertEqual(f.launches.map(\.target), [.running(url: f.bundleURL.standardizedFileURL,
+            processIdentifier: owner.processIdentifier, runtimeInstanceIdentifier: owner.instanceIdentifier)])
+        XCTAssertTrue(f.quits.isEmpty)
+        XCTAssertTrue(f.clears.isEmpty)
+    }
+
+    func testToolbarDeliveryClearsAnAbsentOwnerBeforeRedelivering() async throws {
+        for intent in [NativeApprovalService.ReconciliationIntent.admission, .focus] {
+            let f = try fixture()
+            let request = try f.request(manual: true)
+            f.deliver(request)
+            let receipt = try XCTUnwrap(f.snapshots[request.handle]?.nativeDeliveryReceipt)
+            f.processes.removeAll()
+            let replacement = f.runtime(pid: 43)
+            f.onLaunch = { _, _, completion in
+                XCTAssertEqual(f.clears, [receipt])
+                guard f.snapshots[request.handle]?.nativeDeliveryReceipt == nil else {
+                    XCTFail("Toolbar delivery retained the absent owner's receipt")
+                    completion(false)
+                    return
+                }
+                f.deliver(request, runtime: replacement)
+                completion(true)
+            }
+            let reference = NativeApprovalService.RequestReference(request, isToolbarAction: true)
+            let service = f.service()
+            let result = try await f.finish { await service.reconcile(reference, intent: intent) }
+
+            XCTAssertEqual(result, .opened)
+            XCTAssertEqual(f.launches.map(\.route), [try XCTUnwrap(reference.route)])
+            XCTAssertEqual(f.clears, [receipt])
+            XCTAssertTrue(f.quits.isEmpty)
+            XCTAssertEqual(f.snapshots[request.handle]?.nativeDeliveryReceipt?.owner,
+                replacement.nativeDeliveryOwner)
+            XCTAssertEqual(f.snapshots[request.handle]?.phase, .queued)
+            XCTAssertNil(f.responses[request.handle])
+        }
+    }
+
+    func testToolbarDeliveryWaitsForIncompatibleOwnerExitBeforeClearingAndRedelivering() async throws {
+        for intent in [NativeApprovalService.ReconciliationIntent.admission, .focus] {
+            let f = try fixture()
+            let request = try f.request(manual: true)
+            f.deliver(request, runtime: f.runtime(build: "147"))
+            let receipt = try XCTUnwrap(f.snapshots[request.handle]?.nativeDeliveryReceipt)
+            f.onQuit = { _ in true }
+            let replacement = f.runtime(pid: 43)
+            f.onLaunch = { _, _, completion in
+                XCTAssertEqual(f.clears, [receipt])
+                XCTAssertNil(f.processes[receipt.owner.processIdentifier])
+                guard f.snapshots[request.handle]?.nativeDeliveryReceipt == nil else {
+                    XCTFail("Toolbar delivery retained the retired owner's receipt")
+                    completion(false)
+                    return
+                }
+                f.deliver(request, runtime: replacement)
+                completion(true)
+            }
+            let reference = NativeApprovalService.RequestReference(request, isToolbarAction: true)
+            let service = f.service()
+            let pollDeadline = f.clock.uptimeNanoseconds + NativeApprovalTiming.launchPollIntervalNanoseconds
+            let task = Task { await service.reconcile(reference, intent: intent) }
+            defer { task.cancel() }
+            try await f.eventually {
+                f.quits == [receipt.owner.processIdentifier] && f.clock.pendingSleeps.map(\.deadline).contains(pollDeadline)
+            }
+            XCTAssertTrue(f.clears.isEmpty)
+            XCTAssertTrue(f.launches.isEmpty)
+            f.processes.removeAll()
+            f.clock.advance(to: pollDeadline)
+            let result = try await f.finish { await task.value }
+
+            XCTAssertEqual(result, .opened)
+            XCTAssertEqual(f.launches.map(\.route), [try XCTUnwrap(reference.route)])
+            XCTAssertEqual(f.clears, [receipt])
+            XCTAssertEqual(f.snapshots[request.handle]?.nativeDeliveryReceipt?.owner,
+                replacement.nativeDeliveryOwner)
+            XCTAssertEqual(f.snapshots[request.handle]?.phase, .queued)
+            XCTAssertNil(f.responses[request.handle])
+        }
+    }
+
+    func testToolbarDeliveryRecoversActiveExecutionWithoutReturningToReview() async throws {
+        enum Owner: CaseIterable { case current, absent, incompatible }
+        for intent in [NativeApprovalService.ReconciliationIntent.admission, .focus] {
+            for owner in Owner.allCases {
+                let f = try fixture()
+                let request = try f.request(manual: true)
+                f.deliver(request, runtime: f.runtime(build: owner == .incompatible ? "147" : "148"), executing: true)
+                let receipt = try XCTUnwrap(f.snapshots[request.handle]?.nativeDeliveryReceipt)
+                if owner == .absent { f.processes.removeAll() }
+                let replacement = f.runtime(pid: 43)
+                f.onLaunch = { _, _, completion in
+                    XCTAssertEqual(f.snapshots[request.handle]?.phase, owner == .current ? .approving : .responded)
+                    XCTAssertEqual(f.clears, owner == .current ? [] : [receipt])
+                    if owner != .current { f.processes[replacement.processIdentifier] = replacement }
+                    completion(true)
+                }
+                let reference = NativeApprovalService.RequestReference(request, isToolbarAction: true)
+                let service = f.service()
+                let result = try await f.finish { await service.reconcile(reference, intent: intent) }
+
+                XCTAssertEqual(result, .opened)
+                XCTAssertEqual(f.launches.map(\.route), [try XCTUnwrap(reference.route)])
+                XCTAssertEqual(f.quits, owner == .incompatible ? [receipt.owner.processIdentifier] : [])
+                XCTAssertEqual(f.snapshots[request.handle]?.phase, owner == .current ? .approving : .responded)
+                XCTAssertEqual(f.responses[request.handle] != nil, owner != .current)
+            }
+        }
+    }
+
+    func testVerifiedToolbarIntentSurvivesCompletedOrDeletedRequests() async throws {
+        for deleted in [false, true] {
+            let f = try fixture()
+            let request = try f.request(manual: true)
+            let reference = NativeApprovalService.RequestReference(request, isToolbarAction: true)
+            if deleted { f.snapshots[request.handle] = nil }
+            else { f.setState(.responded, for: request) }
+            f.onLaunch = { _, _, completion in
+                f.processes[42] = f.runtime()
+                completion(true)
+            }
+            let service = f.service()
+            let result = try await f.finish { await service.reconcile(reference, intent: .focus) }
+            XCTAssertEqual(result, .opened)
+            XCTAssertEqual(f.launches.map(\.route), [try XCTUnwrap(reference.route)])
+            XCTAssertTrue(f.clears.isEmpty)
+            XCTAssertEqual(f.snapshots[request.handle]?.phase, deleted ? nil : .responded)
+        }
+    }
+
+    func testVerifiedToolbarIntentSurvivesCompletionDuringHelperPreparation() async throws {
+        for deleted in [false, true] {
+            let f = try fixture()
+            let request = try f.request(manual: true)
+            let gate = f.makeGate()
+            f.onValidate = { _ in await gate.wait(); return true }
+            f.onLaunch = { _, _, completion in
+                f.processes[42] = f.runtime()
+                completion(true)
+            }
+            let service = f.service()
+            let delivery = Task { await service.reconcile(.init(request, isToolbarAction: true), intent: .admission) }
+            defer { delivery.cancel(); gate.resolve(()) }
+            try await f.eventually { !f.validations.isEmpty }
+            if deleted { f.snapshots[request.handle] = nil }
+            else { f.setState(.responded, for: request) }
+            gate.resolve(())
+            let result = try await f.finish { await delivery.value }
+            XCTAssertEqual(result, .opened)
+            XCTAssertEqual(f.launches.map(\.route), [.toolbarApproval(workflowVersion: ExtensionBridge.workflowVersion,
+                handle: request.handle, nativeDeliveryNonce: request.nativeDeliveryNonce)])
+            XCTAssertEqual(f.snapshots[request.handle]?.phase, deleted ? nil : .responded)
+        }
+    }
+
+    func testFailedToolbarDeliveryCannotSucceedFromACompletedResponse() async throws {
+        let f = try fixture()
+        let request = try f.request(manual: true)
+        f.setState(.responded, for: request)
+        f.onLaunch = { _, _, completion in completion(false) }
+        let service = f.service()
+        let result = try await f.finish {
+            await service.reconcile(.init(request, isToolbarAction: true), intent: .focus)
+        }
+        XCTAssertEqual(result, .unavailable)
+        XCTAssertEqual(f.snapshots[request.handle]?.phase, .responded)
+    }
+
+    func testToolbarFocusDoesNotCoalesceWithAnOrdinaryDeliveryWaitingForReceipt() async throws {
+        let f = try fixture()
+        let request = try f.request(manual: true)
+        let runtime = f.runtime()
+        let toolbar = NativeAgentRoute.toolbarApproval(workflowVersion: ExtensionBridge.workflowVersion,
+            handle: request.handle, nativeDeliveryNonce: request.nativeDeliveryNonce)
+        f.onLaunch = { _, route, completion in
+            f.processes[runtime.processIdentifier] = runtime
+            if route == toolbar { f.deliver(request, runtime: runtime) }
+            completion(true)
+        }
+        let service = f.service()
+        let ordinary = Task { await service.reconcile(.init(request), intent: .admission) }
+        defer { ordinary.cancel() }
+        try await f.eventually {
+            f.launches.count == 1 && f.clock.pendingSleeps.contains { $0.deadline == f.clock.uptimeNanoseconds + 50_000_000 }
+        }
+        let focused = try await f.finish {
+            await service.reconcile(.init(request, isToolbarAction: true), intent: .focus)
+        }
+        XCTAssertEqual(focused, .opened)
+        XCTAssertEqual(f.launches.map(\.route), [f.route(request), toolbar])
+        try await f.advanceClock(by: 50_000_000)
+        let admitted = try await f.finish { await ordinary.value }
+        XCTAssertEqual(admitted, .pending)
+    }
+
+    func testMaintenanceCannotPromoteAReferenceToToolbarDelivery() async throws {
+        for manual in [false, true] {
+            let f = try fixture()
+            let request = try f.request(manual: manual)
+            f.onLaunch = { _, _, completion in f.deliver(request); completion(true) }
+            let service = f.service()
+            let result = try await f.finish {
+                await service.reconcile(.init(request, isToolbarAction: true), intent: .maintenance(allowDelivery: true))
+            }
+            XCTAssertEqual(result, .pending)
+            XCTAssertEqual(f.launches.map(\.route), manual ? [] : [f.route(request)])
+        }
+    }
+
     func testResponsePollCommandAcceptsOnlyResponseIdentityAndMaintenanceMode() throws {
         let token = UUID().uuidString.lowercased()
         for maintenance in ["none", "quiet", "interactive"] {

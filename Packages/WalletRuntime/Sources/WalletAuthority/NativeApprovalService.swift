@@ -15,27 +15,35 @@ public actor NativeApprovalService {
         public let handle: RequestHandle
         public let configurationKey: String
         public let expectedNonce: NativeDeliveryNonce?
+        public let isToolbarAction: Bool
 
         public init(
             handle: RequestHandle,
             configurationKey: String,
-            expectedNonce: NativeDeliveryNonce? = nil
+            expectedNonce: NativeDeliveryNonce? = nil,
+            isToolbarAction: Bool = false
         ) {
             self.handle = handle
             self.configurationKey = configurationKey
             self.expectedNonce = expectedNonce
+            self.isToolbarAction = isToolbarAction
         }
 
-        public init(_ snapshot: ExtensionBridge.Snapshot) {
+        public init(_ snapshot: ExtensionBridge.Snapshot, isToolbarAction: Bool = false) {
             self.init(
                 handle: snapshot.handle,
                 configurationKey: snapshot.configurationKey,
-                expectedNonce: snapshot.nativeDeliveryNonce
+                expectedNonce: snapshot.nativeDeliveryNonce,
+                isToolbarAction: isToolbarAction
             )
         }
 
         public var route: NativeAgentRoute? {
             guard let expectedNonce else { return nil }
+            if isToolbarAction {
+                return .toolbarApproval(workflowVersion: ExtensionBridge.workflowVersion, handle: handle,
+                    nativeDeliveryNonce: expectedNonce)
+            }
             return .approval(
                 workflowVersion: ExtensionBridge.workflowVersion,
                 handle: handle,
@@ -145,6 +153,12 @@ public actor NativeApprovalService {
             waitDeadline ?? UInt64.max
         )
         guard isPending(until: deadline) else { return .unavailable }
+        if reference.isToolbarAction, intent == .admission || intent == .focus {
+            guard let route = reference.route else { return .missing }
+            let delivery = getOrStartDelivery(route, reference: reference,
+                deadline: dependencies.deadline(after: launchTimeoutNanoseconds))
+            return await awaitDelivery(delivery, callerDeadline: deadline)
+        }
         if intent == .admission {
             return await reconcileRequest(
                 reference, intent: intent, deadline: deadline, waitDeadline: waitDeadline
@@ -477,16 +491,22 @@ public actor NativeApprovalService {
         deadline: UInt64
     ) async -> NativeApprovalReconciliationResult {
         guard isPending(until: deadline) else { return .unavailable }
+        var target: NativeAgentLauncher.HelperTarget?
         if let reference {
             switch await reconcileOwnership(reference, deadline: deadline) {
-            case .owned: return .pending
-            case .finished(let result): return result
-            case .needsDelivery: break
+            case .owned(_, let runtime):
+                guard reference.isToolbarAction else { return .pending }
+                target = runtime.target
+            case .finished(let result) where !reference.isToolbarAction || result == .unavailable: return result
+            default: break
             }
         }
-        guard isPending(until: deadline), let initialExpected = await dependencies.launcher.expectedRuntime(),
-              let target = await dependencies.launcher.resolveTarget(expected: initialExpected, deadline: deadline),
-              isPending(until: deadline) else { return .unavailable }
+        if target == nil {
+            guard isPending(until: deadline), let expected = await dependencies.launcher.expectedRuntime()
+            else { return .unavailable }
+            target = await dependencies.launcher.resolveTarget(expected: expected, deadline: deadline)
+        }
+        guard let target, isPending(until: deadline) else { return .unavailable }
         if case .running = target {
             await preparationFinished.resolve(())
         }
@@ -497,7 +517,7 @@ public actor NativeApprovalService {
         guard sent, let expected = await dependencies.launcher.expectedRuntime(at: target.url),
               isPending(until: deadline) else { return .unavailable }
         while isPending(until: deadline) {
-            if let reference {
+            if let reference, !reference.isToolbarAction {
                 switch await reconcileOwnership(reference, deadline: deadline) {
                 case .owned: return isPending(until: deadline) ? .pending : .unavailable
                 case .finished(.unavailable), .needsDelivery: break

@@ -73,15 +73,242 @@ final class WalletAuthenticationTests: XCTestCase {
         let challenge = makeChallenge(authorityID: authorityID, purpose: .walletAccess(UUID()))
         let grant = try XCTUnwrap(challenge.issueGrant(for: authorityID, credentialIdentity: .init(status: { current.withLock { $0 } ? .current : .changed })))
         let access = try XCTUnwrap(grant.accessSession(authorityID: authorityID))
-        XCTAssertTrue(access.isCurrent(for: authorityID))
-        XCTAssertTrue(access.isCurrent(for: authorityID))
+        XCTAssertTrue(access.validateCredentials(for: authorityID))
+        XCTAssertTrue(access.validateCredentials(for: authorityID))
         XCTAssertNil(grant.accessSession(authorityID: authorityID))
         XCTAssertFalse(grant.consume(authorityID: authorityID, purpose: .message(review: UUID(), cluster: nil)))
-        XCTAssertTrue(access.isCurrent(for: authorityID))
+        XCTAssertTrue(access.validateCredentials(for: authorityID))
         current.withLock { $0 = false }
-        XCTAssertFalse(access.isCurrent(for: authorityID))
+        XCTAssertFalse(access.validateCredentials(for: authorityID))
         current.withLock { $0 = true }
-        XCTAssertFalse(access.isCurrent(for: authorityID))
+        XCTAssertFalse(access.validateCredentials(for: authorityID))
+    }
+
+    func testAccessSessionExpiresAtExactIdleDeadlineWithoutRevival() throws {
+        let fixture = PasswordKeychainFixture()
+        fixture.passwordData = Data("password".utf8)
+        let started = ContinuousClock.now
+        let clock = Mutex(started)
+        let credentials = makeCredentials(keychain: fixture.keychain, authorityID: UUID(), accessClock: { clock.withLock { $0 } })
+        let access = try makeAccessSession(credentials: credentials)
+        let retained = access
+
+        XCTAssertEqual(credentials.remainingAccessLifetime(access), .seconds(900))
+        clock.withLock { $0 = started + .seconds(899) }
+        XCTAssertTrue(credentials.validateAccess(access))
+        XCTAssertTrue(credentials.permitsAuthenticatedPresentation(access))
+        XCTAssertEqual(credentials.remainingAccessLifetime(access), .seconds(1))
+
+        let reads = fixture.passwordReadCount
+        clock.withLock { $0 = started + .seconds(900) }
+        XCTAssertNil(credentials.recordInteraction(access))
+        XCTAssertFalse(credentials.validateAccess(retained))
+        XCTAssertFalse(credentials.permitsAuthenticatedPresentation(retained))
+        XCTAssertNil(credentials.remainingAccessLifetime(retained))
+
+        clock.withLock { $0 = started }
+        XCTAssertNil(credentials.recordInteraction(retained))
+        XCTAssertFalse(credentials.validateAccess(access))
+        XCTAssertNil(credentials.remainingAccessLifetime(access))
+        XCTAssertEqual(fixture.passwordReadCount, reads)
+    }
+
+    func testLeasePresentationLifetimeAndRenewalNeverReadCredentials() throws {
+        let fixture = PasswordKeychainFixture()
+        fixture.passwordData = Data("password".utf8)
+        let started = ContinuousClock.now
+        let clock = Mutex(started)
+        let credentials = makeCredentials(keychain: fixture.keychain, authorityID: UUID(), accessClock: { clock.withLock { $0 } })
+        let access = try makeAccessSession(credentials: credentials)
+        let reads = fixture.passwordReadCount
+
+        for status in [nil, errSecIO] as [OSStatus?] {
+            fixture.readStatus = status
+            for _ in 0..<100 {
+                clock.withLock { $0 += .seconds(1) }
+                XCTAssertTrue(credentials.permitsAuthenticatedPresentation(access))
+                XCTAssertEqual(credentials.remainingAccessLifetime(access), .seconds(899))
+                XCTAssertEqual(credentials.recordInteraction(access), .seconds(900))
+            }
+        }
+        XCTAssertEqual(fixture.passwordReadCount, reads)
+
+        fixture.readStatus = nil
+        XCTAssertTrue(credentials.validateAccess(access))
+        XCTAssertEqual(fixture.passwordReadCount, reads + 1)
+        access.invalidate()
+        XCTAssertFalse(credentials.permitsAuthenticatedPresentation(access))
+        XCTAssertNil(credentials.remainingAccessLifetime(access))
+        XCTAssertNil(credentials.recordInteraction(access))
+        XCTAssertFalse(credentials.validateAccess(access))
+        XCTAssertEqual(fixture.passwordReadCount, reads + 1)
+    }
+
+    func testInteractionRenewsTheDeadlineForEverySessionReference() throws {
+        let fixture = PasswordKeychainFixture()
+        fixture.passwordData = Data("password".utf8)
+        let started = ContinuousClock.now
+        let clock = Mutex(started)
+        let credentials = makeCredentials(keychain: fixture.keychain, authorityID: UUID(), accessClock: { clock.withLock { $0 } })
+        let access = try makeAccessSession(credentials: credentials)
+        let retained = access
+
+        clock.withLock { $0 = started + .seconds(899) }
+        XCTAssertEqual(credentials.recordInteraction(retained), .seconds(900))
+        XCTAssertEqual(credentials.remainingAccessLifetime(access), .seconds(900))
+        clock.withLock { $0 = started + .seconds(900) }
+        XCTAssertTrue(credentials.validateAccess(access))
+        XCTAssertEqual(credentials.remainingAccessLifetime(retained), .seconds(899))
+        clock.withLock { $0 = started + .seconds(1799) }
+        XCTAssertNil(credentials.recordInteraction(access))
+        XCTAssertNil(credentials.remainingAccessLifetime(retained))
+    }
+
+    func testAccessLifetimeIgnoresWallClockChanges() throws {
+        let fixture = PasswordKeychainFixture()
+        fixture.passwordData = Data("password".utf8)
+        let started = ContinuousClock.now
+        let monotonic = Mutex(started)
+        let wallClock = Mutex(Date(timeIntervalSince1970: 100))
+        let credentials = makeCredentials(
+            keychain: fixture.keychain, authorityID: UUID(),
+            clock: { wallClock.withLock { $0 } }, accessClock: { monotonic.withLock { $0 } }
+        )
+        let access = try makeAccessSession(credentials: credentials)
+
+        monotonic.withLock { $0 = started + .seconds(300) }
+        wallClock.withLock { $0 = .distantFuture }
+        XCTAssertTrue(credentials.validateAccess(access))
+        XCTAssertEqual(credentials.remainingAccessLifetime(access), .seconds(600))
+        wallClock.withLock { $0 = .distantPast }
+        XCTAssertTrue(credentials.permitsAuthenticatedPresentation(access))
+        XCTAssertEqual(credentials.remainingAccessLifetime(access), .seconds(600))
+        monotonic.withLock { $0 = started + .seconds(900) }
+        XCTAssertFalse(credentials.validateAccess(access))
+        XCTAssertNil(credentials.remainingAccessLifetime(access))
+    }
+
+    func testUnavailableCredentialsBlockValidationButAllowLeaseRenewal() throws {
+        let fixture = PasswordKeychainFixture()
+        fixture.passwordData = Data("password".utf8)
+        let started = ContinuousClock.now
+        let clock = Mutex(started)
+        let credentials = makeCredentials(keychain: fixture.keychain, authorityID: UUID(), accessClock: { clock.withLock { $0 } })
+        let access = try makeAccessSession(credentials: credentials)
+
+        clock.withLock { $0 = started + .seconds(300) }
+        fixture.readStatus = errSecIO
+        XCTAssertFalse(credentials.validateAccess(access))
+        XCTAssertTrue(credentials.permitsAuthenticatedPresentation(access))
+        XCTAssertEqual(credentials.remainingAccessLifetime(access), .seconds(600))
+        XCTAssertEqual(credentials.recordInteraction(access), .seconds(900))
+        fixture.readStatus = nil
+        clock.withLock { $0 = started + .seconds(600) }
+        XCTAssertTrue(credentials.validateAccess(access))
+        XCTAssertEqual(credentials.remainingAccessLifetime(access), .seconds(600))
+        fixture.readStatus = errSecIO
+        clock.withLock { $0 = started + .seconds(1200) }
+        XCTAssertFalse(credentials.permitsAuthenticatedPresentation(access))
+        XCTAssertNil(credentials.remainingAccessLifetime(access))
+        fixture.readStatus = nil
+        XCTAssertNil(credentials.recordInteraction(access))
+    }
+
+    func testChangedCredentialsPermanentlyRetireAccessLifetimeAndRenewal() throws {
+        let fixture = PasswordKeychainFixture()
+        fixture.passwordData = Data("password".utf8)
+        let credentials = makeCredentials(keychain: fixture.keychain, authorityID: UUID())
+        let access = try makeAccessSession(credentials: credentials)
+
+        fixture.passwordData = Data("replacement".utf8)
+        let reads = fixture.passwordReadCount
+        XCTAssertTrue(credentials.permitsAuthenticatedPresentation(access))
+        XCTAssertNotNil(credentials.remainingAccessLifetime(access))
+        XCTAssertEqual(credentials.recordInteraction(access), .seconds(900))
+        XCTAssertEqual(fixture.passwordReadCount, reads)
+        XCTAssertFalse(credentials.validateAccess(access))
+        XCTAssertNil(credentials.remainingAccessLifetime(access))
+        fixture.passwordData = Data("password".utf8)
+        XCTAssertFalse(credentials.validateAccess(access))
+        XCTAssertNil(credentials.recordInteraction(access))
+        XCTAssertFalse(credentials.permitsAuthenticatedPresentation(access))
+        XCTAssertEqual(fixture.passwordReadCount, reads + 1)
+    }
+
+    func testWrongAuthorityCannotInspectRenewOrRetireAnAccessSession() throws {
+        let fixture = PasswordKeychainFixture()
+        fixture.passwordData = Data("password".utf8)
+        let clock = ContinuousClock.now
+        let credentials = makeCredentials(keychain: fixture.keychain, authorityID: UUID(), accessClock: { clock })
+        let other = makeCredentials(keychain: fixture.keychain, authorityID: UUID(), accessClock: { clock })
+        let access = try makeAccessSession(credentials: credentials)
+        let reads = fixture.passwordReadCount
+
+        XCTAssertFalse(other.validateAccess(access))
+        XCTAssertFalse(other.permitsAuthenticatedPresentation(access))
+        XCTAssertNil(other.remainingAccessLifetime(access))
+        XCTAssertNil(other.recordInteraction(access))
+        XCTAssertEqual(fixture.passwordReadCount, reads)
+        XCTAssertTrue(credentials.validateAccess(access))
+        XCTAssertEqual(credentials.remainingAccessLifetime(access), .seconds(900))
+    }
+
+    func testExpiryDuringCredentialValidationRetiresTheLease() throws {
+        let started = ContinuousClock.now
+        let clock = Mutex(started)
+        let shouldExpire = Mutex(false)
+        let keychain = Keychain(copyMatching: { _, output in
+            if shouldExpire.withLock({ $0 }) {
+                clock.withLock { $0 = started + .seconds(900) }
+            }
+            output?.pointee = Data("password".utf8) as CFData
+            return errSecSuccess
+        })
+        let credentials = makeCredentials(keychain: keychain, authorityID: UUID(), accessClock: { clock.withLock { $0 } })
+        let access = try makeAccessSession(credentials: credentials)
+
+        clock.withLock { $0 = started + .seconds(899) }
+        shouldExpire.withLock { $0 = true }
+        XCTAssertFalse(credentials.validateAccess(access))
+        XCTAssertNil(credentials.recordInteraction(access))
+        XCTAssertNil(credentials.remainingAccessLifetime(access))
+        shouldExpire.withLock { $0 = false }
+        clock.withLock { $0 = started }
+        XCTAssertFalse(credentials.validateAccess(access))
+    }
+
+    func testConcurrentInvalidationDuringCredentialValidationPreventsAuthorizationAndRenewal() async throws {
+        let entered = expectation(description: "Access validation is checking credentials")
+        let release = DispatchSemaphore(value: 0)
+        let shouldPause = Mutex(false)
+        let keychain = Keychain(copyMatching: { _, output in
+            if shouldPause.withLock({ value in
+                let pause = value
+                value = false
+                return pause
+            }) {
+                entered.fulfill()
+                release.wait()
+            }
+            output?.pointee = Data("password".utf8) as CFData
+            return errSecSuccess
+        })
+        let credentials = makeCredentials(keychain: keychain, authorityID: UUID())
+        let access = try makeAccessSession(credentials: credentials)
+        let retained = access
+        shouldPause.withLock { $0 = true }
+        let validation = Task.detached { credentials.validateAccess(retained) }
+        defer { release.signal() }
+
+        await fulfillment(of: [entered], timeout: 5)
+        access.invalidate()
+        release.signal()
+        let validated = await validation.value
+        XCTAssertFalse(validated)
+        XCTAssertNil(credentials.recordInteraction(retained))
+        XCTAssertFalse(credentials.validateAccess(retained))
+        XCTAssertFalse(credentials.permitsAuthenticatedPresentation(retained))
+        XCTAssertNil(credentials.remainingAccessLifetime(retained))
     }
 
     func testTransientCredentialFailurePreservesPresentationButBlocksAndRetiresPrivilegedGrants() throws {
@@ -101,23 +328,23 @@ final class WalletAuthenticationTests: XCTestCase {
         let export = try XCTUnwrap(credentials.verify(password: "password", challenge: exportChallenge))
 
         fixture.readStatus = errSecIO
-        XCTAssertFalse(credentials.isCurrent(access))
+        XCTAssertFalse(credentials.validateAccess(access))
         XCTAssertTrue(access.permitsAuthenticatedPresentation(for: authorityID))
         XCTAssertFalse(signing.consume(authorityID: authorityID, purpose: signingPurpose))
         XCTAssertNil(export.consumeExport(authorityID: authorityID, walletID: "wallet", account: nil, kind: .mnemonic))
         XCTAssertThrowsError(try credentials.verify(password: "password", challenge: credentials.makeWalletAccessChallenge()))
 
         fixture.readStatus = nil
-        XCTAssertTrue(credentials.isCurrent(access))
+        XCTAssertTrue(credentials.validateAccess(access))
         XCTAssertTrue(access.permitsAuthenticatedPresentation(for: authorityID))
         XCTAssertFalse(signing.consume(authorityID: authorityID, purpose: signingPurpose))
         XCTAssertNil(export.consumeExport(authorityID: authorityID, walletID: "wallet", account: nil, kind: .mnemonic))
 
         fixture.passwordData = Data("replacement".utf8)
-        XCTAssertFalse(credentials.isCurrent(access))
+        XCTAssertFalse(credentials.validateAccess(access))
         XCTAssertFalse(access.permitsAuthenticatedPresentation(for: authorityID))
         fixture.passwordData = Data("password".utf8)
-        XCTAssertFalse(credentials.isCurrent(access))
+        XCTAssertFalse(credentials.validateAccess(access))
         XCTAssertFalse(access.permitsAuthenticatedPresentation(for: authorityID))
     }
 
@@ -129,9 +356,14 @@ final class WalletAuthenticationTests: XCTestCase {
         let access = try XCTUnwrap(credentials.accessSession(authorization:
             XCTUnwrap(credentials.verify(password: "password", challenge: challenge))))
         fixture.passwordData = nil
+        let reads = fixture.passwordReadCount
+        XCTAssertTrue(access.permitsAuthenticatedPresentation(for: challenge.authorityID))
+        XCTAssertFalse(credentials.validateAccess(access))
         XCTAssertFalse(access.permitsAuthenticatedPresentation(for: challenge.authorityID))
         fixture.passwordData = Data("password".utf8)
-        XCTAssertFalse(credentials.isCurrent(access))
+        XCTAssertFalse(credentials.validateAccess(access))
+        XCTAssertNil(credentials.recordInteraction(access))
+        XCTAssertEqual(fixture.passwordReadCount, reads + 1)
     }
 
     func testExportAuthorizationMatchesWalletAccountAndKind() throws {
@@ -231,15 +463,22 @@ final class WalletAuthenticationTests: XCTestCase {
     private func makeCredentials(
         keychain: Keychain,
         authorityID: UUID,
-        clock: @escaping @Sendable () -> Date
+        clock: @escaping @Sendable () -> Date = Date.init,
+        accessClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }
     ) -> WalletCredentials {
 #if os(iOS) || os(visionOS)
         let vault = SafariApprovalVault(fileURL: nil, clock: clock)
         let host = SafariApprovalVaultHost(vault: vault, sourceSnapshot: { nil })
-        return WalletCredentials(keychain: keychain, messages: .testingEnglish, authorityID: authorityID, vaultHost: host, clock: clock)
+        return WalletCredentials(keychain: keychain, messages: .testingEnglish, authorityID: authorityID, vaultHost: host, clock: clock, accessClock: accessClock)
 #else
-        WalletCredentials(keychain: keychain, messages: .testingEnglish, authorityID: authorityID, clock: clock)
+        WalletCredentials(keychain: keychain, messages: .testingEnglish, authorityID: authorityID, clock: clock, accessClock: accessClock)
 #endif
+    }
+
+    private func makeAccessSession(credentials: WalletCredentials) throws -> WalletAccessSession {
+        let challenge = credentials.makeWalletAccessChallenge()
+        let grant = try XCTUnwrap(credentials.verify(password: "password", challenge: challenge))
+        return try XCTUnwrap(credentials.accessSession(authorization: grant))
     }
 
     private func makeChallenge(authorityID: UUID, purpose: WalletAuthenticationChallenge.Purpose) -> WalletAuthenticationChallenge {

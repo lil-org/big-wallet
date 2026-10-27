@@ -373,6 +373,9 @@ export function auditResults(stages) {
             if (stage.approvalAudit && stage.audit?.ok !== true) {
                 issues.push(`${stage.id} has no passing approval exploration audit`);
             }
+            if (stage.upgradeAudit && stage.audit?.ok !== true) {
+                issues.push(`${stage.id} has no passing shipped-main upgrade and recovery audit`);
+            }
             if (stage.preparationResult && stage.audit?.ok !== true) {
                 issues.push(`${stage.id} has no passing Safari preparation audit`);
             }

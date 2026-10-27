@@ -55,7 +55,8 @@ const success = output => ({code: 0, signal: null, output: output ?? "", timedOu
 const passedManifest = manifest => manifest.map(stage => ({id: stage.id, status: "passed",
     ...(stage.nativeAudit ? {nativeAudit: stage.nativeAudit} : {}),
     ...(stage.approvalAudit ? {approvalAudit: stage.approvalAudit} : {}),
-    ...(stage.nativeAudit?.runtime || stage.approvalAudit ? {audit: {ok: true}} : {}),
+    ...(stage.upgradeAudit ? {upgradeAudit: stage.upgradeAudit} : {}),
+    ...(stage.nativeAudit?.runtime || stage.approvalAudit || stage.upgradeAudit ? {audit: {ok: true}} : {}),
     ...(stage.nativeAudit?.kind === "safari" ? {audit: {ok: true, safari: {ok: true}, safariLog: {ok: true}}} : {})}));
 
 test("job validation admits the host snapshot contract and rejects execution injection", () => {

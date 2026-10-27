@@ -6,16 +6,75 @@ import WalletNetworking
 import UIKit
 
 @MainActor
+private final class SecretTextFieldUndoHistory: NSObject {
+    private struct ObservedManager {
+        weak var value: UndoManager?
+    }
+
+    private var managers = [ObservedManager]()
+
+    @objc func capture(_ field: UITextField) {
+        managers.removeAll { $0.value == nil }
+        guard let manager = field.undoManager, !managers.contains(where: { $0.value === manager }) else { return }
+        managers.append(ObservedManager(value: manager))
+    }
+
+    func clear(_ field: UITextField) {
+        capture(field)
+        let retainedManagers = managers.compactMap(\.value)
+        retainedManagers.forEach { $0.removeAllActions() }
+        field.text = nil
+        field.resignFirstResponder()
+        capture(field)
+        retainedManagers.forEach { $0.removeAllActions() }
+        managers.compactMap(\.value).forEach { $0.removeAllActions() }
+        managers.removeAll()
+    }
+}
+
+@MainActor
+private enum SecretTextFieldAssociatedObjects {
+    static var history: UInt8 = 0
+}
+
+extension UITextField {
+    func prepareSecretDraftHistory() {
+        guard objc_getAssociatedObject(self, &SecretTextFieldAssociatedObjects.history) == nil else { return }
+        let history = SecretTextFieldUndoHistory()
+        objc_setAssociatedObject(self, &SecretTextFieldAssociatedObjects.history, history, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        addTarget(history, action: #selector(SecretTextFieldUndoHistory.capture(_:)), for: [.editingDidBegin, .editingChanged, .editingDidEnd])
+        if isFirstResponder { history.capture(self) }
+    }
+
+    func clearSecretDraft() {
+        prepareSecretDraftHistory()
+        let history = objc_getAssociatedObject(self, &SecretTextFieldAssociatedObjects.history) as? SecretTextFieldUndoHistory
+        history?.clear(self)
+    }
+}
+
+@MainActor
 struct LocalAuthentication {
     enum Prompt: Equatable {
         case password(reason: String?), unavailable, mismatch
     }
 
     static func attempt(reason: String, presentPasswordAlertFrom presenter: @escaping @MainActor @Sendable () -> UIViewController?, passwordReason: String?) async -> Bool {
-        let credentials = ApplicationServices.shared.credentials
+        guard let session = await accessSession(reason: reason, presentPasswordAlertFrom: presenter,
+                                               passwordReason: passwordReason) else { return false }
+        session.invalidate()
+        return true
+    }
+
+    static func accessSession(
+        reason: String,
+        presentPasswordAlertFrom presenter: @escaping @MainActor @Sendable () -> UIViewController?,
+        passwordReason: String?,
+        credentials: WalletCredentials = ApplicationServices.shared.credentials
+    ) async -> WalletAccessSession? {
         let challenge = credentials.makeWalletAccessChallenge()
-        guard let grant = await authorize(reason: reason, presentPasswordAlertFrom: presenter, passwordReason: passwordReason, challenge: challenge, credentials: credentials) else { return false }
-        return credentials.accessSession(authorization: grant) != nil
+        guard let grant = await authorize(reason: reason, presentPasswordAlertFrom: presenter, passwordReason: passwordReason, challenge: challenge, credentials: credentials) else { return nil }
+        return credentials.accessSession(authorization: grant)
     }
 
     static func authorize(
@@ -101,6 +160,8 @@ struct LocalAuthentication {
 
         private var continuation: CheckedContinuation<String?, Never>?
         private var alert: UIAlertController?
+        private var pendingResult: String?
+        private var confirmation: (() -> String?)?
         private var isFinishing = false
         private var isCancelled = false
         private let show: Show
@@ -114,7 +175,14 @@ struct LocalAuthentication {
             self.dismiss = dismiss
         }
 
-        func present(from presenter: @escaping @MainActor @Sendable () -> UIViewController?, title: String, message: String?, requestsPassword: Bool, retry: Bool = false) async -> String? {
+        func present(
+            from presenter: @escaping @MainActor @Sendable () -> UIViewController?,
+            title: String,
+            message: String?,
+            requestsPassword: Bool,
+            retry: Bool = false,
+            authorizeConfirmation: @escaping @MainActor () -> Bool = { true }
+        ) async -> String? {
             guard !Task.isCancelled else { return nil }
             return await withTaskCancellationHandler {
                 await withCheckedContinuation { continuation in
@@ -127,12 +195,17 @@ struct LocalAuthentication {
                     self.alert = alert
                     if requestsPassword {
                         alert.addTextField {
+                            $0.prepareSecretDraftHistory()
                             $0.isSecureTextEntry = true
                             $0.placeholder = Strings.password
                         }
                     }
-                    alert.addAction(UIAlertAction(title: retry ? Strings.tryAgain : Strings.ok, style: .default) { [weak self, weak alert] _ in
-                        self?.finish(requestsPassword ? alert?.textFields?.first?.text : "")
+                    confirmation = { [weak alert] in
+                        guard authorizeConfirmation() else { return nil }
+                        return requestsPassword ? alert?.textFields?.first?.text : ""
+                    }
+                    alert.addAction(UIAlertAction(title: retry ? Strings.tryAgain : Strings.ok, style: .default) { [weak self] _ in
+                        self?.confirm()
                     })
                     if requestsPassword || retry {
                         alert.addAction(UIAlertAction(title: Strings.cancel, style: .cancel) { [weak self] _ in
@@ -146,19 +219,30 @@ struct LocalAuthentication {
             }
         }
 
+        func confirm() {
+            guard !isFinishing, continuation != nil else { return }
+            let confirmation = confirmation
+            self.confirmation = nil
+            finish(confirmation?())
+        }
+
         func finish(_ value: String?) {
             guard !isFinishing, continuation != nil else { return }
             isFinishing = true
-            alert?.textFields?.forEach { $0.text = nil }
+            confirmation = nil
+            pendingResult = isCancelled ? nil : value
+            alert?.textFields?.forEach { $0.clearSecretDraft() }
             guard let alert else {
-                resolve(value)
+                resolve()
                 return
             }
-            dismiss(alert, !isCancelled) { [self] in resolve(value) }
+            dismiss(alert, !isCancelled) { [self] in resolve() }
         }
 
-        private func resolve(_ value: String?) {
+        private func resolve() {
             let continuation = continuation
+            let value = pendingResult
+            pendingResult = nil
             self.continuation = nil
             alert = nil
             continuation?.resume(returning: isCancelled ? nil : value)
@@ -166,6 +250,7 @@ struct LocalAuthentication {
 
         func cancel() {
             isCancelled = true
+            pendingResult = nil
             finish(nil)
         }
 

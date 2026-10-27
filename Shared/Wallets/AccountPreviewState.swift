@@ -5,6 +5,7 @@ import Foundation
 
 protocol AccountPreviewSession: Sendable {
     func previewAccounts(page: Int) async throws -> [WalletAccount]
+    func invalidate()
 }
 
 extension WalletPreviewSession: AccountPreviewSession {}
@@ -41,6 +42,7 @@ final class AccountPreviewState {
     private let timing: Timing
     private let didChange: (Change) -> Void
     private var session: (any AccountPreviewSession)?
+    private var preparingSession: (generation: UInt64, session: any AccountPreviewSession)?
     private var loadTask: Task<Void, Never>?
     private var generation: UInt64 = 0
     private var isPagingEnabled = false
@@ -63,6 +65,8 @@ final class AccountPreviewState {
 
     isolated deinit {
         loadTask?.cancel()
+        session?.invalidate()
+        preparingSession?.session.invalidate()
     }
 
     var hasChanges: Bool {
@@ -110,12 +114,25 @@ final class AccountPreviewState {
             do {
                 try Task.checkCancellation()
                 let session = try await makeSession(wallet)
+                var adopted = false
+                defer {
+                    if !adopted {
+                        session.invalidate()
+                        if self?.preparingSession?.generation == generation {
+                            self?.preparingSession = nil
+                        }
+                    }
+                }
                 try Task.checkCancellation()
+                guard self?.generation == generation else { return }
+                self?.preparingSession = (generation, session)
                 let accounts = try await session.previewAccounts(page: 0)
                 try Task.checkCancellation()
                 guard let self, self.generation == generation else { return }
                 loadTask = nil
                 self.session = session
+                preparingSession = nil
+                adopted = true
                 self.accounts = accounts
                 nextPage = 1
                 lastCompletedPageAt = timing.now()
@@ -183,12 +200,18 @@ final class AccountPreviewState {
 
     func invalidate() {
         generation &+= 1
-        loadTask?.cancel()
+        let task = loadTask
+        let currentSession = session
+        let initialSession = preparingSession?.session
         loadTask = nil
         session = nil
+        preparingSession = nil
         isPagingEnabled = false
         nextPage = 0
         lastCompletedPageAt = nil
         hasLoadedAllPages = false
+        currentSession?.invalidate()
+        initialSession?.invalidate()
+        task?.cancel()
     }
 }

@@ -34,26 +34,29 @@ public struct WalletCredentials: Sendable {
     private let authorityID: UUID
     private let authentication: WalletCredentialAuthentication
     private let clock: @Sendable () -> Date
+    private let accessClock: @Sendable () -> ContinuousClock.Instant
     private let postCreation: @MainActor @Sendable () -> Void
 #if os(iOS) || os(visionOS)
     private let vaultHost: SafariApprovalVaultHost
 
-    init(keychain: Keychain, messages: AuthorityMessages, authorityID: UUID, vaultHost: SafariApprovalVaultHost, authentication: WalletCredentialAuthentication = .live, clock: @escaping @Sendable () -> Date = Date.init, postCreation: @escaping @MainActor @Sendable () -> Void = {}) {
+    init(keychain: Keychain, messages: AuthorityMessages, authorityID: UUID, vaultHost: SafariApprovalVaultHost, authentication: WalletCredentialAuthentication = .live, clock: @escaping @Sendable () -> Date = Date.init, accessClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }, postCreation: @escaping @MainActor @Sendable () -> Void = {}) {
         self.keychain = keychain
         self.messages = messages
         self.authorityID = authorityID
         self.authentication = authentication
         self.clock = clock
+        self.accessClock = accessClock
         self.postCreation = postCreation
         self.vaultHost = vaultHost
     }
 #else
-    init(keychain: Keychain, messages: AuthorityMessages, authorityID: UUID, authentication: WalletCredentialAuthentication = .live, clock: @escaping @Sendable () -> Date = Date.init, postCreation: @escaping @MainActor @Sendable () -> Void = {}) {
+    init(keychain: Keychain, messages: AuthorityMessages, authorityID: UUID, authentication: WalletCredentialAuthentication = .live, clock: @escaping @Sendable () -> Date = Date.init, accessClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }, postCreation: @escaping @MainActor @Sendable () -> Void = {}) {
         self.keychain = keychain
         self.messages = messages
         self.authorityID = authorityID
         self.authentication = authentication
         self.clock = clock
+        self.accessClock = accessClock
         self.postCreation = postCreation
     }
 #endif
@@ -109,11 +112,23 @@ public struct WalletCredentials: Sendable {
     }
 
     public func accessSession(authorization: WalletAuthenticationGrant) -> WalletAccessSession? {
-        authorization.accessSession(authorityID: authorityID)
+        authorization.accessSession(authorityID: authorityID, accessClock: accessClock)
     }
 
-    public func isCurrent(_ session: WalletAccessSession) -> Bool {
-        session.isCurrent(for: authorityID)
+    public func validateAccess(_ session: WalletAccessSession) -> Bool {
+        session.validateCredentials(for: authorityID)
+    }
+
+    public func permitsAuthenticatedPresentation(_ session: WalletAccessSession) -> Bool {
+        session.permitsAuthenticatedPresentation(for: authorityID)
+    }
+
+    public func recordInteraction(_ session: WalletAccessSession) -> Duration? {
+        session.recordInteraction(for: authorityID)
+    }
+
+    public func remainingAccessLifetime(_ session: WalletAccessSession) -> Duration? {
+        session.remainingLifetime(for: authorityID)
     }
 
     public var canUseBiometrics: Bool { authentication.canUseBiometrics() }

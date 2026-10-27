@@ -3,7 +3,9 @@ import WalletAuthority
 import WalletNetworking
 import Cocoa
 
-final class NativeAccountSelectionViewController: NSViewController {
+final class NativeAccountSelectionViewController: NSViewController, NativeWalletProtectedContent {
+    var walletAccess = NativeWalletAccess()
+    private var isRetired = false
     let accountSelection: NativeAccountSelectionSession
     let walletsManager: WalletsManager
     var openWalletManagement: @MainActor () async -> Bool
@@ -24,7 +26,8 @@ final class NativeAccountSelectionViewController: NSViewController {
     var networkButton: NSButton { content.networkButton }
     var titleLabel: NSTextField { content.titleLabel }
     private var wallets: [WalletSnapshot] { walletsManager.wallets }
-    private var acceptsUserActions: Bool { accountSelection.review.isActive && !accountSelection.hasCompleted }
+    private var hasActivePresentation: Bool { !isRetired && accountSelection.review.isActive && !accountSelection.hasCompleted }
+    private var acceptsUserActions: Bool { walletAccess.isCurrent && hasActivePresentation }
     private var canSelectEthereumNetwork: Bool { accountSelection.canSelectEthereumNetwork }
 
     init(
@@ -40,6 +43,17 @@ final class NativeAccountSelectionViewController: NSViewController {
 
     required init?(coder: NSCoder) { return nil }
 
+    func retireForWalletLock() {
+        isRetired = true
+        invalidateNativeApprovalReview()
+        cellModels.removeAll()
+        NotificationCenter.default.removeObserver(self)
+        if isViewLoaded {
+            tableView.reloadData()
+            Window.clearText(in: view)
+        }
+    }
+
     isolated deinit {
         managementTask?.cancel()
         NotificationCenter.default.removeObserver(self)
@@ -51,6 +65,10 @@ final class NativeAccountSelectionViewController: NSViewController {
         super.viewDidLoad()
         accountSelection.review.register(self)
         guard acceptsUserActions else { return }
+        (tableView.enclosingScrollView?.verticalScroller as? WalletActivityScroller)?.accessibilityInteraction = { [weak self] in
+            guard let self, hasActivePresentation, viewIfLoaded?.window?.contentViewController === self else { return false }
+            return walletAccess.beginAction()
+        }
         tableView.delegate = self
         tableView.dataSource = self
         tableView.target = self
@@ -87,10 +105,12 @@ final class NativeAccountSelectionViewController: NSViewController {
 
     override func viewDidAppear() {
         super.viewDidAppear()
+        guard !isRetired else { return }
         reloadHeader()
     }
 
     private func reloadHeader() {
+        guard !isRetired else { return }
         let title = accountSelection.mode == .selectAccount ? Strings.selectAccount : Strings.switchAccount
         titleLabel.stringValue = title.replacingOccurrences(of: " ", with: "\n")
         content.addButton.isHidden = true
@@ -105,6 +125,7 @@ final class NativeAccountSelectionViewController: NSViewController {
     }
 
     private func updateBottomButtons() {
+        guard !isRetired else { return }
         content.accountsListBottomConstraint.constant = 62
         content.bottomButtonsStackView.isHidden = false
         if !accountSelection.initiallyConnectedProviders.isEmpty {
@@ -117,7 +138,7 @@ final class NativeAccountSelectionViewController: NSViewController {
     }
 
     private func updatePrimaryButton() {
-        primaryButton.isEnabled = acceptsUserActions && accountSelection.canSubmitSelection()
+        primaryButton.isEnabled = hasActivePresentation && accountSelection.canSubmitSelection()
     }
 
     private func setAccountSelectionControlsEnabled(_ enabled: Bool) {
@@ -135,6 +156,7 @@ final class NativeAccountSelectionViewController: NSViewController {
     }
 
     private func updateCellModels() {
+        guard !isRetired else { return }
         cellModels = WalletAccountListRow.makeRows(wallets: wallets).map(CellModel.wallet)
         if !wallets.contains(where: { $0.accounts.contains(where: accountCanBeSelected) }) {
             cellModels.append(.approvalGuidance)
@@ -189,13 +211,14 @@ final class NativeAccountSelectionViewController: NSViewController {
     }
 
     @IBAction func networkButtonTapped(_ sender: NSButton) {
+        guard acceptsUserActions, walletAccess.beginAction() else { return }
         guard acceptsUserActions, canSelectEthereumNetwork else { return }
         showNetworksList()
     }
 
     private func showNetworksList() {
         let networksList = NetworksListView(selectedNetwork: accountSelection.network) { [weak self] selectedNetwork in
-            guard let self, acceptsUserActions else { return }
+            guard let self, acceptsUserActions, walletAccess.beginAction() else { return }
             endAllSheets()
             if let selectedNetwork {
                 selectNetwork(selectedNetwork)
@@ -207,6 +230,7 @@ final class NativeAccountSelectionViewController: NSViewController {
     }
 
     @IBAction func didClickSecondaryButton(_ sender: Any) {
+        guard acceptsUserActions, walletAccess.beginAction() else { return }
         guard acceptsUserActions else { return }
         if accountSelection.initiallyConnectedProviders.isEmpty == false {
             callCompletion(specificWalletAccounts: [])
@@ -216,6 +240,7 @@ final class NativeAccountSelectionViewController: NSViewController {
     }
 
     @IBAction func didClickPrimaryButton(_ sender: Any) {
+        guard acceptsUserActions, walletAccess.beginAction() else { return }
         guard acceptsUserActions else { return }
         callCompletion(specificWalletAccounts: accountSelection.selectedAccounts.map { $0 })
     }
@@ -228,6 +253,7 @@ final class NativeAccountSelectionViewController: NSViewController {
     }
 
     private func updateNetworkButton(_ network: EthereumNetwork) {
+        guard !isRetired else { return }
         let identity = "\(network.chainIdHexString) · \(network.name)"
         networkButton.image = Images.network.with(
             pointSize: 14,
@@ -239,6 +265,7 @@ final class NativeAccountSelectionViewController: NSViewController {
     }
 
     private func updateNetworkButtonVisibility() {
+        guard !isRetired else { return }
         let isVisible = canSelectEthereumNetwork
         networkButton.isHidden = !isVisible
         if isVisible, let network = accountSelection.network {
@@ -253,11 +280,13 @@ final class NativeAccountSelectionViewController: NSViewController {
     }
 
     @objc private func manageWallets() {
+        guard acceptsUserActions, walletAccess.beginAction() else { return }
         guard acceptsUserActions,
               !isOpeningWalletManagement else { return }
         isOpeningWalletManagement = true
         tableView.reloadData()
         managementTask = Task { [weak self, openWalletManagement] in
+            guard self?.acceptsUserActions == true, !Task.isCancelled else { return }
             let succeeded = await openWalletManagement()
             guard let self, !Task.isCancelled else { return }
             isOpeningWalletManagement = false
@@ -270,6 +299,7 @@ final class NativeAccountSelectionViewController: NSViewController {
     }
 
     override func cancelOperation(_ sender: Any?) {
+        guard acceptsUserActions, walletAccess.beginAction() else { return }
         guard acceptsUserActions else { return }
         if accountSelection.initiallyConnectedProviders.isEmpty == false {
             callCompletion(specificWalletAccounts: nil)
@@ -315,6 +345,7 @@ final class NativeAccountSelectionViewController: NSViewController {
     }
 
     private func toggleAccount(at row: Int) {
+        guard acceptsUserActions, walletAccess.beginAction() else { return }
         guard acceptsUserActions,
               cellModels.indices.contains(row),
               let wallet = walletForRow(row),
@@ -335,7 +366,7 @@ final class NativeAccountSelectionViewController: NSViewController {
 
 extension NativeAccountSelectionViewController: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-        guard acceptsUserActions, cellModels.indices.contains(row) else { return false }
+        guard hasActivePresentation, cellModels.indices.contains(row) else { return false }
         if case .manageWallets = cellModels[row] {
             return !isOpeningWalletManagement && self.tableView.isHandlingKeyDown
         }
@@ -346,6 +377,7 @@ extension NativeAccountSelectionViewController: NSTableViewDelegate {
 
 extension NativeAccountSelectionViewController: NSTableViewDataSource {
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        guard !isRetired, cellModels.indices.contains(row) else { return nil }
         switch cellModels[row] {
         case .wallet(.account(let wallet, let account)):
             let rowView = tableView.makeViewOfType(AccountCellView.self)
@@ -388,6 +420,7 @@ extension NativeAccountSelectionViewController: NSTableViewDataSource {
     }
 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        guard !isRetired, cellModels.indices.contains(row) else { return tableView.rowHeight }
         switch cellModels[row] {
         case .wallet(.account): return 50
         case .wallet: return 27
@@ -401,7 +434,7 @@ extension NativeAccountSelectionViewController: NSTableViewDataSource {
         }
     }
 
-    func numberOfRows(in tableView: NSTableView) -> Int { cellModels.count }
+    func numberOfRows(in tableView: NSTableView) -> Int { isRetired ? 0 : cellModels.count }
 }
 
 extension NativeAccountSelectionViewController: NativeApprovalReviewTeardown {

@@ -21,6 +21,7 @@ final class ApplicationServices {
     var credentials: WalletCredentials { authority.credentials }
     var requests: ExtensionBridge { authority.requests }
     var networks: NetworkResolver { authority.networks }
+    lazy var access = WalletAccessController(credentials: credentials)
 #if os(macOS)
     lazy var nativeApprovals = NativeApprovalService(dependencies: .live(
         bridge: requests, runtimeIdentityDirectoryURL: runtimeIdentityDirectoryURL

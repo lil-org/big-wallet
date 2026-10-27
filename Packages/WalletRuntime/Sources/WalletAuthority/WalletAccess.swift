@@ -432,7 +432,7 @@ struct ApprovedWalletSigningOperation: Sendable {
 private final class RepositoryWalletSigningSource: WalletSigningSource {
     private enum State: Sendable {
         case pending
-        case source(WalletRepository.Source)
+        case source(WalletRepository.SourceIdentity)
         case invalidated
     }
 
@@ -463,7 +463,7 @@ private final class RepositoryWalletSigningSource: WalletSigningSource {
         let attempt = await repository.sign(operation)
         let retained = state.withLock { state in
             guard case .pending = state else { return false }
-            if let source = attempt.source { state = .source(source) }
+            if let source = attempt.sourceIdentity { state = .source(source) }
             return true
         }
         guard retained, !Task.isCancelled else { return .failure(.authorizationUnavailable) }

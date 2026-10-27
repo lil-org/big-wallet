@@ -2,12 +2,13 @@ import {isAbsolute, join, resolve, sep} from "node:path";
 import {SAFARI_SCENARIOS, SAFARI_TEST_CLASS} from "../safari/scenarios.mjs";
 import {expectedSynchronizationPolicy} from "../safari/synchronization.mjs";
 import {RUNTIME_TEST_TARGETS, loadRuntimeInventory} from "./runtime_inventory.mjs";
+import {BASELINE as UPGRADE_BASELINE} from "../wallet_upgrade/contract.mjs";
 
 export {RUNTIME_TEST_TARGETS};
 export const RUNTIME_MODULES = ["WalletDomain", "WalletNetworking", "WalletAuthority"];
 const runtimeInventory = loadRuntimeInventory(new URL("./runtime-test-inventory.json", import.meta.url));
 
-export const SELECTORS = ["build", "test", "performance", "tsan", "fuzz", "approval", "safari", "repository", "worker", "runtime"];
+export const SELECTORS = ["build", "test", "performance", "tsan", "fuzz", "approval", "upgrade", "safari", "repository", "worker", "runtime"];
 export const BOOTSTRAP_TOOL_NAMES = ["VMGuestAgent", "guest_runner", "guest_bootstrap.mjs"];
 const LOCAL_SIGNING_SETTINGS = [
     "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "PROVISIONING_PROFILE=",
@@ -244,6 +245,8 @@ export function createManifest(job) {
     }
     add("metadata.localizations", "repository", "/bin/bash", ["Scripts/asc/validate_localizations.sh"], {requirements: ["jq"]});
     add("scripts.approval-worker-target", "repository", "node", ["--test", "Scripts/tests/approval_worker_target.test.mjs"]);
+    add("scripts.upgrade-consumer-target", "repository", "node", ["--test", "Scripts/tests/upgrade_consumer_target.test.mjs"]);
+    add("upgrade.archive", "repository", "python3", ["Scripts/wallet_upgrade/archive.py", "--verify"], {requirements: ["python"]});
     add("runner.node-tests", "repository", "node", ["--test", "Scripts/vm/tests/*.test.mjs"], {requirements: ["node", "xcode"]});
     add("runner.python-tests", "repository", "python3", ["-m", "unittest", "discover", "-s", "Scripts/vm/tests", "-p", "test_*.py"], {requirements: ["python", "node"]});
     add("safari.runner-tests", "repository", "node", ["--test", "Scripts/safari/tests/*.test.mjs"], {dependencies: ["provider.install"]});
@@ -407,6 +410,14 @@ export function createManifest(job) {
                 env: {APPROVAL_CONFIGURATION: configuration}, failureDirectory: true, scratchDirectory: true,
             });
         }
+    }
+    for (const configuration of configurations) {
+        add(`upgrade.${configuration.toLowerCase()}`, "upgrade", "/bin/sh", ["Scripts/check_wallet_upgrade.sh"], {
+            dependencies: ["runtime.boundaries", "pins.check", "upgrade.archive", "scripts.upgrade-consumer-target"],
+            requirements: ["node", "python", "xcode", "macos"], timeoutSeconds: 3600,
+            env: {UPGRADE_CONFIGURATION: configuration}, failureDirectory: true, scratchDirectory: true,
+            upgradeAudit: {configuration, baseline: UPGRADE_BASELINE, sourceSHA256: job.source.sha256},
+        });
     }
     for (const platform of SAFARI_PLATFORMS) {
         const scenarios = safariTestsForPlatform(options.onlyTesting, platform);

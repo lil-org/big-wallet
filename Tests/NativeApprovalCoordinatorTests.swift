@@ -8,6 +8,385 @@ import SwiftUI
 
 @MainActor
 final class NativeApprovalCoordinatorTests: XCTestCase {
+    func testLateToolbarIntentPreservesTerminalRequestsAndOnlyShowsLockedWallet() async throws {
+        for responded in [false, true] {
+            for locked in [false, true] {
+                let clock = TestClock(uptimeNanoseconds: 0)
+                var preparations = 0
+                var decisions = 0
+                let fixture = try makeFixture(clock: clock, environment: .init(
+                    now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
+                    uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 },
+                    wait: { _ in try? await TestDeferred<Void>().value() },
+                    prepare: { _, _ in preparations += 1; return .unavailable },
+                    attemptNativeDecision: { _ in decisions += 1; return .responseReady }
+                ))
+                fixture.store.snapshot = responded ? try ownedSnapshot(fixture, phase: .responded) : nil
+                var writes = 0
+                fixture.store.onWrite = { writes += 1 }
+                let credentials = authenticationCredentials()
+                let access = WalletAccessController(credentials: credentials)
+                let generation = access.beginAuthentication(cancel: {})
+                let grant = try XCTUnwrap(credentials.verify(password: "test-password", challenge: credentials.makeWalletAccessChallenge()))
+                let session = try XCTUnwrap(credentials.accessSession(authorization: grant))
+                XCTAssertTrue(access.completeAuthentication(session, generation: generation))
+                if locked { access.lock(reason: .idle) }
+                var authenticationAttempts = 0
+                let agent = Agent(approvalInbox: ApprovalInbox(), credentialDependencies: .init(
+                    credentials: credentials,
+                    attemptBiometrics: { _, _ in authenticationAttempts += 1; return nil }, access: access
+                ), makeApprovalCoordinator: { _, _ in fixture.coordinator })
+                let originalWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
+                defer {
+                    fixture.coordinator.onEvent = nil
+                    fixture.coordinator.reject()
+                    NSApp.windows.filter { !originalWindows.contains(ObjectIdentifier($0)) }.forEach { $0.close() }
+                }
+                agent.start(openOnLaunch: false, runtimeIdentity: .init(
+                    instanceIdentifier: fixture.runtime, processIdentifier: 42,
+                    bundlePath: "/tmp/Big Wallet.app", version: .init(marketing: "1.0.99", build: "148"),
+                    workflowVersion: ExtensionBridge.workflowVersion,
+                    launchedAt: Date(timeIntervalSince1970: 1_800_000_000)
+                ))
+
+                agent.process(route: .toolbarApproval(workflowVersion: ExtensionBridge.workflowVersion,
+                    handle: fixture.key.handle, nativeDeliveryNonce: fixture.key.nativeDeliveryNonce))
+                await waitForState(fixture.coordinator, .finished)
+
+                let visible = NSApp.windows.filter { !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible }
+                XCTAssertEqual(visible.count, locked ? 1 : 0)
+                XCTAssertTrue(visible.allSatisfy { $0.contentViewController is WalletLockedViewController })
+                XCTAssertEqual(authenticationAttempts, 0)
+                XCTAssertEqual(preparations, 0)
+                XCTAssertEqual(decisions, 0)
+                XCTAssertEqual(writes, 0)
+                XCTAssertEqual(fixture.store.recordCount, 0)
+                XCTAssertEqual(fixture.store.snapshot?.phase, responded ? .responded : nil)
+                XCTAssertEqual(access.isLocked, locked)
+            }
+        }
+    }
+
+    func testToolbarApprovalRevealsLockedWalletWithoutAuthenticatingAndRejectsTheOldRequest() async throws {
+        let fixture = try makeFixture()
+        let nextFixture = try makeFixture(key: approvalKey(id: 101))
+        let credentials = authenticationCredentials()
+        let access = WalletAccessController(credentials: credentials)
+        let generation = access.beginAuthentication(cancel: {})
+        let grant = try XCTUnwrap(credentials.verify(password: "test-password", challenge: credentials.makeWalletAccessChallenge()))
+        let session = try XCTUnwrap(credentials.accessSession(authorization: grant))
+        XCTAssertTrue(access.completeAuthentication(session, generation: generation))
+        access.lock(reason: .idle)
+        var authenticationAttempts = 0
+        var rejections = 0
+        fixture.store.unownedRejectHandler = { _ in rejections += 1; return .persisted }
+        fixture.store.rejectHandler = { _, _, _ in rejections += 1; return .persisted }
+        let agent = Agent(approvalInbox: ApprovalInbox(), credentialDependencies: .init(
+            credentials: credentials,
+            attemptBiometrics: { _, _ in authenticationAttempts += 1; return nil }, access: access
+        ), makeApprovalCoordinator: { handle, _ in
+            handle == fixture.key.handle ? fixture.coordinator : nextFixture.coordinator
+        })
+        let originalWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
+        defer {
+            fixture.coordinator.onEvent = nil
+            fixture.coordinator.reject()
+            nextFixture.coordinator.onEvent = nil
+            nextFixture.store.rejectHandler = { _, _, _ in .persisted }
+            nextFixture.coordinator.reject()
+            NSApp.windows.filter { !originalWindows.contains(ObjectIdentifier($0)) }.forEach { $0.close() }
+        }
+        agent.start(openOnLaunch: false, runtimeIdentity: .init(
+            instanceIdentifier: fixture.runtime, processIdentifier: 42,
+            bundlePath: "/tmp/Big Wallet.app", version: .init(marketing: "1.0.99", build: "148"),
+            workflowVersion: ExtensionBridge.workflowVersion,
+            launchedAt: Date(timeIntervalSince1970: 1_800_000_000)
+        ))
+        XCTAssertTrue(NSApp.windows.allSatisfy { originalWindows.contains(ObjectIdentifier($0)) })
+
+        agent.process(route: .toolbarApproval(workflowVersion: ExtensionBridge.workflowVersion,
+            handle: fixture.key.handle, nativeDeliveryNonce: fixture.key.nativeDeliveryNonce))
+        await waitForState(fixture.coordinator, .finished)
+
+        let lockedWindow = try XCTUnwrap(NSApp.windows.first {
+            !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible && $0.contentViewController is WalletLockedViewController
+        })
+        XCTAssertEqual(authenticationAttempts, 0)
+        XCTAssertEqual(rejections, 1)
+        XCTAssertTrue(access.isLocked)
+        XCTAssertFalse(NSApp.windows.contains {
+            !originalWindows.contains(ObjectIdentifier($0)) && $0.contentViewController is NativeAccountSelectionViewController
+        })
+        let locked = try XCTUnwrap(lockedWindow.contentViewController as? WalletLockedViewController)
+        locked.unlockWallet()
+        await expectEventually {
+            NSApp.windows.contains { !originalWindows.contains(ObjectIdentifier($0)) && $0.contentViewController is PasswordViewController }
+        }
+        let password = try XCTUnwrap(NSApp.windows.filter { !originalWindows.contains(ObjectIdentifier($0)) }
+            .compactMap { $0.contentViewController as? PasswordViewController }.first)
+        password.passwordTextField.stringValue = "test-password"
+        password.actionButtonTapped(password.okButton as Any)
+        XCTAssertTrue(access.checkAccess())
+        XCTAssertEqual(authenticationAttempts, 1)
+        XCTAssertTrue(lockedWindow.contentViewController is AccountsListViewController)
+
+        agent.process(route: .toolbarApproval(workflowVersion: ExtensionBridge.workflowVersion,
+            handle: nextFixture.key.handle, nativeDeliveryNonce: nextFixture.key.nativeDeliveryNonce))
+        await waitForState(nextFixture.coordinator, .reviewing)
+        let visible = NSApp.windows.filter { !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible }
+        XCTAssertEqual(visible.filter { $0.contentViewController is AccountsListViewController }.count, 1)
+        XCTAssertEqual(visible.filter { $0.contentViewController is NativeAccountSelectionViewController }.count, 1)
+        XCTAssertEqual(authenticationAttempts, 1)
+    }
+
+    func testToolbarApprovalWhileUnlockedShowsOnlyItsApprovalWindow() async throws {
+        let fixture = try makeFixture()
+        let credentials = authenticationCredentials()
+        let access = WalletAccessController(credentials: credentials)
+        let generation = access.beginAuthentication(cancel: {})
+        let grant = try XCTUnwrap(credentials.verify(password: "test-password", challenge: credentials.makeWalletAccessChallenge()))
+        let session = try XCTUnwrap(credentials.accessSession(authorization: grant))
+        XCTAssertTrue(access.completeAuthentication(session, generation: generation))
+        var authenticationAttempts = 0
+        let agent = Agent(approvalInbox: ApprovalInbox(), credentialDependencies: .init(
+            credentials: credentials,
+            attemptBiometrics: { _, _ in authenticationAttempts += 1; return nil }, access: access
+        ), makeApprovalCoordinator: { _, _ in fixture.coordinator })
+        let originalWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
+        defer {
+            fixture.coordinator.onEvent = nil
+            fixture.store.rejectHandler = { _, _, _ in .persisted }
+            fixture.coordinator.reject()
+            NSApp.windows.filter { !originalWindows.contains(ObjectIdentifier($0)) }.forEach { $0.close() }
+        }
+        agent.start(openOnLaunch: false, runtimeIdentity: .init(
+            instanceIdentifier: fixture.runtime, processIdentifier: 42,
+            bundlePath: "/tmp/Big Wallet.app", version: .init(marketing: "1.0.99", build: "148"),
+            workflowVersion: ExtensionBridge.workflowVersion,
+            launchedAt: Date(timeIntervalSince1970: 1_800_000_000)
+        ))
+
+        agent.process(route: .toolbarApproval(workflowVersion: ExtensionBridge.workflowVersion,
+            handle: fixture.key.handle, nativeDeliveryNonce: fixture.key.nativeDeliveryNonce))
+        await waitForState(fixture.coordinator, .reviewing)
+
+        let visible = NSApp.windows.filter { !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible }
+        XCTAssertEqual(visible.filter { $0.contentViewController is NativeAccountSelectionViewController }.count, 1)
+        XCTAssertFalse(visible.contains { $0.contentViewController is AccountsListViewController || $0.contentViewController is WalletLockedViewController })
+        XCTAssertEqual(authenticationAttempts, 0)
+    }
+
+    func testOrdinaryApprovalAuthenticationDoesNotOpenWalletManagement() async throws {
+        let fixture = try makeFixture()
+        let credentials = authenticationCredentials()
+        let access = WalletAccessController(credentials: credentials)
+        let agent = Agent(approvalInbox: ApprovalInbox(), credentialDependencies: .init(
+            credentials: credentials, attemptBiometrics: { _, _ in nil }, access: access
+        ), makeApprovalCoordinator: { _, _ in fixture.coordinator })
+        let originalWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
+        defer {
+            fixture.coordinator.onEvent = nil
+            fixture.store.rejectHandler = { _, _, _ in .persisted }
+            fixture.coordinator.reject()
+            NSApp.windows.filter { !originalWindows.contains(ObjectIdentifier($0)) }.forEach { $0.close() }
+        }
+        agent.start(openOnLaunch: false, runtimeIdentity: .init(
+            instanceIdentifier: fixture.runtime, processIdentifier: 42,
+            bundlePath: "/tmp/Big Wallet.app", version: .init(marketing: "1.0.99", build: "148"),
+            workflowVersion: ExtensionBridge.workflowVersion,
+            launchedAt: Date(timeIntervalSince1970: 1_800_000_000)
+        ))
+        agent.process(route: .approval(workflowVersion: ExtensionBridge.workflowVersion,
+            handle: fixture.key.handle, nativeDeliveryNonce: fixture.key.nativeDeliveryNonce))
+        await expectEventually {
+            NSApp.windows.contains { !originalWindows.contains(ObjectIdentifier($0)) && $0.contentViewController is PasswordViewController }
+        }
+        let authenticationWindow = try XCTUnwrap(NSApp.windows.first {
+            !originalWindows.contains(ObjectIdentifier($0)) && $0.contentViewController is PasswordViewController
+        })
+        let password = try XCTUnwrap(authenticationWindow.contentViewController as? PasswordViewController)
+        password.passwordTextField.stringValue = "test-password"
+        password.actionButtonTapped(password.okButton as Any)
+        await waitForState(fixture.coordinator, .reviewing)
+
+        let visible = NSApp.windows.filter { !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible }
+        XCTAssertEqual(visible.filter { $0.contentViewController is NativeAccountSelectionViewController }.count, 1)
+        XCTAssertFalse(visible.contains { $0.contentViewController is AccountsListViewController })
+        XCTAssertFalse(authenticationWindow.isVisible)
+    }
+
+    func testRequestsArrivingWhileLockedRejectWithoutPresentationOrRestartingWrites() async throws {
+        for receiptAlreadyOwned in [false, true] {
+            let accessFixture = WalletAccessTestFixture()
+            try accessFixture.unlock()
+            accessFixture.access.lock(reason: .idle)
+            let clock = TestClock(uptimeNanoseconds: 0)
+            let waits = ScheduledWaits()
+            let fixture = try makeFixture(clock: clock, environment: .init(
+                now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
+                uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 },
+                wait: { await waits.wait($0) },
+                prepare: { _, _ in XCTFail("Locked requests must not prepare a review"); return .unavailable }
+            ))
+            if receiptAlreadyOwned { fixture.store.snapshot = try ownedSnapshot(fixture) }
+            let firstWrite = TestGate<ExtensionBridge.StoreMutationResult>()
+            let writeStarted = expectation(description: "locked rejection started")
+            var rejectionCount = 0
+            let reject: @MainActor () async -> ExtensionBridge.StoreMutationResult = {
+                rejectionCount += 1
+                if rejectionCount == 1 {
+                    writeStarted.fulfill()
+                    return await firstWrite.wait()
+                }
+                return .persisted
+            }
+            fixture.store.unownedRejectHandler = { handle in
+                XCTAssertFalse(receiptAlreadyOwned)
+                XCTAssertEqual(handle, fixture.key.handle)
+                return await reject()
+            }
+            fixture.store.rejectHandler = { handle, nonce, runtime in
+                XCTAssertTrue(receiptAlreadyOwned)
+                XCTAssertEqual(handle, fixture.key.handle)
+                XCTAssertEqual(nonce, fixture.key.nativeDeliveryNonce)
+                XCTAssertEqual(runtime, fixture.runtime)
+                return await reject()
+            }
+            var authenticationAttempts = 0
+            var creations = 0
+            let agent = Agent(approvalInbox: ApprovalInbox(), credentialDependencies: .init(
+                credentials: accessFixture.credentials,
+                attemptBiometrics: { _, _ in authenticationAttempts += 1; return nil },
+                access: accessFixture.access
+            ), makeApprovalCoordinator: { handle, nonce in
+                creations += 1
+                XCTAssertEqual(handle, fixture.key.handle)
+                XCTAssertEqual(nonce, fixture.key.nativeDeliveryNonce)
+                return fixture.coordinator
+            })
+            let route = NativeAgentRoute.approval(workflowVersion: ExtensionBridge.workflowVersion,
+                handle: fixture.key.handle, nativeDeliveryNonce: fixture.key.nativeDeliveryNonce)
+            let priorWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
+            let priorKeyWindow = NSApp.keyWindow
+            defer {
+                fixture.coordinator.onEvent = nil
+                fixture.store.unownedRejectHandler = { _ in .ownershipLost }
+                fixture.store.rejectHandler = { _, _, _ in .ownershipLost }
+                firstWrite.resolve(.persisted)
+                waits.resumeAll()
+            }
+
+            agent.process(route: route)
+            XCTAssertEqual(fixture.coordinator.phase, .registered)
+            XCTAssertEqual(rejectionCount, 0)
+            agent.start(openOnLaunch: false, runtimeIdentity: .init(
+                instanceIdentifier: fixture.runtime, processIdentifier: 42,
+                bundlePath: "/tmp/Big Wallet.app", version: .init(marketing: "1.0.99", build: "148"),
+                workflowVersion: ExtensionBridge.workflowVersion,
+                launchedAt: Date(timeIntervalSince1970: 1_800_000_000)
+            ))
+            await fulfillment(of: [writeStarted], timeout: 2)
+            for _ in 0..<3 { agent.process(route: route) }
+            XCTAssertEqual(rejectionCount, 1)
+            XCTAssertEqual(fixture.store.outstandingWrites, 1)
+            XCTAssertEqual(fixture.store.maximumOutstandingWrites, 1)
+
+            firstWrite.resolve(.retryablePersistenceFailure)
+            await waitForScheduledWait(waits, count: 1)
+            for _ in 0..<3 { agent.process(route: route) }
+            XCTAssertEqual(rejectionCount, 1)
+            waits.resume(0)
+            await waitForState(fixture.coordinator, .finished)
+
+            XCTAssertEqual(rejectionCount, 2)
+            XCTAssertEqual(creations, 1)
+            XCTAssertEqual(authenticationAttempts, 0)
+            XCTAssertEqual(fixture.store.recordCount, 0)
+            XCTAssertTrue(NSApp.windows.allSatisfy { priorWindows.contains(ObjectIdentifier($0)) })
+            XCTAssertTrue(NSApp.keyWindow === priorKeyWindow)
+            XCTAssertTrue(accessFixture.access.isLocked)
+        }
+    }
+
+    func testExplicitWalletRouteShowsLockedSurfaceWithoutStartingAuthentication() throws {
+        let fixture = WalletAccessTestFixture()
+        try fixture.unlock()
+        fixture.access.lock(reason: .idle)
+        var authenticationAttempts = 0
+        let agent = Agent(approvalInbox: ApprovalInbox(), credentialDependencies: .init(
+            credentials: fixture.credentials,
+            attemptBiometrics: { _, _ in authenticationAttempts += 1; return nil },
+            access: fixture.access
+        ))
+        let priorWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
+
+        agent.process(route: .showWallet(workflowVersion: ExtensionBridge.workflowVersion))
+
+        let window = try XCTUnwrap(NSApp.windows.first {
+            !priorWindows.contains(ObjectIdentifier($0)) && $0.contentViewController is WalletLockedViewController
+        })
+        defer { window.close() }
+        let locked = window.contentViewController
+        XCTAssertTrue(window.isVisible)
+        for _ in 0..<3 { agent.applicationDidBecomeActive() }
+        XCTAssertTrue(window.contentViewController === locked)
+        XCTAssertEqual(authenticationAttempts, 0)
+        XCTAssertTrue(fixture.access.isLocked)
+    }
+
+    func testWalletLockPreservesAcceptedFinalizationWithoutReactivatingItsWindow() async throws {
+        for outcome in [NativeApprovalFinalizationResult.responseReady, .reviewRequired] {
+            let finalizer = TestGate<NativeApprovalFinalizationResult>()
+            let started = expectation(description: "accepted finalization suspended")
+            var decisions = 0
+            let fixture = try makeFixture(attemptNativeDecision: { _ in
+                decisions += 1
+                started.fulfill()
+                return await finalizer.wait()
+            })
+            let credentials = authenticationCredentials()
+            let access = WalletAccessController(credentials: credentials)
+            let generation = access.beginAuthentication(cancel: {})
+            let grant = try XCTUnwrap(credentials.verify(password: "test-password", challenge: credentials.makeWalletAccessChallenge()))
+            let session = try XCTUnwrap(credentials.accessSession(authorization: grant))
+            XCTAssertTrue(access.completeAuthentication(session, generation: generation))
+            start(fixture)
+            await waitForState(fixture.coordinator, .awaitingAuthentication)
+            let (agent, approval, window) = try attachApprovalWindow(to: fixture, access: access, credentials: credentials)
+            defer {
+                fixture.coordinator.onEvent = nil
+                finalizer.resolve(.responseReady)
+                window.close()
+            }
+            fixture.coordinator.resumeAfterAuthentication(authorization: session)
+            await waitForState(fixture.coordinator, .reviewing)
+            fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: try presentedReview(fixture.coordinator))
+            await fulfillment(of: [started], timeout: 1)
+            window.resetActivationCount()
+            var rejections = 0
+            fixture.store.rejectHandler = { _, _, _ in
+                rejections += 1
+                return .persisted
+            }
+
+            access.lock(reason: .idle)
+
+            XCTAssertNil(approval.windowController)
+            let locked = try XCTUnwrap(window.contentViewController as? WalletLockedViewController)
+            XCTAssertEqual(fixture.coordinator.phase, .waiting)
+            XCTAssertEqual(window.activationCount, 0)
+            finalizer.resolve(outcome)
+            await waitForState(fixture.coordinator, .finished)
+            agent.applicationDidBecomeActive()
+            agent.restoreOldestRecoverableApproval()
+            XCTAssertEqual(decisions, 1)
+            XCTAssertEqual(rejections, outcome == .reviewRequired ? 1 : 0)
+            XCTAssertEqual(window.activationCount, 0)
+            XCTAssertTrue(window.contentViewController === locked)
+            XCTAssertTrue(window.isVisible)
+        }
+    }
+
     func testFreshReviewKeepsOldSelectionAndPasswordCallbacksInactive() async throws {
         let fixture = try makeFixture(attemptNativeDecision: { _ in .reviewRequired })
         start(fixture)
@@ -222,7 +601,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         password.actionButtonTapped(password.okButton as Any)
 
         XCTAssertEqual(events, [.authenticated])
-        XCTAssertTrue(credentials.isCurrent(try XCTUnwrap(startup.accessSession)))
+        XCTAssertTrue(credentials.validateAccess(try XCTUnwrap(startup.accessSession)))
         XCTAssertNil(startup.windowController)
     }
 
@@ -866,6 +1245,87 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
 
+    func testAccessibilityRetryRenewsAccessAndRetiredRetryCannotRenewAgain() async throws {
+        let clock = TestClock(uptimeNanoseconds: 0)
+        let accessClock = TestClock(uptimeNanoseconds: 0)
+        var preparations = 0
+        let fixture = try makeFixture(clock: clock, environment: .init(
+            now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
+            uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 },
+            wait: { _ in try? await TestDeferred<Void>().value() },
+            prepare: { binding, _ in
+                preparations += 1
+                if preparations == 1 { return .unavailable }
+                return self.approvalPreparation(binding)
+            }
+        ))
+        fixture.store.rejectHandler = { _, _, _ in .persisted }
+        let credentials = authenticationCredentials(accessClock: { accessClock.instant })
+        let scheduler = WalletAccessTestFixture.Scheduler()
+        let access = WalletAccessController(credentials: credentials, schedule: scheduler.schedule,
+            activityClock: { accessClock.instant })
+        let generation = access.beginAuthentication(cancel: {})
+        let grant = try XCTUnwrap(credentials.verify(password: "test-password", challenge: credentials.makeWalletAccessChallenge()))
+        let session = try XCTUnwrap(credentials.accessSession(authorization: grant))
+        XCTAssertTrue(access.completeAuthentication(session, generation: generation))
+        let originalExpiration = try XCTUnwrap(scheduler.expirations.last)
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        let (agent, approval, window) = try attachApprovalWindow(to: fixture, access: access, credentials: credentials)
+        defer {
+            fixture.coordinator.onEvent = nil
+            access.lock(reason: .idle)
+            fixture.coordinator.reject()
+            window.close()
+            withExtendedLifetime(agent) {}
+        }
+        fixture.coordinator.resumeAfterAuthentication(authorization: session)
+        await waitForState(fixture.coordinator, .paused)
+        let recovery = try XCTUnwrap(window.contentViewController as? WaitingViewController)
+        XCTAssertEqual(recovery.okButton.title, Strings.tryAgain)
+        accessClock.advanceUptime(by: 899_000_000_000)
+        let beforeRetry = scheduler.expirations.count
+
+        _ = recovery.okButton.accessibilityPerformPress()
+
+        XCTAssertEqual(scheduler.expirations.count, beforeRetry + 1)
+        XCTAssertTrue(originalExpiration.cancelled)
+        XCTAssertEqual(credentials.remainingAccessLifetime(session), .seconds(900))
+        await waitForState(fixture.coordinator, .reviewing)
+        XCTAssertEqual(preparations, 2)
+        accessClock.advanceUptime(by: 2_000_000_000)
+        originalExpiration.action()
+        XCTAssertTrue(access.checkAccess())
+        XCTAssertEqual(credentials.remainingAccessLifetime(session), .seconds(898))
+        XCTAssertEqual(fixture.coordinator.phase, .reviewing)
+
+        fixture.coordinator.reject()
+        await waitForState(fixture.coordinator, .finished)
+        XCTAssertTrue(approval.isRetired)
+        let afterRetirement = scheduler.expirations.count
+        recovery.actionButtonTapped(self)
+        XCTAssertEqual(scheduler.expirations.count, afterRetirement)
+        XCTAssertTrue(access.checkAccess())
+
+        access.lock(reason: .systemSleep)
+        let afterLock = scheduler.expirations.count
+        recovery.actionButtonTapped(self)
+        XCTAssertEqual(scheduler.expirations.count, afterLock)
+        XCTAssertTrue(access.isLocked)
+
+        let replacementGeneration = access.beginAuthentication(cancel: {})
+        let replacementGrant = try XCTUnwrap(credentials.verify(password: "test-password", challenge: credentials.makeWalletAccessChallenge()))
+        let replacement = try XCTUnwrap(credentials.accessSession(authorization: replacementGrant))
+        XCTAssertTrue(access.completeAuthentication(replacement, generation: replacementGeneration))
+        let afterUnlock = scheduler.expirations.count
+        recovery.actionButtonTapped(self)
+        XCTAssertEqual(scheduler.expirations.count, afterUnlock)
+        XCTAssertTrue(access.session === replacement)
+        XCTAssertEqual(preparations, 2)
+        XCTAssertEqual(fixture.coordinator.phase, .finished)
+    }
+
+
     func testRepeatedDeliveryShowsWaitingDuringInitialLoad() async throws {
         let fixture = try makeFixture()
         start(fixture)
@@ -1350,28 +1810,34 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
 
     func authenticationCredentials(
-        password: String? = "test-password", clock: @escaping @Sendable () -> Date = Date.init
+        password: String? = "test-password", clock: @escaping @Sendable () -> Date = Date.init,
+        accessClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }
     ) -> WalletCredentials {
         let reader = KeychainCopyMatchingStub()
         reader.passwordData = password.map { Data($0.utf8) }
         return WalletCredentials(keychain: Keychain(copyMatching: reader.copyMatching), messages: .testingEnglish,
-            authorityID: NativeApprovalTestAuthorization.authorityID, clock: clock)
+            authorityID: NativeApprovalTestAuthorization.authorityID, clock: clock, accessClock: accessClock)
     }
 
 
-    func attachApprovalWindow(to fixture: Fixture) throws -> (Agent, Agent.ActiveApproval, TrackingWindow) {
-        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator)
+    func attachApprovalWindow(to fixture: Fixture, access: WalletAccessController? = nil, credentials: WalletCredentials? = nil) throws -> (Agent, Agent.ActiveApproval, TrackingWindow) {
+        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator, access: access)
         var inbox = ApprovalInbox<Agent.ActiveApproval>()
         XCTAssertTrue(inbox.register(fixture.coordinator))
         XCTAssertTrue(inbox.activate(approval, for: fixture.key))
-        let agent = Agent(approvalInbox: inbox)
+        var dependencies = StartupCredentialCoordinator.Dependencies()
+        dependencies.access = access
+        if let credentials { dependencies.credentials = credentials }
+        let agent = Agent(approvalInbox: inbox, credentialDependencies: dependencies)
         let window = TrackingWindow(
             contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 320),
             styleMask: [.titled, .closable], backing: .buffered, defer: false
         )
         window.isReleasedWhenClosed = false
         window.orderFront(nil)
-        approval.windowController = WalletWindowController(window: window)
+        let controller = WalletWindowController(window: window)
+        controller.bindAccess(access, unlock: {})
+        approval.windowController = controller
         fixture.coordinator.onEvent = { [weak agent, weak coordinator = fixture.coordinator, events = fixture.events] event in
             events.record(event, coordinator: coordinator)
             if case .presentationChanged = event, let coordinator {

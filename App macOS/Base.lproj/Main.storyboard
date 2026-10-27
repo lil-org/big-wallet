@@ -674,7 +674,7 @@ DQ
                                     <rect key="frame" x="-100" y="-100" width="240" height="16"/>
                                     <autoresizingMask key="autoresizingMask"/>
                                 </scroller>
-                                <scroller key="verticalScroller" wantsLayer="YES" verticalHuggingPriority="750" horizontal="NO" id="GFp-c5-pAF">
+                                <scroller key="verticalScroller" wantsLayer="YES" verticalHuggingPriority="750" horizontal="NO" id="GFp-c5-pAF" customClass="WalletActivityScroller" customModule="Big_Wallet" customModuleProvider="target">
                                     <rect key="frame" x="172" y="1" width="17" height="182"/>
                                     <autoresizingMask key="autoresizingMask"/>
                                 </scroller>
@@ -994,7 +994,7 @@ DQ
                                     <rect key="frame" x="-100" y="-100" width="240" height="16"/>
                                     <autoresizingMask key="autoresizingMask"/>
                                 </scroller>
-                                <scroller key="verticalScroller" wantsLayer="YES" verticalHuggingPriority="750" horizontal="NO" id="bKL-hk-a9Y">
+                                <scroller key="verticalScroller" wantsLayer="YES" verticalHuggingPriority="750" horizontal="NO" id="bKL-hk-a9Y" customClass="WalletActivityScroller" customModule="Big_Wallet" customModuleProvider="target">
                                     <rect key="frame" x="172" y="1" width="17" height="169"/>
                                     <autoresizingMask key="autoresizingMask"/>
                                 </scroller>
@@ -1275,7 +1275,7 @@ DQ
                                     <rect key="frame" x="-100" y="-100" width="238" height="16"/>
                                     <autoresizingMask key="autoresizingMask"/>
                                 </scroller>
-                                <scroller key="verticalScroller" hidden="YES" wantsLayer="YES" verticalHuggingPriority="750" horizontal="NO" id="t4B-Wh-4zj">
+                                <scroller key="verticalScroller" hidden="YES" wantsLayer="YES" verticalHuggingPriority="750" horizontal="NO" id="t4B-Wh-4zj" customClass="WalletActivityScroller" customModule="Big_Wallet" customModuleProvider="target">
                                     <rect key="frame" x="224" y="17" width="15" height="102"/>
                                     <autoresizingMask key="autoresizingMask"/>
                                 </scroller>

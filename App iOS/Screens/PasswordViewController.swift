@@ -5,15 +5,14 @@ import WalletNetworking
 
 import UIKit
 
-class PasswordViewController: UIViewController, DataStateContainer {
+class PasswordViewController: UIViewController, DataStateContainer, WalletAccessObserver {
     
     enum Mode {
         case create, repeatAfterCreate, enter, unavailable
     }
     
-    var showAccountsListOnVision: (() -> Void)?
-    
     var credentials = ApplicationServices.shared.credentials
+    var access = ApplicationServices.shared.access
     private var mode = Mode.unavailable
     private var isSaving = false
     private var authenticationTask: Task<Void, Never>?
@@ -21,10 +20,13 @@ class PasswordViewController: UIViewController, DataStateContainer {
     private var navigationTask: Task<Void, Never>?
     private var shouldDiscardCreationStack = false
     private var isVisible = false
+    private var isRetired = false
+    private var authenticationGeneration: UInt64?
     var passwordToRepeat: String?
     
     @IBOutlet weak var passwordTextField: UITextField! {
         didSet {
+            passwordTextField.prepareSecretDraftHistory()
             passwordTextField.delegate = self
             passwordTextField.placeholder = Strings.password
         }
@@ -52,24 +54,36 @@ class PasswordViewController: UIViewController, DataStateContainer {
         saveTask?.cancel()
         authenticationTask?.cancel()
         navigationTask?.cancel()
+        access.removeObserver(self)
         NotificationCenter.default.removeObserver(self)
     }
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        saveTask?.cancel()
-        authenticationTask?.cancel()
         navigationTask?.cancel()
+        navigationTask = nil
         isVisible = false
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         isVisible = false
+        guard isBeingDismissed || isMovingFromParent || navigationController?.isBeingDismissed == true else { return }
+        if let transitionCoordinator,
+           transitionCoordinator.animate(alongsideTransition: nil, completion: { [weak self] context in
+               if !context.isCancelled { self?.retirePasswordForm() }
+           }) { return }
+        retirePasswordForm()
+    }
+
+    override func didMove(toParent parent: UIViewController?) {
+        super.didMove(toParent: parent)
+        if parent == nil { retirePasswordForm() }
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        access.addObserver(self)
         okButton.setTitle(Strings.ok, for: .normal)
         navigationItem.backButtonDisplayMode = .minimal
         
@@ -128,7 +142,7 @@ class PasswordViewController: UIViewController, DataStateContainer {
 
     @discardableResult
     private func refreshPasswordState() -> Bool {
-        guard !isSaving else { return false }
+        guard !isSaving, !isRetired else { return false }
         do {
             switch try credentials.passwordState() {
             case .present:
@@ -158,7 +172,7 @@ class PasswordViewController: UIViewController, DataStateContainer {
 
     private func clearPasswordDrafts() {
         passwordToRepeat = nil
-        passwordTextField.text = nil
+        passwordTextField?.clearSecretDraft()
     }
 
     private func discardCreationStackWhenVisible() {
@@ -187,7 +201,7 @@ class PasswordViewController: UIViewController, DataStateContainer {
     }
 
     @objc private func applicationBecameActive() {
-        guard viewIfLoaded?.window != nil, !isSaving else { return }
+        guard viewIfLoaded?.window != nil, !isSaving, !isRetired else { return }
         refreshPasswordState()
     }
 
@@ -200,15 +214,23 @@ class PasswordViewController: UIViewController, DataStateContainer {
     }
     
     private func askForLocalAuthentication() {
-        authenticationTask?.cancel()
-        authenticationTask = Task { [weak self] in
+        guard !isRetired else { return }
+        let generation = beginAuthentication()
+        authenticationTask = Task { [weak self, credentials] in
             do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
-            let success = await LocalAuthentication.attempt(reason: Strings.enterWallet, presentPasswordAlertFrom: { nil }, passwordReason: nil)
-            guard let self, !Task.isCancelled, viewIfLoaded?.window != nil else { return }
-            if success {
-                guard refreshPasswordState(), mode == .enter else { return }
-                showAccountsList()
+            guard self?.canStartAuthentication(generation) == true else { return }
+            let session = await LocalAuthentication.accessSession(reason: Strings.enterWallet,
+                presentPasswordAlertFrom: { nil }, passwordReason: nil, credentials: credentials)
+            guard let self, !Task.isCancelled, isCurrentAuthentication(generation),
+                  viewIfLoaded?.window != nil else {
+                session?.invalidate()
+                return
+            }
+            if let session {
+                guard refreshPasswordState(), mode == .enter else { session.invalidate(); return }
+                finishAuthentication(session, generation: generation)
             } else {
+                cancelAuthentication()
                 guard refreshPasswordState(), mode == .enter else { return }
                 didFailLocalAuthentication()
             }
@@ -231,7 +253,7 @@ class PasswordViewController: UIViewController, DataStateContainer {
     }
     
     private func proceedIfPossible() {
-        guard !isSaving else { return }
+        guard !isSaving, !isRetired else { return }
         let previousMode = mode
         guard refreshPasswordState(), mode == previousMode else { return }
         switch mode {
@@ -240,14 +262,16 @@ class PasswordViewController: UIViewController, DataStateContainer {
                 let passwordViewController = instantiate(PasswordViewController.self, from: .main)
                 passwordViewController.passwordToRepeat = passwordTextField.text
                 passwordViewController.credentials = credentials
-                passwordViewController.showAccountsListOnVision = showAccountsListOnVision
-                passwordTextField.text = nil
+                passwordViewController.access = access
+                clearPasswordDrafts()
                 navigationController?.pushViewController(passwordViewController, animated: true)
             } else {
                 showMessageAlert(text: Strings.typeAtLeast)
             }
         case .repeatAfterCreate:
             if let password = passwordTextField.text, !password.isEmpty, password == passwordToRepeat {
+                clearPasswordDrafts()
+                let generation = beginAuthentication()
                 isSaving = true
                 okButton.isEnabled = false
                 navigationController?.view.isUserInteractionEnabled = false
@@ -255,21 +279,28 @@ class PasswordViewController: UIViewController, DataStateContainer {
                     let result: Result<WalletPasswordCreationResult, Error>
                     do { result = .success(try await credentials.createPasswordIfMissing(password)) }
                     catch { result = .failure(error) }
-                    guard let self else { return }
+                    guard let self, !Task.isCancelled, isCurrentAuthentication(generation) else { return }
                     isSaving = false
                     okButton.isEnabled = true
                     navigationController?.view.isUserInteractionEnabled = true
-                    guard !Task.isCancelled else { return }
                     switch result {
                     case .success(.created):
-                        clearPasswordDrafts()
-                        showAccountsList()
+                        let challenge = credentials.makeWalletAccessChallenge()
+                        if let grant = try? credentials.verify(password: password, challenge: challenge),
+                           let session = credentials.accessSession(authorization: grant) {
+                            finishAuthentication(session, generation: generation)
+                        } else {
+                            cancelAuthentication()
+                            showPasswordUnavailable()
+                        }
                     case .success(.alreadyExists):
+                        cancelAuthentication()
                         clearPasswordDrafts()
                         shouldDiscardCreationStack = true
                         switchToMode(.unavailable)
                         if !refreshPasswordState() || mode != .enter { showPasswordUnavailable() }
                     case .failure:
+                        cancelAuthentication()
                         showPasswordUnavailable()
                     }
                 }
@@ -277,15 +308,19 @@ class PasswordViewController: UIViewController, DataStateContainer {
                 showMessageAlert(text: Strings.passwordDoesNotMatch)
             }
         case .enter:
+            let password = passwordTextField.text ?? ""
+            let generation = beginAuthentication()
             do {
                 let challenge = credentials.makeWalletAccessChallenge()
-                if let authorization = try credentials.verify(password: passwordTextField.text ?? "", challenge: challenge),
-                   credentials.accessSession(authorization: authorization) != nil {
-                    showAccountsList()
+                if let authorization = try credentials.verify(password: password, challenge: challenge),
+                   let session = credentials.accessSession(authorization: authorization) {
+                    finishAuthentication(session, generation: generation)
                 } else {
+                    cancelAuthentication()
                     showMessageAlert(text: Strings.passwordDoesNotMatch)
                 }
             } catch {
+                cancelAuthentication()
                 showPasswordUnavailable()
             }
         case .unavailable:
@@ -293,14 +328,79 @@ class PasswordViewController: UIViewController, DataStateContainer {
         }
     }
     
-    private func showAccountsList() {
+    private func beginAuthentication() -> UInt64 {
+        cancelAuthentication()
+        let generation = access.beginAuthentication { [weak self] in self?.authenticationWasCancelled() }
+        authenticationGeneration = generation
+        return generation
+    }
+
+    private func isCurrentAuthentication(_ generation: UInt64) -> Bool {
+        !isRetired && authenticationGeneration == generation && access.generation == generation
+    }
+
+    private func canStartAuthentication(_ generation: UInt64) -> Bool {
+        isCurrentAuthentication(generation) && isVisible && viewIfLoaded?.window != nil
+    }
+
+    private func finishAuthentication(_ session: WalletAccessSession, generation: UInt64) {
+        guard isCurrentAuthentication(generation) else { session.invalidate(); return }
         clearPasswordDrafts()
-#if os(visionOS)
-        showAccountsListOnVision?()
-#else
-        let accountsList = instantiate(AccountsListViewController.self, from: .main)
-        UIApplication.shared.replaceRootViewController(with: accountsList.inNavigationController)
-#endif
+        if access.completeAuthentication(session, generation: generation) {
+            authenticationGeneration = nil
+        } else {
+            cancelAuthentication()
+            if !isRetired, refreshPasswordState() { didFailLocalAuthentication() }
+        }
+    }
+
+    private func cancelAuthenticationWork() {
+        authenticationGeneration = nil
+        authenticationTask?.cancel()
+        authenticationTask = nil
+        saveTask?.cancel()
+        saveTask = nil
+    }
+
+    private func authenticationWasCancelled() {
+        cancelAuthenticationWork()
+        clearPasswordDrafts()
+        guard isViewLoaded, !isRetired else { return }
+        isSaving = false
+        if mode == .repeatAfterCreate { switchToMode(.create) }
+        passwordTextField.isEnabled = mode != .unavailable
+        okButton.isEnabled = mode != .unavailable
+        navigationController?.view.isUserInteractionEnabled = true
+        navigationController?.setNavigationBarHidden(false, animated: false)
+        initialOverlayView.isHidden = true
+        updateAdaptiveTitleLayout()
+    }
+
+    private func cancelAuthentication() {
+        let generation = authenticationGeneration
+        cancelAuthenticationWork()
+        if let generation { access.cancelAuthentication(generation: generation) }
+    }
+
+    func walletAccessDidLock() {
+        retirePasswordForm()
+    }
+
+    private func retirePasswordForm() {
+        guard !isRetired else { return }
+        isRetired = true
+        cancelAuthentication()
+        navigationTask?.cancel()
+        navigationTask = nil
+        clearPasswordDrafts()
+        clearPresentedWalletInputs()
+        dismissPresentedWalletContent()
+        viewIfLoaded?.endEditing(true)
+        viewIfLoaded?.isUserInteractionEnabled = false
+    }
+
+    func walletAccessDidUnlock() {
+        retirePasswordForm()
     }
     
 }

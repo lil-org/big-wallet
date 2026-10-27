@@ -60,6 +60,7 @@ public actor ExtensionBridge {
         public let createdAt: Date
         public let enqueueAttempt: String
         public let sequence: Int
+        public let isManualSwitch: Bool
         let requestBinding: RequestBinding?
 
         init(
@@ -72,7 +73,8 @@ public actor ExtensionBridge {
             createdAt: Date,
             enqueueAttempt: String,
             sequence: Int,
-            requestBinding: RequestBinding? = nil
+            requestBinding: RequestBinding? = nil,
+            isManualSwitch: Bool = false
         ) {
             self.handle = handle
             self.state = state
@@ -84,6 +86,12 @@ public actor ExtensionBridge {
             self.enqueueAttempt = enqueueAttempt
             self.sequence = sequence
             self.requestBinding = requestBinding
+            switch state {
+            case .queued(let request, _), .approving(let request, _):
+                self.isManualSwitch = request.provider == .unknown && request.name == "switchAccount"
+            case .responded:
+                self.isManualSwitch = isManualSwitch
+            }
         }
 
         public var phase: RequestPhase {

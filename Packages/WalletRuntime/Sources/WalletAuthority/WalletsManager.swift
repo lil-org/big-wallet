@@ -4,6 +4,7 @@ import WalletStorageSupport
 
 import Foundation
 import CryptoKit
+import Synchronization
 
 struct WalletStoreSync {
 
@@ -200,7 +201,7 @@ public final class WalletsManager: NSObject {
             let binding = WalletSecretExportBinding(
                 walletID: prepared.walletID, account: nil, kind: .mnemonic,
                 sourceDigest: Data(SHA256.hash(data: prepared.data)),
-                credentialDigest: Data(SHA256.hash(data: prepared.password))
+                credentialDigest: prepared.credentialDigest
             )
             initialBackupBindings[wallet.id] = InitialBackupAuthorization(
                 binding: binding, deadline: clock().addingTimeInterval(ExtensionBridge.executionLifetime)
@@ -366,11 +367,32 @@ actor WalletRepository {
         let walletID: String
         let data: Data
         let password: Data
+
+        var identity: SourceIdentity {
+            SourceIdentity(walletID: walletID, sourceDigest: Data(SHA256.hash(data: data)),
+                credentialDigest: Data(SHA256.hash(data: password)))
+        }
+    }
+
+    struct SourceIdentity: Equatable, Sendable {
+        let walletID: String
+        let sourceDigest: Data
+        let credentialDigest: Data
+
+        func matches(_ binding: WalletSecretExportBinding) -> Bool {
+            walletID == binding.walletID && sourceDigest == binding.sourceDigest &&
+                credentialDigest == binding.credentialDigest
+        }
     }
 
     struct SigningAttempt: Sendable {
-        let source: Source?
+        let sourceIdentity: SourceIdentity?
         let result: Result<WalletSigningOutput, WalletSigningFailure>
+    }
+
+    private struct PreparedSigningKey: Sendable {
+        let sourceIdentity: SourceIdentity
+        let result: Result<WalletPrivateKey, WalletSigningFailure>
     }
 
     struct SigningKeyDerivation: Sendable {
@@ -384,7 +406,12 @@ actor WalletRepository {
     struct PreparedCreation: Sendable {
         let walletID: String
         let data: Data
-        let password: Data
+        let credentialDigest: Data
+    }
+
+    struct PreparedDeletion: Sendable {
+        let wallet: WalletSnapshot
+        let sourceIdentity: SourceIdentity
     }
 
     private struct PreparedUpdate {
@@ -436,7 +463,8 @@ actor WalletRepository {
     func saveNewWallet(_ prepared: PreparedCreation, willMutateSource: @Sendable () throws -> Void) throws -> Change {
         let wallet = try walletSourceMutator.perform(preparing: {
             try Task.checkCancellation()
-            guard try keychain.readPasswordData() == prepared.password,
+            guard let password = try keychain.readPasswordData(),
+                  Data(SHA256.hash(data: password)) == prepared.credentialDigest,
                   try keychain.readWalletData(id: prepared.walletID) == nil,
                   let wallet = walletContainer(id: prepared.walletID, data: prepared.data) else {
                 throw WalletsManager.Error.keychainAccessFailure
@@ -451,19 +479,17 @@ actor WalletRepository {
         return Change(state: snapshot(), wallet: wallet)
     }
 
-    func prepareDeletion(wallet: WalletSnapshot) async throws -> Source {
-        let source = try source(walletID: wallet.id)
-        try await WalletKeyPreparation.validateDeletion(source)
-        return source
+    func prepareDeletion(wallet: WalletSnapshot) async throws -> PreparedDeletion {
+        try await WalletKeyPreparation.prepareDeletion(source(walletID: wallet.id))
     }
 
-    func delete(_ source: Source, willMutateSource: @Sendable () throws -> Void) throws -> Change {
+    func delete(_ prepared: PreparedDeletion, willMutateSource: @Sendable () throws -> Void) throws -> Change {
         let removed = try walletSourceMutator.perform(preparing: {
             try Task.checkCancellation()
-            guard try sourceIsCurrent(source), let wallet = walletContainer(id: source.walletID, data: source.data) else {
+            guard try sourceIsCurrent(prepared.sourceIdentity) else {
                 throw WalletsManager.Error.keychainAccessFailure
             }
-            return PreparedWalletSourceMutation(payload: WalletSnapshot(wallet), authorityRemovals: [.wallet(id: wallet.id)])
+            return PreparedWalletSourceMutation(payload: prepared.wallet, authorityRemovals: [.wallet(id: prepared.wallet.id)])
         }, beforeCommit: willMutateSource) { wallet in
             try Task.checkCancellation()
             try keychain.removeWallet(id: wallet.id)
@@ -541,76 +567,84 @@ actor WalletRepository {
 
     func exportBinding(wallet: WalletSnapshot, account: WalletAccount?, kind: WalletSecretExport) throws -> WalletSecretExportBinding {
         guard kind != .mnemonic || account == nil else { throw WalletsManager.Error.invalidInput }
-        let source = try source(walletID: wallet.id, account: account)
+        let identity = try source(walletID: wallet.id, account: account).identity
         return WalletSecretExportBinding(
             walletID: wallet.id,
             account: account.map { WalletAccountDescriptor(walletID: wallet.id, account: $0) },
             kind: kind,
-            sourceDigest: Data(SHA256.hash(data: source.data)),
-            credentialDigest: Data(SHA256.hash(data: source.password))
+            sourceDigest: identity.sourceDigest,
+            credentialDigest: identity.credentialDigest
         )
     }
 
     nonisolated func sourceMatches(_ binding: WalletSecretExportBinding) -> Bool {
-        guard let data = try? keychain.readWalletData(id: binding.walletID),
-              let password = try? keychain.readPasswordData() else { return false }
-        return Data(SHA256.hash(data: data)) == binding.sourceDigest &&
-            Data(SHA256.hash(data: password)) == binding.credentialDigest
-    }
-
-    private func source(_ source: Source, matches binding: WalletSecretExportBinding) -> Bool {
-        source.walletID == binding.walletID &&
-            Data(SHA256.hash(data: source.data)) == binding.sourceDigest &&
-            Data(SHA256.hash(data: source.password)) == binding.credentialDigest
+        (try? sourceIsCurrent(SourceIdentity(walletID: binding.walletID,
+            sourceDigest: binding.sourceDigest, credentialDigest: binding.credentialDigest))) == true
     }
 
     func exportPrivateKey(wallet: WalletSnapshot, account: WalletAccount?, binding: WalletSecretExportBinding) async throws -> String {
-        let source = try source(walletID: wallet.id)
-        guard self.source(source, matches: binding) else { throw WalletsManager.Error.keychainAccessFailure }
-        let result = try await WalletKeyPreparation.exportPrivateKey(source, account: account)
-        guard try sourceIsCurrent(source) else { throw WalletsManager.Error.keychainAccessFailure }
+        let result = try await WalletKeyPreparation.exportPrivateKey(
+            source(walletID: wallet.id), account: account, binding: binding
+        )
+        guard try sourceIsCurrent(result.identity) else { throw WalletsManager.Error.keychainAccessFailure }
         try Task.checkCancellation()
-        return result
+        return result.value
     }
 
     func exportMnemonic(wallet: WalletSnapshot, binding: WalletSecretExportBinding) async throws -> String {
-        let source = try source(walletID: wallet.id)
-        guard self.source(source, matches: binding) else { throw WalletsManager.Error.keychainAccessFailure }
-        let result = try await WalletKeyPreparation.exportMnemonic(source)
-        guard try sourceIsCurrent(source) else { throw WalletsManager.Error.keychainAccessFailure }
+        let result = try await WalletKeyPreparation.exportMnemonic(source(walletID: wallet.id), binding: binding)
+        guard try sourceIsCurrent(result.identity) else { throw WalletsManager.Error.keychainAccessFailure }
         try Task.checkCancellation()
-        return result
+        return result.value
     }
 
     func sign(_ operation: ApprovedWalletSigningOperation) async -> SigningAttempt {
-        var preparedSource: Source?
+        let prepared: PreparedSigningKey
         do {
-            let source = try source(walletID: operation.approvedAccount.walletID, account: operation.approvedAccount.account)
-            preparedSource = source
-            let key = try await keyDerivation.derive(source, operation.approvedAccount.account)
-            try Task.checkCancellation()
+            prepared = try await prepareSigningKey(
+                source(walletID: operation.approvedAccount.walletID, account: operation.approvedAccount.account),
+                account: operation.approvedAccount.account
+            )
+        } catch {
+            return SigningAttempt(sourceIdentity: nil, result: .failure(.authorizationUnavailable))
+        }
+        let identity = prepared.sourceIdentity
+        switch prepared.result {
+        case .failure(let failure):
+            return SigningAttempt(sourceIdentity: identity, result: .failure(failure))
+        case .success(let key):
             guard WalletSnapshotValidation.accountMatches(operation.approvedAccount.account, privateKey: key) else {
-                return SigningAttempt(source: source, result: .failure(.failedToSign))
+                return SigningAttempt(sourceIdentity: identity, result: .failure(.failedToSign))
             }
             let result = operation.sign(with: key, validatingSource: {
-                (try? sourceIsCurrent(source)) == true
+                (try? sourceIsCurrent(identity)) == true
             })
-            return SigningAttempt(source: source, result: result)
-        } catch is CancellationError {
-            return SigningAttempt(source: preparedSource, result: .failure(.authorizationUnavailable))
-        } catch WalletKeyStoreError.accountNotFound {
-            return SigningAttempt(source: preparedSource, result: .failure(.authorizationUnavailable))
-        } catch {
-            return SigningAttempt(source: preparedSource, result: .failure(preparedSource == nil ? .authorizationUnavailable : .failedToSign))
+            return SigningAttempt(sourceIdentity: identity, result: result)
         }
     }
 
+    private func prepareSigningKey(_ source: Source, account: WalletAccount) async -> PreparedSigningKey {
+        let identity = source.identity
+        let result: Result<WalletPrivateKey, WalletSigningFailure>
+        do {
+            let key = try await keyDerivation.derive(source, account)
+            try Task.checkCancellation()
+            result = .success(key)
+        } catch is CancellationError {
+            result = .failure(.authorizationUnavailable)
+        } catch WalletKeyStoreError.accountNotFound {
+            result = .failure(.authorizationUnavailable)
+        } catch {
+            result = .failure(.failedToSign)
+        }
+        return PreparedSigningKey(sourceIdentity: identity, result: result)
+    }
+
     func previewSession(wallet: WalletSnapshot) async throws -> WalletPreviewSession {
-        let source = try source(walletID: wallet.id)
-        let hdWallet = try await WalletKeyPreparation.previewWallet(source)
-        guard try sourceIsCurrent(source) else { throw WalletsManager.Error.keychainAccessFailure }
+        let result = try await WalletKeyPreparation.previewWallet(source(walletID: wallet.id))
+        guard try sourceIsCurrent(result.identity) else { throw WalletsManager.Error.keychainAccessFailure }
         try Task.checkCancellation()
-        return WalletPreviewSession(wallet: hdWallet)
+        return WalletPreviewSession(wallet: result.value)
     }
 
 #if os(iOS) || os(visionOS)
@@ -643,9 +677,11 @@ actor WalletRepository {
         return Source(walletID: walletID, data: data, password: password)
     }
 
-    nonisolated func sourceIsCurrent(_ source: Source) throws -> Bool {
-        try keychain.readWalletData(id: source.walletID) == source.data &&
-            keychain.readPasswordData() == source.password
+    nonisolated func sourceIsCurrent(_ identity: SourceIdentity) throws -> Bool {
+        guard let data = try keychain.readWalletData(id: identity.walletID),
+              Data(SHA256.hash(data: data)) == identity.sourceDigest else { return false }
+        guard let password = try keychain.readPasswordData() else { return false }
+        return Data(SHA256.hash(data: password)) == identity.credentialDigest
     }
 
     private func snapshot() -> State {
@@ -660,17 +696,30 @@ actor WalletRepository {
 }
 
 public actor WalletPreviewSession {
-    private let wallet: WalletHDWallet
+    private nonisolated let wallet: Mutex<WalletHDWallet?>
+    private let deriveAccounts: @Sendable (WalletHDWallet, Int) throws -> [WalletAccount]
 
-    init(wallet: WalletHDWallet) {
-        self.wallet = wallet
+    init(
+        wallet: WalletHDWallet,
+        deriveAccounts: @escaping @Sendable (WalletHDWallet, Int) throws -> [WalletAccount] = {
+            try WalletAccountDerivation.previewAccounts(hdWallet: $0, page: $1, coin: nil)
+        }
+    ) {
+        self.wallet = Mutex(wallet)
+        self.deriveAccounts = deriveAccounts
     }
 
     public func previewAccounts(page: Int) throws -> [WalletAccount] {
         try Task.checkCancellation()
-        let accounts = try WalletAccountDerivation.previewAccounts(hdWallet: wallet, page: page, coin: nil)
+        guard let wallet = wallet.withLock({ $0 }) else { throw CancellationError() }
+        let accounts = try deriveAccounts(wallet, page)
         try Task.checkCancellation()
+        guard self.wallet.withLock({ $0 != nil }) else { throw CancellationError() }
         return accounts
+    }
+
+    public nonisolated func invalidate() {
+        wallet.withLock { $0 = nil }
     }
 }
 
@@ -712,36 +761,50 @@ private enum WalletKeyPreparation {
         }
         guard let data = wallet.key.exportJSON() else { throw WalletKeyStoreError.invalidKey }
         try Task.checkCancellation()
-        return WalletRepository.PreparedCreation(walletID: wallet.id, data: data, password: password)
+        return WalletRepository.PreparedCreation(walletID: wallet.id, data: data,
+            credentialDigest: Data(SHA256.hash(data: password)))
     }
 
     @concurrent
-    static func validateDeletion(_ source: WalletRepository.Source) async throws {
+    static func prepareDeletion(_ source: WalletRepository.Source) async throws -> WalletRepository.PreparedDeletion {
         try Task.checkCancellation()
         guard let key = WalletStoredKey.importJSON(json: source.data),
               var secret = key.decryptPrivateKey(password: source.password) else { throw WalletKeyStoreError.invalidKey }
         defer { secret.resetBytes(in: 0..<secret.count) }
         try Task.checkCancellation()
+        return WalletRepository.PreparedDeletion(wallet: WalletSnapshot(WalletContainer(id: source.walletID, key: key)),
+            sourceIdentity: source.identity)
     }
 
     @concurrent
-    static func exportPrivateKey(_ source: WalletRepository.Source, account: WalletAccount?) async throws -> String {
+    static func exportPrivateKey(
+        _ source: WalletRepository.Source,
+        account: WalletAccount?,
+        binding: WalletSecretExportBinding
+    ) async throws -> (value: String, identity: WalletRepository.SourceIdentity) {
+        let identity = source.identity
+        guard identity.matches(binding) else { throw WalletsManager.Error.keychainAccessFailure }
         try Task.checkCancellation()
         let wallet = try wallet(source)
         guard let account = account ?? wallet.accounts.first else { throw WalletKeyStoreError.accountNotFound }
         guard wallet.hasAccountMatching(account) else { throw WalletKeyStoreError.accountNotFound }
         let key = try wallet.privateKey(passwordData: source.password, account: account)
         try Task.checkCancellation()
-        return privateKeyExportString(privateKey: key, coin: account.coin)
+        return (privateKeyExportString(privateKey: key, coin: account.coin), identity)
     }
 
     @concurrent
-    static func exportMnemonic(_ source: WalletRepository.Source) async throws -> String {
+    static func exportMnemonic(
+        _ source: WalletRepository.Source,
+        binding: WalletSecretExportBinding
+    ) async throws -> (value: String, identity: WalletRepository.SourceIdentity) {
+        let identity = source.identity
+        guard identity.matches(binding) else { throw WalletsManager.Error.keychainAccessFailure }
         try Task.checkCancellation()
         let wallet = try wallet(source)
         guard let mnemonic = wallet.key.decryptMnemonic(password: source.password) else { throw WalletKeyStoreError.invalidPassword }
         try Task.checkCancellation()
-        return mnemonic
+        return (mnemonic, identity)
     }
 
     @concurrent
@@ -755,12 +818,12 @@ private enum WalletKeyPreparation {
     }
 
     @concurrent
-    static func previewWallet(_ source: WalletRepository.Source) async throws -> WalletHDWallet {
+    static func previewWallet(_ source: WalletRepository.Source) async throws -> (value: WalletHDWallet, identity: WalletRepository.SourceIdentity) {
         try Task.checkCancellation()
         let wallet = try wallet(source)
         guard let hdWallet = wallet.key.wallet(password: source.password) else { throw WalletsManager.Error.keychainAccessFailure }
         try Task.checkCancellation()
-        return hdWallet
+        return (hdWallet, source.identity)
     }
 
     private static func wallet(_ source: WalletRepository.Source) throws -> WalletContainer {

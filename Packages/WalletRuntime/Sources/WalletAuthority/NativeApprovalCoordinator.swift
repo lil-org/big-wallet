@@ -471,7 +471,7 @@ public final class NativeApprovalCoordinator {
     }
 
     public func resumeAfterAuthentication(authorization: WalletAccessSession) {
-        guard isAwaitingAuthentication, authorization.isCurrent(for: environment.authorityID) else { return }
+        guard isAwaitingAuthentication, authorization.validateCredentials(for: environment.authorityID) else { return }
         walletAccess = authorization
         accessProgress = .authenticated
         beginReviewPreparation()
@@ -580,7 +580,7 @@ public final class NativeApprovalCoordinator {
 
     private func canAccept(_ review: NativeApprovalReview) -> Bool {
         guard isCurrentPresentation(review) else { return false }
-        guard hasAuthenticated, walletAccess?.isCurrent(for: environment.authorityID) == true else {
+        guard hasAuthenticated, walletAccess?.validateCredentials(for: environment.authorityID) == true else {
             failAndReject()
             return false
         }
@@ -1088,7 +1088,10 @@ public final class NativeApprovalCoordinator {
                 case .interruptionRequired:
                     work.update { $0.beginInterruption() }
                 case .reviewRequired:
-                    work.update { $0.pause(for: .prepareReview) }
+                    work.update {
+                        if $0.hasAuthenticated { $0.pause(for: .prepareReview) }
+                        else { $0.beginOwnedRejection(reason: .user) }
+                    }
                 case .pending:
                     work.update {
                         if work.environment.now() < $0.terminalDeadline {

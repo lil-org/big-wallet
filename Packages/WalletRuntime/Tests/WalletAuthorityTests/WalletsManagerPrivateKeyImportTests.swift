@@ -573,7 +573,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
             XCTAssertTrue(fixture.keychain.events.isEmpty)
             XCTAssertEqual(fixture.keychain.walletData, originalData)
             XCTAssertEqual(manager.wallets, originalWallets)
-            XCTAssertTrue(try manager.repository.sourceIsCurrent(source))
+            XCTAssertTrue(try manager.repository.sourceIsCurrent(source.identity))
         }
     }
 
@@ -673,6 +673,38 @@ final class WalletRemovalIntegrationTests: XCTestCase {
                 XCTAssertEqual(fixture.keychain.walletData, originalData)
                 XCTAssertEqual(manager.wallets.map(\.id), originalWalletIDs)
             }
+        }
+    }
+
+    func testPreparedDeletionRejectsChangedWalletOrCredentialBeforeMutation() async throws {
+        enum Change: CaseIterable { case wallet, credential, missingWallet }
+        for change in Change.allCases {
+            let fixture = try makeRemovalFixture()
+            let manager = fixture.manager { _ in XCTFail("Stale deletion must not revoke authority") }
+            await assertWalletReload(manager)
+            let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
+            let prepared = try await manager.repository.prepareDeletion(wallet: wallet)
+            XCTAssertEqual(prepared.wallet, wallet)
+            switch change {
+            case .wallet:
+                fixture.keychain.walletData[wallet.id] = try XCTUnwrap(fixture.keychain.walletData[wallet.id]) + Data([32])
+            case .credential:
+                fixture.keychain.passwordData = Data("replacement".utf8)
+            case .missingWallet:
+                fixture.keychain.walletData[wallet.id] = nil
+            }
+            let retained = fixture.keychain.walletData
+
+            do {
+                _ = try await manager.repository.delete(prepared, willMutateSource: {
+                    XCTFail("Stale deletion must fail before mutation")
+                })
+                XCTFail("Stale deletion was committed")
+            } catch WalletsManager.Error.keychainAccessFailure {
+            }
+
+            XCTAssertTrue(fixture.keychain.events.isEmpty)
+            XCTAssertEqual(fixture.keychain.walletData, retained)
         }
     }
 
@@ -1397,7 +1429,8 @@ final class WalletSigningScopeTests: XCTestCase {
     }
 
     func testSourceRevocationDuringKeyDerivationPreventsSigning() async throws {
-        for revokePermission in [true, false] {
+        enum Revocation: CaseIterable { case permission, wallet, credential }
+        for revocation in Revocation.allCases {
             let reader = KeychainCopyMatchingStub()
             reader.attributes = [reader.walletAttributes(id: walletID)]
             reader.walletData = [walletID: Vectors.walletCoreJSONPrivateKeyFixture]
@@ -1425,7 +1458,8 @@ final class WalletSigningScopeTests: XCTestCase {
             let signing = Task { await session.sign() }
             await fulfillment(of: [derivationStarted], timeout: 2)
 
-            if revokePermission {
+            switch revocation {
+            case .permission:
                 guard case .snapshot(let authority) = fixture.store.configurationSnapshot(
                     configurationKey: "https://wallet.example", profileIdentifier: nil
                 ), case .revoked = fixture.store.revoke(
@@ -1436,8 +1470,10 @@ final class WalletSigningScopeTests: XCTestCase {
                     _ = await signing.value
                     return XCTFail("Expected authority revocation during derivation")
                 }
-            } else {
+            case .wallet:
                 reader.walletData[walletID] = nil
+            case .credential:
+                reader.passwordData = Data("replacement".utf8)
             }
             gate.resolve(())
 

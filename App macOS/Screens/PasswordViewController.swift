@@ -6,6 +6,7 @@ import WalletNetworking
 import Cocoa
 
 final class PasswordViewController: NSViewController {
+    var walletAccess = NativeWalletAccess()
     enum Mode {
         case create, repeatAfterCreate, enter
     }
@@ -32,7 +33,10 @@ final class PasswordViewController: NSViewController {
     @IBOutlet weak var okButton: NSButton!
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet weak var passwordTextField: NSSecureTextField! {
-        didSet { passwordTextField.delegate = self }
+        didSet {
+            passwordTextField.delegate = self
+            passwordTextField.cell?.allowsUndo = false
+        }
     }
 
     static func with(
@@ -60,7 +64,7 @@ final class PasswordViewController: NSViewController {
         self.configuration = configuration
         guard isViewLoaded else { return }
         if changedMode || clearInput || configuration.availability != .ready {
-            passwordTextField.stringValue = ""
+            Window.clearSecretInput(passwordTextField)
         }
         applyConfiguration()
     }
@@ -68,7 +72,7 @@ final class PasswordViewController: NSViewController {
     func retire() {
         onAction = nil
         guard isViewLoaded else { return }
-        passwordTextField.stringValue = ""
+        Window.clearSecretInput(passwordTextField)
         passwordTextField.isEnabled = false
         okButton.isEnabled = false
         cancelButton.isEnabled = false
@@ -113,6 +117,7 @@ final class PasswordViewController: NSViewController {
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
+        guard onAction != nil, walletAccess.beginAction() else { return }
         guard let onAction else { return }
         switch configuration.availability {
         case .unavailable: onAction(.retry)
@@ -125,6 +130,7 @@ final class PasswordViewController: NSViewController {
     }
 
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
+        guard onAction != nil, walletAccess.beginAction() else { return }
         guard configuration.availability != .saving else { return }
         onAction?(.cancel)
     }
@@ -132,6 +138,7 @@ final class PasswordViewController: NSViewController {
 
 extension PasswordViewController: NSTextFieldDelegate {
     func controlTextDidChange(_ obj: Notification) {
+        guard onAction != nil, walletAccess.beginAction() else { return }
         updateSubmitButton()
     }
 }

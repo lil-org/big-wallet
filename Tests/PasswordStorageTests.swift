@@ -104,6 +104,93 @@ final class PasswordStorageTests: XCTestCase {
     }
 
 #else
+    func testUIKitMatchedPasswordConfirmationClearsDraftsBeforeQueuedSave() {
+        let fixture = WalletAccessTestFixture()
+        fixture.keychain.passwordData = nil
+        let controller = instantiate(PasswordViewController.self, from: .main)
+        controller.credentials = fixture.credentials
+        controller.access = fixture.access
+        controller.passwordToRepeat = "draft-password"
+        controller.loadViewIfNeeded()
+        controller.passwordTextField.text = "draft-password"
+
+        controller.okButtonTapped(controller.okButton as Any)
+
+        XCTAssertNil(controller.passwordToRepeat)
+        XCTAssertTrue(controller.passwordTextField.text?.isEmpty ?? true)
+        XCTAssertEqual(fixture.keychain.addCount, 0)
+        fixture.access.lock(reason: .background)
+    }
+
+    func testUIKitPoppedPasswordConfirmationRetiresItsDraftAndCallbacks() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive })
+        let previous = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        let fixture = WalletAccessTestFixture()
+        fixture.keychain.passwordData = nil
+        let first = instantiate(PasswordViewController.self, from: .main)
+        first.credentials = fixture.credentials
+        first.access = fixture.access
+        let navigation = UINavigationController(rootViewController: first)
+        window.rootViewController = navigation
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+        defer {
+            fixture.access.lock(reason: .background)
+            window.isHidden = true
+            window.rootViewController = nil
+            previous?.makeKey()
+        }
+        await expectEventually {
+            first.parent === navigation && first.viewIfLoaded?.window === window &&
+                navigation.visibleViewController === first && navigation.transitionCoordinator == nil
+        }
+        let repeated = instantiate(PasswordViewController.self, from: .main)
+        repeated.credentials = fixture.credentials
+        repeated.access = fixture.access
+        repeated.passwordToRepeat = "draft-password"
+        navigation.pushViewController(repeated, animated: false)
+        repeated.loadViewIfNeeded()
+        await expectEventually {
+            repeated.parent === navigation && repeated.viewIfLoaded?.window === window &&
+                navigation.visibleViewController === repeated && navigation.transitionCoordinator == nil
+        }
+        XCTAssertTrue(repeated.view.isUserInteractionEnabled)
+        XCTAssertTrue(repeated.passwordTextField.isEnabled)
+        repeated.passwordTextField.text = "draft-password"
+
+        XCTAssertTrue(navigation.popViewController(animated: false) === repeated)
+        await expectEventually {
+            repeated.parent == nil && repeated.viewIfLoaded?.window == nil &&
+                navigation.visibleViewController === first && navigation.transitionCoordinator == nil
+        }
+
+        XCTAssertNil(repeated.passwordToRepeat)
+        XCTAssertTrue(repeated.passwordTextField.text?.isEmpty ?? true)
+        repeated.passwordTextField.text = "draft-password"
+        repeated.okButtonTapped(repeated.okButton as Any)
+        XCTAssertEqual(fixture.keychain.addCount, 0)
+        XCTAssertTrue(fixture.access.isLocked)
+    }
+
+    func testUIKitTransientPasswordDisappearancePreservesTheEditableForm() {
+        let fixture = WalletAccessTestFixture()
+        let controller = instantiate(PasswordViewController.self, from: .main)
+        controller.credentials = fixture.credentials
+        controller.access = fixture.access
+        controller.loadViewIfNeeded()
+        controller.passwordTextField.text = "password"
+
+        controller.viewWillDisappear(false)
+        controller.viewDidDisappear(false)
+
+        XCTAssertEqual(controller.passwordTextField.text, "password")
+        controller.okButtonTapped(controller.okButton as Any)
+        XCTAssertNotNil(fixture.access.session)
+        XCTAssertFalse(fixture.access.isLocked)
+    }
+
     func testPasswordFallbackReadFailureRetriesWithoutReportingMismatch() async {
         var prompts = [LocalAuthentication.Prompt]()
         var verificationAttempts = 0

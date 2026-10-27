@@ -5,14 +5,16 @@ import WalletNetworking
 
 import UIKit
 
-class EditAccountsViewController: UIViewController {
+class EditAccountsViewController: WalletAccessViewController {
 
     var wallet: WalletSnapshot!
     var walletsManager = ApplicationServices.shared.wallets
+    var waitForInitialPreviewLayout: @MainActor () async -> Void = { await Task.yield() }
     private var layoutTask: Task<Void, Never>?
     private(set) var previewState: AccountPreviewState!
     private let previewAccountsPreloadThreshold = 4
-    private var previewLayoutTask: Task<Void, Never>?
+    private var previewActivationTask: Task<Void, Never>?
+    private var previewPreloadTask: Task<Void, Never>?
     private var mutationTask: Task<Void, Never>?
     private var didAppear = false
     private var isSaving = false
@@ -20,6 +22,9 @@ class EditAccountsViewController: UIViewController {
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var tableView: UITableView! {
         didSet {
+            (tableView as? WalletActivityTableView)?.accessibilityInteraction = { [weak self] in
+                self?.beginWalletAction() == true
+            }
             tableView.delegate = self
             tableView.dataSource = self
             tableView.registerReusableCell(type: PreviewAccountTableViewCell.self)
@@ -33,13 +38,17 @@ class EditAccountsViewController: UIViewController {
         super.viewDidLoad()
         okButton.setTitle(Strings.ok, for: .normal)
         configureAdaptiveLargeTitle(Strings.editAccounts, tableView: tableView)
-        navigationItem.leftBarButtonItem = UIBarButtonItem(title: Strings.cancel, style: .plain, target: self, action: #selector(closeEditor))
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: Strings.cancel, style: .plain, target: self, action: #selector(cancelEditing))
         previewState = AccountPreviewState(
             wallet: wallet,
-            makeSession: { [walletsManager] in try await walletsManager.previewSession(wallet: $0) },
+            makeSession: { @MainActor [weak self, walletsManager] wallet in
+                guard let self else { throw WalletCredentialError.authorizationUnavailable }
+                try requireCurrentCredentials()
+                return try await walletsManager.previewSession(wallet: wallet)
+            },
             didChange: { [weak self] in self?.previewDidChange($0) }
         )
-        previewState.reset()
+        if hasWalletAccess { previewState.reset() }
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
     }
 
@@ -49,7 +58,8 @@ class EditAccountsViewController: UIViewController {
     }
     
     isolated deinit {
-        previewLayoutTask?.cancel()
+        previewActivationTask?.cancel()
+        previewPreloadTask?.cancel()
         layoutTask?.cancel()
         mutationTask?.cancel()
         previewState?.invalidate()
@@ -69,7 +79,7 @@ class EditAccountsViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         didAppear = true
-        previewMoreAccountsIfNeededForCurrentViewport()
+        if hasWalletAccess { previewMoreAccountsIfNeededForCurrentViewport() }
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -84,16 +94,16 @@ class EditAccountsViewController: UIViewController {
     }
     
     private func toggleAccountAtIndex(_ index: Int) {
-        guard !isSaving else { return }
+        guard beginWalletAction(), !isSaving else { return }
         previewState.toggle(at: index)
     }
 
     private func updateOkButtonState() {
-        okButton.isEnabled = !isSaving && previewState.hasEnabledAccounts
+        okButton.isEnabled = hasCurrentWalletPresentation && !isSaving && previewState.hasEnabledAccounts
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
-        guard !isSaving, let previewState else { return }
+        guard beginWalletAction(), !isSaving, let previewState else { return }
         guard previewState.hasChanges else {
             closeEditor()
             return
@@ -106,16 +116,16 @@ class EditAccountsViewController: UIViewController {
         isModalInPresentation = true
         navigationItem.leftBarButtonItem?.isEnabled = false
         mutationTask = Task { [weak self, walletsManager] in
+            guard let self, !Task.isCancelled, hasWalletAccess else { return }
             do {
+                try requireCurrentCredentials()
                 try await walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
-                guard let self else { return }
+                guard !Task.isCancelled, hasWalletAccess else { return }
                 finishSaving()
-                guard !Task.isCancelled else { return }
                 closeEditor()
             } catch {
-                guard let self else { return }
+                guard !Task.isCancelled, hasWalletAccess else { return }
                 finishSaving()
-                guard !Task.isCancelled else { return }
                 showMessageAlert(text: Strings.somethingWentWrong)
             }
         }
@@ -130,12 +140,15 @@ class EditAccountsViewController: UIViewController {
     }
 
     private func invalidatePreviewAccounts() {
-        previewLayoutTask?.cancel()
-        previewLayoutTask = nil
-        previewState.invalidate()
+        previewActivationTask?.cancel()
+        previewActivationTask = nil
+        previewPreloadTask?.cancel()
+        previewPreloadTask = nil
+        previewState?.invalidate()
     }
 
     @objc private func closeEditor() {
+        guard hasWalletAccess else { return }
         mutationTask?.cancel()
         NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
         invalidatePreviewAccounts()
@@ -143,7 +156,13 @@ class EditAccountsViewController: UIViewController {
         (presenter ?? self).dismiss(animated: true)
     }
 
+    @objc private func cancelEditing() {
+        guard beginWalletAction() else { return }
+        closeEditor()
+    }
+
     @objc private func walletsChanged() {
+        guard hasWalletAccess else { return }
         let currentWallet = walletsManager.currentWallet(id: previewState.wallet.id)
         if case .close = previewState.refresh(wallet: currentWallet) {
             closeEditor()
@@ -151,6 +170,7 @@ class EditAccountsViewController: UIViewController {
     }
 
     private func previewDidChange(_ change: AccountPreviewState.Change) {
+        guard hasWalletAccess else { return }
         updateOkButtonState()
         switch change {
         case .reload:
@@ -166,10 +186,11 @@ class EditAccountsViewController: UIViewController {
     }
 
     private func enablePreviewMoreAccountsAfterCurrentLayout(for generation: UInt64) {
-        previewLayoutTask?.cancel()
-        previewLayoutTask = Task { [weak self] in
-            await Task.yield()
-            guard let self, !Task.isCancelled,
+        previewActivationTask?.cancel()
+        let waitForLayout = waitForInitialPreviewLayout
+        previewActivationTask = Task { [weak self] in
+            await waitForLayout()
+            guard let self, !Task.isCancelled, hasWalletAccess,
                   previewState.activatePaging(for: generation) else { return }
             guard self.didAppear else { return }
             self.previewMoreAccountsIfNeededForCurrentViewport()
@@ -177,8 +198,17 @@ class EditAccountsViewController: UIViewController {
     }
 
     private func previewMoreAccountsIfNeededForCurrentViewport() {
-        guard shouldPreviewMoreAccountsForCurrentViewport() else { return }
+        guard hasWalletAccess, shouldPreviewMoreAccountsForCurrentViewport() else { return }
         previewState.loadMore()
+    }
+
+    private func scheduleMoreAccountsForDisplayedRow() {
+        previewPreloadTask?.cancel()
+        previewPreloadTask = Task { [weak self] in
+            await Task.yield()
+            guard let self, !Task.isCancelled, hasWalletAccess else { return }
+            previewState.loadMore()
+        }
     }
 
     private func shouldPreviewMoreAccountsForCurrentViewport() -> Bool {
@@ -194,17 +224,27 @@ class EditAccountsViewController: UIViewController {
         return tableView.contentSize.height <= max(visibleHeight, 0)
     }
 
+    override func walletAccessDidLock() {
+        super.walletAccessDidLock()
+        mutationTask?.cancel()
+        mutationTask = nil
+        layoutTask?.cancel()
+        invalidatePreviewAccounts()
+        okButton?.isEnabled = false
+    }
+
 }
 
 extension EditAccountsViewController: UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
-        if indexPath.row >= previewState.accounts.count - previewAccountsPreloadThreshold {
-            previewState.loadMore()
+        if hasCurrentWalletPresentation, indexPath.row >= previewState.accounts.count - previewAccountsPreloadThreshold {
+            scheduleMoreAccountsForDisplayedRow()
         }
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        guard beginWalletAction() else { return }
         tableView.deselectRow(at: indexPath, animated: true)
         (tableView.cellForRow(at: indexPath) as? PreviewAccountTableViewCell)?.toggle()
         toggleAccountAtIndex(indexPath.row)

@@ -19,6 +19,7 @@ Scripts/test_vm.sh run all
 Scripts/test_vm.sh run extended
 Scripts/test_vm.sh run all --signing apple
 Scripts/test_vm.sh run all --stage safari
+Scripts/test_vm.sh run all --stage upgrade
 Scripts/test_vm.sh run all --stage safari --configuration Debug --interactive-safari \
   --only-testing 'Safari UI Tests macOS/SafariLifecycleTests/testInstallAndNativeRoundtrip'
 Scripts/test_vm.sh run extended --stage safari --configuration Release
@@ -72,6 +73,36 @@ extension entry points, copied resources, plugins, production proof material,
 entitlements, and production dependencies on test support. Fixtures use real
 module authorization with fake credentials and protected-key storage in their
 disposable directory.
+
+The `upgrade` stage verifies storage and backup compatibility with the confirmed
+shipped release **1.0.98 (147)** at
+`03b1eb841180081063c6a64e5afe58c76d7f3732`. It runs in both Debug and Release by
+default. The self-contained archive in `Tests/Fixtures/ShippedMain/1.0.98-147`
+contains 95 unmodified source/license files, including the historical crypto
+implementation. Its verifier checks the pinned commit, Git tree/blob proofs,
+per-file hashes, and a bounded regular-file inventory before extraction.
+
+The guest compiles those historical sources with thin file-backed storage
+adapters, then refuses execution if the binary has an unresolved `SecItem*`
+storage call. The old writer produces real wallet JSON, Keychain attributes,
+preference values, exported backup text, and signing identities. After that
+process exits, the separate `WalletUpgradeHarness` package loads the original
+bytes through current storage readers and performs password-authenticated exports
+and native approval signing without networking. Subsequent processes reopen a
+current mutation, restore the old backups under a different password, and reopen
+that restoration. Wrong passwords, unavailable storage, failed writes, and invalid
+imports must preserve the original storage bytes.
+
+Plaintext backups restore wallet identities and explicitly re-enabled HD paths;
+they do not contain wallet names or custom network settings. Existing-state
+upgrade checks cover those preferences separately. App Store entitlement
+transitions and physical-device Keychain migration remain outside this harness.
+Each stage retains `upgrade-report.json`, individual phase reports, the original
+fixture files, the verified archive manifest, compiler command logs, and
+`provenance.json` with historical and current source/binary hashes. Missing phases,
+checks, fresh-process identities, or unchanged-storage evidence fail the stage.
+`python3 Scripts/wallet_upgrade/archive.py --verify` checks the archived proof
+without Git; `--check` additionally reproduces it from the pinned Git objects.
 
 Every default approval run includes bounded systematic exploration with at most
 256 traces, one preemption, one fault, two overlapping requests, and 64 transitions. Extended
@@ -559,6 +590,32 @@ a headless run cannot substitute for missing consent. Browser setup, extension a
 and missing UI elements fail the stage instead of skipping coverage. Whole-guest
 macOS screen lock/unlock is not covered because the unattended runner cannot
 unlock the guest. Simulator results do not establish physical iPhone lock behavior.
+
+Wallet access expires after 15 minutes without interaction. Automated access tests
+use a monotonic test clock and injected lifecycle notifications; the iOS Safari
+background/foreground scenario also verifies that the containing app stays locked
+while the extension completes its independently authenticated request.
+
+Before accepting a release with access-lifecycle changes, manually check screen
+lock/unlock inside a disposable interactive VM: unlock the wallet, leave an
+unapproved request open, lock the guest, and unlock the guest. The wallet must
+show its Unlock screen, the unapproved request must be rejected, and no old
+password, import draft, or secret presentation may return. Repeat with an already
+accepted transaction and verify that recovery settles it without another send.
+Ordinary macOS application switching must preserve access until its idle deadline.
+Record the tested macOS version and result separately from automated evidence;
+supported protected-data, sleep, and session-switch notifications do not establish
+coverage of every graphical screen-lock configuration.
+
+Secret-lifetime regressions exercise real AppKit field editors and UIKit text
+input, including retained undo managers, prompt confirmation/cancellation, normal
+navigation, and lock teardown. Import undo/redo must still work before teardown;
+unrelated controls must retain their history afterward. Preview tests cover
+explicit invalidation, cancellation during derivation, and late session creation.
+Invalidation drops the session's retained HD wallet and rejects late results;
+an in-progress derivation may finish using its local reference. These checks
+establish reference lifetime and UI cleanup, not guaranteed erasure of every
+temporary Swift or framework memory copy.
 
 Local macOS Safari can require the dedicated guest account password when enabling
 unsigned extensions. For runs whose captured plan includes that browser suite, the

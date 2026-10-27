@@ -373,7 +373,8 @@ final class HarnessRuntime {
         }, reconcile: { [weak self] reference, intent in
             guard let self else { return .unavailable }
             let result = await nativeService.reconcile(.init(handle: reference.handle, configurationKey: reference.configurationKey,
-                expectedNonce: reference.expectedNonce), intent: intent == .admission ? .admission : .focus)
+                expectedNonce: reference.expectedNonce, isToolbarAction: reference.isToolbarAction),
+                intent: intent == .admission ? .admission : .focus)
             switch result {
             case .pending: return .pending
             case .responseReady: return .responseReady
@@ -461,7 +462,14 @@ final class HarnessRuntime {
 
     private func startRoute(_ route: NativeAgentRoute) throws {
         guard options.role == "approval" else { throw HarnessError.invalid("Routes require approval worker") }
-        guard case .approval(_, let handle, let nonce) = route else { return }
+        let handle: RequestHandle
+        let nonce: NativeDeliveryNonce
+        switch route {
+        case .approval(_, let value, let deliveryNonce), .toolbarApproval(_, let value, let deliveryNonce):
+            handle = value
+            nonce = deliveryNonce
+        case .showWallet: return
+        }
         if let existing = coordinators[handle], existing.nativeDeliveryNonce == nonce {
             if existing.isPaused && !existing.requiresExplicitReviewRetry {
                 existing.retryRecovery()

@@ -85,6 +85,62 @@ final class EditAccountsViewControllerTests: XCTestCase {
     }
 
 #if os(iOS) || os(visionOS)
+    func testDisplayedThresholdRowCannotCancelPendingPagingActivation() async throws {
+        let fixture = try AccountEditorFixture()
+        addTeardownBlock { try await fixture.tearDown() }
+        await assertWalletReload(fixture.manager)
+        let access = WalletAccessTestFixture()
+        try access.unlock()
+        let waitingForLayout = expectation(description: "Initial paging activation waits for layout")
+        let layout = TestGate<Void>()
+        let controller = AccountEditorController()
+        controller.wallet = try XCTUnwrap(fixture.manager.wallets.first)
+        controller.walletsManager = fixture.manager
+        controller.access = access.access
+        controller.waitForInitialPreviewLayout = {
+            waitingForLayout.fulfill()
+            await layout.wait()
+        }
+        controller.loadViewIfNeeded()
+        defer {
+            layout.resolve(())
+            access.access.lock(reason: .background)
+        }
+        await fulfillment(of: [waitingForLayout], timeout: 5)
+        let state = try XCTUnwrap(controller.previewState)
+        let initialCount = state.accounts.count
+        XCTAssertGreaterThan(initialCount, 0)
+        controller.view.frame.size.height = 2_000
+        controller.tableView.frame = controller.view.bounds
+        controller.beginAppearanceTransition(true, animated: false)
+        controller.endAppearanceTransition()
+
+        controller.tableView(controller.tableView, willDisplay: UITableViewCell(),
+                             forRowAt: IndexPath(row: initialCount - 1, section: 0))
+        layout.resolve(())
+
+        await expectEventually(timeout: 5) { state.accounts.count > initialCount }
+    }
+
+    func testExternalWalletRemovalDoesNotRenewWalletAccess() async throws {
+        let fixture = try AccountEditorFixture()
+        addTeardownBlock { try await fixture.tearDown() }
+        await assertWalletReload(fixture.manager)
+        let access = WalletAccessTestFixture()
+        try access.unlock()
+        let host = try AccountEditorHost(manager: fixture.manager, access: access.access)
+        defer { host.close() }
+        access.advance(by: .seconds(60))
+        let expirationCount = access.scheduler.expirations.count
+
+        fixture.reader.attributes = []
+        fixture.reader.walletData = [:]
+        await assertWalletReload(fixture.manager)
+
+        XCTAssertEqual(host.departures, 1)
+        XCTAssertEqual(access.scheduler.expirations.count, expirationCount)
+    }
+
     func testWalletDeletionDismissesEditorAndPresentedAlert() async throws {
         let fixture = try AccountEditorFixture()
         addTeardownBlock { try await fixture.tearDown() }
@@ -104,6 +160,7 @@ final class EditAccountsViewControllerTests: XCTestCase {
             previousKeyWindow?.makeKey()
         }
         let controller = instantiate(EditAccountsViewController.self, from: .main)
+        controller.access = try unlockedWalletAccessForTesting()
         controller.wallet = try XCTUnwrap(fixture.manager.wallets.first)
         controller.walletsManager = fixture.manager
         let navigation = controller.inNavigationController
@@ -297,7 +354,7 @@ private final class AccountEditorHost {
     var departures: Int { controller.dismissals }
 #endif
 
-    init(manager: WalletsManager) throws {
+    init(manager: WalletsManager, access: WalletAccessController? = nil) throws {
 #if os(macOS)
         controller = instantiate(EditAccountsViewController.self)
         window = AccountEditorWindow(contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 400),
@@ -306,6 +363,9 @@ private final class AccountEditorHost {
 #endif
         controller.wallet = try XCTUnwrap(manager.wallets.first)
         controller.walletsManager = manager
+#if os(iOS) || os(visionOS)
+        controller.access = try access ?? unlockedWalletAccessForTesting()
+#endif
         _ = controller.view
 #if os(macOS)
         window.contentViewController = controller

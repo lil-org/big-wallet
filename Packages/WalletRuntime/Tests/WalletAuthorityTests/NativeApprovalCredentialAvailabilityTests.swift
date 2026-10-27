@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import Synchronization
 import WalletDomain
 import WalletRuntimeTestSupport
@@ -7,6 +8,50 @@ import XCTest
 
 @MainActor
 extension NativeApprovalCoordinatorTests {
+    func testApprovalPresentationDoesNotReadCredentialsButConsentValidatesAccess() async throws {
+        let keychain = PasswordKeychainFixture()
+        keychain.passwordData = Data("password".utf8)
+        let authorityID = NativeApprovalTestAuthorization.authorityID
+#if os(iOS) || os(visionOS)
+        let vault = SafariApprovalVault(fileURL: nil)
+        let host = SafariApprovalVaultHost(vault: vault, sourceSnapshot: { nil })
+        let credentials = WalletCredentials(keychain: keychain.keychain, messages: .testingEnglish,
+            authorityID: authorityID, vaultHost: host)
+#else
+        let credentials = WalletCredentials(keychain: keychain.keychain, messages: .testingEnglish, authorityID: authorityID)
+#endif
+        let challenge = credentials.makeWalletAccessChallenge()
+        let grant = try XCTUnwrap(credentials.verify(password: "password", challenge: challenge))
+        let access = try XCTUnwrap(credentials.accessSession(authorization: grant))
+        let fixture = try makeFixture(attemptNativeDecision: { _ in
+            XCTFail("Unavailable credentials must block consent")
+            return .responseReady
+        })
+        fixture.store.rejectHandler = { _, _, _ in .persisted }
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        let authenticationReads = keychain.passwordReadCount
+        fixture.coordinator.resumeAfterAuthentication(authorization: access)
+        await waitForState(fixture.coordinator, .reviewing)
+        XCTAssertEqual(keychain.passwordReadCount, authenticationReads + 1)
+        let review = try presentedReview(fixture.coordinator)
+        let reads = keychain.passwordReadCount
+        keychain.readStatus = errSecIO
+
+        for _ in 0..<100 {
+            XCTAssertTrue(fixture.coordinator.hasAuthenticated)
+            XCTAssertTrue(fixture.coordinator.canReactivate)
+            XCTAssertFalse(fixture.coordinator.isDormant)
+            XCTAssertTrue(try presentedReview(fixture.coordinator) === review)
+        }
+        XCTAssertEqual(keychain.passwordReadCount, reads)
+
+        fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: review)
+        XCTAssertEqual(keychain.passwordReadCount, reads + 1)
+        XCTAssertFalse(review.isActive)
+        await waitForState(fixture.coordinator, .finished)
+    }
+
     func testApprovalRejectsWhenCredentialsBecomeUnavailableOrChanged() async throws {
         for unavailable in [WalletCredentialIdentity.Status.unavailable, .changed] {
             let status = Mutex(WalletCredentialIdentity.Status.current)
@@ -193,11 +238,11 @@ extension NativeApprovalCoordinatorTests {
         XCTAssertTrue(fixture.coordinator.hasAuthenticated)
         XCTAssertTrue(fixture.coordinator.requiresExplicitReviewRetry)
         XCTAssertFalse(fixture.coordinator.isDormant)
-        XCTAssertFalse(access.isCurrent(for: authorityID))
+        XCTAssertFalse(access.validateCredentials(for: authorityID))
         XCTAssertEqual(decisions.withLock { $0 }, 1)
 
         status.withLock { $0 = .current }
-        XCTAssertTrue(access.isCurrent(for: authorityID))
+        XCTAssertTrue(access.validateCredentials(for: authorityID))
         fixture.coordinator.retryRecovery()
         await waitForState(fixture.coordinator, .reviewing)
         let renewed = try presentedReview(fixture.coordinator)
@@ -213,7 +258,7 @@ extension NativeApprovalCoordinatorTests {
         XCTAssertEqual(decisions.withLock { $0 }, 1)
         await waitForState(fixture.coordinator, .finished)
         status.withLock { $0 = .current }
-        XCTAssertFalse(access.isCurrent(for: authorityID))
+        XCTAssertFalse(access.validateCredentials(for: authorityID))
         fixture.coordinator.approveAccounts([], ethereumNetwork: nil, review: renewed)
         XCTAssertEqual(decisions.withLock { $0 }, 1)
     }

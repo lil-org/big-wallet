@@ -6,9 +6,9 @@ import WalletNetworking
 import Cocoa
 
 @MainActor
-final class StartupCredentialCoordinator: NSObject {
+final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
     enum Event: Equatable {
-        case authenticated, cancelled, setupRequiredInDockApp, handedOff
+        case authenticated, cancelled, setupRequiredInDockApp, handedOff, unlockRequested
     }
 
     @MainActor
@@ -19,27 +19,33 @@ final class StartupCredentialCoordinator: NSObject {
             await WindowAuthenticationSession.attemptBiometrics(reason: $0, challenge: $1)
         }
         var openDock: @MainActor () async -> Bool = DockAppLauncher.openDockApp
+        var access: WalletAccessController?
     }
 
     private enum State {
         case idle, welcome, creating, repeating(String), authenticating
-        case enteringPassword, saving, unavailable, handingOff, authenticated
+        case enteringPassword, saving, unavailable, handingOff, authenticated, locked
     }
 
     private let dependencies: Dependencies
+    private let access: WalletAccessController
     private let onEvent: (Event) -> Void
     private var state = State.idle
     private var generation: UInt64 = 0
     private var task: Task<Void, Never>?
     private var authenticationChallenge: WalletAuthenticationChallenge?
-    private(set) var accessSession: WalletAccessSession?
+    private var authenticationGeneration: UInt64?
+    private var authenticationAttempt: UUID?
+    var accessSession: WalletAccessSession? { access.session }
     private var closeObserver: NativeApprovalWindowCloseObserver?
     private(set) var windowController: WalletWindowController?
 
     init(dependencies: Dependencies = Dependencies(), onEvent: @escaping (Event) -> Void) {
         self.dependencies = dependencies
+        access = dependencies.access ?? WalletAccessController(credentials: dependencies.credentials)
         self.onEvent = onEvent
         super.init()
+        access.addObserver(self)
         NotificationCenter.default.addObserver(
             self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil
         )
@@ -48,13 +54,30 @@ final class StartupCredentialCoordinator: NSObject {
     isolated deinit {
         task?.cancel()
         authenticationChallenge?.invalidate()
-        accessSession?.invalidate()
+        access.removeObserver(self)
+        if let authenticationGeneration { access.cancelAuthentication(generation: authenticationGeneration) }
         closeObserver?.disable()
         retirePresentation()
         NotificationCenter.default.removeObserver(self)
     }
 
-    func requestAccess() {
+    func requestAccess(openWallet: Bool = false) {
+        if access.checkAccess(), let session = access.session {
+            if dependencies.credentials.validateAccess(session) {
+                transition(to: .authenticated)
+                closeWindow()
+                onEvent(.authenticated)
+                return
+            }
+            if access.checkAccess() {
+                showUnavailable(openWallet: openWallet)
+                if let windowController { Window.reactivateWindow(windowController) }
+                return
+            }
+            if openWallet { onEvent(.unlockRequested) }
+        }
+        if authenticationGeneration == nil { beginAccessAuthentication() }
+        if case .locked = state { transition(to: .idle) }
         switch state {
         case .unavailable, .saving: break
         default: reconcile()
@@ -64,19 +87,60 @@ final class StartupCredentialCoordinator: NSObject {
 
     func refresh() {
         switch state {
-        case .idle, .authenticated, .unavailable, .saving: return
+        case .idle, .authenticated, .unavailable, .saving, .locked: return
         default: reconcile()
         }
     }
 
     func cancel() {
         switch state {
-        case .idle, .authenticated: return
+        case .idle, .authenticated, .locked: return
         default: break
         }
         transition(to: .idle)
+        cancelAccessAuthentication()
         closeWindow()
         onEvent(.cancelled)
+    }
+
+    func lock() {
+        if !access.isLocked || !access.hasLocked {
+            access.lock(reason: .idle)
+        } else {
+            walletAccessDidLock()
+        }
+    }
+
+    func walletAccessDidLock() {
+        authenticationGeneration = nil
+        authenticationAttempt = nil
+        transition(to: .locked)
+        windowController?.bindAccess(access) { [weak self] in self?.unlock() }
+        windowController?.walletAccessDidLock()
+    }
+
+    private func unlock() {
+        guard access.isLocked else { return }
+        onEvent(.unlockRequested)
+        requestAccess()
+    }
+
+    private func beginAccessAuthentication() {
+        let attempt = UUID()
+        authenticationAttempt = attempt
+        authenticationGeneration = access.beginAuthentication { [weak self] in
+            guard let self, authenticationAttempt == attempt else { return }
+            authenticationGeneration = nil
+            authenticationAttempt = nil
+            transition(to: .locked)
+        }
+    }
+
+    private func cancelAccessAuthentication() {
+        let pending = authenticationGeneration
+        authenticationGeneration = nil
+        authenticationAttempt = nil
+        if let pending { access.cancelAuthentication(generation: pending) }
     }
 
     @objc private func walletsChanged() {
@@ -98,7 +162,7 @@ final class StartupCredentialCoordinator: NSObject {
             case .present:
                 switch state {
                 case .authenticated:
-                    if let accessSession, dependencies.credentials.isCurrent(accessSession) {
+                    if access.checkAccess() {
                         onEvent(.authenticated)
                     } else {
                         beginAuthentication()
@@ -119,8 +183,6 @@ final class StartupCredentialCoordinator: NSObject {
         generation &+= 1
         authenticationChallenge?.invalidate()
         authenticationChallenge = nil
-        accessSession?.invalidate()
-        accessSession = nil
         self.state = state
         let previousTask = task
         task = nil
@@ -130,7 +192,7 @@ final class StartupCredentialCoordinator: NSObject {
     }
 
     private func accepts(_ generation: UInt64) -> Bool {
-        self.generation == generation
+        self.generation == generation && authenticationGeneration.map { access.generation == $0 } != false
     }
 
     private func retirePresentation() {
@@ -145,12 +207,13 @@ final class StartupCredentialCoordinator: NSObject {
     private func present(_ controller: NSViewController, generation: UInt64) {
         guard accepts(generation) else { return }
         if windowController == nil {
-            let created = Window.showNew(closeOthers: false)
+            let created = Window.showNew(closeOthers: false, activates: false)
             guard accepts(generation) else {
                 created.close()
                 return
             }
             windowController = created
+            created.bindAccess(access) { [weak self] in self?.unlock() }
             if let window = created.window {
                 let observer = NativeApprovalWindowCloseObserver { [weak self] in self?.cancel() }
                 closeObserver = observer
@@ -159,8 +222,7 @@ final class StartupCredentialCoordinator: NSObject {
         }
         guard let windowController, accepts(generation) else { return }
         windowController.window?.delegate = nil
-        windowController.contentViewController = controller
-        guard accepts(generation) else { return }
+        guard windowController.installContent(controller, while: { accepts(generation) }) else { return }
         Window.reactivateWindow(windowController)
     }
 
@@ -279,13 +341,19 @@ final class StartupCredentialCoordinator: NSObject {
             showUnavailable()
             return
         }
-        guard let session = dependencies.credentials.accessSession(authorization: grant),
-              dependencies.credentials.isCurrent(session) else {
-            beginAuthentication()
+        guard let authenticationGeneration,
+              let session = dependencies.credentials.accessSession(authorization: grant),
+              dependencies.credentials.validateAccess(session) else {
+            cancel()
             return
         }
         transition(to: .authenticated)
-        accessSession = session
+        guard access.completeAuthentication(session, generation: authenticationGeneration) else {
+            walletAccessDidLock()
+            return
+        }
+        self.authenticationGeneration = nil
+        authenticationAttempt = nil
         closeWindow()
         onEvent(.authenticated)
     }
@@ -320,15 +388,14 @@ final class StartupCredentialCoordinator: NSObject {
         }
     }
 
-    private func showUnavailable(reason: String = Strings.failedToLoad) {
-        if case .unavailable = state { return }
+    private func showUnavailable(reason: String = Strings.failedToLoad, openWallet: Bool = false) {
         let generation = transition(to: .unavailable)
         let controller = WaitingViewController.with(
             reason: reason, isWorking: false,
             retryAction: { [weak self] in
                 guard let self, accepts(generation) else { return }
                 transition(to: .idle)
-                reconcile()
+                requestAccess(openWallet: openWallet)
             }
         )
         present(controller, generation: generation)
@@ -355,6 +422,7 @@ final class StartupCredentialCoordinator: NSObject {
                 return
             }
             transition(to: .idle)
+            cancelAccessAuthentication()
             closeWindow()
             onEvent(.handedOff)
         }

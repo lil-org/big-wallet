@@ -35,6 +35,9 @@ class RunSnapshotBindingTests(unittest.TestCase):
         scenarios.parent.mkdir()
         shutil.copyfile(host.TOOLS.parent / 'safari/scenarios.mjs', scenarios)
         shutil.copyfile(host.TOOLS.parent / 'safari/synchronization.mjs', scenarios.with_name('synchronization.mjs'))
+        upgrade_contract = self.tools.parent / 'wallet_upgrade/contract.mjs'
+        upgrade_contract.parent.mkdir()
+        shutil.copyfile(host.TOOLS.parent / 'wallet_upgrade/contract.mjs', upgrade_contract)
         for arguments in (('init', '-q'), ('config', 'user.email', 'fixture@example.invalid'),
                           ('config', 'user.name', 'Fixture'), ('add', '.'), ('commit', '-qm', 'fixture')):
             subprocess.run(['git', '-C', str(self.repository), *arguments], check=True, capture_output=True)
@@ -299,9 +302,12 @@ class PlannedInventoryTests(unittest.TestCase):
         shutil.copyfile(host.TOOLS.parent / 'safari/synchronization.mjs', synchronization)
         environment = self.manifest.with_name('environment.json')
         shutil.copyfile(host.TOOLS / 'environment.json', environment)
+        upgrade_contract = self.exchange / 'source/Scripts/wallet_upgrade/contract.mjs'
+        upgrade_contract.parent.mkdir()
+        shutil.copyfile(host.TOOLS.parent / 'wallet_upgrade/contract.mjs', upgrade_contract)
         host.atomic_json(self.exchange / 'snapshot-manifest.json', {'version': 1, 'files': [
             {'path': str(path.relative_to(self.exchange / 'source')), 'type': 'file', 'mode': 0o644,
-             'sha256': host.hash_regular_file(path)} for path in (self.manifest, scenarios, synchronization, environment, *runtime_files)]})
+             'sha256': host.hash_regular_file(path)} for path in (self.manifest, scenarios, synchronization, environment, upgrade_contract, *runtime_files)]})
         self.job = {'version': 1, 'runId': 'plan-fixture', 'vmId': 'fixture-vm', 'kind': 'run',
                     'profile': 'all', 'payload': {'stages': [], 'onlyTesting': []},
                     'source': {'sha256': host.hash_regular_file(self.exchange / 'snapshot-manifest.json'), 'commit': 'b' * 40},
@@ -388,6 +394,7 @@ class PlannedInventoryTests(unittest.TestCase):
         for filename in (self.exchange / 'snapshot-manifest.json', self.manifest,
                          self.exchange / 'source/Scripts/safari/scenarios.mjs',
                          self.exchange / 'source/Scripts/safari/synchronization.mjs',
+                         self.exchange / 'source/Scripts/wallet_upgrade/contract.mjs',
                          self.exchange / 'source/Scripts/vm/environment.json'):
             with self.subTest(filename=filename.name):
                 original = filename.read_bytes()

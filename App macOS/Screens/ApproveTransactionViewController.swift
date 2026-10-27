@@ -5,7 +5,10 @@ import WalletNetworking
 
 import Cocoa
 
-class ApproveTransactionViewController: NSViewController {
+class ApproveTransactionViewController: NSViewController, NativeWalletProtectedContent {
+
+    var walletAccess = NativeWalletAccess()
+    private var isRetiredForAccess = false
 
     private enum SheetState {
         case idle
@@ -67,6 +70,15 @@ class ApproveTransactionViewController: NSViewController {
     private var sheetState = SheetState.idle
     private var review: NativeApprovalReview!
 
+    private var acceptsReview: Bool { walletAccess.isCurrent && !isRetiredForAccess && review.isActive }
+
+    func retireForWalletLock() {
+        isRetiredForAccess = true
+        invalidateNativeApprovalReview()
+        balance = nil
+        if isViewLoaded { Window.clearText(in: view) }
+    }
+
     private var transaction: Transaction {
         approvalSnapshot.transaction
     }
@@ -91,7 +103,7 @@ class ApproveTransactionViewController: NSViewController {
     }
 
     func render(_ snapshot: TransactionApprovalSnapshot) {
-        guard review.isActive else { return }
+        guard acceptsReview else { return }
         let revealNotice = snapshot.notice != nil && snapshot.notice != approvalSnapshot.notice
         approvalSnapshot = snapshot
         updateInterface(revealNotice: revealNotice)
@@ -106,7 +118,12 @@ class ApproveTransactionViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         review.register(self)
-        guard review.isActive else { return }
+        guard acceptsReview else { return }
+        (metaTextView.enclosingScrollView?.verticalScroller as? WalletActivityScroller)?.accessibilityInteraction = { [weak self] in
+            guard let self, !isRetiredForAccess, review.isActive,
+                  viewIfLoaded?.window?.contentViewController === self else { return false }
+            return walletAccess.beginAction()
+        }
         
         okButton.title = Strings.ok
         cancelButton.title = Strings.cancel
@@ -115,7 +132,7 @@ class ApproveTransactionViewController: NSViewController {
         
         priceTask = Task { [weak self, priceService] in
             await priceService.update()
-            guard let self, !Task.isCancelled, review.isActive else { return }
+            guard let self, !Task.isCancelled, acceptsReview else { return }
             updateTextView()
         }
         titleLabel.stringValue = Strings.sendTransaction
@@ -141,7 +158,7 @@ class ApproveTransactionViewController: NSViewController {
         let address = account.address
         balanceTask = Task { [weak self, ethereum] in
             guard let balance = try? await ethereum.getBalance(network: network, address: address),
-                  let self, !Task.isCancelled, review.isActive else { return }
+                  let self, !Task.isCancelled, acceptsReview else { return }
             self.balance = balance.eth(shortest: true) + " " + network.symbol
             updateTextView()
         }
@@ -150,6 +167,7 @@ class ApproveTransactionViewController: NSViewController {
 
     override func viewDidAppear() {
         super.viewDidAppear()
+        guard !isRetiredForAccess else { return }
         updateRequester()
         view.window?.delegate = self
         view.window?.makeFirstResponder(view)
@@ -162,7 +180,7 @@ class ApproveTransactionViewController: NSViewController {
     }
 
     private func startApproval() {
-        guard approvalAttempt == nil, review.isActive,
+        guard approvalAttempt == nil, acceptsReview,
               let window = view.window,
               let reservation = coordinator.reserveForPreflight() else { return }
         let coordinator = coordinator!
@@ -177,8 +195,9 @@ class ApproveTransactionViewController: NSViewController {
         }
         let task = Task { [weak self, weak window] in
             defer { challenge.invalidate() }
+            guard self?.acceptsReview == true, !Task.isCancelled else { return }
             let authorization = await Window.authenticate(in: window, reason: .sendTransaction, challenge: challenge, review: lifetime)
-            guard let self, !Task.isCancelled, lifetime.isActive,
+            guard let self, !Task.isCancelled, walletAccess.isCurrent, lifetime.isActive,
                   approvalAttempt?.reservation == reservation else { return }
             defer {
                 if approvalAttempt?.reservation == reservation {
@@ -191,7 +210,7 @@ class ApproveTransactionViewController: NSViewController {
                 return
             }
             let outcome = await coordinator.preflight(reservation)
-            guard !Task.isCancelled, lifetime.isActive,
+            guard !Task.isCancelled, walletAccess.isCurrent, lifetime.isActive,
                   approvalAttempt?.reservation == reservation else { return }
             if case .approved(let transaction) = outcome {
                 approvalAttempt = nil
@@ -209,7 +228,10 @@ class ApproveTransactionViewController: NSViewController {
     }
 
     private func complete(_ approval: ApprovedTransaction?) {
-        guard review.isActive, let completion else { return }
+        guard acceptsReview, let completion else {
+            approval?.authorization.invalidate()
+            return
+        }
         self.completion = nil
         cancelApproval()
         coordinator.invalidate()
@@ -239,7 +261,7 @@ class ApproveTransactionViewController: NSViewController {
     }
 
     private func transactionEditorDidEnd(_ editorWindow: NSWindow) {
-        guard review.isActive else {
+        guard acceptsReview else {
             editorWindow.orderOut(nil)
             return
         }
@@ -259,6 +281,7 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     private func updateInterface(revealNotice: Bool = false) {
+        guard !isRetiredForAccess else { return }
         if !chain.isEthMainnet {
             speedContainerStackView.isHidden = true
             infoTextViewBottomConstraint.constant = 30
@@ -277,6 +300,7 @@ class ApproveTransactionViewController: NSViewController {
     private lazy var accountImageAttachmentString = NSAttributedString.accountImageAttachment(account: account)
     
     private func updateTextView(revealNotice: Bool = false) {
+        guard !isRetiredForAccess else { return }
         let meta = Self.approvalDescription(
             transaction: transaction,
             chain: chain,
@@ -393,11 +417,12 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     @IBAction func editTransactionButtonTapped(_ sender: Any) {
+        guard acceptsReview, walletAccess.beginAction() else { return }
         presentTransactionEditor()
     }
 
     private func presentTransactionEditor() {
-        guard approvalAttempt == nil, let snapshot = approvalSnapshot,
+        guard acceptsReview, approvalAttempt == nil, let snapshot = approvalSnapshot,
               snapshot.canEdit,
               case .idle = sheetState,
               let window = view.window else {
@@ -412,7 +437,7 @@ class ApproveTransactionViewController: NSViewController {
             suggestedFee: snapshot.latestWalletSuggestedFee,
             completion: { [weak self] edits in
                 guard let self,
-                      review.isActive else { return }
+                      acceptsReview, walletAccess.beginAction() else { return }
                 guard let edits else {
                     self.endTransactionEditorSheet()
                     return
@@ -426,7 +451,7 @@ class ApproveTransactionViewController: NSViewController {
                     return
                 }
                 self.endTransactionEditorSheet { [weak self] in
-                    guard let self, review.isActive,
+                    guard let self, acceptsReview,
                           self.approvalSnapshot.phase != .finished else {
                         return
                     }
@@ -451,7 +476,9 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     @IBAction func sliderValueChanged(_ sender: NSSlider) {
-        guard approvalSnapshot.allowsMutation,
+        guard acceptsReview else { return }
+        walletAccess.controller?.recordContinuousInteraction()
+        guard acceptsReview, approvalSnapshot.allowsMutation,
               approvalSnapshot.hasGasSpeedInfo else {
             finishGasSliderInteraction(cancelled: true)
             updateInterface()
@@ -525,7 +552,8 @@ class ApproveTransactionViewController: NSViewController {
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        guard review.isActive, approvalAttempt == nil else { return }
+        guard acceptsReview, walletAccess.beginAction() else { return }
+        guard acceptsReview, approvalAttempt == nil else { return }
         switch Self.primaryAction(for: approvalSnapshot) {
         case .approve: startApproval()
         case .retry: coordinator.retryPreparation()
@@ -535,6 +563,7 @@ class ApproveTransactionViewController: NSViewController {
     }
 
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
+        guard acceptsReview, walletAccess.beginAction() else { return }
         complete(nil)
     }
     
@@ -560,7 +589,7 @@ extension ApproveTransactionViewController:
 extension ApproveTransactionViewController: NSWindowDelegate {
 
     func windowDidResignKey(_ notification: Notification) {
-        guard review.isActive else { return }
+        guard acceptsReview else { return }
         guard gasSliderInteractionStartValue != nil else { return }
         guard approvalSnapshot.allowsMutation else {
             finishGasSliderInteraction(

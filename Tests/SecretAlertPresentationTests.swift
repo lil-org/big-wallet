@@ -52,6 +52,7 @@ final class SecretAlertPresentationTests: XCTestCase {
         let previousKeyWindow = scene.windows.first { $0.isKeyWindow }
         let window = UIWindow(windowScene: scene)
         let controller = instantiate(AccountsListViewController.self, from: .main)
+        controller.access = try unlockedWalletAccessForTesting()
         window.rootViewController = controller
         window.makeKeyAndVisible()
         window.layoutIfNeeded()

@@ -6,13 +6,14 @@ import WalletNetworking
 import Cocoa
 
 @MainActor
-final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown {
+final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown, WalletAccessObserver {
     @MainActor
     struct Dependencies {
         var credentials = ApplicationServices.shared.credentials
         var attemptBiometrics: @MainActor (String, WalletAuthenticationChallenge) async -> WalletAuthenticationResult? = {
             await WindowAuthenticationSession.attemptBiometrics(reason: $0, challenge: $1)
         }
+        var access: WalletAccessController?
     }
 
     private enum State {
@@ -24,6 +25,7 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
     private let challenge: WalletAuthenticationChallenge
     private let review: NativeApprovalReview?
     private let dependencies: Dependencies
+    private let walletAccess: NativeWalletAccess
 #if BW_SAFARI_VM_TESTING
     private let fixtureOperation: SafariVMFixtures.Operation
 #endif
@@ -45,15 +47,18 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
         self.challenge = challenge
         self.review = review
         self.dependencies = dependencies
+        walletAccess = NativeWalletAccess(dependencies.access)
 #if BW_SAFARI_VM_TESTING
         fixtureOperation = review.map { SafariVMFixtures.shared.capture(handle: $0.handle) } ?? SafariVMFixtures.shared.capture()
 #endif
         super.init()
+        dependencies.access?.addObserver(self)
     }
 
     isolated deinit {
         task?.cancel()
         closeObserver?.disable()
+        dependencies.access?.removeObserver(self)
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -95,8 +100,10 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
         cancel()
     }
 
+    func walletAccessDidLock() { cancel() }
+
     private var ownerIsAvailable: Bool {
-        guard review?.isActive != false, let owner else { return false }
+        guard walletAccess.isCurrent, review?.isActive != false, let owner else { return false }
         return Window.isVisibleContentWindow(owner)
     }
 
@@ -152,6 +159,7 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
         let controller = PasswordViewController.with(
             configuration: .init(mode: .enter, reason: reason)
         ) { [weak self] action in self?.handle(action) }
+        controller.walletAccess = walletAccess
         let sheet = NSWindow(contentViewController: controller)
         sheet.styleMask = [.titled]
         sheet.isReleasedWhenClosed = false
@@ -230,8 +238,15 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
     }
 
     private func finish(_ result: WalletAuthenticationGrant?) {
+        if let result, !walletAccess.isCurrent {
+            result.invalidate()
+            finish(nil)
+            return
+        }
         switch state {
-        case .finished: return
+        case .finished:
+            result?.invalidate()
+            return
         case .ending(let previous):
             if result == nil {
                 previous?.invalidate()
@@ -270,8 +285,10 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown 
         closeObserver?.disable()
         closeObserver = nil
         NotificationCenter.default.removeObserver(self)
+        let accepted = walletAccess.isCurrent ? result : nil
+        if accepted == nil { result?.invalidate() }
         let continuation = continuation
         self.continuation = nil
-        continuation?.resume(returning: result)
+        continuation?.resume(returning: accepted)
     }
 }

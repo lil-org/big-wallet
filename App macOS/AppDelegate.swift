@@ -16,6 +16,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var quitKeyboardShortcutMonitor: Any?
     private var startupTask: Task<Void, Never>?
     private var foregroundTask: Task<Void, Never>?
+    private var accessLifecycle: MacWalletAccessLifecycle?
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
@@ -39,6 +40,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         AmbientPseudoLocalizationLaunchMode.recordFromEnvironment()
 #endif
         ApplicationServices.shared.prewarm()
+        accessLifecycle = MacWalletAccessLifecycle(access: ApplicationServices.shared.access)
         installQuitKeyboardShortcutMonitor()
         priceService.start()
         startupTask = Task { [walletsManager, agent] in
@@ -57,6 +59,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard SafariVMFixtures.shared.activationPreparation == nil else { return }
 #endif
         ApplicationServices.shared.prewarm()
+        accessLifecycle?.checkActivation()
         agent.applicationDidBecomeActive()
         foregroundTask?.cancel()
         foregroundTask = Task { [walletsManager] in
@@ -85,6 +88,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         startupTask?.cancel()
         foregroundTask?.cancel()
+        accessLifecycle = nil
         clearAmbientPseudoLocalizationLaunchMode()
         if let quitKeyboardShortcutMonitor {
             NSEvent.removeMonitor(quitKeyboardShortcutMonitor)
@@ -109,6 +113,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 #if BW_SAFARI_VM_TESTING
         guard SafariVMFixtures.shared.activationPreparation == nil else { return }
 #endif
+        ApplicationServices.shared.access.recordInteraction()
         let windows = NSApplication.shared.windows.filter {
             $0.contentViewController != nil && ($0.isVisible || $0.isMiniaturized)
         }

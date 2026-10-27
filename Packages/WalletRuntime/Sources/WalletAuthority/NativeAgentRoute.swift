@@ -10,6 +10,11 @@ public enum NativeAgentRoute: Equatable, Sendable {
         handle: RequestHandle,
         nativeDeliveryNonce: NativeDeliveryNonce
     )
+    case toolbarApproval(
+        workflowVersion: Int,
+        handle: RequestHandle,
+        nativeDeliveryNonce: NativeDeliveryNonce
+    )
     case showWallet(workflowVersion: Int)
 
     private static let scheme = "bigwallet"
@@ -31,7 +36,7 @@ public enum NativeAgentRoute: Equatable, Sendable {
               String(workflowVersion) == workflowRaw,
               workflowVersion == ExtensionBridge.workflowVersion else { return nil }
         switch components.path {
-        case "/approval":
+        case "/approval", "/toolbar-approval":
             let required = Set([
                 "workflowVersion",
                 "id",
@@ -65,11 +70,13 @@ public enum NativeAgentRoute: Equatable, Sendable {
                 requestToken: requestToken,
                 profileIdentifier: profileIdentifier
             ) else { return nil }
-            self = .approval(
-                workflowVersion: workflowVersion,
-                handle: handle,
-                nativeDeliveryNonce: nativeDeliveryNonce
-            )
+            if components.path == "/toolbar-approval" {
+                self = .toolbarApproval(workflowVersion: workflowVersion, handle: handle,
+                    nativeDeliveryNonce: nativeDeliveryNonce)
+            } else {
+                self = .approval(workflowVersion: workflowVersion, handle: handle,
+                    nativeDeliveryNonce: nativeDeliveryNonce)
+            }
         case "/wallet":
             guard Set(values.keys) == Set(["workflowVersion"]) else { return nil }
             self = .showWallet(workflowVersion: workflowVersion)
@@ -87,8 +94,9 @@ public enum NativeAgentRoute: Equatable, Sendable {
             let workflowVersion,
             let handle,
             let nativeDeliveryNonce
-        ):
-            components.path = "/approval"
+        ), .toolbarApproval(let workflowVersion, let handle, let nativeDeliveryNonce):
+            if case .toolbarApproval = self { components.path = "/toolbar-approval" }
+            else { components.path = "/approval" }
             var items = [
                 URLQueryItem(name: "workflowVersion", value: String(workflowVersion)),
                 URLQueryItem(name: "id", value: String(handle.id)),

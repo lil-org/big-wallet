@@ -57,7 +57,8 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             reconcile: { reference, intent in
 #if os(macOS)
                 await nativeApprovals.reconcile(
-                    .init(handle: reference.handle, configurationKey: reference.configurationKey, expectedNonce: reference.expectedNonce),
+                    .init(handle: reference.handle, configurationKey: reference.configurationKey,
+                        expectedNonce: reference.expectedNonce, isToolbarAction: reference.isToolbarAction),
                     intent: intent == .admission ? .admission : .focus
                 )
 #else

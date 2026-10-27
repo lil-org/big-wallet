@@ -8,6 +8,275 @@ import XCTest
 
 @MainActor
 final class OnboardingCancellationTests: XCTestCase {
+    func testTemporaryKeychainFailureShowsRetryWithoutDiscardingTheAccessSession() throws {
+        let fixture = WalletAccessTestFixture()
+        let session = try fixture.unlock()
+        var authenticationAttempts = 0
+        var events = [StartupCredentialCoordinator.Event]()
+        let flow = StartupCredentialCoordinator(dependencies: .init(
+            credentials: fixture.credentials,
+            attemptBiometrics: { _, _ in authenticationAttempts += 1; return nil },
+            access: fixture.access
+        )) { events.append($0) }
+        defer { flow.windowController?.close() }
+        flow.requestAccess()
+        fixture.keychain.readStatus = errSecInteractionNotAllowed
+
+        flow.requestAccess()
+
+        let unavailable = try XCTUnwrap(flow.windowController?.contentViewController as? WaitingViewController)
+        XCTAssertFalse(fixture.access.isLocked)
+        XCTAssertTrue(flow.accessSession === session)
+        XCTAssertEqual(events, [.authenticated])
+        fixture.keychain.readStatus = nil
+        unavailable.actionButtonTapped(unavailable.okButton as Any)
+        XCTAssertEqual(events, [.authenticated, .authenticated])
+        XCTAssertEqual(authenticationAttempts, 0)
+        XCTAssertTrue(flow.accessSession === session)
+        XCTAssertNil(flow.windowController)
+    }
+
+    func testExplicitOpenUpdatesAnExistingCredentialRetry() async throws {
+        let fixture = WalletAccessTestFixture()
+        try fixture.unlock()
+        var events = [StartupCredentialCoordinator.Event]()
+        let flow = StartupCredentialCoordinator(dependencies: .init(
+            credentials: fixture.credentials, attemptBiometrics: { _, _ in nil }, access: fixture.access
+        )) { events.append($0) }
+        defer { flow.windowController?.close(); flow.cancel() }
+        fixture.keychain.readStatus = errSecInteractionNotAllowed
+        flow.requestAccess()
+        let previous = try XCTUnwrap(flow.windowController?.contentViewController as? WaitingViewController)
+
+        flow.requestAccess(openWallet: true)
+
+        let current = try XCTUnwrap(flow.windowController?.contentViewController as? WaitingViewController)
+        XCTAssertFalse(current === previous)
+        fixture.keychain.readStatus = nil
+        fixture.keychain.passwordData = Data("replacement".utf8)
+        previous.actionButtonTapped(previous.okButton as Any)
+        XCTAssertTrue(events.isEmpty)
+        XCTAssertFalse(fixture.access.isLocked)
+        current.actionButtonTapped(current.okButton as Any)
+        XCTAssertEqual(events, [.unlockRequested])
+        await waitUntil { flow.windowController?.contentViewController is PasswordViewController }
+        let password = try XCTUnwrap(flow.windowController?.contentViewController as? PasswordViewController)
+        password.passwordTextField.stringValue = "replacement"
+        password.actionButtonTapped(password.okButton as Any)
+
+        XCTAssertEqual(events, [.unlockRequested, .authenticated])
+        XCTAssertTrue(fixture.access.checkAccess())
+        XCTAssertNil(flow.windowController)
+    }
+
+    func testLockClearsStartupPasswordAndRequiresExplicitUnlock() async throws {
+        let fixture = WalletAccessTestFixture()
+        var attempts = 0
+        var events = [StartupCredentialCoordinator.Event]()
+        let flow = StartupCredentialCoordinator(dependencies: .init(
+            credentials: fixture.credentials,
+            attemptBiometrics: { _, _ in attempts += 1; return nil },
+            access: fixture.access
+        )) { events.append($0) }
+        defer { flow.windowController?.close(); flow.cancel() }
+        flow.requestAccess()
+        await waitUntil { flow.windowController?.contentViewController is PasswordViewController }
+        let window = try XCTUnwrap(flow.windowController?.window)
+        let oldForm = try XCTUnwrap(window.contentViewController as? PasswordViewController)
+        oldForm.passwordTextField.stringValue = "password"
+
+        fixture.access.lock(reason: .systemSleep)
+
+        let locked = try XCTUnwrap(window.contentViewController as? WalletLockedViewController)
+        XCTAssertTrue(oldForm.passwordTextField.stringValue.isEmpty)
+        XCTAssertFalse(oldForm.passwordTextField.isEnabled)
+        oldForm.actionButtonTapped(oldForm.okButton as Any)
+        for _ in 0..<3 { flow.refresh() }
+        XCTAssertEqual(attempts, 1)
+        XCTAssertTrue(events.isEmpty)
+        XCTAssertTrue(window.contentViewController === locked)
+
+        locked.unlockWallet()
+        XCTAssertEqual(events, [.unlockRequested])
+        await waitUntil { window.contentViewController is PasswordViewController }
+        let freshForm = try XCTUnwrap(window.contentViewController as? PasswordViewController)
+        freshForm.passwordTextField.stringValue = "password"
+        freshForm.actionButtonTapped(freshForm.okButton as Any)
+        XCTAssertEqual(events, [.unlockRequested, .authenticated])
+        XCTAssertTrue(fixture.access.checkAccess())
+        locked.unlockWallet()
+        XCTAssertEqual(attempts, 2)
+        XCTAssertNil(flow.windowController)
+    }
+
+    func testExplicitStartupUnlockOpensAccountsAfterTheOriginalOpenWasCanceledByLock() async throws {
+        let fixture = WalletAccessTestFixture()
+        let agent = Agent(approvalInbox: ApprovalInbox(), credentialDependencies: .init(
+            credentials: fixture.credentials, attemptBiometrics: { _, _ in nil }, access: fixture.access
+        ))
+        let originalWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
+        defer {
+            NSApp.windows.filter { !originalWindows.contains(ObjectIdentifier($0)) }.forEach { $0.close() }
+        }
+        agent.open()
+        await waitUntil {
+            NSApp.windows.contains { !originalWindows.contains(ObjectIdentifier($0)) && $0.contentViewController is PasswordViewController }
+        }
+        let startup = try XCTUnwrap(NSApp.windows.first {
+            !originalWindows.contains(ObjectIdentifier($0)) && $0.contentViewController is PasswordViewController
+        })
+        fixture.access.lock(reason: .systemSleep)
+        let locked = try XCTUnwrap(startup.contentViewController as? WalletLockedViewController)
+        agent.applicationDidBecomeActive()
+        XCTAssertTrue(startup.contentViewController === locked)
+        XCTAssertFalse(NSApp.windows.contains {
+            !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible && $0.contentViewController is AccountsListViewController
+        })
+
+        locked.unlockWallet()
+        await waitUntil { startup.contentViewController is PasswordViewController }
+        let password = try XCTUnwrap(startup.contentViewController as? PasswordViewController)
+        password.passwordTextField.stringValue = "password"
+        password.actionButtonTapped(password.okButton as Any)
+
+        await waitUntil {
+            NSApp.windows.contains { !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible && $0.contentViewController is AccountsListViewController }
+        }
+        XCTAssertFalse(startup.isVisible)
+        XCTAssertTrue(fixture.access.checkAccess())
+        XCTAssertEqual(NSApp.windows.filter {
+            !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible && $0.contentViewController is AccountsListViewController
+        }.count, 1)
+    }
+
+    func testExplicitOpenSurvivesCredentialReplacementOrRemoval() async throws {
+        enum Change: CaseIterable { case replacement, removal, replacementAfterRetry }
+        for change in Change.allCases {
+            let fixture = WalletAccessTestFixture()
+            let previous = try fixture.unlock()
+            let agent = Agent(approvalInbox: ApprovalInbox(), credentialDependencies: .init(
+                credentials: fixture.credentials, canCreatePassword: true,
+                attemptBiometrics: { _, _ in nil }, access: fixture.access
+            ))
+            let originalWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
+            defer {
+                NSApp.windows.filter { !originalWindows.contains(ObjectIdentifier($0)) }.forEach { $0.close() }
+            }
+            agent.open()
+            let accountsWindow = try XCTUnwrap(NSApp.windows.first {
+                !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible && $0.contentViewController is AccountsListViewController
+            })
+            let unavailable: WaitingViewController?
+            if change == .replacementAfterRetry {
+                fixture.keychain.readStatus = errSecInteractionNotAllowed
+                agent.open()
+                unavailable = try XCTUnwrap(NSApp.windows.filter { !originalWindows.contains(ObjectIdentifier($0)) }
+                    .compactMap { $0.contentViewController as? WaitingViewController }.first)
+                XCTAssertTrue(fixture.access.session === previous)
+                XCTAssertFalse(fixture.access.isLocked)
+                fixture.keychain.readStatus = nil
+            } else { unavailable = nil }
+            fixture.keychain.passwordData = change == .removal ? nil : Data("replacement".utf8)
+
+            if let unavailable { unavailable.actionButtonTapped(unavailable.okButton as Any) }
+            else { agent.open() }
+
+            XCTAssertTrue(fixture.access.isLocked)
+            XCTAssertFalse(fixture.credentials.validateAccess(previous))
+            XCTAssertTrue(accountsWindow.contentViewController is WalletLockedViewController)
+            if change == .removal {
+                XCTAssertTrue(NSApp.windows.contains {
+                    !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible && $0.contentViewController is WelcomeViewController
+                })
+                fixture.keychain.passwordData = Data("replacement".utf8)
+                agent.applicationDidBecomeActive()
+            }
+            await waitUntil {
+                NSApp.windows.contains { !originalWindows.contains(ObjectIdentifier($0)) && $0.contentViewController is PasswordViewController }
+            }
+            let startup = try XCTUnwrap(NSApp.windows.first {
+                !originalWindows.contains(ObjectIdentifier($0)) && $0.contentViewController is PasswordViewController
+            })
+            let password = try XCTUnwrap(startup.contentViewController as? PasswordViewController)
+            password.passwordTextField.stringValue = "replacement"
+            password.actionButtonTapped(password.okButton as Any)
+
+            XCTAssertTrue(fixture.access.checkAccess())
+            XCTAssertFalse(startup.isVisible)
+            XCTAssertTrue(accountsWindow.isVisible)
+            XCTAssertTrue(accountsWindow.contentViewController is AccountsListViewController)
+            XCTAssertEqual(NSApp.windows.filter {
+                !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible && $0.contentViewController is AccountsListViewController
+            }.count, 1)
+        }
+    }
+
+    func testCredentialReauthenticationStopsAfterCancellationOrAnotherLock() async throws {
+        for locksAgain in [false, true] {
+            let fixture = WalletAccessTestFixture()
+            try fixture.unlock()
+            let agent = Agent(approvalInbox: ApprovalInbox(), credentialDependencies: .init(
+                credentials: fixture.credentials, attemptBiometrics: { _, _ in nil }, access: fixture.access
+            ))
+            let originalWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
+            defer {
+                NSApp.windows.filter { !originalWindows.contains(ObjectIdentifier($0)) }.forEach { $0.close() }
+            }
+            agent.open()
+            fixture.keychain.passwordData = Data("replacement".utf8)
+            agent.open()
+            await waitUntil {
+                NSApp.windows.contains { !originalWindows.contains(ObjectIdentifier($0)) && $0.contentViewController is PasswordViewController }
+            }
+            let password = try XCTUnwrap(NSApp.windows.filter { !originalWindows.contains(ObjectIdentifier($0)) }
+                .compactMap { $0.contentViewController as? PasswordViewController }.first)
+            password.passwordTextField.stringValue = "replacement"
+
+            if locksAgain { fixture.access.lock(reason: .systemSleep) }
+            else { password.cancelButtonTapped(password.cancelButton) }
+            password.actionButtonTapped(password.okButton as Any)
+            agent.applicationDidBecomeActive()
+
+            XCTAssertTrue(fixture.access.isLocked)
+            XCTAssertTrue(password.passwordTextField.stringValue.isEmpty)
+            XCTAssertFalse(NSApp.windows.contains {
+                !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible && $0.contentViewController is AccountsListViewController
+            })
+        }
+    }
+
+    func testLockDiscardsSuccessfulStartupBiometricsThatReturnLate() async throws {
+        let fixture = WalletAccessTestFixture()
+        let gate = AuthenticationGate()
+        var returnedGrant: WalletAuthenticationGrant?
+        var events = [StartupCredentialCoordinator.Event]()
+        let flow = StartupCredentialCoordinator(dependencies: .init(
+            credentials: fixture.credentials,
+            attemptBiometrics: { _, challenge in
+                guard let grant = try? fixture.credentials.verify(password: "password", challenge: challenge) else { return .failed }
+                returnedGrant = grant
+                _ = await gate.attempt()
+                return .granted(grant)
+            },
+            access: fixture.access
+        )) { events.append($0) }
+        defer { flow.windowController?.close(); gate.completeAll() }
+        flow.requestAccess()
+        await gate.waitForAttempt(1)
+        fixture.access.lock(reason: .sessionInactive)
+        gate.complete(1, outcome: .succeeded)
+        await gate.waitForReturn(1)
+        await Task.yield()
+        flow.refresh()
+        XCTAssertTrue(events.isEmpty)
+        XCTAssertTrue(fixture.access.isLocked)
+        XCTAssertNil(flow.accessSession)
+        XCTAssertNil(flow.windowController)
+        XCTAssertEqual(gate.count, 1)
+        let grant = try XCTUnwrap(returnedGrant)
+        XCTAssertNil(fixture.credentials.accessSession(authorization: grant))
+    }
+
     func testClosingEachOnboardingScreenDoesNotReopenOnActivation() async throws {
         for stage in [Stage.welcome, .create, .repeatPassword, .returnedWelcome] {
             let fixture = OnboardingKeychainFixture()
@@ -396,20 +665,20 @@ final class OnboardingCancellationTests: XCTestCase {
         first.passwordTextField.stringValue = "original"
         first.actionButtonTapped(first.okButton as Any)
         let previous = try XCTUnwrap(flow.accessSession)
-        XCTAssertTrue(fixture.credentials.isCurrent(previous))
+        XCTAssertTrue(fixture.credentials.validateAccess(previous))
 
         fixture.password = "replacement"
         flow.requestAccess()
 
         XCTAssertNil(flow.accessSession)
-        XCTAssertFalse(fixture.credentials.isCurrent(previous))
+        XCTAssertFalse(fixture.credentials.validateAccess(previous))
         await waitUntil { flow.windowController?.contentViewController is PasswordViewController }
         let second = try XCTUnwrap(flow.windowController?.contentViewController as? PasswordViewController)
         second.passwordTextField.stringValue = "replacement"
         second.actionButtonTapped(second.okButton as Any)
         let current = try XCTUnwrap(flow.accessSession)
         XCTAssertFalse(current === previous)
-        XCTAssertTrue(fixture.credentials.isCurrent(current))
+        XCTAssertTrue(fixture.credentials.validateAccess(current))
     }
 
     private enum Stage { case welcome, create, repeatPassword, returnedWelcome }

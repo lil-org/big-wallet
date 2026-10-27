@@ -1,0 +1,841 @@
+{
+  "archive": {
+    "bytes": 1717856,
+    "file": "source.tar.gz",
+    "sha256": "abc40a4b3315a83734b6685b33afd59c0e32cfa3efd04b3d825d5ee3a3a12912"
+  },
+  "baseline": {
+    "buildVersion": "147",
+    "commit": "03b1eb841180081063c6a64e5afe58c76d7f3732",
+    "marketingVersion": "1.0.98",
+    "platform": "macos"
+  },
+  "cSources": [
+    "Shared/WalletCoreProxy/ScryptBackend/big_wallet_scrypt_shim.c",
+    "Shared/WalletCoreProxy/Secp256k1Backend/big_wallet_secp256k1_shim.c",
+    "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/secp256k1.c",
+    "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/precomputed_ecmult.c",
+    "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c"
+  ],
+  "definitions": [
+    "ENABLE_MODULE_RECOVERY=1"
+  ],
+  "files": [
+    {
+      "bytes": 597,
+      "gitBlob": "532dfbeb6c4539076f66ba43d485fe7d98cdad64",
+      "mode": "100644",
+      "path": "App macOS/Content/Images.swift",
+      "sha256": "8d62c153ae149ab9f4c8e48b852346f12d0d7f1eea6ee147d7d61de493e4d632"
+    },
+    {
+      "bytes": 7048,
+      "gitBlob": "0e259d42c996742e9e3cba14c677129b2c1b6311",
+      "mode": "100644",
+      "path": "LICENSE",
+      "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
+    },
+    {
+      "bytes": 112,
+      "gitBlob": "0f2d6f8c922688d65a061e7c0b1cb825689c715e",
+      "mode": "100644",
+      "path": "Safari Shared/Models/InpageProvider.swift",
+      "sha256": "5c82261af7baa2ab9650ad326c4273ab17a55dfee29ec617e6399455be79a1ed"
+    },
+    {
+      "bytes": 14593,
+      "gitBlob": "ce7d33dda61bda7a20d83fddc4e5a1290451ab62",
+      "mode": "100644",
+      "path": "Safari Shared/SharedDefaults.swift",
+      "sha256": "e17872b112831c1d825f27b4068b8a48a80768d905379057e77b5aaf0a148ccc"
+    },
+    {
+      "bytes": 1441,
+      "gitBlob": "ec29c01783230b52bf397835d9f83c370422762a",
+      "mode": "100644",
+      "path": "Shared/Ethereum/EthereumAccessListEntry.swift",
+      "sha256": "c027e9645651ba2cc3b3c85243e30f63ffa502d4f49f803878065fdb9d5c5e85"
+    },
+    {
+      "bytes": 7732,
+      "gitBlob": "cc92d45455759eb92d315c3f4be68ca1971820fb",
+      "mode": "100644",
+      "path": "Shared/Ethereum/EthereumNetwork.swift",
+      "sha256": "c7a30f69354153fe9f4d1ac6ef4162690b20893ab87baa4cdfa47cd411b1fdd5"
+    },
+    {
+      "bytes": 14242,
+      "gitBlob": "d887b4314ff9709c70977487975d2687d48d2f64",
+      "mode": "100644",
+      "path": "Shared/Ethereum/NetworkCatalog.swift",
+      "sha256": "0cd24c09df9d794b7205326bfb172235a45d647efd903c7c83033283e91b86f1"
+    },
+    {
+      "bytes": 149,
+      "gitBlob": "6823c38f514b48ec6527c87a0253785e281d74ac",
+      "mode": "100644",
+      "path": "Shared/Extensions/FixedWidthInteger.swift",
+      "sha256": "295c002c7f1bab39ede78944e78a850163c049b53f8c9992470c70b2f8bdb0de"
+    },
+    {
+      "bytes": 5630,
+      "gitBlob": "9f53485184726b65949d8b7b4dcca6a6bf255622",
+      "mode": "100644",
+      "path": "Shared/Extensions/Notification.swift",
+      "sha256": "50225830b2fa42da4d02de74bbcfc6d0ef9df4456812803d595201401605616d"
+    },
+    {
+      "bytes": 1316,
+      "gitBlob": "7898b143795c4aede1d1f20e6439bccdcea837c1",
+      "mode": "100644",
+      "path": "Shared/Extensions/String.swift",
+      "sha256": "5b3a687134fca9e29e70356062de7adc7a95f4fbab8c898ccf1349ae7fc491af"
+    },
+    {
+      "bytes": 1181,
+      "gitBlob": "91ed7e6001c854aa6db06e8739a553baa42be08f",
+      "mode": "100644",
+      "path": "Shared/Extensions/WalletCoin.swift",
+      "sha256": "2d8e1c934649a61031a2f0d098bf532d03c004b490a0c2e732ec82022689ec63"
+    },
+    {
+      "bytes": 184,
+      "gitBlob": "5469f263e9d7caf2bc1455c93b74feff1e6f5d73",
+      "mode": "100644",
+      "path": "Shared/Models/PlatformSpecificImage.swift",
+      "sha256": "b3c0581ef8a3e098ae5f8e33e8be1f9c2ef770c8a5813456df4ba9168645cf97"
+    },
+    {
+      "bytes": 120,
+      "gitBlob": "c69cf370086d7f0b9999b7b13abffa3b3a818344",
+      "mode": "100644",
+      "path": "Shared/Models/SpecificWalletAccount.swift",
+      "sha256": "138c243f1a9f0f184b06a40c9d9be96eb083e785e4e33ef6839473bec37cba8e"
+    },
+    {
+      "bytes": 95334,
+      "gitBlob": "4a091299338287ea11e20c7fe551730bdce20b36",
+      "mode": "100644",
+      "path": "Shared/Services/AlchemyJWTProvider.swift",
+      "sha256": "37935e3efa96abd4f5926ee0011f8f3329578c3303f928d7c80e1c19f3514b38"
+    },
+    {
+      "bytes": 5646,
+      "gitBlob": "f1ed8b97c5df62ccc854417ad69711da23e593bb",
+      "mode": "100644",
+      "path": "Shared/Services/Defaults.swift",
+      "sha256": "3a906f3eb348d5cabc275c1e1e11f1c8d31d93206f6d0d1739f90a084a5f04be"
+    },
+    {
+      "bytes": 5826,
+      "gitBlob": "c433023871d272cf5f259be28cee42cdea35c47b",
+      "mode": "100644",
+      "path": "Shared/Services/Keychain.swift",
+      "sha256": "32652d319b9872f785f0ec9f9c4f1038ca368bd1c773ad9b524bfa1d246e4eaf"
+    },
+    {
+      "bytes": 6823,
+      "gitBlob": "dd6804935dbd1f4f204df79b3593bbd4d5f727f5",
+      "mode": "100644",
+      "path": "Shared/Supporting Files/Strings.swift",
+      "sha256": "8d32ff979706ca026b6d3561bba461dc93d918e2ce343d81939d817286a6c01b"
+    },
+    {
+      "bytes": 10988,
+      "gitBlob": "4a2f06531ef379e047b860cc366e36b5bd192a85",
+      "mode": "100644",
+      "path": "Shared/Utilities/BigUInt.swift",
+      "sha256": "5e1ec1d998d11f4d84a6c4b06ea8d8d5a6655ca70022c70d302edaf9d7deeda5"
+    },
+    {
+      "bytes": 9517,
+      "gitBlob": "4175844653db5033d589fd0585f56fbf64283eb3",
+      "mode": "100644",
+      "path": "Shared/Utilities/Blockies.swift",
+      "sha256": "46b8c7116198065f3258a66ce91456dbde2dc81afd6ec85aa00bd61a41fe5c68"
+    },
+    {
+      "bytes": 8095,
+      "gitBlob": "aa77c795a25a96ddfffb8907deb4212c408711f9",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/ScryptBackend/big_wallet_scrypt_shim.c",
+      "sha256": "e05c935de97d130ac9ef40b37f9c4e9205e91d851514bd75430c04112ea525be"
+    },
+    {
+      "bytes": 8166,
+      "gitBlob": "9d100a55f5caeb3dd406b6dae88dbb324b14d642",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/big_wallet_secp256k1_shim.c",
+      "sha256": "2bfe949558d3740c11ea579566313c09a9b4c26a24e5efe932459e6768f3df24"
+    },
+    {
+      "bytes": 1057,
+      "gitBlob": "4522a5990e2823f2be0db7efcbc4fca139c08025",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/COPYING",
+      "sha256": "a735999c7e5649df6fcda6fb06ab97435851c392b1b93494ae8725f37441632f"
+    },
+    {
+      "bytes": 42403,
+      "gitBlob": "2799d4a1f89941e8bc8328f693482a6a9aea132e",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/include/secp256k1.h",
+      "sha256": "328da0a2e0433e9cdcfae1fbde894d50a17c349e366e03f3f99fe8558ebd9af9"
+    },
+    {
+      "bytes": 5966,
+      "gitBlob": "f2d95c245e2c556a3b0a1e61d6d97f2e8324936c",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/include/secp256k1_preallocated.h",
+      "sha256": "b7283d4cc9c13bb2572dc92e69cea76f3270403baf5748ea4d91a1064b951b85"
+    },
+    {
+      "bytes": 5250,
+      "gitBlob": "2430f9939710bfc2d4b42b7209dc0bbd544c13bb",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/include/secp256k1_recovery.h",
+      "sha256": "e00678a1108acb36c6631a1e290cf33813b0ed5965d23226367008f58abb27f2"
+    },
+    {
+      "bytes": 4667,
+      "gitBlob": "7961005350bfef7df284081c39f33329a7dea3ca",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/assumptions.h",
+      "sha256": "cc875f356cc8f7f272def71f7d7261e44cc27a18a5b668cd8192c84d238e4e68"
+    },
+    {
+      "bytes": 5141,
+      "gitBlob": "08eae47d78e74082fa1a1ea9f105cae3faebd666",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/checkmem.h",
+      "sha256": "450e7928206b994693912ad5c9bbb890ca5250feded149f5025f67ad30d6d711"
+    },
+    {
+      "bytes": 1164,
+      "gitBlob": "4441b08398499ba58c729334d1436764f2c71a1a",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/ecdsa.h",
+      "sha256": "f97753416b0971133ad9d8acf9af02259931d0285a0333a9753201a353070ef6"
+    },
+    {
+      "bytes": 10462,
+      "gitBlob": "ce36e85e6a0808b6df450fb146fc36e6a32d5cdf",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/ecdsa_impl.h",
+      "sha256": "1e6041a11a45baa093df0c8037035bc0ac5a9a2b922cc2c9966aa4c14c2e5468"
+    },
+    {
+      "bytes": 1449,
+      "gitBlob": "c2bbc4703ec3ec8946c46f0ef991b4047c1d36a9",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/eckey.h",
+      "sha256": "cf511599285faecd27ace6191eca3945d85bc852b11076a1b1727759a6b03056"
+    },
+    {
+      "bytes": 3457,
+      "gitBlob": "48745e8fe7b1a46366f06c8e7e9ad7d890f10db5",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/eckey_impl.h",
+      "sha256": "57ae9e8d50dc04bf7ee54cd13e56f1801c3cb587de6baa81c630fd8153f6423b"
+    },
+    {
+      "bytes": 2679,
+      "gitBlob": "326a5eeb43449039b7650f44876f80b2be4075ef",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/ecmult.h",
+      "sha256": "3158078d831594da3ff1222d8547ddca1a6ca28335ded360100fdced3091270c"
+    },
+    {
+      "bytes": 1073,
+      "gitBlob": "665f87ff3d5b5ddbd54c2c58ab066b59f125f674",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/ecmult_compute_table.h",
+      "sha256": "5a8ce69b18d777c3ad608ef173fd6a47c75b9c37bc6801f19ca4c44eb4b9f8f6"
+    },
+    {
+      "bytes": 1913,
+      "gitBlob": "69d59ce595604eb7eada4917bd02a3b6e890d734",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/ecmult_compute_table_impl.h",
+      "sha256": "787c123550f8a7d03a72463abec9057ef7fa60b55ddbbb4fd274ee254e669401"
+    },
+    {
+      "bytes": 1354,
+      "gitBlob": "080e04bc882f29a387fb15e84691089d6c307cd1",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/ecmult_const.h",
+      "sha256": "4705e7baabcbf8fd1853f8cef45a7f6a3075b98925d91cc209afda2c956942ba"
+    },
+    {
+      "bytes": 19584,
+      "gitBlob": "1d24aeaf3647b8fa568db32aa793c8c0d2185e9a",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/ecmult_const_impl.h",
+      "sha256": "07238bcf17c3292bb8198f7f37baf068bdc9a6a57f843c439e220eb08f400607"
+    },
+    {
+      "bytes": 5368,
+      "gitBlob": "43dd10c38d70b79bb2842c616baa90ffddb4aaa4",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/ecmult_gen.h",
+      "sha256": "992ad0e8f2c0dd4cb699af8a5db7c640e904e7696b98f008d9a164933f16ecbf"
+    },
+    {
+      "bytes": 672,
+      "gitBlob": "bd41803a87c15d17abc78948b3b4c60f58998b61",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/ecmult_gen_compute_table.h",
+      "sha256": "51eb54b0cb7b49b25cf751efb2799322d73c97bc9bdd2a263feff2d2d6eeff9f"
+    },
+    {
+      "bytes": 4705,
+      "gitBlob": "6aa8d840828c287f0130783c5db53564f04e5f82",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/ecmult_gen_compute_table_impl.h",
+      "sha256": "9ae524743bb5871bff7e41e48b61218336b1919769132aafa944283ef1bb88f2"
+    },
+    {
+      "bytes": 16392,
+      "gitBlob": "2159eed5e1e5e31d80173b7b64908beb1d2c7c3a",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/ecmult_gen_impl.h",
+      "sha256": "12e5d89186b8663e82eccbb868d9e82b266b06d9c931aa7c4cc179bc83c42cb5"
+    },
+    {
+      "bytes": 34279,
+      "gitBlob": "c421750da0fd02c34855125242f508ec261b49d4",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/ecmult_impl.h",
+      "sha256": "1d9505cf8d42d9c3e2006288bd95c48f876cf87701d8095fc71817b6a171f110"
+    },
+    {
+      "bytes": 15120,
+      "gitBlob": "e3f0234f5fe83f58848908083a42664613bcd8e1",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/field.h",
+      "sha256": "481acd5c23d25ca8f5d963616ab9c3e94cf003fdb4b24608def011d7e9e5c955"
+    },
+    {
+      "bytes": 2338,
+      "gitBlob": "203c10167c3fe47c906d58f568b72d876e98294d",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/field_10x26.h",
+      "sha256": "ba9a43b62e7e70e6e18af2787bd01dfc3a57fea527cf8ad0333194211ac7d7de"
+    },
+    {
+      "bytes": 52106,
+      "gitBlob": "aa45434d9d2c852cf225568f2ed92999a3bc03bb",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/field_10x26_impl.h",
+      "sha256": "6f209a533fd96e73f4c92b101bd3ca46a2f7553967ba7f44650a68ccbf4fbcf6"
+    },
+    {
+      "bytes": 2380,
+      "gitBlob": "f20c246fdd517c09f4f3c514b8e66ba933957ee7",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/field_5x52.h",
+      "sha256": "cbaa91c253ba84d99efcd334c7a39906c164d5edf3cde81200a44a606205cdce"
+    },
+    {
+      "bytes": 19360,
+      "gitBlob": "3a976135ebdc8f07dede8ef6c9364ca30a0a9000",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/field_5x52_impl.h",
+      "sha256": "8104a1b630635c9cc89628142c9fa7afc6f31a888fe50c8ebb2bdf69ca208975"
+    },
+    {
+      "bytes": 11341,
+      "gitBlob": "f23f8ee1c443e9ca934f2c698836e553459239a6",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/field_5x52_int128_impl.h",
+      "sha256": "ee6d585731507c51dc8acd819b66556cf0cd804da1a4b6072a79c17eafbc940a"
+    },
+    {
+      "bytes": 14052,
+      "gitBlob": "7aa7de431a84d48d7fff0d2a8ccffb8841ca002a",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/field_impl.h",
+      "sha256": "33cb488ee009334a7a2ac52a7eabe39795bd184da0238e7acf73ae11374643b3"
+    },
+    {
+      "bytes": 11798,
+      "gitBlob": "ee3ebbbefe704a92fe0f6af8d89a428d61ea274a",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/group.h",
+      "sha256": "f5f85b79a0c1659bf0a85ff199844b60fc2ace13d46c15fcac518e1db0ee1fb0"
+    },
+    {
+      "bytes": 34553,
+      "gitBlob": "f5169650a122d380b90e7242ae827a7ba6ce757b",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/group_impl.h",
+      "sha256": "f55f65b95486c79ab44b55a767fb0879b27983a119757f9207b3c367478ff29e"
+    },
+    {
+      "bytes": 1916,
+      "gitBlob": "6d903ca7e0723ef08f8d23dd1e1dcaaad5d4b551",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/hash.h",
+      "sha256": "e0e586994dd4eb8d6fc6b1846519c1f71f00cf3c2f956264fb265c3e7523e1aa"
+    },
+    {
+      "bytes": 13620,
+      "gitBlob": "4341917773d9c7a8d42ea5125db5fe819fba00ac",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/hash_impl.h",
+      "sha256": "1dc20950aea3e66745a3f44f902e1de94b7effa8f3f82e40312f4e384f8dd88a"
+    },
+    {
+      "bytes": 1685,
+      "gitBlob": "d54995caadf0c46db79922313f999b316817b4b0",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/hsort.h",
+      "sha256": "220cb669835d34c252598ecff860c93edda337a9f8c2fc07b2b6cead7d48b284"
+    },
+    {
+      "bytes": 4798,
+      "gitBlob": "1c674ff1c432735d1f80adcdbad4b692e72b795b",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/hsort_impl.h",
+      "sha256": "2861489c01b927b27d99efe173799a812434748b4addd30d102187ce4f3b66a9"
+    },
+    {
+      "bytes": 3622,
+      "gitBlob": "5355fbfae0fcca1634f184a7cbf3fcdcb0798ab3",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/int128.h",
+      "sha256": "89ac5d91d64f857038d063dd70eec4b29b4f32aa218c790fe049137c347186cb"
+    },
+    {
+      "bytes": 376,
+      "gitBlob": "cfc573408a08d60395a28305282c681cd5fb9c15",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/int128_impl.h",
+      "sha256": "5683c02dfc495639da259d80624711c1c449bbaee6186729e399e713a28b4719"
+    },
+    {
+      "bytes": 581,
+      "gitBlob": "7c97aafc7491b92b889bbd24eb7a1783a9def296",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/int128_native.h",
+      "sha256": "b4c52c7ff091083f5eca9879b98641c7a38356a3c5321cbcc22ae1573e7711e1"
+    },
+    {
+      "bytes": 2881,
+      "gitBlob": "7f02e1590bbea0c446c57ad11162ebaf7c55ce72",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/int128_native_impl.h",
+      "sha256": "ecaafefadbde3db034d4f44678096833d2d113fd21b4ff7044095b6153ec03a8"
+    },
+    {
+      "bytes": 229,
+      "gitBlob": "6156f82cc2d17099f00a367e82c57eaf7b16b960",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/int128_struct.h",
+      "sha256": "0733b3a65719a1e9a8fb3564c71a38f2f31ca3522f40087d536dba90361b66e7"
+    },
+    {
+      "bytes": 7884,
+      "gitBlob": "962a71d13bc3a15016ce83cf7f1e800ec8d00803",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/int128_struct_impl.h",
+      "sha256": "0b4e2200327f5357078ba43b0e0514c58c2b1eb217b87ebc14d95efb913b5be2"
+    },
+    {
+      "bytes": 1865,
+      "gitBlob": "846c642f8c9c34db22c0919e1157e7a9d368b300",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/modinv32.h",
+      "sha256": "774887ccd462b145434d1d6b9ae9455aa3618e791544a2b61267e18931d5010d"
+    },
+    {
+      "bytes": 33492,
+      "gitBlob": "981d2abc6dafa6e1f9ffdf564179e4130eacb6ab",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/modinv32_impl.h",
+      "sha256": "befe02af7099a871677c7b05a81302dff5a4dc1d59f19b20bcb58cc28e096112"
+    },
+    {
+      "bytes": 1969,
+      "gitBlob": "f4208e6c239dfda2303ebd7ddea549689909f8c8",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/modinv64.h",
+      "sha256": "b71cf177d768beac28fcb4f0ef545aafaad16ad0f275c70ee4c60b5f7549ac41"
+    },
+    {
+      "bytes": 37653,
+      "gitBlob": "548787bedff2ec80925d52f4c7fe154e684a80c8",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/modinv64_impl.h",
+      "sha256": "1254dc7ea941fc4d4ef0a85eed80db58d9e2647a8b8d19238d6afc048d63764d"
+    },
+    {
+      "bytes": 6135,
+      "gitBlob": "76a005e01773032bf8db1b30ad4c9773fa75c86c",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/modules/recovery/main_impl.h",
+      "sha256": "fbec2358a560b669d85720108b0b1a8f653c91531a88ded0a1da339445266cc9"
+    },
+    {
+      "bytes": 2409168,
+      "gitBlob": "cbd030ce506b0172ce2a120349cd4ae5996bae46",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/precomputed_ecmult.c",
+      "sha256": "1fba19c482de09f566ed9e7bf6a526e4edb59a1cf38218e3ab413000a0e0deda"
+    },
+    {
+      "bytes": 1585,
+      "gitBlob": "e5a85f684f01b98ee83881a1b920100ac325b698",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/precomputed_ecmult.h",
+      "sha256": "d792b8a49759deff5f1e4092558fa9ae11d24e02695e44bee63a8f0ba8e18503"
+    },
+    {
+      "bytes": 259715,
+      "gitBlob": "248fb077e59f15b7847f422af571a8f2fb0d53ca",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c",
+      "sha256": "c0a7af0884b7b07962be67e9da674e0d75a8d412d116153b8eae2a9e5527d401"
+    },
+    {
+      "bytes": 973,
+      "gitBlob": "00ddce108b66a3edfa875ef0df7f7274b47e2340",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.h",
+      "sha256": "8f514bed441bccf7e34ff05ff49d3a44e9395519a8fdcf176e6aeab7b5dbd5fc"
+    },
+    {
+      "bytes": 5460,
+      "gitBlob": "40d67191acf062eb9cdf86f4fc216a5bf153b90a",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/scalar.h",
+      "sha256": "cdc9a0053321cc541c81bb02f5c4dbba1b9489947908b3187a7c3462c9e806bb"
+    },
+    {
+      "bytes": 801,
+      "gitBlob": "700964291ee28695e80458c861f322e8698949b7",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/scalar_4x64.h",
+      "sha256": "42aed583b28bda7982c54a6f63e50c0ae5f9c27d5f66d92ec6bf6c90e765735a"
+    },
+    {
+      "bytes": 32955,
+      "gitBlob": "a5bf18feb938b5d1fa084f77ddef74039193e546",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/scalar_4x64_impl.h",
+      "sha256": "992b203310337ad913afbdc29691f184462aba37d121c13a76581e9ff2c891b6"
+    },
+    {
+      "bytes": 725,
+      "gitBlob": "17863ef93710bd8e6b3df64cf741207ed5452efd",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/scalar_8x32.h",
+      "sha256": "0614cea113aea88a47ef3b2ba8167722e850d7b2a696a4f16b03ec9a320ef1d6"
+    },
+    {
+      "bytes": 29162,
+      "gitBlob": "aa87b1d3d159d7d8535e8e2762ac70b8d9c46c35",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/scalar_8x32_impl.h",
+      "sha256": "7dd402b15ae1c9b884f20a86c952db4aabb7c13fdba0a4d9addc7e752bc5a982"
+    },
+    {
+      "bytes": 12113,
+      "gitBlob": "9965c2bab93b06c1122e365078b78fc7fb30f855",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/scalar_impl.h",
+      "sha256": "6ba654bd4edc0349d1d7f1dfc25ba2d73dd9f2ecdca8078e384bf7b7837d663f"
+    },
+    {
+      "bytes": 1135,
+      "gitBlob": "2711eb932dc6d51bd518bf4a55690f439b823de5",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/scalar_low.h",
+      "sha256": "3cab20db10224ff85ee7c6d975d2968c1370ed8e96ea26b94650f6e2bac31ac4"
+    },
+    {
+      "bytes": 5967,
+      "gitBlob": "628bfd33e8bb14032af7b8b989c4985004c182f2",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/scalar_low_impl.h",
+      "sha256": "b44c726ac42516345dff05b1d964807609e7c53112aefe584aa0a1d060fb8b9f"
+    },
+    {
+      "bytes": 2224,
+      "gitBlob": "6164330b39429e45a7a7e766dbdc5cd2990820cc",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/scratch.h",
+      "sha256": "4af5e1ff665c0418bcc5b1c2de954e7b377f9bdfdd4309e0296938918fac11ef"
+    },
+    {
+      "bytes": 3677,
+      "gitBlob": "f71a20b9637d091b4d8f469d0e4e929588b24676",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/scratch_impl.h",
+      "sha256": "294a55d429fa4cc9dec46ade345bbb2bfdff4055eb1cbf1ba6168a23e5e74db6"
+    },
+    {
+      "bytes": 29096,
+      "gitBlob": "ddd9849546dd94c11f4930567470cc4fe4b75497",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/secp256k1.c",
+      "sha256": "6a3cad3929bfd49c8f99d36c3e949f4067380dd40c4ba6b81a1ddc608fc65fd4"
+    },
+    {
+      "bytes": 1271,
+      "gitBlob": "d083ac952481d6f6e5bb05b7f05cbbe409592729",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/selftest.h",
+      "sha256": "fa95cb3e35c5d121da797653a58c4c43370d51245aa43b65e0292ce3adf09dd4"
+    },
+    {
+      "bytes": 15742,
+      "gitBlob": "46ab381077cbab67211543320565244c5768d6da",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/util.h",
+      "sha256": "a2d678ac4126c742cee549dda6de8b2def62cbd87103ec7e9fd42e04b3881a36"
+    },
+    {
+      "bytes": 402,
+      "gitBlob": "8912a64d1da75c04c831c27170de3161cf5d373b",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/Secp256k1Backend/secp256k1/src/util_local_visibility.h",
+      "sha256": "d47d4a58f40157ab2a298151f366c5ebec8f7a1e7aaba88e36b530b1c01584ca"
+    },
+    {
+      "bytes": 30513,
+      "gitBlob": "e3e93f2dcae3b760acea1e21fc165e4af0d3acbb",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/WalletCoreProxy.swift",
+      "sha256": "871304e626351cebb06433e4ccdd738173664abb682263a29b87adfd4dc0ea1b"
+    },
+    {
+      "bytes": 13191,
+      "gitBlob": "56c5bdbe091155bdd26ba87e35691e291e7bdd52",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/WalletCoreProxyBIP39WordList.swift",
+      "sha256": "dd959df4c49eaa66861ff0d3319f21bf41b6642fca5b9976504274e9e8485a8f"
+    },
+    {
+      "bytes": 24501,
+      "gitBlob": "df259656300f51044cde0e81a735c636e479ecec",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/WalletCoreProxyCrypto.swift",
+      "sha256": "9f85deb043dab2a3dd0cbd51fc0891c04859614bc69ea0babea03818f633ea91"
+    },
+    {
+      "bytes": 5037,
+      "gitBlob": "7e15b4a7d4c03aabea5d6a0a99de28896339f406",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/WalletCoreProxyEncoding.swift",
+      "sha256": "96b6cf3ca8ac8c1b0c48d1f98e3fe1f74d5a4c4cf9e0b47475e2ea2063034912"
+    },
+    {
+      "bytes": 35286,
+      "gitBlob": "38669dd28c421e111cff6d7dc23f223d733a878e",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/WalletCoreProxyEthereum.swift",
+      "sha256": "2f4afb584e9d426ce05cf5ef18b5ce612e73e58ce84223eaa9221bd54fbced1d"
+    },
+    {
+      "bytes": 13694,
+      "gitBlob": "a3f438abd7e13a86dea810ed22bde69b7d24a003",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/WalletCoreProxyHD.swift",
+      "sha256": "00a5e308f54a2974d169dd663cbd3e3291d40359c8c00e2a4d83f5014590ce54"
+    },
+    {
+      "bytes": 9334,
+      "gitBlob": "ad287546253f66091de1a5f2cbe842f25fd5c681",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/WalletCoreProxySecp256k1.swift",
+      "sha256": "0a07cc0a8743ff6e1ad4761adf4a031e6bf559d728b4c091eb9600a52c85c1a6"
+    },
+    {
+      "bytes": 19783,
+      "gitBlob": "9728c7dc3536d854bba0a7e81c4c26761deb1e7c",
+      "mode": "100644",
+      "path": "Shared/WalletCoreProxy/WalletCoreProxyStoredKey.swift",
+      "sha256": "8bbd1daa60458fa2a66d751ae6ce4c810e00a599ae40ea2f9ede55d60ed5e16e"
+    },
+    {
+      "bytes": 5487,
+      "gitBlob": "73eebf2ed391e954586f3970ef0385963ae082bb",
+      "mode": "100644",
+      "path": "Shared/Wallets/Account.swift",
+      "sha256": "a5d9d0da3127d1210629143f85aeb344ce1d88f834164f3304eaf0ad09af2074"
+    },
+    {
+      "bytes": 1560,
+      "gitBlob": "273c554eccc2edacd017bab5372fefd094b31517",
+      "mode": "100644",
+      "path": "Shared/Wallets/WalletContainer.swift",
+      "sha256": "f5cea84d5242d16f73ee25bb478add65b0309c3ff2a40c0febd3d6ee6ddf5c47"
+    },
+    {
+      "bytes": 30285,
+      "gitBlob": "ea312b990f1e999bfaa15093871a9b6d136d7c3d",
+      "mode": "100644",
+      "path": "Shared/Wallets/WalletsManager.swift",
+      "sha256": "b404505d01fe763b637be953e62cbec68a9fdb5315e18e8ae839a5a50e196d07"
+    },
+    {
+      "bytes": 2340,
+      "gitBlob": "1b019d9c331e04796b4514ce65e0488ad46c0138",
+      "mode": "100644",
+      "path": "Shared/Wallets/WalletsMetadataService.swift",
+      "sha256": "42018e19998cddf117410625012e197ee50df0b0d05e28edcaa87de78e2251fc"
+    }
+  ],
+  "gitProof": {
+    "commit": {
+      "base64": "dHJlZSA1MWEwOGIwOTM2NTJhMDk5MzRmZTI4NDRlMjI5NDZiODI4YjA0MWZhCnBhcmVudCA5NDE3MmY1Yjg3YTE3YjA5ODFjYjUyZDBhYWYxMzM5MzVkZTc2MDZkCmF1dGhvciBpdmFuIGdyYWNoZXYgPGl2YW5AaXZhbi5sb2w+IDE3ODU3NTg2NjMgKzAzMDAKY29tbWl0dGVyIGl2YW4gZ3JhY2hldiA8aXZhbkBpdmFuLmxvbD4gMTc4NTc1ODY2MyArMDMwMAoKZml4IGV4dGVuc2lvbiB0cmlnZ2VycmluZyBwYWdlIHJlbG9hZHMK",
+      "id": "03b1eb841180081063c6a64e5afe58c76d7f3732",
+      "type": "commit"
+    },
+    "trees": [
+      {
+        "base64": "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",
+        "id": "0c7195750a8b044910fa55f3010e291c8810cb7c",
+        "type": "tree"
+      },
+      {
+        "base64": "MTAwNjQ0IG1haW5faW1wbC5oAHagBeAXcwMr+NsbMK1Ml3P6dchs",
+        "id": "15890bafb1a99298aa5dcf9c1e523744dc1e6651",
+        "type": "tree"
+      },
+      {
+        "base64": "MTAwNjQ0IEFwcHJvdmFsU3ViamVjdC5zd2lmdAANHQ3M/Cj89iW6t8lD08DIZbMZOjEwMDY0NCBBdXRoZW50aWNhdGlvblJlYXNvbi5zd2lmdAAJvDuxzXTaUK5C6mnp03LgJxd2GzEwMDY0NCBEYXBwUmVxdWVzdEFjdGlvbi5zd2lmdABGYmG090eiVblOeL54KOn5lBbqyDEwMDY0NCBQZWVyTWV0YS5zd2lmdACd9yk2bqJeqTsTIhes/LAIMXlxVDEwMDY0NCBQbGF0Zm9ybVNwZWNpZmljSW1hZ2Uuc3dpZnQAVGnyY+nXyvK8FFXJO3T+/x5vXXMxMDA2NDQgU2FmYXJpUmVxdWVzdCtIZWxwZXJzLnN3aWZ0AKI8LsEsi2vWs3C0G/0OMXDAEjOvMTAwNjQ0IFNwZWNpZmljV2FsbGV0QWNjb3VudC5zd2lmdADGnPNwCG1/C5mZt7E6v/o7OoGDRA==",
+        "id": "28fed679d0292c5388c0f70d1f1464caddbc4c89",
+        "type": "tree"
+      },
+      {
+        "base64": "MTAwNjQ0IEV0aGVyZXVtLnN3aWZ0AFU58ZMRBl5L/sLfvSQlS29omMdsMTAwNjQ0IEV0aGVyZXVtQWNjZXNzTGlzdEVudHJ5LnN3aWZ0AOwpwBeDIwtSvzl4Ndn4PDcEInYqMTAwNjQ0IEV0aGVyZXVtTmV0d29yay5zd2lmdADMktRUVXWeuS0xXD9L5oyhlxgg+zEwMDY0NCBFdGhlcmV1bVJQQy5zd2lmdADxKhLPeSBjH3SSgWzS9F/DZAepvzEwMDY0NCBOZXR3b3JrQ2F0YWxvZy5qc29uAPwpmByzI5001qnlaEWG0m5SbesyMTAwNjQ0IE5ldHdvcmtDYXRhbG9nLnN3aWZ0ANiHtDFP+XCccJd0h5ddJofUjS9kMTAwNjQ0IE5ldHdvcmtzLnN3aWZ0ABfQR3jPVC3fXsEy5IWbBibzhn0kMTAwNjQ0IE5vZGVzLnN3aWZ0ADU6hfPWnwAY3QDEFv8mRJWVemSiMTAwNjQ0IFRyYW5zYWN0aW9uLnN3aWZ0AEkbbSk4dyZZq/STNyW0WS5MbV75MTAwNjQ0IFRyYW5zYWN0aW9uQXBwcm92YWxDb29yZGluYXRvci5zd2lmdAAF5986Wp7VuQYTyh7Eu5S/uWdF7w==",
+        "id": "2bb9d1282d1fde8b3a6c81c3c0b5ad6e9bf3986b",
+        "type": "tree"
+      },
+      {
+        "base64": "MTAwNjQ0IEFjY291bnQuc3dpZnQAc+6/LtOR6VRYbzlw7wOFljrggrsxMDA2NDQgV2FsbGV0Q29udGFpbmVyLnN3aWZ0ACc8VU7Mwu2s0Be6tTcv79CUsxUXMTAwNjQ0IFdhbGxldHNNYW5hZ2VyLnN3aWZ0AOoxK5kPHpmb+qFQk4cam20TbXw9MTAwNjQ0IFdhbGxldHNNZXRhZGF0YVNlcnZpY2Uuc3dpZnQAGwGdnDMeBHlrRRTOZeBIitRsATg=",
+        "id": "2cfa458003908a876128273479cb30731a3a24de",
+        "type": "tree"
+      },
+      {
+        "base64": "NDAwMDAgRXRoZXJldW0AK7nRKC0f3os6bIHDwLWtbpvzmGs0MDAwMCBFeHRlbnNpb25zAO4biYVlBsnI4aZRaj+U93YZ5b8TNDAwMDAgTW9kZWxzACj+1nnQKSxTiMD3DR8UZMrdvEyJNDAwMDAgU2VydmljZXMA24fX9RY8weu9Ckwo3PyCWhWu1DY0MDAwMCBTdXBwb3J0aW5nIEZpbGVzAD9ILwviyie01sQbfw24XQCdKYYlNDAwMDAgVXRpbGl0aWVzAHcbOHNQmhF+8rwdELROYBczJVC1NDAwMDAgVmlld3MAD3UozsLhgl1P16VpCY0bslitJvA0MDAwMCBXYWxsZXRDb3JlUHJveHkAgRLsye1ZStfoqQ5EYy+aX0jHDoY0MDAwMCBXYWxsZXRzACz6RYADkIqHYSgnNHnLMHMaOiTe",
+        "id": "2e5bfd400a30e952ec68fb6248de71e49909e745",
+        "type": "tree"
+      },
+      {
+        "base64": "MTAwNjQ0IHNlY3AyNTZrMS5oACeZ1KH4mUHovIMo9pNIKmqa6hMuMTAwNjQ0IHNlY3AyNTZrMV9wcmVhbGxvY2F0ZWQuaADy2VwkXixVajsKHmHW2X8ugySTbDEwMDY0NCBzZWNwMjU2azFfcmVjb3ZlcnkuaAAkMPmTlxC/wtS0K3IJ3Au9VEwTuw==",
+        "id": "3d4d5f5bcf4349e7b857c6d630f705bc399c00b7",
+        "type": "tree"
+      },
+      {
+        "base64": "NDAwMDAgQXBwSWNvbi5pY29uAG9TkV+Yk4jI+qaq3vXCHhnCSJaUMTAwNjQ0IExvY2FsaXphYmxlLnhjc3RyaW5ncwB23HPPZ+gJJYlZljq/68IhzMmLbTQwMDAwIFNoYXJlZEFzc2V0cy54Y2Fzc2V0cwATS2iiwVofkY2yAN9YAMDT8gmMjDEwMDY0NCBTdHJpbmdzLnN3aWZ0AN1oBJNdvR9PIE33mzWTu9TV9yf1",
+        "id": "3f482f0be2ca27b4d6c41b7f0db85d009d298625",
+        "type": "tree"
+      },
+      {
+        "base64": "MTAwNjQ0IENPUFlJTkcARSKlmQ4oI/K+Dbfvy8T8oTnAgCUxMDA2NDQgUkVBRE1FLm1kAJDtrhosHPSN6dqoCesWoS9uZNYiNDAwMDAgaW5jbHVkZQA9TV9bz0NJ57hXxtYw9wW8OZwAtzQwMDAwIHNyYwAMcZV1CosESRD6VfMBDikciBDLfA==",
+        "id": "476b731fb17e08c7728023c7fdc428206888cace",
+        "type": "tree"
+      },
+      {
+        "base64": "NDAwMDAgLmFzYwAFfpa+zW7LbbPqckGhr5hjs2SRLDEwMDY0NCAuZ2l0YXR0cmlidXRlcwBQot7U04nZsxiZ/n4PRh3EnIhV4TEwMDY0NCAuZ2l0aWdub3JlAO8EdkDlqBDEpa57rtVnln2KtMG7MTAwNjQ0IEFHRU5UUy5tZADmSnXG7ixZubOWXSozv3QA3HI1BTQwMDAwIEFwcCBpT1MA5mZYVKCbfs5E6hrYE722iS6yboI0MDAwMCBBcHAgbWFjT1MAdqQuZKq9fT2/t6yNE/EwRMQ/RMU0MDAwMCBBcHAgdmlzaW9uT1MAHoA0/WJ49Z/Ql+Qt77FNTJHcg6c0MDAwMCBCaWcgV2FsbGV0IEFtYmllbnQAKto4gKUeb6/QsQhQz0Ak2Fni1cwxMDA2NDQgTElDRU5TRQAOJZ1CyZZ0Lp48uhTGdxKbLBtjETEwMDY0NCBNQUlOVEVOQU5DRS5tZAA3AlXTnBnvolk2LnVeqc9xEf2egzEwMDY0NCBSRUFETUUubWQAgBM/V8Apv6AiH48xx1r6FAP47OE0MDAwMCBTYWZhcmkgU2hhcmVkAPRFclxRE06mrrFDkOix5W8nipp9NDAwMDAgU2FmYXJpIGlPUwAwAKa/Bb75zryAutixxOokoTPwkTQwMDAwIFNhZmFyaSBtYWNPUwAVG3NbjXqA1P7wADqPat9kSTlQfTQwMDAwIFNhZmFyaSB2aXNpb25PUwBbAx6I5LKtmh4lCC0NxBnX6tY74DQwMDAwIFNjcmlwdHMAfQrr7V2TghxmwLCDXPT9rou6gZc0MDAwMCBTaGFyZWQALlv9QAow6VLsaPtiSN5x5JkJ50U0MDAwMCBUZXN0cyBtYWNPUwAp2VAfkT5gqrsyg8TRleK4iFDKMzQwMDAwIFRlc3RzALla1CDSL0Jt8KK+4zJ5vbH17NT/NDAwMDAgV2FsbGV0Lnhjb2RlcHJvagC4zsurvun6TdjlsZzdx2nSoufaCjQwMDAwIFdvcmtlcnMAe3MM0NWTwAxJBHiDUgpmqviqW6E0MDAwMCBhcHAtc3RvcmUtY29ubmVjdACYoxmDJKvE+MeTUgxo2sjLc4jrmg==",
+        "id": "51a08b093652a09934fe2844e22946b828b041fa",
+        "type": "tree"
+      },
+      {
+        "base64": "MTAwNjQ0IFJFQURNRS5tZACPWTPCoUk/tnvlhsK8AlpeFiZHtjEwMDY0NCBiaWdfd2FsbGV0X3NlY3AyNTZrMV9zaGltLmMAnRAKVfXK6z3UBrba6I27MksU1kI0MDAwMCBzZWNwMjU2azEAR2tzH7F+CMdygCPH/cQoIGiIys4=",
+        "id": "644613453904b2a169038ca4bc389ffdc0a46d03",
+        "type": "tree"
+      },
+      {
+        "base64": "MTAwNjQ0IEFnZW50LnN3aWZ0AM5sWzdh42KCg6BcyTI5dMJxNGu1MTAwNjQ0IEFwcERlbGVnYXRlLnN3aWZ0AHOsVjDpBHdUzN8iyzuIl9Ni9Gg2NDAwMDAgQXNzZXRzLnhjYXNzZXRzAFLzA74G9yCi+i5//DPgNKksm5KpNDAwMDAgQmFzZS5scHJvagAdmuUMsVhUKlavyJ9UEzQbavWrATQwMDAwIENvbnRlbnQA+gukbVEFHB5Ih5Xpj9+tGtFfXGo0MDAwMCBFeHRlbnNpb25zAKEgrrI86RZoOQ4JmcNDzH+AmfZFMTAwNjQ0IElkZW50aWZpZXJzLnN3aWZ0AKnB16DKBm0ZzMiA7mcEGv1oBJ8dMTAwNjQ0IEluZm8ucGxpc3QAqkAoYfXRu00igB/mBIHh9nQ653g0MDAwMCBNb2RlbHMA/BwcaZHV2VknrfO6l4UTuRA4mRc0MDAwMCBTY3JlZW5zALZ6QolgxLGQN/Exb4fXX+Ebmh0HNDAwMDAgU3VwcG9ydGluZyBGaWxlcwC4aX9XdOqNoAIXyO+fgWnWzUS0ljQwMDAwIFZpZXdzAIty3CzVwqfEvuXeZO0CGhmeWCQJMTAwNjQ0IFdpbmRvdy5zd2lmdAABmzFa+PXFEOI+Xo4vGVvDHoEL9g==",
+        "id": "76a42e64aabd7d3dbfb7ac8d13f13044c43f44c5",
+        "type": "tree"
+      },
+      {
+        "base64": "MTAwNjQ0IEJpZ1VJbnQuc3dpZnQASi8GUx7zeeBHuGDMNm42tb0ZKoUxMDA2NDQgQmxvY2tpZXMuc3dpZnQAQXWERlPbUDPVif0FhfVvv2QoPrM=",
+        "id": "771b3873509a117ef2bc1d10b44e6017332550b5",
+        "type": "tree"
+      },
+      {
+        "base64": "NDAwMDAgU2NyeXB0QmFja2VuZADPqOJPGZSOa7DwZ8PG6KpFpiKvOzQwMDAwIFNlY3AyNTZrMUJhY2tlbmQAZEYTRTkEsqFpA4ykvDif/cCkbQMxMDA2NDQgV2FsbGV0Q29yZVByb3h5LnN3aWZ0AOPpPy3K47dgrOoeIfwWXkrw06y7MTAwNjQ0IFdhbGxldENvcmVQcm94eUJJUDM5V29yZExpc3Quc3dpZnQAVsW9vgkRVb3Sa6h+NWkeKR573VIxMDA2NDQgV2FsbGV0Q29yZVByb3h5Q3J5cHRvLnN3aWZ0AN8lllYwD1EETN4Ogac1xjbkeezsMTAwNjQ0IFdhbGxldENvcmVQcm94eUVuY29kaW5nLnN3aWZ0AH4VtKfUwDqr6l1qCpneKIljOfQGMTAwNjQ0IFdhbGxldENvcmVQcm94eUV0aGVyZXVtLnN3aWZ0ADhmndKMQh4RHP9tfcI/Ij1zOoeOMTAwNjQ0IFdhbGxldENvcmVQcm94eUhELnN3aWZ0AKP0OKvX4TqG3qgQ7SK95pt9JKADMTAwNjQ0IFdhbGxldENvcmVQcm94eVNlY3AyNTZrMS5zd2lmdACtKHVGJT9mCR3hpfLL6ELyX9XGgTEwMDY0NCBXYWxsZXRDb3JlUHJveHlTdG9yZWRLZXkuc3dpZnQAlyjH3DU22FS7oKfoHEwmdh3rHnw=",
+        "id": "8112ecc9ed594ad7e8a90e44632f9a5f48c70e86",
+        "type": "tree"
+      },
+      {
+        "base64": "NDAwMDAgcmVjb3ZlcnkAFYkLr7GpkpiqXc+cHlI3RNweZlE=",
+        "id": "952b20142e18415549791c32c1bdab0bf041c2c5",
+        "type": "tree"
+      },
+      {
+        "base64": "MTAwNjQ0IElucGFnZVByb3ZpZGVyLnN3aWZ0AA8tb4ySJojWWgYefAscuCVonHFeNDAwMDAgUmVxdWVzdHMAi9Dd2WJ5gc1S+lhoyTCECX0bMSk0MDAwMCBSZXNwb25zZXMAe189wSE33IkXHuDjzqUeRIxweYU=",
+        "id": "a68f18f8c18f023d0dbece820fab94f7aed2fc60",
+        "type": "tree"
+      },
+      {
+        "base64": "MTAwNjQ0IGJpZ193YWxsZXRfc2NyeXB0X3NoaW0uYwCqd8eVolqW3f/7iQfetCEsQIcR+Q==",
+        "id": "cfa8e24f19948e6bb0f067c3c6e8aa45a622af3b",
+        "type": "tree"
+      },
+      {
+        "base64": "MTAwNjQ0IEFsY2hlbXlKV1RQcm92aWRlci5zd2lmdABKCRKZM4KH6hHiDH/lUXML3OILNjEwMDY0NCBEYXBwUmVxdWVzdFByb2Nlc3Nvci5zd2lmdADSwI0tN/3A6J5mNSygqey53uH4fTEwMDY0NCBEZWZhdWx0cy5zd2lmdADx7YuXxd9izMhUQXrWlxHaI+WTuzEwMDY0NCBHYXNTZXJ2aWNlLnN3aWZ0AMUG9SpN/IeWYLEk3cg9Fl2Yffr+MTAwNjQ0IEtleWNoYWluLnN3aWZ0AMQzAjhx0nLPXyWb4ozuQs3qNcR7MTAwNjQ0IFByaWNlU2VydmljZS5zd2lmdADWRSTdMl+zw0AOHpfAqeT8cK4pPjEwMDY0NCBSZW1vdGVJbWFnZUxvYWRlci5zd2lmdAD11UrsOG70SJgsx4GJyaOl3XzD6jEwMDY0NCBSZXZpZXdSZXF1ZXN0ZXIuc3dpZnQA9OU7speZPy7xo33n7DeI/sEAyiQxMDA2NDQgU29sYW5hLnN3aWZ0AJRDlYRT0bUDwTWRze0FGMnlz6B6MTAwNjQ0IFRyYW5zYWN0aW9uSW5zcGVjdG9yLnN3aWZ0AKhCug5KUnk2wqOOAdKmUOT3yPkT",
+        "id": "db87d7f5163cc1ebbd0a4c28dcfc825a15aed436",
+        "type": "tree"
+      },
+      {
+        "base64": "MTAwNjQ0IEZpeGVkV2lkdGhJbnRlZ2VyLnN3aWZ0AGgjw49RS0jsZSfIegJTeF4oHXSsMTAwNjQ0IEltYWdlLnN3aWZ0ANT5SpQVgb9bnoEgWqIoZICQ73aaMTAwNjQ0IE5TRXZlbnQuc3dpZnQAJKM4Vz95n3MgyvZnvdZ07EDok2gxMDA2NDQgTm90aWZpY2F0aW9uLnN3aWZ0AJ9TSFGEcmtllJ2Le03Mpqa/JVYiMTAwNjQ0IFN0cmluZy5zd2lmdAB4mLFDeVxK7eHR8g5kObzNzqg3wTEwMDY0NCBVUkwuc3dpZnQA9zRHOWtUeWo1ERN6fJFRtIPcOGsxMDA2NDQgVXNlckRlZmF1bHRzLnN3aWZ0AAZI5KoICgrJJG83O6wQEZ6+Yf8MMTAwNjQ0IFdhbGxldENvaW4uc3dpZnQAke1+YAHIVKptsG6HOaVTuqQr4I8=",
+        "id": "ee1b89856506c9c8e1a6516a3f94f77619e5bf13",
+        "type": "tree"
+      },
+      {
+        "base64": "MTAwNjQ0IEV4dGVuc2lvbkJyaWRnZS5zd2lmdACSORtBAGo+ysZzrFz+tnxsS1jgPjQwMDAwIElucGFnZSBQcm92aWRlcgDgHgW8k8L/9h3erj64j/cCL6P3djQwMDAwIE1vZGVscwCmjxj4wY8CPQ2+zoIPq5T3rtL8YDQwMDAwIFJlc291cmNlcwBtEHi+p3QjUqFPgicCVYnhDEYCcjEwMDY0NCBTYWZhcmlSUENDbGllbnQuc3dpZnQAlk2f6DP94lIAPSb2SEN8y01BSskxMDA2NDQgU2FmYXJpV2ViRXh0ZW5zaW9uSGFuZGxlci5zd2lmdACoCfyWnHL3ENhCiQ5K8/eR/hDf8zEwMDY0NCBTaGFyZWREZWZhdWx0cy5zd2lmdADOfTPdphvaeiDYP93E5aEpBFGrYjQwMDAwIFRlc3RzAMjNSkMkQhF+8le+28v55ZF2pyLb",
+        "id": "f445725c51134ea6aeb14390e8b1e56f278a9a7d",
+        "type": "tree"
+      },
+      {
+        "base64": "MTAwNjQ0IEltYWdlcy5zd2lmdABTLfvrbEU5B29mukPUhf59mM2tZA==",
+        "id": "fa0ba46d51051c1e488795e98fdfad1ad15f5c6a",
+        "type": "tree"
+      }
+    ]
+  },
+  "provenance": {
+    "confirmedOn": "2026-10-26",
+    "releaseConfirmation": "user"
+  },
+  "schemaVersion": 1,
+  "swiftSources": [
+    "App macOS/Content/Images.swift",
+    "Safari Shared/Models/InpageProvider.swift",
+    "Safari Shared/SharedDefaults.swift",
+    "Shared/Ethereum/EthereumAccessListEntry.swift",
+    "Shared/Ethereum/EthereumNetwork.swift",
+    "Shared/Ethereum/NetworkCatalog.swift",
+    "Shared/Extensions/FixedWidthInteger.swift",
+    "Shared/Extensions/Notification.swift",
+    "Shared/Extensions/String.swift",
+    "Shared/Extensions/WalletCoin.swift",
+    "Shared/Models/PlatformSpecificImage.swift",
+    "Shared/Models/SpecificWalletAccount.swift",
+    "Shared/Services/AlchemyJWTProvider.swift",
+    "Shared/Services/Defaults.swift",
+    "Shared/Services/Keychain.swift",
+    "Shared/Supporting Files/Strings.swift",
+    "Shared/Utilities/BigUInt.swift",
+    "Shared/Utilities/Blockies.swift",
+    "Shared/WalletCoreProxy/WalletCoreProxy.swift",
+    "Shared/WalletCoreProxy/WalletCoreProxyBIP39WordList.swift",
+    "Shared/WalletCoreProxy/WalletCoreProxyCrypto.swift",
+    "Shared/WalletCoreProxy/WalletCoreProxyEncoding.swift",
+    "Shared/WalletCoreProxy/WalletCoreProxyEthereum.swift",
+    "Shared/WalletCoreProxy/WalletCoreProxyHD.swift",
+    "Shared/WalletCoreProxy/WalletCoreProxySecp256k1.swift",
+    "Shared/WalletCoreProxy/WalletCoreProxyStoredKey.swift",
+    "Shared/Wallets/Account.swift",
+    "Shared/Wallets/WalletContainer.swift",
+    "Shared/Wallets/WalletsManager.swift",
+    "Shared/Wallets/WalletsMetadataService.swift"
+  ]
+}

@@ -157,7 +157,7 @@ final class NativeApprovalServiceTestFixture {
             handle: snapshot.handle, state: state, nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
             host: snapshot.host, configurationKey: snapshot.configurationKey,
             revisions: snapshot.revisions, createdAt: snapshot.createdAt,
-            enqueueAttempt: snapshot.enqueueAttempt, sequence: snapshot.sequence
+            enqueueAttempt: snapshot.enqueueAttempt, sequence: snapshot.sequence, isManualSwitch: snapshot.isManualSwitch
         )
     }
 

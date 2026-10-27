@@ -2,6 +2,7 @@ import WalletDomain
 import WalletNetworking
 #if BW_SAFARI_VM_TESTING
 @testable import WalletAuthority
+import CryptoKit
 import Darwin
 import Foundation
 import Security
@@ -925,7 +926,8 @@ struct SafariVMApplicationServices {
         let wallets = system.wallets
         guard !wallets.wallets.contains(where: { $0.id == "fixture-ethereum" }) else { return }
         let prepared = WalletRepository.PreparedCreation(walletID: "fixture-ethereum",
-            data: try fixtures.originalWalletData(id: "fixture-ethereum"), password: Data("approval-fixture-password".utf8))
+            data: try fixtures.originalWalletData(id: "fixture-ethereum"),
+            credentialDigest: Data(SHA256.hash(data: Data("approval-fixture-password".utf8))))
         let repository = wallets.repository
 #if os(iOS)
         _ = try await wallets.approvalVaultHost.performSourceMutation { willMutate in

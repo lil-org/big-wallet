@@ -26,6 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private var commandQBlockerMonitor: Any?
     private var startupTask: Task<Void, Never>?
+    private var accessLifecycle: MacWalletAccessLifecycle?
     private var allowsProgrammaticTermination = false
 
     override init() {
@@ -47,6 +48,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        accessLifecycle = MacWalletAccessLifecycle(access: ApplicationServices.shared.access)
         prewarmAlchemy()
         installCommandQBlocker()
         guard let runtimeIdentity else {
@@ -70,6 +72,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
+        accessLifecycle?.checkActivation()
         prewarmAlchemy()
         agent.applicationDidBecomeActive()
     }
@@ -105,6 +108,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     func applicationWillTerminate(_ notification: Notification) {
         startupTask?.cancel()
+        accessLifecycle = nil
         _ = runtimeIdentity?.clearForCurrentProcess(directoryURL: runtimeIdentityDirectoryURL)
         if let commandQBlockerMonitor {
             NSEvent.removeMonitor(commandQBlockerMonitor)

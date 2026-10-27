@@ -170,7 +170,7 @@ export function validateRuntimeManifest(source) {
         if (JSON.stringify(names) !== JSON.stringify(expectedDependencies[name])) { throw new Error(`Forbidden runtime dependencies in ${name}: ${names.join(", ")}`); }
         const path = /\bpath\s*:\s*"([^"]+)"/.exec(call.body)?.[1];
         if (/\bpath\s*:/.test(call.body) && !path || path && path !== `Sources/${name}`) { throw new Error(`Production target ${name} has unexpected source membership`); }
-        if (/\b(?:resources|plugins)\s*:/.test(maskNonCode(call.body)) || /BW_SAFARI_VM_TESTING|enable-testing|WalletRuntimeHarness/.test(call.body)) {
+        if (/\b(?:resources|plugins)\s*:/.test(maskNonCode(call.body)) || /BW_SAFARI_VM_TESTING|enable-testing|WalletRuntimeHarness|WalletUpgradeHarness|ShippedWalletProducer/.test(call.body)) {
             throw new Error(`Production target ${name} has fixture or test build settings`);
         }
     }
@@ -189,7 +189,7 @@ export function validateRuntimeSource(path, source, {module, application = false
     const fail = message => { throw new Error(`${path}: ${message}`); };
     if (/@testable\b/.test(code)) { fail("Production code may not use @testable"); }
     const imports = [...code.matchAll(/\bimport\s+(?:(?:class|struct|enum|protocol|func|var|let|typealias)\s+)?([A-Za-z_][A-Za-z0-9_]*)/g)].map(match => match[1]);
-    if (imports.some(name => /(?:TestSupport|Harness|Tests)$/.test(name))) { fail("Production code imports test or harness support"); }
+    if (imports.some(name => /(?:TestSupport|Harness|Tests)$|WalletUpgradeConsumer|ShippedWalletProducer/.test(name))) { fail("Production code imports test or harness support"); }
     const foreignSymbols = [...literalCode.matchAll(/@_silgen_name\s*\(\s*"([^"\n]+)"\s*\)/g)].map(match => match[1]);
     if (module !== "WalletAuthority" && (imports.includes("CWalletCrypto") || foreignSymbols.some(symbol => module !== "WalletStorageSupport" || symbol !== "flock"))) { fail("Direct private crypto linkage belongs inside Authority"); }
     if (application && (imports.includes("WalletStorageSupport") || privateTypes.test(literalCode))) { fail("Application code reaches private authority or storage implementation"); }
@@ -260,19 +260,19 @@ export function validateProjectMembership(project, {root, sourceExists = existsS
     walk(objects[project.rootObject].mainGroup, root);
     for (const target of Object.values(objects).filter(value => value.isa === "PBXNativeTarget")) {
         if (/test/i.test(target.productType ?? "") || /Tests/.test(target.name ?? "")) { continue; }
-        if (/Harness|CrashWorker|TestSupport/.test(target.name ?? "")) { throw new Error(`Xcode production graph contains fixture target ${target.name}`); }
+        if (/Harness|CrashWorker|UpgradeConsumer|ShippedWalletProducer|TestSupport/.test(target.name ?? "")) { throw new Error(`Xcode production graph contains fixture target ${target.name}`); }
         for (const dependencyID of target.packageProductDependencies ?? []) {
             const name = objects[dependencyID]?.productName;
-            if (!name || /Harness|Tests|TestSupport|WalletStorageSupport|CWalletCrypto/.test(name)) { throw new Error(`${target.name} links a private/test product: ${name}`); }
+            if (!name || /Harness|UpgradeConsumer|ShippedWalletProducer|Tests|TestSupport|WalletStorageSupport|CWalletCrypto/.test(name)) { throw new Error(`${target.name} links a private/test product: ${name}`); }
         }
         for (const dependencyID of target.dependencies ?? []) {
             const reference = objects[dependencyID];
             const dependency = objects[reference?.target];
             const dependencyName = dependency?.name ?? objects[reference?.targetProxy]?.remoteInfo ?? "";
-            if (/Harness|CrashWorker|Tests|TestSupport/.test(dependencyName)) { throw new Error(`${target.name} depends on a fixture/test target`); }
+            if (/Harness|CrashWorker|UpgradeConsumer|ShippedWalletProducer|Tests|TestSupport/.test(dependencyName)) { throw new Error(`${target.name} depends on a fixture/test target`); }
         }
         for (const configurationID of objects[target.buildConfigurationList]?.buildConfigurations ?? []) {
-            if (/CWalletCrypto|WalletStorageSupport|WalletRuntimeHarness|WalletRuntimeTestSupport/.test(JSON.stringify(objects[configurationID]?.buildSettings ?? {}))) {
+            if (/CWalletCrypto|WalletStorageSupport|WalletRuntimeHarness|WalletUpgradeHarness|WalletUpgradeConsumer|ShippedWalletProducer|wallet_upgrade|ShippedMain|WalletRuntimeTestSupport/.test(JSON.stringify(objects[configurationID]?.buildSettings ?? {}))) {
                 throw new Error(`${target.name} manually links private runtime/test implementation`);
             }
         }
@@ -281,8 +281,16 @@ export function validateProjectMembership(project, {root, sourceExists = existsS
             if (phase?.isa === "PBXFrameworksBuildPhase") {
                 for (const buildID of phase.files ?? []) {
                     const product = objects[objects[buildID]?.productRef]?.productName;
-                    if (product && /Harness|Tests|TestSupport|WalletStorageSupport|CWalletCrypto/.test(product)) {
+                    if (product && /Harness|UpgradeConsumer|ShippedWalletProducer|Tests|TestSupport|WalletStorageSupport|CWalletCrypto/.test(product)) {
                         throw new Error(`${target.name} links a private/test framework: ${product}`);
+                    }
+                }
+            }
+            if (phase?.isa === "PBXResourcesBuildPhase") {
+                for (const buildID of phase.files ?? []) {
+                    const path = paths.get(objects[buildID]?.fileRef);
+                    if (path && /(?:^|\/)(?:ShippedMain|wallet_upgrade|WalletUpgradeHarness)(?:\/|$)/.test(path.split(sep).join("/"))) {
+                        throw new Error(`${target.name} packages an upgrade test artifact`);
                     }
                 }
             }
@@ -291,7 +299,7 @@ export function validateProjectMembership(project, {root, sourceExists = existsS
                 const path = paths.get(objects[buildID]?.fileRef);
                 if (!path || !sourceExists(path)) { throw new Error(`${target.name} compiles a missing source: ${path ?? buildID}`); }
                 const local = relative(root, path).split(sep).join("/");
-                if (local === ".." || local.startsWith("../") || /^Packages\/WalletRuntime\/Sources\/|^Packages\/WalletRuntimeHarness\/|(?:^|\/)Tests\//.test(local) || /big_wallet_.*\.(c|h)$|secp256k1\//.test(local)) {
+                if (local === ".." || local.startsWith("../") || /^Packages\/WalletRuntime\/Sources\/|^Packages\/Wallet(?:Runtime|Upgrade)Harness\/|^Scripts\/wallet_upgrade\/|(?:^|\/)Tests\//.test(local) || /big_wallet_.*\.(c|h)$|secp256k1\//.test(local)) {
                     throw new Error(`${target.name} directly compiles private runtime/test source: ${local}`);
                 }
                 validateSource(path);

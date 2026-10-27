@@ -8,6 +8,392 @@ import XCTest
 
 @MainActor
 final class WindowAuthenticationSessionTests: XCTestCase {
+    func testDeferredApprovalWindowsCascadeAfterContentInstallationOnlyOnce() async throws {
+        let fixture = WalletAccessTestFixture()
+        try fixture.unlock()
+        let manager = try await accountSelectionWalletsManager()
+        let wallet = try XCTUnwrap(manager.wallets.first)
+        let account = try XCTUnwrap(wallet.accounts.first)
+        var controllers = [WalletWindowController]()
+        defer { controllers.forEach { $0.close() } }
+
+        for _ in 0..<2 {
+            let controller = Window.showNew(closeOthers: false, activates: false)
+            controllers.append(controller)
+            controller.bindAccess(fixture.access, unlock: {})
+            let review = try nativeReviewForTesting()
+            let content = ApproveViewController.with(subject: .signMessage, meta: "Cascade fixture",
+                account: account, walletId: wallet.id, review: review, completion: { _ in })
+            content.walletAccess = NativeWalletAccess(fixture.access)
+            XCTAssertTrue(controller.installProtectedContent(content, access: content.walletAccess))
+            XCTAssertFalse(controller.window?.isVisible == true)
+            controller.showWindow(nil)
+            XCTAssertTrue(controller.window?.isVisible == true)
+        }
+
+        let first = try XCTUnwrap(controllers[0].window)
+        let second = try XCTUnwrap(controllers[1].window)
+        let frames = [first.frame, second.frame]
+        XCTAssertNotEqual(NSPoint(x: frames[0].minX, y: frames[0].maxY),
+                          NSPoint(x: frames[1].minX, y: frames[1].maxY))
+        for index in frames.indices {
+            let frame = frames[index]
+            let other = frames[1 - index]
+            let points = [frame.midX, frame.minX + 12, frame.maxX - 12].map {
+                NSPoint(x: $0, y: frame.maxY - 4)
+            }
+            XCTAssertTrue(points.contains { !other.contains($0) }, "Each approval needs an exposed title bar")
+        }
+        for _ in 0..<3 {
+            Window.reactivateWindow(controllers[0])
+            Window.reactivateWindow(controllers[1])
+        }
+        XCTAssertEqual(first.frame, frames[0])
+        XCTAssertEqual(second.frame, frames[1])
+    }
+
+    func testAccessibilityScrollerRenewsExplicitActionsButNotProgrammaticScrolling() throws {
+        let fixture = WalletAccessTestFixture()
+        let session = try fixture.unlock()
+        let reads = fixture.keychain.passwordReadCount
+        let stamp = NativeWalletAccess(fixture.access)
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 200, height: 200))
+        let scroller = WalletActivityScroller(frame: NSRect(x: 0, y: 0, width: 16, height: 200))
+        scroller.accessibilityInteraction = { stamp.beginAction() }
+        scroll.hasVerticalScroller = true
+        scroll.verticalScroller = scroller
+        scroll.documentView = NSView(frame: NSRect(x: 0, y: 0, width: 180, height: 2000))
+        fixture.advance(by: .seconds(800))
+
+        scroller.doubleValue = 0.25
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 200))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        scroll.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(fixture.credentials.remainingAccessLifetime(session), .seconds(100))
+        _ = scroller.accessibilityPerformIncrement()
+        XCTAssertEqual(fixture.credentials.remainingAccessLifetime(session), .seconds(900))
+        fixture.advance(by: .seconds(100))
+        _ = scroller.accessibilityPerformDecrement()
+        XCTAssertEqual(fixture.credentials.remainingAccessLifetime(session), .seconds(900))
+        fixture.advance(by: .seconds(100))
+        scroller.setAccessibilityValue(NSNumber(value: 0.5))
+        XCTAssertEqual(fixture.credentials.remainingAccessLifetime(session), .seconds(900))
+        XCTAssertEqual(fixture.keychain.passwordReadCount, reads)
+        XCTAssertTrue(WalletActivityScroller.isCompatibleWithOverlayScrollers)
+    }
+
+    func testAccessibilityScrollerRejectsExpiredAndReplacedAccess() throws {
+        let fixture = WalletAccessTestFixture()
+        try fixture.unlock()
+        let stamp = NativeWalletAccess(fixture.access)
+        let scroller = WalletActivityScroller(frame: NSRect(x: 0, y: 0, width: 16, height: 200))
+        scroller.accessibilityInteraction = { stamp.beginAction() }
+        scroller.doubleValue = 0.25
+        fixture.advance(by: .seconds(900))
+
+        XCTAssertFalse(scroller.accessibilityPerformIncrement())
+        XCTAssertTrue(fixture.access.isLocked)
+        let replacement = try fixture.unlock()
+        fixture.advance(by: .seconds(100))
+        XCTAssertFalse(scroller.accessibilityPerformDecrement())
+        scroller.setAccessibilityValue(NSNumber(value: 0.75))
+        XCTAssertEqual(scroller.doubleValue, 0.25)
+        XCTAssertEqual(fixture.credentials.remainingAccessLifetime(replacement), .seconds(800))
+    }
+
+    func testManagementScrollerRetainsItsOriginatingAccessGeneration() async throws {
+        let fixture = WalletAccessTestFixture()
+        let session = try fixture.unlock()
+        let controller = AccountsListViewController()
+        controller.walletsManager = try await accountSelectionWalletsManager()
+        controller.walletAccess = NativeWalletAccess(fixture.access)
+        let window = makeWindow()
+        window.bindAccess(fixture.access, unlock: {})
+        XCTAssertTrue(window.installProtectedContent(controller, access: controller.walletAccess))
+        defer { window.close() }
+        let scroller = try XCTUnwrap(controller.tableView.enclosingScrollView?.verticalScroller as? WalletActivityScroller)
+        fixture.advance(by: .seconds(800))
+        _ = scroller.accessibilityPerformIncrement()
+        XCTAssertEqual(fixture.credentials.remainingAccessLifetime(session), .seconds(900))
+
+        fixture.access.lock(reason: .idle)
+        let replacement = try fixture.unlock()
+        fixture.advance(by: .seconds(100))
+        XCTAssertFalse(scroller.accessibilityPerformIncrement())
+        XCTAssertEqual(fixture.credentials.remainingAccessLifetime(replacement), .seconds(800))
+    }
+
+    func testAllProtectedResourceScrollersUseTheActivitySubclass() async throws {
+        let accountsView: AccountsListView = AccountsListView.load()
+        XCTAssertTrue(accountsView.tableView.enclosingScrollView?.verticalScroller is WalletActivityScroller)
+        let fixture = WalletAccessTestFixture()
+        let editor = instantiate(EditAccountsViewController.self)
+        editor.walletAccess = NativeWalletAccess(fixture.access)
+        _ = editor.view
+        XCTAssertTrue(editor.tableView.enclosingScrollView?.verticalScroller is WalletActivityScroller)
+        let manager = try await accountSelectionWalletsManager()
+        let wallet = try XCTUnwrap(manager.wallets.first)
+        let account = try XCTUnwrap(wallet.accounts.first)
+        let review = try nativeReviewForTesting()
+        review.invalidate()
+        let message = ApproveViewController.with(subject: .signMessage, meta: "fixture", account: account,
+            walletId: wallet.id, review: review, completion: { _ in })
+        _ = message.view
+        XCTAssertTrue(message.metaTextView.enclosingScrollView?.verticalScroller is WalletActivityScroller)
+        let transaction = ApproveTransactionViewController.with(
+            transaction: Transaction(from: account.address, to: account.address, value: "0x0", data: "0x"),
+            chain: try XCTUnwrap(ApplicationServices.shared.networks.network(chainId: 1)),
+            account: account, walletId: wallet.id, review: review, completion: { _ in })
+        _ = transaction.view
+        XCTAssertTrue(transaction.metaTextView.enclosingScrollView?.verticalScroller is WalletActivityScroller)
+    }
+
+    func testProtectedContentInstallationPreservesTheLockedViewDuringReentry() throws {
+        for locksOnAppearance in [false, true] {
+            let fixture = WalletAccessTestFixture()
+            try fixture.unlock()
+            let window = makeWindow()
+            window.bindAccess(fixture.access, unlock: {})
+            defer { window.close() }
+            let next = ReentrantProtectedViewController()
+            next.walletAccess = NativeWalletAccess(fixture.access)
+            if locksOnAppearance { next.onAppear = { fixture.access.lock(reason: .idle) } }
+            else { next.onLoad = { fixture.access.lock(reason: .idle) } }
+
+            XCTAssertFalse(window.installProtectedContent(next, access: next.walletAccess))
+
+            XCTAssertTrue(fixture.access.isLocked)
+            XCTAssertTrue(next.retired)
+            let locked = try XCTUnwrap(window.contentViewController as? WalletLockedViewController)
+            XCTAssertTrue(window.window?.contentViewController === locked)
+            XCTAssertTrue(window.window?.contentView === locked.view)
+            XCTAssertTrue(next.viewIfLoaded?.isHidden == true)
+            XCTAssertNil(next.viewIfLoaded?.superview)
+            XCTAssertNil(next.viewIfLoaded?.window)
+        }
+    }
+
+    func testManagementRowRenderingCannotReentrantlyLockAndReloadTheTable() async throws {
+        let fixture = WalletAccessTestFixture()
+        try fixture.unlock()
+        let controller = managementController(manager: try await accountSelectionWalletsManager())
+        controller.walletAccess = NativeWalletAccess(fixture.access)
+        let window = makeWindow()
+        window.bindAccess(fixture.access, unlock: {})
+        window.contentViewController = controller
+        defer { window.close() }
+        var probes = 0
+        fixture.access.isProtectedDataAvailable = {
+            probes += 1
+            fixture.advance(by: .seconds(900))
+            return true
+        }
+
+        XCTAssertNotNil(controller.tableView(controller.tableView, rowViewForRow: 0))
+        XCTAssertEqual(probes, 0)
+        XCTAssertFalse(fixture.access.isLocked)
+        XCTAssertFalse(fixture.access.checkAccess())
+        XCTAssertEqual(controller.numberOfRows(in: controller.tableView), 0)
+        XCTAssertNil(controller.tableView(controller.tableView, rowViewForRow: 0))
+        XCTAssertEqual(controller.tableView(controller.tableView, heightOfRow: 0), controller.tableView.rowHeight)
+        XCTAssertEqual(probes, 1)
+    }
+
+    func testAccountSelectionRefreshChecksAccessOnlyBeforeRendering() async throws {
+        let fixture = WalletAccessTestFixture()
+        try fixture.unlock()
+        let controller = try accountSelectionController(manager: try await accountSelectionWalletsManager(),
+            mode: .selectAccount, selectedAccounts: [])
+        controller.walletAccess = NativeWalletAccess(fixture.access)
+        let window = makeWindow()
+        window.bindAccess(fixture.access, unlock: {})
+        window.contentViewController = controller
+        defer { window.close() }
+        var probes = 0
+        fixture.access.isProtectedDataAvailable = {
+            probes += 1
+            if probes == 2 { fixture.advance(by: .seconds(900)) }
+            return true
+        }
+
+        _ = controller.perform(NSSelectorFromString("walletsChanged"))
+
+        XCTAssertEqual(probes, 1)
+        XCTAssertFalse(fixture.access.isLocked)
+        XCTAssertGreaterThan(controller.numberOfRows(in: controller.tableView), 0)
+        XCTAssertFalse(fixture.access.checkAccess())
+        XCTAssertEqual(controller.numberOfRows(in: controller.tableView), 0)
+        XCTAssertNil(controller.tableView(controller.tableView, rowViewForRow: 0))
+        XCTAssertEqual(controller.tableView(controller.tableView, heightOfRow: 0), controller.tableView.rowHeight)
+        XCTAssertEqual(probes, 2)
+    }
+
+    func testAccountPreviewRenderingDoesNotRetireItsModelMidUpdate() async throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.attributes = [reader.walletAttributes(id: "render-preview")]
+        reader.walletData = ["render-preview": WalletCoreProxyTestVectors.walletCoreJSONMnemonicFixture]
+        reader.passwordData = WalletCoreProxyTestVectors.walletCoreJSONMnemonicPassword
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager)
+        let fixture = WalletAccessTestFixture()
+        try fixture.unlock()
+        let controller = instantiate(EditAccountsViewController.self)
+        controller.wallet = try XCTUnwrap(manager.wallets.first)
+        controller.walletsManager = manager
+        controller.walletAccess = NativeWalletAccess(fixture.access)
+        let window = makeWindow()
+        window.bindAccess(fixture.access, unlock: {})
+        window.contentViewController = controller
+        defer { window.close() }
+        await expectEventually(timeout: 5) { controller.previewState?.accounts.isEmpty == false }
+        let preview = try XCTUnwrap(controller.previewState)
+        var probes = 0
+        fixture.access.isProtectedDataAvailable = {
+            probes += 1
+            if probes == 2 { fixture.advance(by: .seconds(900)) }
+            return true
+        }
+
+        preview.toggle(at: 0)
+
+        XCTAssertEqual(probes, 1)
+        XCTAssertTrue(controller.previewState === preview)
+        XCTAssertFalse(fixture.access.isLocked)
+        XCTAssertFalse(fixture.access.checkAccess())
+        XCTAssertNil(controller.previewState)
+        XCTAssertEqual(controller.numberOfRows(in: controller.tableView), 0)
+        XCTAssertNil(controller.tableView(controller.tableView, rowViewForRow: 0))
+        XCTAssertEqual(probes, 2)
+    }
+
+    func testMacLifecycleLocksForProtectedDataSleepAndSessionChangesOnly() throws {
+        let fixture = WalletAccessTestFixture()
+        let applicationNotifications = NotificationCenter()
+        let workspaceNotifications = NotificationCenter()
+        let lifecycle = MacWalletAccessLifecycle(access: fixture.access,
+            applicationNotifications: applicationNotifications, workspaceNotifications: workspaceNotifications,
+            protectedDataAvailable: { true }, monitorsInput: false)
+        defer { _ = lifecycle }
+        try fixture.unlock()
+        applicationNotifications.post(name: NSApplication.didResignActiveNotification, object: nil)
+        applicationNotifications.post(name: NSApplication.willResignActiveNotification, object: nil)
+        XCTAssertTrue(fixture.access.checkAccess())
+
+        let boundaries: [(NotificationCenter, Notification.Name, WalletAccessController.LockReason)] = [
+            (applicationNotifications, Notification.Name.NSApplicationProtectedDataWillBecomeUnavailable, .protectedDataUnavailable),
+            (workspaceNotifications, NSWorkspace.willSleepNotification, .systemSleep),
+            (workspaceNotifications, NSWorkspace.screensDidSleepNotification, .systemSleep),
+            (workspaceNotifications, NSWorkspace.sessionDidResignActiveNotification, .sessionInactive)
+        ]
+        for (center, name, reason) in boundaries {
+            let session = try fixture.unlock()
+            center.post(name: name, object: nil)
+            XCTAssertTrue(fixture.access.isLocked)
+            XCTAssertEqual(fixture.access.lockReason, reason)
+            XCTAssertFalse(fixture.credentials.validateAccess(session))
+            workspaceNotifications.post(name: NSWorkspace.didWakeNotification, object: nil)
+            workspaceNotifications.post(name: NSWorkspace.screensDidWakeNotification, object: nil)
+            workspaceNotifications.post(name: NSWorkspace.sessionDidBecomeActiveNotification, object: nil)
+            applicationNotifications.post(name: Notification.Name.NSApplicationProtectedDataDidBecomeAvailable, object: nil)
+            applicationNotifications.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+            XCTAssertTrue(fixture.access.isLocked)
+        }
+    }
+
+    func testMacActivationChecksProtectedAvailabilityAndExpiryWithoutRenewing() throws {
+        let fixture = WalletAccessTestFixture()
+        let applicationNotifications = NotificationCenter()
+        let protectedDataAvailable = ProtectedDataAvailability()
+        let lifecycle = MacWalletAccessLifecycle(access: fixture.access,
+            applicationNotifications: applicationNotifications, workspaceNotifications: NotificationCenter(),
+            protectedDataAvailable: { protectedDataAvailable.value }, monitorsInput: false)
+        defer { _ = lifecycle }
+        try fixture.unlock()
+        fixture.advance(by: .seconds(899))
+        applicationNotifications.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        XCTAssertTrue(fixture.access.checkAccess())
+        fixture.advance(by: .seconds(1))
+        applicationNotifications.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        XCTAssertTrue(fixture.access.isLocked)
+        XCTAssertEqual(fixture.access.lockReason, .idle)
+
+        try fixture.unlock()
+        protectedDataAvailable.value = false
+        applicationNotifications.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        XCTAssertTrue(fixture.access.isLocked)
+        XCTAssertEqual(fixture.access.lockReason, .protectedDataUnavailable)
+        protectedDataAvailable.value = true
+        applicationNotifications.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        XCTAssertTrue(fixture.access.isLocked)
+    }
+
+    func testMacLifecycleRemovesInjectedNotificationObserversOnRelease() throws {
+        let fixture = WalletAccessTestFixture()
+        let applicationNotifications = NotificationCenter()
+        let workspaceNotifications = NotificationCenter()
+        var lifecycle: MacWalletAccessLifecycle? = MacWalletAccessLifecycle(access: fixture.access,
+            applicationNotifications: applicationNotifications, workspaceNotifications: workspaceNotifications,
+            protectedDataAvailable: { true }, monitorsInput: false)
+        weak let weakLifecycle = lifecycle
+        try fixture.unlock()
+        lifecycle = nil
+        XCTAssertNil(weakLifecycle)
+        applicationNotifications.post(name: Notification.Name.NSApplicationProtectedDataWillBecomeUnavailable, object: nil)
+        workspaceNotifications.post(name: NSWorkspace.willSleepNotification, object: nil)
+        XCTAssertTrue(fixture.access.checkAccess())
+    }
+
+    func testWalletLockCancelsActionAuthenticationAndKeepsTheLockedSurface() async throws {
+        let fixture = WalletAccessTestFixture()
+        try fixture.unlock()
+        let controller = makeWindow()
+        controller.bindAccess(fixture.access, unlock: {})
+        defer { controller.close() }
+        let challenge = fixture.credentials.makeWalletAccessChallenge()
+        let authentication = Task {
+            await controller.authenticate(reason: .showPrivateKey, challenge: challenge,
+                dependencies: .init(credentials: fixture.credentials, attemptBiometrics: { _, _ in nil }))
+        }
+        let (sheet, form) = try await passwordSheet(in: controller)
+        form.passwordTextField.stringValue = "password"
+
+        fixture.access.lock(reason: .protectedDataUnavailable)
+
+        await assertResult(authentication, equals: false)
+        let locked = try XCTUnwrap(controller.contentViewController as? WalletLockedViewController)
+        XCTAssertTrue(form.passwordTextField.stringValue.isEmpty)
+        XCTAssertFalse(sheet.isVisible)
+        XCTAssertNil(sheet.sheetParent)
+        try fixture.unlock()
+        form.actionButtonTapped(form.okButton as Any)
+        form.cancelButtonTapped(form.cancelButton)
+        XCTAssertTrue(controller.contentViewController === locked)
+        XCTAssertNil(controller.currentAuthenticationSession)
+        XCTAssertThrowsError(try fixture.credentials.verify(password: "password", challenge: challenge))
+    }
+
+    func testExpiredAccessBlocksAuthenticationBeforeOpeningASheet() async throws {
+        let fixture = WalletAccessTestFixture()
+        try fixture.unlock()
+        let controller = makeWindow()
+        controller.bindAccess(fixture.access, unlock: {})
+        defer { controller.close() }
+        fixture.advance(by: .seconds(900))
+        var attempts = 0
+        let result = await controller.authenticate(reason: .showPrivateKey,
+            challenge: fixture.credentials.makeWalletAccessChallenge(),
+            dependencies: .init(credentials: fixture.credentials, attemptBiometrics: { _, _ in
+                attempts += 1
+                return nil
+            }))
+        XCTAssertNil(result)
+        XCTAssertEqual(attempts, 0)
+        XCTAssertTrue(fixture.access.isLocked)
+        XCTAssertTrue(controller.contentViewController is WalletLockedViewController)
+        XCTAssertTrue(controller.window?.sheets.isEmpty == true)
+    }
+
     func testPasswordSheetPreservesOwnerAndCompletesOnlyAfterDismissal() async throws {
         let fixture = AuthenticationKeychainFixture(password: "x")
         let controller = makeWindow()
@@ -21,7 +407,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         let result = await authentication.value
         let grant = try XCTUnwrap(result)
         let access = try XCTUnwrap(fixture.credentials.accessSession(authorization: grant))
-        XCTAssertTrue(fixture.credentials.isCurrent(access))
+        XCTAssertTrue(fixture.credentials.validateAccess(access))
         XCTAssertNil(fixture.credentials.accessSession(authorization: grant))
         access.invalidate()
         XCTAssertNil(sheet.sheetParent)
@@ -485,6 +871,33 @@ final class WindowAuthenticationSessionTests: XCTestCase {
     private func waitUntil(_ predicate: () -> Bool, file: StaticString = #filePath, line: UInt = #line) async {
         await expectEventually(file: file, line: line, predicate)
     }
+}
+
+@MainActor
+private final class ProtectedDataAvailability {
+    var value = true
+}
+
+@MainActor
+private final class ReentrantProtectedViewController: NSViewController, NativeWalletProtectedContent {
+    var walletAccess = NativeWalletAccess()
+    var onLoad: (() -> Void)?
+    var onAppear: (() -> Void)?
+    private(set) var retired = false
+
+    override func loadView() { view = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 350)) }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        onLoad?()
+    }
+
+    override func viewWillAppear() {
+        super.viewWillAppear()
+        onAppear?()
+    }
+
+    func retireForWalletLock() { retired = true }
 }
 
 private struct WindowFocusFailure: Error, CustomStringConvertible {

@@ -72,7 +72,7 @@ final class NativeApprovalWindowCloseObserver {
 }
 
 @MainActor
-class Agent: NSObject {
+class Agent: NSObject, WalletAccessObserver {
     
     enum FinishedApprovalWindowAction: Equatable {
         case none
@@ -83,6 +83,8 @@ class Agent: NSObject {
     @MainActor
     final class ActiveApproval {
         let coordinator: NativeApprovalCoordinator
+        let walletAccess: NativeWalletAccess
+        private let unlockWallet: () -> Void
         private lazy var windowCloseObserver = NativeApprovalWindowCloseObserver { [weak self] in
             guard let self else { return }
             isDismissed = true
@@ -90,7 +92,7 @@ class Agent: NSObject {
         }
         private(set) var isDismissed = false
         private var lastRenderedRevision: UInt64?
-        private var isRetired = false
+        private(set) var isRetired = false
         var windowController: NSWindowController? {
             didSet {
                 guard !isRetired else { return }
@@ -103,16 +105,18 @@ class Agent: NSObject {
             }
         }
 
-        init(coordinator: NativeApprovalCoordinator) {
+        init(coordinator: NativeApprovalCoordinator, access: WalletAccessController? = nil, unlock: @escaping () -> Void = {}) {
             self.coordinator = coordinator
+            walletAccess = NativeWalletAccess(access)
+            unlockWallet = unlock
         }
 
         private func acceptsActions(for review: NativeApprovalReview) -> Bool {
-            !isRetired && review.isActive
+            walletAccess.isCurrent && !isRetired && review.isActive
         }
 
         func activate() {
-            guard !isRetired else { return }
+            guard walletAccess.isCurrent, !isRetired else { return }
             guard let windowController,
                   windowController.window != nil else {
                 NSApp.activate(ignoringOtherApps: true)
@@ -129,7 +133,7 @@ class Agent: NSObject {
         func beginRenderingCurrentPresentation(
             allowNewWaitingWindow: Bool = false
         ) -> NativeApprovalCoordinator.PresentationSnapshot? {
-            guard !isRetired,
+            guard walletAccess.isCurrent, !isRetired,
                   let snapshot = coordinator.currentPresentation,
                   snapshot.revision != lastRenderedRevision,
                   !isDismissed || snapshot.presentation.isTerminal else { return nil }
@@ -144,6 +148,18 @@ class Agent: NSObject {
             isRetired = true
             windowCloseObserver.disable()
         }
+
+        func detachForWalletLock() -> NSWindowController? {
+            retire()
+            let controller = windowController
+            if let protected = controller?.contentViewController as? NativeWalletProtectedContent { protected.retireForWalletLock() }
+            else { (controller?.contentViewController as? NativeApprovalReviewTeardown)?.invalidateNativeApprovalReview() }
+            (controller as? WalletWindowController)?.currentAuthenticationSession?.cancel()
+            Window.dismissSheets(in: controller?.window)
+            controller?.window?.delegate = nil
+            windowController = nil
+            return controller
+        }
     }
 
     static let shared = Agent()
@@ -152,14 +168,20 @@ class Agent: NSObject {
 #endif
     private var isReady = false
     private let credentialDependencies: StartupCredentialCoordinator.Dependencies
+    private let access: WalletAccessController?
+    private let makeApprovalCoordinator: @MainActor (RequestHandle, NativeDeliveryNonce) -> NativeApprovalCoordinator
     private lazy var startupCredentials = StartupCredentialCoordinator(
         dependencies: credentialDependencies
     ) { [weak self] event in
         guard let self else { return }
         switch event {
+        case .unlockRequested:
+            pendingWalletOpenIntent.record()
         case .authenticated:
+            guard access?.checkAccess() != false else { return }
             activateAwaitingApprovals()
             if pendingWalletOpenIntent.consume() { showWallet() }
+            else { closeLockedWindows() }
 #if BW_SAFARI_VM_TESTING
             recordSafariVMExtensionState()
 #endif
@@ -173,6 +195,7 @@ class Agent: NSObject {
         }
     }
     private var walletWindowController: NSWindowController?
+    private var lockedApprovalWindows = [NSWindowController]()
     private var pendingWalletOpenIntent = PendingWalletOpenIntent()
     private var nativeDeliveryOwner: NativeDeliveryOwner?
     private var approvalInbox = ApprovalInbox<ActiveApproval>()
@@ -271,17 +294,37 @@ class Agent: NSObject {
 #endif
 
     private override init() {
-        credentialDependencies = .init()
+        let access = ApplicationServices.shared.access
+        self.access = access
+        var dependencies = StartupCredentialCoordinator.Dependencies()
+        dependencies.access = access
+        credentialDependencies = dependencies
+        makeApprovalCoordinator = Self.liveApprovalCoordinator
         super.init()
+        access.addObserver(self)
     }
 
     init(
         approvalInbox: ApprovalInbox<ActiveApproval>,
-        credentialDependencies: StartupCredentialCoordinator.Dependencies = .init()
+        credentialDependencies: StartupCredentialCoordinator.Dependencies = .init(),
+        makeApprovalCoordinator: (@MainActor (RequestHandle, NativeDeliveryNonce) -> NativeApprovalCoordinator)? = nil
     ) {
         self.approvalInbox = approvalInbox
         self.credentialDependencies = credentialDependencies
+        access = credentialDependencies.access
+        self.makeApprovalCoordinator = makeApprovalCoordinator ?? Self.liveApprovalCoordinator
         super.init()
+        access?.addObserver(self)
+    }
+
+    isolated deinit { access?.removeObserver(self) }
+
+    private static func liveApprovalCoordinator(handle: RequestHandle, nonce: NativeDeliveryNonce) -> NativeApprovalCoordinator {
+        ApplicationServices.shared.authority.makeNativeApprovalCoordinator(handle: handle, nativeDeliveryNonce: nonce)
+    }
+
+    private var requiresExplicitUnlock: Bool {
+        access?.checkAccess() == false && access?.hasLocked == true
     }
     
     func start(
@@ -306,12 +349,15 @@ class Agent: NSObject {
         for coordinator in approvalInbox.coordinators { coordinator.expireIfDormant() }
         for coordinator in approvalInbox.dormantCoordinators { coordinator.retryRecovery() }
         switch route {
-        case .approval(_, let handle, let nativeDeliveryNonce):
+        case .approval(_, let handle, let nativeDeliveryNonce),
+             .toolbarApproval(_, let handle, let nativeDeliveryNonce):
+            if case .toolbarApproval = route, requiresExplicitUnlock { open() }
             let key = ApprovalRouteKey(
                 handle: handle,
                 nativeDeliveryNonce: nativeDeliveryNonce
             )
             if let existing = approvalInbox.coordinator(for: key) {
+                guard !requiresExplicitUnlock else { return }
                 if existing.isAwaitingAuthentication {
                     resumePendingWork()
                 } else {
@@ -319,10 +365,7 @@ class Agent: NSObject {
                 }
                 return
             }
-            let coordinator = ApplicationServices.shared.authority.makeNativeApprovalCoordinator(
-                handle: handle,
-                nativeDeliveryNonce: nativeDeliveryNonce
-            )
+            let coordinator = makeApprovalCoordinator(handle, nativeDeliveryNonce)
             guard approvalInbox.register(coordinator) else { return }
             restoreOldestRecoverableApproval()
             coordinator.onEvent = { [weak self, weak coordinator] event in
@@ -334,6 +377,14 @@ class Agent: NSObject {
                 case .authenticationRequired:
                     self.handleReceiptOwnedApproval(key)
                 case .presentationChanged:
+                    if self.access?.checkAccess() == false || self.approvalInbox.active(for: key)?.isRetired == true {
+                        if coordinator.currentPresentation?.presentation.isTerminal == true {
+                            self.approvalInbox.remove(key)
+                        } else if self.approvalInbox.active(for: key)?.isRetired == true {
+                            coordinator.reject()
+                        }
+                        return
+                    }
                     if self.approvalInbox.active(for: key) == nil {
                         if coordinator.currentPresentation?.presentation.isTerminal == true {
                             self.approvalInbox.remove(key)
@@ -355,6 +406,10 @@ class Agent: NSObject {
         for coordinator in approvalInbox.dormantCoordinators { coordinator.retryRecovery() }
         restoreOldestRecoverableApproval()
         pendingWalletOpenIntent.record()
+        if access?.hasLocked == true, access?.checkAccess() == false {
+            showLockedWallet()
+            return
+        }
         resumePendingWork()
     }
 
@@ -362,7 +417,8 @@ class Agent: NSObject {
         guard isReady else { return }
         startPendingApprovals()
         guard pendingWalletOpenIntent.isPending || approvalInbox.hasAwaitingAuthentication else { return }
-        startupCredentials.requestAccess()
+        guard access?.hasLocked != true || access?.checkAccess() != false else { return }
+        startupCredentials.requestAccess(openWallet: pendingWalletOpenIntent.isPending)
     }
 
     private func startPendingApprovals() {
@@ -372,16 +428,22 @@ class Agent: NSObject {
             coordinator.start(
                 nativeDeliveryOwner: nativeDeliveryOwner
             )
+            if requiresExplicitUnlock { coordinator.reject() }
         }
     }
 
     private func handleReceiptOwnedApproval(_ key: ApprovalRouteKey) {
         guard let coordinator = approvalInbox.coordinator(for: key),
               coordinator.isAwaitingAuthentication else { return }
+        if requiresExplicitUnlock {
+            coordinator.reject()
+            return
+        }
         resumePendingWork()
     }
 
     private func activateAwaitingApprovals() {
+        guard access?.checkAccess() != false else { return }
         guard let authorization = startupCredentials.accessSession else { return }
         for key in approvalInbox.awaitingAuthenticationKeys {
             activateApproval(key, authorization: authorization)
@@ -395,27 +457,97 @@ class Agent: NSObject {
     }
 
     func applicationDidBecomeActive() {
+        access?.checkAccess()
         startupCredentials.refresh()
     }
 
+    func walletAccessDidLock() {
+        pendingWalletOpenIntent.cancel()
+        startupCredentials.lock()
+        (walletWindowController as? WalletWindowController)?.walletAccessDidLock()
+        let coordinators = approvalInbox.coordinators
+        for coordinator in coordinators {
+            let key = ApprovalRouteKey(handle: coordinator.handle, nativeDeliveryNonce: coordinator.nativeDeliveryNonce)
+            if let controller = approvalInbox.active(for: key)?.detachForWalletLock(),
+               let window = controller.window, Window.isVisibleContentWindow(window) {
+                configureLockedWindow(controller)
+                if walletWindowController?.window.map(Window.isVisibleContentWindow) != true {
+                    walletWindowController = controller
+                } else {
+                    lockedApprovalWindows.append(controller)
+                }
+            }
+            coordinator.reject()
+        }
+    }
+
+    private func configureLockedWindow(_ controller: NSWindowController) {
+        guard let controller = controller as? WalletWindowController else { return }
+        controller.bindAccess(access) { [weak self] in self?.unlockWallet() }
+        controller.walletAccessDidLock()
+    }
+
+    private func showLockedWallet() {
+        let controller: NSWindowController
+        if let existing = walletWindowController {
+            controller = existing
+        } else {
+            controller = Window.showNew(closeOthers: false, activates: false)
+            walletWindowController = controller
+        }
+        configureLockedWindow(controller)
+        Window.reactivateWindow(controller)
+    }
+
+    private func unlockWallet() {
+        guard access?.checkAccess() == false else { return }
+        if !approvalInbox.hasAwaitingAuthentication { pendingWalletOpenIntent.record() }
+        startupCredentials.requestAccess()
+    }
+
+    private func closeLockedWindows() {
+        let controllers = lockedApprovalWindows
+        lockedApprovalWindows.removeAll()
+        for controller in controllers { controller.close() }
+        if walletWindowController?.contentViewController is WalletLockedViewController {
+            walletWindowController?.close()
+            walletWindowController = nil
+        }
+    }
+
     private func showWallet() {
+        guard access?.checkAccess() != false else { return }
         if let walletWindowController,
            let window = walletWindowController.window,
            Window.isVisibleContentWindow(window) {
+            if walletWindowController.contentViewController is WalletLockedViewController {
+                let accounts = AccountsListViewController()
+                accounts.walletAccess = NativeWalletAccess(access)
+                guard (walletWindowController as? WalletWindowController)?.installProtectedContent(
+                    accounts, access: accounts.walletAccess
+                ) == true else { return }
+            }
+            guard access?.checkAccess() != false else { return }
             Window.reactivateWindow(walletWindowController)
+            let extras = lockedApprovalWindows
+            lockedApprovalWindows.removeAll()
+            extras.forEach { $0.close() }
             return
         }
         let accountsList = AccountsListViewController()
-        let windowController = Window.showNew(closeOthers: CurrentApp.isDockApp)
-        windowController.contentViewController = accountsList
+        accountsList.walletAccess = NativeWalletAccess(access)
+        let windowController = Window.showNew(closeOthers: CurrentApp.isDockApp, activates: false)
+        windowController.bindAccess(access) { [weak self] in self?.unlockWallet() }
         walletWindowController = windowController
+        guard windowController.installProtectedContent(accountsList, access: accountsList.walletAccess) else { return }
+        Window.reactivateWindow(windowController)
     }
 
     private func activateApproval(_ key: ApprovalRouteKey, authorization: WalletAccessSession) {
         guard let coordinator = approvalInbox.coordinator(for: key),
               coordinator.isAwaitingAuthentication else { return }
         if approvalInbox.active(for: key) == nil {
-            let approval = ActiveApproval(coordinator: coordinator)
+            let approval = ActiveApproval(coordinator: coordinator, access: access) { [weak self] in self?.unlockWallet() }
             guard approvalInbox.activate(approval, for: key) else { return }
         }
         coordinator.resumeAfterAuthentication(authorization: authorization)
@@ -426,11 +558,20 @@ class Agent: NSObject {
         coordinator: NativeApprovalCoordinator,
         allowNewWaitingWindow: Bool = false
     ) {
-        guard let approval = activeApproval(for: handle, coordinator: coordinator),
-              let snapshot = approval.beginRenderingCurrentPresentation(
+        guard let approval = activeApproval(for: handle, coordinator: coordinator) else { return }
+        guard access?.checkAccess() != false, !approval.isRetired else {
+            if coordinator.currentPresentation?.presentation.isTerminal == true {
+                approvalInbox.remove(ApprovalRouteKey(handle: handle, nativeDeliveryNonce: coordinator.nativeDeliveryNonce))
+            } else {
+                coordinator.reject()
+            }
+            return
+        }
+        guard let snapshot = approval.beginRenderingCurrentPresentation(
                   allowNewWaitingWindow: allowNewWaitingWindow
               ) else { return }
         let finishedWindowAction = approval.present(snapshot.presentation)
+        guard access?.checkAccess() != false, !approval.isRetired || finishedWindowAction != nil else { return }
         if finishedWindowAction != nil {
             approvalInbox.remove(ApprovalRouteKey(
                 handle: handle,
@@ -449,6 +590,7 @@ class Agent: NSObject {
 
     @discardableResult
     private func activateOldestPresentedApproval() -> Bool {
+        guard access?.checkAccess() != false else { return false }
         guard let oldest = approvalInbox.oldestActive(where: { approval in
             guard !approval.coordinator.isFinished,
                   let window = approval.windowController?.window else {
@@ -474,6 +616,7 @@ class Agent: NSObject {
     }
 
     func restoreOldestRecoverableApproval() {
+        guard access?.checkAccess() != false else { return }
         guard let oldest = approvalInbox.oldestActive(where: {
             $0.coordinator.canReactivate && ($0.coordinator.isPaused || $0.isDismissed)
         }) else { return }
@@ -505,12 +648,17 @@ extension Agent.ActiveApproval {
         case .finished, .superseded:
             return close()
         }
+        if walletAccess.isCurrent, !isRetired,
+           let windowController, let window = windowController.window,
+           !Window.isVisibleContentWindow(window) {
+            windowController.showWindow(nil)
+        }
         return nil
     }
 
     private func present(_ review: NativeApprovalReview) {
-        guard review.isActive else { return }
-        let windowController = approvalWindow(peer: review.request.peerMeta)
+        guard review.isActive,
+              let windowController = approvalWindow(peer: review.request.peerMeta) else { return }
         switch review.action {
         case .selectAccount(let action):
             presentAccountSelection(action, mode: .selectAccount, review: review)
@@ -519,7 +667,7 @@ extension Agent.ActiveApproval {
         case .approveMessage(let action):
             showApproveMessage(action, review: review)
         case .approveTransaction(let action):
-            windowController.contentViewController = ApproveTransactionViewController.with(
+            let controller = ApproveTransactionViewController.with(
                 transaction: action.transaction,
                 chain: action.chain,
                 account: action.account,
@@ -541,12 +689,15 @@ extension Agent.ActiveApproval {
                     coordinator.reject(review: review)
                 }
             }
+            controller.walletAccess = walletAccess
+            installProtectedContent(controller, in: windowController)
         case .addEthereumChain(let action):
             presentAddEthereumChain(action, review: review)
         }
     }
 
-    private func approvalWindow(peer: PeerMeta? = nil) -> NSWindowController {
+    private func approvalWindow(peer: PeerMeta? = nil) -> NSWindowController? {
+        guard walletAccess.isCurrent, !isRetired else { return nil }
         if let windowController {
             if let peer {
                 (windowController as? WalletWindowController)?.approvalPeer = peer
@@ -555,22 +706,40 @@ extension Agent.ActiveApproval {
         }
         let controller = Window.showNew(
             closeOthers: false,
-            approvalPeer: peer ?? coordinator.peer
+            approvalPeer: peer ?? coordinator.peer,
+            activates: false
         )
+        controller.bindAccess(walletAccess.controller, unlock: unlockWallet)
         windowController = controller
+        guard walletAccess.isCurrent, !isRetired else { return nil }
         return controller
+    }
+
+    @discardableResult
+    private func installProtectedContent(_ content: NSViewController, in controller: NSWindowController) -> Bool {
+        if let walletWindow = controller as? WalletWindowController {
+            return walletWindow.installProtectedContent(content, access: walletAccess) && !isRetired
+        }
+        guard walletAccess.isCurrent, !isRetired else { return false }
+        _ = content.view
+        guard walletAccess.isCurrent, !isRetired else { return false }
+        controller.contentViewController = content
+        return walletAccess.isCurrent && !isRetired
     }
 
     private func presentAddEthereumChain(
         _ action: AddEthereumChainAction,
         review: NativeApprovalReview
     ) {
-        let controller = approvalWindow()
-        Self.installWaitingSurface(reason: Strings.loading, in: controller)
+        guard let controller = approvalWindow(),
+              installWaitingSurface(reason: Strings.loading, in: controller),
+              acceptsActions(for: review) else { return }
         guard let window = controller.window else {
             coordinator.reject(review: review)
             return
         }
+        controller.showWindow(nil)
+        guard acceptsActions(for: review) else { return }
         let alert = Alert()
         alert.messageText = Strings.addNetwork
         alert.informativeText = action.chainToAdd.chainName + "\n\n" + action.chainToAdd.defaultRpcUrl
@@ -580,6 +749,7 @@ extension Agent.ActiveApproval {
         alert.beginSheetModal(for: window) { [weak self] response in
             guard let self, acceptsActions(for: review) else { return }
             if response == .alertFirstButtonReturn {
+                guard walletAccess.beginAction() else { return }
                 coordinator.approveAddEthereumChain(review: review)
             } else {
                 coordinator.reject(review: review)
@@ -604,14 +774,17 @@ extension Agent.ActiveApproval {
             } ? network : nil
             coordinator.approveAccounts(accounts, ethereumNetwork: ethereumNetwork, review: review)
         }
-        approvalWindow().contentViewController = NativeAccountSelectionViewController(accountSelection: session)
+        let controller = NativeAccountSelectionViewController(accountSelection: session)
+        controller.walletAccess = walletAccess
+        guard let window = approvalWindow() else { return }
+        installProtectedContent(controller, in: window)
     }
 
     private func showApproveMessage(
         _ action: SignMessageAction,
         review: NativeApprovalReview
     ) {
-        let controller = approvalWindow()
+        guard let controller = approvalWindow() else { return }
         let window = controller.window
         var authenticationTask: Task<Void, Never>?
         var didResolveAuthentication = false
@@ -642,6 +815,7 @@ extension Agent.ActiveApproval {
             authenticationTask?.cancel()
             authenticationTask = Task { [weak self, weak window] in
                 defer { challenge.invalidate() }
+                guard self?.acceptsActions(for: review) == true, !Task.isCancelled else { return }
                 let authorization = await Window.authenticate(
                     in: window,
                     reason: action.subject.asAuthenticationReason,
@@ -664,48 +838,54 @@ extension Agent.ActiveApproval {
             authenticationTask = nil
             didResolveAuthentication = true
         }
-        controller.contentViewController = approveViewController
+        approveViewController.walletAccess = walletAccess
+        installProtectedContent(approveViewController, in: controller)
     }
 
     private func showWaiting() {
-        let controller = approvalWindow()
-        Self.installWaitingSurface(reason: Strings.loading, in: controller)
+        guard let controller = approvalWindow() else { return }
+        installWaitingSurface(reason: Strings.loading, in: controller)
     }
 
     private func showFailureSurface(retry: Bool = false, reason: String = Strings.somethingWentWrong) {
-        Self.installWaitingSurface(
+        guard let controller = approvalWindow() else { return }
+        installWaitingSurface(
             reason: reason,
-            in: approvalWindow(),
+            in: controller,
             isWorking: false,
             retryAction: retry ? { [weak self] in
-                guard let self, !isRetired else { return }
+                guard let self, !isRetired, walletAccess.beginAction() else { return }
                 coordinator.retryRecovery()
             } : nil
         )
     }
 
-    private static func installWaitingSurface(
+    @discardableResult
+    private func installWaitingSurface(
         reason: String,
         in windowController: NSWindowController,
         isWorking: Bool = true,
         retryAction: (() -> Void)? = nil
-    ) {
+    ) -> Bool {
+        guard walletAccess.isCurrent, !isRetired else { return false }
         let outgoing = windowController.contentViewController
         if !(outgoing is WaitingViewController) {
             windowController.window?.delegate = nil
         }
-        dismissApprovalSheets(in: windowController.window)
+        Self.dismissApprovalSheets(in: windowController.window)
+        guard walletAccess.isCurrent, !isRetired else { return false }
         if let waiting = outgoing as? WaitingViewController {
             waiting.update(reason: reason, isWorking: isWorking, retryAction: retryAction)
-            return
+            return true
         }
-        windowController.contentViewController = WaitingViewController.with(
+        let waiting = WaitingViewController.with(
             reason: reason,
             isWorking: isWorking,
             retryAction: retryAction
         ) {
             Window.activateBrowser(specific: .safari)
         }
+        return installProtectedContent(waiting, in: windowController)
     }
 
     @discardableResult
@@ -736,7 +916,7 @@ extension Agent.ActiveApproval {
     }
 
     fileprivate func restorePresentation(retryPaused: Bool, using agent: Agent) {
-        guard !isRetired, coordinator.canReactivate else { return }
+        guard walletAccess.isCurrent, !isRetired, coordinator.canReactivate else { return }
         restorePresentation()
         if coordinator.isPaused && retryPaused && !coordinator.requiresExplicitReviewRetry {
             coordinator.retryRecovery()

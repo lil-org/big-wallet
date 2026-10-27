@@ -5,6 +5,27 @@ import WalletNetworking
 
 import Cocoa
 
+final class WalletActivityScroller: NSScroller {
+    var accessibilityInteraction: (() -> Bool)?
+
+    override class var isCompatibleWithOverlayScrollers: Bool { true }
+
+    override func accessibilityPerformIncrement() -> Bool {
+        guard accessibilityInteraction?() == true else { return false }
+        return super.accessibilityPerformIncrement()
+    }
+
+    override func accessibilityPerformDecrement() -> Bool {
+        guard accessibilityInteraction?() == true else { return false }
+        return super.accessibilityPerformDecrement()
+    }
+
+    override func setAccessibilityValue(_ accessibilityValue: Any?) {
+        guard accessibilityInteraction?() == true else { return }
+        super.setAccessibilityValue(accessibilityValue)
+    }
+}
+
 class RightClickTableView: NSTableView {
     
     weak var menuSource: TableViewMenuSource?

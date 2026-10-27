@@ -10,5 +10,6 @@ if (job.kind !== "run") { throw new Error("Only test runs have a planned stage i
 const stages = createManifest(job).map(stage => ({id: stage.id, group: stage.group, status: "pending",
     ...(stage.nativeAudit ? {nativeAudit: stage.nativeAudit} : {}),
     ...(stage.approvalAudit ? {approvalAudit: stage.approvalAudit} : {}),
+    ...(stage.upgradeAudit ? {upgradeAudit: stage.upgradeAudit} : {}),
     ...(stage.preparationResult ? {preparationResult: true} : {})}));
 process.stdout.write(JSON.stringify(stages) + "\n");

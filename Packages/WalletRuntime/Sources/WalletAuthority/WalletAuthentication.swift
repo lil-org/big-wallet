@@ -150,10 +150,13 @@ public final class WalletAuthenticationGrant: Sendable {
         return binding
     }
 
-    func accessSession(authorityID: UUID) -> WalletAccessSession? {
+    func accessSession(
+        authorityID: UUID,
+        accessClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }
+    ) -> WalletAccessSession? {
         guard case .walletAccess = challenge.purpose,
               consume(authorityID: authorityID, purpose: challenge.purpose) else { return nil }
-        return WalletAccessSession(authorityID: authorityID, credentialIdentity: credentialIdentity)
+        return WalletAccessSession(authorityID: authorityID, credentialIdentity: credentialIdentity, clock: accessClock)
     }
 
     public func invalidate() {
@@ -162,35 +165,65 @@ public final class WalletAuthenticationGrant: Sendable {
 }
 
 public final class WalletAccessSession: Sendable {
+    private static let inactivityLifetime = Duration.seconds(15 * 60)
     private let authorityID: UUID
     private let credentialIdentity: WalletCredentialIdentity
-    private let active = Mutex(true)
+    private let clock: @Sendable () -> ContinuousClock.Instant
+    private let deadline: Mutex<ContinuousClock.Instant?>
 
-    fileprivate init(authorityID: UUID, credentialIdentity: WalletCredentialIdentity) {
+    fileprivate init(
+        authorityID: UUID,
+        credentialIdentity: WalletCredentialIdentity,
+        clock: @escaping @Sendable () -> ContinuousClock.Instant
+    ) {
         self.authorityID = authorityID
         self.credentialIdentity = credentialIdentity
+        self.clock = clock
+        deadline = Mutex(clock() + Self.inactivityLifetime)
     }
 
-    func isCurrent(for authorityID: UUID) -> Bool {
-        status(for: authorityID) == .current
+    func validateCredentials(for authorityID: UUID) -> Bool {
+        guard remainingLifetime(for: authorityID) != nil else { return false }
+        let status = credentialIdentity.status()
+        if status == .changed { invalidate() }
+        return remainingLifetime(for: authorityID) != nil && status == .current
     }
 
     func permitsAuthenticatedPresentation(for authorityID: UUID) -> Bool {
-        status(for: authorityID) != .changed
+        remainingLifetime(for: authorityID) != nil
     }
 
-    private func status(for authorityID: UUID) -> WalletCredentialIdentity.Status {
-        guard self.authorityID == authorityID, active.withLock({ $0 }) else { return .changed }
-        let status = credentialIdentity.status()
-        if status == .changed {
-            invalidate()
-            return .changed
+    func recordInteraction(for authorityID: UUID) -> Duration? {
+        guard self.authorityID == authorityID else { return nil }
+        return deadline.withLock { deadline in
+            let now = clock()
+            guard let current = deadline, now < current else {
+                deadline = nil
+                return nil
+            }
+            deadline = now + Self.inactivityLifetime
+            return Self.inactivityLifetime
         }
-        return active.withLock { $0 } ? status : .changed
+    }
+
+    func remainingLifetime(for authorityID: UUID) -> Duration? {
+        guard self.authorityID == authorityID else { return nil }
+        return remainingLifetime()
+    }
+
+    private func remainingLifetime() -> Duration? {
+        deadline.withLock { deadline in
+            let now = clock()
+            guard let current = deadline, now < current else {
+                deadline = nil
+                return nil
+            }
+            return now.duration(to: current)
+        }
     }
 
     public func invalidate() {
-        active.withLock { $0 = false }
+        deadline.withLock { $0 = nil }
     }
 }
 

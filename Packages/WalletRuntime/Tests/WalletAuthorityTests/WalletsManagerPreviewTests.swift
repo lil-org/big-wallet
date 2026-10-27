@@ -88,6 +88,130 @@ final class WalletsManagerPreviewTests: XCTestCase {
         }
     }
 
+    func testPreviewSessionInvalidationIsSynchronousAndRejectsEveryLaterPage() async throws {
+        let derivations = Mutex(0)
+        let session = WalletPreviewSession(wallet: try testHDWallet(), deriveAccounts: { _, _ in
+            derivations.withLock { $0 += 1 }
+            return []
+        })
+        let retained = session
+
+        session.invalidate()
+        retained.invalidate()
+        for page in [0, 1] {
+            do {
+                _ = try await retained.previewAccounts(page: page)
+                XCTFail("Retired preview session returned accounts")
+            } catch is CancellationError {
+            }
+        }
+
+        XCTAssertEqual(derivations.withLock { $0 }, 0)
+    }
+
+    func testPreviewSessionDiscardsDerivationCompletedAfterInvalidationOrCancellation() async throws {
+        for invalidatesSession in [false, true] {
+            let entered = expectation(description: "Preview derivation started")
+            let release = DispatchSemaphore(value: 0)
+            defer { release.signal() }
+            let derivations = Mutex(0)
+            let session = WalletPreviewSession(wallet: try testHDWallet(), deriveAccounts: { wallet, _ in
+                let first = derivations.withLock { count in
+                    count += 1
+                    return count == 1
+                }
+                if first {
+                    entered.fulfill()
+                    release.wait()
+                }
+                guard let accounts = wallet.ethereumPreviewAccounts(accountRange: 0..<1) else {
+                    throw PreviewTestError.failed
+                }
+                return accounts
+            })
+            let page = Task { try await session.previewAccounts(page: 0) }
+            await fulfillment(of: [entered], timeout: 2)
+
+            if invalidatesSession { session.invalidate() }
+            else { page.cancel() }
+            release.signal()
+            do {
+                _ = try await page.value
+                XCTFail("Retired preview work returned accounts")
+            } catch is CancellationError {
+            }
+
+            if invalidatesSession {
+                do {
+                    _ = try await session.previewAccounts(page: 1)
+                    XCTFail("Invalidated session started another derivation")
+                } catch is CancellationError {
+                }
+                XCTAssertEqual(derivations.withLock { $0 }, 1)
+            } else {
+                let accounts = try await session.previewAccounts(page: 0)
+                XCTAssertEqual(accounts.first?.address, Vectors.abandonEthereumHDVectors[0].address)
+                XCTAssertEqual(derivations.withLock { $0 }, 2)
+            }
+        }
+    }
+
+    func testSourceIdentityChecksFullWalletBytesBeforeReadingCredentials() throws {
+        let reader = KeychainCopyMatchingStub()
+        let data = Vectors.walletCoreJSONPrivateKeyFixture
+        let password = Vectors.walletCoreJSONPrivateKeyPassword
+        reader.walletData = ["wallet": data]
+        reader.passwordData = password
+        let repository = WalletRepository(keychain: Keychain(copyMatching: reader.copyMatching))
+        let identity = WalletRepository.Source(walletID: "wallet", data: data, password: password).identity
+        XCTAssertTrue(try repository.sourceIsCurrent(identity))
+        let passwordReads = reader.passwordReadCount
+
+        reader.walletData["wallet"] = data + Data([32])
+        XCTAssertNotNil(WalletStoredKey.importJSON(json: try XCTUnwrap(reader.walletData["wallet"])))
+        XCTAssertFalse(try repository.sourceIsCurrent(identity))
+        XCTAssertEqual(reader.passwordReadCount, passwordReads)
+        reader.walletData["wallet"] = nil
+        XCTAssertFalse(try repository.sourceIsCurrent(identity))
+        XCTAssertEqual(reader.passwordReadCount, passwordReads)
+        reader.walletReadStatuses["wallet"] = errSecInteractionNotAllowed
+        XCTAssertThrowsError(try repository.sourceIsCurrent(identity)) { error in
+            guard case WalletCredentialError.failedToRead(errSecInteractionNotAllowed) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+        XCTAssertEqual(reader.passwordReadCount, passwordReads)
+    }
+
+    func testSourceIdentityUsesNormalizedCredentialsAndPreservesReadFailures() throws {
+        let reader = KeychainCopyMatchingStub()
+        let data = Vectors.walletCoreJSONPrivateKeyFixture
+        let password = Vectors.walletCoreJSONPrivateKeyPassword
+        reader.walletData = ["wallet": data]
+        let unavailable = Mutex(false)
+        let repository = WalletRepository(keychain: Keychain(copyMatching: { query, output in
+            if (query as NSDictionary)[kSecAttrAccount as String] as? String == "org.lil.wallet.password",
+               unavailable.withLock({ $0 }) { return errSecInteractionNotAllowed }
+            return reader.copyMatching(query, output)
+        }))
+        let identity = WalletRepository.Source(walletID: "wallet", data: data, password: password).identity
+
+        reader.passwordData = Data([0xef, 0xbb, 0xbf]) + password
+        XCTAssertTrue(try repository.sourceIsCurrent(identity))
+        reader.passwordData = Data([0xef, 0xbb, 0xbf, 0xef, 0xbb, 0xbf]) + password
+        XCTAssertFalse(try repository.sourceIsCurrent(identity))
+        reader.passwordData = Data("replacement".utf8)
+        XCTAssertFalse(try repository.sourceIsCurrent(identity))
+        reader.passwordData = nil
+        XCTAssertFalse(try repository.sourceIsCurrent(identity))
+        unavailable.withLock { $0 = true }
+        XCTAssertThrowsError(try repository.sourceIsCurrent(identity)) { error in
+            guard case WalletCredentialError.failedToRead(errSecInteractionNotAllowed) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
     func testReviewCatalogPreservesAccountMetadataAndSurvivesSourceReload() async throws {
         let reader = KeychainCopyMatchingStub()
         reader.attributes = [

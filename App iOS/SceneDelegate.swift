@@ -21,13 +21,22 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             window.makeKeyAndVisible()
             return
         }
+        let access = ApplicationServices.shared.access
+        let registry = MobileWalletSceneRegistry.shared
+        let window = self.window ?? UIWindow(windowScene: windowScene)
+        self.window = window
+        UIApplication.shared.replaceRootViewController(
+            with: MobileWalletRootViewController(access: access), in: window
+        )
+        registry.register(window)
+        window.makeKeyAndVisible()
         
         if let shortcutItem = connectionOptions.shortcutItem, shortcutItem.type == feedbackShortcutItemType {
             UIApplication.shared.open(.quickFeedbackMail)
         }
         
         if screenshotMode {
-            window?.backgroundColor = UIColor(white: 0.137, alpha: 1)
+            window.backgroundColor = UIColor(white: 0.137, alpha: 1)
         }
     }
 

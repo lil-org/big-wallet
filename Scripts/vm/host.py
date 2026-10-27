@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 TOOLS = Path(__file__).resolve().parent
 DEFAULT_VM = Path.home() / 'Library/Application Support/VirtualBuddy/tests machine.vbvm'
 DEFAULT_STATE = Path.home() / 'Library/Application Support/Big Wallet Test VM'
-STAGES = ('build', 'test', 'performance', 'tsan', 'fuzz', 'approval', 'safari', 'repository', 'worker', 'runtime')
+STAGES = ('build', 'test', 'performance', 'tsan', 'fuzz', 'approval', 'upgrade', 'safari', 'repository', 'worker', 'runtime')
 EXCLUDED_PARTS = {'.git', '.asc-runtime', 'node_modules', 'DerivedData', 'build', '.build',
                   '.cache', '.vm-testing', '__pycache__', '.venv', 'venv'}
 SECRET_SUFFIXES = {'.p12', '.p8', '.pem', '.key', '.mobileprovision', '.provisionprofile'}
@@ -597,7 +597,8 @@ def stage_planned_result(exchange, job):
         raise RunnerError('The staged source snapshot does not match the planned job')
     snapshot = read_json(exchange / 'snapshot-manifest.json')
     for relative in ('Scripts/vm/test_manifest.mjs', 'Scripts/safari/scenarios.mjs', 'Scripts/safari/synchronization.mjs',
-                     'Scripts/vm/environment.json', 'Scripts/vm/runtime_inventory.mjs', 'Scripts/vm/runtime-test-inventory.json'):
+                     'Scripts/vm/environment.json', 'Scripts/vm/runtime_inventory.mjs', 'Scripts/vm/runtime-test-inventory.json',
+                     'Scripts/wallet_upgrade/contract.mjs'):
         entries = [entry for entry in snapshot['files'] if entry.get('path') == relative]
         if (len(entries) != 1 or entries[0].get('type') != 'file' or
                 hash_regular_file(exchange / 'source' / relative) != entries[0].get('sha256')):

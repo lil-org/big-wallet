@@ -87,7 +87,8 @@ function project(sourcePath = "App/main.swift") {
 test("Xcode membership forbids duplicated runtime source and production test dependencies", () => {
     const options = {root: "/fixture", sourceExists: () => true};
     assert.equal(validateProjectMembership(project(), options), true);
-    for (const path of ["Packages/WalletRuntime/Sources/WalletDomain/Value.swift", "Packages/WalletRuntimeHarness/Sources/worker.swift", "Tests/Fixture.swift", "../outside.swift"]) {
+    for (const path of ["Packages/WalletRuntime/Sources/WalletDomain/Value.swift", "Packages/WalletRuntimeHarness/Sources/worker.swift",
+        "Packages/WalletUpgradeHarness/Sources/WalletUpgradeConsumer/Consumer.swift", "Scripts/wallet_upgrade/ProducerDriver.swift", "Tests/Fixture.swift", "../outside.swift"]) {
         assert.throws(() => validateProjectMembership(project(path), options));
     }
     assert.throws(() => validateProjectMembership(project(), {...options, sourceExists: () => false}));
@@ -100,6 +101,22 @@ test("Xcode membership forbids duplicated runtime source and production test dep
     fixture.objects.dependency = {target: "harness"};
     fixture.objects.harness = {isa: "PBXNativeTarget", name: "ApprovalCrashWorker"};
     assert.throws(() => validateProjectMembership(fixture, options));
+});
+
+test("production targets cannot package or link upgrade verification artifacts", () => {
+    const options = {root: "/fixture", sourceExists: () => true};
+    for (const name of ["WalletUpgradeConsumer", "ShippedWalletProducer"]) {
+        const linked = project();
+        linked.objects.app.packageProductDependencies = ["upgradeProduct"];
+        linked.objects.upgradeProduct = {productName: name};
+        assert.throws(() => validateProjectMembership(linked, options));
+        assert.throws(() => validateRuntimeSource("App/Adapter.swift", `import ${name}`, {application: true}));
+    }
+    for (const path of ["Tests/Fixtures/ShippedMain/1.0.98-147/source.tar.gz", "Scripts/wallet_upgrade/ProducerDriver.swift"]) {
+        const packaged = project(path);
+        packaged.objects.phase.isa = "PBXResourcesBuildPhase";
+        assert.throws(() => validateProjectMembership(packaged, options));
+    }
 });
 
 test("API fixture invocation selects the requested prebuilt configuration without hidden builds", () => {

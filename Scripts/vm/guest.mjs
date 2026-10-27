@@ -10,6 +10,7 @@ import {dirname, isAbsolute, join, resolve, sep} from "node:path";
 import {pathToFileURL} from "node:url";
 import {createManifest, validateJob, commandForStage} from "./test_manifest.mjs";
 import {auditApprovalResult, auditNativeResult, auditResults, auditSafariPreparation, auditSafariResult} from "./result_audit.mjs";
+import {auditUpgradeResult} from "../wallet_upgrade/audit.mjs";
 
 const EXCHANGE_PATH = "/Volumes/BigWalletBuild/Exchange";
 const MAX_JSON_BYTES = 16 * 1024 * 1024;
@@ -438,6 +439,7 @@ export function pendingStageResults(manifest) {
     return manifest.map(stage => ({id: stage.id, group: stage.group, status: "pending",
         ...(stage.nativeAudit ? {nativeAudit: stage.nativeAudit} : {}),
         ...(stage.approvalAudit ? {approvalAudit: stage.approvalAudit} : {}),
+        ...(stage.upgradeAudit ? {upgradeAudit: stage.upgradeAudit} : {}),
         ...(stage.preparationResult ? {preparationResult: true} : {})}));
 }
 
@@ -545,6 +547,12 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
             if (stage.approvalAudit && !outcome.cancelled && !outcome.timedOut) {
                 result.approvalEvidence = join("failures", stage.id, "systematic-coverage.json");
                 result.audit = auditApprovalResult(await readSafariEvidence(join(artifacts, result.approvalEvidence)), stage.approvalAudit);
+                if (!result.audit.ok) { result.status = "failed"; result.reason = result.audit.issues; }
+            }
+            if (stage.upgradeAudit && !outcome.cancelled && !outcome.timedOut) {
+                result.upgradeEvidence = join("failures", stage.id, "upgrade-report.json");
+                result.audit = auditUpgradeResult(await readSafariEvidence(join(artifacts, result.upgradeEvidence)), stage.upgradeAudit,
+                    {runId, sourceSHA256: stage.upgradeAudit.sourceSHA256});
                 if (!result.audit.ok) { result.status = "failed"; result.reason = result.audit.issues; }
             }
             if (stage.preparationResult && !outcome.cancelled && !outcome.timedOut) {

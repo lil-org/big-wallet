@@ -163,15 +163,18 @@ public struct NativeMessageDispatcher: Sendable {
         public let handle: RequestHandle
         public let configurationKey: String
         public let expectedNonce: NativeDeliveryNonce
+        public let isToolbarAction: Bool
 
-        public init(handle: RequestHandle, configurationKey: String, expectedNonce: NativeDeliveryNonce) {
+        public init(handle: RequestHandle, configurationKey: String, expectedNonce: NativeDeliveryNonce, isToolbarAction: Bool = false) {
             self.handle = handle
             self.configurationKey = configurationKey
             self.expectedNonce = expectedNonce
+            self.isToolbarAction = isToolbarAction
         }
 
-        public init(_ snapshot: ExtensionBridge.Snapshot) {
-            self.init(handle: snapshot.handle, configurationKey: snapshot.configurationKey, expectedNonce: snapshot.nativeDeliveryNonce)
+        public init(_ snapshot: ExtensionBridge.Snapshot, isToolbarAction: Bool = false) {
+            self.init(handle: snapshot.handle, configurationKey: snapshot.configurationKey,
+                expectedNonce: snapshot.nativeDeliveryNonce, isToolbarAction: isToolbarAction)
         }
     }
 
@@ -358,7 +361,13 @@ public struct NativeMessageDispatcher: Sendable {
             privateBrowsing: context.privateBrowsing
         ) {
         case .accepted(let handle, let approvalRequired, let authority, let admissionKind, let nativeDeliveryNonce):
+            let reference = ApprovalReference(handle: handle, configurationKey: request.configurationKey,
+                expectedNonce: nativeDeliveryNonce,
+                isToolbarAction: context.source == .worker && request.provider == .unknown && request.name == "switchAccount")
             if !approvalRequired || admissionKind == .coalesced {
+                if policy == .native, reference.isToolbarAction {
+                    guard await dependencies.reconcile(reference, .admission) == .opened else { throw Error.bridgeUnavailable }
+                }
                 return try Self.admissionResponse(
                     handle: handle, approvalRequired: approvalRequired,
                     authority: authority, admissionKind: admissionKind
@@ -368,7 +377,7 @@ public struct NativeMessageDispatcher: Sendable {
             case .approvalRequired:
                 if policy == .native {
                     switch await dependencies.reconcile(
-                        .init(handle: handle, configurationKey: request.configurationKey, expectedNonce: nativeDeliveryNonce),
+                        reference,
                         .admission
                     ) {
                     case .pending, .opened: break
@@ -385,6 +394,9 @@ public struct NativeMessageDispatcher: Sendable {
                     authority: authority, admissionKind: admissionKind
                 )
             case .responseReady:
+                if policy == .native, reference.isToolbarAction {
+                    guard await dependencies.reconcile(reference, .admission) == .opened else { throw Error.bridgeUnavailable }
+                }
                 return try Self.admissionResponse(
                     handle: handle, approvalRequired: false,
                     authority: authority, admissionKind: admissionKind
@@ -456,7 +468,8 @@ public struct NativeMessageDispatcher: Sendable {
             let handle = RequestHandle(id: request.id, token: identity.token, profileIdentifier: profileIdentifier)
             guard case .found(let snapshot) = await dependencies.bridge.load(handle: handle),
                   snapshot.configurationKey == identity.configurationKey else { throw Error.invalidMessage }
-            switch await dependencies.reconcile(.init(snapshot), .focus) {
+            let isToolbarAction = context.source == .worker && snapshot.isManualSwitch
+            switch await dependencies.reconcile(.init(snapshot, isToolbarAction: isToolbarAction), .focus) {
             case .opened:
                 return try Self.encode(["id": request.id, "opened": true], as: .nativeOpenReply)
             case .pending:

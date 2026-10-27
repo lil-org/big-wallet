@@ -7,6 +7,23 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9FED0CB7F0ED2687CBD30424 /* MacSecretLifetimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1CC767C44A57EA595DC68C3 /* MacSecretLifetimeTests.swift */; };
+		8916BA04577D407BF7756B35 /* MobileSecretLifetimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A719FB467FA4E9C94BA9D0 /* MobileSecretLifetimeTests.swift */; };
+		CC8529C453360600DEDBB398 /* MobileSecretLifetimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A719FB467FA4E9C94BA9D0 /* MobileSecretLifetimeTests.swift */; };
+		B10BE42BBCA05C914FA6B4D4 /* MobileWalletAccessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EC290F8E399B7A06AC6B11C /* Tests/MobileWalletAccessTests.swift */; };
+		E5AC363102F75244988F0454 /* MobileWalletAccessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EC290F8E399B7A06AC6B11C /* Tests/MobileWalletAccessTests.swift */; };
+		04D65572EFE3954E3734FC1E /* MobileWalletAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1822C8C4CE6C7CE7535EA264 /* App iOS/Library/MobileWalletAccess.swift */; };
+		33E5F12AB070F9996C6A62C4 /* MobileWalletAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1822C8C4CE6C7CE7535EA264 /* App iOS/Library/MobileWalletAccess.swift */; };
+		4FDB37C7DB2DA771504819AD /* WalletAccessControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE2A2EA5BB1F9EC8BA766D17 /* Tests/WalletAccessControllerTests.swift */; };
+		BE93736F354F3F4C6E360EF0 /* WalletAccessControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE2A2EA5BB1F9EC8BA766D17 /* Tests/WalletAccessControllerTests.swift */; };
+		7E307C71DBF00D6734B7BC9F /* WalletAccessControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE2A2EA5BB1F9EC8BA766D17 /* Tests/WalletAccessControllerTests.swift */; };
+		3581025EF15C9A601B581030 /* WalletAccessController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB1B8FACA3861F70598DEE8F /* Shared/Services/WalletAccessController.swift */; };
+		A415EF93822C8ED322E6BB5B /* WalletAccessController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB1B8FACA3861F70598DEE8F /* Shared/Services/WalletAccessController.swift */; };
+		33539C61463BA7B14ADA0F13 /* WalletAccessController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB1B8FACA3861F70598DEE8F /* Shared/Services/WalletAccessController.swift */; };
+		E9DE6338C4F8BAEACD9154DF /* WalletAccessController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB1B8FACA3861F70598DEE8F /* Shared/Services/WalletAccessController.swift */; };
+		14E065D1DB49B7D90A30D081 /* WalletAccessController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB1B8FACA3861F70598DEE8F /* Shared/Services/WalletAccessController.swift */; };
+		32B8EA6C4D5AC3973B1D41A5 /* WalletAccessController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB1B8FACA3861F70598DEE8F /* Shared/Services/WalletAccessController.swift */; };
+		173500CEC3775D90586F7EA2 /* WalletAccessController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB1B8FACA3861F70598DEE8F /* Shared/Services/WalletAccessController.swift */; };
 		69ABA361B8BA9583BCE28739 /* AccountPreviewStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA36AB064B8AEBD6648A1157 /* AccountPreviewStateTests.swift */; };
 		F9553931C49C4743A7FA4366 /* EditAccountsViewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980F2D0B6F454056859A8FC6 /* EditAccountsViewControllerTests.swift */; };
 		4028B827A1D70E12CF27764D /* AccountPreviewStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA36AB064B8AEBD6648A1157 /* AccountPreviewStateTests.swift */; };
@@ -1191,6 +1208,12 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F1CC767C44A57EA595DC68C3 /* MacSecretLifetimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSecretLifetimeTests.swift; sourceTree = "<group>"; };
+		C5A719FB467FA4E9C94BA9D0 /* MobileSecretLifetimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileSecretLifetimeTests.swift; sourceTree = "<group>"; };
+		2EC290F8E399B7A06AC6B11C /* Tests/MobileWalletAccessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/MobileWalletAccessTests.swift"; sourceTree = SOURCE_ROOT; };
+		1822C8C4CE6C7CE7535EA264 /* App iOS/Library/MobileWalletAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "App iOS/Library/MobileWalletAccess.swift"; sourceTree = SOURCE_ROOT; };
+		EE2A2EA5BB1F9EC8BA766D17 /* Tests/WalletAccessControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/WalletAccessControllerTests.swift"; sourceTree = SOURCE_ROOT; };
+		EB1B8FACA3861F70598DEE8F /* Shared/Services/WalletAccessController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Services/WalletAccessController.swift"; sourceTree = SOURCE_ROOT; };
 		EA36AB064B8AEBD6648A1157 /* AccountPreviewStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountPreviewStateTests.swift; sourceTree = "<group>"; };
 		980F2D0B6F454056859A8FC6 /* EditAccountsViewControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditAccountsViewControllerTests.swift; sourceTree = "<group>"; };
 		568B98EA09A27D0AF83EA186 /* AccountPreviewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountPreviewState.swift; sourceTree = "<group>"; };
@@ -1617,6 +1640,8 @@
 			path = Tests;
 			isa = PBXGroup;
 			children = (
+				F1CC767C44A57EA595DC68C3 /* MacSecretLifetimeTests.swift */,
+				C5A719FB467FA4E9C94BA9D0 /* MobileSecretLifetimeTests.swift */,
 				E8E92E120536C98CFE366B19 /* SafariUI */,
 				EA36AB064B8AEBD6648A1157 /* AccountPreviewStateTests.swift */,
 				980F2D0B6F454056859A8FC6 /* EditAccountsViewControllerTests.swift */,
@@ -3402,6 +3427,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3581025EF15C9A601B581030 /* WalletAccessController.swift in Sources */,
 				B3ADA3C5ED0A4A39C2A37E6C /* PBXBuildFile */,
 				C0DE00500000000000000012 /* PBXBuildFile */,
 				BF3D000D2FB3000000000000 /* PBXBuildFile */,
@@ -3431,6 +3457,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				33E5F12AB070F9996C6A62C4 /* MobileWalletAccess.swift in Sources */,
+				A415EF93822C8ED322E6BB5B /* WalletAccessController.swift in Sources */,
 				AF2B9A978726DB86600DBE9F /* PBXBuildFile */,
 				5E8078B98E67D28C7DB4366B /* PBXBuildFile */,
 				65FE125EDB868C412908EB5C /* PBXBuildFile */,
@@ -3478,6 +3506,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				33539C61463BA7B14ADA0F13 /* WalletAccessController.swift in Sources */,
 				A2CF7CBD2C54F0FD9E82ABFA /* PBXBuildFile */,
 				B708E90EEA90A2093A336F5B /* PBXBuildFile */,
 				3E928EDD41EF798B09ECFB79 /* PBXBuildFile */,
@@ -3545,6 +3574,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				04D65572EFE3954E3734FC1E /* MobileWalletAccess.swift in Sources */,
+				E9DE6338C4F8BAEACD9154DF /* WalletAccessController.swift in Sources */,
 				4252635C07BB565FB351972D /* PBXBuildFile */,
 				7A22D7161651202D624C5E26 /* PBXBuildFile */,
 				3D21F2836F718C4D85704B47 /* PBXBuildFile */,
@@ -3594,6 +3625,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				14E065D1DB49B7D90A30D081 /* WalletAccessController.swift in Sources */,
 				2C773FF22D53C18C00879A1F /* PBXBuildFile */,
 				2C773FDD2D53C12300879A1F /* PBXBuildFile */,
 				2C773FDA2D53A5C500879A1F /* PBXBuildFile */,
@@ -3620,6 +3652,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8916BA04577D407BF7756B35 /* MobileSecretLifetimeTests.swift in Sources */,
+				B10BE42BBCA05C914FA6B4D4 /* MobileWalletAccessTests.swift in Sources */,
+				4FDB37C7DB2DA771504819AD /* WalletAccessControllerTests.swift in Sources */,
 				B5FA11010000000000000002 /* PBXBuildFile */,
 				B5FA11010000000000000003 /* PBXBuildFile */,
 				4028B827A1D70E12CF27764D /* PBXBuildFile */,
@@ -3655,6 +3690,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				32B8EA6C4D5AC3973B1D41A5 /* WalletAccessController.swift in Sources */,
 				48AE204175D1F9B460DE4BA5 /* PBXBuildFile */,
 				D4050F4B448B91327C672D88 /* PBXBuildFile */,
 				40343842C622D71519A25A55 /* PBXBuildFile */,
@@ -3722,6 +3758,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				173500CEC3775D90586F7EA2 /* WalletAccessController.swift in Sources */,
 				DA422125B14FEEBCAEBD4DD7 /* PBXBuildFile */,
 				2CE0594627640F470042D844 /* PBXBuildFile */,
 				2CED86BB2AF1820E006F9E26 /* PBXBuildFile */,
@@ -3749,6 +3786,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9FED0CB7F0ED2687CBD30424 /* MacSecretLifetimeTests.swift in Sources */,
+				BE93736F354F3F4C6E360EF0 /* WalletAccessControllerTests.swift in Sources */,
 				F2F2A682389EC2746EF90EC6 /* PBXBuildFile */,
 				49DF4C0DE00D4980A85E40DD /* PBXBuildFile */,
 				E22338598B6A2F5FE5598880 /* PBXBuildFile */,
@@ -3791,6 +3830,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CC8529C453360600DEDBB398 /* MobileSecretLifetimeTests.swift in Sources */,
+				E5AC363102F75244988F0454 /* MobileWalletAccessTests.swift in Sources */,
+				7E307C71DBF00D6734B7BC9F /* WalletAccessControllerTests.swift in Sources */,
 				69ABA361B8BA9583BCE28739 /* PBXBuildFile */,
 				F9553931C49C4743A7FA4366 /* PBXBuildFile */,
 				75DF6A7B7B194C42E799E7A2 /* PBXBuildFile */,
@@ -5053,6 +5095,10 @@
 		F45B0D3AC1FF3AA85A7254F7 /* Runtime Composition */ = {
 			isa = PBXGroup;
 			children = (
+				2EC290F8E399B7A06AC6B11C /* Tests/MobileWalletAccessTests.swift */,
+				1822C8C4CE6C7CE7535EA264 /* App iOS/Library/MobileWalletAccess.swift */,
+				EE2A2EA5BB1F9EC8BA766D17 /* Tests/WalletAccessControllerTests.swift */,
+				EB1B8FACA3861F70598DEE8F /* Shared/Services/WalletAccessController.swift */,
 				8FF3057C230C6518D0DC6C9E /* Shared/Services/ApplicationServices.swift */,
 				88DED4F016D9DA10BBDE631C /* Shared/Services/ApprovalBackgroundActivity.swift */,
 				620E13CC629E84FCECF73948 /* Safari Shared/NativeAgentComposition.swift */,

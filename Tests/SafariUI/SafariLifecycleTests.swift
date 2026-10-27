@@ -338,6 +338,12 @@ final class SafariLifecycleTests: XCTestCase {
             self.wallet.activate()
             try self.require(self.wallet.wait(for: .runningForeground, timeout: 10),
                              "The wallet did not enter the foreground")
+#if os(iOS)
+            try self.require(self.wallet.buttons["wallet-unlock"].waitForExistence(timeout: 10),
+                             "The containing wallet did not remain locked after returning from Safari")
+            try self.require(!self.passwordField.exists,
+                             "Returning to the locked wallet unexpectedly started authentication")
+#endif
             let deadline = Date().addingTimeInterval(10)
             while self.safari.state == .runningForeground && Date() < deadline {
                 try await Task.sleep(for: .milliseconds(100))
@@ -372,6 +378,12 @@ final class SafariLifecycleTests: XCTestCase {
             try await self.approve(control: control)
             _ = try await control.result("ethereum-sign")
             try await control.assertSingleSettlement("ethereum-sign")
+#if os(iOS)
+            self.wallet.activate()
+            try self.require(self.wallet.buttons["wallet-unlock"].waitForExistence(timeout: 10),
+                             "Safari signing unexpectedly unlocked the containing wallet")
+            self.safari.activate()
+#endif
         }
     }
 
@@ -2248,7 +2260,7 @@ final class SafariLifecycleTests: XCTestCase {
             CGPoint(x: $0, y: frame.minY + 4)
         }
         guard let point = titlebarPoints.first(where: { point in !otherFrames.contains { $0.contains(point) } }) else {
-            throw SafariUIFailure("The selected approval window has no exposed title bar")
+            throw SafariUIFailure("The selected approval window has no exposed title bar: target=\(frame), otherWindowsAndSheets=\(otherFrames)")
         }
         window.coordinate(withNormalizedOffset: .zero)
             .withOffset(CGVector(dx: point.x - frame.minX, dy: point.y - frame.minY)).click()

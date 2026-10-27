@@ -478,7 +478,8 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 guard let snapshot = ExtensionRequestProfile.snapshot(
                     item.element,
                     request: profile.request(for: item.element),
-                    sequence: item.offset
+                    sequence: item.offset,
+                    isManualSwitch: ExtensionRequestProfile.isManualSwitch(item.element, in: profile)
                 ) else { return .unavailable }
                 snapshots[item.element.handle] = snapshot
             }
@@ -500,7 +501,8 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             guard let snapshot = ExtensionRequestProfile.snapshot(
                 profile.state.records[index],
                 request: profile.request(for: profile.state.records[index]),
-                sequence: index
+                sequence: index,
+                isManualSwitch: ExtensionRequestProfile.isManualSwitch(profile.state.records[index], in: profile)
             ) else { return .unavailable }
             return .found(snapshot)
         }
@@ -1469,7 +1471,8 @@ extension ExtensionRequestProfile {
     fileprivate static func snapshot(
         _ record: Record,
         request: SafariRequest?,
-        sequence: Int
+        sequence: Int,
+        isManualSwitch: Bool
     ) -> ExtensionBridge.Snapshot? {
         let state: ExtensionBridge.Snapshot.State
         switch record.state {
@@ -1505,7 +1508,8 @@ extension ExtensionRequestProfile {
             createdAt: record.createdAt,
             enqueueAttempt: record.enqueueAttempt,
             sequence: sequence,
-            requestBinding: request.map { .init(record: record, request: $0) }
+            requestBinding: request.map { .init(record: record, request: $0) },
+            isManualSwitch: isManualSwitch
         )
     }
 

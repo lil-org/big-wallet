@@ -14,6 +14,7 @@ final class PasswordKeychainFixture: Sendable {
         var addStatus: OSStatus?
         var wrongReturnType = false
         var walletIDs = [String]()
+        var passwordReadCount = 0
         var addCount = 0
         var deleteCount = 0
         var updateCount = 0
@@ -48,6 +49,7 @@ final class PasswordKeychainFixture: Sendable {
     var addCount: Int { state.withLock { $0.addCount } }
     var deleteCount: Int { state.withLock { $0.deleteCount } }
     var updateCount: Int { state.withLock { $0.updateCount } }
+    var passwordReadCount: Int { state.withLock { $0.passwordReadCount } }
 
 
     var credentials: WalletCredentials {
@@ -72,6 +74,7 @@ final class PasswordKeychainFixture: Sendable {
             let query = query as NSDictionary
             return state.withLock { state in
                 if query[kSecAttrAccount as String] as? String == "org.lil.wallet.password" {
+                    state.passwordReadCount += 1
                     if let status = state.readStatus { return status }
                     if state.wrongReturnType {
                         output?.pointee = "unexpected" as CFString
