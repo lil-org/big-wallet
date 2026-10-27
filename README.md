@@ -45,7 +45,7 @@ Use Xcode 27 or newer with Swift 6.4. All native targets use Swift 6 language mo
 Default actor isolation is `nonisolated`, with `NonisolatedNonsendingByDefault` and `InferIsolatedConformances` enabled. UI and wallet presentation state belong to `MainActor`; shared storage and service state use actors or `Synchronization.Mutex`. Unannotated async functions stay on their caller's actor, and CPU-intensive work uses `@concurrent`. Values crossing actors must be `Sendable`. Synchronous cancellation, secret invalidation, and lease release use synchronized ownership. File locks continue to coordinate the app, Safari extensions, and approval helper across processes. Never suspend while holding an in-process mutex.
 
 The local [WalletRuntime package](Packages/WalletRuntime/README.md) separates pure
-Domain values, wallet Authority, and Networking. Applications compose the three
+Domain values, wallet Authority, Flow orchestration, and Networking. Applications compose the four
 libraries; only Authority can access wallet secrets or the C signing backend.
 The separate `Packages/WalletRuntimeHarness` package owns the validation-only
 crash worker. The runtime guide documents scoped authentication, durable dispatch,

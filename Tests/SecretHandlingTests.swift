@@ -1,4 +1,5 @@
 import WalletDomain
+@testable import WalletAuthority
 import Foundation
 import XCTest
 @testable import Big_Wallet
@@ -14,34 +15,34 @@ final class SecretHandlingTests: XCTestCase {
     func testInvalidationRejectsLateSecretResultsAndCallbacks() {
         let session = SecretPresentationSession()
         let token = session.begin()
-        XCTAssertTrue(session.store("secret", for: token))
-        let copyValue = { session.value(for: token) }
+        XCTAssertTrue(session.store(WalletExportedSecret(text: "secret"), for: token))
+        let copyValue = { session.textForTesting(for: token) }
         XCTAssertEqual(copyValue(), "secret")
 
         session.invalidate()
 
         XCTAssertFalse(session.isCurrent(token))
-        XCTAssertNil(session.value(for: token))
+        XCTAssertNil(session.textForTesting(for: token))
         XCTAssertNil(copyValue())
-        XCTAssertFalse(session.store("late secret", for: token))
-        XCTAssertNil(session.value(for: token))
+        XCTAssertFalse(session.store(WalletExportedSecret(text: "late secret"), for: token))
+        XCTAssertNil(session.textForTesting(for: token))
     }
 
     func testNewPresentationClearsOldSecretAndRejectsOldTokens() {
         let session = SecretPresentationSession()
         let first = session.begin()
-        XCTAssertTrue(session.store("first secret", for: first))
+        XCTAssertTrue(session.store(WalletExportedSecret(text: "first secret"), for: first))
 
         let second = session.begin()
 
         XCTAssertNotEqual(first, second)
         XCTAssertFalse(session.isCurrent(first))
         XCTAssertTrue(session.isCurrent(second))
-        XCTAssertNil(session.value(for: first))
-        XCTAssertNil(session.value(for: second))
-        XCTAssertFalse(session.store("late first secret", for: first))
-        XCTAssertTrue(session.store("second secret", for: second))
-        XCTAssertEqual(session.value(for: second), "second secret")
+        XCTAssertNil(session.textForTesting(for: first))
+        XCTAssertNil(session.textForTesting(for: second))
+        XCTAssertFalse(session.store(WalletExportedSecret(text: "late first secret"), for: first))
+        XCTAssertTrue(session.store(WalletExportedSecret(text: "second secret"), for: second))
+        XCTAssertEqual(session.textForTesting(for: second), "second secret")
     }
 
     func testClipboardUsesLocalOnlyOptionsAndExpiresAfterThirtySeconds() {
@@ -280,13 +281,13 @@ final class SecretHandlingTests: XCTestCase {
         let fixture = ClipboardFixture()
         let session = SecretPresentationSession()
         let token = session.begin()
-        session.store("secret", for: token)
-        fixture.clipboard.copy(session.value(for: token)!)
+        session.store(WalletExportedSecret(text: "secret"), for: token)
+        fixture.clipboard.copy(session.textForTesting(for: token)!)
         XCTAssertEqual(fixture.scheduler.intervals.count, 1)
 
         session.invalidate()
 
-        XCTAssertNil(session.value(for: token))
+        XCTAssertNil(session.textForTesting(for: token))
         XCTAssertEqual(fixture.pasteboard.value, "secret")
         XCTAssertEqual(fixture.scheduler.cancellations, [false])
         fixture.clock.advance(by: 30_000_000_000)
@@ -589,5 +590,14 @@ private final class ClipboardPasteboard {
         value = nil
         ownership += 1
         clearCount += 1
+    }
+}
+
+@MainActor
+extension SecretPresentationSession {
+    func textForTesting(for token: Token) -> String? {
+        var text: String?
+        withText(for: token) { text = $0 }
+        return text
     }
 }

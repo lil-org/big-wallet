@@ -2,7 +2,7 @@ import {execFileSync} from "node:child_process";
 import {fileURLToPath, pathToFileURL} from "node:url";
 import {dirname, isAbsolute, relative, resolve, sep} from "node:path";
 
-const libraries = ["WalletDomain", "WalletAuthority", "WalletNetworking"];
+const libraries = ["WalletDomain", "WalletAuthority", "WalletFlows", "WalletNetworking"];
 const allowedTargets = new Set([...libraries, "WalletStorageSupport", "CWalletCrypto"]);
 const forbiddenSource = /(?:^|\/)(?:AppDelegate|SceneDelegate|SafariWebExtensionHandler|SafariVMFixtures)\.swift$|\.entitlements$|AlchemyJWTRequestProofKey|PrivacyInfo\.xcprivacy/;
 
@@ -57,7 +57,7 @@ export function validateApprovalWorkerTarget({harness, runtime}) {
     }
     const products = named(runtime.manifest.products, "runtime product");
     if (products.size !== libraries.length || libraries.some(name => !products.get(name)?.type?.library || JSON.stringify(products.get(name).targets) !== JSON.stringify([name]))) {
-        throw new Error("WalletRuntime must expose only its three production libraries");
+        throw new Error("WalletRuntime must expose only its four production libraries");
     }
     const targets = named(runtime.manifest.targets, "runtime target");
     const descriptions = named(runtime.description.targets, "described runtime target");
@@ -90,7 +90,7 @@ export function validateApprovalWorkerTarget({harness, runtime}) {
     const inputs = dependencies(worker);
     if (inputs.length !== libraries.length || new Set(inputs.map(value => value.name)).size !== libraries.length || inputs.some(value =>
         value.kind !== "product" || value.package?.toLowerCase() !== "walletruntime" || !libraries.includes(value.name))) {
-        throw new Error("Approval worker must consume only the three runtime library products");
+        throw new Error("Approval worker must consume only the four runtime library products");
     }
     return true;
 }

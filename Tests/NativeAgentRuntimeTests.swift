@@ -1,3 +1,4 @@
+import WalletFlows
 #if os(macOS)
 import Darwin
 import Foundation

@@ -328,7 +328,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 authenticationContext.value = context.identity
                 return true
             },
-            randomKey: { Data((0..<32).map(UInt8.init)) }
+            randomKey: { SecretBytes(copying: Data((0..<32).map(UInt8.init))) }
         )
         let fixture = try fixture()
 
@@ -668,7 +668,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let keys = MemoryApprovalKeyStore()
         let vault = SafariApprovalVault(
             fileURL: url, keyStore: keys,
-            randomKey: { XCTFail("Empty catalogs do not need encryption keys"); return Data() }
+            randomKey: { XCTFail("Empty catalogs do not need encryption keys"); return SecretBytes(copying: Data()) }
         )
         let source = SafariApprovalSourceSnapshot(
             catalog: WalletAccountCatalog(accounts: []), password: Data("empty-wallet".utf8), wallets: []
@@ -846,7 +846,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 9, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 9, count: 32)) }
         )
         try vault.publish(
             source: fixture().source,
@@ -896,7 +896,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: MemoryApprovalKeyStore(),
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 19, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 19, count: 32)) }
         )
         let fixture = try mnemonicFixture()
         try vault.publish(
@@ -924,8 +924,8 @@ final class SafariApprovalVaultTests: XCTestCase {
             authentication: { _, _, _ in true },
             randomKey: {
                 publicationEvents.withValue { $0.append("random-key") }
-                return Data(repeating: 20, count: 32)
-            },
+                return SecretBytes(copying: Data(repeating: 20, count: 32))
+             },
             atomicWrite: { data, destination in
                 publicationEvents.withValue { $0.append("write") }
                 try data.write(to: destination, options: .atomic)
@@ -1229,7 +1229,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 authenticationAttempts.withValue { $0 += 1 }
                 return false
             },
-            randomKey: { Data(repeating: 3, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 3, count: 32)) }
         )
         try vault.publish(
             source: fixture().source,
@@ -1366,7 +1366,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 5, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 5, count: 32)) }
         )
         try vault.publish(
             source: source,
@@ -1403,7 +1403,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 6, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 6, count: 32)) }
         )
         let fixture = try fixture()
         try vault.publish(
@@ -1433,7 +1433,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: MemoryApprovalKeyStore(),
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 6, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 6, count: 32)) }
         )
         let fixture = try fixture()
         try vault.publish(source: fixture.source, integrityKey: integrityKey)
@@ -1499,7 +1499,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: MemoryApprovalKeyStore(),
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 21, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 21, count: 32)) }
         )
         try vault.publish(
             source: fixture().source,
@@ -1603,7 +1603,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 8, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 8, count: 32)) }
         )
         try vault.publish(source: fixture.source, integrityKey: integrityKey)
         var envelope = try readEnvelope(at: url)
@@ -1874,13 +1874,13 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 1, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 1, count: 32)) }
         )
         let source = LockedTestValue(try fixture().source)
-        source.value.password = Data(
+        source.value.password = SecretBytes(copying: Data(
             repeating: 1,
             count: SafariApprovalVault.maximumEnvelopeBytes
-        )
+        ))
 
         XCTAssertThrowsError(try vault.publish(
             source: source.value,
@@ -1906,7 +1906,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let publisher = SafariApprovalVault(
             fileURL: targetURL,
             keyStore: keys,
-            randomKey: { Data(repeating: 22, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 22, count: 32)) }
         )
         try publisher.publish(
             source: fixture().source,
@@ -2339,7 +2339,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             defaults: UserDefaultsPreferenceStorage(suiteName: suite)!,
             integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source }
+            sourceSnapshot: { source.copyForTesting() }
         )
 
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
@@ -2395,7 +2395,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             defaults: UserDefaultsPreferenceStorage(suiteName: suite)!,
             integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source }
+            sourceSnapshot: { source.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -2443,7 +2443,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             defaults: UserDefaultsPreferenceStorage(suiteName: suite)!,
             integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source }
+            sourceSnapshot: { source.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -2481,7 +2481,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             let host = SafariApprovalVaultHost(
                 vault: vault, defaults: UserDefaultsPreferenceStorage(suiteName: suite)!,
                 integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
-                waitToReconcile: { await queue.wait() }, sourceSnapshot: { source }
+                waitToReconcile: { await queue.wait() }, sourceSnapshot: { source.copyForTesting() }
             )
             await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
             await host.waitForReconciliation()
@@ -2610,7 +2610,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let host = SafariApprovalVaultHost(
             vault: vault, defaults: UserDefaultsPreferenceStorage(suiteName: suite)!,
             integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
-            waitToReconcile: { await queue.wait() }, sourceSnapshot: { source }
+            waitToReconcile: { await queue.wait() }, sourceSnapshot: { source.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -2639,7 +2639,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             defaults: UserDefaultsPreferenceStorage(suiteName: suite)!,
             integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source.value }
+            sourceSnapshot: { source.value.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -2766,7 +2766,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 events.withValue { $0.append("source") }
                 XCTAssertEqual(events.value.last(where: { $0 != "source" }), "begin")
                 XCTAssertNil(try vault.tryAcquireCoordinationLease())
-                return source
+                return source.copyForTesting()
             }
         )
         await host.start(backgroundTask: { _ in
@@ -2827,8 +2827,8 @@ final class SafariApprovalVaultTests: XCTestCase {
                 waitToReconcile: { await reconciliationQueue.wait() },
                 sourceSnapshot: {
                     sourceReads.withValue { $0 += 1 }
-                    return source
-                }
+                    return source.copyForTesting()
+            }
             )
             await host.start(backgroundTask: { expire in
                 begins.withValue { $0 += 1 }
@@ -2892,10 +2892,10 @@ final class SafariApprovalVaultTests: XCTestCase {
                         workerStarted.fulfill()
                         await releaseSource.wait()
                         if sourceFails { throw CocoaError(.fileReadUnknown) }
-                        return source
+                        return source.copyForTesting()
                     }
-                    return replacement
-                }
+                    return replacement.copyForTesting()
+            }
             )
             await host.start(backgroundTask: { expiration in
                 expire.value = expiration
@@ -2957,8 +2957,8 @@ final class SafariApprovalVaultTests: XCTestCase {
             randomKey: {
                 events.withValue { $0.append("random-key") }
                 expire.value?()
-                return Data(repeating: 7, count: 32)
-            },
+                return SecretBytes(copying: Data(repeating: 7, count: 32))
+             },
             atomicWrite: { data, destination in
                 events.withValue { $0.append("write") }
                 try data.write(to: destination, options: .atomic)
@@ -3217,7 +3217,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                     firstIdentity.value = vault.reviewCatalog()?.identity
                     followUpStarted.fulfill()
                 }
-                return source
+                return source.copyForTesting()
             }
         )
         reconciliationQueue.suspend()
@@ -3281,7 +3281,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                     workerStarted.fulfill()
                     await releaseWorker.wait()
                 }
-                return source
+                return source.copyForTesting()
             }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
@@ -3313,6 +3313,41 @@ final class SafariApprovalVaultTests: XCTestCase {
 #endif
 
 #if os(iOS) || os(visionOS)
+    @MainActor
+    func testRetainedSourceMutationCallbackCannotInvalidateAfterItsScopeEnds() async throws {
+        for invalidatesDuringOperation in [false, true] {
+            let url = temporaryURL()
+            defer { try? FileManager.default.removeItem(at: url) }
+            let keys = MemoryApprovalKeyStore()
+            let removals = LockedTestValue(0)
+            keys.onRemove = { removals.withValue { $0 += 1 } }
+            let vault = SafariApprovalVault(fileURL: url, keyStore: keys)
+            let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let host = SafariApprovalVaultHost(vault: vault, defaults: defaults, sourceSnapshot: { nil })
+            let retained = LockedTestValue<(@Sendable () throws -> Void)?>(nil)
+
+            try await host.performSourceMutation { willMutate in
+                retained.value = willMutate
+                await Task.yield()
+                if invalidatesDuringOperation { try willMutate() }
+            }
+            await host.waitForReconciliation()
+            let callback = try XCTUnwrap(retained.value)
+            let previousData = try? Data(contentsOf: url)
+            let previousRemovals = removals.value
+
+            XCTAssertThrowsError(try callback()) {
+                XCTAssertEqual($0 as? SafariApprovalVault.Error, .unavailable)
+            }
+            XCTAssertEqual(try? Data(contentsOf: url), previousData)
+            XCTAssertEqual(removals.value, previousRemovals)
+            let lease = try vault.acquireCoordinationLease()
+            lease.release()
+        }
+    }
+
     @MainActor
     func testCanceledSourceMutationDoesNotWriteAfterExecutionLeaseIsReleased() async throws {
         let url = temporaryURL()
@@ -3397,7 +3432,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             defaults: UserDefaultsPreferenceStorage(suiteName: suite)!,
             integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source }
+            sourceSnapshot: { source.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -3438,7 +3473,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let host = SafariApprovalVaultHost(
             vault: vault, defaults: UserDefaultsPreferenceStorage(suiteName: suite)!,
             integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
-            waitToReconcile: { await reconciliationQueue.wait() }, sourceSnapshot: { source }
+            waitToReconcile: { await reconciliationQueue.wait() }, sourceSnapshot: { source.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -3477,7 +3512,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let host = SafariApprovalVaultHost(
             vault: vault, defaults: UserDefaultsPreferenceStorage(suiteName: suite)!,
             integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
-            waitToReconcile: { await reconciliationQueue.wait() }, sourceSnapshot: { source }
+            waitToReconcile: { await reconciliationQueue.wait() }, sourceSnapshot: { source.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -3517,7 +3552,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             let host = SafariApprovalVaultHost(
                 vault: vault, defaults: UserDefaultsPreferenceStorage(suiteName: suite)!,
                 integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
-                waitToReconcile: { await reconciliationQueue.wait() }, sourceSnapshot: { source }
+                waitToReconcile: { await reconciliationQueue.wait() }, sourceSnapshot: { source.copyForTesting() }
             )
             await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
             await host.waitForReconciliation()
@@ -3599,7 +3634,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 XCTAssertFalse(Thread.isMainThread)
                 sourceReads.withValue { $0 += 1 }
                 sourceRead.fulfill()
-                return source
+                return source.copyForTesting()
             }
         )
         let lease = try vault.acquireCoordinationLease()
@@ -3669,7 +3704,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 XCTAssertFalse(Thread.isMainThread)
                 let sourceReadsCount = sourceReads.withValue { $0 += 1; return $0 }
                 if sourceReadsCount == 2 { reconciled.fulfill() }
-                return source
+                return source.copyForTesting()
             }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
@@ -3747,8 +3782,8 @@ final class SafariApprovalVaultTests: XCTestCase {
                 sourceSnapshot: {
                     let count = sourceReads.withValue { $0 += 1; return $0 }
                     if count == 3 { replacementSourceRead.fulfill() }
-                    return source
-                }
+                    return source.copyForTesting()
+            }
             )
             await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
             await host.waitForReconciliation()
@@ -3803,7 +3838,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 4, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 4, count: 32)) }
         )
         let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
@@ -3822,7 +3857,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             sourceSnapshot: {
                 XCTAssertFalse(Thread.isMainThread)
                 sourceReads.withValue { $0 += 1 }
-                return source.value
+                return source.value.copyForTesting()
             }
         )
 
@@ -3870,7 +3905,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 7, count: 32) },
+            randomKey: { SecretBytes(copying: Data(repeating: 7, count: 32)) },
             atomicWrite: { data, destination in
                 if rejectTombstone.value && data.isEmpty {
                     throw CocoaError(.fileWriteUnknown)
@@ -3890,7 +3925,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 key: integrityKey
             ),
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source }
+            sourceSnapshot: { source.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -3927,7 +3962,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             defaults: UserDefaultsPreferenceStorage(suiteName: suite)!,
             integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source }
+            sourceSnapshot: { source.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -3968,7 +4003,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 10, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 10, count: 32)) }
         )
         let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
@@ -3982,7 +4017,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 key: integrityKey
             ),
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source }
+            sourceSnapshot: { source.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -4011,7 +4046,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 11, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 11, count: 32)) }
         )
         let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
@@ -4025,7 +4060,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 key: integrityKey
             ),
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source.value }
+            sourceSnapshot: { source.value.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -4037,7 +4072,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 let storedKeyJSON = snapshot.wallets[index].storedKeyJSON
                 let key = try XCTUnwrap(WalletStoredKey.importJSON(json: storedKeyJSON))
                 var secret = try XCTUnwrap(key.decryptPrivateKey(password: snapshot.password))
-                defer { secret.resetBytes(in: 0..<secret.count) }
+                defer { secret.invalidate() }
                 let encrypted = try XCTUnwrap(EncryptedPayload.encrypt(
                     payload: secret,
                     password: newPassword
@@ -4052,7 +4087,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                     options: [.sortedKeys]
                 )
             }
-            snapshot.password = newPassword
+            snapshot.password = SecretBytes(copying: newPassword)
         }
         await host.reconcile()
         await host.waitForReconciliation()
@@ -4072,10 +4107,10 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 18, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 18, count: 32)) }
         )
         let source = LockedTestValue(try fixture().source)
-        source.value.password = Data("wrong-password".utf8)
+        source.value.password = SecretBytes(copying: Data("wrong-password".utf8))
         XCTAssertThrowsError(try vault.publish(
             source: source.value,
             integrityKey: integrityKey
@@ -4097,7 +4132,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 12, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 12, count: 32)) }
         )
         let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
@@ -4111,7 +4146,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 key: integrityKey
             ),
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source.value }
+            sourceSnapshot: { source.value.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -4161,7 +4196,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 rejectSynchronization.value ? false : value.synchronize()
             },
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { fixture.source }
+            sourceSnapshot: { fixture.source.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -4195,7 +4230,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 13, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 13, count: 32)) }
         )
         let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
@@ -4216,7 +4251,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 return value.synchronize()
             },
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source }
+            sourceSnapshot: { source.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -4290,7 +4325,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             },
             waitToReconcile: { await reconciliationQueue.wait() },
             sourceSnapshot: {
-                return source.value
+                return source.value.copyForTesting()
             }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
@@ -4400,7 +4435,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 return value.synchronize()
             },
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source.value }
+            sourceSnapshot: { source.value.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -4466,7 +4501,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 return value.synchronize()
             },
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source.value }
+            sourceSnapshot: { source.value.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -4529,7 +4564,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 14, count: 32) },
+            randomKey: { SecretBytes(copying: Data(repeating: 14, count: 32)) },
             atomicWrite: { data, destination in
                 events.withValue { $0.append(data.isEmpty ? "tombstone" : "envelope") }
                 try data.write(to: destination, options: .atomic)
@@ -4551,7 +4586,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 return value.synchronize()
             },
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source }
+            sourceSnapshot: { source.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -4590,7 +4625,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 15, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 15, count: 32)) }
         )
         let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
@@ -4604,7 +4639,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 key: integrityKey
             ),
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source.value }
+            sourceSnapshot: { source.value.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -4637,7 +4672,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 16, count: 32) },
+            randomKey: { SecretBytes(copying: Data(repeating: 16, count: 32)) },
             atomicWrite: { data, destination in
                 if rejectEnvelope.value && !data.isEmpty {
                     throw CocoaError(.fileWriteUnknown)
@@ -4657,7 +4692,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 key: integrityKey
             ),
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source.value }
+            sourceSnapshot: { source.value.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -4694,7 +4729,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 20, count: 32) },
+            randomKey: { SecretBytes(copying: Data(repeating: 20, count: 32)) },
             atomicWrite: { data, destination in
                 if rejectTombstone.value && data.isEmpty {
                     throw CocoaError(.fileWriteUnknown)
@@ -4714,7 +4749,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 key: integrityKey
             ),
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source.value }
+            sourceSnapshot: { source.value.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -4768,7 +4803,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 return value.synchronize()
             },
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { fixture.source }
+            sourceSnapshot: { fixture.source.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -4813,7 +4848,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 18, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 18, count: 32)) }
         )
         let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
@@ -4827,7 +4862,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 key: integrityKey
             ),
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source.value }
+            sourceSnapshot: { source.value.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -4883,8 +4918,8 @@ final class SafariApprovalVaultTests: XCTestCase {
                     if sourceIsLocked && isLocked.value {
                         throw WalletCredentialError.failedToRead(errSecInteractionNotAllowed)
                     }
-                    return source
-                }
+                    return source.copyForTesting()
+            }
             )
             await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
             await host.waitForReconciliation()
@@ -4933,7 +4968,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             keyStore: keys,
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
-            randomKey: { Data(repeating: 19, count: 32) }
+            randomKey: { SecretBytes(copying: Data(repeating: 19, count: 32)) }
         )
         let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
@@ -4945,7 +4980,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             defaults: UserDefaultsPreferenceStorage(suiteName: suite)!,
             integrityKeyStore: integrityKeys,
             waitToReconcile: { await reconciliationQueue.wait() },
-            sourceSnapshot: { source }
+            sourceSnapshot: { source.copyForTesting() }
         )
         await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
         await host.waitForReconciliation()
@@ -5306,15 +5341,15 @@ private final class MemoryApprovalKeyStore: SafariApprovalKeyStoring {
 
     func removeAllKeys() { state.withLock { $0.keys.removeAll() } }
 
-    func store(_ key: Data, identity: SafariApprovalKeyIdentity) throws {
+    func store(_ key: SecretBytes, identity: SafariApprovalKeyIdentity) throws {
         onStore?(identity)
         try state.withLock { state in
             if let error = state.storeError { throw error }
-            state.keys[identity] = key
+            state.keys[identity] = key.testData
         }
     }
 
-    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> Data {
+    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> SecretBytes {
         let key = try state.withLock { state in
             state.loadedContext = ObjectIdentifier(context)
             state.loadedIdentities.append(identity)
@@ -5322,7 +5357,7 @@ private final class MemoryApprovalKeyStore: SafariApprovalKeyStoring {
             return key
         }
         onLoad?()
-        return key
+        return SecretBytes(copying: key)
     }
 
     func availability(identities: [SafariApprovalKeyIdentity]) -> [SafariApprovalKeyIdentity: SafariApprovalKeyAvailability] {
@@ -5362,14 +5397,14 @@ private final class MemoryApprovalIntegrityKeyStore: SafariApprovalIntegrityKeyS
     }
 
     init(key: Data?) { state = Mutex(State(key: key)) }
-    func loadOrCreate() throws -> Data {
+    func loadOrCreate() throws -> SecretBytes {
         try state.withLock { state in
             if let error = state.error { throw error }
-            if let key = state.key { return key }
+            if let key = state.key { return SecretBytes(copying: key) }
             let key = Data(repeating: state.nextByte, count: 32)
             state.nextByte &+= 1
             state.key = key
-            return key
+            return SecretBytes(copying: key)
         }
     }
 }

@@ -135,12 +135,20 @@ struct RejectingBroadcastForTesting: SignedTransactionBroadcasting {
 func exportMnemonicForTesting(manager: WalletsManager, wallet: WalletSnapshot) async throws -> String {
     let challenge = try await manager.makeExportChallenge(wallet: wallet, kind: .mnemonic)
     let authorization = try XCTUnwrap(challenge.issueGrant(for: challenge.authorityID, credentialIdentity: .init(status: { .current })))
-    return try await manager.exportMnemonic(wallet: wallet, authorization: authorization)
+    let secret = try await manager.exportMnemonic(wallet: wallet, authorization: authorization)
+    defer { secret.invalidate() }
+    var text: String?
+    secret.withText { text = $0 }
+    return try XCTUnwrap(text)
 }
 
 @MainActor
 func exportPrivateKeyForTesting(manager: WalletsManager, wallet: WalletSnapshot, account: WalletAccount? = nil) async throws -> String {
     let challenge = try await manager.makeExportChallenge(wallet: wallet, account: account, kind: .privateKey)
     let authorization = try XCTUnwrap(challenge.issueGrant(for: challenge.authorityID, credentialIdentity: .init(status: { .current })))
-    return try await manager.exportPrivateKey(wallet: wallet, account: account, authorization: authorization)
+    let secret = try await manager.exportPrivateKey(wallet: wallet, account: account, authorization: authorization)
+    defer { secret.invalidate() }
+    var text: String?
+    secret.withText { text = $0 }
+    return try XCTUnwrap(text)
 }

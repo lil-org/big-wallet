@@ -39,21 +39,25 @@ final class WalletAccessTestFixture {
         }
     }
 
+    let authorityID: UUID
+    private let password: String
     let keychain = PasswordKeychainFixture()
     let credentials: WalletCredentials
     let access: WalletAccessController
     let scheduler: Scheduler
     private let time = Clock()
 
-    init() {
-        keychain.passwordData = Data("password".utf8)
+    init(authorityID: UUID = UUID(), password: String = "password") {
+        self.authorityID = authorityID
+        self.password = password
+        keychain.passwordData = Data(password.utf8)
         let time = time
 #if os(iOS) || os(visionOS)
         let vault = SafariApprovalVault(fileURL: nil)
         let host = SafariApprovalVaultHost(vault: vault, sourceSnapshot: { nil })
-        credentials = WalletCredentials(keychain: keychain.keychain, messages: .testingEnglish, authorityID: UUID(), vaultHost: host, accessClock: { time.now })
+        credentials = WalletCredentials(keychain: keychain.keychain, messages: .testingEnglish, authorityID: authorityID, vaultHost: host, accessClock: { time.now })
 #else
-        credentials = WalletCredentials(keychain: keychain.keychain, messages: .testingEnglish, authorityID: UUID(), accessClock: { time.now })
+        credentials = WalletCredentials(keychain: keychain.keychain, messages: .testingEnglish, authorityID: authorityID, accessClock: { time.now })
 #endif
         let scheduler = Scheduler()
         self.scheduler = scheduler
@@ -66,7 +70,7 @@ final class WalletAccessTestFixture {
 
     func makeSession() throws -> WalletAccessSession {
         let challenge = credentials.makeWalletAccessChallenge()
-        let grant = try XCTUnwrap(credentials.verify(password: "password", challenge: challenge))
+        let grant = try XCTUnwrap(credentials.verify(password: password, challenge: challenge))
         return try XCTUnwrap(credentials.accessSession(authorization: grant))
     }
 
@@ -216,7 +220,7 @@ final class WalletAccessControllerTests: XCTestCase {
         fixture.keychain.passwordData = Data("replacement".utf8)
         XCTAssertTrue(fixture.access.checkAccess())
         XCTAssertEqual(fixture.keychain.passwordReadCount, reads)
-        XCTAssertThrowsError(try fixture.access.requireCurrentCredentials())
+        XCTAssertThrowsError(try fixture.access.requireCurrentAccess())
         XCTAssertFalse(fixture.access.checkAccess())
         fixture.keychain.passwordData = Data("password".utf8)
         XCTAssertFalse(fixture.access.checkAccess())
@@ -230,13 +234,13 @@ final class WalletAccessControllerTests: XCTestCase {
         try fixture.unlock()
         let reads = fixture.keychain.passwordReadCount
         fixture.keychain.readStatus = errSecInteractionNotAllowed
-        XCTAssertThrowsError(try fixture.access.requireCurrentCredentials())
+        XCTAssertThrowsError(try fixture.access.requireCurrentAccess())
         XCTAssertEqual(fixture.keychain.passwordReadCount, reads + 1)
         XCTAssertTrue(fixture.access.checkAccess())
         XCTAssertTrue(fixture.access.recordInteraction())
         XCTAssertEqual(fixture.keychain.passwordReadCount, reads + 1)
         fixture.keychain.readStatus = nil
-        XCTAssertNoThrow(try fixture.access.requireCurrentCredentials())
+        XCTAssertNoThrow(try fixture.access.requireCurrentAccess())
         XCTAssertEqual(fixture.keychain.passwordReadCount, reads + 2)
     }
 

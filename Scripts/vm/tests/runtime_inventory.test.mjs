@@ -50,7 +50,7 @@ test("generated inventory requires every test target and rejects duplicate decla
             writeFileSync(join(directory, "Tests.swift"), `@testable import ${target.slice(0, -5)}\nclass ${target}: XCTestCase { func testOne() {} }`);
         }
         const inventory = generateRuntimeInventory(root);
-        assert.equal(validateRuntimeInventory(inventory).tests.length, 3);
+        assert.equal(validateRuntimeInventory(inventory).tests.length, RUNTIME_TEST_TARGETS.length);
         assert.ok(inventory.tests.every(test => test.variants.length === 6));
         writeFileSync(join(root, "Packages/WalletRuntime/Tests/WalletDomainTests/Duplicate.swift"), "class WalletDomainTests: XCTestCase { func testOne() {} }");
         assert.throws(() => generateRuntimeInventory(root), /Duplicate/);

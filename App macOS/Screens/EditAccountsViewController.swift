@@ -67,8 +67,8 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
         previewState = AccountPreviewState(
             wallet: wallet,
             makeSession: { [walletsManager, walletAccess] in
-                try await walletAccess.requireCurrentCredentials()
-                return try await walletsManager.previewSession(wallet: $0)
+                let session = try await walletAccess.requireCurrentAccess()
+                return try await walletsManager.previewSession(wallet: $0, access: session)
             },
             didChange: { [weak self] in self?.previewDidChange($0) }
         )
@@ -116,8 +116,8 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
         mutationTask = Task { [weak self, walletsManager] in
             guard let self, !Task.isCancelled, acceptsManagementActions else { return }
             do {
-                try walletAccess.requireCurrentCredentials()
-                try await walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
+                let session = try walletAccess.requireCurrentAccess()
+                try await walletsManager.update(wallet: wallet, enabledAccounts: newAccounts, access: session)
                 guard !Task.isCancelled, acceptsManagementActions else { return }
                 finishSaving()
                 showAccountsList()

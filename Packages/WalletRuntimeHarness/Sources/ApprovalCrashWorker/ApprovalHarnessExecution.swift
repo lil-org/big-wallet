@@ -19,7 +19,7 @@ func harnessDecodeHandle(_ value: HarnessValue) throws -> RequestHandle {
     return handle
 }
 
-final class HarnessObservedStore: NativeApprovalStore, NativeDeliveryStore, NativeMessageBridge {
+final class HarnessObservedStore: NativeApprovalStore, NativeDeliveryStore, NativeImmediateCompleting, NativeMessageBridge {
     let bridge: ExtensionBridge
     let ipc: HarnessIPC
 

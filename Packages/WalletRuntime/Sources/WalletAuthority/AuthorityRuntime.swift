@@ -14,7 +14,7 @@ public struct AuthorityStorageConfiguration: Sendable {
 }
 
 @MainActor
-public final class WalletAuthoritySystem {
+public final class AuthorityRuntime {
     public enum ErrorKind: Sendable {
         case userRejected, internalError, approvalInterrupted, privateBrowsingUnsupported
     }
@@ -27,6 +27,12 @@ public final class WalletAuthoritySystem {
     public let messages: AuthorityMessages
     public let metadata: WalletsMetadataService
 
+    private final class NativeAuthorityReference {
+        weak var value: NativeApprovalAuthority?
+        init(_ value: NativeApprovalAuthority) { self.value = value }
+    }
+
+    private var nativeAuthorities = [ApprovalRouteKey: NativeAuthorityReference]()
     private let processor: DappRequestProcessor
     private let finalizer: NativeApprovalFinalizer
     private let executionEnvironment: DurableApprovalExecutor.Environment
@@ -50,7 +56,7 @@ public final class WalletAuthoritySystem {
         preparation: TransactionApprovalOperations,
         storage: AuthorityStorageConfiguration,
         messages: AuthorityMessages
-    ) -> WalletAuthoritySystem {
+    ) -> AuthorityRuntime {
         configured(
             catalog: catalog, catalogOwnedChainIds: catalogOwnedChainIds, decodedChainIds: decodedChainIds,
             broadcaster: broadcaster, preparation: preparation, solanaEndpoints: solanaEndpoints, storage: storage, messages: messages,
@@ -84,7 +90,7 @@ public final class WalletAuthoritySystem {
         credentialAuthentication: WalletCredentialAuthentication = .live,
         clock: @escaping @Sendable () -> Date = Date.init,
         hooks: AuthorityExecutionHooks = .none
-    ) -> WalletAuthoritySystem {
+    ) -> AuthorityRuntime {
         configured(
             catalog: catalog, catalogOwnedChainIds: catalogOwnedChainIds, decodedChainIds: decodedChainIds,
             broadcaster: broadcaster, preparation: preparation, solanaEndpoints: solanaEndpoints, storage: storage, messages: messages,
@@ -123,7 +129,7 @@ public final class WalletAuthoritySystem {
         credentialAuthentication: WalletCredentialAuthentication = .live,
         clock: @escaping @Sendable () -> Date = Date.init,
         hooks: AuthorityExecutionHooks = .none
-    ) -> WalletAuthoritySystem {
+    ) -> AuthorityRuntime {
         let networks = NetworkResolver(
             catalog: catalog,
             catalogOwnedChainIds: catalogOwnedChainIds,
@@ -205,7 +211,7 @@ public final class WalletAuthoritySystem {
             reviewCatalog: admissionCatalog,
             messages: messages
         )
-        return WalletAuthoritySystem(
+        return AuthorityRuntime(
             wallets: wallets, credentials: credentials, requests: requests,
             admission: admission, networks: networks, messages: messages, metadata: metadata,
             processor: processor, finalizer: finalizer, executionEnvironment: environment,
@@ -255,23 +261,30 @@ public final class WalletAuthoritySystem {
 #endif
     }
 
-    public func makeNativeApprovalCoordinator(
+    public func makeNativeApprovalAuthority(
         handle: RequestHandle,
         nativeDeliveryNonce: NativeDeliveryNonce
-    ) -> NativeApprovalCoordinator {
-        NativeApprovalCoordinator(
+    ) -> NativeApprovalAuthority {
+        for key in Array(nativeAuthorities.keys) where nativeAuthorities[key]?.value == nil {
+            nativeAuthorities.removeValue(forKey: key)
+        }
+        let key = ApprovalRouteKey(handle: handle, nativeDeliveryNonce: nativeDeliveryNonce)
+        if let current = nativeAuthorities[key]?.value { return current }
+        let authority = NativeApprovalAuthority(
             handle: handle,
             nativeDeliveryNonce: nativeDeliveryNonce,
             store: requests,
             environment: .live(processor: processor, wallets: wallets, finalizer: finalizer, messages: messages, authorityID: authorityID, clock: clock, hooks: hooks)
         )
+        nativeAuthorities[key] = NativeAuthorityReference(authority)
+        return authority
     }
 
-    public func makePopupRequestSessions(
-        presentation: PopupApprovalStatePresenter.Environment,
+    public func makePopupApprovalAuthority(
+        approvalSubjectTitle: @escaping @MainActor @Sendable (ApprovalSubject) -> String,
         loadTransactionContext: @escaping @MainActor @Sendable (SendTransactionAction) async -> String?
-    ) -> PopupRequestSessions {
-        PopupRequestSessions(
+    ) -> PopupApprovalAuthority {
+        PopupApprovalAuthority(
             store: requests,
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { self.vault.reviewCatalog() },
@@ -285,7 +298,7 @@ public final class WalletAuthoritySystem {
             selectionNetworkResolver: { self.networks.network(chainIdHex: $0) },
             approvalNetworkResolver: networks.approvalResolution,
             executionEnvironment: executionEnvironment,
-            presentationEnvironment: presentation,
+            approvalSubjectTitle: approvalSubjectTitle,
             customDefinitionResult: definitionResult,
             messages: messages,
             loadTransactionContext: loadTransactionContext
@@ -309,12 +322,6 @@ public final class WalletAuthoritySystem {
 
     public func recordReviewRequest(at date: Date) {
         Defaults.latestReviewRequestDate = date
-    }
-
-    public func encodePopupResponse(_ response: PopupResponse, for request: InternalSafariRequest) throws -> WireProtocol.ValidatedObject {
-        try AuthorityMessageContext.$current.withValue(messages) {
-            try PopupResponseEncoder.encode(response, for: request)
-        }
     }
 
 #if os(iOS) || os(visionOS)

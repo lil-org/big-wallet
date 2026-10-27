@@ -169,7 +169,7 @@ final class WalletAccessController {
         self.generation == generation && checkAccess()
     }
 
-    func requireCurrentCredentials() throws {
+    func requireCurrentAccess() throws -> WalletAccessSession {
         guard checkAccess(), let session else { throw WalletCredentialError.authorizationUnavailable }
         let current = generation
         guard credentials.validateAccess(session) else {
@@ -179,6 +179,7 @@ final class WalletAccessController {
         guard generation == current, self.session === session, checkAccess() else {
             throw WalletCredentialError.authorizationUnavailable
         }
+        return session
     }
 
     @discardableResult

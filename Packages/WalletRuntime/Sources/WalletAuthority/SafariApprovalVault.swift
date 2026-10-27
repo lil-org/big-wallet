@@ -3,6 +3,7 @@ import WalletStorageSupport
 // ∅ 2026 lil org
 
 import CryptoKit
+import CommonCrypto
 import Darwin
 import Foundation
 import Synchronization
@@ -101,12 +102,11 @@ struct SafariApprovalWalletRecord: Codable, Equatable, Sendable {
 
 struct SafariApprovalSourceSnapshot: Sendable {
     let catalog: WalletAccountCatalog
-    var password: Data
+    var password: SecretBytes
     var wallets: [SafariApprovalWalletRecord]
 
     mutating func resetSecrets() {
-        password.resetBytes(in: 0..<password.count)
-        password.removeAll(keepingCapacity: false)
+        password.invalidate()
         for index in wallets.indices {
             wallets[index].storedKeyJSON.resetBytes(
                 in: 0..<wallets[index].storedKeyJSON.count
@@ -206,8 +206,8 @@ final class SafariApprovalAuthenticationContext: Sendable {
 }
 
 protocol SafariApprovalKeyStoring: AnyObject, Sendable {
-    func store(_ key: Data, identity: SafariApprovalKeyIdentity) throws
-    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> Data
+    func store(_ key: SecretBytes, identity: SafariApprovalKeyIdentity) throws
+    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> SecretBytes
     func availability(
         identities: [SafariApprovalKeyIdentity]
     ) -> [SafariApprovalKeyIdentity: SafariApprovalKeyAvailability]
@@ -215,14 +215,14 @@ protocol SafariApprovalKeyStoring: AnyObject, Sendable {
 }
 
 protocol SafariApprovalIntegrityKeyStoring: AnyObject, Sendable {
-    func loadOrCreate() throws -> Data
+    func loadOrCreate() throws -> SecretBytes
 }
 
 final class SafariApprovalIntegrityKeychainStore:
     SafariApprovalIntegrityKeyStoring {
 
     private enum LoadResult {
-        case success(Data)
+        case success(SecretBytes)
         case failure(OSStatus)
     }
 
@@ -236,7 +236,7 @@ final class SafariApprovalIntegrityKeychainStore:
         CFDictionary,
         UnsafeMutablePointer<CFTypeRef?>?
     ) -> OSStatus
-    typealias RandomKey = @Sendable () throws -> Data
+    typealias RandomKey = @Sendable () throws -> SecretBytes
 
     private let add: Add
     private let copyMatching: CopyMatching
@@ -252,7 +252,7 @@ final class SafariApprovalIntegrityKeychainStore:
         self.randomKey = randomKey
     }
 
-    func loadOrCreate() throws -> Data {
+    func loadOrCreate() throws -> SecretBytes {
         switch load() {
         case .success(let key):
             guard key.count == 32 else {
@@ -265,17 +265,16 @@ final class SafariApprovalIntegrityKeychainStore:
             throw SafariApprovalVault.Error.keychainFailure(status)
         }
 
-        var key = try randomKey()
+        let key = try randomKey()
         guard key.count == 32 else {
-            key.resetBytes(in: 0..<key.count)
+            key.invalidate()
             throw SafariApprovalVault.Error.invalidKey
         }
-        let query = Self.storeQuery(key)
-        let status = add(query as CFDictionary, nil)
+        let status = try key.withTemporaryData { add(Self.storeQuery($0) as CFDictionary, nil) }
         if status == errSecSuccess {
             return key
         }
-        key.resetBytes(in: 0..<key.count)
+        key.invalidate()
         if status == errSecDuplicateItem,
            case .success(let existing) = load(),
            existing.count == 32 {
@@ -312,8 +311,9 @@ final class SafariApprovalIntegrityKeychainStore:
         var item: CFTypeRef?
         let status = copyMatching(Self.loadQuery as CFDictionary, &item)
         guard status == errSecSuccess else { return .failure(status) }
-        guard let key = item as? Data else { return .failure(errSecDecode) }
-        return .success(key)
+        guard var key = item as? Data else { return .failure(errSecDecode) }
+        defer { key.resetBytes(in: 0..<key.count) }
+        return .success(SecretBytes(copying: key))
     }
 }
 
@@ -345,7 +345,7 @@ final class SafariApprovalKeychainStore: SafariApprovalKeyStoring {
         self.delete = delete
     }
 
-    func store(_ key: Data, identity: SafariApprovalKeyIdentity) throws {
+    func store(_ key: SecretBytes, identity: SafariApprovalKeyIdentity) throws {
         guard key.count == 32 else { throw SafariApprovalVault.Error.invalidKey }
         var accessControlError: Unmanaged<CFError>?
         guard let accessControl = SecAccessControlCreateWithFlags(
@@ -357,25 +357,28 @@ final class SafariApprovalKeychainStore: SafariApprovalKeyStoring {
             throw SafariApprovalVault.Error.keychainFailure(errSecParam)
         }
 
-        var addQuery = try Self.baseQuery(identity: identity)
-        addQuery[kSecValueData as String] = key
-        addQuery[kSecAttrAccessControl as String] = accessControl
-        let status = add(addQuery as CFDictionary, nil)
+        let status = try key.withTemporaryData { data in
+            var addQuery = try Self.baseQuery(identity: identity)
+            addQuery[kSecValueData as String] = data
+            addQuery[kSecAttrAccessControl as String] = accessControl
+            return add(addQuery as CFDictionary, nil)
+        }
         guard status == errSecSuccess else {
             throw SafariApprovalVault.Error.keychainFailure(status)
         }
     }
 
-    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> Data {
+    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> SecretBytes {
         let query = try Self.loadQuery(identity: identity, context: context)
         var item: CFTypeRef?
         let status = copyMatching(query as CFDictionary, &item)
-        guard status == errSecSuccess, let key = item as? Data else {
+        guard status == errSecSuccess, var key = item as? Data else {
             throw SafariApprovalVault.Error.keychainFailure(
                 status == errSecSuccess ? errSecDecode : status
             )
         }
-        return key
+        defer { key.resetBytes(in: 0..<key.count) }
+        return SecretBytes(copying: key)
     }
 
     func availability(
@@ -659,11 +662,10 @@ final class SafariApprovalVault: Sendable {
 
     private struct AccountKey {
         let identity: SafariApprovalKeyIdentity
-        var data: Data
+        let data: SecretBytes
 
         mutating func resetSecret() {
-            data.resetBytes(in: 0..<data.count)
-            data.removeAll(keepingCapacity: false)
+            data.invalidate()
         }
     }
 
@@ -690,7 +692,7 @@ final class SafariApprovalVault: Sendable {
 
     typealias Authentication = @Sendable (SafariApprovalAuthenticationContext, LAPolicy, String) async -> Bool
     typealias CanEvaluateAuthentication = @Sendable (LAContext, LAPolicy) -> Bool
-    typealias RandomKey = @Sendable () throws -> Data
+    typealias RandomKey = @Sendable () throws -> SecretBytes
     typealias AtomicWrite = @Sendable (Data, URL) throws -> Void
 
     private let fileURL: URL?
@@ -739,7 +741,7 @@ final class SafariApprovalVault: Sendable {
     @discardableResult
     func publish(
         source: SafariApprovalSourceSnapshot,
-        integrityKey: Data,
+        integrityKey: SecretBytes,
         coordinationLease: CoordinationLease? = nil,
         activity: SafariApprovalReconciliationActivity? = nil
     ) throws -> Publication {
@@ -756,7 +758,7 @@ final class SafariApprovalVault: Sendable {
 
     private func publishCoordinated(
         source: SafariApprovalSourceSnapshot,
-        integrityKey: Data,
+        integrityKey: SecretBytes,
         activity: SafariApprovalReconciliationActivity?
     ) throws -> Publication {
         try activity?.checkCancellation()
@@ -799,8 +801,9 @@ final class SafariApprovalVault: Sendable {
                 visit: { account, privateKey in
                     try activity?.checkCancellation()
                     let descriptor = WalletAccountDescriptor(walletID: wallet.id, account: account)
-                    var key = try self.randomKey()
-                    defer { key.resetBytes(in: 0..<key.count) }
+                    let key = try self.randomKey()
+                    var transferred = false
+                    defer { if !transferred { key.invalidate() } }
                     guard key.count == 32 else { throw Error.invalidKey }
                     try activity?.checkCancellation()
                     let aad = try self.authenticatedData(
@@ -808,8 +811,10 @@ final class SafariApprovalVault: Sendable {
                         catalogDigest: catalogDigest,
                         account: descriptor
                     )
-                    let sealed = try privateKey.withData {
-                        try AES.GCM.seal($0, using: SymmetricKey(data: key), authenticating: aad)
+                    let sealed = try privateKey.withTemporaryData { plaintext in
+                        try key.withTemporaryData {
+                            try AES.GCM.seal(plaintext, using: SymmetricKey(data: $0), authenticating: aad)
+                        }
                     }
                     let nonce = sealed.nonce.withUnsafeBytes { Data($0) }
                     guard nonces.insert(nonce).inserted else { throw Error.invalidEnvelope }
@@ -823,6 +828,7 @@ final class SafariApprovalVault: Sendable {
                         identity: SafariApprovalKeyIdentity(generation: generation, account: descriptor),
                         data: key
                     ))
+                    transferred = true
                 }
             ) else { throw Error.invalidCatalog }
         }
@@ -987,7 +993,7 @@ final class SafariApprovalVault: Sendable {
         expectedGeneration: UUID,
         expectedEnvelopeDigest: Data,
         expectedSourceMAC: Data,
-        integrityKey: Data
+        integrityKey: SecretBytes
     ) -> PublicationStatus {
         guard integrityKey.count == 32,
               source.catalog.isValid,
@@ -1093,7 +1099,7 @@ final class SafariApprovalVault: Sendable {
               clock() < scope.signingDeadline else { return nil }
         let envelope = record.envelope
         let approvedAccount = scope.approvedAccount
-        var key: Data
+        let key: SecretBytes
         do {
             let identity = SafariApprovalKeyIdentity(generation: envelope.generation, account: approvedAccount)
             key = try context.read { try keyStore.load(identity: identity, context: $0) }
@@ -1102,7 +1108,7 @@ final class SafariApprovalVault: Sendable {
             SafariApprovalDiagnostics.record("load approval key", error: error)
             return nil
         }
-        defer { key.resetBytes(in: 0..<key.count) }
+        defer { key.invalidate() }
         guard key.count == 32,
               !Task.isCancelled,
               clock() < scope.signingDeadline else { return nil }
@@ -1117,21 +1123,19 @@ final class SafariApprovalVault: Sendable {
                   catalogDigest: record.catalogDigest,
                   account: approvedAccount
               ) else { return nil }
-        guard var decrypted = try? AES.GCM.open(
-                  sealed,
-                  using: SymmetricKey(data: key),
-                  authenticating: aad
-              ) else {
+        guard var decrypted = try? key.withTemporaryData({
+            try AES.GCM.open(sealed, using: SymmetricKey(data: $0), authenticating: aad)
+        }) else {
             return nil
         }
         defer { decrypted.resetBytes(in: 0..<decrypted.count) }
         guard decrypted.count == 32,
               !Task.isCancelled,
               clock() < scope.signingDeadline,
-              let privateKey = WalletPrivateKey(data: decrypted),
+              let privateKey = WalletPrivateKey(taking: SecretBytes(copying: decrypted)),
               let signer = UnlockedAccountSigner(
                   approvedAccount: approvedAccount,
-                  privateKey: privateKey
+                  taking: privateKey
               ) else { return nil }
         guard let catalog = reviewCatalog(in: record),
               catalog.specificAccount(descriptor: approvedAccount) != nil else {
@@ -1411,45 +1415,41 @@ final class SafariApprovalVault: Sendable {
     private func sourceAuthenticationCode(
         source: SafariApprovalSourceSnapshot,
         catalogData: Data,
-        integrityKey: Data
+        integrityKey: SecretBytes
     ) throws -> Data {
-        var fingerprint = SourceFingerprint(
-            catalog: catalogData,
-            password: source.password,
-            wallets: source.wallets
-        )
-        defer { fingerprint.resetSecrets() }
-        var data = try canonicalEncoder().encode(fingerprint)
-        defer { data.resetBytes(in: 0..<data.count) }
-        guard data.count <= Self.maximumEnvelopeBytes else { throw Error.payloadTooLarge }
-        return Self.authenticationCode(for: data, key: integrityKey)
+        try source.password.withTemporaryData { password in
+            var fingerprint = SourceFingerprint(catalog: catalogData, password: password, wallets: source.wallets)
+            defer { fingerprint.resetSecrets() }
+            var data = try canonicalEncoder().encode(fingerprint)
+            defer { data.resetBytes(in: 0..<data.count) }
+            guard data.count <= Self.maximumEnvelopeBytes else { throw Error.payloadTooLarge }
+            return try Self.authenticationCode(for: data, key: integrityKey)
+        }
     }
 
-    fileprivate static func makeRandomKey() throws -> Data {
-        var key = Data(count: 32)
-        let status = key.withUnsafeMutableBytes { bytes in
-            SecRandomCopyBytes(
-                kSecRandomDefault,
-                bytes.count,
-                bytes.baseAddress!
-            )
+    fileprivate static func makeRandomKey() throws -> SecretBytes {
+        try SecretBytes(count: 32) { bytes in
+            guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, bytes.baseAddress!) == errSecSuccess else {
+                throw Error.invalidKey
+            }
         }
-        guard status == errSecSuccess else {
-            key.resetBytes(in: 0..<key.count)
-            throw Error.invalidKey
-        }
-        return key
     }
 
     private static func digest(_ data: Data) -> Data {
         Data(SHA256.hash(data: data))
     }
 
-    private static func authenticationCode(for data: Data, key: Data) -> Data {
-        Data(HMAC<SHA256>.authenticationCode(
-            for: data,
-            using: SymmetricKey(data: key)
-        ))
+    private static func authenticationCode(for data: Data, key: SecretBytes) throws -> Data {
+        try key.withUnsafeBytes { keyBytes in
+            var result = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
+            data.withUnsafeBytes { bytes in
+                result.withUnsafeMutableBytes { output in
+                    CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256), keyBytes.baseAddress, keyBytes.count,
+                        bytes.baseAddress, bytes.count, output.baseAddress!)
+                }
+            }
+            return result
+        }
     }
 }
 
@@ -1640,7 +1640,7 @@ actor SafariApprovalVaultHost {
     }
 
     func performSourceMutation<Result: Sendable>(
-        _ operation: @Sendable (_ willMutateSource: @Sendable () throws -> Void) async throws -> Result
+        _ operation: @Sendable (_ willMutateSource: @escaping @Sendable () throws -> Void) async throws -> Result
     ) async throws -> Result {
         var remainingExecutionWait = Duration.nanoseconds(Int64(SafariApprovalVault.coordinationLockTimeoutNanoseconds))
         var waitStarted: ContinuousClock.Instant?
@@ -1663,10 +1663,14 @@ actor SafariApprovalVaultHost {
             }
             try await Task.sleep(for: .milliseconds(10))
         }
-        let mutation = Mutex((attempted: false, invalidated: false))
+        let mutation = Mutex((active: true, attempted: false, invalidated: false))
         defer {
+            let attempted = mutation.withLock { mutation in
+                mutation.active = false
+                return mutation.attempted
+            }
             lease.release()
-            if mutation.withLock({ $0.attempted }) {
+            if attempted {
                 cancelReconciliationRetry()
                 reconcile()
             }
@@ -1675,6 +1679,7 @@ actor SafariApprovalVaultHost {
         let metadata = metadata
         return try await operation {
             try mutation.withLock { mutation in
+                guard mutation.active else { throw SafariApprovalVault.Error.unavailable }
                 guard !mutation.invalidated else { return }
                 mutation.attempted = true
                 do { try vault.clear(coordinationLease: lease) }
@@ -1719,7 +1724,7 @@ actor SafariApprovalVaultHost {
         }
         defer { source.resetSecrets() }
 
-        var integrityKey: Data
+        let integrityKey: SecretBytes
         do {
             if let activity {
                 integrityKey = try activity.withActive { try integrityKeyStore.loadOrCreate() }
@@ -1739,7 +1744,7 @@ actor SafariApprovalVaultHost {
             )
             return
         }
-        defer { integrityKey.resetBytes(in: 0..<integrityKey.count) }
+        defer { integrityKey.invalidate() }
         guard integrityKey.count == 32 else {
             SafariApprovalDiagnostics.record(
                 "validate integrity key",

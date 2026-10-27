@@ -3,6 +3,7 @@ import Synchronization
 import WalletDomain
 import XCTest
 @testable import WalletAuthority
+@testable import WalletFlows
 
 @MainActor
 final class NativeToolbarRoutingTests: XCTestCase {

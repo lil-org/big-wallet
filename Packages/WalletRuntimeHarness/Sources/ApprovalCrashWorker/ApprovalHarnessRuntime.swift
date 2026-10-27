@@ -1,3 +1,4 @@
+@testable import WalletFlows
 import Darwin
 import WalletDomain
 @testable import WalletAuthority
@@ -200,14 +201,15 @@ final class HarnessRuntime {
         guard await wallets.reloadFromStore() else { throw HarnessError.invalid("Cannot load fixture wallets") }
         try Task.checkCancellation()
         let keychain = fixtures.keychain
-        guard let password = try keychain.readPasswordData() else { throw HarnessError.invalid("Missing fixture credential") }
+        guard let password = try keychain.readPasswordSecret() else { throw HarnessError.invalid("Missing fixture credential") }
         let records = try wallets.wallets.map { wallet -> SafariApprovalWalletRecord in
             guard let data = try keychain.readWalletData(id: wallet.id) else { throw HarnessError.invalid("Missing fixture wallet") }
             return SafariApprovalWalletRecord(walletID: wallet.id, storedKeyJSON: data)
         }
         var source = SafariApprovalSourceSnapshot(catalog: WalletAccountCatalog(snapshots: wallets.wallets), password: password, wallets: records)
         defer { source.resetSecrets() }
-        let integrityKey = Data(repeating: 0x41, count: 32)
+        let integrityKey = SecretBytes(copying: Data(repeating: 0x41, count: 32))
+        defer { integrityKey.invalidate() }
         let metadataURL = fixtures.root.appendingPathComponent("fixture-vault-publication.json")
         if let data = try? Data(contentsOf: metadataURL),
            let publication = try? JSONDecoder().decode(HarnessVaultPublication.self, from: data),
@@ -275,7 +277,8 @@ final class HarnessRuntime {
     private lazy var popupSessions = makePopupSessions()
 
     private func makePopupSessions() -> PopupRequestSessions {
-        PopupRequestSessions(store: store, walletEnvironment: PopupWalletEnvironment(
+        let presentation = popupPresentation
+        let authority = PopupApprovalAuthority(store: store, walletEnvironment: PopupWalletEnvironment(
         reviewCatalog: { [weak self] in self?.vault.reviewCatalog() }, approvalCatalog: { [weak self] in self?.vault.approvalCatalog() },
         unlockWallets: { [weak self] reason, authorization in
             guard let self else { return .canceled }
@@ -286,8 +289,9 @@ final class HarnessRuntime {
         }, reloadMetadata: {}), loadsTransactionContext: false, transactionApprovalOperations: transactionOperations,
         invalidateNetworkCache: {}, selectionNetworkResolver: { [networks] in networks.network($0) },
         approvalNetworkResolver: networks.approval, executionEnvironment: executionEnvironment,
-        presentationEnvironment: popupPresentation, customDefinitionResult: networks.matches, messages: .testingEnglish,
+        approvalSubjectTitle: presentation.approvalSubjectTitle, customDefinitionResult: networks.matches, messages: .testingEnglish,
         loadTransactionContext: { _ in nil })
+        return PopupRequestSessions(authority: authority, presentation: presentation, messages: .testingEnglish)
     }
 
     private var popupPresentation: PopupApprovalStatePresenter.Environment {
@@ -478,7 +482,7 @@ final class HarnessRuntime {
         }
         guard let owner = identity.nativeDeliveryOwner else { throw HarnessError.invalid("Invalid fixture delivery owner") }
         let clock = fixtures.clock
-        let coordinator = NativeApprovalCoordinator(handle: handle, nativeDeliveryNonce: nonce, store: store,
+        let coordinator = NativeApprovalCoordinator(authority: NativeApprovalAuthority(handle: handle, nativeDeliveryNonce: nonce, store: store,
             environment: .init(now: clock.now, authorityID: authorityID, hooks: executionHooks, uptime: { Double(clock.uptime()) / 1_000_000_000 },
                 wait: { duration in try? await clock.sleep(for: duration) },
                 waitForAuthenticationExpiry: { seconds in try await clock.sleep(until: clock.now().addingTimeInterval(seconds)) },
@@ -497,7 +501,7 @@ final class HarnessRuntime {
                             await HarnessOperation.$identity.withValue(harnessHandle(handle)) { await finalizer.attempt(consent: consent) }
                         }
                     } catch { return .interruptionRequired }
-                }))
+                })))
         coordinators[handle] = coordinator
         coordinator.onEvent = { [weak self, weak coordinator] event in
             guard let self, let coordinator else { return }
@@ -589,6 +593,10 @@ final class HarnessRuntime {
     }
 
     private func mutateWallet(_ payload: HarnessValue) async throws -> HarnessValue {
+        let challenge = credentials.makeWalletAccessChallenge()
+        guard let grant = try credentials.verify(password: "approval-fixture-password", challenge: challenge),
+              let access = credentials.accessSession(authorization: grant) else { throw HarnessError.invalid("Mutation authentication failed") }
+        defer { access.invalidate() }
         let id = try payload.requiredString("walletID")
         guard await wallets.reloadFromStore() else { throw HarnessError.invalid("Cannot load fixture wallets") }
         let action = try payload.requiredString("action")
@@ -600,7 +608,7 @@ final class HarnessRuntime {
             guard let wallet = wallets.currentWallet(id: id) else {
                 return .object(["changed": .bool(false), "reason": .string("missingWallet"), "accounts": accountsJSON()])
             }
-            if action == "removeWallet" { try await wallets.delete(wallet: wallet) }
+            if action == "removeWallet" { try await wallets.delete(wallet: wallet, access: access) }
             else if action == "removeAccount" {
                 guard wallet.accounts.count > 1 else {
                     return .object(["changed": .bool(false), "reason": .string("lastAccountRequiresWalletRemoval"), "accounts": accountsJSON()])
@@ -609,7 +617,7 @@ final class HarnessRuntime {
                     (payload["coin"].string == nil || payload["coin"].string == account.coin.correspondingInpageProvider.rawValue) &&
                         (payload["address"].string == nil || payload["address"].string == account.address)
                 }) else { return .object(["changed": .bool(false), "reason": .string("missingAccount"), "accounts": accountsJSON()]) }
-                try await wallets.update(wallet: wallet, removeAccounts: [account])
+                try await wallets.update(wallet: wallet, removeAccounts: [account], access: access)
             } else { throw HarnessError.invalid("Unknown wallet action") }
         }
         await wallets.reloadFromStore()

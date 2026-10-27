@@ -45,7 +45,7 @@ per build invocation; the project's normal Debug and Release settings stay intac
 
 The `test` stage includes the `WalletRuntime-Package` XCTest scheme in Debug and
 Release on macOS, iOS Simulator, and visionOS Simulator. Package selectors use
-`WalletDomainTests`, `WalletAuthorityTests`, or `WalletNetworkingTests`, optionally
+`WalletDomainTests`, `WalletAuthorityTests`, `WalletFlowsTests`, or `WalletNetworkingTests`, optionally
 followed by a class and method. `--runtime-platform` limits only this package
 XCTest matrix and may be repeated; omitted platforms remain unverified in a
 filtered report. App and Safari selectors keep their platform-specific targets.
@@ -62,7 +62,7 @@ the existing Debug performance skips still require passing Release gates.
 
 `--stage runtime --only-testing WalletNetworkingTests` compiles one package test
 target without running it or requiring unrelated package targets to compile.
-The three production module names are also accepted. `ApprovalCrashWorker`
+The four production module names are also accepted. `ApprovalCrashWorker`
 validates the closed package dependency graph and builds the standalone harness.
 These focused compilation runs do not establish runtime test coverage.
 

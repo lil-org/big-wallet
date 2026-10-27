@@ -43,8 +43,8 @@ class EditAccountsViewController: WalletAccessViewController {
             wallet: wallet,
             makeSession: { @MainActor [weak self, walletsManager] wallet in
                 guard let self else { throw WalletCredentialError.authorizationUnavailable }
-                try requireCurrentCredentials()
-                return try await walletsManager.previewSession(wallet: wallet)
+                let session = try requireCurrentAccess()
+                return try await walletsManager.previewSession(wallet: wallet, access: session)
             },
             didChange: { [weak self] in self?.previewDidChange($0) }
         )
@@ -118,8 +118,8 @@ class EditAccountsViewController: WalletAccessViewController {
         mutationTask = Task { [weak self, walletsManager] in
             guard let self, !Task.isCancelled, hasWalletAccess else { return }
             do {
-                try requireCurrentCredentials()
-                try await walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
+                let session = try requireCurrentAccess()
+                try await walletsManager.update(wallet: wallet, enabledAccounts: newAccounts, access: session)
                 guard !Task.isCancelled, hasWalletAccess else { return }
                 finishSaving()
                 closeEditor()

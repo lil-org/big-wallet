@@ -2,10 +2,11 @@ import {execFileSync} from "node:child_process";
 import {dirname, isAbsolute, relative, resolve, sep} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 
-const products = ["WalletDomain", "WalletAuthority", "WalletNetworking"];
-const inputs = ["WalletDomain", "WalletAuthority"];
+const products = ["WalletDomain", "WalletAuthority", "WalletFlows", "WalletNetworking"];
+const inputs = ["WalletDomain", "WalletAuthority", "WalletFlows"];
 const graph = {WalletDomain: [], WalletStorageSupport: [], CWalletCrypto: [],
-    WalletAuthority: ["WalletDomain", "WalletStorageSupport", "CWalletCrypto"]};
+    WalletAuthority: ["WalletDomain", "WalletStorageSupport", "CWalletCrypto"],
+    WalletFlows: ["WalletDomain", "WalletAuthority"]};
 const forbidden = /(?:^|\/)(?:AppDelegate|SceneDelegate|SafariWebExtensionHandler|SafariVMFixtures|ProducerDriver|IsolatedStorageAdapters)\.swift$|\.entitlements$|AlchemyJWTRequestProofKey|PrivacyInfo\.xcprivacy|ShippedMain|source\.tar/;
 
 function named(values, label) {
@@ -83,7 +84,7 @@ export function validateUpgradeConsumerTarget({harness, runtime}) {
     const actual = dependencies(consumer);
     if (actual.length !== inputs.length || new Set(actual.map(value => value.name)).size !== inputs.length || actual.some(value =>
         value.kind !== "product" || value.package?.toLowerCase() !== "walletruntime" || !inputs.includes(value.name))) {
-        throw new Error("Upgrade consumer must use only WalletDomain and WalletAuthority");
+        throw new Error("Upgrade consumer must use only WalletDomain, WalletAuthority and WalletFlows");
     }
     return true;
 }

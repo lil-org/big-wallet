@@ -51,11 +51,10 @@ final class NativeSecretAlertPresentation: NSObject {
     }
 
     func present(for window: NSWindow) {
-        guard !hasEnded, let secret = session.value(for: token), canCopy() else {
+        guard !hasEnded, canCopy(), session.withText(for: token, { secretField.stringValue = $0 }) else {
             dismiss()
             return
         }
-        secretField.stringValue = secret
         secretField.frame = NSRect(x: 0, y: 0, width: 320, height: secretField.fittingSize.height)
         alert.beginSheetModal(for: window) { [weak self] response in
             self?.finish(response)
@@ -68,10 +67,11 @@ final class NativeSecretAlertPresentation: NSObject {
 
     func finish(_ response: NSApplication.ModalResponse) {
         guard !hasEnded else { return }
-        let secret = response == .alertSecondButtonReturn && canCopy()
-            ? session.value(for: token) : nil
+        if response == .alertSecondButtonReturn, canCopy(), session.withText(for: token, { secret in
+            dismiss()
+            copy(secret)
+        }) { return }
         dismiss()
-        if let secret { copy(secret) }
     }
 
     func dismiss() {

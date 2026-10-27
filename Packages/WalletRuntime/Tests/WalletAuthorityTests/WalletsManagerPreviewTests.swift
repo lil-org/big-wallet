@@ -55,7 +55,8 @@ final class WalletsManagerPreviewTests: XCTestCase {
         }))
         await assertWalletReload(manager)
         let wallet = try XCTUnwrap(manager.wallets.first)
-        let preview = Task { try await manager.repository.previewSession(wallet: wallet) }
+        let access = manager.accessForTesting()
+        let preview = Task { try await manager.repository.previewSession(wallet: wallet, access: access, authorityID: manager.authorityID) }
         await fulfillment(of: [readingPassword], timeout: 2)
 
         preview.cancel()
@@ -68,7 +69,7 @@ final class WalletsManagerPreviewTests: XCTestCase {
         }
     }
 
-    func testPreviewSessionRejectsSourceChangedDuringPreparation() async throws {
+    func testPreviewSessionAllowsStoredJSONReformattingDuringPreparation() async throws {
         let reader = KeychainCopyMatchingStub()
         reader.walletData = ["wallet": Vectors.walletCoreJSONMnemonicFixture]
         reader.passwordData = Vectors.walletCoreJSONMnemonicPassword
@@ -81,11 +82,117 @@ final class WalletsManagerPreviewTests: XCTestCase {
             }
             return reader.copyMatching(query, result)
         }))
+        let authorityID = UUID()
+        let access = walletAccessForTesting(authorityID: authorityID)
+        let session = try await repository.previewSession(wallet: WalletSnapshot(id: "wallet", isMnemonic: true, accounts: []),
+            access: access, authorityID: authorityID)
+        defer { session.invalidate() }
+        let accounts = try await session.previewAccounts(page: 0)
+        XCTAssertFalse(accounts.isEmpty)
+    }
+
+    func testPreviewRetainsPublicMetadataChangesButRejectsReplacedSecretMaterial() async throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.attributes = [reader.walletAttributes(id: "wallet")]
+        reader.walletData = ["wallet": Vectors.walletCoreJSONMnemonicFixture]
+        reader.passwordData = Vectors.walletCoreJSONMnemonicPassword
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager)
+        let wallet = try XCTUnwrap(manager.wallets.first)
+        let session = try await manager.previewSession(wallet: wallet, access: manager.accessForTesting())
+        defer { session.invalidate() }
+
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Vectors.walletCoreJSONMnemonicFixture) as? [String: Any])
+        object["name"] = "Renamed wallet"
+        reader.walletData["wallet"] = try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted])
+        let accounts = try await session.previewAccounts(page: 0)
+        XCTAssertFalse(accounts.isEmpty)
+
+        var crypto = try XCTUnwrap(object["crypto"] as? [String: Any])
+        crypto["ciphertext"] = "00"
+        object["crypto"] = crypto
+        reader.walletData["wallet"] = try JSONSerialization.data(withJSONObject: object)
         do {
-            _ = try await repository.previewSession(wallet: WalletSnapshot(id: "wallet", isMnemonic: true, accounts: []))
-            XCTFail("Changed wallet source produced a preview session")
-        } catch WalletsManager.Error.keychainAccessFailure {
+            _ = try await session.previewAccounts(page: 1)
+            XCTFail("A preview retained a replaced secret source")
+        } catch is CancellationError {}
+    }
+
+    func testAccessInvalidationRetiresPreviewSeedBeforeAnotherPage() async throws {
+        let authorityID = UUID()
+        let access = walletAccessForTesting(authorityID: authorityID)
+        let wallet = try testHDWallet()
+        let session = WalletPreviewSession(wallet: wallet, access: access, authorityID: authorityID)
+
+        access.invalidate()
+
+        XCTAssertNil(wallet.ethereumPreviewAccounts(accountRange: 0..<1))
+        do {
+            _ = try await session.previewAccounts(page: 0)
+            XCTFail("An invalidated access session retained preview access")
+        } catch is CancellationError {}
+    }
+
+    func testExternalSourceChangesRetireIdlePreviewsWithoutAnotherPageRequest() async throws {
+        for change in 0..<3 {
+            let reader = KeychainCopyMatchingStub()
+            reader.attributes = [reader.walletAttributes(id: "wallet")]
+            reader.walletData = ["wallet": Vectors.walletCoreJSONMnemonicFixture]
+            reader.passwordData = Vectors.walletCoreJSONMnemonicPassword
+            let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+            await assertWalletReload(manager)
+            let session = try await manager.previewSession(wallet: try XCTUnwrap(manager.wallets.first), access: manager.accessForTesting())
+            XCTAssertTrue(session.isActive)
+
+            switch change {
+            case 0: reader.walletData["wallet"] = nil
+            case 1: reader.walletData["wallet"] = Vectors.walletCoreJSONPrivateKeyFixture
+            default: reader.passwordData = Data("replacement".utf8)
+            }
+            await manager.handleExternalWalletStoreChange()
+
+            XCTAssertFalse(session.isActive)
         }
+    }
+
+    func testExternalPublicMetadataChangePreservesIdlePreviewAndRegistryIsWeak() async throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.attributes = [reader.walletAttributes(id: "wallet")]
+        reader.walletData = ["wallet": Vectors.walletCoreJSONMnemonicFixture]
+        reader.passwordData = Vectors.walletCoreJSONMnemonicPassword
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager)
+        var session: WalletPreviewSession? = try await manager.previewSession(
+            wallet: try XCTUnwrap(manager.wallets.first), access: manager.accessForTesting()
+        )
+        weak var releasedSession = session
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Vectors.walletCoreJSONMnemonicFixture) as? [String: Any])
+        object["name"] = "Changed public name"
+        reader.walletData["wallet"] = try JSONSerialization.data(withJSONObject: object)
+
+        await manager.handleExternalWalletStoreChange()
+
+        XCTAssertTrue(try XCTUnwrap(session).isActive)
+        session = nil
+        XCTAssertNil(releasedSession)
+    }
+
+    func testPreviewRejectsExpiredAccess() async throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.attributes = [reader.walletAttributes(id: "wallet")]
+        reader.walletData = ["wallet": Vectors.walletCoreJSONMnemonicFixture]
+        reader.passwordData = Vectors.walletCoreJSONMnemonicPassword
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager)
+        let now = Mutex(ContinuousClock.now)
+        let access = walletAccessForTesting(authorityID: manager.authorityID, clock: { now.withLock { $0 } })
+        let session = try await manager.previewSession(wallet: try XCTUnwrap(manager.wallets.first), access: access)
+        now.withLock { $0 += .seconds(15 * 60) }
+
+        do {
+            _ = try await session.previewAccounts(page: 0)
+            XCTFail("Expired access permitted preview derivation")
+        } catch is CancellationError {}
     }
 
     func testPreviewSessionInvalidationIsSynchronousAndRejectsEveryLaterPage() async throws {

@@ -1528,6 +1528,7 @@
 			files = (
 				0C3861984E6D09682ADD2413 /* PBXBuildFile */,
 				DA85C0C6EB8237A353B6FE9B /* PBXBuildFile */,
+				66CDC3F2CCAFDD6033670C61 /* PBXBuildFile */,
 				AA21155BF3F89AE775D1E627 /* PBXBuildFile */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1538,6 +1539,7 @@
 			files = (
 				78555FFF7160A32164F71CD4 /* PBXBuildFile */,
 				D96D1E60DAFC0F275CE9ADA9 /* PBXBuildFile */,
+				01ADF4835C179A9AF874FEC9 /* PBXBuildFile */,
 				F08D9AA25E96121EA7A02437 /* PBXBuildFile */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1548,6 +1550,7 @@
 			files = (
 				8EB23C17103F9C2D7452F78D /* PBXBuildFile */,
 				78204B94CC25F1EA8C9DE3EF /* PBXBuildFile */,
+				68D96AD04D77128C1CE1FE6D /* PBXBuildFile */,
 				3E9DF6795BA1D0E4821C27C4 /* PBXBuildFile */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1558,6 +1561,7 @@
 			files = (
 				CE04783BB03605C6FB1870ED /* PBXBuildFile */,
 				A9E702280FE1EA0D60F97012 /* PBXBuildFile */,
+				4A0229870BF3560831C4B658 /* PBXBuildFile */,
 				53B6AD605EC1D18A1F8064B2 /* PBXBuildFile */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1568,6 +1572,7 @@
 			files = (
 				C787C2B2C98A35467493C47B /* PBXBuildFile */,
 				AD36408F14BE4EF9F55A9F6E /* PBXBuildFile */,
+				B59B5CA08EF49C85C64DED94 /* PBXBuildFile */,
 				3AA381B2E7DFE522F83FE157 /* PBXBuildFile */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1578,6 +1583,7 @@
 			files = (
 				327D3A6B73A380836F1C5D19 /* PBXBuildFile */,
 				A432427C01261159BAD0874A /* PBXBuildFile */,
+				3BCDE8152DC2044BC86A2705 /* PBXBuildFile */,
 				754E83ABEE611A90DE65CC1F /* PBXBuildFile */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1588,6 +1594,7 @@
 			files = (
 				32B5FB2BB9834B4CBF84DA5F /* PBXBuildFile */,
 				4EFF83D783D92D661FE491F9 /* PBXBuildFile */,
+				8C11A84B8902DB419D8723D1 /* PBXBuildFile */,
 				522421702110FB919EC65DDC /* PBXBuildFile */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1598,6 +1605,7 @@
 			files = (
 				AEB79DA0961A7186DC8AE0D1 /* PBXBuildFile */,
 				C98F11AF51F578486FE1B67A /* PBXBuildFile */,
+				ABF42B72481542D1B0AB8FEA /* PBXBuildFile */,
 				1C4EA4AB8B4B3BA8EFC6E5F3 /* PBXBuildFile */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1608,6 +1616,7 @@
 			files = (
 				26408421D110A784B6BD8F66 /* PBXBuildFile */,
 				2B48C8CC0664C6BA4BCAF6F6 /* PBXBuildFile */,
+				54658D036FDC8C1CEF96B227 /* PBXBuildFile */,
 				E445DD56CBEC7AE50FAA60B6 /* PBXBuildFile */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1618,6 +1627,7 @@
 			files = (
 				19DECBD49960930139C83482 /* PBXBuildFile */,
 				4082C9707D5ABA5DC61955F7 /* PBXBuildFile */,
+				DBDBA373102297EDA35E9A29 /* PBXBuildFile */,
 				3A25D3F171DD7473B237C62C /* PBXBuildFile */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -2166,6 +2176,7 @@
 			packageProductDependencies = (
 				B9D869471AA8339EBC5DADE2 /* WalletDomain */,
 				B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */,
+				48654FD8DC3709727279A051 /* WalletFlows */,
 				ADB46F0D33C85A7683EC7EE9 /* WalletNetworking */,
 			);
 		};
@@ -2193,6 +2204,7 @@
 			packageProductDependencies = (
 				B9D869471AA8339EBC5DADE2 /* WalletDomain */,
 				B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */,
+				48654FD8DC3709727279A051 /* WalletFlows */,
 				ADB46F0D33C85A7683EC7EE9 /* WalletNetworking */,
 			);
 		};
@@ -2222,6 +2234,7 @@
 			packageProductDependencies = (
 				B9D869471AA8339EBC5DADE2 /* WalletDomain */,
 				B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */,
+				48654FD8DC3709727279A051 /* WalletFlows */,
 				ADB46F0D33C85A7683EC7EE9 /* WalletNetworking */,
 			);
 		};
@@ -2250,6 +2263,7 @@
 			packageProductDependencies = (
 				B9D869471AA8339EBC5DADE2 /* WalletDomain */,
 				B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */,
+				48654FD8DC3709727279A051 /* WalletFlows */,
 				ADB46F0D33C85A7683EC7EE9 /* WalletNetworking */,
 			);
 		};
@@ -2276,6 +2290,7 @@
 			packageProductDependencies = (
 				B9D869471AA8339EBC5DADE2 /* WalletDomain */,
 				B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */,
+				48654FD8DC3709727279A051 /* WalletFlows */,
 				ADB46F0D33C85A7683EC7EE9 /* WalletNetworking */,
 			);
 		};
@@ -2299,6 +2314,7 @@
 			packageProductDependencies = (
 				B9D869471AA8339EBC5DADE2 /* WalletDomain */,
 				B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */,
+				48654FD8DC3709727279A051 /* WalletFlows */,
 				ADB46F0D33C85A7683EC7EE9 /* WalletNetworking */,
 			);
 		};
@@ -2326,6 +2342,7 @@
 			packageProductDependencies = (
 				B9D869471AA8339EBC5DADE2 /* WalletDomain */,
 				B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */,
+				48654FD8DC3709727279A051 /* WalletFlows */,
 				ADB46F0D33C85A7683EC7EE9 /* WalletNetworking */,
 			);
 		};
@@ -2353,6 +2370,7 @@
 			packageProductDependencies = (
 				B9D869471AA8339EBC5DADE2 /* WalletDomain */,
 				B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */,
+				48654FD8DC3709727279A051 /* WalletFlows */,
 				ADB46F0D33C85A7683EC7EE9 /* WalletNetworking */,
 			);
 		};
@@ -2376,6 +2394,7 @@
 			packageProductDependencies = (
 				B9D869471AA8339EBC5DADE2 /* WalletDomain */,
 				B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */,
+				48654FD8DC3709727279A051 /* WalletFlows */,
 				ADB46F0D33C85A7683EC7EE9 /* WalletNetworking */,
 			);
 		};
@@ -2399,6 +2418,7 @@
 			packageProductDependencies = (
 				B9D869471AA8339EBC5DADE2 /* WalletDomain */,
 				B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */,
+				48654FD8DC3709727279A051 /* WalletFlows */,
 				ADB46F0D33C85A7683EC7EE9 /* WalletNetworking */,
 			);
 		};
@@ -3680,6 +3700,7 @@
 				AAA688A5AB3BCB0395F1EB5F /* PBXBuildFile */,
 				E5536ADF6E99A27D38DEFDBE /* PBXBuildFile */,
 				34D67B7BF815E5278B24446D /* PBXBuildFile */,
+				C1F4287414D5B934030958D9 /* PBXBuildFile */,
 				0EB79B164B99A02446B21CEF /* PBXBuildFile */,
 				F0EE51813AE939DAEF4A5D6E /* PBXBuildFile */,
 				1524625C1E0DC2866351813C /* PBXBuildFile */,
@@ -3820,6 +3841,7 @@
 				FCE45066E8E63834EDDAEA6C /* PBXBuildFile */,
 				85FF5B06D565059503DDE24F /* PBXBuildFile */,
 				70321C0BC15D3274DB9F19E2 /* PBXBuildFile */,
+				74B1D72D5E55530F68FE4B29 /* PBXBuildFile */,
 				ABFCD09BE283DBFB1909316E /* PBXBuildFile */,
 				B38EB78F99DCB33444720875 /* PBXBuildFile */,
 				3EE0A493DD7AF29B45054EA9 /* PBXBuildFile */,
@@ -3856,6 +3878,7 @@
 				905EE0A6B826BE4CB50DD3C5 /* PBXBuildFile */,
 				AF8F003C544CB9F2CB33F8E7 /* PBXBuildFile */,
 				A214130EDFE4A7F4FD3EFAE8 /* PBXBuildFile */,
+				7F28C8B254F73D10FFD71AAC /* PBXBuildFile */,
 				14FFF2EF47F8B1D7FF81717C /* PBXBuildFile */,
 				6EA894FF1F8C60F36528D2A1 /* PBXBuildFile */,
 				7BA4E7D1A3DB0642BCF800A8 /* PBXBuildFile */,
@@ -4967,6 +4990,11 @@
 			package = B1729919A6744E8150DB612A /* XCLocalSwiftPackageReference */;
 			productName = WalletAuthority;
 		};
+		48654FD8DC3709727279A051 /* WalletFlows */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B1729919A6744E8150DB612A /* XCLocalSwiftPackageReference */;
+			productName = WalletFlows;
+		};
 		ADB46F0D33C85A7683EC7EE9 /* WalletNetworking */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B1729919A6744E8150DB612A /* XCLocalSwiftPackageReference */;
@@ -4980,6 +5008,10 @@
 			isa = PBXBuildFile;
 			productRef = B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */;
 		};
+		01ADF4835C179A9AF874FEC9 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			productRef = 48654FD8DC3709727279A051 /* WalletFlows */;
+		};
 		F08D9AA25E96121EA7A02437 /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
 			productRef = ADB46F0D33C85A7683EC7EE9 /* WalletNetworking */;
@@ -4991,6 +5023,10 @@
 		78204B94CC25F1EA8C9DE3EF /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
 			productRef = B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */;
+		};
+		68D96AD04D77128C1CE1FE6D /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			productRef = 48654FD8DC3709727279A051 /* WalletFlows */;
 		};
 		3E9DF6795BA1D0E4821C27C4 /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
@@ -5004,6 +5040,10 @@
 			isa = PBXBuildFile;
 			productRef = B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */;
 		};
+		DBDBA373102297EDA35E9A29 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			productRef = 48654FD8DC3709727279A051 /* WalletFlows */;
+		};
 		3A25D3F171DD7473B237C62C /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
 			productRef = ADB46F0D33C85A7683EC7EE9 /* WalletNetworking */;
@@ -5015,6 +5055,10 @@
 		4EFF83D783D92D661FE491F9 /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
 			productRef = B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */;
+		};
+		8C11A84B8902DB419D8723D1 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			productRef = 48654FD8DC3709727279A051 /* WalletFlows */;
 		};
 		522421702110FB919EC65DDC /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
@@ -5028,6 +5072,10 @@
 			isa = PBXBuildFile;
 			productRef = B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */;
 		};
+		66CDC3F2CCAFDD6033670C61 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			productRef = 48654FD8DC3709727279A051 /* WalletFlows */;
+		};
 		AA21155BF3F89AE775D1E627 /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
 			productRef = ADB46F0D33C85A7683EC7EE9 /* WalletNetworking */;
@@ -5039,6 +5087,10 @@
 		C98F11AF51F578486FE1B67A /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
 			productRef = B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */;
+		};
+		ABF42B72481542D1B0AB8FEA /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			productRef = 48654FD8DC3709727279A051 /* WalletFlows */;
 		};
 		1C4EA4AB8B4B3BA8EFC6E5F3 /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
@@ -5052,6 +5104,10 @@
 			isa = PBXBuildFile;
 			productRef = B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */;
 		};
+		4A0229870BF3560831C4B658 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			productRef = 48654FD8DC3709727279A051 /* WalletFlows */;
+		};
 		53B6AD605EC1D18A1F8064B2 /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
 			productRef = ADB46F0D33C85A7683EC7EE9 /* WalletNetworking */;
@@ -5063,6 +5119,10 @@
 		2B48C8CC0664C6BA4BCAF6F6 /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
 			productRef = B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */;
+		};
+		54658D036FDC8C1CEF96B227 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			productRef = 48654FD8DC3709727279A051 /* WalletFlows */;
 		};
 		E445DD56CBEC7AE50FAA60B6 /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
@@ -5076,6 +5136,10 @@
 			isa = PBXBuildFile;
 			productRef = B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */;
 		};
+		3BCDE8152DC2044BC86A2705 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			productRef = 48654FD8DC3709727279A051 /* WalletFlows */;
+		};
 		754E83ABEE611A90DE65CC1F /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
 			productRef = ADB46F0D33C85A7683EC7EE9 /* WalletNetworking */;
@@ -5087,6 +5151,10 @@
 		AD36408F14BE4EF9F55A9F6E /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
 			productRef = B6CF4DAB49C010AD39AF3D3F /* WalletAuthority */;
+		};
+		B59B5CA08EF49C85C64DED94 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			productRef = 48654FD8DC3709727279A051 /* WalletFlows */;
 		};
 		3AA381B2E7DFE522F83FE157 /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
@@ -5117,6 +5185,7 @@
 				560639C47410F9A5AC41D2D8 /* Packages/WalletRuntime/Tests/WalletAuthorityTests/NativeApprovalCoordinatorTestFixture.swift */,
 				E5FD43F3BB3B22799A686BBF /* Packages/WalletRuntime/Tests/WalletAuthorityTests/TransactionApprovalTestFixture.swift */,
 				1C0963A2B979F96B1CE57755 /* Packages/WalletRuntime/Tests/WalletAuthorityTests/WalletRepositoryTestFixture.swift */,
+				E58EC4E548048B61C9C7A77E /* Packages/WalletRuntime/Tests/WalletAuthorityTests/SecretTestSupport.swift */,
 				72ECBC4AAC58F0EB486B7314 /* Packages/WalletRuntime/Tests/WalletAuthorityTests/PasswordKeychainFixture.swift */,
 				F9AE0E12EAE236F640CD06D3 /* Packages/WalletRuntime/Tests/WalletAuthorityTests/AuthorityTestDefaults.swift */,
 				848478FF8EBFDD03447733E5 /* Packages/WalletRuntime/Tests/WalletAuthorityTests/WalletCoreProxyTestVectors.swift */,
@@ -5524,17 +5593,35 @@
 			path = Packages/WalletRuntime/Tests/WalletAuthorityTests/WalletRepositoryTestFixture.swift;
 			sourceTree = SOURCE_ROOT;
 		};
+		E58EC4E548048B61C9C7A77E /* Packages/WalletRuntime/Tests/WalletAuthorityTests/SecretTestSupport.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Packages/WalletRuntime/Tests/WalletAuthorityTests/SecretTestSupport.swift;
+			sourceTree = SOURCE_ROOT;
+		};
 		70321C0BC15D3274DB9F19E2 /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
 			fileRef = 1C0963A2B979F96B1CE57755 /* Packages/WalletRuntime/Tests/WalletAuthorityTests/WalletRepositoryTestFixture.swift */;
+		};
+		74B1D72D5E55530F68FE4B29 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = E58EC4E548048B61C9C7A77E /* Packages/WalletRuntime/Tests/WalletAuthorityTests/SecretTestSupport.swift */;
 		};
 		A214130EDFE4A7F4FD3EFAE8 /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
 			fileRef = 1C0963A2B979F96B1CE57755 /* Packages/WalletRuntime/Tests/WalletAuthorityTests/WalletRepositoryTestFixture.swift */;
 		};
+		7F28C8B254F73D10FFD71AAC /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = E58EC4E548048B61C9C7A77E /* Packages/WalletRuntime/Tests/WalletAuthorityTests/SecretTestSupport.swift */;
+		};
 		34D67B7BF815E5278B24446D /* PBXBuildFile */ = {
 			isa = PBXBuildFile;
 			fileRef = 1C0963A2B979F96B1CE57755 /* Packages/WalletRuntime/Tests/WalletAuthorityTests/WalletRepositoryTestFixture.swift */;
+		};
+		C1F4287414D5B934030958D9 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = E58EC4E548048B61C9C7A77E /* Packages/WalletRuntime/Tests/WalletAuthorityTests/SecretTestSupport.swift */;
 		};
 
 /* Wallet runtime package and composition */

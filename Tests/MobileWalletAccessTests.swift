@@ -96,7 +96,7 @@ final class MobileWalletAccessTests: XCTestCase {
 
         XCTAssertFalse(old.beginWalletAction())
         let passwordReads = fixture.keychain.passwordReadCount
-        XCTAssertThrowsError(try old.requireCurrentCredentials())
+        XCTAssertThrowsError(try old.requireCurrentAccess())
         XCTAssertEqual(fixture.keychain.passwordReadCount, passwordReads)
         let current = WalletAccessViewController()
         current.access = fixture.access

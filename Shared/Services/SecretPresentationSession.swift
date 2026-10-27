@@ -10,7 +10,7 @@ final class SecretPresentationSession {
     }
 
     private var token: Token?
-    private var secret: String?
+    private var secret: WalletExportedSecret?
 
     func begin() -> Token {
         invalidate()
@@ -24,18 +24,27 @@ final class SecretPresentationSession {
     }
 
     @discardableResult
-    func store(_ secret: String, for token: Token) -> Bool {
-        guard isCurrent(token) else { return false }
+    func store(_ secret: WalletExportedSecret, for token: Token) -> Bool {
+        guard isCurrent(token) else {
+            secret.invalidate()
+            return false
+        }
+        self.secret?.invalidate()
         self.secret = secret
         return true
     }
 
-    func value(for token: Token) -> String? {
-        isCurrent(token) ? secret : nil
+    @discardableResult
+    func withText(for token: Token, _ consume: (String) -> Void) -> Bool {
+        guard isCurrent(token), let secret else { return false }
+        return secret.withText(consume)
     }
 
     func invalidate() {
         token = nil
+        secret?.invalidate()
         secret = nil
     }
+
+    isolated deinit { secret?.invalidate() }
 }

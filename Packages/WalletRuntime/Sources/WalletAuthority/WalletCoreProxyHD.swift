@@ -16,9 +16,14 @@ enum BIP32 {
     private static let extendedPublicKeyVersion: UInt32 = 0x0488b21e
 
     struct Node {
-        let privateKey: Data
-        let chainCode: Data
+        let privateKey: SecretBytes
+        let chainCode: SecretBytes
         let parentFingerprint: UInt32
+
+        func invalidate() {
+            privateKey.invalidate()
+            chainCode.invalidate()
+        }
     }
 
     struct PublicNode {
@@ -69,31 +74,45 @@ enum BIP32 {
         }
     }
 
-    static func derivePrivateNode(seed: Data, path: DerivationPath, includeParentFingerprint: Bool = true) -> Node? {
-        let master = HMACSHA.sha512(key: Data("Bitcoin seed".utf8), data: seed)
-        var privateKey = master.prefixData(32)
-        var chainCode = master.suffixData(32)
+    static func derivePrivateNode(seed: SecretBytes, path: DerivationPath, includeParentFingerprint: Bool = true) -> Node? {
+        guard let master = HMACSHA.secretSHA512(key: Data("Bitcoin seed".utf8), data: seed) else { return nil }
+        defer { master.invalidate() }
+        guard var privateKey = try? master.copy(in: 0..<32),
+              var chainCode = try? master.copy(in: 32..<64) else { return nil }
+        var transferred = false
+        defer {
+            if !transferred { privateKey.invalidate(); chainCode.invalidate() }
+        }
         var parentFingerprint: UInt32 = 0
         guard Secp256k1.isValidPrivateKey(privateKey) else { return nil }
         for (offset, component) in path.components.enumerated() {
             if includeParentFingerprint, offset == path.components.count - 1 {
                 parentFingerprint = fingerprint(privateKey: privateKey)
             }
-            let childNumber = component.derivationIndex
-            guard let child = deriveChildPrivateKey(privateKey: privateKey, chainCode: chainCode, index: childNumber) else { return nil }
+            guard let child = deriveChildPrivateKey(privateKey: privateKey, chainCode: chainCode,
+                index: component.derivationIndex) else { return nil }
+            privateKey.invalidate()
+            chainCode.invalidate()
             privateKey = child.privateKey
             chainCode = child.chainCode
         }
+        transferred = true
         return Node(privateKey: privateKey, chainCode: chainCode, parentFingerprint: parentFingerprint)
     }
 
-    static func serializeExtendedPublicKey(privateKey: Data, chainCode: Data, depth: UInt8, parentFingerprint: UInt32, childNumber: UInt32) -> String {
+    static func serializeExtendedPublicKey(privateKey: SecretBytes, chainCode: SecretBytes, depth: UInt8, parentFingerprint: UInt32, childNumber: UInt32) -> String {
         guard let publicKey = Secp256k1.publicKey(privateKey: privateKey, compressed: true) else { return "" }
-        return serializeExtendedPublicKey(publicKey: publicKey,
-                                          chainCode: chainCode,
-                                          depth: depth,
-                                          parentFingerprint: parentFingerprint,
-                                          childNumber: childNumber)
+        return (try? chainCode.withTemporaryData {
+            serializeExtendedPublicKey(publicKey: publicKey, chainCode: $0, depth: depth,
+                parentFingerprint: parentFingerprint, childNumber: childNumber)
+        }) ?? ""
+    }
+
+    static func serializeExtendedPublicKey(publicKey: Data, chainCode: SecretBytes, depth: UInt8, parentFingerprint: UInt32, childNumber: UInt32) -> String {
+        (try? chainCode.withTemporaryData {
+            serializeExtendedPublicKey(publicKey: publicKey, chainCode: $0, depth: depth,
+                parentFingerprint: parentFingerprint, childNumber: childNumber)
+        }) ?? ""
     }
 
     static func serializeExtendedPublicKey(publicKey: Data, chainCode: Data, depth: UInt8, parentFingerprint: UInt32, childNumber: UInt32) -> String {
@@ -108,27 +127,41 @@ enum BIP32 {
         return Base58.encodeCheck(payload)
     }
 
-    static func fingerprint(privateKey: Data) -> UInt32 {
+    static func fingerprint(privateKey: SecretBytes) -> UInt32 {
         guard let publicKey = Secp256k1.publicKey(privateKey: privateKey, compressed: true) else { return 0 }
         let sha = Data(SHA256.hash(data: publicKey))
         let ripemd = RIPEMD160.hash(sha)
         return UInt32(ripemd[0]) << 24 | UInt32(ripemd[1]) << 16 | UInt32(ripemd[2]) << 8 | UInt32(ripemd[3])
     }
 
-    private static func deriveChildPrivateKey(privateKey: Data, chainCode: Data, index: UInt32) -> (privateKey: Data, chainCode: Data)? {
-        var data = Data()
+    private static func deriveChildPrivateKey(privateKey: SecretBytes, chainCode: SecretBytes, index: UInt32) -> (privateKey: SecretBytes, chainCode: SecretBytes)? {
+        let data: SecretBytes
         if index >= 0x80000000 {
-            data.append(0)
-            data.append(privateKey)
+            guard let prepared = try? privateKey.withUnsafeBytes({ key in
+                SecretBytes(count: 37) { output in
+                    output[0] = 0
+                    UnsafeMutableRawBufferPointer(rebasing: output[1..<33]).copyMemory(from: key)
+                    storeBigEndian(index, in: output, at: 33)
+                }
+            }) else { return nil }
+            data = prepared
         } else {
             guard let publicKey = Secp256k1.publicKey(privateKey: privateKey, compressed: true) else { return nil }
-            data.append(publicKey)
+            data = SecretBytes(count: publicKey.count + 4) { output in
+                publicKey.withUnsafeBytes {
+                    UnsafeMutableRawBufferPointer(rebasing: output[..<publicKey.count]).copyMemory(from: $0)
+                }
+                storeBigEndian(index, in: output, at: publicKey.count)
+            }
         }
-        appendBigEndianUInt32(index, to: &data)
-        let digest = HMACSHA.sha512(key: chainCode, data: data)
-        let il = digest.prefixData(32)
-        guard let child = Secp256k1.addPrivateKey(privateKey, tweak: il) else { return nil }
-        return (child, digest.suffixData(32))
+        defer { data.invalidate() }
+        guard let digest = HMACSHA.secretSHA512(key: chainCode, data: data) else { return nil }
+        defer { digest.invalidate() }
+        guard let tweak = try? digest.copy(in: 0..<32) else { return nil }
+        defer { tweak.invalidate() }
+        guard let child = Secp256k1.addPrivateKey(privateKey, tweak: tweak),
+              let childChain = try? digest.copy(in: 32..<64) else { return nil }
+        return (child, childChain)
     }
 
     private static func deriveChildPublicNode(node: PublicNode, index: UInt32) -> PublicNode? {
@@ -157,61 +190,89 @@ enum BIP32 {
 
 enum SLIP10Ed25519 {
     struct Node {
-        let privateKey: Data
-        let chainCode: Data
+        let privateKey: SecretBytes
+        let chainCode: SecretBytes
         let parentFingerprint: UInt32
+
+        func invalidate() {
+            privateKey.invalidate()
+            chainCode.invalidate()
+        }
     }
 
     struct PrivateKeyMaterial {
-        let privateKey: Data
-        let chainCode: Data
+        let privateKey: SecretBytes
+        let chainCode: SecretBytes
+
+        func invalidate() {
+            privateKey.invalidate()
+            chainCode.invalidate()
+        }
     }
 
-    static func derivePrivateNode(seed: Data, path: DerivationPath, includeParentFingerprint: Bool = true) -> Node? {
-        let digest = HMACSHA.sha512(key: Data("ed25519 seed".utf8), data: seed)
-        var key = digest.prefixData(32)
-        var chainCode = digest.suffixData(32)
+    static func derivePrivateNode(seed: SecretBytes, path: DerivationPath, includeParentFingerprint: Bool = true) -> Node? {
+        guard let digest = HMACSHA.secretSHA512(key: Data("ed25519 seed".utf8), data: seed) else { return nil }
+        defer { digest.invalidate() }
+        guard var key = try? digest.copy(in: 0..<32),
+              var chainCode = try? digest.copy(in: 32..<64) else { return nil }
+        var transferred = false
+        defer {
+            if !transferred { key.invalidate(); chainCode.invalidate() }
+        }
         var parentFingerprint: UInt32 = 0
         for (offset, component) in path.components.enumerated() {
             if includeParentFingerprint, offset == path.components.count - 1 {
                 parentFingerprint = fingerprint(seed: key)
             }
             guard let child = deriveChildPrivateKey(key: key, chainCode: chainCode, component: component) else { return nil }
+            key.invalidate()
+            chainCode.invalidate()
             key = child.privateKey
             chainCode = child.chainCode
         }
+        transferred = true
         return Node(privateKey: key, chainCode: chainCode, parentFingerprint: parentFingerprint)
     }
 
-    static func derivePrivateKeyMaterial(seed: Data, path: DerivationPath) -> PrivateKeyMaterial? {
+    static func derivePrivateKeyMaterial(seed: SecretBytes, path: DerivationPath) -> PrivateKeyMaterial? {
         guard let node = derivePrivateNode(seed: seed, path: path, includeParentFingerprint: false) else { return nil }
         return PrivateKeyMaterial(privateKey: node.privateKey, chainCode: node.chainCode)
     }
 
     static func deriveChildPrivateKeyMaterial(parent: PrivateKeyMaterial, component: DerivationPath.Component) -> PrivateKeyMaterial? {
-        guard let child = deriveChildPrivateKey(key: parent.privateKey,
-                                                chainCode: parent.chainCode,
-                                                component: component) else { return nil }
+        guard let child = deriveChildPrivateKey(key: parent.privateKey, chainCode: parent.chainCode, component: component) else { return nil }
         return PrivateKeyMaterial(privateKey: child.privateKey, chainCode: child.chainCode)
     }
 
-    private static func deriveChildPrivateKey(key: Data,
-                                              chainCode: Data,
-                                              component: DerivationPath.Component) -> (privateKey: Data, chainCode: Data)? {
-        guard component.hardened else { return nil }
-        var data = Data([0])
-        data.append(key)
-        appendBigEndianUInt32(component.derivationIndex, to: &data)
-        let digest = HMACSHA.sha512(key: chainCode, data: data)
-        return (digest.prefixData(32), digest.suffixData(32))
+    private static func deriveChildPrivateKey(key: SecretBytes, chainCode: SecretBytes, component: DerivationPath.Component) -> (privateKey: SecretBytes, chainCode: SecretBytes)? {
+        guard component.hardened,
+              let data = try? key.withUnsafeBytes({ keyBytes in
+                  SecretBytes(count: keyBytes.count + 5) { output in
+                      output[0] = 0
+                      UnsafeMutableRawBufferPointer(rebasing: output[1..<(keyBytes.count + 1)]).copyMemory(from: keyBytes)
+                      storeBigEndian(component.derivationIndex, in: output, at: keyBytes.count + 1)
+                  }
+              }) else { return nil }
+        defer { data.invalidate() }
+        guard let digest = HMACSHA.secretSHA512(key: chainCode, data: data) else { return nil }
+        defer { digest.invalidate() }
+        guard let child = try? digest.copy(in: 0..<32), let childChain = try? digest.copy(in: 32..<64) else { return nil }
+        return (child, childChain)
     }
 
-    private static func fingerprint(seed: Data) -> UInt32 {
+    private static func fingerprint(seed: SecretBytes) -> UInt32 {
         guard let publicKey = Ed25519.publicKey(seed: seed) else { return 0 }
         let sha = Data(SHA256.hash(data: Data([0x01]) + publicKey))
         let ripemd = RIPEMD160.hash(sha)
         return UInt32(ripemd[0]) << 24 | UInt32(ripemd[1]) << 16 | UInt32(ripemd[2]) << 8 | UInt32(ripemd[3])
     }
+}
+
+private func storeBigEndian(_ value: UInt32, in bytes: UnsafeMutableRawBufferPointer, at offset: Int) {
+    bytes[offset] = UInt8((value >> 24) & 0xff)
+    bytes[offset + 1] = UInt8((value >> 16) & 0xff)
+    bytes[offset + 2] = UInt8((value >> 8) & 0xff)
+    bytes[offset + 3] = UInt8(value & 0xff)
 }
 
 enum BIP39 {
@@ -221,83 +282,76 @@ enum BIP39 {
 
     static func isValidMnemonic(_ mnemonic: String) -> Bool {
         guard mnemonic == mnemonic.trimmingCharacters(in: .whitespacesAndNewlines),
-              !mnemonic.contains("\t"),
-              !mnemonic.contains("\n"),
-              !mnemonic.contains("  ") else { return false }
-        let parts = mnemonic.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
-        guard allowedWordCounts.contains(parts.count),
-              parts.joined(separator: " ") == mnemonic else { return false }
+              !mnemonic.contains("\t"), !mnemonic.contains("\n"), !mnemonic.contains("  ") else { return false }
+        let parts = mnemonic.split(separator: " ", omittingEmptySubsequences: false)
+        guard allowedWordCounts.contains(parts.count) else { return false }
+        let totalBits = parts.count * 11
+        guard let packed = try? SecretBytes(count: (totalBits + 7) / 8, initialize: { output in
+            output.initializeMemory(as: UInt8.self, repeating: 0)
+            for (wordOffset, word) in parts.enumerated() {
+                guard let index = wordIndex[String(word)] else { throw WalletKeyStoreError.invalidMnemonic }
+                for bitOffset in 0..<11 {
+                    let bit = (index >> (10 - bitOffset)) & 1
+                    let position = wordOffset * 11 + bitOffset
+                    output[position / 8] |= UInt8(bit << (7 - position % 8))
+                }
+            }
+        }) else { return false }
+        defer { packed.invalidate() }
+        let entropyBitCount = totalBits * 32 / 33
+        let checksumBitCount = totalBits - entropyBitCount
+        return (try? packed.withUnsafeBytes { bytes in
+            var hash = SHA256()
+            hash.update(bufferPointer: UnsafeRawBufferPointer(rebasing: bytes[..<(entropyBitCount / 8)]))
+            let digest = hash.finalize()
+            let shift = 8 - checksumBitCount
+            let actual: UInt8 = bytes[entropyBitCount / 8] >> shift
+            let firstDigestByte: UInt8 = digest.withUnsafeBytes { $0[0] }
+            let expected: UInt8 = firstDigestByte >> shift
+            return actual == expected
+        }) == true
+    }
 
-        var bits = [Bool]()
-        bits.reserveCapacity(parts.count * 11)
-        for word in parts {
-            guard let index = wordIndex[word] else { return false }
-            for shift in stride(from: 10, through: 0, by: -1) {
-                bits.append(((index >> shift) & 1) == 1)
+    static func generateSecretMnemonic() throws -> SecretBytes {
+        let entropy = try SecureRandom.secret(count: 16)
+        defer { entropy.invalidate() }
+        let digest = try entropy.sha256Digest()
+        return try entropy.withUnsafeBytes { bytes in
+            let entropyBits = bytes.count * 8
+            let wordCount = (entropyBits + entropyBits / 32) / 11
+            func selectedWord(_ offset: Int) -> String {
+                var index = 0
+                for bitOffset in 0..<11 {
+                    let position = offset * 11 + bitOffset
+                    let byte = position < entropyBits ? bytes[position / 8] : digest[(position - entropyBits) / 8]
+                    let bit = (byte >> (7 - position % 8)) & 1
+                    index = index * 2 + Int(bit)
+                }
+                return words[index]
+            }
+            let count = (0..<wordCount).reduce(wordCount - 1) { $0 + selectedWord($1).utf8.count }
+            return SecretBytes(count: count) { output in
+                var position = 0
+                for index in 0..<wordCount {
+                    if index > 0 { output[position] = 32; position += 1 }
+                    for byte in selectedWord(index).utf8 { output[position] = byte; position += 1 }
+                }
             }
         }
-
-        let entropyBitCount = bits.count * 32 / 33
-        let checksumBitCount = bits.count - entropyBitCount
-        guard entropyBitCount.isMultiple(of: 8) else { return false }
-        let entropy = data(fromBits: Array(bits.prefix(entropyBitCount)))
-        let digest = Data(SHA256.hash(data: entropy))
-        let digestBits = Self.bits(from: digest, count: checksumBitCount)
-        return Array(bits.suffix(checksumBitCount)) == digestBits
     }
 
-    static func generateMnemonic() -> String {
-        let entropy = SecureRandom.data(count: 16)
-        return mnemonic(fromEntropy: entropy)
-    }
-
-    static func seed(mnemonic: String, passphrase: String) -> Data {
-        let normalizedMnemonic = mnemonic.decomposedStringWithCompatibilityMapping
+    static func secretSeed(mnemonic: String, passphrase: String) -> SecretBytes {
+        let normalizedMnemonic = SecretBytes(utf8: mnemonic.decomposedStringWithCompatibilityMapping)
+        defer { normalizedMnemonic.invalidate() }
         let normalizedPassphrase = passphrase.decomposedStringWithCompatibilityMapping
-        return PBKDF2.sha512(password: Data(normalizedMnemonic.utf8),
-                             salt: Data(("mnemonic" + normalizedPassphrase).utf8),
-                             rounds: 2048,
-                             keyLength: 64)
-    }
-
-    private static func mnemonic(fromEntropy entropy: Data) -> String {
-        let checksumBitCount = entropy.count * 8 / 32
-        var allBits = bits(from: entropy, count: entropy.count * 8)
-        allBits += bits(from: Data(SHA256.hash(data: entropy)), count: checksumBitCount)
-        var result = [String]()
-        result.reserveCapacity(allBits.count / 11)
-        for offset in stride(from: 0, to: allBits.count, by: 11) {
-            var index = 0
-            for bit in allBits[offset..<(offset + 11)] {
-                index = (index << 1) | (bit ? 1 : 0)
-            }
-            result.append(words[index])
+        let prefix = Array("mnemonic".utf8)
+        let salt = SecretBytes(count: prefix.count + normalizedPassphrase.utf8.count) { output in
+            for (index, byte) in prefix.enumerated() { output[index] = byte }
+            for (index, byte) in normalizedPassphrase.utf8.enumerated() { output[prefix.count + index] = byte }
         }
-        return result.joined(separator: " ")
-    }
-
-    private static func bits(from data: Data, count: Int) -> [Bool] {
-        var output = [Bool]()
-        output.reserveCapacity(count)
-        for byte in data {
-            for shift in stride(from: 7, through: 0, by: -1) where output.count < count {
-                output.append(((byte >> UInt8(shift)) & 1) == 1)
-            }
-        }
-        return output
-    }
-
-    private static func data(fromBits bits: [Bool]) -> Data {
-        var output = Data()
-        for offset in stride(from: 0, to: bits.count, by: 8) {
-            var byte: UInt8 = 0
-            for bit in bits[offset..<(offset + 8)] {
-                byte = (byte << 1) | (bit ? 1 : 0)
-            }
-            output.append(byte)
-        }
-        return output
+        defer { salt.invalidate() }
+        return PBKDF2.secretSHA512(password: normalizedMnemonic, salt: salt, rounds: 2048, keyLength: 64)
+            ?? SecretBytes(count: 0) { _ in }
     }
 
 }
-

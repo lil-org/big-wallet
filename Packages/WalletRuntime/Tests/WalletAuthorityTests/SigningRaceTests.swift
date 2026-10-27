@@ -203,11 +203,11 @@ final class SigningRaceTests: XCTestCase {
 
 #if os(iOS) || os(visionOS)
 private final class SigningRaceForbiddenVaultKeys: SafariApprovalKeyStoring, SafariApprovalIntegrityKeyStoring, Sendable {
-    func store(_ key: Data, identity: SafariApprovalKeyIdentity) throws {
+    func store(_ key: SecretBytes, identity: SafariApprovalKeyIdentity) throws {
         XCTFail("Credential races must not publish vault keys")
         throw SafariApprovalVault.Error.unavailable
     }
-    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> Data {
+    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> SecretBytes {
         XCTFail("Credential races must not read vault keys")
         throw SafariApprovalVault.Error.unavailable
     }
@@ -216,7 +216,7 @@ private final class SigningRaceForbiddenVaultKeys: SafariApprovalKeyStoring, Saf
         return [:]
     }
     func removeAll() throws { XCTFail("Credential races must not delete vault keys") }
-    func loadOrCreate() throws -> Data {
+    func loadOrCreate() throws -> SecretBytes {
         XCTFail("Credential races must not read vault integrity keys")
         throw SafariApprovalVault.Error.unavailable
     }

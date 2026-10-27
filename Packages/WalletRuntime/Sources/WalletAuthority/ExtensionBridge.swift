@@ -209,6 +209,7 @@ public actor ExtensionBridge {
         let fingerprint: Data
         let authority: RequestAuthorityVersion
         let replayOnly: Bool
+        var transportContext: NativeRequestContext? = nil
     }
 
     final class OperationLease: Sendable {
@@ -351,7 +352,8 @@ public actor ExtensionBridge {
             canonicalData: canonicalData,
             fingerprint: fingerprint,
             authority: authority,
-            replayOnly: replayOnly
+            replayOnly: replayOnly,
+            transportContext: nil
         ))
     }
 
@@ -418,12 +420,28 @@ public actor ExtensionBridge {
         return value
     }
 
+    public static func admittedIngress(wire: WireProtocol.ValidatedObject,
+                                       context: NativeRequestContext) -> DappIngressResult {
+        guard wire.contract == .dappRequest, let request = SafariRequest(wire: wire),
+              context.authorizes(request) else { return .invalid }
+        switch dappIngressResult(request: request, wire: wire) {
+        case .accepted(var ingress):
+            ingress.transportContext = context
+            return .accepted(ingress)
+        case .payloadTooLarge: return .payloadTooLarge
+        case .invalid: return .invalid
+        }
+    }
+
     public func enqueue(
         ingress: Ingress,
         profileIdentifier: UUID?,
         privateBrowsing: Bool = false
     ) -> EnqueueResult {
         guard !privateBrowsing else { return .rejected }
+        if let context = ingress.transportContext {
+            guard !context.privateBrowsing, context.profileIdentifier == profileIdentifier else { return .rejected }
+        }
         let result = store.enqueue(ingress: ingress, profileIdentifier: profileIdentifier)
         if case .accepted(let handle, _, _, _, _) = result {
             hooks.event(.init(.requestAdmitted, handle: handle))

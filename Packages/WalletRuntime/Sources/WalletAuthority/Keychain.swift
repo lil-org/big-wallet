@@ -61,20 +61,20 @@ struct Keychain: Sendable {
         
     }
     
-    func readPassword() throws -> String? {
-        guard let data = try read(key: .password) else { return nil }
+    func readPasswordSecret() throws -> SecretBytes? {
+        guard var data = try read(key: .password) else { return nil }
+        defer { data.resetBytes(in: 0..<data.count) }
         guard let password = String(data: data, encoding: .utf8), !password.isEmpty else {
             throw WalletCredentialError.invalidPasswordData
         }
-        return password
-    }
-    
-    func readPasswordData() throws -> Data? {
-        try readPassword().map { Data($0.utf8) }
+        return SecretBytes(utf8: password)
     }
 
     func passwordState() throws -> WalletPasswordState {
-        if try readPasswordData() != nil { return .present }
+        if let password = try readPasswordSecret() {
+            password.invalidate()
+            return .present
+        }
         guard try readAllWalletIDs().isEmpty else { throw WalletCredentialError.orphanedWallets }
         return .missing
     }
@@ -89,7 +89,9 @@ struct Keychain: Sendable {
         try Task.checkCancellation()
         try beforeInsert()
         try Task.checkCancellation()
-        let status = add(saveQuery(data: Data(password.utf8), key: .password) as CFDictionary, nil)
+        let secret = SecretBytes(utf8: password)
+        defer { secret.invalidate() }
+        let status = try secret.withTemporaryData { add(saveQuery(data: $0, key: .password) as CFDictionary, nil) }
         switch status {
         case errSecSuccess: return .created
         case errSecDuplicateItem: return .alreadyExists

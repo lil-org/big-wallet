@@ -507,16 +507,16 @@ enum WalletSnapshotValidation {
 
     static func visitOwnedAccountKeys(
         _ wallet: WalletContainer,
-        password: Data,
+        password: SecretBytes,
         checkCancellation: () throws -> Void = {},
         visit: (WalletAccount, WalletPrivateKey) throws -> Void
     ) throws -> Bool {
         try checkCancellation()
         let accounts = wallet.accounts
         guard accounts.count == wallet.key.accountCount,
-              var secret = wallet.key.decryptPrivateKey(password: password)
+              let secret = wallet.key.decryptPrivateKey(password: password)
         else { return false }
-        defer { secret.resetBytes(in: 0..<secret.count) }
+        defer { secret.invalidate() }
         try checkCancellation()
 
         if wallet.isMnemonic {
@@ -537,19 +537,22 @@ enum WalletSnapshotValidation {
 
     private static func visitMnemonicAccountKeys(
         _ accounts: [WalletAccount],
-        secret: Data,
+        secret: SecretBytes,
         checkCancellation: () throws -> Void,
         visit: (WalletAccount, WalletPrivateKey) throws -> Void
     ) throws -> Bool {
-        guard let mnemonic = String(data: secret, encoding: .utf8),
-              let wallet = WalletHDWallet(mnemonic: mnemonic, passphrase: "")
-        else { return false }
+        guard let wallet = try secret.withTemporaryData({ data -> WalletHDWallet? in
+            guard let mnemonic = String(data: data, encoding: .utf8) else { return nil }
+            return WalletHDWallet(mnemonic: mnemonic, passphrase: "")
+        }) else { return false }
+        defer { wallet.invalidate() }
         return try accounts.allSatisfy { account in
             try checkCancellation()
             guard let privateKey = wallet.privateKey(
                 coin: account.coin,
                 derivationPath: account.derivationPath
             ) else { return false }
+            defer { privateKey.invalidate() }
             try checkCancellation()
             guard accountMatches(account, privateKey: privateKey) else { return false }
             try checkCancellation()
@@ -560,19 +563,16 @@ enum WalletSnapshotValidation {
 
     private static func visitPrivateKeyAccounts(
         _ accounts: [WalletAccount],
-        secret: Data,
+        secret: SecretBytes,
         checkCancellation: () throws -> Void,
         visit: (WalletAccount, WalletPrivateKey) throws -> Void
     ) throws -> Bool {
-        guard let privateKey = WalletPrivateKey(data: secret) else {
+        guard let privateKey = WalletPrivateKey(taking: secret) else {
             return false
         }
         return try accounts.allSatisfy { account in
             try checkCancellation()
-            guard WalletCrypto.isValidPrivateKeyData(
-                secret,
-                coin: account.coin
-            ) else { return false }
+            guard privateKey.isValid(for: account.coin) else { return false }
             guard accountMatches(account, privateKey: privateKey) else { return false }
             try checkCancellation()
             try visit(account, privateKey)
@@ -597,16 +597,23 @@ enum WalletSnapshotValidation {
 
 final class UnlockedAccountSigner: Sendable {
     private let approvedAccount: WalletAccountDescriptor
-    private let privateKey: Mutex<WalletPrivateKey?>
+    private struct State {
+        var privateKey: WalletPrivateKey?
+        var taken = false
+    }
+    private let state: Mutex<State>
 
     init?(
         approvedAccount: WalletAccountDescriptor,
-        privateKey: WalletPrivateKey
+        taking privateKey: WalletPrivateKey
     ) {
         guard approvedAccount.isValid,
-              WalletSnapshotValidation.accountMatches(approvedAccount.account, privateKey: privateKey) else { return nil }
+              WalletSnapshotValidation.accountMatches(approvedAccount.account, privateKey: privateKey) else {
+            privateKey.invalidate()
+            return nil
+        }
         self.approvedAccount = approvedAccount
-        self.privateKey = Mutex(privateKey)
+        state = Mutex(State(privateKey: privateKey))
     }
 
     @MainActor
@@ -622,11 +629,12 @@ final class UnlockedAccountSigner: Sendable {
             invalidate()
             return .failure(.authorizationUnavailable)
         }
-        guard let privateKey = privateKey.withLock({ key in
-            let retained = key
-            key = nil
-            return retained
+        guard let privateKey = state.withLock({ state in
+            guard !state.taken else { return nil as WalletPrivateKey? }
+            state.taken = true
+            return state.privateKey
         }) else { return .failure(.authorizationUnavailable) }
+        defer { invalidate() }
         guard let result = await awaitBackgroundOperation({
             operation.sign(with: privateKey, validatingSource: { source.isCurrent() })
         }), operation.isAuthorizedToSign else { return .failure(.authorizationUnavailable) }
@@ -634,7 +642,11 @@ final class UnlockedAccountSigner: Sendable {
     }
 
     func invalidate() {
-        privateKey.withLock { $0 = nil }
+        let retired = state.withLock { state in
+            defer { state.privateKey = nil; state.taken = true }
+            return state.privateKey
+        }
+        retired?.invalidate()
     }
 
     deinit {

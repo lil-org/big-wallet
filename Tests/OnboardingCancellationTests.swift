@@ -1,3 +1,4 @@
+import WalletFlows
 import WalletDomain
 @testable import WalletAuthority
 import AppKit

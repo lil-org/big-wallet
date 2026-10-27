@@ -3,6 +3,7 @@ import WalletStorageSupport
 // ∅ 2026 lil org
 
 import Foundation
+import CryptoKit
 
 enum WalletKeyStoreError: Swift.Error {
     case invalidPassword
@@ -31,22 +32,41 @@ enum WalletImportLimits {
 }
 
 struct WalletPrivateKey: Sendable {
-    private let keyData: Data
-    fileprivate static let invalid = WalletPrivateKey(unchecked: Data())
+    fileprivate let keyData: SecretBytes
+    fileprivate static let invalid = WalletPrivateKey(unchecked: SecretBytes(count: 0) { _ in })
 
     init?(data: Data) {
         guard data.count == 32, data.contains(where: { $0 != 0 }) else { return nil }
-        keyData = data
+        keyData = SecretBytes(copying: data)
     }
 
-    fileprivate init(unchecked data: Data) {
-        keyData = data
+    fileprivate init(unchecked bytes: SecretBytes) { keyData = bytes }
+
+    init?(taking bytes: SecretBytes) {
+        guard bytes.count == 32,
+              (try? bytes.withUnsafeBytes { $0.contains(where: { $0 != 0 }) }) == true else {
+            bytes.invalidate()
+            return nil
+        }
+        keyData = bytes
     }
 
-    func withData<Result>(_ body: (Data) throws -> Result) rethrows -> Result {
-        var privateKeyData = keyData
-        defer { privateKeyData.resetBytes(in: 0..<privateKeyData.count) }
-        return try body(privateKeyData)
+    func withUnsafeBytes<Result>(_ body: (UnsafeRawBufferPointer) throws -> Result) throws -> Result {
+        try keyData.withUnsafeBytes(body)
+    }
+
+    func withTemporaryData<Result>(_ body: (Data) throws -> Result) throws -> Result {
+        try keyData.withTemporaryData(body)
+    }
+
+    func invalidate() { keyData.invalidate() }
+
+    func isValid(for coin: WalletCoin) -> Bool {
+        switch coin {
+        case .ethereum: return Secp256k1.isValidPrivateKey(keyData)
+        case .solana:
+            return keyData.count == 32 && (try? keyData.withUnsafeBytes { $0.contains(where: { $0 != 0 }) }) == true
+        }
     }
 
     func publicKeyData(coin: WalletCoin) -> Data {
@@ -75,7 +95,7 @@ struct WalletPrivateKey: Sendable {
     func sign<Digests: Sequence>(digests: Digests, coin: WalletCoin) -> [Data]? where Digests.Element == Data {
         switch coin {
         case .ethereum:
-            guard WalletCrypto.isValidPrivateKeyData(keyData, coin: coin) else { return nil }
+            guard Secp256k1.isValidPrivateKey(keyData) else { return nil }
             var signatures = [Data]()
             signatures.reserveCapacity(digests.underestimatedCount)
             for digest in digests {
@@ -90,12 +110,16 @@ struct WalletPrivateKey: Sendable {
 }
 
 struct WalletHDWallet: Sendable {
-    private let seed: Data
+    private let seed: SecretBytes
 
     init?(mnemonic: String, passphrase: String) {
         guard WalletCrypto.isValidMnemonic(mnemonic) else { return nil }
-        self.seed = BIP39.seed(mnemonic: mnemonic, passphrase: passphrase)
+        let seed = BIP39.secretSeed(mnemonic: mnemonic, passphrase: passphrase)
+        guard seed.count == 64 else { seed.invalidate(); return nil }
+        self.seed = seed
     }
+
+    func invalidate() { seed.invalidate() }
 
     func getKey(coin: WalletCoin, derivationPath: String) -> WalletPrivateKey {
         return privateKey(coin: coin, derivationPath: derivationPath) ?? .invalid
@@ -107,10 +131,12 @@ struct WalletHDWallet: Sendable {
             guard let path = DerivationPath(derivationPath),
                   let node = BIP32.derivePrivateNode(seed: seed, path: path, includeParentFingerprint: false),
                   Secp256k1.isValidPrivateKey(node.privateKey) else { return nil }
+            node.chainCode.invalidate()
             return WalletPrivateKey(unchecked: node.privateKey)
         case .solana:
             guard let path = DerivationPath(derivationPath),
                   let node = SLIP10Ed25519.derivePrivateNode(seed: seed, path: path, includeParentFingerprint: false) else { return nil }
+            node.chainCode.invalidate()
             return WalletPrivateKey(unchecked: node.privateKey)
         }
     }
@@ -120,6 +146,7 @@ struct WalletHDWallet: Sendable {
               let prefixNode = SLIP10Ed25519.derivePrivateKeyMaterial(seed: seed, path: prefixPath) else {
             return nil
         }
+        defer { prefixNode.invalidate() }
 
         var accounts = [WalletAccount]()
         accounts.reserveCapacity(accountRange.count)
@@ -133,6 +160,7 @@ struct WalletHDWallet: Sendable {
                                                                                 component: components.address) else {
                 return nil
             }
+            defer { accountNode.invalidate(); addressNode.invalidate() }
             let privateKey = WalletPrivateKey(unchecked: addressNode.privateKey)
             guard let account = solanaPreviewAccount(accountIndex: accountIndex,
                                                      account: accountValue,
@@ -179,6 +207,7 @@ struct WalletHDWallet: Sendable {
             guard let path = DerivationPath(WalletCrypto.solanaDefaultDerivationPath(account: 0)),
                   let node = SLIP10Ed25519.derivePrivateNode(seed: seed, path: path),
                   let publicKey = Ed25519.publicKey(seed: node.privateKey) else { return "" }
+            defer { node.invalidate() }
             return BIP32.serializeExtendedPublicKey(publicKey: Data([0x01]) + publicKey,
                                                     chainCode: node.chainCode,
                                                     depth: 3,
@@ -200,6 +229,7 @@ struct WalletHDWallet: Sendable {
         guard coin == .ethereum, account < 0x80000000 else { return "" }
         guard let accountPath = DerivationPath("m/44'/60'/\(account)'"),
               let node = BIP32.derivePrivateNode(seed: seed, path: accountPath) else { return "" }
+        defer { node.invalidate() }
         return BIP32.serializeExtendedPublicKey(privateKey: node.privateKey,
                                                 chainCode: node.chainCode,
                                                 depth: 3,
@@ -215,11 +245,12 @@ struct WalletStoredKey {
     var isMnemonic: Bool { storage.type == .mnemonic }
     var accountCount: Int { storage.accounts.count }
 
-    init?(name: String, password: Data) {
-        let mnemonic = BIP39.generateMnemonic()
+    init?(name: String, password: SecretBytes) {
+        guard let mnemonic = try? BIP39.generateSecretMnemonic() else { return nil }
+        defer { mnemonic.invalidate() }
         guard let storage = StoredKeyStorage(type: .mnemonic,
                                              name: name,
-                                             payload: Data(mnemonic.utf8),
+                                             payload: mnemonic,
                                              password: password) else { return nil }
         self.storage = storage
     }
@@ -242,27 +273,32 @@ struct WalletStoredKey {
         return key
     }
 
-    static func importPrivateKey(privateKey: Data, name: String, password: Data, coin: WalletCoin) -> WalletStoredKey? {
-        guard WalletCrypto.isValidPrivateKeyData(privateKey, coin: coin),
-              let walletPrivateKey = WalletPrivateKey(data: privateKey),
-              let storage = StoredKeyStorage(type: .privateKey, name: name, payload: privateKey, password: password)
+    static func importPrivateKey(privateKey: WalletPrivateKey, name: String, password: SecretBytes, coin: WalletCoin) -> WalletStoredKey? {
+        guard privateKey.isValid(for: coin),
+              let storage = StoredKeyStorage(type: .privateKey, name: name, payload: privateKey.keyData, password: password)
         else { return nil }
-        guard storage.addDefaultAccount(coin: coin, privateKey: walletPrivateKey) else { return nil }
+        guard storage.addDefaultAccount(coin: coin, privateKey: privateKey) else { return nil }
         return WalletStoredKey(storage: storage)
     }
 
-    static func importHDWallet(mnemonic: String, name: String, password: Data, coin: WalletCoin) -> WalletStoredKey? {
-        guard let wallet = WalletHDWallet(mnemonic: mnemonic, passphrase: ""),
-              let storage = StoredKeyStorage(type: .mnemonic, name: name, payload: Data(mnemonic.utf8), password: password)
-        else { return nil }
+    static func importHDWallet(mnemonic: String, name: String, password: SecretBytes, coin: WalletCoin) -> WalletStoredKey? {
+        guard let wallet = WalletHDWallet(mnemonic: mnemonic, passphrase: "") else { return nil }
+        defer { wallet.invalidate() }
+        let secret = SecretBytes(utf8: mnemonic)
+        defer { secret.invalidate() }
+        guard let storage = StoredKeyStorage(type: .mnemonic, name: name, payload: secret, password: password) else { return nil }
         _ = storage.accountForCoin(coin: coin, wallet: wallet)
         return WalletStoredKey(storage: storage)
     }
 
-    func wallet(password: Data) -> WalletHDWallet? {
+    func wallet(password: SecretBytes) -> WalletHDWallet? {
         guard storage.type == .mnemonic,
-              let mnemonic = decryptMnemonic(password: password) else { return nil }
-        return WalletHDWallet(mnemonic: mnemonic, passphrase: "")
+              let mnemonic = decryptMnemonicSecret(password: password) else { return nil }
+        defer { mnemonic.invalidate() }
+        return try? mnemonic.withTemporaryData {
+            guard let decoded = String(data: $0, encoding: .utf8) else { return nil }
+            return WalletHDWallet(mnemonic: decoded, passphrase: "")
+        }
     }
 
     func account(index: Int) -> WalletAccount? {
@@ -278,29 +314,36 @@ struct WalletStoredKey {
         return storage.accountForCoinDerivation(coin: coin, derivation: derivation, wallet: wallet)
     }
 
-    func privateKey(coin: WalletCoin, password: Data) -> WalletPrivateKey? {
+    func privateKey(coin: WalletCoin, password: SecretBytes) -> WalletPrivateKey? {
         switch storage.type {
         case .privateKey:
             guard let data = decryptPrivateKey(password: password),
-                  WalletCrypto.isValidPrivateKeyData(data, coin: coin),
-                  let privateKey = WalletPrivateKey(data: data),
-                  storage.hasAccount(coin: coin, matching: privateKey) else { return nil }
+                  let privateKey = WalletPrivateKey(taking: data) else { return nil }
+            guard privateKey.isValid(for: coin), storage.hasAccount(coin: coin, matching: privateKey) else {
+                privateKey.invalidate()
+                return nil
+            }
             return privateKey
         case .mnemonic:
             guard let wallet = wallet(password: password) else { return nil }
+            defer { wallet.invalidate() }
             let account = storage.accountForCoinDerivation(coin: coin, derivation: .default, wallet: wallet)
             return account.flatMap { wallet.privateKey(coin: coin, derivationPath: $0.derivationPath) }
         }
     }
 
-    func decryptPrivateKey(password: Data) -> Data? {
+    func decryptPrivateKey(password: SecretBytes) -> SecretBytes? {
         return storage.decrypt(password: password)
     }
 
-    func decryptMnemonic(password: Data) -> String? {
-        guard storage.type == .mnemonic,
-              let data = storage.decrypt(password: password) else { return nil }
-        return String(data: data, encoding: .utf8)
+    func decryptMnemonicSecret(password: SecretBytes) -> SecretBytes? {
+        guard storage.type == .mnemonic else { return nil }
+        return storage.decrypt(password: password)
+    }
+
+    var encryptedMaterialDigest: Data? {
+        guard let data = try? JSONSerialization.data(withJSONObject: storage.encryptedPayload.jsonObject(), options: [.sortedKeys]) else { return nil }
+        return Data(SHA256.hash(data: data))
     }
 
     func exportJSON() -> Data? {
@@ -400,6 +443,8 @@ enum WalletCrypto {
         guard hexString.count.isMultiple(of: 2) else { return nil }
         var data = Data()
         data.reserveCapacity(hexString.count / 2)
+        var transferred = false
+        defer { if !transferred { data.resetBytes(in: 0..<data.count) } }
 
         var highNibble: UInt8?
         for byte in hexString.utf8 {
@@ -411,6 +456,7 @@ enum WalletCrypto {
                 highNibble = value
             }
         }
+        transferred = true
         return data
     }
 

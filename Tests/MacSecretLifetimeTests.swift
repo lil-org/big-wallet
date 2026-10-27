@@ -13,7 +13,7 @@ final class MacSecretLifetimeTests: XCTestCase {
             (false, true, false), (true, true, false), (false, false, false),
             (false, true, true), (true, true, true),
         ] {
-            let fixture = WalletAccessTestFixture()
+            let fixture = WalletAccessTestFixture(password: String(decoding: WalletCoreProxyTestVectors.walletCoreJSONMnemonicPassword, as: UTF8.self))
             try fixture.unlock()
             let entered = expectation(description: "account mutation reached commit boundary")
             let exited = expectation(description: "cancelled account mutation returned")
@@ -28,6 +28,7 @@ final class MacSecretLifetimeTests: XCTestCase {
             let original = try XCTUnwrap(key.exportJSON())
             reader.attributes = [reader.walletAttributes(id: "retired-accounts")]
             reader.walletData = ["retired-accounts": original]
+            reader.passwordData = WalletCoreProxyTestVectors.walletCoreJSONMnemonicPassword
             let writes = Mutex(0)
             var publications = 0
             let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching, update: { _, attributes in
@@ -37,7 +38,7 @@ final class MacSecretLifetimeTests: XCTestCase {
             }), walletSourceMutator: mutation, notifications: .init(
                 postLocalChange: {}, postMutation: { publications += 1 },
                 startObserving: { _, _ in }, stopObserving: { _ in }, isExternalChange: { _ in false }
-            ))
+            ), authorityID: fixture.authorityID)
             await assertWalletReload(manager)
             XCTAssertEqual(manager.wallets.first?.accounts.count, 2)
             var controller: AccountsListViewController? = AccountsListViewController()
@@ -98,7 +99,7 @@ final class MacSecretLifetimeTests: XCTestCase {
         let host = try ImportHost()
         defer { host.close() }
         var imports = 0
-        host.controller.dependencies.importWallet = { _, _ in imports += 1; return Self.wallet }
+        host.controller.dependencies.importWallet = { _, _, _ in imports += 1; return Self.wallet }
         let reads = host.fixture.keychain.passwordReadCount
         host.fixture.keychain.passwordData = Data("replacement".utf8)
 
@@ -123,7 +124,7 @@ final class MacSecretLifetimeTests: XCTestCase {
         let started = expectation(description: "import started")
         let result = TestGate<Result<WalletSnapshot, Error>>()
         defer { result.resolve(.failure(CancellationError())) }
-        host.controller.dependencies.importWallet = { input, password in
+        host.controller.dependencies.importWallet = { input, password, _ in
             XCTAssertEqual(input, "disposable import draft")
             XCTAssertNil(password)
             started.fulfill()
@@ -167,7 +168,7 @@ final class MacSecretLifetimeTests: XCTestCase {
             return result
         }
         var imports = 0
-        host.controller.dependencies.importWallet = { _, _ in imports += 1; return Self.wallet }
+        host.controller.dependencies.importWallet = { _, _, _ in imports += 1; return Self.wallet }
         let editor = try enter("cancelled draft", in: host.controller.textField)
         await fulfillment(of: [entered], timeout: 2)
         let generation = host.fixture.access.generation
@@ -195,7 +196,7 @@ final class MacSecretLifetimeTests: XCTestCase {
             let returned = expectation(description: "held import returned")
             let result = TestGate<Result<WalletSnapshot, Error>>()
             defer { result.resolve(.failure(CancellationError())) }
-            host.controller.dependencies.importWallet = { _, _ in
+            host.controller.dependencies.importWallet = { _, _, _ in
                 started.fulfill()
                 let value = await result.wait()
                 returned.fulfill()
@@ -246,7 +247,7 @@ final class MacSecretLifetimeTests: XCTestCase {
             return .alertFirstButtonReturn
         }
         let imported = expectation(description: "password cleared before import")
-        host.controller.dependencies.importWallet = { input, password in
+        host.controller.dependencies.importWallet = { input, password, _ in
             XCTAssertEqual(input, "encrypted wallet draft")
             XCTAssertEqual(password, "keystore-password")
             XCTAssertEqual(passwordField?.stringValue, "")
@@ -289,7 +290,7 @@ final class MacSecretLifetimeTests: XCTestCase {
             return .alertSecondButtonReturn
         }
         var imports = 0
-        host.controller.dependencies.importWallet = { _, _ in imports += 1; return Self.wallet }
+        host.controller.dependencies.importWallet = { _, _, _ in imports += 1; return Self.wallet }
         _ = try enter("recoverable draft", in: host.controller.textField)
         await expectEventually { host.controller.okButton.isEnabled }
 
@@ -334,7 +335,7 @@ final class MacSecretLifetimeTests: XCTestCase {
         defer { host.close() }
         host.controller.dependencies.validate = { _ in .requiresPassword }
         var imports = 0
-        host.controller.dependencies.importWallet = { _, _ in imports += 1; return Self.wallet }
+        host.controller.dependencies.importWallet = { _, _, _ in imports += 1; return Self.wallet }
         var passwordField: NSSecureTextField?
         var passwordEditor: NSTextView?
         host.controller.dependencies.runPasswordPrompt = { [weak host] alert in
@@ -451,7 +452,7 @@ private final class ImportHost {
         controller = instantiate(ImportViewController.self)
         controller.walletAccess = NativeWalletAccess(fixture.access)
         controller.dependencies.validate = { _ in .valid }
-        controller.dependencies.importWallet = { _, _ in throw CancellationError() }
+        controller.dependencies.importWallet = { _, _, _ in throw CancellationError() }
         window = SecretLifetimeWindow(contentRect: NSRect(x: -10_000, y: -10_000, width: 300, height: 350),
             styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false

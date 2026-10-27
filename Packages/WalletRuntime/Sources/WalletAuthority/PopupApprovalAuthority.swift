@@ -249,7 +249,7 @@ final class PopupRequestSession {
 }
 
 @MainActor
-public final class PopupRequestSessions {
+public final class PopupApprovalAuthority {
 
     private enum AuthenticationOutcome: Sendable {
         case unlocked(catalog: WalletReviewCatalog, preparation: WalletSigningPreparation)
@@ -302,7 +302,7 @@ public final class PopupRequestSessions {
     private let customDefinitionResult: @MainActor @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult
     private let clock: @MainActor @Sendable () -> Date
     private let durableApprovalExecutor: DurableApprovalExecutor
-    private let presenter: PopupApprovalStatePresenter
+    private let approvalSubjectTitle: @MainActor @Sendable (ApprovalSubject) -> String
     private var entries = [RequestHandle: RequestEntry]()
 
     init(
@@ -316,7 +316,7 @@ public final class PopupRequestSessions {
         selectionNetworkResolver: @escaping (String) -> EthereumNetwork?,
         approvalNetworkResolver: @escaping (Int) -> ApprovalNetworkResolution,
         executionEnvironment: DurableApprovalExecutor.Environment,
-        presentationEnvironment: PopupApprovalStatePresenter.Environment,
+        approvalSubjectTitle: @escaping @MainActor @Sendable (ApprovalSubject) -> String,
         customDefinitionResult: @escaping @MainActor @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult,
         messages: AuthorityMessages,
         loadTransactionContext: @escaping @MainActor @Sendable (SendTransactionAction) async -> String? = { _ in nil }
@@ -338,22 +338,13 @@ public final class PopupRequestSessions {
             store: store,
             environment: executionEnvironment
         )
-        presenter = PopupApprovalStatePresenter(environment: presentationEnvironment)
-    }
-
-    public func privateBrowsingResponse(
-        for request: InternalSafariRequest
-    ) -> PopupResponse {
-        guard case .popup(.getPendingRequests) = request.command else {
-            return .command(.init(status: .ignored, approvalState: nil))
-        }
-        return .queue(presenter.pendingResponse())
+        self.approvalSubjectTitle = approvalSubjectTitle
     }
 
     public func dispatch(
         request: InternalSafariRequest,
         profileIdentifier: UUID?
-    ) async -> PopupResponse {
+    ) async -> PopupAuthorityResponse {
         await AuthorityMessageContext.$current.withValue(messages) {
             await AuthorityExecutionHooks.$current.withValue(hooks) {
                 await dispatchScoped(request: request, profileIdentifier: profileIdentifier)
@@ -364,15 +355,15 @@ public final class PopupRequestSessions {
     private func dispatchScoped(
         request: InternalSafariRequest,
         profileIdentifier: UUID?
-    ) async -> PopupResponse {
+    ) async -> PopupAuthorityResponse {
         guard case .popup(let command) = request.command else {
-            return .command(.init(status: .ignored, approvalState: nil))
+            return .command(status: .ignored, state: nil)
         }
         if case .getPendingRequests = command {
             return await pendingRequestsResponse(profileIdentifier: profileIdentifier)
         }
         guard let handle = handle(for: request, profileIdentifier: profileIdentifier) else {
-            return .command(.init(status: .ignored, approvalState: nil))
+            return .command(status: .ignored, state: nil)
         }
         switch command {
         case .getApprovalState, .retryApproval:
@@ -401,11 +392,11 @@ public final class PopupRequestSessions {
         for outcome: PopupCommandStatus,
         handle: RequestHandle,
         retry: Bool = false
-    ) async -> PopupResponse {
+    ) async -> PopupAuthorityResponse {
         if case .unavailable = outcome {
-            return .command(.init(status: .unavailable, approvalState: nil))
+            return .command(status: .unavailable, state: nil)
         }
-        let loaded: PopupApprovalState?
+        let loaded: PopupAuthorityState?
         switch await store.load(handle: handle) {
         case .found(let snapshot):
             if retry, case .queued(_, .unowned) = snapshot.state {
@@ -422,14 +413,14 @@ public final class PopupRequestSessions {
             }
             loaded = await approvalState(snapshot: snapshot)
         case .missing:
-            loaded = presenter.missingState(id: handle.id)
+            loaded = PopupAuthorityState(id: handle.id, content: .missing)
         case .unavailable:
             loaded = nil
         }
         guard let state = loaded else {
-            return .command(.init(status: .unavailable, approvalState: nil))
+            return .command(status: .unavailable, state: nil)
         }
-        return .command(.init(status: outcome, approvalState: state))
+        return .command(status: outcome, state: state)
     }
 
     private func performCommand(
@@ -508,7 +499,7 @@ public final class PopupRequestSessions {
 
     private func pendingRequestsResponse(
         profileIdentifier: UUID?
-    ) async -> PopupResponse {
+    ) async -> PopupAuthorityResponse {
         guard case .available(let availableSnapshots) = await store.list(
             profileIdentifier: profileIdentifier
         ) else {
@@ -528,21 +519,18 @@ public final class PopupRequestSessions {
         }
         staleHandles.forEach { discardEntry(handle: $0) }
 
-        var requests = [PopupPendingRequest]()
-        var completedResponses = [PopupCompletedResponse]()
+        var requests = [ExtensionBridge.Snapshot]()
+        var completedResponses = [ExtensionBridge.Snapshot]()
         for snapshot in snapshots {
             switch snapshot.phase {
             case .queued, .approving:
-                requests.append(presenter.pendingRequest(snapshot))
+                requests.append(snapshot)
             case .responded:
                 discardEntry(handle: snapshot.handle)
-                completedResponses.append(presenter.completedResponse(snapshot))
+                completedResponses.append(snapshot)
             }
         }
-        return .queue(presenter.pendingResponse(
-            requests: requests,
-            completedResponses: completedResponses
-        ))
+        return .queue(pending: requests, completed: completedResponses)
     }
 
     private func ensureSession(
@@ -652,43 +640,36 @@ public final class PopupRequestSessions {
 
     private func approvalState(
         snapshot: ExtensionBridge.Snapshot
-    ) async -> PopupApprovalState? {
+    ) async -> PopupAuthorityState? {
         let handle = snapshot.handle
         if snapshot.phase == .responded {
             discardEntry(handle: handle)
-            return presenter.missingState(id: handle.id)
+            return PopupAuthorityState(id: handle.id, content: .missing)
         }
         if snapshot.isQueuedForNativeApproval {
             discardEntry(handle: handle)
-            return presenter.state(id: handle.id, host: snapshot.host, presentation: .working)
+            return PopupAuthorityState(id: handle.id, host: snapshot.host, content: .working)
         }
         let sessionWasCached = entries[handle]?.session != nil
         let activeSession = activeSession(snapshot: snapshot)
         guard case .available(let session) = activeSession else {
             if case .unavailable = activeSession {
-                return PopupApprovalStatePresenter.errorState(
-                    id: handle.id, actions: [.retry, .reject],
-                    host: snapshot.host, error: AuthorityStrings.failedToLoad
-                )
+                return PopupAuthorityState(id: handle.id, host: snapshot.host,
+                    content: .error(message: AuthorityStrings.failedToLoad, actions: [.retry, .reject]))
             }
             if case .secureSetupRequired = activeSession {
-                return presenter.secureSetupRequiredState(
-                    id: handle.id,
-                    host: snapshot.host
-                )
+                return PopupAuthorityState(id: handle.id, host: snapshot.host,
+                    content: .error(message: AuthorityStrings.secureApprovalSetupRequired, actions: [.retry, .reject]))
             }
             if case .immediateResponse(let persistenceState) = activeSession {
                 if persistenceState == .failed {
-                    return PopupApprovalStatePresenter.errorState(
-                        id: handle.id,
-                        host: snapshot.host,
-                        error: AuthorityStrings.failedToLoad
-                    )
+                    return PopupAuthorityState(id: handle.id, host: snapshot.host,
+                        content: .error(message: AuthorityStrings.failedToLoad, actions: [.retry]))
                 }
-                return presenter.state(id: handle.id, host: snapshot.host, presentation: .working)
+                return PopupAuthorityState(id: handle.id, host: snapshot.host, content: .working)
             }
             if snapshot.phase == .approving {
-                return presenter.state(id: handle.id, host: snapshot.host, presentation: .working)
+                return PopupAuthorityState(id: handle.id, host: snapshot.host, content: .working)
             }
             switch await store.load(handle: handle) {
             case .found(let current) where current.phase == .responded:
@@ -698,7 +679,7 @@ public final class PopupRequestSessions {
             case .unavailable:
                 return nil
             }
-            return presenter.missingState(id: handle.id)
+            return PopupAuthorityState(id: handle.id, content: .missing)
         }
         if sessionWasCached, session.canBeginApproval {
             switch session.preparedAction {
@@ -712,12 +693,9 @@ public final class PopupRequestSessions {
             snapshot: snapshot,
             session: session
         )
-        return presenter.state(
-            id: handle.id,
-            host: session.request.host,
-            presentation: session.presentation,
-            transactionMutationAllowed: transactionMutationAllowed
-        )
+        return PopupAuthorityState(id: handle.id, host: session.request.host,
+            content: session.publicPresentation,
+            transactionMutationAllowed: transactionMutationAllowed)
     }
 
     private func approve(
@@ -865,7 +843,7 @@ public final class PopupRequestSessions {
         let action = session.preparedAction
         switch action {
         case .approveMessage(let message):
-            reason = presenter.subjectTitle(message.subject)
+            reason = approvalSubjectTitle(message.subject)
             approvedAccount = WalletAccountDescriptor(walletID: message.walletId, account: message.account)
             transactionSession = nil
         case .approveTransaction(let transactionAction):

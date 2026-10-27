@@ -3,9 +3,10 @@ import test from "node:test";
 import {validateApprovalWorkerTarget} from "../validate_approval_worker_target.mjs";
 
 function graph() {
-    const libraries = ["WalletDomain", "WalletAuthority", "WalletNetworking"];
+    const libraries = ["WalletDomain", "WalletAuthority", "WalletFlows", "WalletNetworking"];
     const targets = libraries.concat("WalletStorageSupport", "CWalletCrypto").map(name => ({name, type: "regular", dependencies: []}));
     targets.find(target => target.name === "WalletAuthority").dependencies = ["WalletDomain", "WalletStorageSupport", "CWalletCrypto"].map(name => ({byName: [name, null]}));
+    targets.find(target => target.name === "WalletFlows").dependencies = ["WalletDomain", "WalletAuthority"].map(name => ({byName: [name, null]}));
     targets.find(target => target.name === "WalletNetworking").dependencies = ["WalletDomain", "WalletStorageSupport"].map(name => ({byName: [name, null]}));
     const runtime = {
         manifest: {dependencies: [], products: libraries.map(name => ({name, type: {library: ["automatic"]}, targets: [name]})), targets},

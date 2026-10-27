@@ -1,5 +1,5 @@
 import WalletDomain
-import WalletStorageSupport
+import WalletAuthority
 // ∅ 2026 lil org
 
 import Foundation
@@ -55,8 +55,10 @@ public final class PopupApprovalStatePresenter {
     private static let maximumSelectableAccountIcons = 32
     private let iconDataURLs = NSCache<NSString, NSString>()
     private let environment: Environment
+    private let messages: AuthorityMessages
 
-    init(environment: Environment) {
+    init(environment: Environment, messages: AuthorityMessages) {
+        self.messages = messages
         self.environment = environment
         iconDataURLs.countLimit = 64
         iconDataURLs.totalCostLimit = 2 * 1024 * 1024
@@ -112,7 +114,7 @@ public final class PopupApprovalStatePresenter {
     func state(
         id: Int,
         host: String? = nil,
-        presentation: PopupRequestSession.Presentation,
+        presentation: PopupAuthorityState.Content,
         transactionMutationAllowed: Bool = false
     ) -> PopupApprovalState {
         let content: PopupApprovalState.Content
@@ -126,8 +128,9 @@ public final class PopupApprovalStatePresenter {
             )
         case .authenticating: content = .authenticating
         case .working: content = .working
-        case .error(let message):
-            content = .error(message: message, actions: [.retry, .reject])
+        case .missing: content = .missing
+        case .error(let message, let actions):
+            content = .error(message: message, actions: actions)
         }
         return PopupApprovalState(id: id, host: host, content: content)
     }
@@ -141,14 +144,14 @@ public final class PopupApprovalStatePresenter {
             id: id,
             actions: [.retry, .reject],
             host: host,
-            error: AuthorityStrings.secureApprovalSetupRequired
+            error: messages[.secureApprovalSetupRequired]
         )
     }
 
     private func reviewState(
         id: Int,
         host: String?,
-        review: PopupRequestSession.ReviewPresentation,
+        review: PopupReviewSnapshot,
         transactionMutationAllowed: Bool
     ) -> PopupApprovalState {
         let content: PopupReview.Content
@@ -194,19 +197,19 @@ public final class PopupApprovalStatePresenter {
         environment.approvalSubjectTitle(subject)
     }
 
-    private func title(for content: PopupRequestSession.ReviewContent) -> String {
+    private func title(for content: PopupReviewSnapshot.Content) -> String {
         switch content {
-        case .selectAccount: return AuthorityStrings.connectWallet
-        case .switchAccount: return AuthorityStrings.switchAccount
+        case .selectAccount: return messages[.connectWallet]
+        case .switchAccount: return messages[.switchAccount]
         case .approveMessage(let action): return environment.approvalSubjectTitle(action.subject)
-        case .approveTransaction: return AuthorityStrings.sendTransaction
-        case .addEthereumChain: return AuthorityStrings.addNetwork
+        case .approveTransaction: return messages[.sendTransaction]
+        case .addEthereumChain: return messages[.addNetwork]
         }
     }
 
     private func selectionReview(
         action: SelectAccountAction,
-        draft: PopupRequestSession.SelectionDraft,
+        draft: PopupReviewSnapshot.Selection,
         reviewCatalog: WalletReviewCatalog?
     ) -> PopupSelectionReview {
         var accounts = [PopupSelectableAccount]()
@@ -239,9 +242,9 @@ public final class PopupApprovalStatePresenter {
             canSelectNetwork: canSelectNetwork,
             allowsEmptySelection: !action.initiallyConnectedProviders.isEmpty,
             emptyMessage: accounts.isEmpty ? action.coinType.map {
-                String(format: AuthorityStrings.addAccountToConnect, $0.name)
+                String(format: messages[.addAccountToConnect], $0.name)
             } : nil,
-            primaryTitle: action.initiallyConnectedProviders.isEmpty ? AuthorityStrings.connect : nil
+            primaryTitle: action.initiallyConnectedProviders.isEmpty ? messages[.connect] : nil
         )
     }
 
@@ -265,7 +268,7 @@ public final class PopupApprovalStatePresenter {
     }
 
     private func transactionReview(
-        transactionSession: PopupTransactionSession,
+        transactionSession: PopupReviewSnapshot.PreparedTransaction,
         action: SendTransactionAction
     ) -> PopupTransactionReview {
         let chain = action.chain
@@ -274,7 +277,7 @@ public final class PopupApprovalStatePresenter {
         let price = environment.price(chain)
         var feeLines = environment.transactionFeeLines(transaction, chain, price)
         if snapshot.phase == .idle || snapshot.phase == .preparing {
-            feeLines.append(AuthorityStrings.calculating.withEllipsis)
+            feeLines.append(messages[.calculating].withEllipsis)
         }
         let canBackOffRefresh: Bool
         switch snapshot.phase {

@@ -2,6 +2,7 @@ import WalletDomain
 import WalletNetworking
 #if BW_SAFARI_VM_TESTING
 @testable import WalletAuthority
+import WalletFlows
 import CryptoKit
 import Darwin
 import Foundation
@@ -346,12 +347,15 @@ final class SafariVMFixtures: Sendable {
                 _ = try Self.read(root.appendingPathComponent("original-wallets.plist"), maximum: 8 * 1_024 * 1_024)
                 return
             }
-            let password = Data("approval-fixture-password".utf8)
-            var records = ["org.lil.wallet.password": password]
+            let password = SecretBytes(utf8: "approval-fixture-password")
+            defer { password.invalidate() }
+            var records = ["org.lil.wallet.password": Data("approval-fixture-password".utf8)]
             for (name, coin, seed) in [("fixture-ethereum", WalletCoin.ethereum, UInt8(1)), ("fixture-solana", .solana, UInt8(2))] {
-                guard let key = WalletStoredKey.importPrivateKey(privateKey: Data(repeating: seed, count: 32), name: name, password: password, coin: coin) else { throw Failure.invalidFixture }
+                guard let privateKey = WalletPrivateKey(data: Data(repeating: seed, count: 32)) else { throw Failure.invalidFixture }
+                defer { privateKey.invalidate() }
+                guard let key = WalletStoredKey.importPrivateKey(privateKey: privateKey, name: name, password: password, coin: coin) else { throw Failure.invalidFixture }
                 let wallet = WalletContainer(id: name, key: key)
-                _ = try wallet.getAccount(password: "approval-fixture-password", coin: coin)
+                _ = try wallet.getAccount(password: password, coin: coin)
                 guard let data = key.exportJSON() else { throw Failure.invalidFixture }
                 records["org.lil.wallet.wallet." + name] = data
             }
@@ -380,12 +384,15 @@ final class SafariVMFixtures: Sendable {
             let expectedIDs = Set(["fixture-ethereum", "fixture-solana", "fixture-multicoin"])
             let existingIDs = Set(try keychain.readAllWalletIDs())
             guard existingIDs.isSubset(of: expectedIDs) else { throw Failure.invalidFixture }
-            if let existingPassword = try keychain.readPassword() {
-                guard existingPassword == password else { throw Failure.invalidFixture }
+            if let existingPassword = try keychain.readPasswordSecret() {
+                defer { existingPassword.invalidate() }
+                guard try existingPassword.withUnsafeBytes({ $0.elementsEqual(password.utf8) }) else { throw Failure.invalidFixture }
             } else {
                 guard existingIDs.isEmpty else { throw Failure.invalidFixture }
                 _ = try keychain.createPasswordIfMissing(password, beforeInsert: {})
-                guard try keychain.readPassword() == password else { throw Failure.invalidFixture }
+                guard let stored = try keychain.readPasswordSecret() else { throw Failure.invalidFixture }
+                defer { stored.invalidate() }
+                guard try stored.withUnsafeBytes({ $0.elementsEqual(password.utf8) }) else { throw Failure.invalidFixture }
             }
             let records = try dataRecords("wallets.plist")
             let initialized = try dataRecords("apple-wallet-bootstrap.plist")["complete"] != nil
@@ -399,14 +406,13 @@ final class SafariVMFixtures: Sendable {
                     let accounts = Set(current.accounts.map { WalletAccountDescriptor(walletID: id, account: $0) })
                     let expectedAccounts = Set(intended.accounts.map { WalletAccountDescriptor(walletID: id, account: $0) })
                     guard accounts == expectedAccounts else { throw Failure.invalidFixture }
-                    let credential = Data(password.utf8)
-                    if key.isMnemonic {
-                        guard let mnemonic = key.decryptMnemonic(password: credential),
-                              mnemonic == expectedKey.decryptMnemonic(password: credential) else { throw Failure.invalidFixture }
-                    } else {
-                        guard let privateKey = key.decryptPrivateKey(password: credential),
-                              privateKey == expectedKey.decryptPrivateKey(password: credential) else { throw Failure.invalidFixture }
-                    }
+                    let credential = SecretBytes(utf8: password)
+                    defer { credential.invalidate() }
+                    let actual = key.isMnemonic ? key.decryptMnemonicSecret(password: credential) : key.decryptPrivateKey(password: credential)
+                    let intendedSecret = key.isMnemonic ? expectedKey.decryptMnemonicSecret(password: credential) : expectedKey.decryptPrivateKey(password: credential)
+                    defer { actual?.invalidate(); intendedSecret?.invalidate() }
+                    guard let actual, let intendedSecret,
+                          try actual.withUnsafeBytes({ left in try intendedSecret.withUnsafeBytes { left.elementsEqual($0) } }) else { throw Failure.invalidFixture }
                 } else if !initialized {
                     try keychain.saveWallet(id: id, data: expected)
                 }
@@ -741,7 +747,12 @@ final class SafariVMMutations {
         case .removeEthereumAccount:
             guard let wallet = wallets.wallets.first(where: { $0.id == "fixture-ethereum" }),
                   wallet.accounts.count == 1, wallet.accounts[0].coin == .ethereum else { throw SafariVMFixtures.Failure.invalidFixture }
-            try await wallets.delete(wallet: wallet)
+            let credentials = ApplicationServices.shared.credentials
+            let challenge = credentials.makeWalletAccessChallenge()
+            guard let grant = try credentials.verify(password: "approval-fixture-password", challenge: challenge),
+                  let access = credentials.accessSession(authorization: grant) else { throw SafariVMFixtures.Failure.unavailable }
+            defer { access.invalidate() }
+            try await wallets.delete(wallet: wallet, access: access)
         case .restoreEthereumAccount:
             try await SafariVMApplicationServices.restoreWallet(system: ApplicationServices.shared.authority, fixtures: fixtures)
         case .replaceVaultGeneration:
@@ -778,22 +789,22 @@ final class SafariVMPreferenceStorage: SharedPreferenceStorage, Sendable {
 final class SafariVMApprovalKeyStore: SafariApprovalKeyStoring, SafariApprovalIntegrityKeyStoring {
     private let fixtures = SafariVMFixtures.shared
 
-    func store(_ key: Data, identity: SafariApprovalKeyIdentity) throws {
+    func store(_ key: SecretBytes, identity: SafariApprovalKeyIdentity) throws {
         guard key.count == 32 else { throw SafariApprovalVault.Error.invalidKey }
         try fixtures.withStorage {
             var keys = try fixtures.dataRecords("vault-keys.plist")
-            keys[try identity.keychainAccount()] = key
+            keys[try identity.keychainAccount()] = try key.withUnsafeBytes { Data($0) }
             try fixtures.saveDataRecords(keys, name: "vault-keys.plist")
         }
     }
 
-    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> Data {
+    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> SecretBytes {
         let key = try fixtures.withStorage {
             guard let key = try fixtures.dataRecords("vault-keys.plist")[identity.keychainAccount()] else { throw SafariApprovalVault.Error.keychainFailure(errSecItemNotFound) }
             guard key.count == 32 else { throw SafariApprovalVault.Error.invalidKey }
             return key
         }
-        return key
+        return SecretBytes(copying: key)
     }
 
     func availability(identities: [SafariApprovalKeyIdentity]) -> [SafariApprovalKeyIdentity: SafariApprovalKeyAvailability] {
@@ -809,19 +820,19 @@ final class SafariVMApprovalKeyStore: SafariApprovalKeyStoring, SafariApprovalIn
         try fixtures.withStorage { try fixtures.saveDataRecords([:], name: "vault-keys.plist") }
     }
 
-    func loadOrCreate() throws -> Data {
+    func loadOrCreate() throws -> SecretBytes {
         try fixtures.withStorage {
             var keys = try fixtures.dataRecords("vault-integrity.plist")
             if let key = keys["integrity"] {
                 guard key.count == 32 else { throw SafariApprovalVault.Error.invalidKey }
-                return key
+                return SecretBytes(copying: key)
             }
             var key = Data(count: 32)
             let status = key.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, $0.count, $0.baseAddress!) }
             guard status == errSecSuccess else { throw SafariVMFixtures.Failure.unavailable }
             keys["integrity"] = key
             try fixtures.saveDataRecords(keys, name: "vault-integrity.plist")
-            return key
+            return SecretBytes(copying: key)
         }
     }
 }
@@ -853,11 +864,11 @@ struct SafariVMApplicationServices {
         let authorization = SafariVMRPCFixtureAuthorization()
         let rpc = EthereumRPC(authorizationProvider: authorization, authorizeRequest: routing.authorize)
         let ethereum = EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil })
-        let solana = SolanaRPCClient(urlSession: URLSession(configuration: .default),
+        let solana = SolanaRPCClient(urlSession: WalletHTTPSession.make(),
             authorizationProvider: authorization, messages: .init(failedToSend: Strings.failedToSend,
                 blockhashNotFound: Strings.solanaBlockhashNotFound),
             authorizeRequest: routing.authorize, rejectsRedirects: true)
-        let safariRPC = SafariRPCClient(urlSession: URLSession(configuration: .default), authorizationProvider: authorization,
+        let safariRPC = SafariRPCClient(urlSession: WalletHTTPSession.make(), authorizationProvider: authorization,
             authorizeRequest: routing.authorize)
         let vault: SafariApprovalVault
         let integrity: any SafariApprovalIntegrityKeyStoring
@@ -881,7 +892,7 @@ struct SafariVMApplicationServices {
             isExternalChange: { WalletStoreSync.isExternalChange($0) }
         ) : .live
         let publicationStorage: any SharedPreferenceStorage = fixtures.isLocal ? preferences : UserDefaultsPreferenceStorage.standard
-        let authority = WalletAuthoritySystem.testing(
+        let runtime = AuthorityRuntime.testing(
             catalog: catalog, catalogOwnedChainIds: catalogOwnedChainIds, decodedChainIds: decodedChainIds,
             solanaEndpoints: SolanaRPCClient.RPCConfiguration.bundled,
             broadcaster: SignedBroadcastClient(ethereum: EthereumBroadcastClient(rpc: rpc), solana: solana),
@@ -912,7 +923,7 @@ struct SafariVMApplicationServices {
                 ? .init(canUseBiometrics: { false }, attemptBiometrics: { _ in .failed }) : .live,
             hooks: hooks
         )
-        return SafariVMApplicationServices(authority: authority, authorization: authorization, ethereumRPC: rpc,
+        return SafariVMApplicationServices(authority: WalletAuthoritySystem(runtime: runtime), authorization: authorization, ethereumRPC: rpc,
             ethereum: ethereum, solana: solana, safariRPC: safariRPC, prices: PriceService(fetchPrices: { ["ETH": 2_000] }))
     }
 
@@ -931,10 +942,10 @@ struct SafariVMApplicationServices {
         let repository = wallets.repository
 #if os(iOS)
         _ = try await wallets.approvalVaultHost.performSourceMutation { willMutate in
-            try await repository.saveNewWallet(prepared, willMutateSource: willMutate)
+            try await repository.saveNewWallet(prepared, willMutateSource: willMutate, validateAccess: {})
         }
 #else
-        _ = try await repository.saveNewWallet(prepared, willMutateSource: {})
+        _ = try await repository.saveNewWallet(prepared, willMutateSource: {}, validateAccess: {})
 #endif
         guard await wallets.reloadFromStore() else { throw SafariVMFixtures.Failure.unavailable }
 #if os(macOS)
@@ -956,7 +967,7 @@ struct SafariVMApplicationServices {
         }
         await system.waitForVaultReconciliation()
         let previous = try generation()
-        try await system.invalidateVaultForTesting()
+        try await system.runtime.invalidateVaultForTesting()
         let current = try generation()
         guard current != previous else { throw SafariVMFixtures.Failure.unavailable }
         return (previous.uuidString.lowercased(), current.uuidString.lowercased())

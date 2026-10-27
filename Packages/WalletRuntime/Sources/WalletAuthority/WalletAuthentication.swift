@@ -169,7 +169,11 @@ public final class WalletAccessSession: Sendable {
     private let authorityID: UUID
     private let credentialIdentity: WalletCredentialIdentity
     private let clock: @Sendable () -> ContinuousClock.Instant
-    private let deadline: Mutex<ContinuousClock.Instant?>
+    private struct State {
+        var deadline: ContinuousClock.Instant?
+        var invalidationObservers = [UUID: @Sendable () -> Void]()
+    }
+    private let state: Mutex<State>
 
     fileprivate init(
         authorityID: UUID,
@@ -179,7 +183,7 @@ public final class WalletAccessSession: Sendable {
         self.authorityID = authorityID
         self.credentialIdentity = credentialIdentity
         self.clock = clock
-        deadline = Mutex(clock() + Self.inactivityLifetime)
+        state = Mutex(State(deadline: clock() + Self.inactivityLifetime))
     }
 
     func validateCredentials(for authorityID: UUID) -> Bool {
@@ -195,15 +199,14 @@ public final class WalletAccessSession: Sendable {
 
     func recordInteraction(for authorityID: UUID) -> Duration? {
         guard self.authorityID == authorityID else { return nil }
-        return deadline.withLock { deadline in
+        let recorded = state.withLock { state in
             let now = clock()
-            guard let current = deadline, now < current else {
-                deadline = nil
-                return nil
-            }
-            deadline = now + Self.inactivityLifetime
-            return Self.inactivityLifetime
+            guard let current = state.deadline, now < current else { return false }
+            state.deadline = now + Self.inactivityLifetime
+            return true
         }
+        if !recorded { invalidate() }
+        return recorded ? Self.inactivityLifetime : nil
     }
 
     func remainingLifetime(for authorityID: UUID) -> Duration? {
@@ -212,19 +215,42 @@ public final class WalletAccessSession: Sendable {
     }
 
     private func remainingLifetime() -> Duration? {
-        deadline.withLock { deadline in
+        let remaining = state.withLock { state -> Duration? in
             let now = clock()
-            guard let current = deadline, now < current else {
-                deadline = nil
-                return nil
-            }
+            guard let current = state.deadline, now < current else { return nil }
             return now.duration(to: current)
         }
+        if remaining == nil { invalidate() }
+        return remaining
+    }
+
+    func observeInvalidation(for authorityID: UUID, _ observer: @escaping @Sendable () -> Void) -> UUID? {
+        guard self.authorityID == authorityID else { observer(); return nil }
+        let identifier = UUID()
+        let installed = state.withLock { state in
+            guard let deadline = state.deadline, clock() < deadline else { return false }
+            state.invalidationObservers[identifier] = observer
+            return true
+        }
+        guard installed else { invalidate(); observer(); return nil }
+        return identifier
+    }
+
+    func removeInvalidationObserver(_ identifier: UUID) {
+        state.withLock { $0.invalidationObservers[identifier] = nil }
     }
 
     public func invalidate() {
-        deadline.withLock { $0 = nil }
+        let observers = state.withLock { state in
+            state.deadline = nil
+            let observers = Array(state.invalidationObservers.values)
+            state.invalidationObservers.removeAll()
+            return observers
+        }
+        for observer in observers { observer() }
     }
+
+    deinit { invalidate() }
 }
 
 public enum WalletAuthenticationResult: Sendable {

@@ -17,7 +17,7 @@ final class EditAccountsViewControllerTests: XCTestCase {
         let fixture = try AccountEditorFixture()
         addTeardownBlock { try await fixture.tearDown() }
         await assertWalletReload(fixture.manager)
-        let host = try AccountEditorHost(manager: fixture.manager)
+        let host = try AccountEditorHost(manager: fixture.manager, access: fixture.accessFixture.access)
         defer { host.close() }
         let state = try XCTUnwrap(host.controller.previewState)
         await expectEventually(timeout: 5) { state.accounts.count >= 4 }
@@ -60,7 +60,7 @@ final class EditAccountsViewControllerTests: XCTestCase {
         }
         addTeardownBlock { try await fixture.tearDown() }
         await assertWalletReload(fixture.manager)
-        let host = try AccountEditorHost(manager: fixture.manager)
+        let host = try AccountEditorHost(manager: fixture.manager, access: fixture.accessFixture.access)
         observedHost = host
         defer { host.close() }
         let state = try XCTUnwrap(host.controller.previewState)
@@ -89,7 +89,7 @@ final class EditAccountsViewControllerTests: XCTestCase {
         let fixture = try AccountEditorFixture()
         addTeardownBlock { try await fixture.tearDown() }
         await assertWalletReload(fixture.manager)
-        let access = WalletAccessTestFixture()
+        let access = fixture.accessFixture
         try access.unlock()
         let waitingForLayout = expectation(description: "Initial paging activation waits for layout")
         let layout = TestGate<Void>()
@@ -126,7 +126,7 @@ final class EditAccountsViewControllerTests: XCTestCase {
         let fixture = try AccountEditorFixture()
         addTeardownBlock { try await fixture.tearDown() }
         await assertWalletReload(fixture.manager)
-        let access = WalletAccessTestFixture()
+        let access = fixture.accessFixture
         try access.unlock()
         let host = try AccountEditorHost(manager: fixture.manager, access: access.access)
         defer { host.close() }
@@ -160,7 +160,7 @@ final class EditAccountsViewControllerTests: XCTestCase {
             previousKeyWindow?.makeKey()
         }
         let controller = instantiate(EditAccountsViewController.self, from: .main)
-        controller.access = try unlockedWalletAccessForTesting()
+        controller.access = fixture.accessFixture.access
         controller.wallet = try XCTUnwrap(fixture.manager.wallets.first)
         controller.walletsManager = fixture.manager
         let navigation = controller.inNavigationController
@@ -191,6 +191,7 @@ private final class AccountEditorFixture {
     private static let walletID = "account-editor"
     let reader: KeychainCopyMatchingStub
     let manager: WalletsManager
+    let accessFixture: WalletAccessTestFixture
     private let sourceMutator: AccountEditorSourceMutator
 #if os(iOS) || os(visionOS)
     private let vaultHost: SafariApprovalVaultHost
@@ -203,6 +204,9 @@ private final class AccountEditorFixture {
     init(postMutation: @escaping @MainActor @Sendable () -> Void = {
         NotificationCenter.default.post(name: Notification.Name("walletsChanged"), object: nil, userInfo: nil)
     }) throws {
+        let accessFixture = WalletAccessTestFixture(password: String(decoding: WalletCoreProxyTestVectors.walletCoreJSONMnemonicPassword, as: UTF8.self))
+        self.accessFixture = accessFixture
+        try accessFixture.unlock()
         let reader = KeychainCopyMatchingStub()
         let sourceMutator = AccountEditorSourceMutator()
         self.reader = reader
@@ -247,7 +251,8 @@ private final class AccountEditorFixture {
                 postMutation: postMutation,
                 startObserving: { _, _ in }, stopObserving: { _ in }, isExternalChange: { _ in false }
             ),
-            metadataMutations: .init(removeWallet: { _ in }, removeAccounts: { _, _ in })
+            metadataMutations: .init(removeWallet: { _ in }, removeAccounts: { _, _ in }),
+            authorityID: accessFixture.authorityID
         )
 #if os(iOS) || os(visionOS)
         manager.approvalVaultHost = vaultHost
@@ -313,14 +318,15 @@ private final class AccountEditorApprovalKeys: SafariApprovalKeyStoring, SafariA
 
     var removalCount: Int { state.withLock { $0.removals } }
 
-    func store(_ key: Data, identity: SafariApprovalKeyIdentity) throws {
-        state.withLock { $0.keys[identity] = key }
+    func store(_ key: SecretBytes, identity: SafariApprovalKeyIdentity) throws {
+        let data = try key.withUnsafeBytes { Data($0) }
+        state.withLock { $0.keys[identity] = data }
     }
 
-    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> Data {
+    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> SecretBytes {
         try state.withLock {
             guard let key = $0.keys[identity] else { throw SafariApprovalVault.Error.invalidKey }
-            return key
+            return SecretBytes(copying: key)
         }
     }
 
@@ -337,8 +343,8 @@ private final class AccountEditorApprovalKeys: SafariApprovalKeyStoring, SafariA
         }
     }
 
-    func loadOrCreate() throws -> Data {
-        Data(repeating: 0x47, count: 32)
+    func loadOrCreate() throws -> SecretBytes {
+        SecretBytes(copying: Data(repeating: 0x47, count: 32))
     }
 }
 #endif
@@ -354,7 +360,7 @@ private final class AccountEditorHost {
     var departures: Int { controller.dismissals }
 #endif
 
-    init(manager: WalletsManager, access: WalletAccessController? = nil) throws {
+    init(manager: WalletsManager, access: WalletAccessController) throws {
 #if os(macOS)
         controller = instantiate(EditAccountsViewController.self)
         window = AccountEditorWindow(contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 400),
@@ -364,7 +370,9 @@ private final class AccountEditorHost {
         controller.wallet = try XCTUnwrap(manager.wallets.first)
         controller.walletsManager = manager
 #if os(iOS) || os(visionOS)
-        controller.access = try access ?? unlockedWalletAccessForTesting()
+        controller.access = access
+#else
+        controller.walletAccess = NativeWalletAccess(access)
 #endif
         _ = controller.view
 #if os(macOS)

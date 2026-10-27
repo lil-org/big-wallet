@@ -1,127 +1,6 @@
-import WalletDomain
-import WalletStorageSupport
-// ∅ 2026 lil org
-
 import Foundation
-
-@MainActor
-public protocol NativeApprovalReviewTeardown: AnyObject {
-    func invalidateNativeApprovalReview()
-}
-
-@MainActor
-public final class NativeApprovalReview {
-    private struct Participant {
-        weak var value: (any NativeApprovalReviewTeardown)?
-    }
-
-    fileprivate let approval: ApprovalReview
-    private let authorityID: UUID
-    private let clock: @Sendable () -> Date
-    private let authenticationScope = UUID()
-    private var authenticationChallenge: WalletAuthenticationChallenge?
-    public private(set) var isActive = true
-    private var participants = [ObjectIdentifier: Participant]()
-
-    public var request: SafariRequest { approval.request }
-    public var handle: RequestHandle { approval.binding.handle }
-    public var action: DappRequestAction { approval.action }
-
-    init(intent: BoundApprovalIntent, authorityID: UUID = UUID(), clock: @escaping @Sendable () -> Date = Date.init, hooks: AuthorityExecutionHooks = .none) {
-        approval = ApprovalReview(intent: intent, hooks: hooks)
-        self.authorityID = authorityID
-        self.clock = clock
-    }
-
-    public func makeMessageAuthenticationChallenge(solanaCluster: Solana.Cluster?) -> WalletAuthenticationChallenge? {
-        guard isActive, case .approveMessage(let action) = action,
-              DappApprovalValidator.resolveMessagePayload(action.payload, cluster: solanaCluster, endpoints: action.solanaEndpoints) != nil else { return nil }
-        return makeChallenge(.message(review: authenticationScope, cluster: solanaCluster))
-    }
-
-    public func makeTransactionAuthenticationChallenge(
-        transaction: Transaction,
-        reviewedNetwork: ResolvedEthereumNetwork
-    ) -> WalletAuthenticationChallenge? {
-        guard isActive, case .approveTransaction(let action) = action,
-              TransactionReviewBinding.preservesPayload(transaction, reviewed: action.transaction),
-              let execution = DappApprovalDecision.TransactionExecution(
-                transaction, reviewedNetwork: reviewedNetwork,
-                approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account)
-              ), execution.isApplicable(to: action) else { return nil }
-        return makeChallenge(.transaction(review: authenticationScope, binding: .init(execution)))
-    }
-
-    private func makeChallenge(_ purpose: WalletAuthenticationChallenge.Purpose) -> WalletAuthenticationChallenge {
-        authenticationChallenge?.invalidate()
-        let challenge = WalletAuthenticationChallenge(
-            authorityID: authorityID, purpose: purpose, deadline: request.admissionDeadline, clock: clock
-        )
-        authenticationChallenge = challenge
-        return challenge
-    }
-
-    fileprivate func consumeMessageAuthorization(_ grant: WalletAuthenticationGrant, cluster: Solana.Cluster?) -> Bool {
-        isActive && grant.consume(authorityID: authorityID, purpose: .message(review: authenticationScope, cluster: cluster))
-    }
-
-    fileprivate func consumeTransactionAuthorization(_ grant: WalletAuthenticationGrant, execution: DappApprovalDecision.TransactionExecution) -> Bool {
-        isActive && grant.consume(authorityID: authorityID, purpose: .transaction(review: authenticationScope, binding: .init(execution)))
-    }
-
-    public func register(_ participant: any NativeApprovalReviewTeardown) {
-        guard isActive else {
-            participant.invalidateNativeApprovalReview()
-            return
-        }
-        participants = participants.filter { $0.value.value != nil }
-        participants[ObjectIdentifier(participant)] = Participant(value: participant)
-    }
-
-    public func invalidate() {
-        guard isActive else { return }
-        isActive = false
-        authenticationChallenge?.invalidate()
-        authenticationChallenge = nil
-        approval.invalidate()
-        let activeParticipants = participants.values.compactMap(\.value)
-        participants.removeAll()
-        for participant in activeParticipants {
-            participant.invalidateNativeApprovalReview()
-        }
-    }
-}
-
-protocol NativeDeliveryStore: AnyObject, Sendable {
-    func load(
-        handle: RequestHandle
-    ) async -> ExtensionBridge.SnapshotResult
-    func recordNativeDeliveryReceipt(
-        handle: RequestHandle,
-        nativeDeliveryNonce: NativeDeliveryNonce,
-        owner: NativeDeliveryOwner
-    ) async -> ExtensionBridge.StoreMutationResult
-    func reject(handle: RequestHandle) async ->
-        ExtensionBridge.StoreMutationResult
-    func interruptNativeApproval(
-        handle: RequestHandle,
-        nativeDeliveryNonce: NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID
-    ) async -> ExtensionBridge.NativeInterruptionResult
-    func completeNativeImmediate(
-        handle: RequestHandle,
-        nativeDeliveryNonce: NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID,
-        resolution: ImmediateResolution
-    ) async -> ExtensionBridge.StoreMutationResult
-    func rejectNativeDelivery(
-        handle: RequestHandle,
-        nativeDeliveryNonce: NativeDeliveryNonce,
-        runtimeInstanceIdentifier: UUID
-    ) async -> ExtensionBridge.StoreMutationResult
-}
-
-extension ExtensionBridge: NativeDeliveryStore {}
+import WalletDomain
+import WalletAuthority
 
 @MainActor
 public final class NativeApprovalCoordinator {
@@ -167,74 +46,6 @@ public final class NativeApprovalCoordinator {
         public let sequence: Int
     }
 
-    struct Environment: Sendable {
-        let messages: AuthorityMessages
-        let authorityID: UUID
-        let hooks: AuthorityExecutionHooks
-        let now: @Sendable () -> Date
-        let uptime: @MainActor @Sendable () -> TimeInterval
-        let wait: @MainActor @Sendable (UInt64) async -> Void
-        let waitForAuthenticationExpiry: @MainActor @Sendable (TimeInterval) async throws -> Void
-        let prepare: @MainActor @Sendable (ExtensionBridge.RequestBinding, WalletReviewCatalog?) -> DappRequestPreparation
-        let reloadWallets: @MainActor @Sendable () async -> Bool
-        let currentReviewCatalog: @MainActor @Sendable () -> WalletReviewCatalog?
-        let attemptNativeDecision: @MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult
-
-        init(
-            now: @escaping @Sendable () -> Date,
-            messages: AuthorityMessages = .testingEnglish,
-            authorityID: UUID = UUID(),
-            hooks: AuthorityExecutionHooks = .none,
-            uptime: (@MainActor @Sendable () -> TimeInterval)? = nil,
-            wait: @escaping @MainActor @Sendable (UInt64) async -> Void,
-            waitForAuthenticationExpiry: (@MainActor @Sendable (TimeInterval) async throws -> Void)? = nil,
-            prepare: (@MainActor @Sendable (ExtensionBridge.RequestBinding, WalletReviewCatalog?) -> DappRequestPreparation)? = nil,
-            reloadWallets: (@MainActor @Sendable () async -> Bool)? = nil,
-            currentReviewCatalog: (@MainActor @Sendable () -> WalletReviewCatalog?)? = nil,
-            attemptNativeDecision: (@MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult)? = nil
-        ) {
-            self.now = now
-            self.messages = messages
-            self.authorityID = authorityID
-            self.hooks = hooks
-            self.uptime = uptime ?? { ProcessInfo.processInfo.systemUptime }
-            self.wait = wait
-            self.waitForAuthenticationExpiry = waitForAuthenticationExpiry ?? { seconds in
-                let clock = ContinuousClock()
-                try await clock.sleep(until: clock.now.advanced(by: .seconds(seconds)), tolerance: nil)
-            }
-            self.prepare = prepare ?? { _, _ in .unavailable }
-            self.reloadWallets = reloadWallets ?? { false }
-            self.currentReviewCatalog = currentReviewCatalog ?? { nil }
-            self.attemptNativeDecision = attemptNativeDecision ?? { _ in .pending }
-        }
-
-        static func live(
-            processor: DappRequestProcessor,
-            wallets: WalletsManager,
-            finalizer: NativeApprovalFinalizer,
-            messages: AuthorityMessages,
-            authorityID: UUID,
-            clock: @escaping @Sendable () -> Date,
-            hooks: AuthorityExecutionHooks
-        ) -> Environment {
-            Environment(
-                now: clock,
-                messages: messages,
-                authorityID: authorityID,
-                hooks: hooks,
-                wait: { nanoseconds in
-                    let clock = ContinuousClock()
-                    try? await clock.sleep(until: clock.now.advanced(by: .nanoseconds(Int64(clamping: nanoseconds))), tolerance: nil)
-                },
-                prepare: { processor.prepare($0, catalog: $1) },
-                reloadWallets: { await wallets.reloadFromStore() },
-                currentReviewCatalog: { wallets.reviewCatalog() },
-                attemptNativeDecision: { await finalizer.attempt(consent: $0) }
-            )
-        }
-    }
-
     private enum AccessProgress {
         case unverified, receiptVerified, authenticated
     }
@@ -250,7 +61,7 @@ public final class NativeApprovalCoordinator {
     private enum RecoveryIntent {
         case validateReceipt
         case prepareReview
-        case persistResponse(ImmediateResolution)
+        case persistResponse(NativeApprovalResponse)
         case rejectBeforeAuthentication
         case rejectOwned
     }
@@ -347,7 +158,7 @@ public final class NativeApprovalCoordinator {
     private final class Work {
         weak var owner: NativeApprovalCoordinator?
         let store: NativeDeliveryStore
-        let environment: Environment
+        let environment: NativeApprovalAuthority
         let handle: RequestHandle
         let nonce: NativeDeliveryNonce
         let runtime: NativeDeliveryOwner?
@@ -416,7 +227,7 @@ public final class NativeApprovalCoordinator {
     public var onEvent: ((Event) -> Void)?
 
     private let store: NativeDeliveryStore
-    private let environment: Environment
+    private let environment: NativeApprovalAuthority
     private var runtime: NativeDeliveryOwner?
     private var activeWork: ActiveWork?
     private var state = State.registered
@@ -427,7 +238,7 @@ public final class NativeApprovalCoordinator {
 
     private var hasVerifiedReceipt: Bool { accessProgress != .unverified }
     public var hasAuthenticated: Bool {
-        accessProgress == .authenticated && walletAccess?.permitsAuthenticatedPresentation(for: environment.authorityID) == true
+        accessProgress == .authenticated && walletAccess.map(environment.permitsPresentation) == true
     }
 
     public var isAwaitingAuthentication: Bool { phase == .awaitingAuthentication }
@@ -446,17 +257,12 @@ public final class NativeApprovalCoordinator {
         isPaused && environment.now() >= terminalDeadline
     }
 
-    init(
-        handle: RequestHandle,
-        nativeDeliveryNonce: NativeDeliveryNonce,
-        store: NativeDeliveryStore,
-        environment: Environment
-    ) {
-        self.handle = handle
-        self.nativeDeliveryNonce = nativeDeliveryNonce
-        self.store = store
-        self.environment = environment
-        terminalDeadline = environment.now().addingTimeInterval(ExtensionBridge.requestTTL)
+    public init(authority: NativeApprovalAuthority) {
+        handle = authority.handle
+        nativeDeliveryNonce = authority.nativeDeliveryNonce
+        store = authority.deliveryStore
+        environment = authority
+        terminalDeadline = authority.now().addingTimeInterval(ExtensionBridge.requestTTL)
     }
 
     isolated deinit {
@@ -471,7 +277,7 @@ public final class NativeApprovalCoordinator {
     }
 
     public func resumeAfterAuthentication(authorization: WalletAccessSession) {
-        guard isAwaitingAuthentication, authorization.validateCredentials(for: environment.authorityID) else { return }
+        guard isAwaitingAuthentication, environment.acceptAccess(authorization) else { return }
         walletAccess = authorization
         accessProgress = .authenticated
         beginReviewPreparation()
@@ -506,67 +312,23 @@ public final class NativeApprovalCoordinator {
         }
     }
 
-    public func approveAccounts(
-        _ accounts: [SpecificWalletAccount],
-        ethereumNetwork: EthereumNetwork?,
-        review: NativeApprovalReview
-    ) {
-        let identities = accounts.map {
-            WalletAccountDescriptor(walletID: $0.walletId, account: $0.account)
-        }
-        acceptReview(review) { review, approvedAt, receipt in
-            review.acceptAccounts(
-                selection: .init(accounts: identities, ethereumChainID: ethereumNetwork?.chainIdHexString),
-                approvedAt: approvedAt,
-                nativeReceipt: receipt
-            )
-        }
+    public func approveAccounts(_ accounts: [SpecificWalletAccount], ethereumNetwork: EthereumNetwork?, review: NativeApprovalReview) {
+        acceptReview(review) { review.approveAccounts(accounts, ethereumNetwork: ethereumNetwork) }
     }
 
     public func approveMessage(solanaCluster: Solana.Cluster?, review: NativeApprovalReview, authorization: WalletAuthenticationGrant) {
-        guard case .approveMessage = review.action, canAccept(review) else { return }
-        guard review.consumeMessageAuthorization(authorization, cluster: solanaCluster) else {
-            failAndReject()
-            return
-        }
-        acceptReview(review) { review, approvedAt, receipt in
-            review.acceptMessage(cluster: solanaCluster, approvedAt: approvedAt, nativeReceipt: receipt)
-        }
+        guard case .approveMessage = review.action else { return }
+        acceptReview(review) { review.approveMessage(solanaCluster: solanaCluster, authorization: authorization) }
     }
 
-    public func approveTransaction(
-        _ transaction: Transaction,
-        reviewedNetwork: ResolvedEthereumNetwork,
-        review: NativeApprovalReview,
-        authorization: WalletAuthenticationGrant
-    ) {
-        guard case .approveTransaction(let action) = review.action, canAccept(review) else { return }
-        guard TransactionReviewBinding.preservesPayload(transaction, reviewed: action.transaction) else {
-            authorization.invalidate()
-            failAndReject()
-            return
-        }
-        guard let execution = DappApprovalDecision.TransactionExecution(
-            transaction,
-            reviewedNetwork: reviewedNetwork,
-            approvedAccount: WalletAccountDescriptor(walletID: action.walletId, account: action.account)
-        ) else {
-            failAndReject()
-            return
-        }
-        guard review.consumeTransactionAuthorization(authorization, execution: execution) else {
-            failAndReject()
-            return
-        }
-        acceptReview(review) { review, approvedAt, receipt in
-            review.acceptTransaction(execution: execution, approvedAt: approvedAt, nativeReceipt: receipt)
-        }
+    public func approveTransaction(_ transaction: Transaction, reviewedNetwork: ResolvedEthereumNetwork,
+                                   review: NativeApprovalReview, authorization: WalletAuthenticationGrant) {
+        guard case .approveTransaction = review.action else { return }
+        acceptReview(review) { review.approveTransaction(transaction, reviewedNetwork: reviewedNetwork, authorization: authorization) }
     }
 
     public func approveAddEthereumChain(review: NativeApprovalReview) {
-        acceptReview(review) { review, approvedAt, receipt in
-            review.acceptAddEthereumChain(approvedAt: approvedAt, nativeReceipt: receipt)
-        }
+        acceptReview(review) { review.approveAddEthereumChain() }
     }
 
     public func reject() {
@@ -580,7 +342,7 @@ public final class NativeApprovalCoordinator {
 
     private func canAccept(_ review: NativeApprovalReview) -> Bool {
         guard isCurrentPresentation(review) else { return false }
-        guard hasAuthenticated, walletAccess?.validateCredentials(for: environment.authorityID) == true else {
+        guard hasAuthenticated else {
             failAndReject()
             return false
         }
@@ -601,21 +363,13 @@ public final class NativeApprovalCoordinator {
         }
     }
 
-    private func acceptReview(
-        _ review: NativeApprovalReview,
-        using accept: (ApprovalReview, Date, NativeDeliveryReceipt) -> ReviewConsent?
-    ) {
-        guard canAccept(review), let runtime else { return }
-        let approvedAt = environment.now()
-        let receipt = NativeDeliveryReceipt(
-            nativeDeliveryNonce: nativeDeliveryNonce,
-            owner: runtime
-        )
-        guard let consent = accept(review.approval, approvedAt, receipt) else {
+    private func acceptReview(_ review: NativeApprovalReview, using accept: () -> NativeApprovalOperation?) {
+        guard canAccept(review) else { return }
+        guard let operation = accept() else {
             failAndReject()
             return
         }
-        beginFinalization(consent)
+        beginFinalization(operation)
     }
 
     private func transition(
@@ -636,11 +390,7 @@ public final class NativeApprovalCoordinator {
                 context: context,
                 task: Task {
                     guard context.isCurrent else { return }
-                    await AuthorityMessageContext.$current.withValue(context.environment.messages) {
-                        await AuthorityExecutionHooks.$current.withValue(context.environment.hooks) {
-                            await run(context)
-                        }
-                    }
+                    await run(context)
                 }
             )
         }
@@ -693,9 +443,9 @@ public final class NativeApprovalCoordinator {
         }
     }
 
-    private func beginFinalization(_ consent: ReviewConsent) {
+    private func beginFinalization(_ operation: NativeApprovalOperation) {
         transition(to: .finalizing) { work in
-            await Self.finalize(work, consent: consent)
+            await Self.finalize(work, operation: operation)
         }
     }
 
@@ -705,7 +455,7 @@ public final class NativeApprovalCoordinator {
         }
     }
 
-    private func beginResponsePersistence(_ response: ImmediateResolution) {
+    private func beginResponsePersistence(_ response: NativeApprovalResponse) {
         transition(to: .persistingResponse) { work in
             await Self.persistResponse(work, response: response)
         }
@@ -910,60 +660,39 @@ public final class NativeApprovalCoordinator {
         while work.mayAttempt {
             guard let status = await work.load() else { return }
             if finishIfResolved(status, work: work) { return }
-            if case .pending(let snapshot, .current) = status, let binding = snapshot.requestBinding {
+            if case .pending(_, .current) = status, let runtime = work.runtime,
+               let access = work.update({ $0.walletAccess }) ?? nil {
+                let preparation = await work.environment.prepareReview(owner: runtime, access: access, until: work.recoveryDeadline)
                 guard work.mayAttempt else { break }
-                var preparation: DappRequestPreparation? = work.update { _ in
-                    work.environment.prepare(binding, nil)
-                }
-                if case .needsCatalog? = preparation {
-                    preparation = nil
-                    if await work.environment.reloadWallets() {
-                        guard work.mayAttempt else { break }
-                        guard let refreshed = await work.load() else { return }
-                        if finishIfResolved(refreshed, work: work) { return }
-                        guard case .pending(let current, .current) = refreshed,
-                              current.requestBinding == binding else { continue }
-                        if let catalog = work.update({ _ in work.environment.currentReviewCatalog() }) ?? nil {
-                            preparation = work.update { _ in work.environment.prepare(binding, catalog) }
-                        }
+                switch preparation {
+                case .unavailable:
+                    work.update { $0.pause(for: .prepareReview) }
+                case .changed:
+                    continue
+                case .retry:
+                    if await work.retry() { continue }
+                    work.update { $0.pause(for: .prepareReview) }
+                case .review(let review):
+                    guard review.handle == work.handle else {
+                        review.invalidate()
+                        work.update { $0.failAndReject() }
+                        return
                     }
+                    work.update { $0.presentReview(review) }
+                case .immediate(let response):
+                    work.update { $0.updateState(.persistingResponse, within: work) }
+                    await persistResponse(work, response: response)
                 }
-                guard work.mayAttempt else { break }
-                if let preparation {
-                    switch preparation {
-                    case .needsCatalog, .unavailable:
-                        work.update { $0.pause(for: .prepareReview) }
-                    case .approval(let intent):
-                        guard intent.binding == binding else {
-                            work.update { $0.failAndReject() }
-                            return
-                        }
-                        let review = NativeApprovalReview(intent: intent, authorityID: work.environment.authorityID, clock: work.environment.now, hooks: work.environment.hooks)
-                        work.update {
-                            $0.presentReview(review)
-                        }
-                    case .immediate(let response):
-                        work.update {
-                            $0.updateState(.persistingResponse, within: work)
-                        }
-                        await persistResponse(work, response: response)
-                    }
-                    return
-                }
+                return
             }
             if !(await work.retry()) { break }
         }
         work.update { $0.pause(for: .prepareReview) }
     }
 
-    private static func persistResponse(_ work: Work, response: ImmediateResolution) async {
-        guard let runtime = work.runtime else { return }
+    private static func persistResponse(_ work: Work, response: NativeApprovalResponse) async {
         await persistOwnedMutation(work, recovery: .persistResponse(response)) {
-            await work.store.completeNativeImmediate(
-                handle: work.handle, nativeDeliveryNonce: work.nonce,
-                runtimeInstanceIdentifier: runtime.runtimeInstanceIdentifier,
-                resolution: response
-            )
+            await response.persistResponse()
         }
     }
 
@@ -1071,7 +800,7 @@ public final class NativeApprovalCoordinator {
         return true
     }
 
-    private static func finalize(_ work: Work, consent: ReviewConsent) async {
+    private static func finalize(_ work: Work, operation: NativeApprovalOperation) async {
         while work.isCurrent {
             guard let status = await work.load() else { return }
             switch status {
@@ -1080,7 +809,7 @@ public final class NativeApprovalCoordinator {
                     work.update { $0.finish() }
                     return
                 }
-                let result = await work.environment.attemptNativeDecision(consent)
+                let result = await operation.attempt()
                 guard work.isCurrent else { return }
                 switch result {
                 case .responseReady:

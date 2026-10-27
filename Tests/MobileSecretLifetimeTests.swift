@@ -15,7 +15,7 @@ final class MobileSecretLifetimeTests: XCTestCase {
         let result = TestGate<WalletSnapshot>()
         let started = expectation(description: "import started")
         let completed = expectation(description: "completion delivered")
-        controller.importWallet = { input, password in
+        controller.importWallet = { input, password, _ in
             XCTAssertEqual(input, "disposable import")
             XCTAssertNil(password)
             started.fulfill()
@@ -49,7 +49,7 @@ final class MobileSecretLifetimeTests: XCTestCase {
         let returned = expectation(description: "late import returned")
         var imports = 0
         var completions = 0
-        controller.importWallet = { _, _ in
+        controller.importWallet = { _, _, _ in
             imports += 1
             started.fulfill()
             let wallet = await result.wait()
@@ -79,7 +79,7 @@ final class MobileSecretLifetimeTests: XCTestCase {
         let controller = try makeImportController()
         let result = TestDeferred<WalletSnapshot>()
         let started = expectation(description: "import started")
-        controller.importWallet = { _, _ in
+        controller.importWallet = { _, _, _ in
             started.fulfill()
             return try await result.value()
         }
@@ -102,7 +102,7 @@ final class MobileSecretLifetimeTests: XCTestCase {
             try fixture.unlock()
             let controller = try makeImportController(access: fixture.access)
             var imports = 0
-            controller.importWallet = { _, _ in imports += 1; return self.wallet() }
+            controller.importWallet = { _, _, _ in imports += 1; return self.wallet() }
             if replaced { fixture.keychain.passwordData = Data("replacement".utf8) }
             else { fixture.keychain.readStatus = errSecInteractionNotAllowed }
             let passwordReads = fixture.keychain.passwordReadCount
@@ -145,7 +145,7 @@ final class MobileSecretLifetimeTests: XCTestCase {
         controller.makePasswordPrompt = { prompt }
         controller.validateWalletInput = { _ in .requiresPassword }
         var importCount = 0
-        controller.importWallet = { input, password in
+        controller.importWallet = { input, password, _ in
             importCount += 1
             XCTAssertEqual(input, "encrypted import")
             XCTAssertEqual(password, "keystore password")
@@ -185,7 +185,7 @@ final class MobileSecretLifetimeTests: XCTestCase {
         controller.makePasswordPrompt = { prompt }
         controller.validateWalletInput = { _ in .requiresPassword }
         var imports = 0
-        controller.importWallet = { _, _ in imports += 1; return self.wallet() }
+        controller.importWallet = { _, _, _ in imports += 1; return self.wallet() }
         controller.textView.text = "encrypted import"
         controller.textViewDidChange(controller.textView)
         await expectEventually { controller.okButton.isEnabled }
@@ -245,7 +245,7 @@ final class MobileSecretLifetimeTests: XCTestCase {
         }, dismiss: { _, _, completion in finishDismissal = completion })
         controller.makePasswordPrompt = { prompt }
         controller.validateWalletInput = { _ in .requiresPassword }
-        controller.importWallet = { _, _ in
+        controller.importWallet = { _, _, _ in
             imported.fulfill()
             return try await result.value()
         }

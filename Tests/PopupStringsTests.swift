@@ -1,5 +1,6 @@
 import WalletDomain
 @testable import WalletAuthority
+@testable import WalletFlows
 // ∅ 2026 lil org
 
 import XCTest
@@ -120,9 +121,7 @@ final class PopupStringsTests: XCTestCase {
     }
 
     private func encode(_ response: PopupResponse, for request: InternalSafariRequest) throws -> WireProtocol.ValidatedObject {
-        try AuthorityMessageContext.$current.withValue(messages) {
-            try PopupResponseEncoder.encode(response, for: request)
-        }
+        try PopupResponseEncoder.encode(response, for: request, messages: messages)
     }
 
     @MainActor
@@ -251,7 +250,7 @@ final class PopupStringsTests: XCTestCase {
     @MainActor
     func testSecureSetupRequiredStateAllowsRefreshAndRejection() {
         let approval = AuthorityMessageContext.$current.withValue(messages) {
-            PopupApprovalStatePresenter(environment: presentationEnvironment())
+            PopupApprovalStatePresenter(environment: presentationEnvironment(), messages: messages)
                 .secureSetupRequiredState(id: 91, host: "wallet.example")
         }
         let state = popupApprovalJSON(approval)
@@ -286,13 +285,13 @@ final class PopupStringsTests: XCTestCase {
         let session = PopupRequestSession(intent: try reviewIntentForTesting(
             binding: XCTUnwrap(snapshot.requestBinding), action: action
         ), transactionApprovalOperations: unusedPopupTransactionOperations())
-        let presenter = PopupApprovalStatePresenter(environment: presentationEnvironment())
+        let presenter = PopupApprovalStatePresenter(environment: presentationEnvironment(), messages: messages)
         func renderedPresentation(transactionMutationAllowed: Bool) -> [String: Any] {
             AuthorityMessageContext.$current.withValue(messages) {
                 popupApprovalJSON(presenter.state(
                     id: session.handle.id,
                     host: session.request.host,
-                    presentation: session.presentation,
+                    presentation: session.publicPresentation,
                     transactionMutationAllowed: transactionMutationAllowed
                 ))
             }

@@ -102,9 +102,11 @@ final class UpgradeVerification {
     private func mutateExisting() async throws {
         let services = try services()
         try await load(services, password: expectations.fixturePassword)
+        let access = try services.authenticate(password: expectations.fixturePassword)
+        defer { access.invalidate() }
         try originalWallets(services, allowsAdded: false)
         let original = try ethereumWallet()
-        let added = try await services.wallets.addWallet(input: original.accounts[0].privateKeyBackup, inputPassword: nil)
+        let added = try await services.wallets.addWallet(input: original.accounts[0].privateKeyBackup, inputPassword: nil, access: access)
         try require(added.id != original.walletID && !expectations.wallets.contains { $0.walletID == added.id }, "Import reused a historical wallet identifier")
         try verifyAccounts(added, expected: original)
         report.checks.append("wallet-created")
@@ -167,12 +169,12 @@ final class UpgradeVerification {
         let creation = try await services.credentials.createPasswordIfMissing(restoredPassword)
         try require(creation == .created, "Replacement password was not created")
         let access = try services.authenticate(password: restoredPassword)
-        access.invalidate()
+        defer { access.invalidate() }
         report.checks.append("replacement-password")
         var mapping = [String: String]()
         for original in expectations.wallets {
             let input = original.mnemonicBackup ?? original.accounts[0].privateKeyBackup
-            let wallet = try await services.wallets.addWallet(input: input, inputPassword: nil)
+            let wallet = try await services.wallets.addWallet(input: input, inputPassword: nil, access: access)
             try require(wallet.id != original.walletID, "Restoration reused a historical wallet identifier")
             mapping[original.fixtureID] = wallet.id
         }
@@ -181,7 +183,7 @@ final class UpgradeVerification {
             guard let id = mapping[original.fixtureID], let wallet = services.wallets.currentWallet(id: id) else {
                 throw UpgradeFailure.invalid("Restored mnemonic wallet is missing")
             }
-            let preview = try await services.wallets.previewSession(wallet: wallet)
+            let preview = try await services.wallets.previewSession(wallet: wallet, access: access)
             defer { preview.invalidate() }
             let candidates = try await preview.previewAccounts(page: 0)
             let selected = try original.accounts.map { expected -> WalletAccount in
@@ -190,7 +192,7 @@ final class UpgradeVerification {
                 }
                 return account
             }
-            try await services.wallets.update(wallet: wallet, enabledAccounts: selected)
+            try await services.wallets.update(wallet: wallet, enabledAccounts: selected, access: access)
         }
         report.checks.append("hd-paths-restored")
         try restoredIdentities(services, mapping: mapping)
@@ -259,8 +261,15 @@ final class UpgradeVerification {
             try require(try storage.walletData(id: expected.walletID) == fixtureStorage.walletData(id: expected.walletID),
                 "Current mutation rewrote an original wallet")
         }
-        try require(try storage.keychain.readPasswordData() == fixtureStorage.keychain.readPasswordData(),
-            "Current mutation changed the original credential")
+        guard let currentCredential = try storage.keychain.readPasswordSecret(),
+              let originalCredential = try fixtureStorage.keychain.readPasswordSecret() else {
+            throw UpgradeFailure.invalid("Original credential is missing")
+        }
+        defer { currentCredential.invalidate(); originalCredential.invalidate() }
+        let credentialsMatch = try currentCredential.withUnsafeBytes { current in
+            try originalCredential.withUnsafeBytes { current.elementsEqual($0) }
+        }
+        try require(credentialsMatch, "Current mutation changed the original credential")
     }
 
     private func networkSettings(_ preferences: FixturePreferences) throws {
@@ -406,14 +415,18 @@ final class UpgradeVerification {
             case "failed-add":
                 storage.setFault(.failedAdd)
                 do {
-                    _ = try await services.wallets.addWallet(input: ethereumWallet().accounts[0].privateKeyBackup, inputPassword: nil)
+                    let access = try services.authenticate(password: expectations.fixturePassword)
+                    defer { access.invalidate() }
+                    _ = try await services.wallets.addWallet(input: ethereumWallet().accounts[0].privateKeyBackup, inputPassword: nil, access: access)
                     rejected = false
                 } catch WalletCredentialError.failedToSave(errSecIO) {
                     rejected = true
                 }
             default:
                 do {
-                    _ = try await services.wallets.addWallet(input: "{\"crypto\":{}}", inputPassword: "incorrect")
+                    let access = try services.authenticate(password: expectations.fixturePassword)
+                    defer { access.invalidate() }
+                    _ = try await services.wallets.addWallet(input: "{\"crypto\":{}}", inputPassword: "incorrect", access: access)
                     rejected = false
                 } catch {
                     rejected = true

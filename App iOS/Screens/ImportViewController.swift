@@ -46,8 +46,8 @@ class ImportViewController: WalletAccessViewController {
     var validateWalletInput: @MainActor (String) async -> WalletsManager.InputValidationResult = {
         await ApplicationServices.shared.wallets.validateWalletInput($0)
     }
-    var importWallet: @MainActor (String, String?) async throws -> WalletSnapshot = {
-        try await ApplicationServices.shared.wallets.addWallet(input: $0, inputPassword: $1)
+    var importWallet: @MainActor (String, String?, WalletAccessSession) async throws -> WalletSnapshot = {
+        try await ApplicationServices.shared.wallets.addWallet(input: $0, inputPassword: $1, access: $2)
     }
     var makePasswordPrompt: @MainActor () -> LocalAuthentication.AlertRequest = { .init() }
 
@@ -183,9 +183,9 @@ class ImportViewController: WalletAccessViewController {
             self?.setWaiting(true)
             let result: Result<WalletSnapshot, Error>
             do {
-                if let self { try requireCurrentCredentials() }
-                else { return }
-                result = .success(try await importWallet(input, password))
+                guard let self else { return }
+                let session = try requireCurrentAccess()
+                result = .success(try await importWallet(input, password, session))
             }
             catch { result = .failure(error) }
             guard let self, acceptsSubmission(generation) else { return }

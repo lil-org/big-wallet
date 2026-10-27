@@ -113,13 +113,13 @@ final class PasswordKeychainFixture: Sendable {
 
 #if os(iOS) || os(visionOS)
 private final class PasswordFixtureApprovalKeys: SafariApprovalKeyStoring, Sendable {
-    func store(_ key: Data, identity: SafariApprovalKeyIdentity) throws { throw SafariApprovalVault.Error.unavailable }
-    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> Data { throw SafariApprovalVault.Error.unavailable }
+    func store(_ key: SecretBytes, identity: SafariApprovalKeyIdentity) throws { throw SafariApprovalVault.Error.unavailable }
+    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> SecretBytes { throw SafariApprovalVault.Error.unavailable }
     func availability(identities: [SafariApprovalKeyIdentity]) -> [SafariApprovalKeyIdentity: SafariApprovalKeyAvailability] { [:] }
     func removeAll() throws {}
 }
 
 private final class PasswordFixtureIntegrityKey: SafariApprovalIntegrityKeyStoring, Sendable {
-    func loadOrCreate() throws -> Data { throw SafariApprovalVault.Error.unavailable }
+    func loadOrCreate() throws -> SecretBytes { throw SafariApprovalVault.Error.unavailable }
 }
 #endif

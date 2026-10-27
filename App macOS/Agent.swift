@@ -1,3 +1,4 @@
+import WalletFlows
 import WalletDomain
 import WalletAuthority
 import WalletNetworking

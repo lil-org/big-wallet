@@ -191,7 +191,7 @@ public final class EthereumRPC: EthereumRPCClient {
     private let waitForRetry: @Sendable () async throws -> Void
 
     public init(
-        urlSession: URLSession = URLSession(configuration: .default),
+        urlSession: URLSession = WalletHTTPSession.make(),
         authorizationProvider: any AlchemyAuthorizationProviding,
         authorizeRequest: @escaping @Sendable (inout URLRequest) throws -> Void = { _ in },
         waitForRetry: @escaping @Sendable () async throws -> Void = {

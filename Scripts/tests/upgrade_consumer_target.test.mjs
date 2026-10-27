@@ -3,12 +3,13 @@ import test from "node:test";
 import {validateUpgradeConsumerTarget} from "../validate_upgrade_consumer_target.mjs";
 
 function graph() {
-    const products = ["WalletDomain", "WalletAuthority", "WalletNetworking"];
+    const products = ["WalletDomain", "WalletAuthority", "WalletFlows", "WalletNetworking"];
     const targets = [...products, "WalletStorageSupport", "CWalletCrypto"].map(name => ({
         name, type: "regular", dependencies: [],
     }));
     targets.find(value => value.name === "WalletAuthority").dependencies = ["WalletDomain", "WalletStorageSupport", "CWalletCrypto"]
         .map(name => ({byName: [name, null]}));
+    targets.find(value => value.name === "WalletFlows").dependencies = ["WalletDomain", "WalletAuthority"].map(name => ({byName: [name, null]}));
     targets.find(value => value.name === "WalletNetworking").dependencies = ["WalletDomain", "WalletStorageSupport"]
         .map(name => ({byName: [name, null]}));
     const runtime = {
@@ -28,7 +29,7 @@ function graph() {
         manifest: {
             dependencies: [{}],
             products: [{name: "WalletUpgradeConsumer", type: {executable: null}, targets: ["WalletUpgradeConsumer"]}],
-            targets: [{name: "WalletUpgradeConsumer", type: "executable", dependencies: ["WalletDomain", "WalletAuthority"]
+            targets: [{name: "WalletUpgradeConsumer", type: "executable", dependencies: ["WalletDomain", "WalletAuthority", "WalletFlows"]
                 .map(name => ({product: [name, "walletruntime", null, null]})),
             settings: [{kind: {swiftLanguageMode: {version: "6"}}}]}],
         },
@@ -46,11 +47,11 @@ const runtimeSource = (value, name = "WalletAuthority") => value.runtime.descrip
 const consumer = value => value.harness.manifest.targets[0];
 const source = value => value.harness.description.targets[0];
 
-test("accepts only Domain and Authority products with their closed four-target dependency graph", () => {
+test("accepts Domain, Authority and Flows products with a closed dependency graph", () => {
     const value = graph();
     assert.equal(validateUpgradeConsumerTarget(value), true);
-    assert.equal(value.runtime.manifest.products.length, 3);
-    assert.deepEqual(consumer(value).dependencies.map(value => value.product[0]), ["WalletDomain", "WalletAuthority"]);
+    assert.equal(value.runtime.manifest.products.length, 4);
+    assert.deepEqual(consumer(value).dependencies.map(value => value.product[0]), ["WalletDomain", "WalletAuthority", "WalletFlows"]);
 });
 
 test("accepts ordinary target dependencies and package-relative described paths", () => {
@@ -71,12 +72,12 @@ for (const [name, mutate, expected] of [
     ["app dependencies", value => { runtimeTarget(value).dependencies.push({byName: ["Big Wallet", null]}); }, /unexpected runtime dependency/],
     ["test-support dependencies", value => { runtimeTarget(value).dependencies.push({byName: ["WalletRuntimeTestSupport", null]}); }, /unexpected runtime dependency/],
     ["networking transitively", value => { runtimeTarget(value).dependencies.push({byName: ["WalletNetworking", null]}); }, /unexpected runtime dependency/],
-    ["networking as a consumer product", value => { consumer(value).dependencies[1].product[0] = "WalletNetworking"; }, /only WalletDomain and WalletAuthority/],
-    ["an extra consumer product dependency", value => { consumer(value).dependencies.push({product: ["WalletNetworking", "walletruntime", null, null]}); }, /only WalletDomain and WalletAuthority/],
-    ["duplicate consumer dependencies", value => { consumer(value).dependencies[1] = consumer(value).dependencies[0]; }, /only WalletDomain and WalletAuthority/],
-    ["a missing consumer dependency", value => { consumer(value).dependencies.pop(); }, /only WalletDomain and WalletAuthority/],
-    ["consumer by-name dependencies", value => { consumer(value).dependencies[0] = {byName: ["WalletDomain", null]}; }, /only WalletDomain and WalletAuthority/],
-    ["a consumer dependency from another package", value => { consumer(value).dependencies[0].product[1] = "external"; }, /only WalletDomain and WalletAuthority/],
+    ["networking as a consumer product", value => { consumer(value).dependencies[1].product[0] = "WalletNetworking"; }, /only WalletDomain, WalletAuthority and WalletFlows/],
+    ["an extra consumer product dependency", value => { consumer(value).dependencies.push({product: ["WalletNetworking", "walletruntime", null, null]}); }, /only WalletDomain, WalletAuthority and WalletFlows/],
+    ["duplicate consumer dependencies", value => { consumer(value).dependencies[1] = consumer(value).dependencies[0]; }, /only WalletDomain, WalletAuthority and WalletFlows/],
+    ["a missing consumer dependency", value => { consumer(value).dependencies.pop(); }, /only WalletDomain, WalletAuthority and WalletFlows/],
+    ["consumer by-name dependencies", value => { consumer(value).dependencies[0] = {byName: ["WalletDomain", null]}; }, /only WalletDomain, WalletAuthority and WalletFlows/],
+    ["a consumer dependency from another package", value => { consumer(value).dependencies[0].product[1] = "external"; }, /only WalletDomain, WalletAuthority and WalletFlows/],
     ["a missing crypto dependency", value => { runtimeTarget(value).dependencies.pop(); }, /unexpected runtime dependency/],
     ["a duplicate runtime dependency", value => { runtimeTarget(value).dependencies[2] = runtimeTarget(value).dependencies[0]; }, /unexpected runtime dependency/],
     ["a Domain-to-Authority dependency cycle", value => { runtimeTarget(value, "WalletDomain").dependencies.push({byName: ["WalletAuthority", null]}); }, /unexpected runtime dependency/],

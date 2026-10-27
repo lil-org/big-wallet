@@ -34,9 +34,11 @@ final class SecretAlertPresentation {
         session.isCurrent(token) && isActive()
     }
 
-    func show(_ secret: String, title: String, token: Token, from presenter: UIViewController, completion: (() -> Void)? = nil) {
-        guard accepts(token), session.store(secret, for: token) else { return }
-        let alert = UIAlertController(title: title, message: secret, preferredStyle: .alert)
+    func show(_ secret: WalletExportedSecret, title: String, token: Token, from presenter: UIViewController, completion: (() -> Void)? = nil) {
+        guard accepts(token) else { secret.invalidate(); return }
+        guard session.store(secret, for: token) else { return }
+        let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
+        guard session.withText(for: token, { alert.message = $0 }) else { invalidate(); return }
         alert.addAction(UIAlertAction(title: Strings.copy, style: .default) { [weak self] _ in
             self?.finish(token, copying: true)
         })
@@ -55,8 +57,8 @@ final class SecretAlertPresentation {
 
     func finish(_ token: Token, copying: Bool) {
         guard session.isCurrent(token) else { return }
-        if copying, accepts(token), let secret = session.value(for: token) {
-            copy(secret)
+        if copying, accepts(token) {
+            session.withText(for: token, copy)
         }
         invalidate()
     }

@@ -140,20 +140,25 @@ final class HarnessFixtureStorage: Sendable {
     private func initialize() throws {
         let password = "approval-fixture-password"
         let passwordData = Data(password.utf8)
+        let passwordSecret = SecretBytes(utf8: password)
+        defer { passwordSecret.invalidate() }
         var records = ["org.lil.wallet.password": passwordData]
         for (name, coin, seed) in [("fixture-ethereum", WalletCoin.ethereum, UInt8(1)), ("fixture-solana", .solana, UInt8(2))] {
-            guard let key = WalletStoredKey.importPrivateKey(privateKey: Data(repeating: seed, count: 32),
-                name: name, password: passwordData, coin: coin) else { throw HarnessError.invalid("Cannot create fixture key") }
+            guard let privateKey = WalletPrivateKey(data: Data(repeating: seed, count: 32)) else { throw HarnessError.invalid("Cannot create fixture key") }
+            defer { privateKey.invalidate() }
+            guard let key = WalletStoredKey.importPrivateKey(privateKey: privateKey,
+                name: name, password: passwordSecret, coin: coin) else { throw HarnessError.invalid("Cannot create fixture key") }
             let wallet = WalletContainer(id: name, key: key)
-            _ = try wallet.getAccount(password: password, coin: coin)
+            _ = try wallet.getAccount(password: passwordSecret, coin: coin)
             guard let data = key.exportJSON() else { throw HarnessError.invalid("Cannot encode fixture wallet") }
             records["org.lil.wallet.wallet." + name] = data
         }
         let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
-        guard let stored = WalletStoredKey.importHDWallet(mnemonic: mnemonic, name: "fixture-multicoin", password: passwordData, coin: .ethereum),
+        guard let stored = WalletStoredKey.importHDWallet(mnemonic: mnemonic, name: "fixture-multicoin", password: passwordSecret, coin: .ethereum),
               let hd = WalletHDWallet(mnemonic: mnemonic, passphrase: ""),
               let ethereum = hd.ethereumPreviewAccounts(accountRange: 0..<2),
               let solana = hd.solanaPreviewAccounts(accountRange: 0..<2) else { throw HarnessError.invalid("Cannot create mnemonic fixture") }
+        defer { hd.invalidate() }
         let wallet = WalletContainer(id: "fixture-multicoin", key: stored)
         for account in wallet.accounts { stored.removeAccountForCoinDerivationPath(coin: account.coin, derivationPath: account.derivationPath) }
         for account in ethereum + solana {

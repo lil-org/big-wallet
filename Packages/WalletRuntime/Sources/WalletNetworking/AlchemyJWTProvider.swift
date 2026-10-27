@@ -715,14 +715,10 @@ public final class AlchemyJWTProvider: AlchemyAuthorizationProviding {
                 isDirectory: false
             )
         )
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 10
-        configuration.timeoutIntervalForResource = 15
-
         return AlchemyJWTProvider(
             tokenStore: tokenStore,
             broker: AlchemyJWTBrokerClient(
-                urlSession: URLSession(configuration: configuration),
+                urlSession: WalletHTTPSession.make(timeoutIntervalForRequest: 10, timeoutIntervalForResource: 15),
                 proofSigner: AlchemyJWTRequestProofSigner(bundle: bundle)
             ),
             refreshLock: refreshLock,

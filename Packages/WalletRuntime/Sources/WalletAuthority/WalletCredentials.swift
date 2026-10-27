@@ -90,16 +90,15 @@ public struct WalletCredentials: Sendable {
             challenge.invalidate()
             throw WalletCredentialError.authorizationUnavailable
         }
-        guard let storedPassword = try keychain.readPassword() else {
+        guard let credential = try keychain.readPasswordSecret() else {
             throw WalletCredentialError.failedToRead(errSecItemNotFound)
         }
-        var credential = Data(storedPassword.utf8)
-        defer { credential.resetBytes(in: 0..<credential.count) }
+        defer { credential.invalidate() }
         guard !Task.isCancelled, challenge.isPending(for: authorityID) else {
             challenge.invalidate()
             throw WalletCredentialError.authorizationUnavailable
         }
-        guard storedPassword == password else { return nil }
+        guard try credential.withUTF8String({ $0 == password }) else { return nil }
         guard !Task.isCancelled, let grant = issueGrant(for: challenge, verifiedCredential: credential) else {
             challenge.invalidate()
             throw WalletCredentialError.authorizationUnavailable
@@ -151,18 +150,19 @@ public struct WalletCredentials: Sendable {
     }
 
     private func issueGrant(for challenge: WalletAuthenticationChallenge) throws -> WalletAuthenticationGrant? {
-        guard var credential = try keychain.readPasswordData() else { return nil }
-        defer { credential.resetBytes(in: 0..<credential.count) }
+        guard let credential = try keychain.readPasswordSecret() else { return nil }
+        defer { credential.invalidate() }
         return issueGrant(for: challenge, verifiedCredential: credential)
     }
 
-    private func issueGrant(for challenge: WalletAuthenticationChallenge, verifiedCredential credential: Data) -> WalletAuthenticationGrant? {
-        let digest = Data(SHA256.hash(data: credential))
+    private func issueGrant(for challenge: WalletAuthenticationChallenge, verifiedCredential credential: SecretBytes) -> WalletAuthenticationGrant? {
+        guard let digest = try? credential.sha256Digest() else { return nil }
         let keychain = keychain
         return challenge.issueGrant(for: authorityID, credentialIdentity: .init(status: {
             do {
-                guard let current = try keychain.readPasswordData() else { return .changed }
-                return Data(SHA256.hash(data: current)) == digest ? .current : .changed
+                guard let current = try keychain.readPasswordSecret() else { return .changed }
+                defer { current.invalidate() }
+                return try current.sha256Digest() == digest ? .current : .changed
             } catch {
                 return .unavailable
             }

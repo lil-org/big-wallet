@@ -14,6 +14,7 @@ let package = Package(
     products: [
         .library(name: "WalletDomain", targets: ["WalletDomain"]),
         .library(name: "WalletAuthority", targets: ["WalletAuthority"]),
+        .library(name: "WalletFlows", targets: ["WalletFlows"]),
         .library(name: "WalletNetworking", targets: ["WalletNetworking"]),
     ],
     targets: [
@@ -22,7 +23,7 @@ let package = Package(
         .target(
             name: "CWalletCrypto",
             sources: [
-                "big_wallet_secp256k1_shim.c", "big_wallet_scrypt_shim.c",
+                "big_wallet_secp256k1_shim.c", "big_wallet_scrypt_shim.c", "big_wallet_memory_shim.c",
                 "secp256k1/src/secp256k1.c",
                 "secp256k1/src/precomputed_ecmult.c",
                 "secp256k1/src/precomputed_ecmult_gen.c",
@@ -37,6 +38,11 @@ let package = Package(
             linkerSettings: [.linkedFramework("Security"), .linkedFramework("LocalAuthentication")]
         ),
         .target(
+            name: "WalletFlows",
+            dependencies: ["WalletDomain", "WalletAuthority"],
+            swiftSettings: concurrency
+        ),
+        .target(
             name: "WalletNetworking",
             dependencies: ["WalletDomain", "WalletStorageSupport"],
             swiftSettings: concurrency,
@@ -45,7 +51,8 @@ let package = Package(
         .target(name: "WalletRuntimeTestSupport", dependencies: ["WalletDomain"], path: "Tests/Support",
                 resources: [.copy("Fixtures/NetworkCatalog.json"), .copy("Fixtures/wire_protocol_contract.json"), .copy("Fixtures/native_response_contract.json")], swiftSettings: concurrency),
         .testTarget(name: "WalletDomainTests", dependencies: ["WalletDomain", "WalletRuntimeTestSupport"], swiftSettings: concurrency),
-        .testTarget(name: "WalletAuthorityTests", dependencies: ["WalletAuthority", "WalletRuntimeTestSupport"], swiftSettings: concurrency),
+        .testTarget(name: "WalletAuthorityTests", dependencies: ["WalletAuthority", "WalletFlows", "WalletRuntimeTestSupport"], swiftSettings: concurrency),
+        .testTarget(name: "WalletFlowsTests", dependencies: ["WalletFlows", "WalletAuthority", "WalletRuntimeTestSupport"], swiftSettings: concurrency),
         .testTarget(name: "WalletNetworkingTests", dependencies: ["WalletNetworking", "WalletStorageSupport", "WalletRuntimeTestSupport"], swiftSettings: concurrency),
     ]
 )

@@ -1,19 +1,20 @@
 # Wallet runtime
 
-The application, native approval helper, and Safari extensions compose three
+The application, native approval helper, and Safari extensions compose four
 libraries. This is an API boundary enforced by Swift modules; all code still runs
 inside the existing processes and uses the existing entitlements.
 
 | Module | Source ownership | Dependencies |
 | --- | --- | --- |
 | `WalletDomain` | Immutable wallet/account values, requests, wire codec, transaction and fee values, endpoint identities, nonsecret encoders, service contracts | Foundation and pure system utilities |
-| `WalletAuthority` | Wallet storage and credentials, vault, request storage and revocation, review state machines, authentication/consent, signing, durable execution | Domain, private storage support, private C crypto |
+| `WalletAuthority` | Wallet storage and credentials, vault, request storage and revocation, bound reviews, authentication/consent, signing and durable execution | Domain, private storage support, private C crypto |
+| `WalletFlows` | Browser/native dispatch, popup presentation, native observation/retry, helper launch orchestration and application composition | Domain and Authority |
 | `WalletNetworking` | Ethereum and Solana RPC, request admission and streaming, preparation, fees, broadcast and confirmation, Alchemy credentials | Domain, private storage support |
 
 `WalletStorageSupport` holds the shared file-lock implementation. It has no library
 product. `CWalletCrypto` is reachable only through Authority. Authority and
-Networking cannot import one another. `ApplicationServices` composes the public
-libraries and injects localized messages, transaction preparation, and signed
+Networking cannot import one another. Flows cannot import Networking, private storage support, Security, LocalAuthentication or private crypto. `ApplicationServices` composes the public
+libraries through `WalletAuthoritySystem` in Flows and `AuthorityRuntime` in Authority and injects localized messages, transaction preparation, and signed
 transaction broadcasting. App-owned extensions format values for UI.
 
 ## Approval and secret access
@@ -36,6 +37,26 @@ preflight output against that review before accepting it. A fee change requiring
 new consent returns to review; preparation cannot replace immutable signing
 fields.
 
+## Secret ownership and management access
+
+`SecretBytes` owns private allocations inside Authority. Its synchronous borrows do
+not hold the lifetime mutex during cryptographic work. Invalidation refuses new
+borrows immediately; the final active borrow wipes and releases the allocation.
+Passwords, seeds, private keys, vault keys and sensitive intermediate buffers use
+this owner. Framework-managed strings, Keychain results and CryptoKit internals
+can still contain copies outside this allocation's control.
+
+Password decoding preserves existing BOM and Unicode equality semantics. The
+refactor changes neither stored bytes nor KDF inputs. Authorized exports return
+an opaque `WalletExportedSecret`; presentation owns its lifetime and creates text
+only for display or clipboard operations.
+
+Wallet creation, import, account changes, deletion and preview require a current
+`WalletAccessSession` inside Authority, including validation at the source commit
+boundary. Preview lifetime binds to access and encrypted secret identity while
+allowing names and enabled-account metadata to refresh. Initial password setup
+remains an atomic preauthentication operation.
+
 ## Network handoff
 
 Domain defines `TransactionPreparing`, `SignedTransactionBroadcasting`,
@@ -53,6 +74,15 @@ its separate RPC-auth Keychain credentials.
 
 Wallet, wire, and durable-storage formats retain the existing representation.
 This refactor does not add readers or migrations for intermediate branch versions.
+
+## HTTP sessions
+
+Production clients use `URLSession` directly. `WalletHTTPSession.make()` creates
+ephemeral sessions with cookies, shared credential storage and response caching
+disabled. Clients retain their existing redirect delegates, streaming limits,
+cancellation and application retry policies. Foundation handles TLS and HTTP
+authentication. These settings do not promise a single wire request or
+operation-scoped Basic/Digest authentication.
 
 ## Validation ownership
 
@@ -100,3 +130,8 @@ source separately without replacing the original identity.
 These bounds establish reproducible coverage of the declared dependency races.
 They do not enumerate every possible Swift executor ordering or provide
 process-level containment.
+
+API boundary fixtures compile twice: as an external consumer and as a distinct
+module using the production package identity. Both must reject raw secrets,
+capability construction and management calls without access. Existing core test
+fixtures remain test-only; Flow tests use ordinary Authority imports.

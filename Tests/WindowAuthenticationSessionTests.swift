@@ -234,9 +234,9 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         reader.attributes = [reader.walletAttributes(id: "render-preview")]
         reader.walletData = ["render-preview": WalletCoreProxyTestVectors.walletCoreJSONMnemonicFixture]
         reader.passwordData = WalletCoreProxyTestVectors.walletCoreJSONMnemonicPassword
-        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        let fixture = WalletAccessTestFixture(password: String(decoding: WalletCoreProxyTestVectors.walletCoreJSONMnemonicPassword, as: UTF8.self))
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching), authorityID: fixture.authorityID)
         await assertWalletReload(manager)
-        let fixture = WalletAccessTestFixture()
         try fixture.unlock()
         let controller = instantiate(EditAccountsViewController.self)
         controller.wallet = try XCTUnwrap(manager.wallets.first)

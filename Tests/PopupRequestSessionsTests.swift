@@ -1,6 +1,7 @@
 import WalletDomain
 import WalletNetworking
 @testable import WalletAuthority
+@testable import WalletFlows
 // ∅ 2026 lil org
 
 import Foundation
@@ -3476,7 +3477,7 @@ extension PopupRequestSessionsTests {
             XCTAssertEqual(presentedDraft.selectedAccounts, reviewed.selectedAccounts)
             XCTAssertEqual(presentedDraft.network, reviewed.network)
             XCTAssertEqual(presentation.reviewToken, token)
-            let state = PopupApprovalStatePresenter(environment: popupPresentationEnvironment()).state(id: session.handle.id, presentation: session.presentation)
+            let state = PopupApprovalStatePresenter(environment: popupPresentationEnvironment(), messages: ApplicationServices.shared.authority.messages).state(id: session.handle.id, presentation: session.publicPresentation)
             guard case .review(let rendered, _, _) = state.content,
                   case .accountSelection(let selection) = rendered.content else {
                 return XCTFail("Expected rendered selection")
@@ -3554,15 +3555,15 @@ extension PopupRequestSessionsTests {
             return XCTFail("Expected transaction action")
         }
         let transaction = PopupTransactionSession(action: action, operations: unusedPopupTransactionOperations())
-        let selectionDraft = PopupRequestSession.SelectionDraft(selectedAccounts: [], network: nil)
-        let cases: [(PopupRequestSession.ReviewContent, String)] = [
+        let selectionDraft = PopupReviewSnapshot.Selection(selectedAccounts: [], network: nil)
+        let cases: [(PopupReviewSnapshot.Content, String)] = [
             (.selectAccount(action: selection, draft: selectionDraft), Strings.connectWallet),
             (.switchAccount(action: selection, draft: selectionDraft), Strings.switchAccount),
             (.approveMessage(message), message.subject.title),
-            (.approveTransaction(action: action, transaction: transaction), Strings.sendTransaction),
+            (.approveTransaction(action: action, transaction: .init(snapshot: transaction.snapshot, balance: transaction.balance)), Strings.sendTransaction),
             (.addEthereumChain(.init(chainToAdd: popupTestNetwork())), Strings.addNetwork),
         ]
-        let presenter = PopupApprovalStatePresenter(environment: popupPresentationEnvironment())
+        let presenter = PopupApprovalStatePresenter(environment: popupPresentationEnvironment(), messages: ApplicationServices.shared.authority.messages)
         for (content, title) in cases {
             let state = presenter.state(id: 43, presentation: .review(.init(
                 reviewToken: UUID(), content: content, reviewCatalog: nil, feedback: nil
@@ -10755,12 +10756,14 @@ private func makePopupSessionsForTesting(
     presentationEnvironment: PopupApprovalStatePresenter.Environment? = nil,
     customDefinitionResult: @escaping @MainActor @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult = { _ in .unavailable }
 ) -> PopupRequestSessions {
-    PopupRequestSessions(store: store, walletEnvironment: walletEnvironment, loadsTransactionContext: loadsTransactionContext,
+    let presentation = presentationEnvironment ?? popupPresentationEnvironment()
+    let authority = PopupApprovalAuthority(store: store, walletEnvironment: walletEnvironment, loadsTransactionContext: loadsTransactionContext,
         transactionApprovalOperations: transactionApprovalOperations ?? popupImmediateTransactionOperations(),
         invalidateNetworkCache: invalidateNetworkCache, selectionNetworkResolver: selectionNetworkResolver,
         approvalNetworkResolver: approvalNetworkResolver, executionEnvironment: executionEnvironment,
-        presentationEnvironment: presentationEnvironment ?? popupPresentationEnvironment(),
+        approvalSubjectTitle: presentation.approvalSubjectTitle,
         customDefinitionResult: customDefinitionResult, messages: ApplicationServices.shared.authority.messages)
+    return PopupRequestSessions(authority: authority, presentation: presentation, messages: ApplicationServices.shared.authority.messages)
 }
 
 @MainActor

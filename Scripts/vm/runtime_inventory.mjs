@@ -2,7 +2,7 @@ import {existsSync, readFileSync, readdirSync, writeFileSync} from "node:fs";
 import {dirname, join, resolve} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 
-export const RUNTIME_TEST_TARGETS = ["WalletDomainTests", "WalletAuthorityTests", "WalletNetworkingTests"];
+export const RUNTIME_TEST_TARGETS = ["WalletDomainTests", "WalletAuthorityTests", "WalletFlowsTests", "WalletNetworkingTests"];
 const PLATFORMS = ["macos", "ios", "visionos"];
 const CONFIGURATIONS = ["Debug", "Release"];
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -50,7 +50,7 @@ function condition(expression, platform, configuration, swiftPackage) {
     const os = {macos: "macOS", ios: "iOS", visionos: "visionOS"}[platform];
     const modules = new Set(["Foundation", "CryptoKit", "CommonCrypto", "Security", "Synchronization", "XCTest",
         "SwiftUI", "Combine", "OSLog", "LocalAuthentication", "Darwin", "Dispatch",
-        "WalletDomain", "WalletAuthority", "WalletNetworking", "WalletStorageSupport", "WalletRuntimeTestSupport"]);
+        "WalletDomain", "WalletAuthority", "WalletFlows", "WalletNetworking", "WalletStorageSupport", "WalletRuntimeTestSupport"]);
     if (platform === "macos") { modules.add("AppKit"); }
     else { modules.add("UIKit"); }
     if (!swiftPackage) { modules.add("Big_Wallet"); }

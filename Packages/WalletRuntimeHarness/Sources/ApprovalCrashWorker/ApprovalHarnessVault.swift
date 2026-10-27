@@ -12,18 +12,20 @@ final class HarnessVaultKeyStore: SafariApprovalKeyStoring {
         lock = AuthorityFileLock(fileURL: root.appendingPathComponent("vault-keys.lock"))
     }
 
-    func store(_ key: Data, identity: SafariApprovalKeyIdentity) throws {
+    func store(_ key: SecretBytes, identity: SafariApprovalKeyIdentity) throws {
         try withLock {
             var keys = try read()
-            keys[try identity.keychainAccount()] = key
-            try PropertyListEncoder().encode(keys).write(to: file, options: .atomic)
+            try key.withTemporaryData { bytes in
+                keys[try identity.keychainAccount()] = bytes
+                try PropertyListEncoder().encode(keys).write(to: file, options: .atomic)
+            }
         }
     }
 
-    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> Data {
+    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> SecretBytes {
         try withLock {
             guard let key = try read()[identity.keychainAccount()] else { throw SafariApprovalVault.Error.invalidKey }
-            return key
+            return SecretBytes(copying: key)
         }
     }
 

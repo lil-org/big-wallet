@@ -1,3 +1,4 @@
+@testable import WalletFlows
 import CryptoKit
 import Foundation
 import Synchronization
@@ -106,8 +107,13 @@ final class ConsumerServices {
         guard let grant = try credentials.verify(password: password, challenge: challenge) else {
             throw UpgradeFailure.invalid("Export authentication failed")
         }
-        if mnemonic { return try await wallets.exportMnemonic(wallet: wallet, authorization: grant) }
-        return try await wallets.exportPrivateKey(wallet: wallet, account: account, authorization: grant)
+        let secret: WalletExportedSecret
+        if mnemonic { secret = try await wallets.exportMnemonic(wallet: wallet, authorization: grant) }
+        else { secret = try await wallets.exportPrivateKey(wallet: wallet, account: account, authorization: grant) }
+        defer { secret.invalidate() }
+        var text: String?
+        guard secret.withText({ text = $0 }), let text else { throw UpgradeFailure.invalid("Export was retired") }
+        return text
     }
 
     func sign(account: SpecificWalletAccount, expected: FixtureExpectations.Account, password: String, solanaMessage: Data) async throws {
@@ -186,9 +192,9 @@ final class ConsumerServices {
         case .manualSwitchCapacityReached: throw UpgradeFailure.invalid("\(context) admission capacity reached")
         case .unavailable: throw UpgradeFailure.invalid("\(context) admission store unavailable")
         }
-        let coordinator = NativeApprovalCoordinator(handle: handle, nativeDeliveryNonce: nonce, store: bridge,
+        let coordinator = NativeApprovalCoordinator(authority: NativeApprovalAuthority(handle: handle, nativeDeliveryNonce: nonce, store: bridge,
             environment: .live(processor: processor, wallets: wallets, finalizer: finalizer, messages: .testingEnglish,
-                authorityID: authorityID, clock: Date.init, hooks: .none))
+                authorityID: authorityID, clock: Date.init, hooks: .none)))
         let resolved = ApprovalResolution<Result<Void, UpgradeFailure>>()
         var decided = false
         let credentials = credentials

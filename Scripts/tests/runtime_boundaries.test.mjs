@@ -1,22 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {parseOptions, parseProject, productionSource, validateProjectMembership, validateRuntimeManifest, validateRuntimeSource} from "../check_runtime_boundaries.mjs";
+import {boundaryConsumerContexts, boundaryPackageIdentity, parseOptions, parseProject, productionSource, validateProjectMembership, validateRuntimeManifest, validateRuntimeSource} from "../check_runtime_boundaries.mjs";
 
 const manifest = `
 import PackageDescription
 let package = Package(name: "WalletRuntime", products: [
     .library(name: "WalletDomain", targets: ["WalletDomain"]),
     .library(name: "WalletAuthority", targets: ["WalletAuthority"]),
+    .library(name: "WalletFlows", targets: ["WalletFlows"]),
     .library(name: "WalletNetworking", targets: ["WalletNetworking"]),
 ], targets: [
     .target(name: "WalletDomain"), .target(name: "WalletStorageSupport"), .target(name: "CWalletCrypto"),
     .target(name: "WalletAuthority", dependencies: ["WalletDomain", "WalletStorageSupport", "CWalletCrypto"]),
+    .target(name: "WalletFlows", dependencies: ["WalletDomain", "WalletAuthority"]),
     .target(name: "WalletNetworking", dependencies: ["WalletDomain", "WalletStorageSupport"]),
     .target(name: "WalletRuntimeTestSupport", path: "Tests/Support"),
     .testTarget(name: "WalletAuthorityTests", dependencies: ["WalletAuthority", "WalletRuntimeTestSupport"]),
 ])`;
 
-test("runtime manifest permits exactly three public products and private support dependencies", () => {
+test("runtime manifest permits exactly four public products and private support dependencies", () => {
     assert.equal(validateRuntimeManifest(manifest), true);
     for (const changed of [
         manifest.replace('.target(name: "WalletDomain")', '.target(name: "WalletDomain", dependencies: ["WalletAuthority"])'),
@@ -129,4 +131,28 @@ test("API fixture invocation selects the requested prebuilt configuration withou
 test("the private storage target may bind flock without opening app crypto linkage", () => {
     assert.doesNotThrow(() => validateRuntimeSource("Storage/Lock.swift", '@_silgen_name("flock") private func lock(_ fd: Int32, _ operation: Int32) -> Int32', {module: "WalletStorageSupport"}));
     assert.throws(() => validateRuntimeSource("Storage/Lock.swift", '@_silgen_name("bw_secp256k1_sign_recoverable") private func sign()', {module: "WalletStorageSupport"}));
+});
+
+test("Flows cannot reach secrets, authority internals or networking", () => {
+    for (const source of ["import Security", "import LocalAuthentication", "import WalletStorageSupport", "import WalletNetworking",
+        "let secret: SecretBytes", "let consent: ReviewConsent", "let signer: WalletSigningSession", "let permit: BroadcastDispatchPermit"]) {
+        assert.throws(() => validateRuntimeSource("Flows/Adapter.swift", source, {module: "WalletFlows"}));
+    }
+    assert.doesNotThrow(() => validateRuntimeSource("Flows/Adapter.swift", "import WalletAuthority\nlet runtime: AuthorityRuntime", {module: "WalletFlows"}));
+    assert.throws(() => validateRuntimeSource("Authority/Core.swift", "import WalletFlows", {module: "WalletAuthority"}));
+});
+
+test("boundary checks use the resolved SwiftPM identity in a distinct consumer module", () => {
+    const identity = boundaryPackageIdentity({name: "WalletRuntime", identity: "actual_identity", dependencies: []});
+    assert.equal(identity, "actual_identity");
+    assert.deepEqual(boundaryConsumerContexts(identity), [
+        ["external", ["-module-name", "WalletExternalBoundaryConsumer"]],
+        ["package", ["-module-name", "WalletPackageBoundaryConsumer", "-package-name", "actual_identity"]],
+    ]);
+    assert.throws(() => boundaryPackageIdentity({name: "WalletRuntime", dependencies: []}));
+    assert.throws(() => boundaryPackageIdentity({name: "Different", identity: "actual_identity", dependencies: []}));
+    assert.throws(() => boundaryPackageIdentity({name: "WalletRuntime", identity: "actual_identity", dependencies: [{}]}));
+    assert.throws(() => boundaryConsumerContexts(""));
+    assert.throws(() => validateRuntimeManifest(manifest.replace('.target(name: "WalletDomain")', '.target(name: "WalletDomain", packageAccess: false)')));
+    assert.throws(() => validateRuntimeManifest(manifest + '\nlet flags = ["-package-name", "another"]'));
 });

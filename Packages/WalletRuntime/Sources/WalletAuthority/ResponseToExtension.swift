@@ -116,6 +116,10 @@ public struct ResponseToExtension: Sendable {
     public private(set) var approvalCommitted = false
     public let authorizationFailure: Bool
 
+    public init(for request: SafariRequest, error: ProviderResponseError) {
+        self.init(for: request, payload: .error(error))
+    }
+
     init(
         for request: SafariRequest,
         payload: Payload,
@@ -145,7 +149,7 @@ public struct ResponseToExtension: Sendable {
         return response
     }
 
-    var addsEthereumChain: Bool {
+    public var addsEthereumChain: Bool {
         guard name == SafariRequest.Ethereum.Method.addEthereumChain.rawValue,
               provider == .ethereum,
               case .result = payload else { return false }
@@ -182,7 +186,7 @@ public struct ResponseToExtension: Sendable {
         return json
     }
 
-    init?(json: [String: Any]) {
+    public init?(json: [String: Any]) {
         guard let wire = WireProtocol.object(.nativeResponse, value: json),
               let id = wire.json["id"] as? Int,
               let name = wire.json["name"] as? String,

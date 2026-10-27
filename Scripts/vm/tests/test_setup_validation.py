@@ -114,7 +114,8 @@ class SetupValidationInventoryTests(unittest.TestCase):
         self.assertEqual([stage['id'] for stage in result['stages']], [stage['id'] for stage in planned['stages']])
         self.assertEqual({stage['id'] for stage in result['stages']}, {
             'provider.install', 'protocol.check', 'provider.test', 'runtime.inventory', 'runtime.boundaries',
-            'runtime.WalletDomain.debug', 'runtime.WalletNetworking.debug', 'runtime.WalletAuthority.debug', 'runtime.api.debug',
+            'runtime.WalletDomain.debug', 'runtime.WalletNetworking.debug', 'runtime.WalletAuthority.debug',
+            'runtime.WalletFlows.debug', 'runtime.api.debug',
             'build-runtime-tests.macos.debug', 'test-runtime.macos.debug',
             'build-tests.macos.debug', 'test.macos.debug', 'build-tests.ios.debug', 'test.ios.debug',
             'build-tests.visionos.debug', 'test.visionos.debug',

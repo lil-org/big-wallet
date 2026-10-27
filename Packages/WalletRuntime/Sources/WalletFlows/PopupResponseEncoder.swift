@@ -1,10 +1,11 @@
 import Foundation
 import WalletDomain
+import WalletAuthority
 
 enum PopupResponseEncoder: Sendable {
     static let maximumResponseBytes = WireProtocol.maximumPopupResponseBytes
 
-    static func encode(_ response: PopupResponse, for request: InternalSafariRequest) throws -> WireProtocol.ValidatedObject {
+    static func encode(_ response: PopupResponse, for request: InternalSafariRequest, messages: AuthorityMessages) throws -> WireProtocol.ValidatedObject {
         let encoder = JSONEncoder()
         if let object = bounded(response, using: encoder) { return object }
         if let object = bounded(response.removingDecorativeImages, using: encoder) { return object }
@@ -20,7 +21,7 @@ enum PopupResponseEncoder: Sendable {
             id: request.id,
             host: original?.host,
             content: .error(
-                message: AuthorityStrings.somethingWentWrong,
+                message: messages[.somethingWentWrong],
                 actions: original?.canReject == true ? [.reject] : [.retry]
             )
         )

@@ -25,10 +25,11 @@ struct NativeWalletAccess {
         return controller?.recordInteraction() ?? true
     }
 
-    func requireCurrentCredentials() throws {
+    func requireCurrentAccess() throws -> WalletAccessSession {
+        guard isCurrent, let controller else { throw WalletCredentialError.authorizationUnavailable }
+        let session = try controller.requireCurrentAccess()
         guard isCurrent else { throw WalletCredentialError.authorizationUnavailable }
-        try controller?.requireCurrentCredentials()
-        guard isCurrent else { throw WalletCredentialError.authorizationUnavailable }
+        return session
     }
 }
 

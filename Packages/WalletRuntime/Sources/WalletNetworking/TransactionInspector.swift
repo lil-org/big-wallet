@@ -15,7 +15,7 @@ public struct TransactionInspector: Sendable {
     (@Sendable (_ data: String, _ nameHex: String, _ signature: String) -> String?)?
 
     public init(
-        urlSession: URLSession = .shared,
+        urlSession: URLSession = WalletHTTPSession.make(),
         onSubscriberRegistered: (@Sendable () -> Void)? = nil,
         decoder:
             (@Sendable (_ data: String, _ nameHex: String, _ signature: String) -> String?)?

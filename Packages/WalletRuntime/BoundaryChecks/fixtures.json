@@ -84,7 +84,7 @@
   {
     "path": "Negative/CredentialReader.swift",
     "succeeds": false,
-    "diagnostic": "has no member 'readPasswordData'"
+    "diagnostic": "has no member 'readPasswordSecret'"
   },
   {
     "path": "Negative/RawCSymbol.swift",
@@ -125,5 +125,75 @@
     "path": "Negative/IngressConstructor.swift",
     "succeeds": false,
     "diagnostic": "initializer.*inaccessible|Ingress.*inaccessible"
+  },
+  {
+    "path": "Negative/CreateWithoutAccess.swift",
+    "succeeds": false,
+    "diagnostic": "missing argument for parameter 'access'"
+  },
+  {
+    "path": "Negative/ImportWithoutAccess.swift",
+    "succeeds": false,
+    "diagnostic": "missing argument for parameter 'access'"
+  },
+  {
+    "path": "Negative/UpdateWithoutAccess.swift",
+    "succeeds": false,
+    "diagnostic": "missing argument for parameter 'access'"
+  },
+  {
+    "path": "Negative/DeleteWithoutAccess.swift",
+    "succeeds": false,
+    "diagnostic": "missing argument for parameter 'access'"
+  },
+  {
+    "path": "Negative/PreviewWithoutAccess.swift",
+    "succeeds": false,
+    "diagnostic": "missing argument for parameter 'access'"
+  },
+  {
+    "path": "Negative/SecretBytes.swift",
+    "succeeds": false,
+    "diagnostic": "cannot find 'SecretBytes'|SecretBytes.*inaccessible"
+  },
+  {
+    "path": "Negative/ExportHandleConstructor.swift",
+    "succeeds": false,
+    "diagnostic": "initializer.*inaccessible|no accessible initializers"
+  },
+  {
+    "path": "Negative/ExportHandleBytes.swift",
+    "succeeds": false,
+    "diagnostic": "bytes.*inaccessible|has no member"
+  },
+  {
+    "path": "Negative/ReviewHandleConstructor.swift",
+    "succeeds": false,
+    "diagnostic": "initializer.*inaccessible|no accessible initializers"
+  },
+  {
+    "path": "Negative/OperationHandleConstructor.swift",
+    "succeeds": false,
+    "diagnostic": "initializer.*inaccessible|no accessible initializers"
+  },
+  {
+    "path": "Negative/NativeAuthorityConstructor.swift",
+    "succeeds": false,
+    "diagnostic": "initializer.*inaccessible|no accessible initializers"
+  },
+  {
+    "path": "Negative/PopupAuthorityConstructor.swift",
+    "succeeds": false,
+    "diagnostic": "initializer.*inaccessible|no accessible initializers"
+  },
+  {
+    "path": "Negative/ReviewBackingAccess.swift",
+    "succeeds": false,
+    "diagnostic": "approval.*inaccessible"
+  },
+  {
+    "path": "Negative/ReviewHandleDecoding.swift",
+    "succeeds": false,
+    "diagnostic": "Decodable|decode"
   }
 ]

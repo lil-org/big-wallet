@@ -1,6 +1,7 @@
 import Foundation
 import WalletDomain
 import WalletAuthority
+import WalletFlows
 import WalletNetworking
 
 @MainActor
@@ -74,17 +75,17 @@ final class ApplicationServices {
         self.authorization = authorization
         let rpc = EthereumRPC(authorizationProvider: authorization)
         ethereumRPC = rpc
-        let inspector = TransactionInspector(urlSession: .shared)
+        let inspector = TransactionInspector()
         let ethereum = EthereumTransactionPreparation(rpc: rpc, interpretTransaction: inspector.interpret)
         self.ethereum = ethereum
         let solana = SolanaRPCClient(
-            urlSession: URLSession(configuration: .default),
+            urlSession: WalletHTTPSession.make(),
             authorizationProvider: authorization,
             messages: .init(failedToSend: Strings.failedToSend, blockhashNotFound: Strings.solanaBlockhashNotFound)
         )
         self.solana = solana
-        safariRPC = SafariRPCClient(urlSession: URLSession(configuration: .default), authorizationProvider: authorization)
-        prices = PriceService(urlSession: URLSession(configuration: .ephemeral))
+        safariRPC = SafariRPCClient(urlSession: WalletHTTPSession.make(), authorizationProvider: authorization)
+        prices = PriceService(urlSession: WalletHTTPSession.make())
         authority = WalletAuthoritySystem.live(
             catalog: catalog, catalogOwnedChainIds: BundledNetworkOwnership.chainIds,
             decodedChainIds: decodedChainIDs,

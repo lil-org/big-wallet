@@ -7,6 +7,7 @@ import XCTest
 import Darwin
 #endif
 @testable import WalletAuthority
+@testable import WalletFlows
 import WalletDomain
 import WalletRuntimeTestSupport
 

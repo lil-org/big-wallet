@@ -89,6 +89,24 @@ final class PasswordStorageTests: XCTestCase {
         XCTAssertEqual(fixture.deleteCount, 0)
     }
 
+    func testCanonicalUnicodePasswordComparisonDoesNotRewriteKDFBytes() throws {
+        let fixture = PasswordKeychainFixture()
+        let composed = "caf\u{00e9}"
+        let decomposed = "cafe\u{0301}"
+        XCTAssertNotEqual(Data(composed.utf8), Data(decomposed.utf8))
+        for stored in [composed, decomposed] {
+            let bytes = Data(stored.utf8)
+            fixture.passwordData = bytes
+            XCTAssertTrue(try fixture.verify(password: composed))
+            XCTAssertTrue(try fixture.verify(password: decomposed))
+            XCTAssertFalse(try fixture.verify(password: "cafe"))
+            let secret = try XCTUnwrap(fixture.keychain.readPasswordSecret())
+            defer { secret.invalidate() }
+            XCTAssertEqual(secret.testData, bytes)
+            XCTAssertEqual(fixture.passwordData, bytes)
+        }
+    }
+
     func testPasswordCreationFailsBeforeInvalidationForUnreadableCorruptOrOrphanedStorage() throws {
         let fixture = PasswordKeychainFixture()
         let beforeInsert = { XCTFail("Storage must be checked before invalidating the vault") }

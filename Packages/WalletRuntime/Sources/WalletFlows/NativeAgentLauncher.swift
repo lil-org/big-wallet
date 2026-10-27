@@ -1,5 +1,5 @@
+import WalletAuthority
 import WalletDomain
-import WalletStorageSupport
 // ∅ 2026 lil org
 
 import Foundation

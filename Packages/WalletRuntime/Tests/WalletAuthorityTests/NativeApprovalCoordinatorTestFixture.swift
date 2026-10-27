@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 import WalletDomain
 @testable import WalletAuthority
+import WalletFlows
 #if SWIFT_PACKAGE
 import WalletRuntimeTestSupport
 #endif
@@ -58,7 +59,7 @@ extension NativeApprovalCoordinatorTests {
 
 
     @MainActor
-    final class CoordinatorStore: NativeDeliveryStore {
+    final class CoordinatorStore: NativeDeliveryStore, NativeImmediateCompleting {
         var outstandingWrites = 0
         private(set) var maximumOutstandingWrites = 0
         var onRead: (() -> Void)?
@@ -553,4 +554,15 @@ extension NativeApprovalCoordinatorTests {
         )
     }
 
+}
+
+@MainActor
+extension NativeApprovalCoordinator {
+    typealias Environment = NativeApprovalAuthority.Environment
+
+    convenience init(handle: RequestHandle, nativeDeliveryNonce: NativeDeliveryNonce,
+                     store: any NativeDeliveryStore, environment: Environment) {
+        self.init(authority: NativeApprovalAuthority(handle: handle, nativeDeliveryNonce: nativeDeliveryNonce,
+            store: store, environment: environment))
+    }
 }

@@ -3,15 +3,16 @@ import {existsSync, readFileSync, readdirSync, realpathSync} from "node:fs";
 import {dirname, isAbsolute, join, relative, resolve, sep} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 
-const libraries = ["WalletDomain", "WalletAuthority", "WalletNetworking"];
+const libraries = ["WalletDomain", "WalletAuthority", "WalletFlows", "WalletNetworking"];
 const productionTargets = [...libraries, "WalletStorageSupport", "CWalletCrypto"];
 const expectedDependencies = {
     WalletDomain: [], WalletStorageSupport: [], CWalletCrypto: [],
     WalletAuthority: ["CWalletCrypto", "WalletDomain", "WalletStorageSupport"],
+    WalletFlows: ["WalletAuthority", "WalletDomain"],
     WalletNetworking: ["WalletDomain", "WalletStorageSupport"],
 };
 const applicationRoots = ["App iOS", "App macOS", "App visionOS", "Big Wallet Ambient", "Safari Shared", "Safari macOS", "Safari iOS", "Safari visionOS", "Shared"];
-const privateTypes = /\b(?:Keychain|WalletCrypto|WalletPrivateKey|WalletStoredKey|WalletHDWallet|WalletRepository|WalletContainer|WalletSigningSource|WalletSigningPreparation|WalletSigningSession|ApprovedWalletSigningOperation|ApprovedExecutionPermit|BroadcastDispatchPermit|SafariApprovalVault|SafariApprovalVaultHost|SafariApprovalKeychainStore|EthereumSigner|SolanaSigner)\b/;
+const privateTypes = /\b(?:SecretBytes|Keychain|WalletCrypto|WalletPrivateKey|WalletStoredKey|WalletHDWallet|WalletRepository|WalletContainer|WalletSigningSource|WalletSigningPreparation|WalletSigningSession|ApprovedWalletSigningOperation|ApprovedExecutionPermit|BroadcastDispatchPermit|SafariApprovalVault|SafariApprovalVaultHost|SafariApprovalKeychainStore|EthereumSigner|SolanaSigner)\b/;
 const networkTypes = /\b(?:URLSession|URLRequest|HTTPURLResponse|AlchemyJWTProvider|EthereumRPC|SafariRPCClient|SafariRPCService|SolanaRPCClient|PriceService|TransactionInspector)\b/;
 
 function maskNonCode(source, {strings = true} = {}) {
@@ -138,11 +139,12 @@ function manifestCalls(source, names) {
 
 export function validateRuntimeManifest(source) {
     const text = maskNonCode(source, {strings: false});
+    if (/"-package-name"|\bpackageAccess\s*:\s*false/.test(text)) { throw new Error("Runtime compiler package identity may not be overridden"); }
     if (/BW_SAFARI_VM_TESTING|enable-testing/.test(text)) { throw new Error("Production package contains fixture/test compiler settings"); }
     const productCalls = manifestCalls(text, ["library", "executable"]);
     const products = productCalls.map(call => /\bname\s*:\s*"([^"]+)"/.exec(call.body)?.[1]);
     if (products.length !== libraries.length || products.some(name => !libraries.includes(name)) || new Set(products).size !== libraries.length) {
-        throw new Error("Runtime must expose exactly WalletDomain, WalletAuthority and WalletNetworking");
+        throw new Error("Runtime must expose exactly WalletDomain, WalletAuthority, WalletFlows and WalletNetworking");
     }
     for (const product of productCalls) {
         const name = /\bname\s*:\s*"([^"]+)"/.exec(product.body)?.[1];
@@ -199,13 +201,17 @@ export function validateRuntimeSource(path, source, {module, application = false
             fail("Domain must contain values and pure operations, without services, I/O or UI");
         }
     }
-    if (module === "WalletAuthority" && (imports.includes("WalletNetworking") || networkTypes.test(literalCode))) { fail("Authority depends on concrete networking"); }
+    if (module === "WalletAuthority" && (imports.includes("WalletNetworking") || imports.includes("WalletFlows") || networkTypes.test(literalCode))) { fail("Authority depends on concrete networking"); }
+    if (module === "WalletFlows" && (imports.some(name => ["Security", "LocalAuthentication", "WalletStorageSupport", "WalletNetworking"].includes(name)) ||
+        privateTypes.test(literalCode) || /\b(?:ReviewConsent|ApprovedCompletion|PreparedBroadcast|ApprovedExecutionPermit|BroadcastDispatchPermit|SecItem\w*)\b/.test(code))) {
+        fail("Flows reaches privileged authority implementation");
+    }
     if (module === "WalletAuthority" && /(?:EthereumSigner|SolanaSigner|WalletCoreProxy[^/]*)\.swift$/.test(path) &&
         /\b(?:TransactionPreparing|SignedTransactionBroadcasting|BroadcastRequest|BroadcastResult|FileManager|FileHandle)\b|\b(?:Data|String)\s*\(\s*contentsOf/.test(literalCode)) {
         fail("Signing implementations may not receive networking services or perform I/O");
     }
     if (module === "WalletNetworking") {
-        if (imports.includes("WalletAuthority") || imports.includes("LocalAuthentication") || privateTypes.test(literalCode)) { fail("Networking reaches wallet or signing authority"); }
+        if (imports.includes("WalletAuthority") || imports.includes("WalletFlows") || imports.includes("LocalAuthentication") || privateTypes.test(literalCode)) { fail("Networking reaches wallet or signing authority"); }
         const text = maskNonCode(effective, {strings: false});
         if (/org\.lil\.keychain|SafariApprovalVault|org\.lil\.wallet\.wallet\.|org\.lil\.wallet\.password/.test(text)) { fail("Networking contains wallet Keychain/vault identifiers"); }
         if (/\bkSecAttrAccessGroup\b/.test(code) && !/\b(?:let|var)\s+accessGroup\s*=\s*"[^"\n]+\.rpc-auth"/.test(text)) {
@@ -388,6 +394,9 @@ export function checkOrdinaryImportAPI(options) {
         if (!existsSync(join(modules, `${library}.swiftmodule`))) { throw new Error(`Build ${library} for ${options.configuration} before checking its public boundary`); }
     }
     const fixtureRoot = realpathSync(join(options.packagePath, "BoundaryChecks"));
+    const graph = JSON.parse(execFileSync("swift", ["package", "--package-path", options.packagePath,
+        "show-dependencies", "--format", "json"], {cwd: options.root, encoding: "utf8"}));
+    const packageIdentity = boundaryPackageIdentity(graph);
     const catalog = JSON.parse(readFileSync(join(fixtureRoot, "fixtures.json"), "utf8"));
     if (!Array.isArray(catalog) || !catalog.length || !catalog.some(value => value.succeeds === true) || !catalog.some(value => value.succeeds === false)) { throw new Error("Invalid API boundary fixture inventory"); }
     for (const fixture of catalog) {
@@ -396,16 +405,34 @@ export function checkOrdinaryImportAPI(options) {
         const path = join(fixtureRoot, fixture.path);
         const source = readFileSync(path, "utf8");
         if (/@testable|@_spi/.test(maskNonCode(source))) { throw new Error(`API fixture must use ordinary imports: ${fixture.path}`); }
-        const result = spawnSync("swiftc", ["-typecheck", "-target", `${process.arch === "arm64" ? "arm64" : "x86_64"}-apple-macosx15.0`, "-swift-version", "6", "-enable-upcoming-feature", "NonisolatedNonsendingByDefault",
-            "-enable-upcoming-feature", "InferIsolatedConformances", "-I", modules, path], {cwd: options.root, encoding: "utf8", maxBuffer: 4 * 1024 * 1024});
-        if (result.error || result.signal || result.status === null) { throw result.error ?? new Error(`Boundary compiler failed: ${fixture.path}`); }
-        const diagnostic = (result.stdout ?? "") + (result.stderr ?? "");
-        if (fixture.succeeds ? result.status !== 0 : result.status === 0 || !new RegExp(fixture.diagnostic, "i").test(diagnostic)) {
-            throw new Error(`Unexpected API boundary result for ${fixture.path}: exit ${result.status}\n${diagnostic}`);
+        for (const [scope, flags] of boundaryConsumerContexts(packageIdentity)) {
+            const result = spawnSync("swiftc", ["-typecheck", "-target", `${process.arch === "arm64" ? "arm64" : "x86_64"}-apple-macosx15.0`, "-swift-version", "6", "-enable-upcoming-feature", "NonisolatedNonsendingByDefault",
+                "-enable-upcoming-feature", "InferIsolatedConformances", ...flags, "-I", modules, path], {cwd: options.root, encoding: "utf8", maxBuffer: 4 * 1024 * 1024});
+            if (result.error || result.signal || result.status === null) { throw result.error ?? new Error(`Boundary compiler failed: ${fixture.path}`); }
+            const diagnostic = (result.stdout ?? "") + (result.stderr ?? "");
+            if (fixture.succeeds ? result.status !== 0 : result.status === 0 || !new RegExp(fixture.diagnostic, "i").test(diagnostic)) {
+                throw new Error(`Unexpected ${scope} API boundary result for ${fixture.path}: exit ${result.status}\n${diagnostic}`);
+            }
+            process.stdout.write(`Runtime ${scope} API boundary ${fixture.succeeds ? "accepted" : "rejected"}: ${fixture.path}\n`);
         }
-        process.stdout.write(`Runtime API boundary ${fixture.succeeds ? "accepted" : "rejected"}: ${fixture.path}\n`);
     }
     return catalog.length;
+}
+
+export function boundaryPackageIdentity(graph) {
+    if (graph?.name !== "WalletRuntime" || !/^[A-Za-z_][A-Za-z_0-9]*$/.test(graph.identity ?? "") ||
+        !Array.isArray(graph.dependencies) || graph.dependencies.length) {
+        throw new Error("Resolved runtime package identity is missing or inconsistent");
+    }
+    return graph.identity;
+}
+
+export function boundaryConsumerContexts(packageIdentity) {
+    if (!/^[A-Za-z_][A-Za-z_0-9]*$/.test(packageIdentity)) { throw new Error("Invalid compiler package identity"); }
+    return [
+        ["external", ["-module-name", "WalletExternalBoundaryConsumer"]],
+        ["package", ["-module-name", "WalletPackageBoundaryConsumer", "-package-name", packageIdentity]],
+    ];
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

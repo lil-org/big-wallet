@@ -317,7 +317,7 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
     private func startWalletMutation(
         showsFailure: Bool = true,
         revealToken: SecretPresentationSession.Token? = nil,
-        _ operation: @escaping @MainActor () async throws -> WalletSnapshot?
+        _ operation: @escaping @MainActor (WalletAccessSession) async throws -> WalletSnapshot?
     ) {
         let id = UUID()
         let access = walletAccess
@@ -325,8 +325,8 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
             defer { self?.walletMutationTasks.removeValue(forKey: id) }
             guard !Task.isCancelled, self?.acceptsManagementActions == true else { return }
             do {
-                try access.requireCurrentCredentials()
-                let created = try await operation()
+                let session = try access.requireCurrentAccess()
+                let created = try await operation(session)
                 guard let self, !Task.isCancelled, acceptsManagementActions else { return }
                 if let created {
                     newWalletId = created.id
@@ -350,8 +350,8 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
 
     private func createNewAccountAndShowSecretWords() {
         guard acceptsManagementActions, let token = beginSecretPresentation() else { return }
-        startWalletMutation(showsFailure: false, revealToken: token) { [walletsManager] in
-            try await walletsManager.createWallet()
+        startWalletMutation(showsFailure: false, revealToken: token) { [walletsManager] session in
+            try await walletsManager.createWallet(access: session)
         }
     }
 
@@ -472,8 +472,8 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
             return
         }
         
-        startWalletMutation { [walletsManager] in
-            try await walletsManager.update(wallet: wallet, removeAccounts: [account])
+        startWalletMutation { [walletsManager] session in
+            try await walletsManager.update(wallet: wallet, removeAccounts: [account], access: session)
             return nil
         }
     }
@@ -523,8 +523,8 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
     }
     
     private func removeWallet(_ wallet: WalletSnapshot) {
-        startWalletMutation(showsFailure: false) { [walletsManager] in
-            try await walletsManager.delete(wallet: wallet)
+        startWalletMutation(showsFailure: false) { [walletsManager] session in
+            try await walletsManager.delete(wallet: wallet, access: session)
             return nil
         }
     }
@@ -641,7 +641,7 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
         keyExportTask = Task { [weak self, walletsManager] in
             defer { authorization.invalidate() }
             guard self?.canPresentSecret(for: token) == true, !Task.isCancelled else { return }
-            let secret: String
+            let secret: WalletExportedSecret
             do {
                 if showingMnemonic {
                     secret = try await walletsManager.exportMnemonic(wallet: wallet, authorization: authorization)
@@ -652,15 +652,15 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
                 if self?.secretToken == token { self?.invalidateSecretPresentation() }
                 return
             }
-            guard let self, !Task.isCancelled, canPresentSecret(for: token) else { return }
+            guard let self, !Task.isCancelled, canPresentSecret(for: token) else { secret.invalidate(); return }
             keyExportTask = nil
             presentSecret(secret, showingMnemonic: showingMnemonic, token: token)
         }
     }
 
-    private func presentSecret(_ secret: String, showingMnemonic: Bool, token: SecretPresentationSession.Token) {
+    private func presentSecret(_ secret: WalletExportedSecret, showingMnemonic: Bool, token: SecretPresentationSession.Token) {
         guard canPresentSecret(for: token), let window = secretOwnerWindow,
-              secretSession.store(secret, for: token) else { return }
+              secretSession.store(secret, for: token) else { secret.invalidate(); return }
         let presentation = NativeSecretAlertPresentation(
             session: secretSession,
             token: token,

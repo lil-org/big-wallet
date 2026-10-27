@@ -63,7 +63,7 @@ final class StoredKeyStorage {
     var encryptedPayload: EncryptedPayload
     var accounts: [WalletRawAccountRecord]
 
-    init?(type: KeyType, name: String, payload: Data, password: Data) {
+    init?(type: KeyType, name: String, payload: SecretBytes, password: SecretBytes) {
         guard let encryptedPayload = EncryptedPayload.encrypt(payload: payload, password: password) else { return nil }
         self.type = type
         self.name = name
@@ -80,7 +80,7 @@ final class StoredKeyStorage {
         self.accounts = accounts
     }
 
-    func decrypt(password: Data) -> Data? {
+    func decrypt(password: SecretBytes) -> SecretBytes? {
         return encryptedPayload.decrypt(password: password)
     }
 
@@ -355,7 +355,7 @@ struct EncryptedPayload {
         self.kdf = kdf
     }
 
-    static func encrypt(payload: Data, password: Data) -> EncryptedPayload? {
+    static func encrypt(payload: SecretBytes, password: SecretBytes) -> EncryptedPayload? {
         let salt = SecureRandom.data(count: 32)
         let iv = SecureRandom.data(count: 16)
         let kdf = KDF.scrypt(n: ScryptDefaults.n,
@@ -363,16 +363,22 @@ struct EncryptedPayload {
                              p: ScryptDefaults.p,
                              dkLen: ScryptDefaults.dkLen,
                              salt: salt)
-        let derivedKey = Scrypt.deriveKey(password: password,
+        guard let derivedKey = Scrypt.deriveSecret(password: password,
                                           salt: salt,
                                           n: ScryptDefaults.n,
                                           r: ScryptDefaults.r,
                                           p: ScryptDefaults.p,
-                                          dkLen: ScryptDefaults.dkLen)
+                                          dkLen: ScryptDefaults.dkLen) else { return nil }
+        defer { derivedKey.invalidate() }
         guard derivedKey.count >= 32,
-              let ciphertext = AESCTR.crypt(data: payload, key: Data(derivedKey.prefix(16)), iv: iv)
-        else { return nil }
-        let mac = WalletCrypto.keccak256(data: derivedKey.subdata(in: 16..<32) + ciphertext)
+              let encrypted = try? derivedKey.withUnsafeBytes({ derived in
+                  try payload.withUnsafeBytes { plaintext in
+                      AESCTR.crypt(data: plaintext, key: UnsafeRawBufferPointer(rebasing: derived[..<16]), iv: iv)
+                  }
+              }),
+              let ciphertext = try? encrypted.withUnsafeBytes({ Data($0) }) else { return nil }
+        defer { encrypted.invalidate() }
+        guard let mac = authenticationCode(derivedKey: derivedKey, ciphertext: ciphertext) else { return nil }
         return EncryptedPayload(cipher: .aes128CTR, iv: iv, ciphertext: ciphertext, mac: mac, kdf: kdf)
     }
 
@@ -416,19 +422,30 @@ struct EncryptedPayload {
         }
     }
 
-    func decrypt(password: Data) -> Data? {
-        let derivedKey: Data
+    func decrypt(password: SecretBytes) -> SecretBytes? {
+        let derivedKey: SecretBytes?
         switch kdf {
         case let .scrypt(n, r, p, dkLen, salt):
-            derivedKey = Scrypt.deriveKey(password: password, salt: salt, n: n, r: r, p: p, dkLen: dkLen)
+            derivedKey = Scrypt.deriveSecret(password: password, salt: salt, n: n, r: r, p: p, dkLen: dkLen)
         case let .pbkdf2(c, dkLen, salt):
-            derivedKey = PBKDF2.sha256(password: password, salt: salt, rounds: c, keyLength: dkLen)
+            derivedKey = PBKDF2.secretSHA256(password: password, salt: salt, rounds: c, keyLength: dkLen)
         }
-
+        guard let derivedKey else { return nil }
+        defer { derivedKey.invalidate() }
         let keyBytes = cipher.keyBytes
         guard derivedKey.count >= max(32, keyBytes),
-              WalletCrypto.keccak256(data: derivedKey.subdata(in: 16..<32) + ciphertext) == mac else { return nil }
-        return AESCTR.crypt(data: ciphertext, key: Data(derivedKey.prefix(keyBytes)), iv: iv)
+              Self.authenticationCode(derivedKey: derivedKey, ciphertext: ciphertext) == mac else { return nil }
+        return try? derivedKey.withUnsafeBytes { derived in
+            ciphertext.withUnsafeBytes {
+                AESCTR.crypt(data: $0, key: UnsafeRawBufferPointer(rebasing: derived[..<keyBytes]), iv: iv)
+            }
+        }
+    }
+
+    private static func authenticationCode(derivedKey: SecretBytes, ciphertext: Data) -> Data? {
+        guard let macKey = try? derivedKey.copy(in: 16..<32) else { return nil }
+        defer { macKey.invalidate() }
+        return try? macKey.withTemporaryData { WalletCrypto.keccak256(parts: [$0, ciphertext]) }
     }
 
     func jsonObject() -> [String: Any] {
@@ -454,6 +471,14 @@ struct EncryptedPayload {
 }
 
 enum SecureRandom {
+    static func secret(count: Int) throws -> SecretBytes {
+        try SecretBytes(count: count) { bytes in
+            guard count == 0 || SecRandomCopyBytes(kSecRandomDefault, count, bytes.baseAddress!) == errSecSuccess else {
+                throw WalletKeyStoreError.invalidKey
+            }
+        }
+    }
+
     static func data(count: Int) -> Data {
         guard count > 0 else { return Data() }
         var bytes = [UInt8](repeating: 0, count: count)

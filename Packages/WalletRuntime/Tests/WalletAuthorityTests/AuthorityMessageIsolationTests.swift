@@ -55,7 +55,31 @@ final class AuthorityMessageIsolationTests: XCTestCase {
         XCTAssertEqual(second.system.error(.internalError).message, "second.somethingWentWrong")
     }
 
-    private func system(label: String) throws -> (system: WalletAuthoritySystem, suite: String, root: URL) {
+    func testRuntimeSharesNativeReviewAuthorityOnlyWithinItsExactRoute() throws {
+        let fixture = try system(label: "native-route-cache")
+        defer {
+            UserDefaults.standard.removePersistentDomain(forName: fixture.suite)
+            try? FileManager.default.removeItem(at: fixture.root)
+        }
+        let handle = RequestHandle(id: 7, token: .init(value: UUID()), profileIdentifier: UUID())
+        let nonce = NativeDeliveryNonce(value: UUID())
+        let first = fixture.system.makeNativeApprovalAuthority(handle: handle, nativeDeliveryNonce: nonce)
+        let repeated = fixture.system.makeNativeApprovalAuthority(handle: handle, nativeDeliveryNonce: nonce)
+        XCTAssertTrue(first === repeated)
+        let otherNonce = fixture.system.makeNativeApprovalAuthority(handle: handle, nativeDeliveryNonce: .init(value: UUID()))
+        XCTAssertFalse(first === otherNonce)
+        let otherProfile = RequestHandle(id: handle.id, token: handle.token, profileIdentifier: UUID())
+        let separate = fixture.system.makeNativeApprovalAuthority(handle: otherProfile, nativeDeliveryNonce: nonce)
+        XCTAssertFalse(first === separate)
+        weak var released: NativeApprovalAuthority?
+        do {
+            let transient = fixture.system.makeNativeApprovalAuthority(handle: handle, nativeDeliveryNonce: .init(value: UUID()))
+            released = transient
+        }
+        XCTAssertNil(released)
+    }
+
+    private func system(label: String) throws -> (system: AuthorityRuntime, suite: String, root: URL) {
         let suite = "AuthorityMessageIsolation.\(UUID().uuidString)"
         let preferences = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(suite, isDirectory: true)
@@ -66,7 +90,7 @@ final class AuthorityMessageIsolationTests: XCTestCase {
             prepare: { _, _, _ in AsyncThrowingStream { $0.finish() } },
             preflight: { transaction, _ in .unavailable(transaction, .init(info: nil, nextBaseFee: nil)) }
         )
-        let system = WalletAuthoritySystem.testing(
+        let system = AuthorityRuntime.testing(
             catalog: nil, catalogOwnedChainIds: [], solanaEndpoints: AuthorityTestSolanaEndpoints(),
             broadcaster: RejectingBroadcastForTesting(), preparation: preparation,
             storage: .init(containerURL: root), messages: messages,
@@ -83,7 +107,7 @@ final class AuthorityMessageIsolationTests: XCTestCase {
     }
 
     private final class UnusedIntegrityStore: SafariApprovalIntegrityKeyStoring, Sendable {
-        func loadOrCreate() throws -> Data {
+        func loadOrCreate() throws -> SecretBytes {
             XCTFail("Message isolation must not read integrity keys")
             throw CocoaError(.fileReadUnknown)
         }

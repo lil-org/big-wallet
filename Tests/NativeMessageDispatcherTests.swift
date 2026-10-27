@@ -3,10 +3,41 @@ import Foundation
 import XCTest
 @testable import Big_Wallet
 @testable import WalletAuthority
+@testable import WalletFlows
 @testable import WalletNetworking
 
 @MainActor
 final class NativeMessageDispatcherTests: XCTestCase {
+    func testAdmittedIngressCannotChangeProfileOrEscapePrivateBrowsing() async throws {
+        try await withFixture { fixture in
+            let profile = UUID()
+            let message = try await fixture.connectionMessage(profile: profile)
+            let wire = try XCTUnwrap(WireProtocol.object(.dappRequest, value: message))
+            func admitted(privateBrowsing: Bool) throws -> ExtensionBridge.Ingress {
+                var transport = message
+                transport[WireProtocol.nativeContextKey] = [
+                    "source": "site", "privateBrowsing": privateBrowsing,
+                    "site": ["host": "wallet.example", "configurationKey": fixture.origin],
+                    "document": ["tabId": 1, "frameId": 0],
+                ]
+                let context = try XCTUnwrap(NativeRequestContext.extract(from: transport, profileIdentifier: profile)).context
+                guard case .accepted(let ingress) = ExtensionBridge.admittedIngress(wire: wire, context: context) else {
+                    throw CocoaError(.coderInvalidValue)
+                }
+                return ingress
+            }
+            guard case .rejected = await fixture.bridge.enqueue(ingress: try admitted(privateBrowsing: false), profileIdentifier: nil) else {
+                return XCTFail("Transport-bound ingress must retain its Safari profile")
+            }
+            guard case .rejected = await fixture.bridge.enqueue(ingress: try admitted(privateBrowsing: true), profileIdentifier: profile) else {
+                return XCTFail("Transport-bound ingress cannot become a nonprivate request")
+            }
+            guard case .accepted = await fixture.bridge.enqueue(ingress: try admitted(privateBrowsing: false), profileIdentifier: profile) else {
+                return XCTFail("The original nonprivate transport context must remain admissible")
+            }
+        }
+    }
+
     func testMalformedCommandsNeverReachDependencies() async throws {
         try await withFixture { fixture in
             for message: [String: Any] in [

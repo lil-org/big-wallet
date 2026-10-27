@@ -5,6 +5,13 @@ import WalletStorageSupport
 import Foundation
 
 enum Secp256k1 {
+    static func isValidPrivateKey(_ secret: SecretBytes) -> Bool {
+        guard secret.count == 32 else { return false }
+        return (try? secret.withUnsafeBytes {
+            bwSecp256k1IsValidPrivateKey($0.bindMemory(to: UInt8.self).baseAddress!) == 1
+        }) == true
+    }
+
     static func isValidPrivateKey(_ data: Data) -> Bool {
         guard data.count == 32 else { return false }
         return withPointer(data) { bwSecp256k1IsValidPrivateKey($0) == 1 } ?? false
@@ -33,19 +40,49 @@ enum Secp256k1 {
         return output
     }
 
-    static func sign(digest: Data, privateKey: Data) -> Data? {
-        guard digest.count == 32, privateKey.count == 32 else { return nil }
-        var signature = Data(repeating: 0, count: 65)
-        let result = withPointer(digest) { digestPointer in
-            withPointer(privateKey) { privateKeyPointer in
-                signature.withUnsafeMutableBytes { signatureBuffer in
-                    guard let signaturePointer = signatureBuffer.bindMemory(to: UInt8.self).baseAddress else { return Int32(0) }
-                    return bwSecp256k1SignRecoverable(digestPointer, privateKeyPointer, signaturePointer)
-                }
-            } ?? Int32(0)
+    static func publicKey(privateKey: SecretBytes, compressed: Bool) -> Data? {
+        guard privateKey.count == 32 else { return nil }
+        return try? privateKey.withUnsafeBytes { privateKeyBytes -> Data? in
+            let outputCount = compressed ? 33 : 65
+            var output = Data(repeating: 0, count: outputCount)
+            var length = outputCount
+            let result = output.withUnsafeMutableBytes { outputBuffer in
+                bwSecp256k1CreatePublicKey(privateKeyBytes.bindMemory(to: UInt8.self).baseAddress!,
+                    outputBuffer.bindMemory(to: UInt8.self).baseAddress!, &length, compressed ? 1 : 0)
+            }
+            guard result == 1, length == outputCount else { return nil }
+            return output
         }
-        guard result == 1 else { return nil }
-        return signature
+    }
+
+    static func sign(digest: Data, privateKey: SecretBytes) -> Data? {
+        guard digest.count == 32, privateKey.count == 32 else { return nil }
+        return try? privateKey.withUnsafeBytes { privateKeyBytes -> Data? in
+            var signature = Data(repeating: 0, count: 65)
+            let result = digest.withUnsafeBytes { digestBytes in
+                signature.withUnsafeMutableBytes { signatureBytes in
+                    bwSecp256k1SignRecoverable(digestBytes.bindMemory(to: UInt8.self).baseAddress!,
+                        privateKeyBytes.bindMemory(to: UInt8.self).baseAddress!,
+                        signatureBytes.bindMemory(to: UInt8.self).baseAddress!)
+                }
+            }
+            return result == 1 ? signature : nil
+        }
+    }
+
+    static func addPrivateKey(_ privateKey: SecretBytes, tweak: SecretBytes) -> SecretBytes? {
+        guard privateKey.count == 32, tweak.count == 32 else { return nil }
+        return try? privateKey.withUnsafeBytes { keyBytes in
+            try tweak.withUnsafeBytes { tweakBytes in
+                try SecretBytes(count: 32) { output in
+                    guard bwSecp256k1TweakAddPrivateKey(keyBytes.bindMemory(to: UInt8.self).baseAddress!,
+                        tweakBytes.bindMemory(to: UInt8.self).baseAddress!,
+                        output.bindMemory(to: UInt8.self).baseAddress!) == 1 else {
+                        throw SecretBytes.Error.unavailable
+                    }
+                }
+            }
+        }
     }
 
     static func recoverPublicKey(signature: Data, digest: Data) -> Data? {
@@ -91,21 +128,6 @@ enum Secp256k1 {
         }
         guard result == 1 else { return nil }
         return publicKey
-    }
-
-    static func addPrivateKey(_ privateKey: Data, tweak: Data) -> Data? {
-        guard privateKey.count == 32, tweak.count == 32 else { return nil }
-        var output = Data(repeating: 0, count: 32)
-        let result = withPointer(privateKey) { privateKeyPointer in
-            withPointer(tweak) { tweakPointer in
-                output.withUnsafeMutableBytes { outputBuffer in
-                    guard let outputPointer = outputBuffer.bindMemory(to: UInt8.self).baseAddress else { return Int32(0) }
-                    return bwSecp256k1TweakAddPrivateKey(privateKeyPointer, tweakPointer, outputPointer)
-                }
-            } ?? Int32(0)
-        }
-        guard result == 1 else { return nil }
-        return output
     }
 
     private static func serializePublicKey(_ publicKey: Data, compressed: Bool) -> Data? {

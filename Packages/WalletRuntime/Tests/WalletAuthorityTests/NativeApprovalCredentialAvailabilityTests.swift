@@ -5,6 +5,7 @@ import WalletDomain
 import WalletRuntimeTestSupport
 import XCTest
 @testable import WalletAuthority
+@testable import WalletFlows
 
 @MainActor
 extension NativeApprovalCoordinatorTests {

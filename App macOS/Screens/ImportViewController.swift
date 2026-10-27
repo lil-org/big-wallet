@@ -10,8 +10,8 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
         var validate: @MainActor (String) async -> WalletsManager.InputValidationResult = {
             await ApplicationServices.shared.wallets.validateWalletInput($0)
         }
-        var importWallet: @MainActor (String, String?) async throws -> WalletSnapshot = {
-            try await ApplicationServices.shared.wallets.addWallet(input: $0, inputPassword: $1)
+        var importWallet: @MainActor (String, String?, WalletAccessSession) async throws -> WalletSnapshot = {
+            try await ApplicationServices.shared.wallets.addWallet(input: $0, inputPassword: $1, access: $2)
         }
         var runPasswordPrompt: @MainActor (NSAlert) -> NSApplication.ModalResponse = { $0.runModal() }
     }
@@ -169,8 +169,8 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
         let access = walletAccess
         let task = Task {
             try Task.checkCancellation()
-            try access.requireCurrentCredentials()
-            return try await operation(input, password)
+            let session = try access.requireCurrentAccess()
+            return try await operation(input, password, session)
         }
         importTask = task
         importResultTask = Task { [weak self] in

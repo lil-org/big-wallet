@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 import WalletDomain
 @testable import WalletAuthority
+@testable import WalletFlows
 import WalletRuntimeTestSupport
 
 @MainActor

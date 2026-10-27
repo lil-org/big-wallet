@@ -5,7 +5,7 @@ import {RUNTIME_TEST_TARGETS, loadRuntimeInventory} from "./runtime_inventory.mj
 import {BASELINE as UPGRADE_BASELINE} from "../wallet_upgrade/contract.mjs";
 
 export {RUNTIME_TEST_TARGETS};
-export const RUNTIME_MODULES = ["WalletDomain", "WalletNetworking", "WalletAuthority"];
+export const RUNTIME_MODULES = ["WalletDomain", "WalletNetworking", "WalletAuthority", "WalletFlows"];
 const runtimeInventory = loadRuntimeInventory(new URL("./runtime-test-inventory.json", import.meta.url));
 
 export const SELECTORS = ["build", "test", "performance", "tsan", "fuzz", "approval", "upgrade", "safari", "repository", "worker", "runtime"];
@@ -73,7 +73,7 @@ export function validateJob(value) {
     }
     if (!Array.isArray(options.onlyTesting) || options.onlyTesting.length > 200 || options.onlyTesting.some(test =>
         typeof test !== "string" || !TEST_TARGETS.includes(test) &&
-        !/^(?:(?:(?:Safari UI )?Tests macOS|(?:Safari UI )?Tests iOS|Tests visionOS|Wallet(?:Domain|Authority|Networking)Tests)\/)?[A-Za-z_][A-Za-z0-9_]*(?:\/[A-Za-z_][A-Za-z0-9_]*(?:\(\))?)?$/.test(test))) {
+        !/^(?:(?:(?:Safari UI )?Tests macOS|(?:Safari UI )?Tests iOS|Tests visionOS|Wallet(?:Domain|Authority|Flows|Networking)Tests)\/)?[A-Za-z_][A-Za-z0-9_]*(?:\/[A-Za-z_][A-Za-z0-9_]*(?:\(\))?)?$/.test(test))) {
         throw new Error("Invalid XCTest selection");
     }
     for (const selector of options.onlyTesting) {

@@ -12,6 +12,7 @@ let package = Package(
             dependencies: [
                 .product(name: "WalletDomain", package: "walletruntime"),
                 .product(name: "WalletAuthority", package: "walletruntime"),
+                .product(name: "WalletFlows", package: "walletruntime"),
             ],
             swiftSettings: [
                 .swiftLanguageMode(.v6),

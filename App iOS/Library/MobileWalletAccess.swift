@@ -243,9 +243,9 @@ class WalletAccessViewController: UIViewController, WalletAccessObserver {
         hasWalletAccess && access.recordInteraction()
     }
 
-    func requireCurrentCredentials() throws {
+    func requireCurrentAccess() throws -> WalletAccessSession {
         guard hasWalletAccess else { throw WalletCredentialError.authorizationUnavailable }
-        try access.requireCurrentCredentials()
+        return try access.requireCurrentAccess()
     }
 
     func walletAccessDidLock() {

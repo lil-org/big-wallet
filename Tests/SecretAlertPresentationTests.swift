@@ -1,4 +1,5 @@
 import WalletDomain
+@testable import WalletAuthority
 #if os(iOS) || os(visionOS)
 import UIKit
 import XCTest
@@ -11,7 +12,7 @@ final class SecretAlertPresentationTests: XCTestCase {
             let token = try XCTUnwrap(controller.beginSecretPresentation())
             let presentation = controller.secretPresentation
             let appeared = self.expectation(description: "Secret alert appeared")
-            presentation.show("disposable secret", title: "Secret", token: token, from: controller) {
+            presentation.show(WalletExportedSecret(text: "disposable secret"), title: "Secret", token: token, from: controller) {
                 appeared.fulfill()
             }
             let alert = try XCTUnwrap(presentation.alert)
@@ -24,7 +25,7 @@ final class SecretAlertPresentationTests: XCTestCase {
             XCTAssertNil(alert.message)
             XCTAssertNil(presentation.alert)
             XCTAssertFalse(presentation.accepts(token))
-            presentation.show("late export", title: "Secret", token: token, from: controller)
+            presentation.show(WalletExportedSecret(text: "late export"), title: "Secret", token: token, from: controller)
             XCTAssertNil(presentation.alert)
             let dismissed = self.expectation(description: "secret alert dismissed")
             alert.dismissAfterCurrentTransition(animated: false) { dismissed.fulfill() }
@@ -38,7 +39,7 @@ final class SecretAlertPresentationTests: XCTestCase {
             controller.beginAppearanceTransition(false, animated: true)
             defer { controller.endAppearanceTransition() }
 
-            controller.secretPresentation.show("late export", title: "Secret", token: token, from: controller)
+            controller.secretPresentation.show(WalletExportedSecret(text: "late export"), title: "Secret", token: token, from: controller)
 
             XCTAssertNil(controller.secretPresentation.alert)
             XCTAssertFalse(controller.secretPresentation.accepts(token))
@@ -86,7 +87,7 @@ final class SecretAlertPresentationTests: XCTestCase {
         let token = try XCTUnwrap(presentation.begin())
         let presenter = Presenter()
         presenter.delaysCompletion = true
-        presentation.show("queued secret", title: "Secret", token: token, from: presenter)
+        presentation.show(WalletExportedSecret(text: "queued secret"), title: "Secret", token: token, from: presenter)
         let alert = try XCTUnwrap(presentation.alert)
 
         presentation.invalidate()
@@ -103,7 +104,7 @@ final class SecretAlertPresentationTests: XCTestCase {
         let presentation = SecretAlertPresentation(isActive: { true }, copy: { copies.append($0) })
         let token = try XCTUnwrap(presentation.begin())
         let presenter = Presenter()
-        presentation.show("disposable secret", title: "Secret", token: token, from: presenter)
+        presentation.show(WalletExportedSecret(text: "disposable secret"), title: "Secret", token: token, from: presenter)
         let alert = try XCTUnwrap(presenter.presentedAlerts.first)
         alert.loadViewIfNeeded()
 
@@ -126,7 +127,7 @@ final class SecretAlertPresentationTests: XCTestCase {
         presentation.invalidate()
         active = true
 
-        presentation.show("late secret", title: "Secret", token: token, from: presenter)
+        presentation.show(WalletExportedSecret(text: "late secret"), title: "Secret", token: token, from: presenter)
 
         XCTAssertTrue(presenter.presentedAlerts.isEmpty)
         XCTAssertFalse(presentation.accepts(token))
@@ -138,10 +139,10 @@ final class SecretAlertPresentationTests: XCTestCase {
         let presentation = SecretAlertPresentation(isActive: { true }, copy: { copies.append($0) })
         let presenter = Presenter()
         let old = try XCTUnwrap(presentation.begin())
-        presentation.show("old secret", title: "Secret", token: old, from: presenter)
+        presentation.show(WalletExportedSecret(text: "old secret"), title: "Secret", token: old, from: presenter)
         let retainedOldAlert = try XCTUnwrap(presentation.alert)
         let current = try XCTUnwrap(presentation.begin())
-        presentation.show("current secret", title: "Secret", token: current, from: presenter)
+        presentation.show(WalletExportedSecret(text: "current secret"), title: "Secret", token: current, from: presenter)
 
         presentation.finish(old, copying: true)
 
@@ -160,7 +161,7 @@ final class SecretAlertPresentationTests: XCTestCase {
         let presenter = Presenter()
         active = false
 
-        presentation.show("late secret", title: "Secret", token: token, from: presenter)
+        presentation.show(WalletExportedSecret(text: "late secret"), title: "Secret", token: token, from: presenter)
 
         XCTAssertTrue(presenter.presentedAlerts.isEmpty)
         XCTAssertNil(presentation.alert)
@@ -172,7 +173,7 @@ final class SecretAlertPresentationTests: XCTestCase {
         let presentation = SecretAlertPresentation(isActive: { active }, copy: { copies.append($0) })
         let token = try XCTUnwrap(presentation.begin())
         let presenter = Presenter()
-        presentation.show("secret", title: "Secret", token: token, from: presenter)
+        presentation.show(WalletExportedSecret(text: "secret"), title: "Secret", token: token, from: presenter)
         active = false
 
         presentation.finish(token, copying: true)
@@ -187,7 +188,7 @@ final class SecretAlertPresentationTests: XCTestCase {
         let presentation = SecretAlertPresentation(isActive: { true }, copy: { copies.append($0) })
         let token = try XCTUnwrap(presentation.begin())
         let presenter = Presenter()
-        presentation.show("secret", title: "Secret", token: token, from: presenter)
+        presentation.show(WalletExportedSecret(text: "secret"), title: "Secret", token: token, from: presenter)
 
         presentation.finish(token, copying: false)
         presentation.finish(token, copying: true)
@@ -200,7 +201,7 @@ final class SecretAlertPresentationTests: XCTestCase {
         var presentation: SecretAlertPresentation? = SecretAlertPresentation(isActive: { true })
         let presenter = Presenter()
         let token = try XCTUnwrap(presentation?.begin())
-        presentation?.show("secret", title: "Secret", token: token, from: presenter)
+        presentation?.show(WalletExportedSecret(text: "secret"), title: "Secret", token: token, from: presenter)
 
         presentation = nil
 

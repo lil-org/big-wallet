@@ -3,6 +3,7 @@ import Foundation
 import Synchronization
 import XCTest
 @testable import WalletAuthority
+@testable import WalletFlows
 #if SWIFT_PACKAGE
 import WalletRuntimeTestSupport
 #endif

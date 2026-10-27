@@ -306,8 +306,8 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
     
     private func createNewWalletAndShowSecretWords() {
         guard beginWalletAction(), let token = beginSecretPresentation() else { return }
-        performWalletMutation(revealToken: token) { [walletsManager] in
-            try await walletsManager.createWallet()
+        performWalletMutation(revealToken: token) { [walletsManager] session in
+            try await walletsManager.createWallet(access: session)
         }
     }
     
@@ -321,7 +321,7 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
         keyExportTask?.cancel()
         keyExportTask = Task { [weak self, walletsManager] in
             guard let self, !Task.isCancelled, hasWalletAccess else { authorization.invalidate(); return }
-            let secret: String
+            let secret: WalletExportedSecret
             do {
                 if showingMnemonic {
                     secret = try await walletsManager.exportMnemonic(wallet: wallet, authorization: authorization)
@@ -332,12 +332,12 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
                 secretPresentation.finish(token, copying: false)
                 return
             }
-            guard !Task.isCancelled, hasWalletAccess, secretPresentation.accepts(token) else { return }
+            guard !Task.isCancelled, hasWalletAccess, secretPresentation.accepts(token) else { secret.invalidate(); return }
             presentSecret(secret, showingMnemonic: showingMnemonic, token: token)
         }
     }
 
-    private func presentSecret(_ secret: String, showingMnemonic: Bool, token: SecretAlertPresentation.Token) {
+    private func presentSecret(_ secret: WalletExportedSecret, showingMnemonic: Bool, token: SecretAlertPresentation.Token) {
         secretPresentation.show(secret, title: showingMnemonic ? Strings.secretWords : Strings.privateKey, token: token, from: self)
     }
 
@@ -509,8 +509,8 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
             return
         }
         
-        performWalletMutation { [walletsManager] in
-            try await walletsManager.update(wallet: wallet, removeAccounts: [account])
+        performWalletMutation { [walletsManager] session in
+            try await walletsManager.update(wallet: wallet, removeAccounts: [account], access: session)
             return nil
         }
     }
@@ -550,23 +550,23 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
     }
     
     private func removeWallet(_ wallet: WalletSnapshot) {
-        performWalletMutation { [walletsManager] in
-            try await walletsManager.delete(wallet: wallet)
+        performWalletMutation { [walletsManager] session in
+            try await walletsManager.delete(wallet: wallet, access: session)
             return nil
         }
     }
 
     private func performWalletMutation(
         revealToken: SecretAlertPresentation.Token? = nil,
-        _ operation: @escaping @MainActor () async throws -> WalletSnapshot?
+        _ operation: @escaping @MainActor (WalletAccessSession) async throws -> WalletSnapshot?
     ) {
         guard beginWalletAction(), view.isUserInteractionEnabled else { return }
         setWalletMutationActive(true)
         walletMutationTask = Task { [weak self] in
             guard let self, !Task.isCancelled, hasWalletAccess else { return }
             do {
-                try requireCurrentCredentials()
-                let created = try await operation()
+                let session = try requireCurrentAccess()
+                let created = try await operation(session)
                 guard !Task.isCancelled, hasWalletAccess else { return }
                 setWalletMutationActive(false)
                 reloadData()
@@ -591,7 +591,7 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
         keyExportTask = Task { [weak self, walletsManager] in
             guard let self, !Task.isCancelled, hasWalletAccess else { authorization.invalidate(); return }
             let secret = try? await walletsManager.exportMnemonic(wallet: wallet, authorization: authorization)
-            guard !Task.isCancelled, hasWalletAccess, secretPresentation.accepts(token) else { return }
+            guard !Task.isCancelled, hasWalletAccess, secretPresentation.accepts(token) else { secret?.invalidate(); return }
             guard let secret else {
                 secretPresentation.finish(token, copying: false)
                 return

@@ -1,4 +1,5 @@
 import WalletDomain
+@testable import WalletAuthority
 import AppKit
 import XCTest
 @testable import Big_Wallet
@@ -8,7 +9,7 @@ final class NativeSecretAlertPresentationTests: XCTestCase {
     func testNativeCopyActionRunsBeforeSheetIsDetached() async {
         let session = SecretPresentationSession()
         let token = session.begin()
-        session.store("private-key", for: token)
+        session.store(WalletExportedSecret(text: "private-key"), for: token)
         let owner = NSWindow(
             contentRect: NSRect(x: -10_000, y: -10_000, width: 400, height: 300),
             styleMask: [.titled],
@@ -91,7 +92,7 @@ final class NativeSecretAlertPresentationTests: XCTestCase {
     func testResignedSheetCannotUseStaleKeyWindowReferenceToCopy() {
         let session = SecretPresentationSession()
         let token = session.begin()
-        session.store("private-key", for: token)
+        session.store(WalletExportedSecret(text: "private-key"), for: token)
         let owner = NSWindow(
             contentRect: NSRect(x: -10_000, y: -10_000, width: 400, height: 300),
             styleMask: [.titled], backing: .buffered, defer: false
@@ -128,14 +129,14 @@ final class NativeSecretAlertPresentationTests: XCTestCase {
         presentation.finish(.alertSecondButtonReturn)
 
         XCTAssertTrue(copied.isEmpty)
-        XCTAssertNil(session.value(for: token))
+        XCTAssertNil(session.textForTesting(for: token))
         XCTAssertEqual(presentation.secretField.stringValue, "")
     }
 
     func testCopyClearsPresentationBeforeCopyingAndOnlyRunsOnce() {
         let session = SecretPresentationSession()
         let token = session.begin()
-        session.store("private-key", for: token)
+        session.store(WalletExportedSecret(text: "private-key"), for: token)
         var copied = [String]()
         var didEnd = false
         let presentation = NativeSecretAlertPresentation(
@@ -144,7 +145,7 @@ final class NativeSecretAlertPresentationTests: XCTestCase {
             title: "Private key",
             canCopy: { true },
             copy: { value in
-                XCTAssertNil(session.value(for: token))
+                XCTAssertNil(session.textForTesting(for: token))
                 XCTAssertTrue(didEnd)
                 copied.append(value)
             },
@@ -164,7 +165,7 @@ final class NativeSecretAlertPresentationTests: XCTestCase {
         for response in [NSApplication.ModalResponse.alertFirstButtonReturn, .abort, .cancel, .init(rawValue: -7)] {
             let session = SecretPresentationSession()
             let token = session.begin()
-            session.store("seed words", for: token)
+            session.store(WalletExportedSecret(text: "seed words"), for: token)
             var copied = false
             let presentation = NativeSecretAlertPresentation(
                 session: session,
@@ -186,7 +187,7 @@ final class NativeSecretAlertPresentationTests: XCTestCase {
     func testRevocationPreventsLateCopyCallback() {
         let session = SecretPresentationSession()
         let token = session.begin()
-        session.store("private-key", for: token)
+        session.store(WalletExportedSecret(text: "private-key"), for: token)
         var copied = false
         let presentation = NativeSecretAlertPresentation(
             session: session,
@@ -200,13 +201,13 @@ final class NativeSecretAlertPresentationTests: XCTestCase {
         presentation.finish(.alertSecondButtonReturn)
 
         XCTAssertFalse(copied)
-        XCTAssertNil(session.value(for: token))
+        XCTAssertNil(session.textForTesting(for: token))
     }
 
     func testObsoletePresentationCannotCopyOrInvalidateReplacement() {
         let session = SecretPresentationSession()
         let first = session.begin()
-        session.store("old-secret", for: first)
+        session.store(WalletExportedSecret(text: "old-secret"), for: first)
         var copied = false
         let presentation = NativeSecretAlertPresentation(
             session: session,
@@ -216,18 +217,18 @@ final class NativeSecretAlertPresentationTests: XCTestCase {
             copy: { _ in copied = true }
         )
         let replacement = session.begin()
-        session.store("new-secret", for: replacement)
+        session.store(WalletExportedSecret(text: "new-secret"), for: replacement)
 
         presentation.finish(.alertSecondButtonReturn)
 
         XCTAssertFalse(copied)
-        XCTAssertEqual(session.value(for: replacement), "new-secret")
+        XCTAssertEqual(session.textForTesting(for: replacement), "new-secret")
     }
 
     func testInactiveOwnerCannotCopyAndDisplayDoesNotAllowUnprotectedCopying() {
         let session = SecretPresentationSession()
         let token = session.begin()
-        session.store("private-key", for: token)
+        session.store(WalletExportedSecret(text: "private-key"), for: token)
         var copied = false
         let presentation = NativeSecretAlertPresentation(
             session: session,
@@ -240,7 +241,7 @@ final class NativeSecretAlertPresentationTests: XCTestCase {
         presentation.finish(.alertSecondButtonReturn)
 
         XCTAssertFalse(copied)
-        XCTAssertNil(session.value(for: token))
+        XCTAssertNil(session.textForTesting(for: token))
         XCTAssertFalse(presentation.secretField.isSelectable)
         XCTAssertFalse(presentation.secretField.isEditable)
     }

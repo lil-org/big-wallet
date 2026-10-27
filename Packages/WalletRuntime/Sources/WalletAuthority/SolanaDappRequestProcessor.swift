@@ -172,7 +172,7 @@ struct SolanaDappRequestProcessor {
             subject: .approveTransaction,
             meta: SolanaTransactionSummaryFormatter.approvalMessage(
                 encodedMessages: messages,
-                preparedMessages: preparedMessages
+                preparedMessages: preparedMessages, labels: summaryLabels
             ),
             payload: .signature(.solanaTransactions(preparedMessages))
         ))
@@ -296,7 +296,7 @@ struct SolanaDappRequestProcessor {
         guard body.method == .signMessage, !body.displayHex else {
             return body.method == .signMessage
                 ? canonicalMessage
-                : SolanaTransactionSummaryFormatter.rawApprovalMessage(messages: [canonicalMessage])
+                : SolanaTransactionSummaryFormatter.rawApprovalMessage(messages: [canonicalMessage], labels: summaryLabels)
         }
         guard let messageData = decodedMessageData ?? WalletCrypto.hexData(string: canonicalMessage),
               let messageText = String(data: messageData, encoding: .utf8),
@@ -306,13 +306,17 @@ struct SolanaDappRequestProcessor {
         return messageText
     }
 
+    private static var summaryLabels: SolanaTransactionSummaryFormatter.Labels {
+        .init(rawTransactionWarning: AuthorityStrings.rawSolanaTransactionWarning, data: AuthorityStrings.data)
+    }
+
     private static func transactionApprovalMessage(
         message: String,
         preparedMessage: SolanaPreparedTransactionMessage
     ) -> String {
         return SolanaTransactionSummaryFormatter.approvalMessage(
             encodedMessages: [message],
-            preparedMessages: [preparedMessage]
+            preparedMessages: [preparedMessage], labels: summaryLabels
         )
     }
 

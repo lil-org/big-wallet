@@ -738,7 +738,6 @@ final class WalletSigningSourceCheckGate: Sendable {
 final class UnlockedAccountSignerTests: XCTestCase {
     func testInitializationRejectsInvalidDescriptorsAndMismatchedKeys() throws {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
-        let otherKey = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 7, count: 32)))
         for coin: WalletCoin in [.ethereum, .solana] {
             let approved = descriptor(coin: coin, key: key)
             let invalid = [
@@ -753,25 +752,27 @@ final class UnlockedAccountSignerTests: XCTestCase {
                 ),
             ]
             for account in invalid {
-                XCTAssertNil(UnlockedAccountSigner(approvedAccount: account, privateKey: key))
+                XCTAssertNil(UnlockedAccountSigner(approvedAccount: account,
+                    taking: try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))))
             }
-            XCTAssertNil(UnlockedAccountSigner(approvedAccount: approved, privateKey: otherKey))
+            XCTAssertNil(UnlockedAccountSigner(approvedAccount: approved,
+                taking: try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 7, count: 32)))))
         }
 
         let invalidEthereumKey = try XCTUnwrap(WalletPrivateKey(
             data: WalletCoreProxyTestVectors.secp256k1PrivateKeyAtCurveOrder
         ))
         XCTAssertNil(UnlockedAccountSigner(
-            approvedAccount: descriptor(coin: .ethereum, key: key), privateKey: invalidEthereumKey
+            approvedAccount: descriptor(coin: .ethereum, key: key), taking: invalidEthereumKey
         ))
     }
 
     func testSignerRejectsOtherAccountIdentitiesAndSignsApprovedAccountOnlyOnce() async throws {
-        let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
         let otherKey = try XCTUnwrap(WalletPrivateKey(data: Data(repeating: 7, count: 32)))
         for coin: WalletCoin in [.ethereum, .solana] {
+            let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
             let approved = descriptor(coin: coin, key: key)
-            let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
+            let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, taking: key))
             let alternatives = [
                 WalletAccountDescriptor(walletID: "other-wallet", account: approved.account),
                 descriptor(coin: coin, key: otherKey),
@@ -796,7 +797,7 @@ final class UnlockedAccountSignerTests: XCTestCase {
     func testFailedSigningConsumesTheAccountKey() async throws {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
         let approved = descriptor(coin: .ethereum, key: key)
-        let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
+        let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, taking: key))
         let malformed = try approvedWalletSigningPermitForTesting(
             approvedAccount: approved,
             payload: .signature(.ethereumTypedData(WalletCoreProxyTestVectors.malformedTypedDataJSON))
@@ -814,7 +815,7 @@ final class UnlockedAccountSignerTests: XCTestCase {
         let sourceChecks = Mutex([Bool]())
         let signingStarted = Mutex(false)
         let signer = try XCTUnwrap(UnlockedAccountSigner(
-            approvedAccount: approved, privateKey: key
+            approvedAccount: approved, taking: key
         ))
         let permit = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
 
@@ -839,7 +840,7 @@ final class UnlockedAccountSignerTests: XCTestCase {
     func testConcurrentAttemptsCanProduceOnlyOneSignature() async throws {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
         let approved = descriptor(coin: .ethereum, key: key)
-        let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
+        let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, taking: key))
         let permit = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
         let first = Task { await sign(permit, using: signer) }
         let second = Task { await sign(permit, using: signer) }
@@ -859,12 +860,13 @@ final class UnlockedAccountSignerTests: XCTestCase {
     }
 
     func testOneOperationCannotSignThroughMultipleAccountSigners() async throws {
-        let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
         for coin: WalletCoin in [.ethereum, .solana] {
+            let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
             let approved = descriptor(coin: coin, key: key)
             let permit = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
-            let first = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
-            let second = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
+            let first = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, taking: key))
+            let secondKey = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
+            let second = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, taking: secondKey))
             var secondResult: Result<WalletSigningOutput, WalletSigningFailure>?
             let result = await signingAttempt(permit) { operation, source in
                 let copiedOperation = operation
@@ -878,10 +880,10 @@ final class UnlockedAccountSignerTests: XCTestCase {
     }
 
     func testInvalidationReleasesUnusedSigningAuthority() async throws {
-        let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
         for coin: WalletCoin in [.ethereum, .solana] {
+            let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
             let approved = descriptor(coin: coin, key: key)
-            let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
+            let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, taking: key))
             let permit = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
             signer.invalidate()
             signer.invalidate()
@@ -890,10 +892,10 @@ final class UnlockedAccountSignerTests: XCTestCase {
     }
 
     func testCancellationBeforeSigningConsumesTheAccountKey() async throws {
-        let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
         for coin: WalletCoin in [.ethereum, .solana] {
+            let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
             let approved = descriptor(coin: coin, key: key)
-            let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, privateKey: key))
+            let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, taking: key))
             let permit = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
             let result = await signingAttempt(permit) { operation, source in
                 let task = Task {
@@ -928,7 +930,7 @@ final class UnlockedAccountSignerTests: XCTestCase {
                     let approved = WalletAccountDescriptor(walletID: wallet.id, account: account)
                     let signer = try XCTUnwrap(UnlockedAccountSigner(
                         approvedAccount: approved,
-                        privateKey: wallet.privateKey(passwordData: password, account: account)
+                        taking: wallet.privateKey(passwordData: password, account: account)
                     ))
                     return (approved, signer)
                 }
