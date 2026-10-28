@@ -741,7 +741,7 @@ extension Agent.ActiveApproval {
         }
         controller.showWindow(nil)
         guard acceptsActions(for: review) else { return }
-        let alert = Alert()
+        let alert = NSAlert()
         alert.messageText = Strings.addNetwork
         alert.informativeText = action.chainToAdd.chainName + "\n\n" + action.chainToAdd.defaultRpcUrl
         alert.alertStyle = .informational

@@ -66,13 +66,8 @@ The four production module names are also accepted. `ApprovalCrashWorker`
 validates the closed package dependency graph and builds the standalone harness.
 These focused compilation runs do not establish runtime test coverage.
 
-The crash worker lives in the separate `Packages/WalletRuntimeHarness` package.
-Its guest build enables testability only for that invocation; app products never
-depend on this package or its fixture code. The prebuild validator rejects app or
-extension entry points, copied resources, plugins, production proof material,
-entitlements, and production dependencies on test support. Fixtures use real
-module authorization with fake credentials and protected-key storage in their
-disposable directory.
+The [approval lifecycle guide](#approval-lifecycle-and-crash-tests) describes the
+isolated crash worker and its fixture boundaries.
 
 The `upgrade` stage verifies storage and backup compatibility with the confirmed
 shipped release **1.0.98 (147)** at
@@ -104,26 +99,11 @@ checks, fresh-process identities, or unchanged-storage evidence fail the stage.
 `python3 Scripts/wallet_upgrade/archive.py --verify` checks the archived proof
 without Git; `--check` additionally reproduces it from the pinned Git objects.
 
-Every default approval run includes bounded systematic exploration with at most
-256 traces, one preemption, one fault, two overlapping requests, and 64 transitions. Extended
-runs add a dedicated 4096-trace pass with two preemptions, two faults, three
-overlapping requests, and 128 transitions. Each request is parked at an acknowledged
-native task boundary before exploration starts. A second approved request runs
-in another Safari profile; the extended pass also holds a third admission from
-another origin. Recovery cannot grant fresh consent to that queued request.
-The report records observed request overlap and applied faults for each scenario,
-and the auditor rejects missing evidence. The existing random soak remains separate.
-`--approval-arg=--systematic`, followed by `--approval-arg=all`, `extended`, or
-`off`, selects a diagnostic profile; `--systematic-only` and `--trace-limit` are
-also forwarded through `--approval-arg`. An unfinished frontier or missing
-mode/provider/template evidence fails the run and retains
-`systematic-coverage.json` beside its replay artifacts.
-
-The existing `check_swift6.sh` and `check_approval_lifecycle.sh` commands route
-host invocations here. `check_swift6.sh` is a host-only alias; the guest executes
-the shared stage manifest and rejects direct umbrella invocations. Guest execution requires virtual hardware, a root-owned
-provisioning identity, the selected console user's graphical session, and a
-matching job identity. Missing prerequisites never trigger a host fallback.
+Submit stages through `Scripts/test_vm.sh`. The `check_approval_lifecycle.sh`
+and `check_wallet_upgrade.sh` stage entry points also route host invocations here.
+The guest executes the shared stage manifest and requires virtual hardware, a
+root-owned provisioning identity, the selected console user's graphical session,
+and a matching job identity. Missing prerequisites never trigger a host fallback.
 
 The explicit `setup --interactive` option opens one owned window titled
 `Big Wallet Test VM — Setup` for one-time guest consent. Default setup and default
@@ -434,7 +414,72 @@ It does not query the host Keychain. Exact simulator installer DMGs can be
 supplied with `runtimes` entries containing `platform` and `dmgPath`; otherwise
 the guest downloads the pinned versions from Apple and checks their build IDs.
 
+## Approval lifecycle and crash tests
+
+Run from the repository root on the host:
+
+```sh
+Scripts/test_vm.sh run all --stage approval
+Scripts/test_vm.sh run all --stage approval --configuration Release
+Scripts/test_vm.sh run all --stage approval --configuration Debug --approval-arg=--soak --approval-arg=--seed --approval-arg=42
+Scripts/test_vm.sh run all --stage approval --configuration Debug --approval-arg=--replay --approval-arg=/path/to/replay.json
+```
+
+The default run checks mandatory scenarios and process-crash boundaries, explores
+bounded deterministic races, and runs 32 seeded sequences of 64 actions,
+alternating native and popup approval. `--soak` defaults to 1,000 sequences of
+200 actions; `--seed`, `--sequences`, and `--steps` select a bounded random run
+through `--approval-arg`. The VM retains failure artifacts in the printed results
+directory.
+
+Every default approval run includes bounded systematic exploration with at most
+256 traces, one preemption, one fault, two overlapping requests, and 64 transitions. Extended
+runs add a dedicated 4096-trace pass with two preemptions, two faults, three
+overlapping requests, and 128 transitions. Each request is parked at an acknowledged
+native task boundary before exploration starts. A second approved request runs
+in another Safari profile; the extended pass also holds a third admission from
+another origin. Recovery cannot grant fresh consent to that queued request.
+The report records observed request overlap and applied faults for each scenario,
+and the auditor rejects missing evidence. The existing random soak remains separate.
+`--approval-arg=--systematic`, followed by `--approval-arg=all`, `extended`, or
+`off`, selects a diagnostic profile; `--systematic-only` and `--trace-limit` are
+also forwarded through `--approval-arg`. An unfinished frontier or missing
+mode/provider/template evidence fails the run and retains
+`systematic-coverage.json` beside its replay artifacts.
+
+The crash worker lives in the separate `Packages/WalletRuntimeHarness` package
+and runs without launching the wallet app or Safari extension.
+Its guest build enables testability only for that invocation; app products never
+depend on this package or its fixture code. The prebuild validator rejects app or
+extension entry points, copied resources, plugins, production proof material,
+entitlements, and production dependencies on test support. Fixtures use real
+module authorization with fake credentials and protected-key storage in their
+disposable directory.
+
+The worker's two process roles share only a disposable test directory. Wallet
+records, metadata, networks, authentication outcomes, and RPC responses are
+explicit fixtures. Production routing, scoped authentication, approval, signing,
+and durable persistence execute against those dependencies.
+
+The Node parent runs the actual provider, content script, service worker, and popup scripts in separate VM contexts. It controls message delivery and test clocks, records signing and simulated RPC effects outside the native processes, and kills only its own children at acknowledged checkpoints. Restarts retain the same test files and receive new process identities. A failure retains its attempted action prefix, seed, event ledger, browser trace, and storage snapshot; reduction attempts preserve the failing invariant and are capped at 200. Replay executes the production scenario again. Systematic replay requires the exact enabled and selected actions, and a minimized witness must reproduce twice before it is marked stable. Random replay consumes exactly the recorded scheduling decisions and transport fault targets; a fresh seeded run explores subsequent actions after a fix.
+
+Failure artifacts also record captured source snapshot and worker binary hashes,
+the original witness, durable observations, and external effects. Replay against
+newer source records that source separately without replacing the original identity.
+
+Random permanent message drops apply to extension/native transport boundaries. Same-document DOM events can be delayed, duplicated, or reordered; document loss is modeled by navigation or replacement. Arbitrary permanent DOM-event loss is outside the progress guarantee and may leave a provider promise pending before the extension receives it. Replay retains explicit scheduling and fault choices; automatic polling can vary with process scheduling, so its full trace is diagnostic rather than a byte-for-byte replay requirement. A failure that does not reproduce is reported as such.
+
+The harness checks the [runtime execution and recovery guarantees](../../Packages/WalletRuntime/README.md#execution-and-recovery).
+Unexpected exits, missing checkpoints, malformed replies, and watchdog timeouts
+fail the harness.
+
+Process kills do not simulate power loss; the persistence disk-model tests cover synchronization ordering separately. Browser APIs and authentication are simulated here. Actual Safari suspension, sender metadata, rendering, biometrics, and protected vault keys still require device testing.
+
 ## Suites and reports
+
+Native builds use Xcode's default DerivedData inside the guest and disable coverage
+collection. Simulator destinations come from the pinned guest runtimes. Validating
+the oldest supported OS versions requires those runtimes or devices separately.
 
 `all` covers Debug/Release builds and full tests on all three platforms, Safari
 JavaScript and real Safari UI lifecycle tests on macOS and iOS Simulator, generated protocol/bundle checks, all script regressions, the
@@ -664,7 +709,7 @@ and records its path in `retained-vm.json` in the results directory. Later runs
 preserve that clone for diagnostic recovery. Clones with fully collected
 artifacts are removed even when their tests fail.
 
-`stop` sends the active job a cancellation request over its pinned connection,
+For test jobs, `stop` sends a cancellation request over the pinned connection,
 permits diagnostic collection, and stops only the runner-owned VM process.
 Collection waits are bounded by phase: 20 seconds before a guest job is observed,
 10 minutes for a running job to finalize, 30 minutes for export, and 15 minutes
@@ -701,14 +746,53 @@ invocations are rejected; submit jobs through `Scripts/test_vm.sh`.
 Changes to the installed bootstrap, its installer, or environment pins require
 setup again. Setup applies the update headlessly using the retained guest account
 access, then checks installed bootstrap hashes before tests and baseline promotion.
-An older prepared VM needs one setup refresh to install this boundary and its
-nested job payload. Producers and consumers use the current format together,
-without accepting earlier development job formats. Interrupted promotion resumes
-from its recorded state on the next setup attempt.
+Producers and consumers use the current job format together without accepting
+earlier development formats. Interrupted promotion resumes from its recorded
+state on the next setup attempt.
 
 Production publishing/deployment and live paid RPC probes are outside this
 runner's suite. Simulator and fixture results do not
 establish physical Touch ID/Face ID, Secure Enclave, or real-device behavior.
+
+## Recovering retained diagnostics
+
+After freeing enough host space, collect artifacts from a stopped run that has a
+`retained-vm.json` receipt:
+
+```sh
+Scripts/test_vm.sh recover-artifacts RUN_ID
+```
+
+Recovery starts only that retained VM, using the credential scope and exact SSH
+pin file recorded before the original launch in `guest-access.json`.
+Later baseline or candidate setup does not change this binding.
+It checks the original job and source identity,
+rejects any still-live recorded runner, and reads the existing artifact directory.
+It does not mount the guest disk on the host, provision the VM, upload source,
+launch a test job, or change the original job's stop records. Missing credentials
+or a missing access receipt or pin file block recovery instead of guessing an
+account or establishing new trust.
+
+The command prints a separate `recovery-*` results directory. Its
+`recovered/artifacts/` directory contains the collected logs, `.xcresult` bundles,
+and raw guest `result.json`; `artifacts/result.json` reports collection status.
+The original run's result, source manifest, job, and retention receipt stay
+unchanged. An unfinished guest report is retained as partial diagnostic evidence.
+Successful collection never changes the original test outcome or establishes
+passing suite coverage. The stopped VM remains retained after collection.
+
+Admission requires actual free space for both the downloaded archive and extracted
+files, in addition to the configured host reserve. `collection-capacity.json`
+records the host available-capacity API's estimate and actual free bytes; purgeable
+space alone does not admit an artifact transfer. Recovery validates bounded
+archive contents before publishing them. The default total timeout is one hour;
+`--timeout SECONDS` selects another bound. `status` shows recovery progress, and
+`stop` cancels the collector and shuts down only its owned VM process. These
+operations use the recovery attempt's own stop and status files.
+A retry reconciles a stopped, interrupted recovery attempt before collecting;
+it reclaims abandoned scratch archives and partial extractions before checking
+capacity. Workers retain a scratch lock through stderr, so live writers block
+cleanup. Reports, published `recovered/` output, and the retained VM stay intact.
 
 ## Testing the runner itself
 

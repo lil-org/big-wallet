@@ -14176,39 +14176,6 @@
       ]
     },
     {
-      "id": "WalletNetworkingTests/GasServiceTests/testCompatibilityFeeSettersTransitionProvenanceAtomically",
-      "variants": [
-        "macos.debug",
-        "macos.release",
-        "ios.debug",
-        "ios.release",
-        "visionos.debug",
-        "visionos.release"
-      ]
-    },
-    {
-      "id": "WalletNetworkingTests/GasServiceTests/testCompatibilityPreparedFeeSetterPreservesMixedProvenance",
-      "variants": [
-        "macos.debug",
-        "macos.release",
-        "ios.debug",
-        "ios.release",
-        "visionos.debug",
-        "visionos.release"
-      ]
-    },
-    {
-      "id": "WalletNetworkingTests/GasServiceTests/testCompatibilitySetterCompletesPartialFeeAsAutomatic",
-      "variants": [
-        "macos.debug",
-        "macos.release",
-        "ios.debug",
-        "ios.release",
-        "visionos.debug",
-        "visionos.release"
-      ]
-    },
-    {
       "id": "WalletNetworkingTests/GasServiceTests/testCompleteDappEIP1559FeeProceedsOnUnknownSupportEndpoint",
       "variants": [
         "macos.debug",
@@ -15342,17 +15309,6 @@
       ]
     },
     {
-      "id": "WalletNetworkingTests/GasServiceTests/testLegacyGasPriceCompatibilityMirrorsPreparedFee",
-      "variants": [
-        "macos.debug",
-        "macos.release",
-        "ios.debug",
-        "ios.release",
-        "visionos.debug",
-        "visionos.release"
-      ]
-    },
-    {
       "id": "WalletNetworkingTests/GasServiceTests/testLegacySliderReusesItsPreviousPriorityWithoutCurve",
       "variants": [
         "macos.debug",
@@ -15772,6 +15728,50 @@
     },
     {
       "id": "WalletNetworkingTests/GasServiceTests/testPreparationRejectsEndpointChainMismatchForLegacyFee",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/GasServiceTests/testPreparedFeeCompletionKeepsRequestedProvenance",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/GasServiceTests/testPreparedFeeReplacementProjectsLegacyGasPrice",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/GasServiceTests/testPreparedFeeUpdatesPreserveMixedProvenance",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/GasServiceTests/testPreparedFeeUpdatesTransitionProvenance",
       "variants": [
         "macos.debug",
         "macos.release",

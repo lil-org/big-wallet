@@ -1144,6 +1144,9 @@ final class SafariLifecycleTests: XCTestCase {
                                                   "synchronization": synchronization,
                                                   "status": "passed", "evidence": ["xcresult": name]])
             } catch {
+                let diagnostic = "Safari scenario \(identifier):\(iteration) failed: \(error)"
+                let boundedDiagnostic = String(decoding: diagnostic.utf8.prefix(8192), as: UTF8.self)
+                FileHandle.standardError.write(Data((boundedDiagnostic + "\n").utf8))
                 attachEvidence("\(identifier)-\(iteration)-failure")
                 var evidence = ["error": String(describing: error)]
                 do { try await cleanup(resettingProfileSession: identifier == "profiles-private") }
@@ -1177,20 +1180,42 @@ final class SafariLifecycleTests: XCTestCase {
     @MainActor
     private func cleanup(retainingSafari: Bool = false, resettingProfileSession: Bool = false) async throws {
         var keepSafari = false
-        defer {
-#if os(macOS)
-            if helperIsRunning { helper.terminate() }
-            if let walletApplication, walletApplication.state != .notRunning { walletApplication.terminate() }
-#else
-            let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
-            if settings.state != .notRunning { settings.terminate() }
-            if wallet.state != .notRunning { wallet.terminate() }
-#endif
-            if !keepSafari, safari.state != .notRunning { safari.terminate() }
-            retainedSafari = keepSafari
+        var failure: Error?
+        do {
+            keepSafari = try await cleanupBrowserWindows(
+                retainingSafari: retainingSafari, resettingProfileSession: resettingProfileSession
+            )
+        } catch {
+            failure = error
         }
+#if os(macOS)
+        if helperIsRunning { helper.terminate() }
+        if let walletApplication, walletApplication.state != .notRunning { walletApplication.terminate() }
+        if !keepSafari {
+            do {
+                try await Task { @MainActor in try await self.terminateSafariForCleanup() }.value
+            } catch {
+                if let previous = failure {
+                    failure = SafariUIFailure("\(previous); Safari shutdown failed: \(error)")
+                } else {
+                    failure = error
+                }
+            }
+        }
+#else
+        let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
+        if settings.state != .notRunning { settings.terminate() }
+        if wallet.state != .notRunning { wallet.terminate() }
+        if !keepSafari, safari.state != .notRunning { safari.terminate() }
+#endif
+        retainedSafari = keepSafari
+        if let failure { throw failure }
+    }
+
+    @MainActor
+    private func cleanupBrowserWindows(retainingSafari: Bool, resettingProfileSession: Bool) async throws -> Bool {
         try closeOwnedApprovalIfPresent()
-        guard safari.state != .notRunning, extensionActivated else { return }
+        guard safari.state != .notRunning, extensionActivated else { return false }
         safari.activate()
 #if os(macOS)
         var closed = 0
@@ -1241,8 +1266,64 @@ final class SafariLifecycleTests: XCTestCase {
             }
         }
 #endif
-        keepSafari = retainingSafari && safari.state != .notRunning
+        return retainingSafari && safari.state != .notRunning
     }
+
+#if os(macOS)
+    @MainActor
+    private func terminateSafariForCleanup() async throws {
+        let bundleIdentifier = "com.apple.Safari"
+        let applications = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
+            .filter { !$0.isTerminated }
+        try require(applications.count <= 1, "Safari cleanup found multiple running browser processes")
+        guard let application = applications.first else { return }
+        let processIdentifier = application.processIdentifier
+        guard processIdentifier > 0, let launchDate = application.launchDate,
+              let bundleURL = application.bundleURL, bundleURL.isFileURL,
+              application.bundleIdentifier == bundleIdentifier else {
+            throw SafariUIFailure("Safari cleanup could not verify the running browser's identity")
+        }
+        let expectedBundlePath = bundleURL.resolvingSymlinksInPath().path
+        var evidence = ["pid: \(processIdentifier)", "launchedAt: \(launchDate.timeIntervalSince1970)",
+                        "bundleIdentifier: \(bundleIdentifier)", "bundlePath: \(expectedBundlePath)"]
+        defer {
+            let attachment = XCTAttachment(string: evidence.joined(separator: "\n"))
+            attachment.name = "macos-safari-cleanup"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+        evidence.append("gracefulTerminationAccepted: \(application.terminate())")
+        let exitedGracefully = try await waitForSafariExit(application, timeout: .seconds(10))
+        if !exitedGracefully, let current = NSRunningApplication(processIdentifier: processIdentifier), !current.isTerminated {
+            guard current.processIdentifier == processIdentifier, current.launchDate == launchDate,
+                  current.bundleIdentifier == bundleIdentifier,
+                  current.bundleURL?.resolvingSymlinksInPath().path == expectedBundlePath else {
+                evidence.append("forceTerminationRefused: process identity changed")
+                throw SafariUIFailure("Safari process identity changed before cleanup escalation")
+            }
+            evidence.append("forceTerminationAccepted: \(current.forceTerminate())")
+            let exited = try await waitForSafariExit(application, timeout: .seconds(10))
+            evidence.append("exitedAfterForce: \(exited)")
+            try require(exited, "Safari remained running after bounded cleanup termination")
+        } else {
+            evidence.append("exitedGracefully: \(application.isTerminated)")
+        }
+        try require(application.isTerminated, "Safari cleanup could not confirm the captured browser exited")
+        let remaining = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
+            .filter { !$0.isTerminated }
+        evidence.append("remainingSafariProcesses: \(remaining.map(\.processIdentifier))")
+        try require(remaining.isEmpty, "Safari restarted or remained running after scenario cleanup")
+    }
+
+    @MainActor
+    private func waitForSafariExit(_ application: NSRunningApplication, timeout: Duration) async throws -> Bool {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while !application.isTerminated && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        return application.isTerminated
+    }
+#endif
 
     @MainActor
     private func prepare(control: SafariUIControl, config: SafariUIConfiguration, privateBrowsing: Bool = false) async throws {

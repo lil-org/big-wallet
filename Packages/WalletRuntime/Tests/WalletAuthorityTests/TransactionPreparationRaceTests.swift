@@ -24,7 +24,10 @@ final class TransactionPreparationRaceTests: XCTestCase {
                 case (.first, 0), (.first, 1):
                     var late = original
                     late.nonce = step.index == 0 ? "0x3" : "0x4"
-                    late.preparedFee = .legacy(gasPrice: step.index == 0 ? 11 : 12)
+                    late.replacePreparedFee(
+                        .legacy(gasPrice: step.index == 0 ? 11 : 12),
+                        provenance: original.feeProvenance
+                    )
                     old.continuation.yield(.transactionUpdated(late))
                     if editedID == nil {
                         await expectEventually { coordinator.snapshot.transaction.nonce == late.nonce }

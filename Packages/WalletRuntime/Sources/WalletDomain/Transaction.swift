@@ -346,74 +346,12 @@ public struct Transaction: Sendable {
             }
         }
 
-        mutating func setPreparedFee(_ fee: PreparedTransactionFee?) {
-            let previousFee = preparedFee
-            backing = Self.canonicalBacking(for: fee)
-            transitionProvenance(from: previousFee, to: fee)
-        }
-
-        mutating func setLegacyGasPrice(_ rawLegacyGasPrice: String?) {
-            let previousFee = preparedFee
-            guard let rawLegacyGasPrice,
-                  let value = EthereumQuantity.parseUInt256(
-                      rawLegacyGasPrice,
-                      allowPrefixless: true
-                  ) else {
-                backing = .unprepared(
-                    rawLegacyGasPrice: rawLegacyGasPrice
-                )
-                transitionProvenance(from: previousFee, to: nil)
-                return
-            }
-            backing = .legacy(
-                value: value,
-                encoded: rawLegacyGasPrice
-            )
-            transitionProvenance(
-                from: previousFee,
-                to: .legacy(gasPrice: value)
-            )
-        }
-
         mutating func replace(
             preparedFee: PreparedTransactionFee,
             provenance: TransactionFeeProvenance
         ) {
             backing = Self.canonicalBacking(for: preparedFee)
             self.provenance = provenance
-        }
-
-        private mutating func transitionProvenance(
-            from previousFee: PreparedTransactionFee?,
-            to fee: PreparedTransactionFee?
-        ) {
-            guard let fee else {
-                provenance = TransactionFeeProvenance()
-                return
-            }
-            let fallbackSource = previousFee.map {
-                provenance.dominantSource(for: $0)
-            } ?? .automatic
-            var nextProvenance: TransactionFeeProvenance
-            switch previousFee {
-            case .some(.legacy):
-                nextProvenance = TransactionFeeProvenance(
-                    gasPrice: provenance.gasPrice
-                )
-            case .some(.eip1559):
-                nextProvenance = TransactionFeeProvenance(
-                    maxPriorityFeePerGas:
-                        provenance.maxPriorityFeePerGas,
-                    maxFeePerGas: provenance.maxFeePerGas
-                )
-            case .none:
-                nextProvenance = provenance
-            }
-            nextProvenance.fillMissingSources(
-                for: fee,
-                with: fallbackSource
-            )
-            provenance = nextProvenance
         }
 
         private static func initialBacking(
@@ -450,18 +388,16 @@ public struct Transaction: Sendable {
         }
 
         private static func canonicalBacking(
-            for fee: PreparedTransactionFee?
+            for fee: PreparedTransactionFee
         ) -> Backing {
             switch fee {
-            case .some(.legacy(let value)):
+            case .legacy(let value):
                 return .legacy(
                     value: value,
                     encoded: value.toHexString(withPrefix: true)
                 )
-            case .some(.eip1559(let priority, let cap)):
+            case .eip1559(let priority, let cap):
                 return .eip1559(priority: priority, cap: cap)
-            case .none:
-                return .unprepared(rawLegacyGasPrice: nil)
             }
         }
     }
@@ -611,21 +547,11 @@ public struct Transaction: Sendable {
     }
 
     public var preparedFee: PreparedTransactionFee? {
-        get {
-            feeState.preparedFee
-        }
-        set {
-            feeState.setPreparedFee(newValue)
-        }
+        feeState.preparedFee
     }
 
     public var gasPrice: String? {
-        get {
-            feeState.legacyGasPrice
-        }
-        set {
-            feeState.setLegacyGasPrice(newValue)
-        }
+        feeState.legacyGasPrice
     }
 
     public var feeProvenance: TransactionFeeProvenance {
@@ -638,16 +564,7 @@ public struct Transaction: Sendable {
     }
 
     public var feeSource: TransactionFeeSource {
-        get {
-            feeProvenance.dominantSource(for: preparedFee)
-        }
-        set {
-            guard let preparedFee else {
-                feeProvenance = TransactionFeeProvenance()
-                return
-            }
-            feeProvenance = TransactionFeeProvenance(source: newValue, for: preparedFee)
-        }
+        feeProvenance.dominantSource(for: preparedFee)
     }
 
     public mutating func setPreparedFee(

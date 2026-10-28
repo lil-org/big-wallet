@@ -6,7 +6,7 @@ import Cocoa
 @MainActor
 final class NativeSecretAlertPresentation: NSObject {
     let token: SecretPresentationSession.Token
-    let alert = Alert()
+    let alert = NSAlert()
     let secretField = NSTextField(wrappingLabelWithString: "")
 
     private let session: SecretPresentationSession

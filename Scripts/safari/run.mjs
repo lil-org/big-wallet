@@ -174,6 +174,31 @@ function signingSettings(options) {
         "CODE_SIGN_ENTITLEMENTS=", "ENABLE_APP_SANDBOX=NO", "ENABLE_HARDENED_RUNTIME=NO", "REGISTER_APP_GROUPS=NO", "CODE_SIGNING_ALLOWED=YES", "BW_VM_VERIFICATION_BUILD=YES"];
 }
 
+export function safariXcodeCommands(options, descriptorPath, runID) {
+    const scheme = `Safari UI Tests ${options.platform === "macos" ? "macOS" : "iOS"}`;
+    const destination = options.platform === "ios" && options.phase === "build"
+        ? "generic/platform=iOS Simulator" : options.destination;
+    const base = ["-project", "Wallet.xcodeproj", "-scheme", scheme, "-configuration", options.configuration, "-destination", destination,
+        ...signingSettings(options), "BW_SAFARI_VM_TESTING=YES", `BW_SAFARI_VM_CONFIGURATION=${descriptorPath}`,
+        `BW_TEST_VM_RUN_ID=${runID}`, "BW_TEST_VM_EXCHANGE=/Volumes/BigWalletBuild/Exchange",
+        `SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) BW_SAFARI_VM_TESTING${options.configuration === "Debug" ? " DEBUG" : ""}`];
+    const settings = [...base];
+    settings[settings.indexOf("-scheme") + 1] = options.platform === "macos" ? "Wallet" : "Wallet iOS";
+    const timeouts = options.phase === "test" ? safariTestTimeouts(options.iterations) : null;
+    return {
+        base,
+        settings: ["-showBuildSettings", "-json", ...settings],
+        build: ["-jobs", "2", "build-for-testing", ...base, "ENABLE_TESTABILITY=YES"],
+        test: timeouts && {
+            args: ["-jobs", "2", "test-without-building", ...base,
+                "-parallel-testing-enabled", "NO", "-enableCodeCoverage", "NO", "-collect-test-diagnostics", "never",
+                ...timeouts.args, "-resultBundlePath", options.resultBundle,
+                ...options.onlyTesting.map(value => `-only-testing:${value}`)],
+            timeoutSeconds: timeouts.timeoutSeconds,
+        },
+    };
+}
+
 function validateFixtureRoot(root) {
     if (!/^\/Volumes\/BigWalletBuild\/Exchange\/[A-Za-z0-9._-]+\/safari\/macos\/(Debug|Release)$/.test(root) || root.includes("..")) { throw new Error("Invalid fixture entitlement root"); }
 }
@@ -207,10 +232,8 @@ async function signLocalMacFixtureProducts(paths, root, command = execute, entit
     await command("/usr/bin/codesign", ["--verify", "--deep", "--strict", paths.app]);
 }
 
-async function products(args, options) {
-    const settingsArgs = [...args];
-    settingsArgs[settingsArgs.indexOf("-scheme") + 1] = options.platform === "macos" ? "Wallet" : "Wallet iOS";
-    const settings = JSON.parse(await execute("xcodebuild", ["-showBuildSettings", "-json", ...settingsArgs], {capture: true}));
+async function products(settingsArgs, options) {
+    const settings = JSON.parse(await execute("xcodebuild", settingsArgs, {capture: true}));
     const target = options.platform === "macos" ? "Big Wallet" : "Big Wallet iOS";
     const app = settings.find(value => value.target === target)?.buildSettings;
     if (!app?.TARGET_BUILD_DIR || app.FULL_PRODUCT_NAME !== "Big Wallet.app") { throw new Error("Safari app build settings unavailable"); }
@@ -917,15 +940,12 @@ export async function main(args = process.argv.slice(2)) {
     } else {
         if (JSON.stringify(JSON.parse(await readFile(descriptorPath, "utf8"))) !== JSON.stringify(descriptor)) { throw new Error("Safari build/run descriptor mismatch"); }
     }
-    const scheme = `Safari UI Tests ${options.platform === "macos" ? "macOS" : "iOS"}`;
-    const buildArgs = ["-project", "Wallet.xcodeproj", "-scheme", scheme, "-configuration", options.configuration, "-destination", options.destination,
-        ...signingSettings(options), "BW_SAFARI_VM_TESTING=YES", `BW_SAFARI_VM_CONFIGURATION=${descriptorPath}`,
-        `BW_TEST_VM_RUN_ID=${runID}`, "BW_TEST_VM_EXCHANGE=/Volumes/BigWalletBuild/Exchange",
-        `SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) BW_SAFARI_VM_TESTING${options.configuration === "Debug" ? " DEBUG" : ""}`];
+    const commands = safariXcodeCommands(options, descriptorPath, runID);
+    const buildArgs = commands.base;
     if (options.phase === "build") {
-        const paths = await products(buildArgs, options);
+        const paths = await products(commands.settings, options);
         await removeHostedUnitTestBundle(paths, options.platform);
-        await execute("xcodebuild", ["-jobs", "2", "build-for-testing", ...buildArgs, "ENABLE_TESTABILITY=YES"]);
+        await execute("xcodebuild", commands.build);
         await access(paths.extension);
         await verifyFixtureProducts(paths, options.platform, descriptor);
         paths.synchronizationHookExclusion = await verifySynchronizationHookExclusion(paths, options.platform);
@@ -1035,12 +1055,8 @@ export async function main(args = process.argv.slice(2)) {
                 progress: value => atomicJSON(join(artifacts, `${stageId}.safari-preparation-progress.json`),
                     {version: 1, preparationRunID: runID, ...value})});
         } else {
-            const testTimeouts = safariTestTimeouts(options.iterations);
-            await runCommand("xcodebuild", ["-jobs", "2", "test-without-building", ...buildArgs,
-                "-parallel-testing-enabled", "NO", "-enableCodeCoverage", "NO", "-collect-test-diagnostics", "never",
-                ...testTimeouts.args,
-                "-resultBundlePath", options.resultBundle, ...options.onlyTesting.map(value => `-only-testing:${value}`)],
-            {env: {...process.env, TEST_RUNNER_BW_SAFARI_VM_CONFIGURATION: descriptorPath}, timeoutSeconds: testTimeouts.timeoutSeconds});
+            await runCommand("xcodebuild", commands.test.args,
+                {env: {...process.env, TEST_RUNNER_BW_SAFARI_VM_CONFIGURATION: descriptorPath}, timeoutSeconds: commands.test.timeoutSeconds});
         }
         requireRunning();
     } catch (error) {

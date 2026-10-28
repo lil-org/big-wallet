@@ -1676,21 +1676,34 @@ final class DappRequestProcessorTests: XCTestCase {
         let overflow = Transaction.maximumUInt256 + 1
         let invalidEdits: [(String, (inout Transaction) -> Void)] = [
             ("zero gas", { $0.gas = "0x0" }),
-            ("legacy fee overflow", { $0.preparedFee = .legacy(gasPrice: overflow) }),
+            ("legacy fee overflow", {
+                $0.replacePreparedFee(.legacy(gasPrice: overflow), provenance: .init(gasPrice: .automatic))
+            }),
             ("priority fee overflow", {
-                $0.preparedFee = .eip1559(maxPriorityFeePerGas: overflow, maxFeePerGas: overflow)
+                $0.replacePreparedFee(
+                    .eip1559(maxPriorityFeePerGas: overflow, maxFeePerGas: overflow),
+                    provenance: .init(maxPriorityFeePerGas: .automatic, maxFeePerGas: .automatic)
+                )
             }),
             ("maximum fee overflow", {
-                $0.preparedFee = .eip1559(maxPriorityFeePerGas: 1, maxFeePerGas: overflow)
+                $0.replacePreparedFee(
+                    .eip1559(maxPriorityFeePerGas: 1, maxFeePerGas: overflow),
+                    provenance: .init(maxPriorityFeePerGas: .automatic, maxFeePerGas: .automatic)
+                )
             }),
             ("priority exceeds maximum", {
-                $0.preparedFee = .eip1559(maxPriorityFeePerGas: 11, maxFeePerGas: 10)
+                $0.replacePreparedFee(
+                    .eip1559(maxPriorityFeePerGas: 11, maxFeePerGas: 10),
+                    provenance: .init(maxPriorityFeePerGas: .automatic, maxFeePerGas: .automatic)
+                )
             }),
             ("legacy priority provenance", { $0.feeProvenance.maxPriorityFeePerGas = .manual }),
             ("legacy maximum provenance", { $0.feeProvenance.maxFeePerGas = .manual }),
             ("dynamic legacy provenance", {
-                $0.preparedFee = .eip1559(maxPriorityFeePerGas: 1, maxFeePerGas: 10)
-                $0.feeProvenance.gasPrice = .manual
+                $0.replacePreparedFee(
+                    .eip1559(maxPriorityFeePerGas: 1, maxFeePerGas: 10),
+                    provenance: .init(gasPrice: .manual, maxPriorityFeePerGas: .automatic, maxFeePerGas: .automatic)
+                )
             }),
             ("current base fee overflow", { $0.currentBaseFeePerGas = overflow }),
             ("next base fee overflow", { $0.nextBaseFeePerGas = overflow }),

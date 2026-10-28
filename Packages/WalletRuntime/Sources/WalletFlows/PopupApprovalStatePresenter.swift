@@ -135,10 +135,6 @@ public final class PopupApprovalStatePresenter {
         return PopupApprovalState(id: id, host: host, content: content)
     }
 
-    func missingState(id: Int) -> PopupApprovalState {
-        PopupApprovalState(id: id, content: .missing)
-    }
-
     func secureSetupRequiredState(id: Int, host: String) -> PopupApprovalState {
         Self.errorState(
             id: id,
@@ -191,10 +187,6 @@ public final class PopupApprovalStatePresenter {
                 content: content
             ), actions: actions, feedback: review.feedback)
         )
-    }
-
-    func subjectTitle(_ subject: ApprovalSubject) -> String {
-        environment.approvalSubjectTitle(subject)
     }
 
     private func title(for content: PopupReviewSnapshot.Content) -> String {

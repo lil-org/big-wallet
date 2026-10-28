@@ -1064,7 +1064,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let controller = NSViewController()
         controller.view = NSView()
         windowController.contentViewController = controller
-        let alert = Alert()
+        let alert = NSAlert()
         alert.messageText = "Review"
         alert.addButton(withTitle: Strings.ok)
         let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 230, height: 24))

@@ -10,8 +10,5 @@ public enum NativeApprovalTiming: Sendable {
     public static let launchPollIntervalNanoseconds: UInt64 = 50_000_000
     public static let runtimeIdentityGracePeriodNanoseconds: UInt64 = 1_000_000_000
     public static let receiptWaitTimeoutNanoseconds: UInt64 = 250_000_000
-    public static let responseTimeoutNanoseconds: UInt64 = 170_000_000_000
-    public static let responsePollIntervalNanoseconds: UInt64 = 250_000_000
-    public static let deliveryCheckIntervalNanoseconds: UInt64 = 1_000_000_000
 }
 

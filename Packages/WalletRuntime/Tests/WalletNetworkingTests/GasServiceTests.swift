@@ -1487,7 +1487,7 @@ final class GasServiceTests: XCTestCase {
     func testFallbackRecommendationIsAtSliderCenter() async throws {
         let info = try XCTUnwrap(GasPriceInfo.relative(to: 100))
         var transaction = Transaction(from: "0x0", to: "0x1", value: nil, data: "0x")
-        transaction.gasPrice = String.hex(100)
+        transaction.setPreparedFee(.legacy(gasPrice: 100), source: .automatic)
 
         XCTAssertEqual(
             transaction.currentFeeInRelationTo(info: info),
@@ -1499,7 +1499,7 @@ final class GasServiceTests: XCTestCase {
     func testFallbackCurveRemainsEditableAcrossBothHalves() async throws {
         let info = try XCTUnwrap(GasPriceInfo.relative(to: 100))
         var transaction = Transaction(from: "0x0", to: "0x1", value: nil, data: "0x")
-        transaction.gasPrice = String.hex(100)
+        transaction.setPreparedFee(.legacy(gasPrice: 100), source: .automatic)
         let fixtures: [(Double, BigUInt)] = [
             (0, 50),
             (50, 75),
@@ -1594,7 +1594,7 @@ final class GasServiceTests: XCTestCase {
 
         XCTAssertEqual(transaction.currentFeeInRelationTo(info: info), 0)
 
-        transaction.gasPrice = String.hex(401)
+        transaction.setPreparedFee(.legacy(gasPrice: 401), source: .dapp)
         XCTAssertEqual(transaction.currentFeeInRelationTo(info: info), 200)
     }
 
@@ -1622,7 +1622,7 @@ final class GasServiceTests: XCTestCase {
             6
         )
 
-        transaction.gasPrice = String.hex(12)
+        transaction.setPreparedFee(.legacy(gasPrice: 12), source: .dapp)
         let upperPosition = transaction.currentFeeInRelationTo(info: info)
         XCTAssertGreaterThan(upperPosition, 100)
         XCTAssertLessThan(upperPosition, 200)
@@ -1740,12 +1740,14 @@ final class GasServiceTests: XCTestCase {
         let largeGasPrice = try XCTUnwrap(Transaction.gasPriceWei(fromGwei: "18446744074"))
         XCTAssertGreaterThan(largeGasPrice, BigUInt(UInt64.max))
 
-        var transaction = Transaction(from: "0x0", to: "0x1", value: nil, data: "0x")
-        transaction.gasPrice = largeGasPrice.hexString
+        var transaction = Transaction(
+            from: "0x0", to: "0x1", gasPrice: largeGasPrice.hexString, value: nil, data: "0x",
+            feeIntent: .automatic, feeSource: .automatic
+        )
         XCTAssertEqual(transaction.gasPriceValue, largeGasPrice)
         XCTAssertEqual(Transaction.gasPriceWei(fromGwei: try XCTUnwrap(transaction.editableGasPriceGwei)), largeGasPrice)
 
-        transaction.gasPrice = BigUInt(1_234_567_890).hexString
+        transaction.setPreparedFee(.legacy(gasPrice: 1_234_567_890), source: .automatic)
         XCTAssertEqual(transaction.gasPriceGwei, "1")
         XCTAssertEqual(transaction.editableGasPriceGwei, "1.23456789")
     }
@@ -2046,9 +2048,12 @@ final class GasServiceTests: XCTestCase {
                 from: invalidFields, on: chain, resettingFeeTo: fee
             ))
             var valid = invalid
-            valid.preparedFee = fee.isEIP1559
-                ? .eip1559(maxPriorityFeePerGas: 1, maxFeePerGas: 3)
-                : .legacy(gasPrice: 3)
+            valid.replacePreparedFee(
+                fee.isEIP1559
+                    ? .eip1559(maxPriorityFeePerGas: 1, maxFeePerGas: 3)
+                    : .legacy(gasPrice: 3),
+                provenance: invalid.feeProvenance
+            )
             XCTAssertNil(valid.edits(from: invalidFields, on: chain))
             XCTAssertEqual(valid.nonce, "0x1")
         }
@@ -2097,7 +2102,7 @@ final class GasServiceTests: XCTestCase {
 
     func testTransactionEditsApplyOnlyChangedFieldsToLatestTransaction() async {
         var transaction = Transaction(from: "0x0", to: "0x1", value: nil, data: "0x")
-        transaction.gasPrice = BigUInt(100).hexString
+        transaction.setPreparedFee(.legacy(gasPrice: 100), source: .automatic)
         transaction.nonce = String.hex(1)
         let edits = Transaction.Edits(gasPrice: BigUInt(200))
 
@@ -2413,7 +2418,7 @@ final class GasServiceTests: XCTestCase {
 
         XCTAssertNil(transaction.estimatedFeeValue)
         XCTAssertNil(transaction.maximumFeeValue)
-        transaction.gasPrice = "0x1"
+        transaction.setPreparedFee(.legacy(gasPrice: 1), source: .dapp)
         XCTAssertEqual(transaction.maximumFeeValue, maximum)
     }
 
@@ -2474,7 +2479,7 @@ final class GasServiceTests: XCTestCase {
 
 
 
-    func testLegacyGasPriceCompatibilityMirrorsPreparedFee() async {
+    func testPreparedFeeReplacementProjectsLegacyGasPrice() async {
         var transaction = Transaction(
             from: "0x0",
             to: "0x1",
@@ -2487,18 +2492,19 @@ final class GasServiceTests: XCTestCase {
         XCTAssertEqual(transaction.preparedFee, .legacy(gasPrice: BigUInt(100)))
         XCTAssertEqual(transaction.feeIntent, .legacy(gasPrice: BigUInt(100)))
 
-        transaction.preparedFee = .eip1559(
-            maxPriorityFeePerGas: BigUInt(1),
-            maxFeePerGas: BigUInt(201)
+        transaction.replacePreparedFee(
+            .eip1559(maxPriorityFeePerGas: 1, maxFeePerGas: 201),
+            provenance: .init(maxPriorityFeePerGas: .dapp, maxFeePerGas: .dapp)
         )
         XCTAssertNil(transaction.gasPrice)
 
-        transaction.gasPrice = "0x65"
+        transaction.replacePreparedFee(.legacy(gasPrice: 101), provenance: .init(gasPrice: .dapp))
         XCTAssertEqual(transaction.preparedFee, .legacy(gasPrice: BigUInt(101)))
         XCTAssertEqual(transaction.gasPrice, "0x65")
+        XCTAssertEqual(transaction.feeIntent, .legacy(gasPrice: 100))
     }
 
-    func testCompatibilityFeeSettersTransitionProvenanceAtomically() async {
+    func testPreparedFeeUpdatesTransitionProvenance() async {
         var transaction = Transaction(
             from: "0x0",
             to: "0x1",
@@ -2508,9 +2514,9 @@ final class GasServiceTests: XCTestCase {
             feeSource: .dapp
         )
 
-        transaction.preparedFee = .eip1559(
-            maxPriorityFeePerGas: 1,
-            maxFeePerGas: 201
+        transaction.setPreparedFee(
+            .eip1559(maxPriorityFeePerGas: 1, maxFeePerGas: 201),
+            source: .dapp
         )
         XCTAssertEqual(
             transaction.feeProvenance,
@@ -2521,7 +2527,7 @@ final class GasServiceTests: XCTestCase {
         )
         XCTAssertEqual(transaction.feeSource, .dapp)
 
-        transaction.gasPrice = "0x65"
+        transaction.setPreparedFee(.legacy(gasPrice: 101), source: .dapp)
         XCTAssertEqual(
             transaction.feeProvenance,
             TransactionFeeProvenance(gasPrice: .dapp)
@@ -2529,7 +2535,7 @@ final class GasServiceTests: XCTestCase {
         XCTAssertEqual(transaction.feeSource, .dapp)
     }
 
-    func testCompatibilityPreparedFeeSetterPreservesMixedProvenance() async {
+    func testPreparedFeeUpdatesPreserveMixedProvenance() async {
         let provenance = TransactionFeeProvenance(
             gasPrice: .slider,
             maxPriorityFeePerGas: .dapp,
@@ -2547,9 +2553,9 @@ final class GasServiceTests: XCTestCase {
             feeProvenance: provenance
         )
 
-        transaction.preparedFee = .eip1559(
-            maxPriorityFeePerGas: 2,
-            maxFeePerGas: 202
+        transaction.setPreparedFee(
+            .eip1559(maxPriorityFeePerGas: 2, maxFeePerGas: 202),
+            source: .automatic
         )
 
         XCTAssertEqual(
@@ -2561,7 +2567,7 @@ final class GasServiceTests: XCTestCase {
         )
     }
 
-    func testCompatibilitySetterCompletesPartialFeeAsAutomatic() async {
+    func testPreparedFeeCompletionKeepsRequestedProvenance() async {
         var transaction = Transaction(
             from: "0x0",
             to: "0x1",
@@ -2581,9 +2587,9 @@ final class GasServiceTests: XCTestCase {
             )
         )
 
-        transaction.preparedFee = .eip1559(
-            maxPriorityFeePerGas: 2,
-            maxFeePerGas: 202
+        transaction.setPreparedFee(
+            .eip1559(maxPriorityFeePerGas: 2, maxFeePerGas: 202),
+            source: .automatic
         )
 
         XCTAssertEqual(
@@ -2608,21 +2614,13 @@ final class GasServiceTests: XCTestCase {
         XCTAssertEqual(exact.preparedFee, .legacy(gasPrice: 171))
         XCTAssertEqual(exact.gasPrice, "0xAB")
 
-        exact.preparedFee = .legacy(gasPrice: 172)
+        exact.replacePreparedFee(.legacy(gasPrice: 172), provenance: .init(gasPrice: .dapp))
         XCTAssertEqual(
             exact.gasPrice,
             BigUInt(172).toHexString(withPrefix: true)
         )
 
         let paddedZero = "0x00"
-        exact.gasPrice = paddedZero
-        XCTAssertEqual(exact.preparedFee, .legacy(gasPrice: 0))
-        XCTAssertEqual(exact.gasPrice, paddedZero)
-        XCTAssertEqual(
-            exact.feeProvenance,
-            TransactionFeeProvenance(gasPrice: .dapp)
-        )
-
         let initializedZero = Transaction(
             from: "0x0",
             to: "0x1",
@@ -2632,20 +2630,13 @@ final class GasServiceTests: XCTestCase {
         )
         XCTAssertEqual(initializedZero.preparedFee, .legacy(gasPrice: 0))
         XCTAssertEqual(initializedZero.gasPrice, paddedZero)
+        XCTAssertEqual(initializedZero.feeProvenance, .init(gasPrice: .dapp))
         XCTAssertEqual(
             initializedZero.feeIntent,
             .legacy(gasPrice: 0)
         )
 
         let invalidRaw = "0xzz"
-        exact.gasPrice = invalidRaw
-        XCTAssertNil(exact.preparedFee)
-        XCTAssertEqual(exact.gasPrice, invalidRaw)
-        XCTAssertEqual(
-            exact.feeProvenance,
-            TransactionFeeProvenance()
-        )
-
         let initializedInvalid = Transaction(
             from: "0x0",
             to: "0x1",
@@ -2655,6 +2646,7 @@ final class GasServiceTests: XCTestCase {
         )
         XCTAssertNil(initializedInvalid.preparedFee)
         XCTAssertEqual(initializedInvalid.gasPrice, invalidRaw)
+        XCTAssertEqual(initializedInvalid.feeProvenance, TransactionFeeProvenance())
         XCTAssertEqual(
             initializedInvalid.feeIntent,
             .legacy(gasPrice: nil)
@@ -2816,7 +2808,7 @@ final class GasServiceTests: XCTestCase {
 
     func testNonceOnlyEditPreservesLatestGasPrice() async {
         var transaction = Transaction(from: "0x0", to: "0x1", value: nil, data: "0x")
-        transaction.gasPrice = BigUInt(999).hexString
+        transaction.setPreparedFee(.legacy(gasPrice: 999), source: .automatic)
 
         XCTAssertTrue(transaction.apply(Transaction.Edits(nonce: 3)))
         XCTAssertEqual(transaction.gasPriceValue, BigUInt(999))
@@ -2826,35 +2818,46 @@ final class GasServiceTests: XCTestCase {
     func testApprovalValidationAllowsLegacyZeroOffMainnetAndAllowsZeroPriority() async throws {
         let mainnet = makeNetwork(chainID: EthereumNetwork.ethMainnetChainId)
         let otherNetwork = makeNetwork(chainID: 10)
-        var transaction = Transaction(from: "0x0", to: "0x1", value: nil, data: "0x")
-        transaction.nonce = String.hex(0)
-        transaction.gas = String.hex(21_000)
-
         let largeGasPrice = try XCTUnwrap(BigUInt(decimalString: "18446744073709551616"))
-        transaction.gasPrice = largeGasPrice.hexString
+        var transaction = Transaction(
+            from: "0x0", to: "0x1", nonce: "0x0",
+            gasPrice: largeGasPrice.hexString, gas: "0x5208", value: nil, data: "0x",
+            feeIntent: .automatic, feeSource: .automatic
+        )
         XCTAssertEqual(transaction.gasPriceValue, largeGasPrice)
         XCTAssertTrue(transaction.isReadyForApproval(on: mainnet))
 
         let maximumGasPrice = try XCTUnwrap(BigUInt(hexString: String(repeating: "f", count: 64)))
-        transaction.gasPrice = maximumGasPrice.hexString
+        let maximum = Transaction(
+            from: "0x0", to: "0x1", nonce: "0x0",
+            gasPrice: maximumGasPrice.hexString, gas: "0x5208", value: nil, data: "0x",
+            feeIntent: .automatic, feeSource: .automatic
+        )
+        XCTAssertEqual(maximum.preparedFee, .legacy(gasPrice: maximumGasPrice))
         XCTAssertFalse(
-            transaction.isReadyForApproval(on: mainnet),
+            maximum.isReadyForApproval(on: mainnet),
             "The maximum fee product must fit uint256"
         )
 
         let uint256Overflow = try XCTUnwrap(BigUInt(hexString: "1" + String(repeating: "0", count: 64)))
-        transaction.gasPrice = uint256Overflow.hexString
+        let overflowing = Transaction(
+            from: "0x0", to: "0x1", nonce: "0x0",
+            gasPrice: uint256Overflow.hexString, gas: "0x5208", value: nil, data: "0x",
+            feeIntent: .automatic, feeSource: .automatic
+        )
         XCTAssertFalse(Transaction.isValidGasPrice(uint256Overflow, on: mainnet))
-        XCTAssertFalse(transaction.isReadyForApproval(on: mainnet))
-        XCTAssertFalse(transaction.isReadyForApproval(on: otherNetwork))
+        XCTAssertNil(overflowing.preparedFee)
+        XCTAssertEqual(overflowing.gasPrice, uint256Overflow.hexString)
+        XCTAssertFalse(overflowing.isReadyForApproval(on: mainnet))
+        XCTAssertFalse(overflowing.isReadyForApproval(on: otherNetwork))
 
-        transaction.gasPrice = BigUInt(0).hexString
+        transaction.setPreparedFee(.legacy(gasPrice: 0), source: .automatic)
         XCTAssertFalse(transaction.isReadyForApproval(on: mainnet))
         XCTAssertTrue(transaction.isReadyForApproval(on: otherNetwork))
 
-        transaction.preparedFee = .eip1559(
-            maxPriorityFeePerGas: 0,
-            maxFeePerGas: 1
+        transaction.replacePreparedFee(
+            .eip1559(maxPriorityFeePerGas: 0, maxFeePerGas: 1),
+            provenance: .init(maxPriorityFeePerGas: .automatic, maxFeePerGas: .automatic)
         )
         transaction.currentBaseFeePerGas = 0
         transaction.nextBaseFeePerGas = 0
@@ -2864,11 +2867,18 @@ final class GasServiceTests: XCTestCase {
         )
         XCTAssertTrue(transaction.isReadyForApproval(on: mainnet))
 
-        transaction.gasPrice = "invalid"
-        XCTAssertFalse(transaction.isReadyForApproval(on: mainnet))
-        XCTAssertFalse(transaction.isReadyForApproval(on: otherNetwork))
+        let malformed = Transaction(
+            from: "0x0", to: "0x1", nonce: "0x0",
+            gasPrice: "invalid", gas: "0x5208", value: nil, data: "0x",
+            feeIntent: .automatic, feeSource: .automatic,
+            currentBaseFeePerGas: 0, nextBaseFeePerGas: 0
+        )
+        XCTAssertNil(malformed.preparedFee)
+        XCTAssertEqual(malformed.gasPrice, "invalid")
+        XCTAssertFalse(malformed.isReadyForApproval(on: mainnet))
+        XCTAssertFalse(malformed.isReadyForApproval(on: otherNetwork))
 
-        transaction.gasPrice = BigUInt(1).hexString
+        transaction.setPreparedFee(.legacy(gasPrice: 1), source: .automatic)
         transaction.gas = nil
         XCTAssertFalse(transaction.isReadyForApproval(on: mainnet))
 
@@ -2899,7 +2909,7 @@ final class GasServiceTests: XCTestCase {
         var transaction = Transaction(from: "0x0", to: "0x1", value: nil, data: "0x")
         transaction.nonce = String.hex(0)
         transaction.gas = String.hex(21_000)
-        transaction.gasPrice = BigUInt(1).hexString
+        transaction.setPreparedFee(.legacy(gasPrice: 1), source: .automatic)
 
         for chainID in [4_217, 31_318, 42_429, 42_431] {
             let tempo = makeNetwork(chainID: chainID)
@@ -2908,8 +2918,11 @@ final class GasServiceTests: XCTestCase {
     }
 
     func testEthereumPreparationReportsNonceFailure() async {
+        let gasPriceRelease = TestDeferred<Void>()
+        defer { gasPriceRelease.resolve(.success(())) }
         let rpc = EthereumPreparationRPCStub(
-            nonceResult: .failure(StubError.expected)
+            nonceResult: .failure(StubError.expected),
+            gasPriceRelease: gasPriceRelease
         )
 
         await assertSinglePreparationFailure(
@@ -2938,13 +2951,14 @@ final class GasServiceTests: XCTestCase {
             transaction: Transaction(
                 from: "0x0",
                 to: "",
+                nonce: "0x1",
                 value: nil,
                 data: "0x"
             ),
             expectedFailure: .gasPriceUnavailable
         )
 
-        XCTAssertEqual(rpc.nonceCallCount, 1)
+        XCTAssertEqual(rpc.nonceCallCount, 0)
         XCTAssertEqual(rpc.gasPriceCallCount, 1)
         XCTAssertEqual(rpc.estimateGasCallCount, 0)
     }
@@ -2960,7 +2974,7 @@ final class GasServiceTests: XCTestCase {
             data: "0x"
         )
         transaction.nonce = "0x1"
-        transaction.gasPrice = "0x64"
+        transaction.setPreparedFee(.legacy(gasPrice: 100), source: .automatic)
 
         await assertSinglePreparationFailure(
             using: rpc,
@@ -2987,7 +3001,7 @@ final class GasServiceTests: XCTestCase {
             data: "0x"
         )
         transaction.nonce = "0x1"
-        transaction.gasPrice = "0x64"
+        transaction.setPreparedFee(.legacy(gasPrice: 100), source: .automatic)
 
         await assertSinglePreparationFailure(
             using: rpc,
@@ -3016,7 +3030,7 @@ final class GasServiceTests: XCTestCase {
                 data: "0x"
             )
             transaction.nonce = "0x1"
-            transaction.gasPrice = "0x64"
+            transaction.setPreparedFee(.legacy(gasPrice: 100), source: .automatic)
 
             await assertSinglePreparationFailure(
                 using: rpc,
@@ -3039,7 +3053,7 @@ final class GasServiceTests: XCTestCase {
             data: "0x"
         )
         transaction.nonce = "0x1"
-        transaction.gasPrice = "0x64"
+        transaction.setPreparedFee(.legacy(gasPrice: 100), source: .automatic)
 
         await assertSinglePreparationFailure(
             using: secondEstimateZeroRPC,
@@ -3246,7 +3260,7 @@ final class GasServiceTests: XCTestCase {
             data: "0x"
         )
         transaction.nonce = "0x1"
-        transaction.gasPrice = "0x64"
+        transaction.setPreparedFee(.legacy(gasPrice: 100), source: .automatic)
 
         let cancellation = Task { @MainActor in
             let onUpdate: (Transaction) -> Void = { _ in
@@ -3346,7 +3360,7 @@ final class GasServiceTests: XCTestCase {
             data: "0x"
         )
         transaction.nonce = "0x1"
-        transaction.gasPrice = "0x64"
+        transaction.setPreparedFee(.legacy(gasPrice: 100), source: .automatic)
         transaction.gas = "0x5208"
         var didReturnFromPrepare = false
 
@@ -3417,7 +3431,7 @@ final class GasServiceTests: XCTestCase {
             data: "0x12345678"
         )
         transaction.nonce = "0x1"
-        transaction.gasPrice = "0x64"
+        transaction.setPreparedFee(.legacy(gasPrice: 100), source: .automatic)
         transaction.gas = "0x5208"
         let ethereum = EthereumTransactionPreparation(
             rpc: rpc,
@@ -3488,7 +3502,7 @@ final class GasServiceTests: XCTestCase {
             data: "0x"
         )
         transaction.nonce = "0x1"
-        transaction.gasPrice = "0x64"
+        transaction.setPreparedFee(.legacy(gasPrice: 100), source: .automatic)
         transaction.gas = "0x1"
 
         Task { @MainActor in
@@ -8571,6 +8585,7 @@ private final class EthereumPreparationRPCStub: EthereumRPCClient {
     private let gasPriceResult: Result<String, Error>
     private var estimateGasResults: [Result<String, Error>]
     private let nonceRelease: TestDeferred<Void>?
+    private let gasPriceRelease: TestDeferred<Void>?
     private let defersEstimateGasCompletions: Bool
     private var pendingEstimateGasCompletions = [TestGate<Void>]()
     private(set) var nonceCallCount = 0
@@ -8583,12 +8598,14 @@ private final class EthereumPreparationRPCStub: EthereumRPCClient {
         gasPriceResult: Result<String, Error> = .success("0x64"),
         estimateGasResults: [Result<String, Error>] = [.success("0x5208"), .success("0x5208")],
         nonceRelease: TestDeferred<Void>? = nil,
+        gasPriceRelease: TestDeferred<Void>? = nil,
         defersEstimateGasCompletions: Bool = false
     ) {
         self.nonceResult = nonceResult
         self.gasPriceResult = gasPriceResult
         self.estimateGasResults = estimateGasResults
         self.nonceRelease = nonceRelease
+        self.gasPriceRelease = gasPriceRelease
         self.defersEstimateGasCompletions = defersEstimateGasCompletions
     }
 
@@ -8598,6 +8615,7 @@ private final class EthereumPreparationRPCStub: EthereumRPCClient {
     @MainActor
     func fetchGasPrice(endpoint: EthereumRPCEndpoint) async throws -> String {
         gasPriceCallCount += 1
+        if let gasPriceRelease { try await gasPriceRelease.value() }
         return try gasPriceResult.get()
     }
 

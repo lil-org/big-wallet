@@ -406,21 +406,6 @@ struct Window {
         }
     }
     
-    static func closeWindowAndActivateNext(idToClose: Int?, specificBrowser: Browser?) {
-        guard !isClosingAllWindows else { return }
-        closeWindow(idToClose: idToClose)
-        
-        if let window = NSApplication.shared.windows.last(where: {
-            $0.windowNumber != idToClose &&
-                $0.isOnActiveSpace &&
-                isVisibleContentWindow($0)
-        }) {
-            activateWindow(window)
-        } else {
-            activateBrowser(specific: specificBrowser)
-        }
-    }
-    
     private static func closeAll() {
         isClosingAllWindows = true
         NSApplication.shared.windows.filter(isVisibleContentWindow).forEach { window in

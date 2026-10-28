@@ -55,7 +55,7 @@ extension NSViewController {
         style: NSAlert.Style,
         completion: @escaping () -> Void = {}
     ) {
-        let alert = Alert()
+        let alert = NSAlert()
         alert.messageText = message
         alert.alertStyle = style
         alert.addButton(withTitle: Strings.ok)
@@ -68,7 +68,7 @@ extension NSViewController {
         placeholder: String,
         completion: @escaping (String?) -> Void
     ) {
-        let alert = Alert()
+        let alert = NSAlert()
         alert.messageText = title
         alert.alertStyle = .informational
         let textField = NSTextField(

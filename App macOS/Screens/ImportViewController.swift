@@ -128,7 +128,7 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
  
     private func showPasswordAlert() {
         guard acceptsManagementActions else { return }
-        let alert = Alert()
+        let alert = NSAlert()
         let input = textField.stringValue
         alert.messageText = Strings.enterKeystorePassword
         alert.alertStyle = .informational

@@ -1946,7 +1946,7 @@ final class WalletSigningScopeTests: XCTestCase {
             )
             var final = original
             final.nonce = "0x7"
-            final.preparedFee = finalFee
+            final.replacePreparedFee(finalFee, provenance: original.feeProvenance)
             var parameters: [String: Any] = [
                 "from": account.normalizedAddress,
                 "to": "0x0000000000000000000000000000000000000002",

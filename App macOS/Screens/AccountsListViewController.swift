@@ -299,7 +299,7 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
     @objc private func didClickCreateAccount() {
         guard acceptsManagementActions, walletAccess.beginAction() else { return }
         guard acceptsManagementActions else { return }
-        let alert = Alert()
+        let alert = NSAlert()
         alert.messageText = Strings.backUpNewWallet
         alert.informativeText = Strings.youWillSeeSecretWords
         alert.alertStyle = .critical
@@ -479,7 +479,7 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
     }
     
     private func warnOnLastAccountRemovalAttempt(wallet: WalletSnapshot) {
-        let alert = Alert()
+        let alert = NSAlert()
         alert.messageText = Strings.removingTheLastAccount
         alert.alertStyle = .critical
         
@@ -495,7 +495,7 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
     }
     
     private func warnBeforeRemoving(wallet: WalletSnapshot) {
-        let alert = Alert()
+        let alert = NSAlert()
         alert.messageText = Strings.removedWalletsCantBeRecovered
         alert.alertStyle = .critical
         alert.addButton(withTitle: Strings.removeAnyway)
@@ -574,7 +574,7 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
     }
     
     private func warnBeforeShowingKey(wallet: WalletSnapshot, specificAccount: WalletAccount?) {
-        let alert = Alert()
+        let alert = NSAlert()
         let showingMnemonic = wallet.isMnemonic && specificAccount == nil
         alert.messageText = showingMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
         alert.alertStyle = .critical

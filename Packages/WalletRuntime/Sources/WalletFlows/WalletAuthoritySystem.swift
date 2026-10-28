@@ -39,9 +39,6 @@ public final class WalletAuthoritySystem {
     public func error(_ kind: AuthorityRuntime.ErrorKind) -> ProviderResponseError { runtime.error(kind) }
     nonisolated public func invalidateNetworkCache() { runtime.invalidateNetworkCache() }
     public func recordReviewRequest(at date: Date) { runtime.recordReviewRequest(at: date) }
-    public func encodePopupResponse(_ response: PopupResponse, for request: InternalSafariRequest) throws -> WireProtocol.ValidatedObject {
-        try PopupResponseEncoder.encode(response, for: request, messages: messages)
-    }
 
 #if os(iOS) || os(visionOS)
     public func startVaultReconciliation(backgroundTask: @escaping AuthorityRuntime.BackgroundTask,

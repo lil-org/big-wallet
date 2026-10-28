@@ -36,7 +36,7 @@ class SetupAccessTests(unittest.TestCase):
         password.write_text('fixture guest password\n')
         password.chmod(0o600)
         self.directory = host.private_directory(self.state / 'access')
-        self.keys = self.directory / 'known-hosts'
+        self.keys = self.directory / 'known-hosts-fixture'
         self.keys.write_text('fixture public key')
         self.access = {'macAddress': '02:00:00:00:00:01', 'hostKeyAlias': 'big-wallet-vm-fixture-vm',
                        'knownHosts': self.keys}
@@ -332,6 +332,10 @@ class SetupAccessTests(unittest.TestCase):
         self.assertFalse(hook.install)
         self.assertEqual(hook.job, job)
         self.assertEqual(hook.password, password)
+        receipt = self.exchange / 'guest-access.json'
+        self.assertEqual(host.read_json(receipt), {'version': 1, 'runId': self.run_id,
+            'vmId': 'fixture-vm', 'vm': str(self.vm), 'consoleUser': 'wallet-test',
+            'guestAccessID': self.request_id, 'knownHosts': self.keys.name})
         self.module.prepare_guest_access.assert_called_once_with(self.vm, directory, 'fixture-vm', 'wallet-test')
         self.module.GuestInstaller.assert_not_called()
         self.exchange_module.GuestExchange.assert_not_called()
@@ -345,6 +349,7 @@ class SetupAccessTests(unittest.TestCase):
         self.module.SSHBannerProbe.assert_not_called()
         self.module.GuestInstaller.assert_not_called()
         self.exchange_module.GuestExchange.assert_not_called()
+        self.assertFalse((self.exchange / 'guest-access.json').exists())
 
     def test_ssh_startup_waits_for_banner_without_sending_password(self):
         self.module.SSHBannerProbe.side_effect = [Mock(poll=Mock(return_value={'status': 'failed'})),

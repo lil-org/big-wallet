@@ -63,6 +63,13 @@ def xcode_upgrade_module():
     return module
 
 
+def recovery_module():
+    spec = importlib.util.spec_from_file_location('vm_artifact_recovery', TOOLS / 'recovery.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def normalize_source_vm(value):
     path = Path(value).expanduser().absolute()
     if '..' in path.parts:
@@ -900,6 +907,12 @@ def clear_owned_operation(state, run_id):
             path.unlink()
 
 
+def is_recovery_operation(state, active):
+    run_id = active.get('runId')
+    return (isinstance(run_id, str) and run_id.startswith('recovery-') and
+            active.get('exchange') == str(state / 'results' / run_id) and active.get('cloneOwned') is not True)
+
+
 def retain_clone_diagnostics(active):
     if active.get('phase') == 'preparing' or active.get('artifactsExported') is True:
         return False
@@ -1319,6 +1332,9 @@ def reconcile_interrupted_operation(state):
         raise RunnerError('Interrupted operation has an invalid run identity')
     if not any(exchange.resolve().is_relative_to(state / folder) for folder in ('results', 'setup')) or not vm.resolve().is_relative_to(state):
         raise RunnerError('Interrupted operation does not belong to this state directory')
+    if is_recovery_operation(state, active):
+        ensure_disk_idle(vm)
+        recovery_module().cleanup_scratch(exchange)
     clone_identity = None
     if active.get('cloneOwned') is True and vm == state / 'runs' / (run_id + '.vbvm'):
         if vm.is_symlink() or vm.resolve() != vm:
@@ -1668,8 +1684,12 @@ def prepared_guest_hook(state, vm, record, exchange):
         access = module.prepare_guest_access(vm, directory, record['vmId'], record['consoleUser'])
         if not access['knownHosts']:
             raise RunnerError('The prepared guest SSH identity is missing; rerun setup before testing')
+        job = read_json(exchange / 'job.json')
+        atomic_json(exchange / 'guest-access.json', {'version': 1, 'runId': job['runId'],
+            'vmId': record['vmId'], 'vm': str(vm), 'consoleUser': record['consoleUser'],
+            'guestAccessID': record['guestAccessID'], 'knownHosts': Path(access['knownHosts']).name})
         return GuestSetupHook(module, access, record['consoleUser'], password, directory, exchange,
-                              read_json(exchange / 'job.json'), install=False)
+                              job, install=False)
     except module.GuestAccessError as error:
         raise RunnerError(str(error)) from None
 
@@ -2410,6 +2430,10 @@ def parser():
     commands.add_parser('doctor')
     commands.add_parser('status')
     commands.add_parser('stop')
+    recovery_parser = commands.add_parser('recover-artifacts', allow_abbrev=False,
+                                         help='Collect existing diagnostics from a stopped retained VM without rerunning its job')
+    recovery_parser.add_argument('run_id')
+    recovery_parser.add_argument('--timeout', type=int, help='Collection timeout in seconds (default: 3600)')
     upgrade_parser = commands.add_parser('upgrade-xcode', allow_abbrev=False,
                                         help='Adopt installed Xcode, prepare the VM, and verify the full local suite')
     upgrade_parser.add_argument('--check', action='store_true', help='Preview pins and prerequisites without writing files or starting a VM')
@@ -2479,6 +2503,11 @@ def main(argv=None):
                 print(json.dumps(active, indent=2))
             return 0
         with execution_lock(state):
+            if args.command == 'recover-artifacts':
+                active = read_json(state / 'active.json') if (state / 'active.json').exists() else {}
+                if is_recovery_operation(state, active):
+                    reconcile_interrupted_operation(state)
+                return recovery_module().recover(SimpleNamespace(**globals()), args, state)
             reconcile_interrupted_operation(state)
             if args.command == 'setup':
                 return setup(args, state, environment)
