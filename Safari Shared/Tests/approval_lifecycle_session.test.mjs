@@ -14,6 +14,7 @@ const {secp256k1} = require("@noble/curves/secp256k1");
 const {Keypair, SystemProgram, Transaction} = require("@solana/web3.js");
 const base58Module = require("bs58");
 const base58 = base58Module.default || base58Module;
+const consentProcess = {epoch: "approval-1", role: "approval"};
 
 test("authority observations retain module events without substituting signing checkpoints", async () => {
     const session = new LifecycleSession({seed: 1, mode: "popup"});
@@ -26,6 +27,25 @@ test("authority observations retain module events without substituting signing c
     assert.ok(session.coverage.has("authority:protectedKeyRead"));
     assert.equal(session.coverage.has("signer.before"), false);
     await assert.rejects(session.nativeEvent({event: "authority.event", details: {kind: "unexpected"}}, child), error => error.invariant === "protocol");
+});
+
+test("consent and signing observations bind to their native process identities", async () => {
+    for (const role of ["approval", "bridge"]) {
+        const session = new LifecycleSession({seed: 1, mode: role === "approval" ? "native" : "popup"});
+        session.ledger = {append() {}};
+        const handle = {id: 1, token: "request", profileIdentifier: null};
+        session.oracle.register({handle, configurationKey: "https://one.example", provider: "ethereum", name: "signPersonalMessage"});
+        session.oracle.approvalIntent({handle, label: "approved"});
+        const child = {role, epoch: `${role}-1`};
+        await session.nativeEvent({event: "consent", details: {handle, label: "approved"}}, child);
+        const signing = {event: "checkpoint", details: {name: "signer.before", handle, executionID: "execution"}};
+        await assert.rejects(session.nativeEvent(signing, {role, epoch: `${role}-2`}), error => error.invariant === "consent");
+        await assert.rejects(session.nativeEvent(signing, {role: role === "approval" ? "bridge" : "approval", epoch: child.epoch}),
+            error => error.invariant === "consent");
+        assert.equal(session.oracle.executions.size, 0);
+        await session.nativeEvent(signing, child);
+        assert.equal(session.oracle.executions.size, 1);
+    }
 });
 
 test("launch acknowledgement does not require a fresh receipt when an existing route is reused", async () => {
@@ -139,7 +159,7 @@ test("revocation includes automatic signer checkpoints only while their release 
                 const child = {role: "approval", epoch: "approval-1", gates: new Set(["before", "after"]), release(gate) { this.gates.delete(gate); }};
                 session.oracle.register({handle, configurationKey, provider: "solana", name: "signMessage", account: address});
                 session.oracle.approvalIntent({handle, label: "approved"});
-                session.oracle.acceptConsent({handle, label: "approved"});
+                session.oracle.acceptConsent({...consentProcess, handle, label: "approved"});
                 session.nativeRequests.set(handleKey(handle), {provider: "solana", name: "signMessage",
                     expectedBody: {publicKey: address, object: {params: {message: "0x010203"}}}});
                 const details = {handle, executionID: "execution", approvedAccount: address};
@@ -944,7 +964,7 @@ test("existing authorized connections succeed without a new admission before and
             const handle = {id: 99, token: "prior-connection", profileIdentifier: null};
             session.oracle.register({handle, configurationKey: "https://one.example", provider, name: provider === "ethereum" ? "requestAccounts" : "connect"});
             session.oracle.approvalIntent({handle, label: "prior-approval", selectedAccounts: [{coin: provider, address}]});
-            session.oracle.acceptConsent({handle, label: "prior-approval"});
+            session.oracle.acceptConsent({...consentProcess, handle, label: "prior-approval"});
             session.browser = new BrowserLifecycle({scheduler: session.scheduler, onSettlement: operation => session.observeSettlement(operation), native: async message => {
                 if (message.subject === "getLatestConfiguration") { return {id: message.id, state}; }
                 if (message.subject === "getRecoveryRequests") { return {id: message.id, requests: []}; }
@@ -976,7 +996,7 @@ test("connection results match the accepted account selection instead of an unre
                 session.oracle.register({handle, configurationKey: "https://one.example", provider, name: provider === "ethereum" ? "requestAccounts" : "connect"});
                 if (consent === "revoked") { session.oracle.revoke({profileIdentifier: null, configurationKey: "https://one.example", provider, definite: false}); }
                 session.oracle.approvalIntent({handle, label: "selected", selectedAccounts: [{coin: provider, address: selected}]});
-                if (consent !== "pending") { session.oracle.acceptConsent({handle, label: "selected"}); }
+                if (consent !== "pending") { session.oracle.acceptConsent({...consentProcess, handle, label: "selected"}); }
                 const settle = () => session.observeSettlement({label: "connect", provider, handle, url: "https://one.example/page",
                     document: "page", currentDocument: "page", status: "fulfilled",
                     publicState: provider === "ethereum" ? {address: consent === "pending" ? "" : other} : {publicKey: consent === "pending" ? "" : other},
@@ -1003,7 +1023,7 @@ test("an older tab snapshot cannot make a never-approved account appear authoriz
             session.oracle.register({handle, configurationKey: "https://one.example", provider,
                 name: provider === "ethereum" ? "requestAccounts" : "connect"});
             session.oracle.approvalIntent({handle, label: "approved", selectedAccounts: [{coin: provider, address: accounts[0]}]});
-            session.oracle.acceptConsent({handle, label: "approved"});
+            session.oracle.acceptConsent({...consentProcess, handle, label: "approved"});
             session.oracle.recordCommittedGrant({handle, state: state(1, accounts[0])});
             let current = state(4, accounts[0]);
             session.browser = new BrowserLifecycle({scheduler: session.scheduler,
@@ -1130,7 +1150,7 @@ test("recovery delivers delayed configuration updates and checks the actual page
     const handle = {id: 1, token: "connect", profileIdentifier: null};
     session.oracle.register({handle, configurationKey: "https://one.example", provider: "ethereum", name: "requestAccounts"});
     session.oracle.approvalIntent({handle, label: "connect", selectedAccounts: [{coin: "ethereum", address}]});
-    session.oracle.acceptConsent({handle, label: "connect"});
+    session.oracle.acceptConsent({...consentProcess, handle, label: "connect"});
     const native = async message => {
         if (message.subject === "getLatestConfiguration") { return {id: message.id, state}; }
         if (message.subject === "getRecoveryRequests") { return {id: message.id, requests: []}; }
@@ -1165,7 +1185,7 @@ async function configurationSession(current, authoritative) {
         session.oracle.register({handle, configurationKey: "https://one.example", provider,
             name: provider === "ethereum" ? "requestAccounts" : "connect"});
         session.oracle.approvalIntent({handle, label: provider, selectedAccounts: [{coin: provider, address}]});
-        session.oracle.acceptConsent({handle, label: provider});
+        session.oracle.acceptConsent({...consentProcess, handle, label: provider});
     }
     const native = async message => {
         if (message.subject === "getLatestConfiguration") { return {id: message.id, state: current}; }
@@ -1199,7 +1219,7 @@ test("configuration refresh cannot transfer approval to another authority contex
                 session.oracle.register({handle, configurationKey: "https://one.example", provider,
                     name: provider === "ethereum" ? "requestAccounts" : "connect", authority: state});
                 session.oracle.approvalIntent({handle, label: "approved", selectedAccounts: [{coin: provider, address}]});
-                session.oracle.acceptConsent({handle, label: "approved"});
+                session.oracle.acceptConsent({...consentProcess, handle, label: "approved"});
                 state = structuredClone(state);
                 state.context = context;
                 state.revisions[provider] = 1;
@@ -1241,7 +1261,7 @@ test("a new document cannot use an account from inside a known revocation gap", 
                 session.oracle.register({handle, configurationKey: "https://one.example", provider,
                     name: provider === "ethereum" ? "requestAccounts" : "connect"});
                 session.oracle.approvalIntent({handle, label: "replacement", selectedAccounts: [{coin: provider, address: addresses[1]}]});
-                session.oracle.acceptConsent({handle, label: "replacement"});
+                session.oracle.acceptConsent({...consentProcess, handle, label: "replacement"});
                 Object.assign(current, state(4, addresses[1]));
                 session.browser.focus(first.id);
                 await session.pumpUntil(() => session.browser.configurationReady(first.id, current));
@@ -1633,8 +1653,8 @@ test("Solana public signing results must retain the approved account", () => {
             session.nativeRequests.set(handleKey(handle), {provider: "solana", name: method, body, expectedBody: body});
             session.oracle.register({handle, configurationKey: "https://one.example", provider: "solana", name: method, account: publicKey});
             session.oracle.approvalIntent({handle, label: "approved"});
-            session.oracle.acceptConsent({handle, label: "approved"});
-            const execution = {handle, executionID: "execution", epoch: "approval-1"};
+            session.oracle.acceptConsent({...consentProcess, handle, label: "approved"});
+            const execution = {...consentProcess, handle, executionID: "execution"};
             session.oracle.execution(execution);
             session.oracle.signed(execution);
             session.verifySigning({...execution, response: {kind: "result", result: base58.encode(ed25519.sign(message, first.secretKey.subarray(0, 32)))}});

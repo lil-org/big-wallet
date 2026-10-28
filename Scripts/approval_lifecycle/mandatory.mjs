@@ -6,6 +6,7 @@ import {nativeSiteContext} from "./browser.mjs";
 import {LifecycleFailure} from "./scheduler.mjs";
 import {handleKey} from "./oracle.mjs";
 import {profiles} from "./scenarios.mjs";
+import {persistenceRecoveryScenarios, runPersistenceRecovery} from "./persistence_recovery.mjs";
 
 const persistenceStages = ["write", "fileSync", "rename", "directorySync", "finalSync"];
 const semanticStages = ["admission.after", "claim.after", "authorize.after", "signer.before", "signer.after",
@@ -19,6 +20,7 @@ export function mandatoryScenarios(mode, seed = 1) {
         ...(mode === "popup" ? [{kind: "editedReview"}, {kind: "abandonedPopupReview"}, {kind: "walletReconciliationAfterClockJump"}] : []),
     ];
     for (const provider of ["ethereum", "solana"]) {
+        cases.push(...persistenceRecoveryScenarios(provider));
         for (const checkpoint of [...semanticStages, ...(mode === "native" ? ["receipt.after"] : [])]) {
             cases.push({kind: "crash", provider, checkpoint});
         }
@@ -39,7 +41,7 @@ export function mandatoryScenarios(mode, seed = 1) {
 
 export function mandatoryName(scenario) {
     const value = scenario.mandatory;
-    return [scenario.mode, value.kind, value.provider, value.operation, value.checkpoint].filter(Boolean).join("/");
+    return [scenario.mode, value.kind, value.provider, value.failure, value.operation, value.checkpoint].filter(Boolean).join("/");
 }
 
 export function validateMandatoryScenario(scenario) {
@@ -551,6 +553,7 @@ export async function runMandatory(session, scenario) {
     switch (specification.kind) {
     case "success": await success(session); break;
     case "crash": await crash(session, specification); break;
+    case "persistenceRecovery": await runPersistenceRecovery(session, specification, {awaitReview, approveOnce}); break;
     case "competition": await competition(session); break;
     case "consentReplay": await consentReplay(session); break;
     case "revocationCrash": await revocationCrash(session); break;

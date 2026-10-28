@@ -432,6 +432,20 @@ alternating native and popup approval. `--soak` defaults to 1,000 sequences of
 through `--approval-arg`. The VM retains failure artifacts in the printed results
 directory.
 
+The mandatory corpus also runs twelve combined persistence-recovery cases across
+native/popup approval and Ethereum/Solana: a 17-byte partial write followed by
+`ENOSPC`, an `EIO` after broadcast-checkpoint rename, and an `EIO` before completion
+publication after RPC acceptance. Each case proves the exact request, process,
+operation, and injected errno before restarting or disconnecting. Recovery and
+stale approval replay cannot sign or dispatch again. A pre-checkpoint popup retry
+requires fresh consent within the original deadline; native interruption requires
+a new browser request. Published checkpoints retain their original transaction
+identity through repeated recovery and delivery, without restoring permissions.
+These errors are injected through the worker's file-operation hooks; the tests do
+not fill the guest disk. Failed-result gates run after the store releases its lock.
+Inspection retains the current wallet snapshot while a wallet mutation is active,
+so diagnostic reloads cannot invalidate that mutation's readiness token.
+
 Every default approval run includes bounded systematic exploration with at most
 256 traces, one preemption, one fault, two overlapping requests, and 64 transitions. Extended
 runs add a dedicated 4096-trace pass with two preemptions, two faults, three

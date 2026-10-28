@@ -33,6 +33,11 @@ function canonical(value) {
     return value;
 }
 
+function validProcessIdentity(epoch, role) {
+    return typeof epoch === "string" && epoch.length > 0 && epoch.trim() === epoch &&
+        !/[\u0000-\u001f\u007f]/.test(epoch) && ["bridge", "approval"].includes(role);
+}
+
 export class EffectLedger {
     constructor(path) {
         this.path = path;
@@ -162,7 +167,10 @@ export class LifecycleOracle {
         this.approvals.set(label, approval);
         request.approvals.push(label);
     }
-    acceptConsent({handle, label, revision}) {
+    acceptConsent({handle, label, revision, epoch, role}) {
+        if (!validProcessIdentity(epoch, role)) {
+            this.fail("oracle-input", "Consent omitted a valid process identity", {epoch, role});
+        }
         const key = handleKey(handle);
         const request = this.requests.get(key);
         const approval = (label ? this.approvals.get(label) : null) ||
@@ -173,6 +181,8 @@ export class LifecycleOracle {
             this.fail("consent", "Native consent changed the reviewed revision", {approval, revision});
         }
         approval.accepted = true;
+        approval.acceptedEpoch = epoch;
+        approval.acceptedRole = role;
         if (label && label !== approval.label) { this.approvals.set(label, approval); }
         if (!approval.revoked && ["requestAccounts", "connect", "switchAccount"].includes(request.name)) {
             for (const [provider, address] of Object.entries(approval.grantAccounts)) {
@@ -215,7 +225,10 @@ export class LifecycleOracle {
             }
         }
     }
-    execution({handle, executionID, epoch, consentLabel, account, payloadDigest}) {
+    execution({handle, executionID, epoch, role, consentLabel, account, payloadDigest}) {
+        if (!validProcessIdentity(epoch, role)) {
+            this.fail("oracle-input", "Signing omitted a valid process identity", {epoch, role});
+        }
         const key = handleKey(handle);
         const request = this.requests.get(key);
         if (request?.broadcastCommitted) { this.fail("broadcast", "A committed request entered signing again", {handle, executionID}); }
@@ -223,6 +236,11 @@ export class LifecycleOracle {
             request?.approvals.map(value => this.approvals.get(value)).findLast(value => value.accepted);
         if (!approval || approval.key !== key || !approval.accepted) {
             this.fail("consent", "Signing entered without fresh matching consent", {handle, consentLabel});
+        }
+        if (approval.acceptedEpoch !== epoch || approval.acceptedRole !== role) {
+            this.fail("consent", "Signing reused consent from another process identity", {
+                handle, consentLabel, epoch, role, acceptedEpoch: approval.acceptedEpoch, acceptedRole: approval.acceptedRole,
+            });
         }
         if (account !== undefined && approval.account != null && canonicalAccount(account) !== approval.account) {
             this.fail("consent", "Signing account differs from reviewed account", {account, expected: approval.account});

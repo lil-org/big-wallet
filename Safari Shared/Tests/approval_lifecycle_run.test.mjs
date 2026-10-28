@@ -97,6 +97,85 @@ test("replay cannot pass while a saved scheduling decision remains unconsumed", 
     await assert.rejects(executeScenario(replay, {}, {capture: false}), error => error.invariant === "replay-schedule");
 });
 
+test("mandatory persistence replay re-arms its exact failure and rejects missing or foreign process evidence", async t => {
+    isolateSession(t);
+    const handle = {id: 7, token: "00000000-0000-0000-0000-000000000007", profileIdentifier: null};
+    const label = "persistence-recovery:partial-write:native:ethereum";
+    const common = {operation: "broadcast.prepare", requestToken: handle.token, occurrence: 1};
+    const expectedArming = [
+        {rules: [{...common, name: "broadcast.prepare.before", label: `${label}:before`, action: "hold"}]},
+        {rules: [
+            {...common, name: "persistence.write.after", label, action: "fail", errno: 28},
+            {...common, name: "broadcast.prepare.failed", label: `${label}:failed`, action: "hold"},
+        ], partialWriteBytes: 17},
+    ];
+    const visits = [];
+    let evidence;
+    t.mock.method(LifecycleSession.prototype, "initialize", async function () {
+        this.ledger = {events: []};
+        this.tabs = [{profile: {id: null}}];
+        const visit = {armed: [], approvals: 0, releases: 0, evidence};
+        visits.push(visit);
+        const child = {role: "approval", epoch: "approval-1"};
+        const park = (rule, gate, result) => this.gates.set(`${child.epoch}:${gate}`, {
+            child, event: {gate}, details: {handle, name: rule.name, gateKey: `${rule.label}|${rule.name}|${rule.occurrence}`, result},
+        });
+        child.command = async (command, payload) => {
+            assert.equal(command, "checkpoints");
+            visit.armed.push(structuredClone(payload));
+            if (visit.armed.length === 1) { park(payload.rules[0], "before"); }
+            return {configured: true};
+        };
+        child.release = gate => {
+            assert.equal(gate, "before");
+            visit.releases += 1;
+            const configured = visit.armed[1];
+            const fault = configured.rules.find(rule => rule.action === "fail");
+            if (visit.evidence === "foreign-epoch") {
+                this.ledger.events.push({type: "checkpoint", fault: true, handle, role: child.role, epoch: "approval-2",
+                    operation: fault.operation, name: fault.name, gateKey: `${fault.label}|${fault.name}|${fault.occurrence}`,
+                    errno: fault.errno, writtenBytes: configured.partialWriteBytes, requestedBytes: 512});
+            }
+            park(configured.rules.find(rule => rule.action === "hold"), "failed", "retryablePersistenceFailure");
+        };
+        this.children.set(child.role, child);
+        this.decide = async (_, decision, review) => {
+            assert.equal(decision, "approve");
+            assert.deepEqual(review.handle, handle);
+            visit.approvals += 1;
+            return true;
+        };
+    });
+    t.mock.method(LifecycleSession.prototype, "request", () => ({status: "pending", provider: "ethereum"}));
+    t.mock.method(LifecycleSession.prototype, "inspect", async () => [
+        {handle, provider: "ethereum", name: "signTransaction", phase: "queued", presentation: "review"},
+    ]);
+    const original = {version: 1, seed: 17, mode: "native", actions: [],
+        mandatory: {kind: "persistenceRecovery", provider: "ethereum", failure: "partial-write"}};
+    for (evidence of ["missing", "foreign-epoch"]) {
+        let replay;
+        for (const identity of [sourceIdentity, currentIdentity]) {
+            await assert.rejects(executeScenario(replay ?? original, {sourceIdentity: identity, timeout: 1000}, {capture: false}), error => {
+                assert.equal(error.invariant, "coverage");
+                assert.equal(error.message, "coverage: Persistence recovery did not exercise its exact injected failure");
+                assert.deepEqual(error.details.expected, {operation: "broadcast.prepare", checkpoint: "persistence.write.after",
+                    errno: 28, partialWriteBytes: 17, handle, epoch: "approval-1", role: "approval", label});
+                assert.equal(error.details.observed.length, evidence === "missing" ? 0 : 1);
+                if (evidence === "foreign-epoch") { assert.equal(error.details.observed[0].epoch, "approval-2"); }
+                assert.deepEqual(error.replayScenario.mandatory, original.mandatory);
+                assert.deepEqual(error.replayScenario.sourceIdentity, sourceIdentity);
+                assert.deepEqual(error.replayScenario.reproduction.sourceIdentity, identity);
+                replay = JSON.parse(JSON.stringify(error.replayScenario));
+                return true;
+            });
+            assert.deepEqual(visits.at(-1).armed, expectedArming);
+            assert.equal(visits.at(-1).approvals, 1);
+            assert.equal(visits.at(-1).releases, 1);
+        }
+    }
+    assert.equal(visits.length, 4);
+});
+
 function nativeReplyFaultSession(t) {
     isolateSession(t);
     const settings = {phaseDrift: false, ignoreSavedTarget: false, captureArtifacts: false};

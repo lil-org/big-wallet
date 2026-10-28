@@ -332,8 +332,11 @@ final class HarnessIPC: Sendable {
         let decision = checkpointDecision(name, details: details)
         let details = checkpointDetails(details, decision: decision)
         if let decision, decision.action == "fail" {
-            event("checkpoint", details: details.merging(["name": .string(name), "fault": .bool(true)]))
-            throw POSIXError(POSIXErrorCode(rawValue: decision.errorNumber) ?? .EIO)
+            let error = POSIXError(POSIXErrorCode(rawValue: decision.errorNumber) ?? .EIO)
+            event("checkpoint", details: details.merging([
+                "name": .string(name), "fault": .bool(true), "errno": .number(Double(error.code.rawValue))
+            ]))
+            throw error
         }
         if decision != nil || name == "signer.before" || name == "signer.after" {
             let value = try await request("checkpoint", details: details.merging([
@@ -354,8 +357,11 @@ final class HarnessIPC: Sendable {
         }
         let details = checkpointDetails(details, decision: decision).merging(["name": .string(name), "hold": .bool(true)])
         if decision.action == "fail" {
-            event("checkpoint", details: details.merging(["fault": .bool(true)]))
-            throw POSIXError(POSIXErrorCode(rawValue: decision.errorNumber) ?? .EIO)
+            let error = POSIXError(POSIXErrorCode(rawValue: decision.errorNumber) ?? .EIO)
+            event("checkpoint", details: details.merging([
+                "fault": .bool(true), "errno": .number(Double(error.code.rawValue))
+            ]))
+            throw error
         }
         let (_, gate) = try makeGate(name: "checkpoint", details: details)
         let value = try gate.waitSync()

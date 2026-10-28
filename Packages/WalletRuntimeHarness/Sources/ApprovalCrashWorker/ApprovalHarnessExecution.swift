@@ -34,6 +34,7 @@ final class HarnessObservedStore: NativeApprovalStore, NativeDeliveryStore, Nati
         after: String? = nil,
         extra: HarnessValue = .object([:]),
         successful: @Sendable (Value) -> Bool = { _ in true },
+        persistenceFailed: @Sendable (Value) -> Bool = { _ in false },
         _ operation: @Sendable () async throws -> Value
     ) async throws -> Value {
         try await HarnessOperation.$name.withValue(name) {
@@ -42,6 +43,11 @@ final class HarnessObservedStore: NativeApprovalStore, NativeDeliveryStore, Nati
                 try await ipc.checkpoint(name + ".before", details: details)
                 let value = try await operation()
                 if successful(value) { try await ipc.checkpoint(after ?? name + ".after", details: details) }
+                else if persistenceFailed(value) {
+                    try await ipc.checkpoint(name + ".failed", details: details.merging([
+                        "result": .string("retryablePersistenceFailure")
+                    ]))
+                }
                 return value
             }
         }
@@ -122,14 +128,16 @@ final class HarnessObservedStore: NativeApprovalStore, NativeDeliveryStore, Nati
     func prepareBroadcast(permit: ExtensionBridge.ApprovedExecutionPermit, broadcast: PreparedBroadcast) async -> ExtensionBridge.BroadcastPreparationResult {
         do { return try await perform("broadcast.prepare", handle: permit.handle, after: "broadcast.prepared",
             extra: .object(["executionID": .string(permit.executionID.uuidString.lowercased())]),
-            successful: { if case .prepared = $0 { true } else { false } }) {
+            successful: { if case .prepared = $0 { true } else { false } },
+            persistenceFailed: { if case .retryablePersistenceFailure = $0 { true } else { false } }) {
             await self.bridge.prepareBroadcast(permit: permit, broadcast: broadcast)
         } } catch { return .retryablePersistenceFailure }
     }
 
     func complete(permit: ExtensionBridge.ApprovedExecutionPermit, result: ApprovedCompletion) async -> ExtensionBridge.StoreMutationResult {
         do { return try await perform("completion", handle: permit.handle,
-            extra: .object(["executionID": .string(permit.executionID.uuidString.lowercased())]), successful: { $0 == .persisted }) {
+            extra: .object(["executionID": .string(permit.executionID.uuidString.lowercased())]), successful: { $0 == .persisted },
+            persistenceFailed: { $0 == .retryablePersistenceFailure }) {
             await self.bridge.complete(permit: permit, result: result)
         } }
         catch { return .retryablePersistenceFailure }

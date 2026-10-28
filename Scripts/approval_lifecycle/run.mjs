@@ -10,6 +10,7 @@ import {mandatoryName, mandatoryScenarios, runMandatory, validateMandatoryScenar
 import {EXPLORATION_BOUNDS, ScheduleExplorer, exploreSchedules, minimizeSchedule} from "./explorer.mjs";
 import {runSystematic, systematicName, systematicScenarios, validateSystematicScenario} from "./systematic.mjs";
 import {captureSourceIdentity, validateSourceIdentity} from "./source_identity.mjs";
+import {persistenceRecoveryCases, persistenceRecoveryCoverage} from "./persistence_recovery.mjs";
 
 const help = `Usage: Scripts/check_approval_lifecycle.sh [options]
   --seed N             Reproducible unsigned 32-bit seed (default 1)
@@ -285,6 +286,14 @@ export async function main(arguments_ = process.argv.slice(2)) {
             "wallet-revocation-crash", "authentication-cancelled", "revocation-before-signing"] : [];
         if (options.mandatory && options.mode !== "native") { required.push("edited-review-token", "wallet-reconciliation-after-clock-jump"); }
         if (options.mandatory && options.mode !== "popup") { required.push("native-explicit-review-retry", "native-chain-switch-authentication"); }
+        if (options.mandatory) {
+            const modes = options.mode === "alternate" ? ["native", "popup"] : [options.mode];
+            for (const mode of modes) {
+                for (const provider of ["ethereum", "solana"]) {
+                    required.push(...persistenceRecoveryCases.map(failure => persistenceRecoveryCoverage(mode, provider, failure)));
+                }
+            }
+        }
         if (options.sequences >= 32 && options.steps >= 64) {
             required.push("gate:authentication.before",
                 "gate:signer.before", "gate:signer.after", "gate:broadcast.prepared");

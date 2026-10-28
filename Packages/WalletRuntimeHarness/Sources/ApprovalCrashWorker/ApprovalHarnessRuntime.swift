@@ -96,6 +96,7 @@ final class HarnessRuntime {
     private var configurationKeys = Set<String>()
     private var heldClaims = [String: ExtensionBridge.ApprovalClaim]()
     private var activeCommands = Set<String>()
+    private var activeWalletMutations = 0
     private var authenticationResult = true
 
     init(options: HarnessWorkerOptions, ipc: HarnessIPC) throws {
@@ -593,6 +594,8 @@ final class HarnessRuntime {
     }
 
     private func mutateWallet(_ payload: HarnessValue) async throws -> HarnessValue {
+        activeWalletMutations += 1
+        defer { activeWalletMutations -= 1 }
         let challenge = credentials.makeWalletAccessChallenge()
         guard let grant = try credentials.verify(password: "approval-fixture-password", challenge: challenge),
               let access = credentials.accessSession(authorization: grant) else { throw HarnessError.invalid("Mutation authentication failed") }
@@ -626,7 +629,7 @@ final class HarnessRuntime {
     }
 
     private func inspect(profile: UUID?) async throws -> HarnessValue {
-        await wallets.reloadFromStore()
+        if activeWalletMutations == 0 { await wallets.reloadFromStore() }
         let snapshots: [ExtensionBridge.Snapshot]
         switch await bridge.list(profileIdentifier: profile) {
         case .available(let values): snapshots = values.values.sorted { $0.sequence < $1.sequence }

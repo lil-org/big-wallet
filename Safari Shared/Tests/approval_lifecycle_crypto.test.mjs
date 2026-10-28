@@ -14,6 +14,7 @@ const base58 = base58Module.default || base58Module;
 const hex = bytes => "0x" + Buffer.from(bytes).toString("hex");
 const address = privateKey => hex(keccak_256(secp256k1.getPublicKey(privateKey, false).subarray(1)).subarray(12));
 const rejectsPayload = operation => assert.throws(operation, error => error.invariant === "payload");
+const consentProcess = {epoch: "approval-1", role: "approval"};
 const transactionPrivateKey = Buffer.from("608dcb1742bb3fb7aec002074e3420e4fab7d00cced79ccdac53ed5b27138151", "hex");
 const legacy = {
     bytes: Buffer.from("f86c098504a817c800825208943535353535353535353535353535353535353535880de0b6b3a76400008025a028ef61340bd939bc2195fe537567866003e1a15d3c71ff63e1590620aa636276a067cbe9d8997f761aecb703304b3800ccf555c9f3dc64214b297fb1966a3b6d83", "hex"),
@@ -238,8 +239,8 @@ test("simulated Solana RPC accepts complete multisignature envelopes and rejects
         const oracle = new LifecycleOracle;
         oracle.register({handle, configurationKey: "https://one.example", provider: "solana", name: "signAndSendTransaction", account: fixture.publicKey});
         oracle.approvalIntent({handle, label: "approved"});
-        oracle.acceptConsent({handle, label: "approved"});
-        const execution = {handle, executionID: "execution", epoch: "approval-1"};
+        oracle.acceptConsent({...consentProcess, handle, label: "approved"});
+        const execution = {...consentProcess, handle, executionID: "execution"};
         oracle.execution(execution);
         oracle.signed(execution);
         oracle.checkpoint(execution);
@@ -275,8 +276,8 @@ test("simulated RPC rejects broadcasts sent to a different reviewed network befo
         const oracle = new LifecycleOracle;
         oracle.register({handle, configurationKey: "https://one.example", provider, name: provider === "ethereum" ? "signTransaction" : "signAndSendTransaction"});
         oracle.approvalIntent({handle, label: "approved"});
-        oracle.acceptConsent({handle, label: "approved"});
-        const execution = {handle, executionID: provider, epoch: "approval-1"};
+        oracle.acceptConsent({...consentProcess, handle, label: "approved"});
+        const execution = {...consentProcess, handle, executionID: provider};
         oracle.execution(execution);
         oracle.signed(execution);
         oracle.checkpoint(execution);
