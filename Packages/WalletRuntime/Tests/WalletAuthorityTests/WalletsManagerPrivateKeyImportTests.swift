@@ -532,8 +532,41 @@ final class WalletRemovalIntegrationTests: XCTestCase {
 
         XCTAssertEqual(transactionEntries.withLock { $0 }, 2)
         XCTAssertEqual(revocations.withLock { $0 }, 0)
-        XCTAssertEqual(fixture.keychain.events, ["update", "delete", "add"])
+        XCTAssertEqual(fixture.keychain.events, ["update", "add"])
         XCTAssertNotNil(fixture.keychain.walletData[imported.id])
+    }
+
+    func testWalletCreationAndImportDoNotPublishAfterFailedInsertion() async throws {
+        for createWallet in [true, false] {
+            for status in [errSecDuplicateItem, errSecIO] {
+                let fixture = try makeRemovalFixture()
+                let manager = fixture.manager { _ in XCTFail("Creation must not revoke authority") }
+                await assertWalletReload(manager)
+                let originalData = fixture.keychain.walletData
+                let originalWallets = manager.wallets
+                fixture.keychain.addStatus = status
+
+                do {
+                    if createWallet {
+                        _ = try await manager.createWallet(access: manager.accessForTesting())
+                    } else {
+                        _ = try await manager.addWallet(
+                            input: WalletCrypto.hexString(data: Vectors.onePrivateKey),
+                            inputPassword: nil,
+                            access: manager.accessForTesting()
+                        )
+                    }
+                    XCTFail("Expected insertion failure")
+                } catch WalletCredentialError.failedToSave(let actual) {
+                    XCTAssertEqual(actual, status)
+                }
+
+                XCTAssertEqual(fixture.keychain.events, ["add"])
+                XCTAssertEqual(fixture.keychain.walletData, originalData)
+                XCTAssertEqual(manager.wallets, originalWallets)
+                XCTAssertEqual(fixture.mutationCount, 0)
+            }
+        }
     }
 
     func testCanceledImportNeverEntersSourceCommit() async throws {
@@ -997,6 +1030,8 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         let walletID = "removal-test-\(UUID().uuidString)"
         let siblingID = "removal-sibling-\(UUID().uuidString)"
         let keychain = WalletRemovalKeychainStub()
+        private let mutations = Mutex(0)
+        var mutationCount: Int { mutations.withLock { $0 } }
         private let metadataSuite = "WalletRemovalMetadataTests.\(UUID().uuidString)"
         let metadata: WalletsMetadataService
 #if os(iOS) || os(visionOS)
@@ -1024,7 +1059,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
                 keychain: Keychain(copyMatching: keychain.copyMatching, add: keychain.add,
                                    update: keychain.update, delete: keychain.delete),
                 walletSourceMutator: mutator,
-                notifications: .init(postLocalChange: {}, postMutation: {}, startObserving: { _, _ in },
+                notifications: .init(postLocalChange: {}, postMutation: { [self] in mutations.withLock { $0 += 1 } }, startObserving: { _, _ in },
                     stopObserving: { _ in }, isExternalChange: { _ in false }),
                 metadataMutations: metadata.mutations
             )
@@ -1092,6 +1127,7 @@ private final class WalletRemovalKeychainStub: Sendable {
         var walletData: [String: Data] = [:]
         var passwordData: Data? = Vectors.walletCoreJSONMnemonicPassword
         var events: [String] = []
+        var addStatus: OSStatus = errSecSuccess
         var deleteStatus: OSStatus = errSecSuccess
         var updateStatus: OSStatus = errSecSuccess
         var beforeWalletRead: (@Sendable (String) -> Void)? = nil
@@ -1117,6 +1153,11 @@ private final class WalletRemovalKeychainStub: Sendable {
     var deleteStatus: OSStatus {
         get { state.withLock { $0.deleteStatus } }
         set { state.withLock { $0.deleteStatus = newValue } }
+    }
+
+    var addStatus: OSStatus {
+        get { state.withLock { $0.addStatus } }
+        set { state.withLock { $0.addStatus = newValue } }
     }
 
     var updateStatus: OSStatus {
@@ -1164,10 +1205,15 @@ private final class WalletRemovalKeychainStub: Sendable {
               key.hasPrefix(walletPrefix), let data = attributes[kSecValueData as String] as? Data else {
             return errSecParam
         }
-        events.append("add")
+        state.withLock { $0.events.append("add") }
         beforeWalletWrite?()
-        walletData[String(key.dropFirst(walletPrefix.count))] = data
-        return errSecSuccess
+        let id = String(key.dropFirst(walletPrefix.count))
+        return state.withLock { state in
+            guard state.addStatus == errSecSuccess else { return state.addStatus }
+            guard state.walletData[id] == nil else { return errSecDuplicateItem }
+            state.walletData[id] = data
+            return errSecSuccess
+        }
     }
 
     func update(_ query: CFDictionary, _ attributes: CFDictionary) -> OSStatus {

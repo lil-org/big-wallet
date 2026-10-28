@@ -6993,6 +6993,80 @@ final class GasServiceTests: XCTestCase {
         }
     }
 
+    func testEthereumRPCRawSendRejectsInvalidEnvelopesWithoutReplay() async throws {
+        let bodies = [
+            #"{"id":1,"result":"0xaccepted"}"#,
+            #"{"jsonrpc":"1.0","id":1,"result":"0xaccepted"}"#,
+            #"{"jsonrpc":"2.0","result":"0xaccepted"}"#,
+            #"{"jsonrpc":"2.0","id":2,"result":"0xaccepted"}"#,
+            #"{"jsonrpc":"2.0","id":"1","result":"0xaccepted"}"#,
+            #"{"jsonrpc":"2.0","id":true,"result":"0xaccepted"}"#,
+            #"{"jsonrpc":"2.0","id":1.0000000000000001,"result":"0xaccepted"}"#,
+            #"{"jsonrpc":"2.0","id":1.0000000000000001,"error":{"code":401,"message":"unauthorized"}}"#,
+            #"{"jsonrpc":"2.0","id":1,"error":{"code":401.00000000000001,"message":"unauthorized"}}"#,
+            #"{"jsonrpc":"2.0","id":1,"error":{"code":-32601.000000000001,"message":"failed"}}"#,
+            #"{"jsonrpc":"2.0","id":null,"error":{"code":-32601,"message":"Method not found"}}"#,
+            #"{"jsonrpc":"2.0","id":1,"result":"0xaccepted","error":null}"#,
+            #"{"jsonrpc":"2.0","id":1,"result":null}"#,
+            #"{"jsonrpc":"2.0","id":1,"error":{"message":"Missing code"}}"#,
+        ]
+        for statusCode in [200, 401] {
+            for body in bodies {
+                let requestCount = LockedCounter()
+                let session = makeRPCSession()
+                let authorization = EthereumAuthorizationProviderStub(
+                    token: "current-token", replacementToken: "unused-token"
+                )
+                defer {
+                    GasServiceURLProtocol.removeRequestHandler(for: alchemyRPCURL)
+                    session.invalidateAndCancel()
+                }
+                GasServiceURLProtocol.setRequestHandler(for: alchemyRPCURL) { request in
+                    _ = requestCount.increment()
+                    return (try Self.httpResponse(for: request, statusCode: statusCode), Data(body.utf8))
+                }
+
+                let result = await asyncResult {
+                    try await EthereumRPC(urlSession: session, authorizationProvider: authorization)
+                        .sendRawTransaction(endpoint: alchemyEndpoint, signedTxData: "0x01")
+                }
+                switch result {
+                case .success(let hash):
+                    XCTFail("Accepted invalid HTTP \(statusCode) reply: \(body), hash: \(hash)")
+                case .failure(let error):
+                    XCTAssertEqual(error as? EthereumRPCError, .unknown, body)
+                }
+                XCTAssertEqual(requestCount.value, 1, body)
+                XCTAssertEqual(authorization.authorizationCallCount, 1, body)
+                XCTAssertEqual(authorization.replacementCallCount, 0, body)
+                XCTAssertEqual(authorization.invalidatedTokens, statusCode == 401 ? ["current-token"] : [], body)
+            }
+        }
+    }
+
+    func testEthereumRPCReadRetriesUncorrelatedErrorBeforeAcceptingValidReply() async throws {
+        let requestCount = LockedCounter()
+        let session = makeRPCSession()
+        defer {
+            GasServiceURLProtocol.removeRequestHandler(for: rpcURL)
+            session.invalidateAndCancel()
+        }
+        GasServiceURLProtocol.setRequestHandler(for: rpcURL) { request in
+            let first = requestCount.increment() == 1
+            let body = first
+                ? #"{"jsonrpc":"2.0","id":null,"error":{"code":-32601,"message":"Method not found"}}"#
+                : #"{"jsonrpc":"2.0","id":1,"result":"0x64"}"#
+            return (try Self.httpResponse(for: request, statusCode: first ? 500 : 200), Data(body.utf8))
+        }
+
+        let value = try await EthereumRPC(
+            urlSession: session, authorizationProvider: RejectingRPCAuth(), waitForRetry: {}
+        ).fetchGasPrice(endpoint: endpoint(rpcURL))
+
+        XCTAssertEqual(value, "0x64")
+        XCTAssertEqual(requestCount.value, 2)
+    }
+
     func testEthereumRPCBlocksRawSendRedirectOnInjectedSession() async {
         let sourceURL = rpcURL + "/raw-send-redirect"
         let targetURL = rpcURL + "/raw-send-redirect-target"
@@ -7912,7 +7986,7 @@ final class GasServiceTests: XCTestCase {
             let response = try Self.httpResponse(for: request, statusCode: 500)
             let data = try JSONSerialization.data(withJSONObject: [
                 "jsonrpc": "2.0",
-                "id": NSNull(),
+                "id": 1,
                 "error": [
                     "code": -32_601,
                     "message": "Method not found",

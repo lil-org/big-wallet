@@ -141,7 +141,10 @@ receives consent, a signing source, or a dispatch permit.
 Results distinguish acceptance, rejection, definite non-submission, uncertain
 submission, and confirmation failure. Recovery uses the durable transaction
 identity without signing or submitting again. Ethereum submits once. Solana may
-retry identical signed bytes once after an HTTP 401. Public RPC admission and
+retry identical signed bytes once after an HTTP 401 with a valid RPC error reply.
+Native RPC replies must carry version 2.0, the matching numeric request ID, and
+exactly one valid result or error. Malformed submission replies remain uncertain
+and cannot authorize another submission. Public RPC admission and
 response budgets are independent of approval execution. Networking retains only
 its separate RPC-auth Keychain credentials.
 

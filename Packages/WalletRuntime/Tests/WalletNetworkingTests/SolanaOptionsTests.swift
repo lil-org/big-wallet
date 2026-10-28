@@ -419,6 +419,148 @@ final class SolanaOptionsTests: XCTestCase {
         )
     }
 
+    func testSolanaSubmissionRejectsInvalidEnvelopesWithoutReplay() async throws {
+        let bodies = [
+            "",
+            #"{"id":1,"result":"test-signature"}"#,
+            #"{"jsonrpc":"1.0","id":1,"result":"test-signature"}"#,
+            #"{"jsonrpc":"2.0","result":"test-signature"}"#,
+            #"{"jsonrpc":"2.0","id":2,"result":"test-signature"}"#,
+            #"{"jsonrpc":"2.0","id":"1","result":"test-signature"}"#,
+            #"{"jsonrpc":"2.0","id":true,"result":"test-signature"}"#,
+            #"{"jsonrpc":"2.0","id":1.0000000000000001,"result":"test-signature"}"#,
+            #"{"jsonrpc":"2.0","id":1.0000000000000001,"error":{"code":401,"message":"unauthorized"}}"#,
+            #"{"jsonrpc":"2.0","id":1,"error":{"code":401.00000000000001,"message":"unauthorized"}}"#,
+            #"{"jsonrpc":"2.0","id":1,"error":{"code":40100000000000001e-14,"message":"unauthorized"}}"#,
+            #"{"jsonrpc":"2.0","id":null,"error":{"code":401,"message":"unauthorized"}}"#,
+            #"{"jsonrpc":"2.0","id":1,"result":"test-signature","error":null}"#,
+            #"{"jsonrpc":"2.0","id":1,"result":null}"#,
+            #"{"jsonrpc":"2.0","id":1,"error":{"code":401}}"#,
+        ]
+        let signedTransaction = try signedTransactionFixture()
+        let endpoint = try XCTUnwrap(SolanaRPCClient.RPCConfiguration.bundled.endpoint(for: .mainnetBeta))
+        for statusCode in [200, 401] {
+            for body in bodies {
+                let recorder = SolanaRPCRequestRecorder()
+                let session = makeRPCSession { request in
+                    _ = try recorder.record(request)
+                    return (try Self.httpResponse(for: request, statusCode: statusCode), Data(body.utf8))
+                }
+                defer {
+                    session.invalidateAndCancel()
+                    SolanaOptionsURLProtocol.removeRequestHandler()
+                }
+                let authorization = SolanaAuthorizationProviderStub(
+                    token: "current-token", replacementToken: "unused-token"
+                )
+                let solana = SolanaRPCClient(
+                    urlSession: session, authorizationProvider: authorization,
+                    messages: NetworkTestVectors.solanaMessages
+                )
+
+                do {
+                    let signature = try await solana.sendSignedTransaction(
+                        signedTransaction, endpoint: endpoint, sendOptions: .init()
+                    )
+                    XCTFail("Accepted invalid HTTP \(statusCode) reply: \(body), signature: \(signature)")
+                } catch {
+                    XCTAssertEqual(error as? Solana.SendTransactionError, .unknown, body)
+                }
+                XCTAssertEqual(recorder.snapshot().map(\.method), ["sendTransaction"], body)
+                XCTAssertEqual(authorization.authorizationCallCount, 1, body)
+                XCTAssertEqual(authorization.replacementCallCount, 0, body)
+                XCTAssertEqual(authorization.invalidatedTokens, statusCode == 401 ? ["current-token"] : [], body)
+            }
+        }
+    }
+
+    func testSolanaConfirmationPollsPastMalformedAndPendingReplies() async throws {
+        let recorder = SolanaRPCRequestRecorder()
+        let requestCount = LockedSolanaCounter()
+        let session = makeRPCSession { request in
+            _ = try recorder.record(request)
+            let body: String
+            switch requestCount.increment() {
+            case 1:
+                body = #"{"jsonrpc":"2.0","id":1,"result":"test-signature"}"#
+            case 2:
+                body = #"{"jsonrpc":"2.0","id":2,"result":{"value":[{"confirmations":null,"err":null,"confirmationStatus":"finalized"}]}}"#
+            case 3:
+                body = #"{"jsonrpc":"2.0","id":1,"result":{"value":[null]}}"#
+            case 4:
+                body = #"{"jsonrpc":"2.0","id":1,"result":{"value":[{"confirmations":null,"err":null,"confirmationStatus":"finalized"}]}}"#
+            default:
+                throw SolanaRPCStubError.unexpectedRequest
+            }
+            return (try Self.httpResponse(for: request), Data(body.utf8))
+        }
+        defer {
+            session.invalidateAndCancel()
+            SolanaOptionsURLProtocol.removeRequestHandler()
+        }
+        let clock = TestClock()
+        let solana = SolanaRPCClient(
+            urlSession: session, authorizationProvider: RejectingRPCAuth(),
+            timing: .init(now: { clock.date }, sleep: { interval in
+                try Task.checkCancellation()
+                clock.advance(by: UInt64(interval * 1_000_000_000))
+            }), messages: NetworkTestVectors.solanaMessages
+        )
+
+        let signature = try await solana.sendSignedTransaction(
+            signedTransactionFixture(),
+            endpoint: try XCTUnwrap(SolanaRPCClient.RPCConfiguration.bundled.endpoint(for: .testnet)),
+            sendOptions: .init(confirmationCommitment: .finalized)
+        )
+
+        XCTAssertEqual(signature, "test-signature")
+        XCTAssertEqual(recorder.snapshot().map(\.method), [
+            "sendTransaction", "getSignatureStatuses", "getSignatureStatuses", "getSignatureStatuses",
+        ])
+    }
+
+    func testSolanaConfirmationRecoversAuthorizationAfterMalformed401() async throws {
+        let recorder = SolanaRPCRequestRecorder()
+        let requestCount = LockedSolanaCounter()
+        let session = makeRPCSession { request in
+            _ = try recorder.record(request)
+            let attempt = requestCount.increment()
+            let body: String
+            switch attempt {
+            case 1:
+                body = #"{"jsonrpc":"2.0","id":1,"result":"test-signature"}"#
+            case 2:
+                body = #"{"error":"unauthorized"}"#
+            case 3:
+                body = #"{"jsonrpc":"2.0","id":1,"result":{"value":[{"confirmations":null,"err":null,"confirmationStatus":"finalized"}]}}"#
+            default:
+                throw SolanaRPCStubError.unexpectedRequest
+            }
+            return (try Self.httpResponse(for: request, statusCode: attempt == 2 ? 401 : 200), Data(body.utf8))
+        }
+        defer {
+            session.invalidateAndCancel()
+            SolanaOptionsURLProtocol.removeRequestHandler()
+        }
+        let authorization = SolanaAuthorizationProviderStub(token: "initial-token", replacementToken: "replacement-token")
+        let solana = SolanaRPCClient(
+            urlSession: session, authorizationProvider: authorization, messages: NetworkTestVectors.solanaMessages
+        )
+
+        let signature = try await solana.sendSignedTransaction(
+            signedTransactionFixture(),
+            endpoint: try XCTUnwrap(SolanaRPCClient.RPCConfiguration.bundled.endpoint(for: .mainnetBeta)),
+            sendOptions: .init(confirmationCommitment: .finalized)
+        )
+
+        XCTAssertEqual(signature, "test-signature")
+        XCTAssertEqual(recorder.snapshot().map(\.method), ["sendTransaction", "getSignatureStatuses", "getSignatureStatuses"])
+        XCTAssertEqual(recorder.snapshot().map(\.authorization), ["Bearer initial-token", "Bearer initial-token", "Bearer replacement-token"])
+        XCTAssertEqual(authorization.authorizationCallCount, 2)
+        XCTAssertEqual(authorization.replacementCallCount, 1)
+        XCTAssertEqual(authorization.invalidationCallCount, 0)
+    }
+
     func testSolanaMainnetReplaysSubmissionOnceWithReplacementAuthorizationAfter401()
         async throws {
         let configuration = SolanaRPCClient.RPCConfiguration.bundled

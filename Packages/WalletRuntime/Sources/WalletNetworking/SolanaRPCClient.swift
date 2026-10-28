@@ -2,6 +2,7 @@ import Foundation
 import WalletDomain
 
 public final class SolanaRPCClient: Sendable {
+    private static let requestID = 1
 
     private enum Method: String {
         case getSignatureStatuses
@@ -348,7 +349,7 @@ public final class SolanaRPCClient: Sendable {
 
         var dict: [String: Any] = [
             "method": method.rawValue,
-            "id": 1,
+            "id": Self.requestID,
             "jsonrpc": "2.0",
         ]
 
@@ -377,7 +378,9 @@ public final class SolanaRPCClient: Sendable {
                 allowsAlchemyAuthorization: endpoint.allowsAlchemyAuthorization,
                 provider: authorizationProvider
             ),
-            acceptsUnauthorizedResponse: { $0.result != nil }
+            shouldRecoverUnauthorizedResponse: { response in
+                response.map { $0.result == nil } ?? false
+            }
         )
         switch outcome {
         case .retryableFailure:
@@ -488,7 +491,7 @@ public final class SolanaRPCClient: Sendable {
     private func performRequest<Response: Decodable & Sendable>(
         request: URLRequest,
         requestAuthorization: RPCRequestAuthorization,
-        acceptsUnauthorizedResponse: @Sendable (Response) -> Bool = { _ in false }
+        shouldRecoverUnauthorizedResponse: @Sendable (Response?) -> Bool = { _ in true }
     ) async throws -> RPCRequestOutcome<Response> {
         try Task.checkCancellation()
         let authorization: AlchemyAuthorization?
@@ -502,7 +505,7 @@ public final class SolanaRPCClient: Sendable {
             request: request,
             authorization: authorization,
             requestAuthorization: requestAuthorization,
-            acceptsUnauthorizedResponse: acceptsUnauthorizedResponse
+            shouldRecoverUnauthorizedResponse: shouldRecoverUnauthorizedResponse
         )
     }
 
@@ -510,7 +513,7 @@ public final class SolanaRPCClient: Sendable {
         request: URLRequest,
         authorization: AlchemyAuthorization?,
         requestAuthorization: RPCRequestAuthorization,
-        acceptsUnauthorizedResponse: @Sendable (Response) -> Bool
+        shouldRecoverUnauthorizedResponse: @Sendable (Response?) -> Bool
     ) async throws -> RPCRequestOutcome<Response> {
         try Task.checkCancellation()
         var authorizedRequest = request
@@ -518,14 +521,17 @@ public final class SolanaRPCClient: Sendable {
         let redirectDelegate = rejectsRedirects ? NoRedirectSessionDelegate() : nil
         let transport = try await urlSession.responsePreservingTransportError(for: authorizedRequest, delegate: redirectDelegate)
         guard redirectDelegate?.didRejectRedirect != true else { throw Solana.SendTransactionError.rpcUnavailable }
-        let decodedResponse = transport.data.flatMap { try? JSONDecoder().decode(Response.self, from: $0) }
+        let decodedResponse = transport.data.flatMap {
+            NativeRPCResponseDecoder.decode(Response.self, from: $0, expectedID: Self.requestID)
+        }
         try Task.checkCancellation()
         if let httpResponse = transport.response as? HTTPURLResponse,
            httpResponse.statusCode == 401,
            let authorization {
-            if let decodedResponse, acceptsUnauthorizedResponse(decodedResponse) {
+            if !shouldRecoverUnauthorizedResponse(decodedResponse) {
                 await requestAuthorization.invalidate(afterUnauthorized: authorization)
                 try Task.checkCancellation()
+                guard let decodedResponse else { return .retryableFailure }
                 return .response(decodedResponse)
             }
             guard requestAuthorization.reserveUnauthorizedRecovery() else {
@@ -548,7 +554,7 @@ public final class SolanaRPCClient: Sendable {
                 request: request,
                 authorization: replacement,
                 requestAuthorization: requestAuthorization,
-                acceptsUnauthorizedResponse: acceptsUnauthorizedResponse
+                shouldRecoverUnauthorizedResponse: shouldRecoverUnauthorizedResponse
             )
         }
         guard let decodedResponse else { return .retryableFailure }

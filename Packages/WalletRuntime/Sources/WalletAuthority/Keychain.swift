@@ -156,13 +156,6 @@ struct Keychain: Sendable {
     
     private func save(data: Data, key: ItemKey) throws {
         let query = saveQuery(data: data, key: key)
-        var deleteQuery = query
-        deleteQuery[kSecValueData as String] = nil
-        let deleteStatus = delete(deleteQuery as CFDictionary)
-        guard deleteStatus == errSecSuccess ||
-                deleteStatus == errSecItemNotFound else {
-            throw WalletCredentialError.failedToSave(deleteStatus)
-        }
         let addStatus = add(query as CFDictionary, nil)
         guard addStatus == errSecSuccess else {
             throw WalletCredentialError.failedToSave(addStatus)

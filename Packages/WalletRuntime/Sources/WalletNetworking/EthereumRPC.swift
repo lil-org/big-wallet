@@ -65,7 +65,6 @@ public protocol EthereumRPCClient: EthereumFeeRPCClient {
 }
 
 private struct RPCResponse<ResultValue: Decodable & Sendable>: Decodable, Sendable {
-    let jsonrpc: String
     let result: ResultValue?
     let error: Failure?
 
@@ -172,6 +171,8 @@ final class NoRedirectSessionDelegate: NSObject, URLSessionTaskDelegate, Sendabl
 }
 
 public final class EthereumRPC: EthereumRPCClient {
+    private static let requestID = 1
+
     private enum RetryPolicy: Sendable {
         case transientFailures
         case never
@@ -266,7 +267,7 @@ public final class EthereumRPC: EthereumRPCClient {
     }
 
     private static func body(method: String, params: [Any]) throws -> Data {
-        try JSONSerialization.data(withJSONObject: ["jsonrpc": "2.0", "id": 1, "method": method, "params": params])
+        try JSONSerialization.data(withJSONObject: ["jsonrpc": "2.0", "id": requestID, "method": method, "params": params])
     }
 
     private func request<Value: Decodable & Sendable>(
@@ -321,7 +322,9 @@ public final class EthereumRPC: EthereumRPCClient {
                     break attempt
                 }
                 let data = transport.data
-                let decoded = data.flatMap { try? JSONDecoder().decode(RPCResponse<Value>.self, from: $0) }
+                let decoded = data.flatMap {
+                    NativeRPCResponseDecoder.decode(RPCResponse<Value>.self, from: $0, expectedID: Self.requestID)
+                }
                 try Task.checkCancellation()
                 if response.statusCode == 401, retryPolicy == .never {
                     if let rejected = authorization {
