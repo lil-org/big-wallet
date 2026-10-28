@@ -123,4 +123,21 @@ final class SecretBytesTests: XCTestCase {
         XCTAssertNil(retainedWallet.ethereumPreviewAccounts(accountRange: 0..<1))
         XCTAssertNil(retainedWallet.solanaPreviewAccounts(accountRange: 0..<1))
     }
+
+    func testMnemonicDerivationBorrowsItsOwnerAndKeepsAnIndependentSeed() throws {
+        let vectors = WalletCoreProxyTestVectors.self
+        let mnemonic = SecretBytes(utf8: vectors.abandonMnemonic)
+        let wallet = try XCTUnwrap(WalletHDWallet(mnemonic: mnemonic, passphrase: ""))
+        defer { wallet.invalidate(); mnemonic.invalidate() }
+        XCTAssertEqual(mnemonic.testData, Data(vectors.abandonMnemonic.utf8))
+
+        mnemonic.invalidate()
+
+        XCTAssertNil(WalletHDWallet(mnemonic: mnemonic, passphrase: ""))
+        XCTAssertNil(WalletHDWallet(storedMnemonic: mnemonic))
+        let key = try XCTUnwrap(wallet.privateKey(coin: .ethereum, derivationPath: "m/44'/60'/0'/0/0"))
+        defer { key.invalidate() }
+        XCTAssertEqual(WalletCrypto.addressFromPublicKeyData(key.publicKeyData(coin: .ethereum), coin: .ethereum),
+                       vectors.abandonEthereumAddress)
+    }
 }

@@ -490,7 +490,7 @@ enum WalletSnapshotValidation {
         guard Set(walletRecords.map(\.id)).count == walletRecords.count
         else { return nil }
         for record in walletRecords {
-            guard let key = WalletStoredKey.importJSON(json: record.data)
+            guard let key = WalletStoredKey.importJSON(json: record.data, requireCompleteAccounts: true)
             else { return nil }
             let wallet = WalletContainer(id: record.id, key: key)
             guard wallet.accounts.count == wallet.key.accountCount else {
@@ -541,10 +541,7 @@ enum WalletSnapshotValidation {
         checkCancellation: () throws -> Void,
         visit: (WalletAccount, WalletPrivateKey) throws -> Void
     ) throws -> Bool {
-        guard let wallet = try secret.withTemporaryData({ data -> WalletHDWallet? in
-            guard let mnemonic = String(data: data, encoding: .utf8) else { return nil }
-            return WalletHDWallet(mnemonic: mnemonic, passphrase: "")
-        }) else { return false }
+        guard let wallet = WalletHDWallet(storedMnemonic: secret) else { return false }
         defer { wallet.invalidate() }
         return try accounts.allSatisfy { account in
             try checkCancellation()

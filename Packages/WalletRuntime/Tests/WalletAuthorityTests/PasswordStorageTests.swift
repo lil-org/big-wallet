@@ -22,7 +22,12 @@ final class PasswordStorageTests: XCTestCase {
             }
         }
         fixture.readStatus = nil
-        for data in [Data(), Data([0xff, 0xfe]), Data([0xef, 0xbb, 0xbf])] {
+        for data in [
+            Data(), Data([0xff, 0xfe]), Data([0xef, 0xbb, 0xbf]),
+            Data([0x80]), Data([0xc0, 0xaf]), Data([0xed, 0xa0, 0x80]),
+            Data([0xf4, 0x90, 0x80, 0x80]), Data([0xf0, 0x9f, 0x94]),
+            Data([0xe2, 0x28, 0xa1]),
+        ] {
             fixture.passwordData = data
             XCTAssertThrowsError(try fixture.keychain.readPasswordData()) { error in
                 guard case WalletCredentialError.invalidPasswordData = error else {
@@ -40,7 +45,7 @@ final class PasswordStorageTests: XCTestCase {
 
     func testExistingShortAndUnicodePasswordsRemainReadableAndVerifiable() throws {
         let fixture = PasswordKeychainFixture()
-        for password in ["x", "пароль🔐"] {
+        for password in ["x", "пароль🔐", "before\0after"] {
             fixture.passwordData = Data(password.utf8)
             XCTAssertEqual(try fixture.keychain.readPassword(), password)
             XCTAssertEqual(try fixture.keychain.passwordState(), .present)
@@ -91,19 +96,23 @@ final class PasswordStorageTests: XCTestCase {
 
     func testCanonicalUnicodePasswordComparisonDoesNotRewriteKDFBytes() throws {
         let fixture = PasswordKeychainFixture()
-        let composed = "caf\u{00e9}"
-        let decomposed = "cafe\u{0301}"
-        XCTAssertNotEqual(Data(composed.utf8), Data(decomposed.utf8))
-        for stored in [composed, decomposed] {
-            let bytes = Data(stored.utf8)
-            fixture.passwordData = bytes
-            XCTAssertTrue(try fixture.verify(password: composed))
-            XCTAssertTrue(try fixture.verify(password: decomposed))
-            XCTAssertFalse(try fixture.verify(password: "cafe"))
-            let secret = try XCTUnwrap(fixture.keychain.readPasswordSecret())
-            defer { secret.invalidate() }
-            XCTAssertEqual(secret.testData, bytes)
-            XCTAssertEqual(fixture.passwordData, bytes)
+        for (composed, decomposed) in [
+            ("caf\u{00e9}", "cafe\u{0301}"),
+            ("\u{AC00}", "\u{1100}\u{1161}"),
+            ("a\u{0323}\u{0301}", "a\u{0301}\u{0323}"),
+        ] {
+            XCTAssertNotEqual(Data(composed.utf8), Data(decomposed.utf8))
+            for stored in [composed, decomposed] {
+                let bytes = Data(stored.utf8)
+                fixture.passwordData = bytes
+                XCTAssertTrue(try fixture.verify(password: composed))
+                XCTAssertTrue(try fixture.verify(password: decomposed))
+                XCTAssertFalse(try fixture.verify(password: "cafe"))
+                let secret = try XCTUnwrap(fixture.keychain.readPasswordSecret())
+                defer { secret.invalidate() }
+                XCTAssertEqual(secret.testData, bytes)
+                XCTAssertEqual(fixture.passwordData, bytes)
+            }
         }
     }
 

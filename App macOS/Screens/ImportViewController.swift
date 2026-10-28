@@ -10,6 +10,11 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
         var validate: @MainActor (String) async -> WalletsManager.InputValidationResult = {
             await ApplicationServices.shared.wallets.validateWalletInput($0)
         }
+        var prepareStore: @MainActor () async -> Bool = {
+            let wallets = ApplicationServices.shared.wallets
+            if wallets.isStoreReady { return true }
+            return await wallets.reloadFromStore()
+        }
         var importWallet: @MainActor (String, String?, WalletAccessSession) async throws -> WalletSnapshot = {
             try await ApplicationServices.shared.wallets.addWallet(input: $0, inputPassword: $1, access: $2)
         }
@@ -164,12 +169,16 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
         guard acceptsManagementActions, !isImporting else { return }
         isImporting = true
         okButton.isEnabled = false
-        cancelButton.isEnabled = false
+        let prepareStore = dependencies.prepareStore
         let operation = dependencies.importWallet
         let access = walletAccess
-        let task = Task {
+        let task = Task { [weak self] in
+            try Task.checkCancellation()
+            guard await prepareStore() else { throw WalletsManager.LoadFailure.unavailable }
             try Task.checkCancellation()
             let session = try access.requireCurrentAccess()
+            guard self?.acceptsManagementActions == true else { throw CancellationError() }
+            self?.cancelButton.isEnabled = false
             return try await operation(input, password, session)
         }
         importTask = task
@@ -183,14 +192,18 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
                 showAccountsList(newWalletId: wallet.id)
             case .failure(let error):
                 finishImporting()
-                presentMessageAlert(error as? WalletImportError == .limitExceeded
-                    ? Strings.walletImportLimitExceeded : Strings.failedToImportWallet, style: .critical)
+                let message: String
+                if error is WalletsManager.LoadFailure { message = Strings.failedToLoad }
+                else if error as? WalletImportError == .limitExceeded { message = Strings.walletImportLimitExceeded }
+                else { message = Strings.failedToImportWallet }
+                presentMessageAlert(message, style: .critical)
             }
         }
     }
 
     private func finishImporting() {
         isImporting = false
+        okButton.title = Strings.tryAgain
         okButton.isEnabled = inputValidationResult != .invalid
         cancelButton.isEnabled = true
     }
@@ -227,6 +240,7 @@ extension ImportViewController: NSTextFieldDelegate {
         guard acceptsManagementActions else { return }
         validationTask?.cancel()
         let input = textField.stringValue
+        okButton.title = Strings.ok
         okButton.isEnabled = false
         let validate = dependencies.validate
         validationTask = Task { [weak self] in

@@ -20,6 +20,11 @@ struct NativeWalletAccess {
         return controller.accepts(generation)
     }
 
+    var hasCurrentPresentation: Bool {
+        guard let controller, let generation else { return true }
+        return controller.generation == generation && !controller.isLocked
+    }
+
     func beginAction() -> Bool {
         guard isCurrent else { return false }
         return controller?.recordInteraction() ?? true

@@ -113,10 +113,26 @@ struct WalletHDWallet: Sendable {
     private let seed: SecretBytes
 
     init?(mnemonic: String, passphrase: String) {
-        guard WalletCrypto.isValidMnemonic(mnemonic) else { return nil }
-        let seed = BIP39.secretSeed(mnemonic: mnemonic, passphrase: passphrase)
+        let secret = SecretBytes(utf8: mnemonic)
+        defer { secret.invalidate() }
+        self.init(mnemonic: secret, passphrase: passphrase)
+    }
+
+    init?(mnemonic: SecretBytes, passphrase: String) {
+        guard let seed = BIP39.secretSeed(mnemonic: mnemonic, passphrase: passphrase) else { return nil }
         guard seed.count == 64 else { seed.invalidate(); return nil }
         self.seed = seed
+    }
+
+    init?(storedMnemonic: SecretBytes) {
+        guard let range = try? storedMnemonic.withUnsafeBytes({ SecretUTF8.decodedRange(in: $0) }) else { return nil }
+        if range.lowerBound == 0 {
+            self.init(mnemonic: storedMnemonic, passphrase: "")
+        } else {
+            guard let decoded = try? storedMnemonic.copy(in: range) else { return nil }
+            defer { decoded.invalidate() }
+            self.init(mnemonic: decoded, passphrase: "")
+        }
     }
 
     func invalidate() { seed.invalidate() }
@@ -259,8 +275,8 @@ struct WalletStoredKey {
         self.storage = storage
     }
 
-    static func importJSON(json: Data) -> WalletStoredKey? {
-        return StoredKeyStorage.importJSON(json).map(WalletStoredKey.init(storage:))
+    static func importJSON(json: Data, requireCompleteAccounts: Bool = false) -> WalletStoredKey? {
+        return StoredKeyStorage.importJSON(json, requireCompleteAccounts: requireCompleteAccounts).map(WalletStoredKey.init(storage:))
     }
 
     static func importUserJSON(json: Data) throws -> WalletStoredKey {
@@ -282,11 +298,15 @@ struct WalletStoredKey {
     }
 
     static func importHDWallet(mnemonic: String, name: String, password: SecretBytes, coin: WalletCoin) -> WalletStoredKey? {
-        guard let wallet = WalletHDWallet(mnemonic: mnemonic, passphrase: "") else { return nil }
-        defer { wallet.invalidate() }
         let secret = SecretBytes(utf8: mnemonic)
         defer { secret.invalidate() }
-        guard let storage = StoredKeyStorage(type: .mnemonic, name: name, payload: secret, password: password) else { return nil }
+        return importHDWallet(mnemonic: secret, name: name, password: password, coin: coin)
+    }
+
+    static func importHDWallet(mnemonic: SecretBytes, name: String, password: SecretBytes, coin: WalletCoin) -> WalletStoredKey? {
+        guard let wallet = WalletHDWallet(mnemonic: mnemonic, passphrase: "") else { return nil }
+        defer { wallet.invalidate() }
+        guard let storage = StoredKeyStorage(type: .mnemonic, name: name, payload: mnemonic, password: password) else { return nil }
         _ = storage.accountForCoin(coin: coin, wallet: wallet)
         return WalletStoredKey(storage: storage)
     }
@@ -295,10 +315,7 @@ struct WalletStoredKey {
         guard storage.type == .mnemonic,
               let mnemonic = decryptMnemonicSecret(password: password) else { return nil }
         defer { mnemonic.invalidate() }
-        return try? mnemonic.withTemporaryData {
-            guard let decoded = String(data: $0, encoding: .utf8) else { return nil }
-            return WalletHDWallet(mnemonic: decoded, passphrase: "")
-        }
+        return WalletHDWallet(storedMnemonic: mnemonic)
     }
 
     func account(index: Int) -> WalletAccount? {

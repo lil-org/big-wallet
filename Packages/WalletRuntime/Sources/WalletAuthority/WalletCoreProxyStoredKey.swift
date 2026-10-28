@@ -224,20 +224,22 @@ final class StoredKeyStorage {
         }
     }
 
-    static func importJSON(_ data: Data) -> StoredKeyStorage? {
+    static func importJSON(_ data: Data, requireCompleteAccounts: Bool = false) -> StoredKeyStorage? {
         guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let crypto = (object["crypto"] ?? object["Crypto"]) as? [String: Any],
               let payload = EncryptedPayload(json: crypto) else { return nil }
         let type = (object["type"] as? String).flatMap(KeyType.init(rawValue:)) ?? .privateKey
         let name = object["name"] as? String ?? ""
         let id = object["id"] as? String ?? UUID().uuidString.lowercased()
-        let accounts = parseAccounts(object: object)
+        guard let accounts = parseAccounts(object: object, requireCompleteAccounts: requireCompleteAccounts) else { return nil }
         return StoredKeyStorage(type: type, name: name, id: id, encryptedPayload: payload, accounts: accounts)
     }
 
-    private static func parseAccounts(object: [String: Any]) -> [WalletRawAccountRecord] {
+    private static func parseAccounts(object: [String: Any], requireCompleteAccounts: Bool) -> [WalletRawAccountRecord]? {
+        if requireCompleteAccounts, object["activeAccounts"] != nil,
+           !(object["activeAccounts"] is [[String: Any]]) { return nil }
         if let active = object["activeAccounts"] as? [[String: Any]] {
-            return active.compactMap { accountObject in
+            let accounts = active.compactMap { accountObject -> WalletRawAccountRecord? in
                 guard let address = accountObject["address"] as? String,
                       let path = accountObject["derivationPath"] as? String else { return nil }
                 let coinRaw = uint32Value(accountObject["coin"])
@@ -251,9 +253,11 @@ final class StoredKeyStorage {
                                               publicKey: accountObject["publicKey"] as? String ?? "",
                                               extendedPublicKey: accountObject["extendedPublicKey"] as? String ?? "")
             }
+            guard !requireCompleteAccounts || accounts.count == active.count else { return nil }
+            return accounts
         }
 
-        guard let address = object["address"] as? String else { return [] }
+        guard let address = object["address"] as? String else { return requireCompleteAccounts ? nil : [] }
         let coinRaw = uint32Value(object["coin"]) ?? WalletCoin.ethereum.rawValue
         let coin = WalletCoin(rawValue: coinRaw) ?? .ethereum
         return [WalletRawAccountRecord(address: address,

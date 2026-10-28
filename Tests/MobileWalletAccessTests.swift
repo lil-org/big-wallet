@@ -1,13 +1,172 @@
 #if os(iOS) || os(visionOS)
 import UIKit
+import Security
+import Synchronization
+import LocalAuthentication
 import XCTest
-import WalletDomain
 import WalletDomain
 @testable import WalletAuthority
 @testable import Big_Wallet
 
 @MainActor
 final class MobileWalletAccessTests: XCTestCase {
+    func testPendingAuthenticationSurvivesSharedWalletReload() async throws {
+        for operation in MobileWalletOperationHost.Operation.allCases {
+            let host = try await MobileWalletOperationHost()
+            addTeardownBlock { @MainActor in try await host.tearDown() }
+            defer { host.close() }
+            try await host.begin(operation)
+            host.inventory.holdNextRead()
+            let reload = Task { await host.manager.reloadFromStore() }
+            defer { reload.cancel(); host.inventory.release() }
+            await fulfillment(of: [host.inventory.entered], timeout: 3)
+            XCTAssertEqual(host.manager.loadState, .loading)
+            XCTAssertEqual(host.authentication.cancellations, 0)
+
+            host.inventory.release()
+            let loaded = await reload.value
+            XCTAssertTrue(loaded)
+            XCTAssertEqual(host.authentication.cancellations, 0)
+            host.authentication.complete()
+
+            await expectEventually(timeout: 5) { host.didPerform(operation) }
+            XCTAssertEqual(host.authentication.cancellations, 0)
+        }
+    }
+
+    func testSuccessfulAuthenticationWaitsForSharedReloadBeforeExportOrDelete() async throws {
+        for operation in MobileWalletOperationHost.Operation.allCases {
+            let host = try await MobileWalletOperationHost()
+            addTeardownBlock { @MainActor in try await host.tearDown() }
+            defer { host.close() }
+            try await host.begin(operation)
+            host.inventory.holdNextRead()
+            let reload = Task { await host.manager.reloadFromStore() }
+            defer { reload.cancel(); host.inventory.release() }
+            await fulfillment(of: [host.inventory.entered], timeout: 3)
+
+            host.authentication.complete()
+            await fulfillment(of: [host.authentication.returned], timeout: 3)
+            for _ in 0..<3 { await Task.yield() }
+            XCTAssertEqual(host.manager.loadState, .loading)
+            XCTAssertFalse(host.didPerform(operation))
+            XCTAssertEqual(host.authentication.cancellations, 0)
+
+            host.inventory.release()
+            let loaded = await reload.value
+            XCTAssertTrue(loaded)
+            await expectEventually(timeout: 5) { host.didPerform(operation) }
+            XCTAssertEqual(host.authentication.cancellations, 0)
+            XCTAssertEqual(host.inventory.reads, 2)
+        }
+    }
+
+    func testFailedSharedReloadOrLockCancelsAuthenticationBeforeExportOrDelete() async throws {
+        for operation in MobileWalletOperationHost.Operation.allCases {
+            for lock in [false, true] {
+                let host = try await MobileWalletOperationHost()
+                addTeardownBlock { @MainActor in try await host.tearDown() }
+                defer { host.close() }
+                try await host.begin(operation)
+                host.inventory.holdNextRead()
+                if !lock { host.reader.attributesStatus = errSecInteractionNotAllowed }
+                let reload = Task { await host.manager.reloadFromStore() }
+                defer { reload.cancel(); host.inventory.release() }
+                await fulfillment(of: [host.inventory.entered], timeout: 3)
+                if lock { host.access.access.lock(reason: .background) }
+                else { host.inventory.release() }
+                await fulfillment(of: [host.authentication.cancelled], timeout: 3)
+                host.authentication.complete()
+                await fulfillment(of: [host.authentication.returned], timeout: 3)
+                host.inventory.release()
+                _ = await reload.value
+                host.reader.attributesStatus = errSecSuccess
+                await assertWalletReload(host.manager)
+
+                XCTAssertEqual(host.authentication.cancellations, 1)
+                XCTAssertFalse(host.didPerform(operation))
+                XCTAssertEqual(host.manager.wallets.count, 1)
+            }
+        }
+    }
+
+    func testWalletListInitialFailureStaysDistinctFromAnEmptyWallet() async throws {
+        let fixture = WalletAccessTestFixture()
+        try fixture.unlock()
+        let reader = KeychainCopyMatchingStub()
+        reader.attributesStatus = errSecInteractionNotAllowed
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager, succeeds: false)
+        let controller = instantiate(AccountsListViewController.self, from: .main)
+        controller.access = fixture.access
+        controller.walletsManager = manager
+        controller.loadViewIfNeeded()
+
+        XCTAssertEqual(controller.dataState, .failedToLoad)
+        XCTAssertEqual(controller.tableView.numberOfSections, 0)
+        XCTAssertFalse(controller.navigationItem.rightBarButtonItems?.first?.isEnabled ?? true)
+
+        reader.attributesStatus = errSecSuccess
+        _ = controller.perform(NSSelectorFromString("retryWalletLoad"))
+        await expectEventually { manager.isStoreReady && controller.dataState == .noData }
+
+        XCTAssertTrue(controller.navigationItem.rightBarButtonItems?.first?.isEnabled == true)
+    }
+
+    func testWalletListFailedRefreshKeepsPublicRowsAndFencesEditing() async throws {
+        let fixture = WalletAccessTestFixture()
+        try fixture.unlock()
+        let reader = KeychainCopyMatchingStub()
+        reader.attributes = [reader.walletAttributes(id: "cached-wallet")]
+        reader.walletData = ["cached-wallet": WalletCoreProxyTestVectors.walletCoreJSONMnemonicFixture]
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager)
+        let controller = instantiate(AccountsListViewController.self, from: .main)
+        controller.access = fixture.access
+        controller.walletsManager = manager
+        controller.loadViewIfNeeded()
+        let sections = controller.tableView.numberOfSections
+        let rows = controller.tableView.numberOfRows(inSection: 0)
+        let offset = controller.tableView.contentOffset
+
+        reader.attributesStatus = errSecInteractionNotAllowed
+        await assertWalletReload(manager, succeeds: false)
+
+        XCTAssertEqual(controller.dataState, .hasData)
+        XCTAssertEqual(controller.tableView.numberOfSections, sections)
+        XCTAssertEqual(controller.tableView.numberOfRows(inSection: 0), rows)
+        XCTAssertEqual(controller.tableView.contentOffset, offset)
+        XCTAssertFalse(controller.tableView(controller.tableView, canEditRowAt: IndexPath(row: 0, section: 0)))
+        XCTAssertTrue(controller.loadRetryButton?.isEnabled == true)
+        XCTAssertTrue(controller.view.isUserInteractionEnabled)
+
+        reader.attributesStatus = errSecSuccess
+        controller.loadRetryButton?.sendActions(for: .touchUpInside)
+        await expectEventually { manager.isStoreReady && controller.loadRetryButton?.isHidden == true }
+        XCTAssertTrue(controller.tableView(controller.tableView, canEditRowAt: IndexPath(row: 0, section: 0)))
+    }
+
+    func testLockedWalletListIgnoresRetainedRetryActions() async throws {
+        let fixture = WalletAccessTestFixture()
+        try fixture.unlock()
+        let reader = KeychainCopyMatchingStub()
+        reader.attributesStatus = errSecInteractionNotAllowed
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager, succeeds: false)
+        let controller = instantiate(AccountsListViewController.self, from: .main)
+        controller.access = fixture.access
+        controller.walletsManager = manager
+        controller.loadViewIfNeeded()
+        fixture.access.lock(reason: .background)
+        reader.attributesStatus = errSecSuccess
+
+        _ = controller.perform(NSSelectorFromString("retryWalletLoad"))
+        await Task.yield()
+
+        XCTAssertEqual(manager.loadState, .failed(.unavailable))
+        XCTAssertFalse(controller.view.isUserInteractionEnabled)
+    }
+
     func testBackgroundLocksOnlyAfterTheLastForegroundSceneLeaves() {
         var locks = [WalletAccessController.LockReason]()
         let scenes = MobileWalletSceneTracker { locks.append($0) }
@@ -414,5 +573,191 @@ final class MobileWalletAccessTests: XCTestCase {
         if let button = view as? UIButton, button.accessibilityIdentifier == identifier { return button }
         return view.subviews.lazy.compactMap { self.button(in: $0, identifier: identifier) }.first
     }
+}
+
+@MainActor
+private final class MobileWalletOperationHost {
+    enum Operation: CaseIterable { case export, delete }
+
+    let access: WalletAccessTestFixture
+    let reader = KeychainCopyMatchingStub()
+    let inventory = HeldMobileWalletInventory()
+    let authentication = HeldMobileWalletAuthentication()
+    let manager: WalletsManager
+    let controller: AccountsListViewController
+    private let window: UIWindow
+    private weak var previousKeyWindow: UIWindow?
+    private var pendingDismissal: UIViewController?
+    private var isClosed = false
+    private let deletions = MobileWalletDeletionCount()
+    private let vaultHost: SafariApprovalVaultHost
+    private let directory: URL
+    private let defaultsSuite = "MobileWalletOperationTests.\(UUID().uuidString)"
+
+    init() async throws {
+        let access = WalletAccessTestFixture(
+            password: String(decoding: WalletCoreProxyTestVectors.walletCoreJSONMnemonicPassword, as: UTF8.self))
+        self.access = access
+        try access.unlock()
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive })
+        previousKeyWindow = scene.windows.first { $0.isKeyWindow }
+        window = UIWindow(windowScene: scene)
+        controller = instantiate(AccountsListViewController.self, from: .main)
+        directory = FileManager.default.temporaryDirectory.appendingPathComponent(defaultsSuite, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let keys = MobileWalletOperationVaultKeys()
+        vaultHost = SafariApprovalVaultHost(
+            vault: SafariApprovalVault(fileURL: directory.appendingPathComponent("approval-vault"), keyStore: keys),
+            defaults: try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: defaultsSuite)),
+            integrityKeyStore: keys, sourceSnapshot: { nil })
+
+        let walletID = "mobile-authentication"
+        reader.attributes = [reader.walletAttributes(id: walletID)]
+        reader.walletData = [walletID: WalletCoreProxyTestVectors.walletCoreJSONMnemonicFixture]
+        reader.passwordData = WalletCoreProxyTestVectors.walletCoreJSONMnemonicPassword
+        let reader = reader
+        let inventory = inventory
+        let deletions = deletions
+        manager = WalletsManager(keychain: Keychain(copyMatching: { query, result in
+            if (query as NSDictionary)[kSecReturnAttributes as String] as? Bool == true { inventory.waitIfHeld() }
+            return reader.copyMatching(query, result)
+        }, delete: { query in
+            guard (query as NSDictionary)[kSecAttrAccount as String] as? String == "org.lil.wallet.wallet.\(walletID)" else {
+                return errSecParam
+            }
+            deletions.increment()
+            reader.attributes = []
+            reader.walletData = [:]
+            return errSecSuccess
+        }), walletSourceMutator: MobileWalletOperationSourceMutator(), notifications: .init(
+            postLocalChange: { NotificationCenter.default.post(name: Notification.Name("walletsChanged"), object: nil) },
+            postMutation: { NotificationCenter.default.post(name: Notification.Name("walletsChanged"), object: nil) },
+            startObserving: { _, _ in }, stopObserving: { _ in }, isExternalChange: { _ in false }
+        ), authorityID: access.authorityID)
+        manager.approvalVaultHost = vaultHost
+        await assertWalletReload(manager)
+        controller.walletsManager = manager
+        controller.access = access.access
+        controller.authenticate = { [authentication] _, _, _, challenge in await authentication.run(challenge) }
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+        await expectEventually { self.controller.canPresentSecret }
+    }
+
+    func begin(_ operation: Operation) async throws {
+        let wallet = try XCTUnwrap(manager.wallets.first)
+        switch operation {
+        case .export: controller.authenticateForExport(wallet, specificAccount: nil)
+        case .delete: controller.authenticateForRemoval(wallet)
+        }
+        let entered = await XCTWaiter.fulfillment(of: [authentication.entered], timeout: 3)
+        XCTAssertEqual(entered, .completed)
+    }
+
+    func didPerform(_ operation: Operation) -> Bool {
+        switch operation {
+        case .export:
+            guard let alert = controller.secretPresentation.alert else { return false }
+            return alert.message == WalletCoreProxyTestVectors.walletCoreJSONMnemonic &&
+                alert.viewIfLoaded?.window != nil && !alert.isBeingPresented
+        case .delete: return deletions.value > 0
+        }
+    }
+
+    func close() {
+        guard !isClosed else { return }
+        isClosed = true
+        pendingDismissal = controller.presentedViewController
+        inventory.release()
+        authentication.complete()
+        access.access.lock(reason: .background)
+    }
+
+    func tearDown() async throws {
+        close()
+        if let presented = pendingDismissal {
+            await withCheckedContinuation { continuation in
+                presented.dismissAfterCurrentTransition(animated: false) { continuation.resume() }
+            }
+            pendingDismissal = nil
+        }
+        window.isHidden = true
+        window.rootViewController = nil
+        previousKeyWindow?.makeKey()
+        await vaultHost.waitForReconciliation()
+        UserDefaults(suiteName: defaultsSuite)?.removePersistentDomain(forName: defaultsSuite)
+        try FileManager.default.removeItem(at: directory)
+    }
+}
+
+private final class HeldMobileWalletInventory: Sendable {
+    let entered = XCTestExpectation(description: "shared inventory read held")
+    private let state = Mutex((held: false, reads: 0))
+    private let gate = DispatchSemaphore(value: 0)
+
+    var reads: Int { state.withLock { $0.reads } }
+    func holdNextRead() { state.withLock { $0.held = true } }
+    func release() { gate.signal() }
+
+    func waitIfHeld() {
+        guard state.withLock({ state in
+            state.reads += 1
+            defer { state.held = false }
+            return state.held
+        }) else { return }
+        entered.fulfill()
+        XCTAssertEqual(gate.wait(timeout: .now() + 10), .success)
+    }
+}
+
+private final class HeldMobileWalletAuthentication: Sendable {
+    let entered = XCTestExpectation(description: "mobile wallet authentication pending")
+    let returned = XCTestExpectation(description: "mobile wallet authentication returned")
+    let cancelled = XCTestExpectation(description: "mobile wallet authentication cancelled")
+    private let gate = TestGate<Void>()
+    private let cancellationCount = Mutex(0)
+
+    var cancellations: Int { cancellationCount.withLock { $0 } }
+    func complete() { gate.resolve(()) }
+
+    func run(_ challenge: WalletAuthenticationChallenge) async -> WalletAuthenticationGrant? {
+        await withTaskCancellationHandler {
+            entered.fulfill()
+            await gate.wait()
+            let grant = Task.isCancelled ? nil : challenge.issueGrant(for: challenge.authorityID,
+                credentialIdentity: .init(status: { .current }))
+            returned.fulfill()
+            return grant
+        } onCancel: {
+            challenge.invalidate()
+            cancellationCount.withLock { $0 += 1 }
+            cancelled.fulfill()
+        }
+    }
+}
+
+private struct MobileWalletOperationSourceMutator: WalletSourceMutating {
+    func perform<Payload, Result>(preparing: () throws -> PreparedWalletSourceMutation<Payload>,
+        beforeCommit: () throws -> Void, commit: (Payload) throws -> Result) throws -> Result {
+        let prepared = try preparing()
+        try beforeCommit()
+        return try commit(prepared.payload)
+    }
+}
+
+private final class MobileWalletDeletionCount: Sendable {
+    private let count = Mutex(0)
+    var value: Int { count.withLock { $0 } }
+    func increment() { count.withLock { $0 += 1 } }
+}
+
+private final class MobileWalletOperationVaultKeys: SafariApprovalKeyStoring, SafariApprovalIntegrityKeyStoring {
+    func store(_ key: SecretBytes, identity: SafariApprovalKeyIdentity) throws { throw SafariApprovalVault.Error.unavailable }
+    func load(identity: SafariApprovalKeyIdentity, context: LAContext) throws -> SecretBytes { throw SafariApprovalVault.Error.unavailable }
+    func availability(identities: [SafariApprovalKeyIdentity]) -> [SafariApprovalKeyIdentity: SafariApprovalKeyAvailability] { [:] }
+    func removeAll() throws {}
+    func loadOrCreate() throws -> SecretBytes { SecretBytes(copying: Data(repeating: 0x47, count: 32)) }
 }
 #endif

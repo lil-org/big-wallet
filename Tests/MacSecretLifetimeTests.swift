@@ -154,6 +154,92 @@ final class MacSecretLifetimeTests: XCTestCase {
         XCTAssertTrue(host.window.contentViewController === current)
     }
 
+    func testStoreRecoveryRetryPreservesTheDraftUntilImportSucceeds() async throws {
+        let host = try ImportHost()
+        defer { host.close() }
+        host.windowController.approvalPeer = PeerMeta(title: "fixture")
+        let reader = KeychainCopyMatchingStub()
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager)
+        _ = try enter("recoverable import draft", in: host.controller.textField)
+        await expectEventually { host.controller.okButton.isEnabled }
+        reader.attributesStatus = errSecInteractionNotAllowed
+        await assertWalletReload(manager, succeeds: false)
+        var preparations = 0
+        var imports = 0
+        host.controller.dependencies.prepareStore = {
+            preparations += 1
+            if manager.isStoreReady { return true }
+            return await manager.reloadFromStore()
+        }
+        host.controller.dependencies.importWallet = { input, password, _ in
+            XCTAssertTrue(manager.isStoreReady)
+            XCTAssertEqual(input, "recoverable import draft")
+            XCTAssertNil(password)
+            imports += 1
+            return Self.wallet
+        }
+
+        host.controller.actionButtonTapped(host.controller.okButton as Any)
+        await expectEventually { host.window.attachedSheet != nil }
+
+        XCTAssertEqual(preparations, 1)
+        XCTAssertEqual(imports, 0)
+        XCTAssertEqual(host.controller.textField.stringValue, "recoverable import draft")
+        XCTAssertTrue(host.controller.textField.isEnabled)
+        XCTAssertTrue(host.controller.cancelButton.isEnabled)
+        XCTAssertTrue(host.controller.okButton.isEnabled)
+        XCTAssertEqual(host.controller.okButton.title, Strings.tryAgain)
+        Window.dismissSheets(in: host.window)
+        reader.attributesStatus = errSecSuccess
+
+        host.controller.actionButtonTapped(host.controller.okButton as Any)
+        await expectEventually { host.window.contentViewController is AccountsListViewController }
+
+        XCTAssertEqual(preparations, 2)
+        XCTAssertEqual(imports, 1)
+        XCTAssertTrue(host.controller.textField.stringValue.isEmpty)
+    }
+
+    func testCancelAndLockDuringStoreRecoveryPreventLateImport() async throws {
+        for locks in [false, true] {
+            let host = try ImportHost()
+            defer { host.close() }
+            let entered = expectation(description: "store recovery entered")
+            let returned = expectation(description: "store recovery returned")
+            let recovery = TestGate<Bool>()
+            defer { recovery.resolve(false) }
+            host.controller.dependencies.prepareStore = {
+                entered.fulfill()
+                let result = await recovery.wait()
+                returned.fulfill()
+                return result
+            }
+            var imports = 0
+            host.controller.dependencies.importWallet = { _, _, _ in imports += 1; return Self.wallet }
+            let editor = try enter("cancelled recovery draft", in: host.controller.textField)
+            await expectEventually { host.controller.okButton.isEnabled }
+            host.controller.actionButtonTapped(host.controller.okButton as Any)
+            await fulfillment(of: [entered], timeout: 2)
+            XCTAssertTrue(host.controller.cancelButton.isEnabled)
+            XCTAssertFalse(host.controller.okButton.isEnabled)
+
+            if locks { host.fixture.access.lock(reason: .systemSleep) }
+            else { host.controller.cancelButtonTapped(host.controller.cancelButton) }
+            let replacement = host.window.contentViewController
+            recovery.resolve(true)
+            await fulfillment(of: [returned], timeout: 2)
+            await Task.yield()
+
+            XCTAssertEqual(imports, 0)
+            XCTAssertTrue(host.controller.textField.stringValue.isEmpty)
+            XCTAssertTrue(editor.string.isEmpty)
+            XCTAssertFalse(host.controller.okButton.isEnabled)
+            XCTAssertTrue(host.window.contentViewController === replacement)
+            XCTAssertNil(host.window.attachedSheet)
+        }
+    }
+
     func testCancelClearsTheDraftAndRejectsLateValidationInTheSameAccessSession() async throws {
         let host = try ImportHost()
         defer { host.close() }
@@ -452,6 +538,7 @@ private final class ImportHost {
         controller = instantiate(ImportViewController.self)
         controller.walletAccess = NativeWalletAccess(fixture.access)
         controller.dependencies.validate = { _ in .valid }
+        controller.dependencies.prepareStore = { true }
         controller.dependencies.importWallet = { _, _, _ in throw CancellationError() }
         window = SecretLifetimeWindow(contentRect: NSRect(x: -10_000, y: -10_000, width: 300, height: 350),
             styleMask: [.titled, .closable], backing: .buffered, defer: false)

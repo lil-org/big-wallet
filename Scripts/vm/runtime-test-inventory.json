@@ -8287,6 +8287,17 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/SecretBytesTests/testMnemonicDerivationBorrowsItsOwnerAndKeepsAnIndependentSeed",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/SecretBytesTests/testPrivateKeyAndSeedAliasesLoseSigningAndDerivationAccess",
       "variants": [
         "macos.debug",
@@ -10201,6 +10212,28 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/WalletCoreProxyHDWalletTests/testSecretMnemonicSeedPreservesUnicodePassphraseNormalization",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletCoreProxyHDWalletTests/testStoredMnemonicDecodingStripsOneBOMWithoutChangingSecretBytes",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/WalletCoreProxyHDWalletTests/testWalletCreationRejectsInvalidMnemonic",
       "variants": [
         "macos.debug",
@@ -10872,6 +10905,17 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/WalletCoreProxyStoredKeyTests/testStrictStoredAccountParsingPreservesCompleteWalletRecords",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/WalletCoreProxyStoredKeyTests/testSupportedCoinUnknownDerivationMapsToCustom",
       "variants": [
         "macos.debug",
@@ -10968,7 +11012,95 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/WalletCoreProxyStoredKeyTests/testUserJSONImportRemainsPermissiveAboutIncompleteAccountMetadata",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/WalletCoreProxyStoredKeyTests/testUserJSONImportSizeLimitDoesNotRestrictStoredReads",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletLoadRecoveryTests/testCancelledRefreshPreservesSnapshotAndAllowsANewRetry",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletLoadRecoveryTests/testConcurrentReloadsShareAReadAndOneCancelledWaiterDoesNotCancelOthers",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletLoadRecoveryTests/testCorruptAndMissingRecordsNeverPublishAPartialSnapshot",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletLoadRecoveryTests/testExternalMutationDuringEnumerationRequiresAFreshSnapshot",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletLoadRecoveryTests/testFailedStoreRejectsRetainedManagementAndExportActionsWithoutRetrying",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletLoadRecoveryTests/testFailurePublishesStatusWithoutPublishingOrDiscardingCachedWallets",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletLoadRecoveryTests/testMalformedStoredAccountsPreserveSnapshotAndRejectEditsWithoutWriting",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -12079,7 +12211,7 @@
       ]
     },
     {
-      "id": "WalletAuthorityTests/WalletsManagerPreviewTests/testWalletReloadTreatsInvalidJSONAsSkippableAndEmptyStoreAsAvailable",
+      "id": "WalletAuthorityTests/WalletsManagerPreviewTests/testWalletReloadRejectsInvalidJSONAndTreatsEmptyStoreAsAvailable",
       "variants": [
         "macos.debug",
         "macos.release",

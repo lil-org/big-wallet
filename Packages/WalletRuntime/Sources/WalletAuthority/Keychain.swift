@@ -64,10 +64,12 @@ struct Keychain: Sendable {
     func readPasswordSecret() throws -> SecretBytes? {
         guard var data = try read(key: .password) else { return nil }
         defer { data.resetBytes(in: 0..<data.count) }
-        guard let password = String(data: data, encoding: .utf8), !password.isEmpty else {
-            throw WalletCredentialError.invalidPasswordData
+        return try data.withUnsafeBytes { bytes in
+            guard let range = SecretUTF8.decodedRange(in: bytes), !range.isEmpty else {
+                throw WalletCredentialError.invalidPasswordData
+            }
+            return SecretBytes(copying: UnsafeRawBufferPointer(rebasing: bytes[range]))
         }
-        return SecretBytes(utf8: password)
     }
 
     func passwordState() throws -> WalletPasswordState {

@@ -13,6 +13,163 @@ import UIKit
 
 @MainActor
 final class EditAccountsViewControllerTests: XCTestCase {
+    func testSuccessfulStoreReloadRestartsPendingInitialPreview() async throws {
+        let fixture = try AccountEditorFixture()
+        addTeardownBlock { try await fixture.tearDown() }
+        await assertWalletReload(fixture.manager)
+        let creation = HeldAccountEditorPreviewCreation(heldCall: 1)
+        defer { creation.release() }
+        let host = try AccountEditorHost(manager: fixture.manager, access: fixture.accessFixture.access) {
+            $0.makePreviewSession = { try await creation.makeSession(manager: $0, wallet: $1, access: $2) }
+        }
+        defer { host.close() }
+        let state = try XCTUnwrap(host.controller.previewState)
+        await fulfillment(of: [creation.entered], timeout: 5)
+        XCTAssertEqual(state.status, .loadingInitial)
+
+        await assertWalletReload(fixture.manager)
+
+        await fulfillment(of: [creation.cancelled], timeout: 2)
+        await expectEventually(timeout: 5) { state.canEdit }
+        XCTAssertEqual(creation.calls, 2)
+        XCTAssertEqual(host.departures, 0)
+        XCTAssertFalse(state.accounts.isEmpty)
+        XCTAssertFalse(state.hasChanges)
+        XCTAssertTrue(host.controller.okButton.isEnabled)
+        creation.release()
+        await fulfillment(of: [creation.returned], timeout: 2)
+        for _ in 0..<3 { await Task.yield() }
+        XCTAssertTrue(state.canEdit)
+        XCTAssertFalse(state.canRetry)
+    }
+
+    func testSuccessfulStoreReloadRestartsPendingPreviewRecoveryPreservingDraft() async throws {
+        let fixture = try AccountEditorFixture()
+        addTeardownBlock { try await fixture.tearDown() }
+        await assertWalletReload(fixture.manager)
+        let creation = HeldAccountEditorPreviewCreation(heldCall: 2)
+        defer { creation.release() }
+        let host = try AccountEditorHost(manager: fixture.manager, access: fixture.accessFixture.access) {
+            $0.makePreviewSession = { try await creation.makeSession(manager: $0, wallet: $1, access: $2) }
+        }
+        defer { host.close() }
+        let state = try XCTUnwrap(host.controller.previewState)
+        await expectEventually(timeout: 5) { state.canEdit }
+        let addedIndex = try XCTUnwrap(state.accounts.firstIndex { !state.isEnabled($0) })
+        state.toggle(at: addedIndex)
+        let loaded = state.accounts
+        let enabled = state.enabledAccounts
+        fixture.reader.attributesStatus = errSecInteractionNotAllowed
+        await assertWalletReload(fixture.manager, succeeds: false)
+        fixture.reader.attributesStatus = errSecSuccess
+        host.controller.retryPreview()
+        await fulfillment(of: [creation.entered], timeout: 5)
+        XCTAssertEqual(state.status, .recovering)
+
+        await assertWalletReload(fixture.manager)
+
+        await fulfillment(of: [creation.cancelled], timeout: 2)
+        await expectEventually(timeout: 5) { state.canEdit }
+        XCTAssertEqual(creation.calls, 3)
+        XCTAssertEqual(host.departures, 0)
+        XCTAssertEqual(state.accounts, loaded)
+        XCTAssertEqual(state.enabledAccounts, enabled)
+        XCTAssertTrue(state.hasChanges)
+        XCTAssertTrue(host.controller.okButton.isEnabled)
+        XCTAssertTrue(host.controller.previewRetryButton.isHidden)
+        creation.release()
+        await fulfillment(of: [creation.returned], timeout: 2)
+        for _ in 0..<3 { await Task.yield() }
+        XCTAssertTrue(state.canEdit)
+        XCTAssertFalse(state.canRetry)
+        XCTAssertEqual(state.enabledAccounts, enabled)
+    }
+
+    func testStorageFailureKeepsDraftReadOnlyUntilRetrySucceeds() async throws {
+        let fixture = try AccountEditorFixture()
+        addTeardownBlock { try await fixture.tearDown() }
+        await assertWalletReload(fixture.manager)
+        let host = try AccountEditorHost(manager: fixture.manager, access: fixture.accessFixture.access)
+        defer { host.close() }
+        let state = try XCTUnwrap(host.controller.previewState)
+        await expectEventually(timeout: 5) { state.canEdit }
+        let addedIndex = try XCTUnwrap(state.accounts.firstIndex { !state.isEnabled($0) })
+        state.toggle(at: addedIndex)
+        let loaded = state.accounts
+        let enabled = state.enabledAccounts
+        fixture.reader.attributesStatus = errSecInteractionNotAllowed
+
+        let loadedStore = await fixture.manager.reloadFromStore()
+
+        XCTAssertFalse(loadedStore)
+        XCTAssertEqual(host.departures, 0)
+        XCTAssertEqual(state.accounts, loaded)
+        XCTAssertEqual(state.enabledAccounts, enabled)
+        XCTAssertFalse(state.canEdit)
+        XCTAssertFalse(host.controller.okButton.isEnabled)
+        XCTAssertTrue(host.controller.previewRetryButton.isEnabled)
+        XCTAssertFalse(host.controller.previewRetryButton.isHidden)
+        host.controller.okButtonTapped(host.controller.okButton as Any)
+        state.toggle(at: addedIndex)
+        XCTAssertEqual(state.enabledAccounts, enabled)
+
+        fixture.reader.attributesStatus = errSecSuccess
+        host.controller.retryPreview()
+
+        await expectEventually(timeout: 5) { fixture.manager.isStoreReady && state.canEdit }
+        XCTAssertEqual(host.departures, 0)
+        XCTAssertEqual(state.accounts, loaded)
+        XCTAssertEqual(state.enabledAccounts, enabled)
+        XCTAssertTrue(host.controller.okButton.isEnabled)
+        XCTAssertTrue(host.controller.previewRetryButton.isHidden)
+    }
+
+    func testInitialPreviewFailureShowsRetryWithoutClosingTheEditor() async throws {
+        let fixture = try AccountEditorFixture()
+        addTeardownBlock { try await fixture.tearDown() }
+        await assertWalletReload(fixture.manager)
+        fixture.reader.passwordData = nil
+        let host = try AccountEditorHost(manager: fixture.manager, access: fixture.accessFixture.access)
+        defer { host.close() }
+        let state = try XCTUnwrap(host.controller.previewState)
+        await expectEventually(timeout: 5) { state.canRetry }
+        XCTAssertEqual(host.departures, 0)
+        XCTAssertTrue(state.accounts.isEmpty)
+        XCTAssertFalse(host.controller.okButton.isEnabled)
+        XCTAssertTrue(host.controller.previewRetryButton.isEnabled)
+        XCTAssertFalse(host.controller.previewRetryButton.isHidden)
+
+        fixture.reader.passwordData = WalletCoreProxyTestVectors.walletCoreJSONMnemonicPassword
+        host.controller.retryPreview()
+
+        await expectEventually(timeout: 5) { state.canEdit }
+        XCTAssertEqual(host.departures, 0)
+        XCTAssertFalse(state.accounts.isEmpty)
+        XCTAssertFalse(state.hasChanges)
+        XCTAssertTrue(host.controller.okButton.isEnabled)
+    }
+
+    func testCancelRemainsAvailableAfterStorageFailure() async throws {
+        let fixture = try AccountEditorFixture()
+        addTeardownBlock { try await fixture.tearDown() }
+        await assertWalletReload(fixture.manager)
+        let host = try AccountEditorHost(manager: fixture.manager, access: fixture.accessFixture.access)
+        let state = try XCTUnwrap(host.controller.previewState)
+        await expectEventually(timeout: 5) { state.canEdit }
+        fixture.reader.attributesStatus = errSecInteractionNotAllowed
+        let loaded = await fixture.manager.reloadFromStore()
+        XCTAssertFalse(loaded)
+        XCTAssertFalse(host.controller.okButton.isEnabled)
+#if os(macOS)
+        XCTAssertTrue(host.controller.cancelButton.isEnabled)
+#else
+        XCTAssertTrue(host.controller.navigationItem.leftBarButtonItem?.isEnabled == true)
+#endif
+        host.close()
+        XCTAssertEqual(host.departures, 1)
+        XCTAssertFalse(state.canRetry)
+    }
+
     func testWalletNotificationsRebaseTheOpenEditorAndStopAfterDeletion() async throws {
         let fixture = try AccountEditorFixture()
         addTeardownBlock { try await fixture.tearDown() }
@@ -53,11 +210,11 @@ final class EditAccountsViewControllerTests: XCTestCase {
         weak var observedHost: AccountEditorHost?
         var departuresDuringPublication = [Int]()
         var cancellationDuringPublication = [Bool]()
-        let fixture = try AccountEditorFixture {
+        let fixture = try AccountEditorFixture(postMutation: {
             NotificationCenter.default.post(name: Notification.Name("walletsChanged"), object: nil)
             departuresDuringPublication.append(observedHost?.departures ?? -1)
             cancellationDuringPublication.append(Task.isCancelled)
-        }
+        })
         addTeardownBlock { try await fixture.tearDown() }
         await assertWalletReload(fixture.manager)
         let host = try AccountEditorHost(manager: fixture.manager, access: fixture.accessFixture.access)
@@ -85,6 +242,90 @@ final class EditAccountsViewControllerTests: XCTestCase {
     }
 
 #if os(iOS) || os(visionOS)
+    func testInitialPagingActivationSurvivesAnOverlappingSuccessfulStoreReload() async throws {
+        let holdRead = Mutex(false)
+        let storeRead = expectation(description: "Store reload is waiting for its inventory")
+        let releaseRead = DispatchSemaphore(value: 0)
+        let fixture = try AccountEditorFixture(beforeInventoryRead: {
+            guard holdRead.withLock({ $0 }) else { return }
+            storeRead.fulfill()
+            releaseRead.wait()
+        })
+        addTeardownBlock { try await fixture.tearDown() }
+        await assertWalletReload(fixture.manager)
+        let waitingForLayout = expectation(description: "Initial page is waiting for layout")
+        let finishedLayout = expectation(description: "Initial layout completes during store reload")
+        let layout = TestGate<Void>()
+        let controller = AccountEditorController()
+        controller.wallet = try XCTUnwrap(fixture.manager.wallets.first)
+        controller.walletsManager = fixture.manager
+        controller.access = fixture.accessFixture.access
+        controller.waitForInitialPreviewLayout = {
+            waitingForLayout.fulfill()
+            await layout.wait()
+            finishedLayout.fulfill()
+        }
+        defer {
+            holdRead.withLock { $0 = false }
+            releaseRead.signal()
+            layout.resolve(())
+            fixture.accessFixture.access.lock(reason: .background)
+        }
+        controller.loadViewIfNeeded()
+        await fulfillment(of: [waitingForLayout], timeout: 5)
+        let state = try XCTUnwrap(controller.previewState)
+        let initialCount = state.accounts.count
+        XCTAssertGreaterThan(initialCount, 0)
+        holdRead.withLock { $0 = true }
+        let reload = Task { await fixture.manager.reloadFromStore() }
+        await fulfillment(of: [storeRead], timeout: 5)
+        XCTAssertEqual(fixture.manager.loadState, .loading)
+
+        layout.resolve(())
+        await fulfillment(of: [finishedLayout], timeout: 2)
+        await Task.yield()
+        holdRead.withLock { $0 = false }
+        releaseRead.signal()
+        let loaded = await reload.value
+        XCTAssertTrue(loaded)
+
+        controller.tableView(controller.tableView, willDisplay: UITableViewCell(),
+            forRowAt: IndexPath(row: initialCount - 1, section: 0))
+
+        await expectEventually(timeout: 5) { state.accounts.count > initialCount }
+        XCTAssertFalse(state.canRetry)
+    }
+
+    func testCachedPreviewFailureKeepsRetryVisibleWhileScrolling() async throws {
+        let fixture = try AccountEditorFixture()
+        addTeardownBlock { try await fixture.tearDown() }
+        await assertWalletReload(fixture.manager)
+        let host = try AccountEditorHost(manager: fixture.manager, access: fixture.accessFixture.access)
+        defer { host.close() }
+        let controller = host.controller
+        let state = try XCTUnwrap(controller.previewState)
+        await expectEventually(timeout: 5) { state.canEdit }
+        controller.view.layoutIfNeeded()
+        controller.tableView.layoutIfNeeded()
+        XCTAssertGreaterThan(controller.tableView.contentSize.height, controller.tableView.bounds.height)
+        let offset = controller.tableView.contentOffset
+
+        fixture.reader.attributesStatus = errSecInteractionNotAllowed
+        await assertWalletReload(fixture.manager, succeeds: false)
+        controller.view.layoutIfNeeded()
+        let button = controller.previewRetryButton
+        let firstFrame = button.convert(button.bounds, to: controller.view)
+
+        XCTAssertFalse(button.isHidden)
+        XCTAssertTrue(button.isEnabled)
+        XCTAssertTrue(controller.view.bounds.contains(firstFrame))
+        XCTAssertEqual(controller.tableView.contentOffset, offset)
+        controller.tableView.setContentOffset(CGPoint(x: 0, y: 300), animated: false)
+        controller.view.layoutIfNeeded()
+        XCTAssertEqual(button.convert(button.bounds, to: controller.view), firstFrame)
+        XCTAssertTrue(controller.view.bounds.contains(firstFrame))
+    }
+
     func testDisplayedThresholdRowCannotCancelPendingPagingActivation() async throws {
         let fixture = try AccountEditorFixture()
         addTeardownBlock { try await fixture.tearDown() }
@@ -186,6 +427,37 @@ final class EditAccountsViewControllerTests: XCTestCase {
 #endif
 }
 
+private final class HeldAccountEditorPreviewCreation: Sendable {
+    let entered = XCTestExpectation(description: "Preview session creation is pending")
+    let cancelled = XCTestExpectation(description: "Obsolete preview session creation is cancelled")
+    let returned = XCTestExpectation(description: "Obsolete preview session creation returns")
+    private let heldCall: Int
+    private let callCount = Mutex(0)
+    private let result = TestGate<Void>()
+
+    var calls: Int { callCount.withLock { $0 } }
+
+    init(heldCall: Int) { self.heldCall = heldCall }
+
+    func makeSession(manager: WalletsManager, wallet: WalletSnapshot,
+                     access: WalletAccessSession) async throws -> any AccountPreviewSession {
+        let call = callCount.withLock { $0 += 1; return $0 }
+        if call == heldCall {
+            await withTaskCancellationHandler {
+                entered.fulfill()
+                await result.wait()
+            } onCancel: {
+                self.cancelled.fulfill()
+            }
+            returned.fulfill()
+            throw WalletsManager.Error.keychainAccessFailure
+        }
+        return try await manager.previewSession(wallet: wallet, access: access)
+    }
+
+    func release() { result.resolve(()) }
+}
+
 @MainActor
 private final class AccountEditorFixture {
     private static let walletID = "account-editor"
@@ -201,7 +473,7 @@ private final class AccountEditorFixture {
     private let defaultsSuite: String
 #endif
 
-    init(postMutation: @escaping @MainActor @Sendable () -> Void = {
+    init(beforeInventoryRead: @escaping @Sendable () -> Void = {}, postMutation: @escaping @MainActor @Sendable () -> Void = {
         NotificationCenter.default.post(name: Notification.Name("walletsChanged"), object: nil, userInfo: nil)
     }) throws {
         let accessFixture = WalletAccessTestFixture(password: String(decoding: WalletCoreProxyTestVectors.walletCoreJSONMnemonicPassword, as: UTF8.self))
@@ -230,7 +502,10 @@ private final class AccountEditorFixture {
         self.vaultKeys = keys
         self.vaultHost = vaultHost
 #endif
-        let keychain = Keychain(copyMatching: reader.copyMatching, add: { _, _ in
+        let keychain = Keychain(copyMatching: { query, result in
+            if (query as NSDictionary)[kSecReturnAttributes as String] as? Bool == true { beforeInventoryRead() }
+            return reader.copyMatching(query, result)
+        }, add: { _, _ in
             XCTFail("Account editing must not add Keychain items")
             return errSecParam
         }, update: { query, attributes in
@@ -360,7 +635,8 @@ private final class AccountEditorHost {
     var departures: Int { controller.dismissals }
 #endif
 
-    init(manager: WalletsManager, access: WalletAccessController) throws {
+    init(manager: WalletsManager, access: WalletAccessController,
+         configure: (EditAccountsViewController) -> Void = { _ in }) throws {
 #if os(macOS)
         controller = instantiate(EditAccountsViewController.self)
         window = AccountEditorWindow(contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 400),
@@ -374,6 +650,7 @@ private final class AccountEditorHost {
 #else
         controller.walletAccess = NativeWalletAccess(access)
 #endif
+        configure(controller)
         _ = controller.view
 #if os(macOS)
         window.contentViewController = controller

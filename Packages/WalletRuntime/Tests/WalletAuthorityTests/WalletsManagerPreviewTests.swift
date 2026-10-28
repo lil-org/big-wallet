@@ -642,13 +642,14 @@ final class WalletsManagerPreviewTests: XCTestCase {
         XCTAssertEqual(publishedWalletIDs, [["wallet-a", "wallet-b"]])
 
         reader.walletReadStatuses["wallet-b"] = errSecItemNotFound
-        await assertWalletReload(manager)
-        XCTAssertEqual(manager.wallets.map(\.id), ["wallet-a"])
-        XCTAssertEqual(metadataReloadCount, 2)
-        XCTAssertEqual(publishedWalletIDs, [["wallet-a", "wallet-b"], ["wallet-a"]])
+        await assertWalletReload(manager, succeeds: false)
+        XCTAssertEqual(manager.wallets.map(\.id), ["wallet-a", "wallet-b"])
+        XCTAssertEqual(manager.loadState, .failed(.unavailable))
+        XCTAssertEqual(metadataReloadCount, 1)
+        XCTAssertEqual(publishedWalletIDs, [["wallet-a", "wallet-b"]])
     }
 
-    func testWalletReloadTreatsInvalidJSONAsSkippableAndEmptyStoreAsAvailable() async throws {
+    func testWalletReloadRejectsInvalidJSONAndTreatsEmptyStoreAsAvailable() async throws {
         let reader = KeychainCopyMatchingStub()
         reader.attributes = [
             reader.walletAttributes(id: "valid"),
@@ -664,14 +665,18 @@ final class WalletsManagerPreviewTests: XCTestCase {
             reloadMetadata: { metadataReloadCount += 1 }
         )
 
-        await assertWalletReload(manager)
-        XCTAssertEqual(manager.wallets.map(\.id), ["valid"])
-        XCTAssertEqual(metadataReloadCount, 1)
+        await assertWalletReload(manager, succeeds: false)
+        XCTAssertTrue(manager.wallets.isEmpty)
+        XCTAssertEqual(manager.loadState, .failed(.corrupt))
+        XCTAssertFalse(manager.hasLoadedSnapshot)
+        XCTAssertEqual(metadataReloadCount, 0)
 
         reader.attributesStatus = errSecItemNotFound
         await assertWalletReload(manager)
         XCTAssertTrue(manager.wallets.isEmpty)
-        XCTAssertEqual(metadataReloadCount, 2)
+        XCTAssertEqual(manager.loadState, .ready)
+        XCTAssertTrue(manager.hasLoadedSnapshot)
+        XCTAssertEqual(metadataReloadCount, 1)
     }
 
     func testWalletReloadPreservesLastGoodStateWhenEnumerationIsUnavailable() async throws {

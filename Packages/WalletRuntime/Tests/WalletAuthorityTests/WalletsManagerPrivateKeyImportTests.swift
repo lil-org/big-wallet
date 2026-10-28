@@ -674,6 +674,12 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         let manager = fixture.manager { _ in XCTFail("Import must not revoke authority") }
         let inputs: [(input: String, password: String?, mnemonic: Bool, exported: String)] = [
             (Vectors.walletCoreJSONMnemonic, nil, true, Vectors.walletCoreJSONMnemonic),
+            (
+                String(decoding: Vectors.walletCoreJSONMnemonicFixture, as: UTF8.self),
+                String(decoding: Vectors.walletCoreJSONMnemonicPassword, as: UTF8.self),
+                true,
+                Vectors.walletCoreJSONMnemonic
+            ),
             (Vectors.solanaSequentialSecretKeyBase58, nil, false, Vectors.solanaSequentialSecretKeyBase58),
             (
                 String(decoding: Vectors.walletCoreJSONVariantPrivateKeyFixtures[0].json, as: UTF8.self),

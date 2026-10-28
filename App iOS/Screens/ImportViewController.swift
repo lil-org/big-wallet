@@ -46,6 +46,11 @@ class ImportViewController: WalletAccessViewController {
     var validateWalletInput: @MainActor (String) async -> WalletsManager.InputValidationResult = {
         await ApplicationServices.shared.wallets.validateWalletInput($0)
     }
+    var prepareStore: @MainActor () async -> Bool = {
+        let wallets = ApplicationServices.shared.wallets
+        if wallets.isStoreReady { return true }
+        return await wallets.reloadFromStore()
+    }
     var importWallet: @MainActor (String, String?, WalletAccessSession) async throws -> WalletSnapshot = {
         try await ApplicationServices.shared.wallets.addWallet(input: $0, inputPassword: $1, access: $2)
     }
@@ -58,6 +63,7 @@ class ImportViewController: WalletAccessViewController {
     private var validationGeneration: UInt64 = 0
     private var submissionGeneration: UInt64 = 0
     private var isWaiting = false
+    private var hasImportFailed = false
     private(set) var isRetired = false
     private var inputValidationResult = WalletsManager.InputValidationResult.invalid
 
@@ -111,7 +117,8 @@ class ImportViewController: WalletAccessViewController {
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: Strings.cancel, style: .plain, target: self, action: #selector(cancelImport))
         okButton.configurationUpdateHandler = { [weak self] button in
             let isWaiting = self?.isWaiting == true
-            button.configuration?.title = isWaiting ? "" : Strings.ok
+            let title = self?.hasImportFailed == true ? Strings.tryAgain : Strings.ok
+            button.configuration?.title = isWaiting ? "" : title
             button.configuration?.showsActivityIndicator = isWaiting
         }
     }
@@ -156,6 +163,7 @@ class ImportViewController: WalletAccessViewController {
         let input = textView.text ?? ""
         let needsPassword = inputValidationResult == .requiresPassword
         let makePrompt = makePasswordPrompt
+        let prepareStore = prepareStore
         let importWallet = importWallet
         importTask = Task { [weak self] in
             guard self?.acceptsSubmission(generation) == true else { return }
@@ -180,10 +188,13 @@ class ImportViewController: WalletAccessViewController {
             } else {
                 password = nil
             }
-            self?.setWaiting(true)
+            self?.setWaiting(true, allowsCancellation: true)
             let result: Result<WalletSnapshot, Error>
             do {
+                guard await prepareStore() else { throw WalletsManager.LoadFailure.unavailable }
+                guard self?.acceptsSubmission(generation) == true else { return }
                 guard let self else { return }
+                setWaiting(true)
                 let session = try requireCurrentAccess()
                 result = .success(try await importWallet(input, password, session))
             }
@@ -197,9 +208,13 @@ class ImportViewController: WalletAccessViewController {
                 dismiss(animated: true)
                 completion?(true)
             case .failure(let error):
+                hasImportFailed = true
                 setWaiting(false)
-                showMessageAlert(text: error as? WalletImportError == .limitExceeded
-                    ? Strings.walletImportLimitExceeded : Strings.failedToImportWallet)
+                let message: String
+                if error is WalletsManager.LoadFailure { message = Strings.failedToLoad }
+                else if error as? WalletImportError == .limitExceeded { message = Strings.walletImportLimitExceeded }
+                else { message = Strings.failedToImportWallet }
+                showMessageAlert(text: message)
             }
         }
     }
@@ -239,17 +254,19 @@ class ImportViewController: WalletAccessViewController {
         navigationItem.leftBarButtonItem?.isEnabled = false
     }
 
-    private func setWaiting(_ waiting: Bool) {
-        guard !isRetired, waiting != isWaiting else { return }
+    private func setWaiting(_ waiting: Bool, allowsCancellation: Bool = false) {
+        guard !isRetired else { return }
         isWaiting = waiting
         view.isUserInteractionEnabled = !waiting
         isModalInPresentation = waiting
-        navigationItem.leftBarButtonItem?.isEnabled = !waiting
+        navigationItem.leftBarButtonItem?.isEnabled = !waiting || allowsCancellation
         okButton.setNeedsUpdateConfiguration()
     }
 
     private func validateInput(proceedIfValid: Bool) {
         guard !isRetired, hasWalletAccess else { return }
+        hasImportFailed = false
+        okButton.setNeedsUpdateConfiguration()
         placeholderLabel.isHidden = !textView.text.isEmpty
         validationGeneration &+= 1
         let generation = validationGeneration

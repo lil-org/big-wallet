@@ -86,8 +86,45 @@ private struct UnavailableWalletSourceMutator: WalletSourceMutating {
     }
 }
 
+private final class WalletStoreReadiness: Sendable {
+    private struct State {
+        var generation: UInt64 = 0
+        var ready = false
+    }
+
+    private let state = Mutex(State())
+
+    func setReady(_ ready: Bool) {
+        state.withLock {
+            if $0.ready != ready { $0.generation &+= 1 }
+            $0.ready = ready
+        }
+    }
+
+    func token() throws -> UInt64 {
+        try state.withLock {
+            guard $0.ready else { throw WalletsManager.Error.keychainAccessFailure }
+            return $0.generation
+        }
+    }
+
+    func validate(_ token: UInt64) throws {
+        guard state.withLock({ $0.ready && $0.generation == token }) else {
+            throw WalletsManager.Error.keychainAccessFailure
+        }
+    }
+}
+
 @MainActor
 public final class WalletsManager: NSObject {
+    public enum LoadFailure: Swift.Error, Equatable, Sendable {
+        case unavailable, corrupt
+    }
+
+    public enum LoadState: Equatable, Sendable {
+        case idle, loading, ready, failed(LoadFailure)
+    }
+
     public enum Error: Swift.Error {
         case keychainAccessFailure
         case invalidInput
@@ -111,6 +148,30 @@ public final class WalletsManager: NSObject {
     private let publishLocalChange: @MainActor () -> Void
     private nonisolated let notifications: WalletStoreChangeNotifications
     public private(set) var wallets = [WalletSnapshot]()
+    public private(set) var loadState = LoadState.idle
+    public private(set) var hasLoadedSnapshot = false
+    public var isStoreReady: Bool { loadState == .ready }
+    private let readiness = WalletStoreReadiness()
+    private final class ReloadWaiter: Sendable {
+        let cancelled = Mutex(false)
+    }
+    @MainActor
+    private final class ReloadAttempt {
+        let previousState: LoadState
+        var task: Task<WalletRepository.LoadResult, Never>
+        var storeChangeRevision: UInt64
+        var pass: UInt64 = 0
+        var waiters = [ReloadWaiter]()
+        var result: Bool?
+
+        init(previousState: LoadState, storeChangeRevision: UInt64, repository: WalletRepository) {
+            self.previousState = previousState
+            self.storeChangeRevision = storeChangeRevision
+            task = Task { await repository.load() }
+        }
+    }
+    private var reloadAttempt: ReloadAttempt?
+    private var storeChangeRevision: UInt64 = 0
     private var repositoryRevision: UInt64 = 0
     private var isObservingExternalChanges = false
     private var externalReload: Task<Void, Never>?
@@ -148,6 +209,7 @@ public final class WalletsManager: NSObject {
 
     isolated deinit {
         externalReload?.cancel()
+        reloadAttempt?.task.cancel()
         notifications.stopObserving(self)
     }
 
@@ -159,18 +221,101 @@ public final class WalletsManager: NSObject {
 
     @discardableResult
     public func reloadFromStore() async -> Bool {
-        do {
-            let state = try await repository.reload()
-            apply(state)
-            publishLocalChange()
+        guard !Task.isCancelled else { return false }
+        if let pending = reloadAttempt { cancelReloadIfUnobserved(pending) }
+        let attempt: ReloadAttempt
+        let waiter = ReloadWaiter()
+        if let pending = reloadAttempt {
+            attempt = pending
+            attempt.waiters.append(waiter)
+        } else {
+            attempt = ReloadAttempt(previousState: loadState, storeChangeRevision: storeChangeRevision, repository: repository)
+            attempt.waiters.append(waiter)
+            reloadAttempt = attempt
+            setLoadState(.loading)
+        }
+        return await withTaskCancellationHandler {
+            while true {
+                let pass = attempt.pass
+                let result = await attempt.task.value
+                guard !Task.isCancelled, !waiter.cancelled.withLock({ $0 }) else {
+                    waiter.cancelled.withLock { $0 = true }
+                    cancelReloadIfUnobserved(attempt)
+                    return false
+                }
+                if let completed = attempt.result { return completed }
+                guard reloadAttempt === attempt else { return false }
+                guard pass == attempt.pass else { continue }
+                if attempt.storeChangeRevision != storeChangeRevision {
+                    attempt.storeChangeRevision = storeChangeRevision
+                    attempt.pass &+= 1
+                    attempt.task = Task { [repository] in await repository.load() }
+                    continue
+                }
+                return finishReload(attempt, result: result)
+            }
+        } onCancel: {
+            waiter.cancelled.withLock { $0 = true }
+            Task { @MainActor [weak self] in self?.cancelReloadIfUnobserved(attempt) }
+        }
+    }
+
+    private func cancelReloadIfUnobserved(_ attempt: ReloadAttempt) {
+        guard reloadAttempt === attempt,
+              attempt.waiters.allSatisfy({ $0.cancelled.withLock { $0 } }) else { return }
+        reloadAttempt = nil
+        attempt.result = false
+        attempt.task.cancel()
+        setLoadState(attempt.previousState)
+    }
+
+    private func finishReload(_ attempt: ReloadAttempt, result: WalletRepository.LoadResult) -> Bool {
+        if let completed = attempt.result { return completed }
+        guard reloadAttempt === attempt else { return false }
+        reloadAttempt = nil
+        switch result {
+        case .loaded(let state):
+            let applied = apply(state)
+            attempt.result = true
+            setLoadState(.ready)
+            if applied {
+                reloadMetadata()
+                publishLocalChange()
+            }
             return true
-        } catch {
+        case .failed(let failure, let revision):
+            guard revision >= repositoryRevision else {
+                attempt.result = hasLoadedSnapshot
+                setLoadState(hasLoadedSnapshot ? .ready : attempt.previousState)
+                return hasLoadedSnapshot
+            }
+            repositoryRevision = revision
+            attempt.result = false
+            setLoadState(.failed(failure))
+            return false
+        case .cancelled:
+            attempt.result = false
+            setLoadState(attempt.previousState)
             return false
         }
     }
 
+    private func setLoadState(_ state: LoadState) {
+        guard loadState != state else { return }
+        loadState = state
+        readiness.setReady(state == .ready)
+        NotificationCenter.default.post(name: .walletsLoadStateChanged, object: self)
+    }
+
+    private func requireReadyStore() async throws -> UInt64 {
+        try Task.checkCancellation()
+        if loadState == .idle { _ = await reloadFromStore() }
+        try Task.checkCancellation()
+        return try readiness.token()
+    }
+
     public func reviewCatalog() -> WalletReviewCatalog? {
-        guard let data = try? WalletAccountCatalog(snapshots: wallets).canonicalData() else { return nil }
+        guard isStoreReady, let data = try? WalletAccountCatalog(snapshots: wallets).canonicalData() else { return nil }
         return WalletReviewCatalog(
             identity: WalletCatalogIdentity(generation: nil, catalogData: data),
             orderedAccounts: wallets.flatMap { wallet in
@@ -195,8 +340,9 @@ public final class WalletsManager: NSObject {
 
     public func createWallet(access: WalletAccessSession) async throws -> WalletSnapshot {
         try validateManagementAccess(access)
+        let token = try await requireReadyStore()
         let prepared = try await repository.prepareNewWallet(input: nil, inputPassword: nil)
-        let wallet = try await commit(access: access) { [repository] willMutate, validate in
+        let wallet = try await commit(access: access, readinessToken: token) { [repository] willMutate, validate in
             try await repository.saveNewWallet(prepared, willMutateSource: willMutate, validateAccess: validate)
         }
         if !Task.isCancelled {
@@ -214,8 +360,9 @@ public final class WalletsManager: NSObject {
 
     public func addWallet(input: String, inputPassword: String?, access: WalletAccessSession) async throws -> WalletSnapshot {
         try validateManagementAccess(access)
+        let token = try await requireReadyStore()
         let prepared = try await repository.prepareNewWallet(input: input, inputPassword: inputPassword)
-        return try await commit(access: access) { [repository] willMutate, validate in
+        return try await commit(access: access, readinessToken: token) { [repository] willMutate, validate in
             try await repository.saveNewWallet(prepared, willMutateSource: willMutate, validateAccess: validate)
         }
     }
@@ -234,8 +381,9 @@ public final class WalletsManager: NSObject {
 
     public func delete(wallet: WalletSnapshot, access: WalletAccessSession) async throws {
         try validateManagementAccess(access)
+        let token = try await requireReadyStore()
         let prepared = try await repository.prepareDeletion(wallet: wallet)
-        _ = try await commit(access: access) { [repository] willMutate, validate in
+        _ = try await commit(access: access, readinessToken: token) { [repository] willMutate, validate in
             try await repository.delete(prepared, willMutateSource: willMutate, validateAccess: validate)
         }
     }
@@ -243,7 +391,16 @@ public final class WalletsManager: NSObject {
 
     public func previewSession(wallet: WalletSnapshot, access: WalletAccessSession) async throws -> WalletPreviewSession {
         try validateManagementAccess(access)
-        return try await repository.previewSession(wallet: wallet, access: access, authorityID: authorityID)
+        let token = try await requireReadyStore()
+        let session = try await repository.previewSession(wallet: wallet, access: access, authorityID: authorityID)
+        do {
+            try readiness.validate(token)
+            try Task.checkCancellation()
+            return session
+        } catch {
+            session.invalidate()
+            throw error
+        }
     }
 
     public func makeExportChallenge(
@@ -251,7 +408,9 @@ public final class WalletsManager: NSObject {
         account: WalletAccount? = nil,
         kind: WalletSecretExport
     ) async throws -> WalletAuthenticationChallenge {
+        let token = try await requireReadyStore()
         let binding = try await repository.exportBinding(wallet: wallet, account: account, kind: kind)
+        try readiness.validate(token)
         try Task.checkCancellation()
         return WalletAuthenticationChallenge(
             authorityID: authorityID, purpose: .secretExport(binding),
@@ -260,7 +419,7 @@ public final class WalletsManager: NSObject {
     }
 
     public func takeInitialBackupAuthorization(wallet: WalletSnapshot) -> WalletAuthenticationGrant? {
-        guard let initial = initialBackupBindings.removeValue(forKey: wallet.id),
+        guard isStoreReady, let initial = initialBackupBindings.removeValue(forKey: wallet.id),
               clock() < initial.deadline else { return nil }
         let binding = initial.binding
         let challenge = WalletAuthenticationChallenge(
@@ -279,18 +438,33 @@ public final class WalletsManager: NSObject {
         account: WalletAccount? = nil,
         authorization: WalletAuthenticationGrant
     ) async throws -> WalletExportedSecret {
+        let token = try await requireReadyStore()
         let descriptor = account.map { WalletAccountDescriptor(walletID: wallet.id, account: $0) }
         guard let binding = authorization.consumeExport(
             authorityID: authorityID, walletID: wallet.id, account: descriptor, kind: .privateKey
         ) else { throw Error.keychainAccessFailure }
-        return try await repository.exportPrivateKey(wallet: wallet, account: account, binding: binding)
+        let secret = try await repository.exportPrivateKey(wallet: wallet, account: account, binding: binding)
+        return try validateExport(secret, readinessToken: token)
     }
 
     public func exportMnemonic(wallet: WalletSnapshot, authorization: WalletAuthenticationGrant) async throws -> WalletExportedSecret {
+        let token = try await requireReadyStore()
         guard let binding = authorization.consumeExport(
             authorityID: authorityID, walletID: wallet.id, account: nil, kind: .mnemonic
         ) else { throw Error.keychainAccessFailure }
-        return try await repository.exportMnemonic(wallet: wallet, binding: binding)
+        let secret = try await repository.exportMnemonic(wallet: wallet, binding: binding)
+        return try validateExport(secret, readinessToken: token)
+    }
+
+    private func validateExport(_ secret: WalletExportedSecret, readinessToken: UInt64) throws -> WalletExportedSecret {
+        do {
+            try Task.checkCancellation()
+            try readiness.validate(readinessToken)
+            return secret
+        } catch {
+            secret.invalidate()
+            throw error
+        }
     }
 
     nonisolated static func privateKeyImport(from input: String) -> PrivateKeyImport? {
@@ -299,12 +473,18 @@ public final class WalletsManager: NSObject {
 
     private func commit(
         access: WalletAccessSession,
+        readinessToken: UInt64? = nil,
         _ operation: @Sendable (_ willMutateSource: @Sendable () throws -> Void, _ validateAccess: @Sendable () throws -> Void) async throws -> WalletRepository.Change
     ) async throws -> WalletSnapshot {
         try validateManagementAccess(access)
+        let token: UInt64
+        if let readinessToken { token = readinessToken }
+        else { token = try await requireReadyStore() }
+        try readiness.validate(token)
         let authorityID = authorityID
-        let validate: @Sendable () throws -> Void = {
+        let validate: @Sendable () throws -> Void = { [readiness] in
             try Task.checkCancellation()
+            try readiness.validate(token)
             guard access.validateCredentials(for: authorityID) else { throw WalletCredentialError.authorizationUnavailable }
         }
         let change: WalletRepository.Change
@@ -315,7 +495,10 @@ public final class WalletsManager: NSObject {
 #else
         change = try await operation({}, validate)
 #endif
-        apply(change.state)
+        if apply(change.state) {
+            if reloadAttempt == nil { setLoadState(.ready) }
+            reloadMetadata()
+        }
         notifications.postMutation()
         return change.wallet
     }
@@ -325,15 +508,17 @@ public final class WalletsManager: NSObject {
         guard access.validateCredentials(for: authorityID) else { throw WalletCredentialError.authorizationUnavailable }
     }
 
-    private func apply(_ state: WalletRepository.State) {
-        guard state.revision >= repositoryRevision else { return }
+    @discardableResult
+    private func apply(_ state: WalletRepository.State) -> Bool {
+        guard state.revision >= repositoryRevision else { return false }
         repositoryRevision = state.revision
         wallets = state.wallets
+        hasLoadedSnapshot = true
         let currentWalletIDs = Set(wallets.map(\.id))
         initialBackupBindings = initialBackupBindings.filter {
             currentWalletIDs.contains($0.key) && clock() < $0.value.deadline
         }
-        reloadMetadata()
+        return true
     }
 
     private func startObservingExternalChanges() {
@@ -355,6 +540,7 @@ public final class WalletsManager: NSObject {
     }
 
     func handleExternalWalletStoreChange() async {
+        storeChangeRevision &+= 1
         _ = await reloadFromStore()
     }
 
@@ -362,6 +548,12 @@ public final class WalletsManager: NSObject {
 }
 
 actor WalletRepository {
+    enum LoadResult: Sendable {
+        case loaded(State)
+        case failed(WalletsManager.LoadFailure, revision: UInt64)
+        case cancelled
+    }
+
     struct MetadataMutations: Sendable {
         let removeWallet: @Sendable (WalletSnapshot) -> Void
         let removeAccounts: @Sendable (String, [WalletAccount]) -> Void
@@ -471,16 +663,34 @@ actor WalletRepository {
         self.metadataMutations = metadataMutations
     }
 
+    func load() -> LoadResult {
+        do {
+            return .loaded(try reload())
+        } catch is CancellationError {
+            return .cancelled
+        } catch {
+            guard !Task.isCancelled else { return .cancelled }
+            revision += 1
+            let failure = error as? WalletsManager.LoadFailure ?? .unavailable
+            return .failed(failure, revision: revision)
+        }
+    }
+
     func reload() throws -> State {
         defer { retireStalePreviews() }
+        try Task.checkCancellation()
         let walletIDs = try keychain.readAllWalletIDs()
+        guard Set(walletIDs).count == walletIDs.count else { throw WalletsManager.LoadFailure.corrupt }
         var loaded = [WalletContainer]()
         loaded.reserveCapacity(walletIDs.count)
         for id in walletIDs {
-            guard let data = try keychain.readWalletData(id: id),
-                  let wallet = walletContainer(id: id, data: data) else { continue }
+            try Task.checkCancellation()
+            guard let data = try keychain.readWalletData(id: id) else { throw WalletsManager.LoadFailure.unavailable }
+            guard let wallet = walletContainer(id: id, data: data),
+                  wallet.accounts.count == wallet.key.accountCount else { throw WalletsManager.LoadFailure.corrupt }
             loaded.append(wallet)
         }
+        guard WalletAccountCatalog(wallets: loaded).isValid else { throw WalletsManager.LoadFailure.corrupt }
         try Task.checkCancellation()
         wallets = loaded
         return snapshot()
@@ -736,7 +946,7 @@ actor WalletRepository {
     func previewSession(wallet: WalletSnapshot, access: WalletAccessSession, authorityID: UUID) async throws -> WalletPreviewSession {
         let source = try source(walletID: wallet.id)
         defer { source.invalidate() }
-        guard let key = WalletStoredKey.importJSON(json: source.data), key.isMnemonic,
+        guard let key = WalletStoredKey.importJSON(json: source.data, requireCompleteAccounts: true), key.isMnemonic,
               let material = key.encryptedMaterialDigest else { throw WalletsManager.Error.keychainAccessFailure }
         let identity = PreviewIdentity(walletID: wallet.id, encryptedMaterialDigest: material,
             credentialDigest: source.identity.credentialDigest)
@@ -805,7 +1015,7 @@ actor WalletRepository {
 
     nonisolated func sourceIsCurrent(_ identity: PreviewIdentity) throws -> Bool {
         guard let data = try keychain.readWalletData(id: identity.walletID),
-              let key = WalletStoredKey.importJSON(json: data), key.isMnemonic,
+              let key = WalletStoredKey.importJSON(json: data, requireCompleteAccounts: true), key.isMnemonic,
               key.encryptedMaterialDigest == identity.encryptedMaterialDigest,
               let password = try keychain.readPasswordSecret() else { return false }
         defer { password.invalidate() }
@@ -822,7 +1032,7 @@ actor WalletRepository {
     }
 
     private func walletContainer(id: String, data: Data) -> WalletContainer? {
-        guard let key = WalletStoredKey.importJSON(json: data) else { return nil }
+        guard let key = WalletStoredKey.importJSON(json: data, requireCompleteAccounts: true) else { return nil }
         return WalletContainer(id: id, key: key)
     }
 }
@@ -943,7 +1153,7 @@ private enum WalletKeyPreparation {
     @concurrent
     static func prepareDeletion(_ source: WalletRepository.Source) async throws -> WalletRepository.PreparedDeletion {
         try Task.checkCancellation()
-        guard let key = WalletStoredKey.importJSON(json: source.data),
+        guard let key = WalletStoredKey.importJSON(json: source.data, requireCompleteAccounts: true),
               let secret = key.decryptPrivateKey(password: source.password) else { throw WalletKeyStoreError.invalidKey }
         defer { secret.invalidate() }
         try Task.checkCancellation()
@@ -1008,7 +1218,7 @@ private enum WalletKeyPreparation {
     }
 
     private static func wallet(_ source: WalletRepository.Source) throws -> WalletContainer {
-        guard let key = WalletStoredKey.importJSON(json: source.data) else { throw WalletKeyStoreError.invalidKey }
+        guard let key = WalletStoredKey.importJSON(json: source.data, requireCompleteAccounts: true) else { throw WalletKeyStoreError.invalidKey }
         return WalletContainer(id: source.walletID, key: key)
     }
     private static func createWallet(name: String, password: SecretBytes) throws -> WalletContainer {
@@ -1025,17 +1235,12 @@ private enum WalletKeyPreparation {
         defer { inputPassword.invalidate() }
         guard let data = key.decryptPrivateKey(password: inputPassword) else { throw WalletKeyStoreError.invalidPassword }
         defer { data.invalidate() }
-        if data.count != 32, let mnemonic = try data.withTemporaryData({ checkMnemonic($0) }) {
-            return try importMnemonic(mnemonic, name: name, encryptPassword: newPassword)
+        if data.count != 32, try data.withUnsafeBytes({ BIP39.isValidMnemonic($0) }) {
+            return try importMnemonic(data, name: name, encryptPassword: newPassword)
         }
         guard let privateKey = WalletPrivateKey(taking: data) else { throw WalletKeyStoreError.invalidKey }
         defer { privateKey.invalidate() }
         return try importPrivateKey(privateKey, name: name, password: newPassword, coin: coin)
-    }
-
-    private static func checkMnemonic(_ data: Data) -> String? {
-        guard let mnemonic = String(data: data, encoding: .ascii), WalletCrypto.isValidMnemonic(mnemonic: mnemonic) else { return nil }
-        return mnemonic
     }
 
     private static func importPrivateKey(_ privateKey: WalletPrivateKey, name: String, password: SecretBytes, coin: WalletCoin) throws -> WalletContainer {
@@ -1048,6 +1253,12 @@ private enum WalletKeyPreparation {
     }
 
     private static func importMnemonic(_ mnemonic: String, name: String, encryptPassword: SecretBytes) throws -> WalletContainer {
+        let secret = SecretBytes(utf8: mnemonic)
+        defer { secret.invalidate() }
+        return try importMnemonic(secret, name: name, encryptPassword: encryptPassword)
+    }
+
+    private static func importMnemonic(_ mnemonic: SecretBytes, name: String, encryptPassword: SecretBytes) throws -> WalletContainer {
         guard let key = WalletStoredKey.importHDWallet(mnemonic: mnemonic, name: name, password: encryptPassword, coin: defaultCoin) else { throw WalletKeyStoreError.invalidMnemonic }
         let id = makeNewWalletId()
         let wallet = WalletContainer(id: id, key: key)

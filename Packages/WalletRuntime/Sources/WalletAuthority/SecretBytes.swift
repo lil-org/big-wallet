@@ -56,6 +56,10 @@ final class SecretBytes: Sendable {
         }
     }
 
+    convenience init(copying bytes: UnsafeRawBufferPointer) {
+        self.init(count: bytes.count) { $0.copyMemory(from: bytes) }
+    }
+
     convenience init(utf8 string: String) {
         self.init(count: string.utf8.count) { destination in
             for (index, byte) in string.utf8.enumerated() { destination[index] = byte }
@@ -102,6 +106,14 @@ final class SecretBytes: Sendable {
         try withUnsafeBytes { try operation(String(decoding: $0, as: UTF8.self)) }
     }
 
+    func matchesUTF8String(_ string: String) throws -> Bool {
+        try withUnsafeBytes { bytes in
+            if bytes.elementsEqual(string.utf8) { return true }
+            if bytes.allSatisfy({ $0 < 0x80 }), string.utf8.allSatisfy({ $0 < 0x80 }) { return false }
+            return String(decoding: bytes, as: UTF8.self) == string
+        }
+    }
+
     func sha256Digest() throws -> Data {
         try withUnsafeBytes { bytes in
             var hash = SHA256()
@@ -119,6 +131,23 @@ final class SecretBytes: Sendable {
     }
 
     deinit { invalidate() }
+}
+
+enum SecretUTF8 {
+    static func decodedRange(in bytes: UnsafeRawBufferPointer) -> Range<Int>? {
+        var decoder = UTF8()
+        var iterator = bytes.makeIterator()
+        while true {
+            switch decoder.decode(&iterator) {
+            case .scalarValue:
+                continue
+            case .emptyInput:
+                return (bytes.starts(with: [0xef, 0xbb, 0xbf]) ? 3 : 0)..<bytes.count
+            case .error:
+                return nil
+            }
+        }
+    }
 }
 
 @_silgen_name("bw_wallet_zero_memory")

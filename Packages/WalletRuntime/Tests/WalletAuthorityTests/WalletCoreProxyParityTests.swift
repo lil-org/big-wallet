@@ -414,12 +414,14 @@ final class WalletCoreProxyCoinAndCryptoTests: XCTestCase {
     }
 
     func testMnemonicValidationPinsLengthsChecksumAndNormalization() {
-        XCTAssertTrue(WalletCrypto.isValidMnemonic(Vectors.abandonMnemonic))
-        XCTAssertTrue(WalletCrypto.isValidMnemonic(Vectors.walletCoreHDMnemonic))
-        XCTAssertTrue(WalletCrypto.isValidMnemonic(Vectors.valid15WordMnemonic))
-        XCTAssertTrue(WalletCrypto.isValidMnemonic(Vectors.valid18WordMnemonic))
-        XCTAssertTrue(WalletCrypto.isValidMnemonic(Vectors.valid21WordMnemonic))
-        XCTAssertTrue(WalletCrypto.isValidMnemonic(Vectors.zeroEntropy24WordMnemonic))
+        for mnemonic in [
+            Vectors.abandonMnemonic, Vectors.walletCoreHDMnemonic,
+            Vectors.valid15WordMnemonic, Vectors.valid18WordMnemonic,
+            Vectors.valid21WordMnemonic, Vectors.zeroEntropy24WordMnemonic,
+        ] {
+            XCTAssertTrue(WalletCrypto.isValidMnemonic(mnemonic))
+            XCTAssertTrue(Data(mnemonic.utf8).withUnsafeBytes { BIP39.isValidMnemonic($0) })
+        }
 
         XCTAssertFalse(WalletCrypto.isValidMnemonic(Vectors.invalidChecksumMnemonic))
         XCTAssertFalse(WalletCrypto.isValidMnemonic(Vectors.invalidWordCountMnemonic))
@@ -435,9 +437,14 @@ final class WalletCoreProxyCoinAndCryptoTests: XCTestCase {
             "\n" + Vectors.abandonMnemonic,
             Vectors.abandonMnemonic.replacingOccurrences(of: " ", with: "  "),
             Vectors.abandonMnemonic.replacingOccurrences(of: " ", with: "\t"),
+            "\u{feff}" + Vectors.abandonMnemonic,
+            Vectors.abandonMnemonic.replacingOccurrences(of: " ", with: "\u{00a0}"),
         ] {
             XCTAssertFalse(WalletCrypto.isValidMnemonic(invalidMnemonic), invalidMnemonic)
+            XCTAssertFalse(Data(invalidMnemonic.utf8).withUnsafeBytes { BIP39.isValidMnemonic($0) })
         }
+        let invalidUTF8 = Data(Vectors.abandonMnemonic.utf8) + Data([0xff])
+        XCTAssertFalse(invalidUTF8.withUnsafeBytes { BIP39.isValidMnemonic($0) })
     }
 
     func testBIP44DerivationPathAndPreviewIndexContract() {
@@ -1468,6 +1475,40 @@ final class WalletCoreProxyHDWalletTests: XCTestCase {
         }
     }
 
+    func testSecretMnemonicSeedPreservesUnicodePassphraseNormalization() throws {
+        let mnemonic = SecretBytes(utf8: Vectors.walletCoreHDMnemonic)
+        defer { mnemonic.invalidate() }
+        let compatible = "\u{212B}\u{FB01}\u{00E9}\u{AC00}"
+        let decomposed = "A\u{030A}fie\u{0301}\u{1100}\u{1161}"
+        let first = try XCTUnwrap(BIP39.secretSeed(mnemonic: mnemonic, passphrase: compatible))
+        let second = try XCTUnwrap(BIP39.secretSeed(mnemonic: mnemonic, passphrase: decomposed))
+        let distinct = try XCTUnwrap(BIP39.secretSeed(mnemonic: mnemonic, passphrase: "Afie"))
+        defer { first.invalidate(); second.invalidate(); distinct.invalidate() }
+
+        XCTAssertEqual(first.testData, second.testData)
+        XCTAssertNotEqual(first.testData, distinct.testData)
+        XCTAssertEqual(mnemonic.testData, Data(Vectors.walletCoreHDMnemonic.utf8))
+    }
+
+    func testStoredMnemonicDecodingStripsOneBOMWithoutChangingSecretBytes() throws {
+        let mnemonicBytes = Data(Vectors.abandonMnemonic.utf8)
+        for prefix in [Data(), Data([0xef, 0xbb, 0xbf]), Data([0xef, 0xbb, 0xbf, 0xef, 0xbb, 0xbf]), Data([0xff])] {
+            let original = prefix + mnemonicBytes
+            let mnemonic = SecretBytes(copying: original)
+            defer { mnemonic.invalidate() }
+            let wallet = WalletHDWallet(storedMnemonic: mnemonic)
+            defer { wallet?.invalidate() }
+            if prefix.isEmpty || prefix.count == 3 {
+                let wallet = try XCTUnwrap(wallet)
+                XCTAssertEqual(derivedAddress(wallet: wallet, coin: .ethereum, path: "m/44'/60'/0'/0/0"),
+                               Vectors.abandonEthereumAddress)
+            } else {
+                XCTAssertNil(wallet)
+            }
+            XCTAssertEqual(mnemonic.testData, original)
+        }
+    }
+
     func testLeadingZeroEthereumDerivationMatchesWalletCoreVector() throws {
         let wallet = try requireHDWallet(mnemonic: Vectors.leadingZeroEthereumMnemonic)
         let firstKey = wallet.getKey(coin: .ethereum, derivationPath: Vectors.leadingZeroEthereumDerivationPath)
@@ -1908,6 +1949,43 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyDescription(privateKey.publicKeyDescription(coin: .ethereum),
                                                                     coin: .ethereum),
                        Vectors.walletCoreJSONPrivateKeyAddress)
+    }
+
+    func testStrictStoredAccountParsingPreservesCompleteWalletRecords() throws {
+        let fixtures = [Vectors.walletCoreJSONPrivateKeyFixture, Vectors.walletCoreJSONMnemonicFixture] +
+            Vectors.walletCoreJSONVariantPrivateKeyFixtures.map(\.json)
+        for fixture in fixtures {
+            let imported = try XCTUnwrap(WalletStoredKey.importJSON(json: fixture))
+            let stored = try XCTUnwrap(WalletStoredKey.importJSON(json: fixture, requireCompleteAccounts: true))
+            XCTAssertEqual(stored.accountCount, imported.accountCount)
+            for index in 0..<imported.accountCount {
+                XCTAssertEqual(stored.account(index: index), imported.account(index: index))
+            }
+            let serialized = try XCTUnwrap(imported.exportJSON())
+            let reloaded = try XCTUnwrap(WalletStoredKey.importJSON(json: serialized, requireCompleteAccounts: true))
+            XCTAssertEqual(reloaded.accountCount, imported.accountCount)
+            for index in 0..<imported.accountCount {
+                XCTAssertEqual(reloaded.account(index: index), imported.account(index: index))
+            }
+        }
+    }
+
+    func testUserJSONImportRemainsPermissiveAboutIncompleteAccountMetadata() throws {
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Vectors.walletCoreJSONPrivateKeyFixture) as? [String: Any])
+        object["activeAccounts"] = [["address": Vectors.walletCoreJSONPrivateKeyAddress]]
+        let incompleteAccounts = try JSONSerialization.data(withJSONObject: object)
+
+        XCTAssertNil(WalletStoredKey.importJSON(json: incompleteAccounts, requireCompleteAccounts: true))
+        let imported = try WalletStoredKey.importUserJSON(json: incompleteAccounts)
+        XCTAssertEqual(imported.accountCount, 0)
+        XCTAssertEqual(imported.decryptPrivateKey(password: Vectors.walletCoreJSONPrivateKeyPassword),
+                       Vectors.walletCoreJSONPrivateKeyData)
+
+        object.removeValue(forKey: "activeAccounts")
+        object.removeValue(forKey: "address")
+        let withoutAccounts = try JSONSerialization.data(withJSONObject: object)
+        XCTAssertNil(WalletStoredKey.importJSON(json: withoutAccounts, requireCompleteAccounts: true))
+        XCTAssertNoThrow(try WalletStoredKey.importUserJSON(json: withoutAccounts))
     }
 
     func testImportsWalletCorePrivateKeyJSONVariantFixtures() throws {

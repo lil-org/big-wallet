@@ -278,18 +278,22 @@ private func storeBigEndian(_ value: UInt32, in bytes: UnsafeMutableRawBufferPoi
 enum BIP39 {
     private static let allowedWordCounts = Set([12, 15, 18, 21, 24])
     private static let words: [String] = BIP39WordList.words.split(separator: "\n").map(String.init)
-    private static let wordIndex: [String: Int] = Dictionary(uniqueKeysWithValues: words.enumerated().map { ($1, $0) })
+    private static let wordBytes = words.map { Array($0.utf8) }
+    private static let maximumMnemonicBytes = 24 * (wordBytes.map(\.count).max() ?? 0) + 23
 
     static func isValidMnemonic(_ mnemonic: String) -> Bool {
-        guard mnemonic == mnemonic.trimmingCharacters(in: .whitespacesAndNewlines),
-              !mnemonic.contains("\t"), !mnemonic.contains("\n"), !mnemonic.contains("  ") else { return false }
-        let parts = mnemonic.split(separator: " ", omittingEmptySubsequences: false)
+        isValidMnemonic(mnemonic.utf8)
+    }
+
+    static func isValidMnemonic<Bytes: Collection>(_ mnemonic: Bytes) -> Bool where Bytes.Element == UInt8 {
+        guard mnemonic.count <= maximumMnemonicBytes else { return false }
+        let parts = mnemonic.split(separator: 32, omittingEmptySubsequences: false)
         guard allowedWordCounts.contains(parts.count) else { return false }
         let totalBits = parts.count * 11
         guard let packed = try? SecretBytes(count: (totalBits + 7) / 8, initialize: { output in
             output.initializeMemory(as: UInt8.self, repeating: 0)
             for (wordOffset, word) in parts.enumerated() {
-                guard let index = wordIndex[String(word)] else { throw WalletKeyStoreError.invalidMnemonic }
+                guard let index = wordIndex(word) else { throw WalletKeyStoreError.invalidMnemonic }
                 for bitOffset in 0..<11 {
                     let bit = (index >> (10 - bitOffset)) & 1
                     let position = wordOffset * 11 + bitOffset
@@ -310,6 +314,22 @@ enum BIP39 {
             let expected: UInt8 = firstDigestByte >> shift
             return actual == expected
         }) == true
+    }
+
+    private static func wordIndex<Bytes: Collection>(_ bytes: Bytes) -> Int? where Bytes.Element == UInt8 {
+        var lowerBound = 0
+        var upperBound = wordBytes.count
+        while lowerBound < upperBound {
+            let index = lowerBound + (upperBound - lowerBound) / 2
+            let word = wordBytes[index]
+            if bytes.elementsEqual(word) { return index }
+            if bytes.lexicographicallyPrecedes(word) {
+                upperBound = index
+            } else {
+                lowerBound = index + 1
+            }
+        }
+        return nil
     }
 
     static func generateSecretMnemonic() throws -> SecretBytes {
@@ -340,9 +360,8 @@ enum BIP39 {
         }
     }
 
-    static func secretSeed(mnemonic: String, passphrase: String) -> SecretBytes {
-        let normalizedMnemonic = SecretBytes(utf8: mnemonic.decomposedStringWithCompatibilityMapping)
-        defer { normalizedMnemonic.invalidate() }
+    static func secretSeed(mnemonic: SecretBytes, passphrase: String) -> SecretBytes? {
+        guard (try? mnemonic.withUnsafeBytes({ isValidMnemonic($0) })) == true else { return nil }
         let normalizedPassphrase = passphrase.decomposedStringWithCompatibilityMapping
         let prefix = Array("mnemonic".utf8)
         let salt = SecretBytes(count: prefix.count + normalizedPassphrase.utf8.count) { output in
@@ -350,8 +369,7 @@ enum BIP39 {
             for (index, byte) in normalizedPassphrase.utf8.enumerated() { output[prefix.count + index] = byte }
         }
         defer { salt.invalidate() }
-        return PBKDF2.secretSHA512(password: normalizedMnemonic, salt: salt, rounds: 2048, keyLength: 64)
-            ?? SecretBytes(count: 0) { _ in }
+        return PBKDF2.secretSHA512(password: mnemonic, salt: salt, rounds: 2048, keyLength: 64)
     }
 
 }

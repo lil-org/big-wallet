@@ -98,7 +98,7 @@ public struct WalletCredentials: Sendable {
             challenge.invalidate()
             throw WalletCredentialError.authorizationUnavailable
         }
-        guard try credential.withUTF8String({ $0 == password }) else { return nil }
+        guard try credential.matchesUTF8String(password) else { return nil }
         guard !Task.isCancelled, let grant = issueGrant(for: challenge, verifiedCredential: credential) else {
             challenge.invalidate()
             throw WalletCredentialError.authorizationUnavailable

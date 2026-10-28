@@ -1,11 +1,87 @@
 import WalletDomain
 @testable import WalletAuthority
 import AppKit
+import Security
 import XCTest
 @testable import Big_Wallet
 
 @MainActor
 final class NativeAccountSelectionViewControllerTests: XCTestCase {
+    func testNetworkSheetCanDismissAfterStoreFailureWithoutApplyingASelection() async throws {
+        let replacementNetwork = try XCTUnwrap(ApplicationServices.shared.networks.network(chainId: 10))
+        for proposedNetwork in [nil, replacementNetwork] {
+            let reader = KeychainCopyMatchingStub()
+            reader.attributes = [reader.walletAttributes(id: "network-sheet")]
+            reader.walletData = ["network-sheet": WalletCoreProxyTestVectors.walletCoreJSONMnemonicFixture]
+            let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+            await assertWalletReload(manager)
+            let controller = try accountSelectionController(manager: manager, mode: .selectAccount,
+                selectedAccounts: [], coinType: .ethereum)
+            let originalNetwork = controller.accountSelection.network
+            let window = accountSelectionWindow(controller: controller)
+            defer {
+                controller.endAllSheets()
+                window.close()
+            }
+            controller.networkButtonTapped(controller.networkButton)
+            let sheet = try XCTUnwrap(window.attachedSheet)
+            reader.attributesStatus = errSecInteractionNotAllowed
+            await assertWalletReload(manager, succeeds: false)
+            XCTAssertTrue(window.attachedSheet === sheet)
+            XCTAssertFalse(controller.networkButton.isEnabled)
+
+            controller.completeNetworkSelection(proposedNetwork)
+
+            await expectEventually { window.attachedSheet == nil }
+            XCTAssertEqual(controller.accountSelection.network, originalNetwork)
+            XCTAssertFalse(controller.accountSelection.hasCompleted)
+            XCTAssertTrue(controller.accountSelection.review.isActive)
+            XCTAssertTrue(controller.content.loadRetryButton?.isEnabled == true)
+        }
+    }
+
+    func testFailedStoreLoadKeepsApprovalPendingAndAllowsCancellation() async throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.attributesStatus = errSecInteractionNotAllowed
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager, succeeds: false)
+        var decisions = [[SpecificWalletAccount]?]()
+        let controller = try accountSelectionController(manager: manager, mode: .selectAccount,
+            selectedAccounts: [], completion: { accounts, _ in decisions.append(accounts) })
+
+        XCTAssertEqual(controller.tableView.numberOfRows, 0)
+        XCTAssertFalse(controller.primaryButton.isEnabled)
+        XCTAssertTrue(controller.secondaryButton.isEnabled)
+        XCTAssertEqual(controller.secondaryButton.title, Strings.cancel)
+        XCTAssertTrue(controller.content.loadRetryButton?.isEnabled == true)
+        controller.didClickPrimaryButton(controller.primaryButton)
+        XCTAssertTrue(decisions.isEmpty)
+
+        controller.didClickSecondaryButton(controller.secondaryButton)
+        XCTAssertEqual(decisions.count, 1)
+        XCTAssertNil(decisions.first!)
+    }
+
+    func testStoreRetryRestoresAccountSelectionWithoutReplacingApproval() async throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.attributesStatus = errSecInteractionNotAllowed
+        reader.attributes = [reader.walletAttributes(id: "retry-selection")]
+        reader.walletData = ["retry-selection": WalletCoreProxyTestVectors.walletCoreJSONMnemonicFixture]
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager, succeeds: false)
+        let controller = try accountSelectionController(manager: manager, mode: .selectAccount, selectedAccounts: [])
+        let session = controller.accountSelection
+
+        reader.attributesStatus = errSecSuccess
+        controller.content.loadRetryButton?.performClick(nil)
+        await expectEventually { manager.isStoreReady && controller.tableView.numberOfRows > 0 }
+
+        XCTAssertTrue(controller.accountSelection === session)
+        XCTAssertTrue(session.review.isActive)
+        XCTAssertFalse(session.hasCompleted)
+        XCTAssertTrue(controller.content.loadStatusView?.isHidden == true)
+    }
+
     func testControllersLoadIndependentInstancesOfTheSharedAccountView() async throws {
         let manager = try await accountSelectionWalletsManager()
         let selection = try accountSelectionController(manager: manager, mode: .selectAccount, selectedAccounts: [])
@@ -65,6 +141,34 @@ final class NativeAccountSelectionViewControllerTests: XCTestCase {
             await assertWalletReload(manager)
             XCTAssertEqual(manager.currentWallet(id: wallet.id)?.accounts, originalAccounts)
         }
+    }
+
+    func testManageWalletsCanRetryAfterReloadAbortsItsQueuedLaunch() async throws {
+        let reader = KeychainCopyMatchingStub()
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager)
+        let controller = try accountSelectionController(manager: manager, mode: .selectAccount, selectedAccounts: [])
+        let window = accountSelectionWindow(controller: controller)
+        defer { window.close() }
+        var launches = 0
+        controller.openWalletManagement = { launches += 1; return true }
+
+        _ = controller.perform(NSSelectorFromString("manageWallets"))
+        let launch = try XCTUnwrap(controller.managementTask)
+        reader.attributesStatus = errSecInteractionNotAllowed
+        await assertWalletReload(manager, succeeds: false)
+        await launch.value
+        XCTAssertEqual(launches, 0)
+
+        reader.attributesStatus = errSecSuccess
+        await assertWalletReload(manager)
+        let manageRow = controller.numberOfRows(in: controller.tableView) - 1
+        XCTAssertEqual(controller.tableView(controller.tableView, rowViewForRow: manageRow)?.alphaValue, 1)
+        _ = controller.perform(NSSelectorFromString("manageWallets"))
+        await controller.managementTask?.value
+        XCTAssertEqual(launches, 1)
+        XCTAssertTrue(controller.accountSelection.review.isActive)
+        XCTAssertFalse(controller.accountSelection.hasCompleted)
     }
 
     func testManageWalletsHandoffKeepsApprovalPendingAndFencesLateCallbacks() async throws {

@@ -10,6 +10,83 @@ import WalletDomain
 final class MobileSecretLifetimeTests: XCTestCase {
     private enum Failure: Error { case failed }
 
+    func testImportRetriesFailedStoreWithoutDiscardingItsDraft() async throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.attributesStatus = errSecInteractionNotAllowed
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager, succeeds: false)
+        let controller = try makeImportController()
+        var preparations = 0
+        var imports = 0
+        controller.prepareStore = {
+            preparations += 1
+            if manager.isStoreReady { return true }
+            return await manager.reloadFromStore()
+        }
+        controller.importWallet = { input, password, _ in
+            XCTAssertTrue(manager.isStoreReady)
+            XCTAssertEqual(input, "recoverable import")
+            XCTAssertNil(password)
+            imports += 1
+            return self.wallet()
+        }
+        controller.textView.text = "recoverable import"
+        controller.textViewDidChange(controller.textView)
+        await expectEventually { controller.okButton.isEnabled }
+        controller.okButtonTapped(controller.okButton as Any)
+        await expectEventually { !controller.presentedAlerts.isEmpty }
+
+        XCTAssertEqual(imports, 0)
+        XCTAssertEqual(controller.presentedAlerts.last?.title, Strings.failedToLoad)
+        XCTAssertEqual(controller.textView.text, "recoverable import")
+        XCTAssertTrue(controller.view.isUserInteractionEnabled)
+        controller.okButton.configurationUpdateHandler?(controller.okButton)
+        XCTAssertEqual(controller.okButton.configuration?.title, Strings.tryAgain)
+        XCTAssertFalse(controller.isRetired)
+
+        reader.attributesStatus = errSecSuccess
+        controller.okButtonTapped(controller.okButton as Any)
+        await expectEventually { controller.dismissals == 1 }
+        XCTAssertEqual(preparations, 2)
+        XCTAssertEqual(imports, 1)
+        XCTAssertTrue(controller.textView.text.isEmpty)
+    }
+
+    func testCancelOrLockDuringImportRecoveryPreventsLateImport() async throws {
+        for lock in [false, true] {
+            let fixture = WalletAccessTestFixture()
+            try fixture.unlock()
+            let controller = try makeImportController(access: fixture.access)
+            let result = TestGate<Bool>()
+            defer { result.resolve(false) }
+            let entered = expectation(description: "store recovery entered")
+            let returned = expectation(description: "store recovery returned")
+            var imports = 0
+            controller.prepareStore = {
+                entered.fulfill()
+                let ready = await result.wait()
+                returned.fulfill()
+                return ready
+            }
+            controller.importWallet = { _, _, _ in imports += 1; return self.wallet() }
+            controller.textView.text = "discarded import"
+            controller.okButtonTapped(controller.okButton as Any)
+            await fulfillment(of: [entered], timeout: 2)
+            XCTAssertTrue(controller.navigationItem.leftBarButtonItem?.isEnabled == true)
+
+            if lock { fixture.access.lock(reason: .background) }
+            else { controller.cancelImport() }
+            result.resolve(true)
+            await fulfillment(of: [returned], timeout: 2)
+            await Task.yield()
+
+            XCTAssertEqual(imports, 0)
+            XCTAssertTrue(controller.isRetired)
+            XCTAssertTrue(controller.textView.text.isEmpty)
+            XCTAssertTrue(controller.presentedAlerts.isEmpty)
+        }
+    }
+
     func testImportSuccessRetiresDraftBeforeCompletionAndDismissal() async throws {
         let controller = try makeImportController()
         let result = TestGate<WalletSnapshot>()
@@ -533,6 +610,7 @@ final class MobileSecretLifetimeTests: XCTestCase {
         let controller = ImportController()
         controller.access = try access ?? unlockedWalletAccessForTesting()
         controller.validateWalletInput = { _ in .valid }
+        controller.prepareStore = { true }
         controller.loadViewIfNeeded()
         return controller
     }
@@ -563,6 +641,7 @@ final class MobileSecretLifetimeTests: XCTestCase {
             let placeholder = UILabel()
             let paste = UIButton(type: .system)
             let ok = UIButton(type: .system)
+            ok.configuration = .filled()
             let children: [UIView] = [input, placeholder, paste, ok]
             for child in children { view.addSubview(child) }
             textView = input
