@@ -173,6 +173,7 @@ public final class EthereumRPC: EthereumRPCClient {
         try JSONSerialization.data(withJSONObject: ["jsonrpc": "2.0", "id": requestID, "method": method, "params": params])
     }
 
+    @concurrent
     private func request<Value: Decodable & Sendable>(
         body: Data,
         endpoint: EthereumRPCEndpoint,
