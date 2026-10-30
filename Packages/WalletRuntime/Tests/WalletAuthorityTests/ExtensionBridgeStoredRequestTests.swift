@@ -3,9 +3,7 @@
 import Foundation
 import Synchronization
 import XCTest
-#if os(macOS)
 import Darwin
-#endif
 @testable import WalletAuthority
 @testable import WalletFlows
 import WalletDomain
@@ -680,7 +678,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             writes.withValue { $0 += 1 }
             throw Failure.injectedWrite
         }
-                io.readData = { _ in throw Failure.injectedWrite }
+                io.readSnapshot = { _, _ in .unavailable }
             })
         guard case .unavailable = await unreadable.configurationSnapshot(
             configurationKey: "https://wallet.example", profileIdentifier: nil
@@ -1560,10 +1558,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 XCTAssertNotNil(state["completed"], "Expiry must be written instead of an invalid execution context")
                 try baseIO.replace(data, url)
             }
-                io.readData = { url in
-                let data = try Data(contentsOf: url)
+                io.readSnapshot = { url, maximumBytes in
+                let result = baseIO.readSnapshot(url, maximumBytes)
                 callbackClock.setDate(fixture.request.admissionDeadline.addingTimeInterval(0.01))
-                return data
+                return result
             }
             }
         )
@@ -2037,13 +2035,110 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testRevocationCapacityRolloverDisconnectsProfilesAndRetiresReviewsWithoutDiscardingJournal() async throws {
+        let account = authorityTestAccount()
+        let dormantID = UUID()
+        let connected = try await grantAuthority(account, id: 63_160)
+        _ = try await grantAuthority(account, id: 63_161, profileIdentifier: dormantID)
+        let signing = try await admittedSigning(account, id: 63_162)
+        let signingClaim = try approvalClaim(await bridge.claim(handle: signing.handle))
+        let signingApproval = try reviewedApproval(signingClaim)
+        XCTAssertTrue(signingClaim.adoptForExecution())
+        defer { signingClaim.releaseUnapproved() }
+
+        let connection = try makeConnectionFixture(id: 63_163, provider: .ethereum, host: "new.example")
+        let connectionHandle = try accepted(await bridge.enqueue(ingress: connection.ingress, profileIdentifier: nil)).handle
+        let connectionClaim = try approvalClaim(await bridge.claim(handle: connectionHandle))
+        let connectionApproval = try reviewedApproval(connectionClaim, accounts: [account])
+        XCTAssertTrue(connectionClaim.adoptForExecution())
+        defer { connectionClaim.releaseUnapproved() }
+
+        let manual = try makeManualFixture(id: 63_164, enqueueAttempt: attempt(for: 63_164))
+        let manualHandle = try accepted(await bridge.enqueue(ingress: manual.ingress, profileIdentifier: nil)).handle
+        let manualClaim = try approvalClaim(await bridge.claim(handle: manualHandle))
+        let manualApproval = try reviewedApproval(manualClaim, accounts: [account])
+        XCTAssertTrue(manualClaim.adoptForExecution())
+        defer { manualClaim.releaseUnapproved() }
+
+        let broadcast = try await admittedBroadcast(account, id: 63_165)
+        let broadcastClaim = try approvalClaim(await bridge.claim(handle: broadcast.handle))
+        let execution = try await reviewedExecution(broadcastClaim)
+        defer { execution.releaseLease() }
+        let checkpoint = await prepareReviewedBroadcast(execution, in: bridge)
+        XCTAssertEqual(checkpoint, .persisted)
+        let originalReply = try await deliveredAuthority(connected.handle)
+        let before = try await removalSnapshot()
+        let activeBytes = try Data(contentsOf: defaultProfileURL)
+        let dormantBytes = try Data(contentsOf: profileURL(dormantID))
+        let oldEpoch = try storedRevocationLedger().epoch
+        var full = WalletAuthorityRevocationLedger(epoch: oldEpoch)
+        try full.record((0..<WalletAuthorityRevocationLedger.maximumEntries).map { .wallet(id: "history-\($0)") })
+        try full.encoded().write(to: revocationLedgerURL)
+
+        try removalStore().withRevokedWalletAuthority(matching: .wallet(id: "newly-removed-wallet")) {}
+        let replacement = try storedRevocationLedger()
+        XCTAssertNotEqual(replacement.epoch, oldEpoch)
+        XCTAssertEqual(replacement.sequence, 1)
+        XCTAssertEqual(replacement.walletRemovals, [.init(walletID: "newly-removed-wallet", sequence: 1)])
+        XCTAssertEqual(try Data(contentsOf: defaultProfileURL), activeBytes)
+        XCTAssertEqual(try Data(contentsOf: profileURL(dormantID)), dormantBytes)
+
+        let reset = try await removalSnapshot()
+        XCTAssertNil(reset.ethereumAccount)
+        XCTAssertEqual(reset.ethereumChainId, before.ethereumChainId)
+        XCTAssertEqual(reset.version.context, before.version.context)
+        XCTAssertGreaterThan(reset.version.revisions.ethereum, before.version.revisions.ethereum)
+        for (claim, approval) in [(signingClaim, signingApproval), (connectionClaim, connectionApproval), (manualClaim, manualApproval)] {
+            guard case .ownershipLost = removalStore().authorize(claim: claim, approval: approval) else {
+                return XCTFail("Pre-rollover reviews must not authorize execution")
+            }
+            let reply = try await deliveredAuthority(claim.handle)
+            XCTAssertEqual((reply.response["error"] as? [String: Any])?["code"] as? Int, 4100)
+        }
+        let completed = try await deliveredAuthority(connected.handle)
+        XCTAssertTrue(NSDictionary(dictionary: completed.response).isEqual(to: originalReply.response))
+        let completion = await completeReviewedExecution(execution, in: bridge)
+        XCTAssertEqual(completion, .persisted)
+        let recovered = try await deliveredAuthority(broadcast.handle)
+        XCTAssertTrue(NSDictionary(dictionary: recovered.response).isEqual(to: execution.recoveryResponse.json))
+        guard case .responded = await bridge.claim(handle: broadcast.handle) else {
+            return XCTFail("Committed broadcasts must not receive another execution claim")
+        }
+        XCTAssertEqual(try Data(contentsOf: profileURL(dormantID)), dormantBytes)
+        let dormant = try await removalSnapshot(profileIdentifier: dormantID)
+        XCTAssertNil(dormant.ethereumAccount)
+    }
+
+    @MainActor
+    func testOversizedLedgerLeavesPermissionsAndCommittedBroadcastJournalUntouched() async throws {
+        let account = authorityTestAccount()
+        _ = try await grantAuthority(account, id: 63_170)
+        let broadcast = try await admittedBroadcast(account, id: 63_171)
+        let claim = try approvalClaim(await bridge.claim(handle: broadcast.handle))
+        let execution = try await reviewedExecution(claim)
+        defer { execution.releaseLease() }
+        let checkpoint = await prepareReviewedBroadcast(execution, in: bridge)
+        XCTAssertEqual(checkpoint, .persisted)
+        let profileBytes = try Data(contentsOf: defaultProfileURL)
+        let ledgerBytes = Data(repeating: 0, count: WalletAuthorityRevocationLedger.maximumEncodedBytes + 1)
+        try ledgerBytes.write(to: revocationLedgerURL)
+        for _ in 0..<2 {
+            guard case .unavailable = removalStore().configurationSnapshot(
+                configurationKey: "https://wallet.example", profileIdentifier: nil
+            ) else { return XCTFail("Oversized history must remain unavailable") }
+            XCTAssertEqual(try Data(contentsOf: defaultProfileURL), profileBytes)
+            XCTAssertEqual(try Data(contentsOf: revocationLedgerURL), ledgerBytes)
+        }
+    }
+
     func testUnreadableOrUnsafeRevocationHistoryBlocksSourceWithoutOverwritingIt() throws {
         try removalStore().withRevokedWalletAuthority(matching: .wallet(id: "old-wallet")) {}
         let original = try Data(contentsOf: revocationLedgerURL)
         let sourceWrites = LockedTestValue(0)
         let unreadable = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: storeDependenciesForTesting(
             fileIO: approvalStoreIO(directoryBoundary: rootURL) { io in
-                io.readData = { _ in throw Failure.injectedWrite }
+                io.readSnapshot = { _, _ in .unavailable }
             }
         ))
         XCTAssertThrowsError(try unreadable.withRevokedWalletAuthority(matching: .wallet(id: "new-wallet")) {
@@ -2117,13 +2212,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 XCTAssertEqual(url, callbackLedgerURL)
                 try baseIO.replace(data, url)
             }
-                io.readData = { url in
+                io.readSnapshot = { url, maximumBytes in
                 XCTAssertEqual(url, callbackLedgerURL)
-                return try Data(contentsOf: url)
-            }
-                io.readFileSize = { url in
-                XCTAssertEqual(url, callbackLedgerURL)
-                return try baseIO.readFileSize(url)
+                return baseIO.readSnapshot(url, maximumBytes)
             }
             }
         ))
@@ -2160,9 +2251,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let sourceMutations = LockedTestValue(0)
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: storeDependenciesForTesting(
             fileIO: approvalStoreIO(directoryBoundary: rootURL) { io in
-                io.readData = { url in
-                guard url == callbackLedgerURL else { throw Failure.injectedWrite }
-                return try Data(contentsOf: url)
+                let baseIO = io
+                io.readSnapshot = { url, maximumBytes in
+                guard url == callbackLedgerURL else { return .unavailable }
+                return baseIO.readSnapshot(url, maximumBytes)
             }
             }
         ))
@@ -2860,9 +2952,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let writer = makeBridge(clock: { [clock = clock!] in clock.date },
             configureIO: { io in
                 let baseIO = io
-                io.readData = { url in
-            if unavailable.value { throw CocoaError(.fileReadUnknown) }
-            return try baseIO.readData(url)
+                io.readSnapshot = { url, maximumBytes in
+            if unavailable.value { return .unavailable }
+            return baseIO.readSnapshot(url, maximumBytes)
         }
             })
 
@@ -5233,27 +5325,24 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     }
                     throw Failure.injectedWrite
                 }
-                    io.readData = { url in
+                    io.readSnapshot = { url, maximumBytes in
                     if recovering.value, url == targetURL {
+                        if mode == .oversizedFile { return .tooLarge }
+                        let result = baseIO.readSnapshot(url, maximumBytes)
+                        guard case .data = result else { return result }
                         recoveryReads.withValue { $0 += 1 }
                         switch mode {
                         case .unreadable:
-                            throw Failure.injectedWrite
+                            return .unavailable
                         case .oversizedData:
-                            return Data(repeating: 0, count: ExtensionBridge.maximumRetainedBytes * 2)
+                            return .data(Data(repeating: 0, count: ExtensionBridge.maximumRetainedBytes * 2))
                         case .emptyData:
-                            return Data()
+                            return .data(Data())
                         default:
-                            break
+                            return result
                         }
                     }
-                    return try baseIO.readData(url)
-                }
-                    io.readFileSize = { url in
-                    if recovering.value, url == targetURL, mode == .oversizedFile {
-                        return Int.max
-                    }
-                    return try baseIO.readFileSize(url)
+                    return baseIO.readSnapshot(url, maximumBytes)
                 }
                 }
             )
@@ -6544,13 +6633,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let expectedProfileURL = profileURL(handle.profileIdentifier)
         let authorizer = makeBridge(clock: { [clock = clock!] in clock.date },
             configureIO: { io in
-                io.readData = { url in
-            let data = try Data(contentsOf: url)
+                let baseIO = io
+                io.readSnapshot = { url, maximumBytes in
+            let result = baseIO.readSnapshot(url, maximumBytes)
             if url == expectedProfileURL {
                 reads.withValue { $0 += 1 }
                 callbackClock.setDate(claim.executionDeadline)
             }
-            return data
+            return result
         }
             })
         let authorized = await authorizer.authorize(claim: claim, approval: approval)
@@ -6578,13 +6668,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: storeDependenciesForTesting(
                 clock: { callbackClock.date },
             fileIO: approvalStoreIO(directoryBoundary: rootURL) { io in
-                io.readData = { url in
-                    let data = try Data(contentsOf: url)
+                let baseIO = io
+                io.readSnapshot = { url, maximumBytes in
+                    let result = baseIO.readSnapshot(url, maximumBytes)
                     if expireDuringRead.value, url == expectedProfileURL {
                         reads.withValue { $0 += 1 }
                         callbackClock.setDate(deadline)
                     }
-                    return data
+                    return result
                 }
             }
             ))
@@ -7016,15 +7107,24 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
         var operations = DurableProfilePersistence.Operations.live
         let openDirectory = operations.openDirectory
+        let openFile = operations.openFile
         let syncDirectory = operations.syncDirectory
         let directoryPaths = LockedTestValue([Int32: String]())
-        let openedPaths = LockedTestValue([String]())
         let synchronizedPaths = LockedTestValue([String]())
         let failBoundarySynchronization = LockedTestValue(false)
         operations.openDirectory = { path in
+            XCTAssertEqual(path, container.path)
             let descriptor = try openDirectory(path)
             directoryPaths.withValue { $0[descriptor] = path }
-            openedPaths.withValue { $0.append(path) }
+            return descriptor
+        }
+        operations.openFile = { parent, name, flags, mode in
+            let descriptor = try openFile(parent, name, flags, mode)
+            if flags & O_DIRECTORY != 0 {
+                let parentPath = try XCTUnwrap(directoryPaths.value[parent])
+                let path = URL(fileURLWithPath: parentPath).appendingPathComponent(name).path
+                directoryPaths.withValue { $0[descriptor] = path }
+            }
             return descriptor
         }
         operations.syncDirectory = { descriptor in
@@ -7045,9 +7145,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let template = try makeFixture(id: 982)
         guard case .snapshot(let snapshot) = store.configurationSnapshot(configurationKey: template.request.configurationKey, profileIdentifier: nil) else { return XCTFail("Expected container authority") }
         let ledgerPaths = [storeRoot, support, library, container].map(\.path)
-        XCTAssertEqual(openedPaths.value, ledgerPaths + expectedPaths)
         XCTAssertEqual(synchronizedPaths.value, ledgerPaths + expectedPaths)
-        openedPaths.withValue { $0.removeAll() }
         synchronizedPaths.withValue { $0.removeAll() }
         var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: template.ingress.canonicalData) as? [String: Any])
         raw["authority"] = snapshot.version.json
@@ -7056,22 +7154,18 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             ingress: fixture.ingress,
             profileIdentifier: nil
         )).handle
-        XCTAssertEqual(openedPaths.value, expectedPaths)
         XCTAssertEqual(synchronizedPaths.value, expectedPaths)
 
         let expectedResponse = response(for: fixture.request)
         XCTAssertEqual(store.completeImmediate(handle: handle, resolution: immediateResolution(for: fixture.request)), .persisted)
-        openedPaths.withValue { $0.removeAll() }
         synchronizedPaths.withValue { $0.removeAll() }
         failBoundarySynchronization.value = true
         guard case .unavailable = store.prepareResponseDelivery(
             handle: handle,
             configurationKey: fixture.request.configurationKey
         ) else { return XCTFail("Response reads must synchronize through the container boundary") }
-        XCTAssertEqual(openedPaths.value, expectedPaths)
         XCTAssertEqual(synchronizedPaths.value, expectedPaths)
 
-        openedPaths.withValue { $0.removeAll() }
         synchronizedPaths.withValue { $0.removeAll() }
         failBoundarySynchronization.value = false
         let recovered = try responseJSON(store.prepareResponseDelivery(
@@ -7079,7 +7173,6 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             configurationKey: fixture.request.configurationKey
         ))
         XCTAssertEqual(recovered as NSDictionary, expectedResponse.json as NSDictionary)
-        XCTAssertEqual(openedPaths.value, expectedPaths)
         XCTAssertEqual(synchronizedPaths.value, expectedPaths)
     }
 

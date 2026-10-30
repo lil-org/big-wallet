@@ -162,7 +162,7 @@ final class WalletAuthorityRevocationLedgerTests: XCTestCase {
             }),
         ]
         for (name, mutate) in mutations {
-            XCTAssertNil(WalletAuthorityRevocationLedger.decode(try corrupted(ledger, mutate)), name)
+            XCTAssertNil(try WalletAuthorityRevocationLedger.decode(corrupted(ledger, mutate)), name)
         }
         for field in ["walletRemovals", "accountRemovals"] {
             for sequence in [-1, 0, 2] {
@@ -171,10 +171,112 @@ final class WalletAuthorityRevocationLedgerTests: XCTestCase {
                     entries[0]["sequence"] = sequence
                     raw[field] = entries
                 }
-                XCTAssertNil(WalletAuthorityRevocationLedger.decode(data), "\(field) sequence \(sequence)")
+                XCTAssertNil(try WalletAuthorityRevocationLedger.decode(data), "\(field) sequence \(sequence)")
             }
         }
-        XCTAssertNil(WalletAuthorityRevocationLedger.decode(Data("not a plist".utf8)))
+        XCTAssertNil(try WalletAuthorityRevocationLedger.decode(Data("not a plist".utf8)))
+    }
+
+    func testEntryLimitAcceptsTheBoundaryAndRejectsGrowthWithoutChangingTheLedger() throws {
+        var ledger = WalletAuthorityRevocationLedger(epoch: epoch)
+        let removals = (0..<WalletAuthorityRevocationLedger.maximumEntries).map {
+            WalletAuthorityRemoval.wallet(id: "wallet-\($0)")
+        }
+        try ledger.record(removals)
+        XCTAssertTrue(ledger.isValid)
+        XCTAssertEqual(try WalletAuthorityRevocationLedger.decode(ledger.encoded()), ledger)
+
+        let before = ledger
+        assertCapacityExceeded { try ledger.record([.accounts([self.descriptor()])]) }
+        XCTAssertEqual(ledger, before)
+        XCTAssertTrue(try ledger.record([removals[0]]))
+        XCTAssertEqual(ledger.walletRemovals.count, WalletAuthorityRevocationLedger.maximumEntries)
+        XCTAssertEqual(ledger.sequence, 2)
+    }
+
+    func testEntryLimitCountsWalletsAndAccountsTogetherBeforeDecodingElements() throws {
+        let invalidEntry: [String: Any] = ["not": "a removal"]
+        for (walletCount, accountCount) in [
+            (WalletAuthorityRevocationLedger.maximumEntries + 1, 0),
+            (1, WalletAuthorityRevocationLedger.maximumEntries),
+            (0, WalletAuthorityRevocationLedger.maximumEntries + 1),
+        ] {
+            let raw: [String: Any] = [
+                "schemaVersion": 1, "epoch": epoch.uuidString, "sequence": 1,
+                "walletRemovals": Array(repeating: invalidEntry, count: walletCount),
+                "accountRemovals": Array(repeating: invalidEntry, count: accountCount),
+            ]
+            let data = try PropertyListSerialization.data(fromPropertyList: raw, format: .binary, options: 0)
+            XCTAssertLessThan(data.count, WalletAuthorityRevocationLedger.maximumEncodedBytes)
+            assertCapacityExceeded { _ = try WalletAuthorityRevocationLedger.decode(data) }
+        }
+    }
+
+    func testByteLimitAcceptsTheExactBoundaryAndRejectsOneExtraByte() throws {
+        let ledger = WalletAuthorityRevocationLedger(epoch: epoch)
+        var raw = try XCTUnwrap(PropertyListSerialization.propertyList(
+            from: ledger.encoded(), options: [], format: nil
+        ) as? [String: Any])
+        let limit = WalletAuthorityRevocationLedger.maximumEncodedBytes
+        var padding = limit
+        var data = Data()
+        for _ in 0..<4 {
+            raw["padding"] = String(repeating: "x", count: padding)
+            data = try PropertyListSerialization.data(fromPropertyList: raw, format: .binary, options: 0)
+            if data.count == limit { break }
+            padding += limit - data.count
+        }
+        XCTAssertEqual(data.count, limit)
+        XCTAssertEqual(try WalletAuthorityRevocationLedger.decode(data), ledger)
+        data.append(0)
+        assertCapacityExceeded { _ = try WalletAuthorityRevocationLedger.decode(data) }
+    }
+
+    func testDecodingRejectsRepeatedOversizedStringsWithinFileAndEntryLimits() throws {
+        for (field, entry) in oversizedRemovalEntries() {
+            let data = try corrupted(WalletAuthorityRevocationLedger(epoch: epoch)) {
+                $0["sequence"] = 1
+                $0[field] = Array(repeating: entry, count: 1_024)
+            }
+            XCTAssertLessThan(data.count, 256 * 1_024, "Repeated values must share binary-plist references")
+            XCTAssertLessThan(data.count, WalletAuthorityRevocationLedger.maximumEncodedBytes)
+            XCTAssertLessThan(1_024, WalletAuthorityRevocationLedger.maximumEntries)
+            assertInvalidRemovalDecoding(data)
+            XCTAssertNil(try WalletAuthorityRevocationLedger.decode(data))
+        }
+    }
+
+    func testDecodingRejectsOversizedEntryBeforeReadingMalformedFollowingEntry() throws {
+        for (field, entry) in oversizedRemovalEntries() {
+            let data = try corrupted(WalletAuthorityRevocationLedger(epoch: epoch)) {
+                $0["sequence"] = 1
+                $0[field] = [entry, ["not": "a removal"]]
+            }
+            assertInvalidRemovalDecoding(data)
+        }
+    }
+
+    func testEncodedByteLimitIsIndependentOfEntryLimit() throws {
+        var ledger = WalletAuthorityRevocationLedger(epoch: epoch)
+        let removals = (0..<32_768).map { index in
+            WalletAuthorityRemoval.wallet(id: String(repeating: "x", count: 240) + String(index))
+        }
+        try ledger.record(removals)
+        XCTAssertLessThan(ledger.walletRemovals.count, WalletAuthorityRevocationLedger.maximumEntries)
+        XCTAssertTrue(ledger.isValid)
+        assertCapacityExceeded { _ = try ledger.encoded() }
+    }
+
+    func testWholeWalletSubsumptionFitsAtEntryCapacity() throws {
+        let accounts = Set((0..<WalletAuthorityRevocationLedger.maximumEntries).map {
+            descriptor(path: "m/44'/60'/0'/0/\($0)")
+        })
+        var ledger = WalletAuthorityRevocationLedger(epoch: epoch)
+        try ledger.record([.accounts(accounts)])
+        try ledger.record([.wallet(id: "wallet")])
+        XCTAssertEqual(ledger.walletRemovals, [.init(walletID: "wallet", sequence: 2)])
+        XCTAssertTrue(ledger.accountRemovals.isEmpty)
+        XCTAssertEqual(ledger.epoch, epoch)
     }
 
     func testIndependentConcurrentStoresPublishEveryBatchBeforeCommittingSource() throws {
@@ -203,7 +305,7 @@ final class WalletAuthorityRevocationLedgerTests: XCTestCase {
                         payload: index, authorityRemovals: [.wallet(id: walletID), .accounts([account])]
                     )
                 }, beforeCommit: {}, commit: { writer in
-                    guard let published = WalletAuthorityRevocationLedger.decode(try Data(contentsOf: ledgerURL)),
+                    guard let published = try WalletAuthorityRevocationLedger.decode(Data(contentsOf: ledgerURL)),
                           let walletRemoval = published.walletRemovals.first(where: { $0.walletID == walletID }),
                           let accountRemoval = published.accountRemovals.first(where: { $0.account == account }),
                           walletRemoval.sequence == accountRemoval.sequence else {
@@ -238,6 +340,47 @@ final class WalletAuthorityRevocationLedgerTests: XCTestCase {
         func fail(_ message: String) { state.withLock { $0.failures.append(message) } }
         func snapshot() -> (committed: [Int], failures: [String]) {
             state.withLock { ($0.committed, $0.failures) }
+        }
+    }
+
+    private func assertCapacityExceeded(
+        _ operation: () throws -> Void,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertThrowsError(try operation(), file: file, line: line) { error in
+            guard case WalletAuthorityRevocationLedger.Error.capacityExceeded = error else {
+                return XCTFail("Expected capacityExceeded, received \(error)", file: file, line: line)
+            }
+        }
+    }
+
+    private func oversizedRemovalEntries() -> [(String, [String: Any])] {
+        let oversized = String(repeating: "x", count: 64 * 1_024)
+        var entries: [(String, [String: Any])] = [
+            ("walletRemovals", ["walletID": oversized, "sequence": 1]),
+        ]
+        for field in ["walletID", "normalizedAddress", "derivationPath"] {
+            var account: [String: Any] = [
+                "walletID": "wallet", "coin": WalletCoin.ethereum.rawValue,
+                "normalizedAddress": "0x0000000000000000000000000000000000000001",
+                "derivationPath": "m/44'/60'/0'/0/0",
+            ]
+            account[field] = oversized
+            entries.append(("accountRemovals", ["account": account, "sequence": 1]))
+        }
+        return entries
+    }
+
+    private func assertInvalidRemovalDecoding(
+        _ data: Data,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertThrowsError(try PropertyListDecoder().decode(WalletAuthorityRevocationLedger.self, from: data), file: file, line: line) {
+            guard case WalletAuthorityRevocationLedger.Error.invalidRemoval = $0 else {
+                return XCTFail("Expected invalidRemoval before decoding later entries, received \($0)", file: file, line: line)
+            }
         }
     }
 

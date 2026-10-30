@@ -266,20 +266,13 @@ final class HarnessPersistence: Sendable {
             try baseIO.synchronizePublishedFile(url)
             try confirmPublishedGrant(at: url, directoryBoundary: directoryBoundary)
         }
-        io.readData = { [self] url in
-            let details = HarnessValue.object(["path": .string(url.path)])
-            try ipc.checkpointSync("persistence.read.before", details: details)
-            let data = try baseIO.readData(url)
-            try confirmPublishedGrant(data: data, url: url, directoryBoundary: directoryBoundary)
-            try ipc.checkpointSync("persistence.read.after", details: details)
-            return data
-        }
-        io.readFileSize = { [ipc] url in
-            let details = HarnessValue.object(["path": .string(url.path)])
-            try ipc.checkpointSync("persistence.stat.before", details: details)
-            let size = try baseIO.readFileSize(url)
-            try ipc.checkpointSync("persistence.stat.after", details: details)
-            return size
+        io.readSnapshot = { [self] url, maximumBytes in
+            let result = baseIO.readSnapshot(url, maximumBytes)
+            if case .data(let data) = result {
+                do { try confirmPublishedGrant(data: data, url: url, directoryBoundary: directoryBoundary) }
+                catch { return .unavailable }
+            }
+            return result
         }
         return io
     }
@@ -298,6 +291,20 @@ final class HarnessPersistence: Sendable {
                 state[descriptor] = Descriptor(path: (state[directory]?.path ?? "") + "/" + name)
             }
             return descriptor
+        }
+        operations.metadata = { [self] descriptor in
+            let details = details(descriptor)
+            try ipc.checkpointSync("persistence.stat.before", details: details)
+            let metadata = try live.metadata(descriptor)
+            try ipc.checkpointSync("persistence.stat.after", details: details)
+            return metadata
+        }
+        operations.read = { [self] descriptor, bytes, count in
+            let details = details(descriptor).merging(["requestedBytes": .number(Double(count))])
+            try ipc.checkpointSync("persistence.read.before", details: details)
+            let read = try live.read(descriptor, bytes, count)
+            try ipc.checkpointSync("persistence.read.after", details: details.merging(["readBytes": .number(Double(read))]))
+            return read
         }
         operations.write = { [self] descriptor, bytes, count in
             let details = details(descriptor).merging(["requestedBytes": .number(Double(count))])
@@ -363,7 +370,7 @@ final class HarnessPersistence: Sendable {
               let handle = try? harnessDecodeHandle(HarnessOperation.identity),
               let executionID = HarnessOperation.identity["executionID"].string,
               UUID(uuidString: executionID) != nil else { return }
-        let beforeData = try readBounded(url, maximum: 16 * 1024 * 1024)
+        let beforeData = try readBounded(url, maximum: 16 * 1024 * 1024, directoryBoundary: directoryBoundary)
         let before = try PropertyListDecoder().decode(ExtensionRequestProfile.State.self, from: beforeData)
         let after = try PropertyListDecoder().decode(ExtensionRequestProfile.State.self, from: data)
         guard before.profileIdentifier == handle.profileIdentifier, after.profileIdentifier == handle.profileIdentifier,
@@ -388,13 +395,13 @@ final class HarnessPersistence: Sendable {
         try FileManager.default.createDirectory(at: candidate.deletingLastPathComponent(), withIntermediateDirectories: true,
             attributes: [.posixPermissions: 0o700])
         if FileManager.default.fileExists(atPath: candidate.path) {
-            let existing = try readCandidate(candidate, digest: digest)
+            let existing = try readCandidate(candidate, digest: digest, directoryBoundary: directoryBoundary)
             guard try harnessDecodeHandle(existing["handle"]) == handle,
                   existing["configurationKey"].string == record.configurationKey else {
                 throw HarnessError.invalid("Grant candidate identity changed")
             }
             if existing["executionID"].string == executionID { return }
-            let published = try readBounded(url, maximum: 16 * 1024 * 1024)
+            let published = try readBounded(url, maximum: 16 * 1024 * 1024, directoryBoundary: directoryBoundary)
             guard published == beforeData, Self.profileDigest(published) != digest else {
                 throw HarnessError.invalid("Cannot replace a published grant candidate")
             }
@@ -430,7 +437,7 @@ final class HarnessPersistence: Sendable {
 
     private func confirmPublishedGrant(at url: URL, directoryBoundary: URL) throws {
         guard isProfile(url, directoryBoundary: directoryBoundary), HarnessOperation.taskID != nil else { return }
-        try confirmPublishedGrant(data: readBounded(url, maximum: 16 * 1024 * 1024), url: url, directoryBoundary: directoryBoundary)
+        try confirmPublishedGrant(data: readBounded(url, maximum: 16 * 1024 * 1024, directoryBoundary: directoryBoundary), url: url, directoryBoundary: directoryBoundary)
     }
 
     private func confirmPublishedGrant(data: Data, url: URL, directoryBoundary: URL) throws {
@@ -439,7 +446,7 @@ final class HarnessPersistence: Sendable {
         guard !acknowledgedGrantProofs.withLock({ $0.contains(digest) }) else { return }
         let candidate = candidateURL(digest, directoryBoundary: directoryBoundary)
         guard FileManager.default.fileExists(atPath: candidate.path) else { return }
-        let proof = try readCandidate(candidate, digest: digest)
+        let proof = try readCandidate(candidate, digest: digest, directoryBoundary: directoryBoundary)
         let handle = try harnessDecodeHandle(proof["handle"])
         let profile = try PropertyListDecoder().decode(ExtensionRequestProfile.State.self, from: data)
         guard profile.profileIdentifier == handle.profileIdentifier,
@@ -466,8 +473,8 @@ final class HarnessPersistence: Sendable {
         directoryBoundary.appendingPathComponent("grant-proofs", isDirectory: true).appendingPathComponent(digest + ".json")
     }
 
-    private func readCandidate(_ url: URL, digest: String) throws -> HarnessValue {
-        let value = try JSONDecoder().decode(HarnessValue.self, from: readBounded(url, maximum: 1_048_576))
+    private func readCandidate(_ url: URL, digest: String, directoryBoundary: URL) throws -> HarnessValue {
+        let value = try JSONDecoder().decode(HarnessValue.self, from: readBounded(url, maximum: 1_048_576, directoryBoundary: directoryBoundary))
         guard value["profileSHA256"].string == digest, let executionID = value["executionID"].string,
               UUID(uuidString: executionID) != nil, let creatorEpoch = value["creatorEpoch"].string, !creatorEpoch.isEmpty,
               ["bridge", "approval"].contains(value["creatorRole"].string ?? "") else {
@@ -476,22 +483,10 @@ final class HarnessPersistence: Sendable {
         return value
     }
 
-    private func readBounded(_ url: URL, maximum: Int) throws -> Data {
-        let descriptor = Darwin.open(url.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK)
-        guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
-        defer { Darwin.close(descriptor) }
-        var metadata = stat()
-        guard fstat(descriptor, &metadata) == 0, metadata.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
-              metadata.st_size >= 0, metadata.st_size <= Int64(maximum) else { throw HarnessError.invalid("Invalid grant evidence file") }
-        var data = Data(count: Int(metadata.st_size))
-        try data.withUnsafeMutableBytes { bytes in
-            var offset = 0
-            while offset < bytes.count {
-                let count = Darwin.read(descriptor, bytes.baseAddress!.advanced(by: offset), bytes.count - offset)
-                if count < 0 && errno == EINTR { continue }
-                guard count > 0 else { throw HarnessError.invalid("Truncated grant evidence file") }
-                offset += count
-            }
+    private func readBounded(_ url: URL, maximum: Int, directoryBoundary: URL) throws -> Data {
+        let persistence = DurableProfilePersistence(directoryBoundary: directoryBoundary)
+        guard case .data(let data) = persistence.readSnapshot(at: url, maximumBytes: maximum) else {
+            throw HarnessError.invalid("Invalid grant evidence file")
         }
         return data
     }

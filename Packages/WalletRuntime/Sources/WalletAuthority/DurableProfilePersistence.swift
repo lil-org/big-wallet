@@ -19,51 +19,92 @@ struct DurableProfilePersistence: Sendable {
         var rename: @Sendable (Int32, String, String) throws -> Void
         var unlink: @Sendable (Int32, String) throws -> Void
         var close: @Sendable (Int32) -> Void
+        var metadata = SharedFileOperations.live.metadata
+        var entryMetadata = SharedFileOperations.live.entryMetadata
+        var read = SharedFileOperations.live.read
 
         static let live = Operations(
             openDirectory: { path in
-                try checked(Darwin.open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW))
+                let (result, errorNumber) = path.withCString { path in
+                    let result = Darwin.open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW)
+                    let errorNumber = errno
+                    return (result, errorNumber)
+                }
+                return try checked(result, errorNumber: errorNumber)
             },
             openFile: { directory, name, flags, mode in
-                try checked(Darwin.openat(directory, name, flags, mode))
+                let (result, errorNumber) = name.withCString { name in
+                    let result = Darwin.openat(directory, name, flags, mode)
+                    let errorNumber = errno
+                    return (result, errorNumber)
+                }
+                return try checked(result, errorNumber: errorNumber)
             },
             fileKind: { descriptor in
                 var metadata = stat()
-                try checked(Darwin.fstat(descriptor, &metadata))
+                let result = Darwin.fstat(descriptor, &metadata)
+                let errorNumber = errno
+                try checked(result, errorNumber: errorNumber)
                 return kind(metadata.st_mode)
             },
             entryKind: { directory, name in
                 var metadata = stat()
-                guard Darwin.fstatat(directory, name, &metadata, AT_SYMLINK_NOFOLLOW) == 0 else {
-                    if errno == ENOENT { return nil }
-                    throw failure()
+                let (result, errorNumber) = name.withCString { name in
+                    let result = Darwin.fstatat(directory, name, &metadata, AT_SYMLINK_NOFOLLOW)
+                    let errorNumber = errno
+                    return (result, errorNumber)
+                }
+                guard result == 0 else {
+                    if errorNumber == ENOENT { return nil }
+                    throw failure(errorNumber: errorNumber)
                 }
                 return kind(metadata.st_mode)
             },
             write: { descriptor, bytes, count in
                 let written = Darwin.write(descriptor, bytes, count)
-                guard written >= 0 else { throw failure() }
+                let errorNumber = errno
+                guard written >= 0 else { throw failure(errorNumber: errorNumber) }
                 return written
             },
-            fullSync: { try checked(Darwin.fcntl($0, F_FULLFSYNC)) },
-            syncDirectory: { try checked(Darwin.fsync($0)) },
+            fullSync: { descriptor in
+                let result = Darwin.fcntl(descriptor, F_FULLFSYNC)
+                let errorNumber = errno
+                try checked(result, errorNumber: errorNumber)
+            },
+            syncDirectory: { descriptor in
+                let result = Darwin.fsync(descriptor)
+                let errorNumber = errno
+                try checked(result, errorNumber: errorNumber)
+            },
             rename: { directory, source, destination in
-                try checked(Darwin.renameat(directory, source, directory, destination))
+                let (result, errorNumber) = source.withCString { source in
+                    destination.withCString { destination in
+                        let result = Darwin.renameat(directory, source, directory, destination)
+                        let errorNumber = errno
+                        return (result, errorNumber)
+                    }
+                }
+                try checked(result, errorNumber: errorNumber)
             },
             unlink: { directory, name in
-                try checked(Darwin.unlinkat(directory, name, 0))
+                let (result, errorNumber) = name.withCString { name in
+                    let result = Darwin.unlinkat(directory, name, 0)
+                    let errorNumber = errno
+                    return (result, errorNumber)
+                }
+                try checked(result, errorNumber: errorNumber)
             },
             close: { _ = Darwin.close($0) }
         )
 
         @discardableResult
-        private static func checked(_ result: Int32) throws -> Int32 {
-            guard result >= 0 else { throw failure() }
+        private static func checked(_ result: Int32, errorNumber: Int32) throws -> Int32 {
+            guard result >= 0 else { throw failure(errorNumber: errorNumber) }
             return result
         }
 
-        private static func failure() -> POSIXError {
-            POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        private static func failure(errorNumber: Int32) -> POSIXError {
+            POSIXError(POSIXErrorCode(rawValue: errorNumber) ?? .EIO)
         }
 
         private static func kind(_ mode: mode_t) -> FileKind {
@@ -160,24 +201,31 @@ struct DurableProfilePersistence: Sendable {
         try retryInterrupted { try operations.fullSync(descriptor) }
     }
 
+    func readSnapshot(at url: URL, maximumBytes: Int) -> RegularFileSnapshotReader.Result {
+        var readerOperations = SharedFileOperations.live
+        readerOperations.directories = directoryOperations
+        readerOperations.openFile = operations.openFile
+        readerOperations.metadata = operations.metadata
+        readerOperations.entryMetadata = operations.entryMetadata
+        readerOperations.read = operations.read
+        readerOperations.close = operations.close
+        return RegularFileSnapshotReader(directoryBoundary: directoryBoundary, operations: readerOperations)
+            .read(at: url, maximumBytes: maximumBytes)
+    }
+
+    private var directoryOperations: AnchoredDirectoryAccess.Operations {
+        let operations = operations
+        return .init(
+            openDirectory: operations.openDirectory,
+            openDirectoryAt: { directory, name in
+                try operations.openFile(directory, name, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW, 0)
+            },
+            close: operations.close
+        )
+    }
+
     private func openDirectories(for url: URL) throws -> [Int32] {
-        guard url.isFileURL, directoryBoundary.isFileURL else { throw POSIXError(.EINVAL) }
-        let parent = url.standardizedFileURL.deletingLastPathComponent().standardizedFileURL
-        let boundaryComponents = directoryBoundary.pathComponents
-        guard parent.pathComponents.starts(with: boundaryComponents) else { throw POSIXError(.EINVAL) }
-        var descriptors = [Int32]()
-        var current = parent
-        do {
-            while true {
-                let descriptor = try retryInterrupted { try operations.openDirectory(current.path) }
-                descriptors.append(descriptor)
-                if current.pathComponents == boundaryComponents { return descriptors }
-                current.deleteLastPathComponent()
-            }
-        } catch {
-            descriptors.reversed().forEach(operations.close)
-            throw error
-        }
+        try AnchoredDirectoryAccess.openParent(of: url, within: directoryBoundary, operations: directoryOperations)
     }
 
     private func openTemporaryFile(in directory: Int32) throws -> (descriptor: Int32, name: String) {

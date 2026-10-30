@@ -713,7 +713,8 @@ public final class AlchemyJWTProvider: AlchemyAuthorizationProviding {
             fileURL: containerURL?.appendingPathComponent(
                 ".alchemy-jwt-refresh.lock",
                 isDirectory: false
-            )
+            ),
+            directoryBoundary: containerURL
         )
         return AlchemyJWTProvider(
             tokenStore: tokenStore,

@@ -3469,6 +3469,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
             refreshLock: ObservedAlchemyJWTRefreshLock(CrossProcessFileLock(fileURL: fileURL)) { acquired in
                 if !acquired { contended.fulfill() }
             },
+            refreshLockTimeoutNanoseconds: 10_000_000_000,
             now: now
         )
         let second = makeProvider(
@@ -3477,22 +3478,27 @@ final class AlchemyJWTProviderTests: XCTestCase {
             refreshLock: ObservedAlchemyJWTRefreshLock(CrossProcessFileLock(fileURL: fileURL)) { acquired in
                 if !acquired { contended.fulfill() }
             },
+            refreshLockTimeoutNanoseconds: 10_000_000_000,
             now: now
         )
 
-        async let firstAuthorization = first.authorization(for: alchemyURL)
-        async let secondAuthorization = second.authorization(for: alchemyURL)
+        let firstAuthorization = Task {
+            try await first.authorization(for: alchemyURL)
+        }
+        defer { firstAuthorization.cancel() }
         await firstFetchGate.waitUntilStarted()
-        await fulfillment(of: [contended], timeout: 2)
+        let secondAuthorization = Task {
+            try await second.authorization(for: alchemyURL)
+        }
+        defer { secondAuthorization.cancel() }
+        let contention = await XCTWaiter.fulfillment(of: [contended], timeout: 2)
         firstFetchGate.release()
-        let resolvedAuthorizations = try await (
-            firstAuthorization,
-            secondAuthorization
-        )
-        let authorizations = [
-            resolvedAuthorizations.0,
-            resolvedAuthorizations.1,
-        ]
+        let firstResult = await firstAuthorization.result
+        let secondResult = await secondAuthorization.result
+        XCTAssertEqual(contention, .completed)
+        let authorizations: [AlchemyAuthorization?]
+        do { authorizations = [try firstResult.get(), try secondResult.get()] }
+        catch { return XCTFail("Authorization failed: \(error)") }
 
         XCTAssertEqual(
             Set(authorizations.compactMap { $0?.token }),

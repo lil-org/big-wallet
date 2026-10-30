@@ -1184,7 +1184,8 @@ final class SafariApprovalVault: Sendable {
             SafariApprovalVault.coordinationLockTimeoutNanoseconds
     ) throws -> CoordinationLease {
         let coordinationLock = CrossProcessFileLock(
-            fileURL: coordinationLockURL
+            fileURL: coordinationLockURL,
+            directoryBoundary: fileURL?.deletingLastPathComponent()
         )
         try coordinationLock.acquire(
             timeoutNanoseconds: timeoutNanoseconds,
@@ -1198,7 +1199,8 @@ final class SafariApprovalVault: Sendable {
 
     func tryAcquireCoordinationLease() throws -> CoordinationLease? {
         let coordinationLock = CrossProcessFileLock(
-            fileURL: coordinationLockURL
+            fileURL: coordinationLockURL,
+            directoryBoundary: fileURL?.deletingLastPathComponent()
         )
         guard try coordinationLock.tryAcquire() else { return nil }
         return CoordinationLease(
@@ -1249,87 +1251,9 @@ final class SafariApprovalVault: Sendable {
     }
 
     private static func readEnvelopeData(at fileURL: URL) -> Data? {
-        let descriptor: Int32 = fileURL.withUnsafeFileSystemRepresentation {
-            guard let path = $0 else { return -1 }
-            return Darwin.open(
-                path,
-                O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK
-            )
-        }
-        guard descriptor >= 0 else { return nil }
-        defer { Darwin.close(descriptor) }
-
-        guard let initial = fileMetadata(descriptor),
-              (initial.st_mode & mode_t(S_IFMT)) == mode_t(S_IFREG),
-              initial.st_size >= 0,
-              initial.st_size <= off_t(maximumEnvelopeBytes) else {
-            return nil
-        }
-
-        let expectedCount = Int(initial.st_size)
-        var data = Data(count: expectedCount)
-        let readAll = data.withUnsafeMutableBytes { bytes in
-            guard expectedCount > 0 else { return true }
-            guard let baseAddress = bytes.baseAddress else { return false }
-            var offset = 0
-            while offset < expectedCount {
-                let count = retryingRead(
-                    descriptor,
-                    into: baseAddress.advanced(by: offset),
-                    count: expectedCount - offset
-                )
-                guard count > 0 else { return false }
-                offset += count
-            }
-            return true
-        }
-        guard readAll else { return nil }
-
-        var trailingByte: UInt8 = 0
-        let trailingCount = withUnsafeMutableBytes(of: &trailingByte) { bytes in
-            retryingRead(
-                descriptor,
-                into: bytes.baseAddress!,
-                count: bytes.count
-            )
-        }
-        guard trailingCount == 0,
-              let final = fileMetadata(descriptor),
-              sameSnapshot(initial, final),
-              data.count <= maximumEnvelopeBytes else { return nil }
+        let reader = RegularFileSnapshotReader(directoryBoundary: fileURL.deletingLastPathComponent())
+        guard case .data(let data) = reader.read(at: fileURL, maximumBytes: maximumEnvelopeBytes) else { return nil }
         return data
-    }
-
-    private static func fileMetadata(_ descriptor: Int32) -> stat? {
-        var metadata = stat()
-        var result: Int32
-        repeat {
-            result = Darwin.fstat(descriptor, &metadata)
-        } while result == -1 && errno == EINTR
-        return result == 0 ? metadata : nil
-    }
-
-    private static func retryingRead(
-        _ descriptor: Int32,
-        into buffer: UnsafeMutableRawPointer,
-        count: Int
-    ) -> Int {
-        var result: Int
-        repeat {
-            result = Darwin.read(descriptor, buffer, count)
-        } while result == -1 && errno == EINTR
-        return result
-    }
-
-    private static func sameSnapshot(_ lhs: stat, _ rhs: stat) -> Bool {
-        lhs.st_dev == rhs.st_dev &&
-            lhs.st_ino == rhs.st_ino &&
-            lhs.st_mode == rhs.st_mode &&
-            lhs.st_size == rhs.st_size &&
-            lhs.st_mtimespec.tv_sec == rhs.st_mtimespec.tv_sec &&
-            lhs.st_mtimespec.tv_nsec == rhs.st_mtimespec.tv_nsec &&
-            lhs.st_ctimespec.tv_sec == rhs.st_ctimespec.tv_sec &&
-            lhs.st_ctimespec.tv_nsec == rhs.st_ctimespec.tv_nsec
     }
 
     private func isCurrent(
@@ -1348,7 +1272,9 @@ final class SafariApprovalVault: Sendable {
         ifCurrent snapshotData: Data,
         keyIdentity: SafariApprovalKeyIdentity
     ) async -> WalletExecutionLease? {
-        let coordinationLock = CrossProcessFileLock(fileURL: coordinationLockURL)
+        let coordinationLock = CrossProcessFileLock(
+            fileURL: coordinationLockURL, directoryBoundary: fileURL?.deletingLastPathComponent()
+        )
         let deadline = ContinuousClock.now + .nanoseconds(
             Int64(Self.coordinationLockTimeoutNanoseconds)
         )

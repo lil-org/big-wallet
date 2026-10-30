@@ -10,20 +10,42 @@ public final class CrossProcessFileLock:
 
     private enum FileLockError: Error {
         case missingFileURL
-        case openFailed
-        case lockFailed
+        case unsafeFile
         case lockTimedOut
     }
 
+    public struct Operations: Sendable {
+        public var files: SharedFileOperations
+        public var flock: @Sendable (Int32, Int32) throws -> Void
+
+        public init(
+            files: SharedFileOperations,
+            flock: @escaping @Sendable (Int32, Int32) throws -> Void
+        ) {
+            self.files = files
+            self.flock = flock
+        }
+
+        public static let live = Self(files: .live, flock: { descriptor, operation in
+            let result = storageSystemFlock(descriptor, operation)
+            let code = errno
+            try FileSystemCall.checked(result, errorCode: code)
+        })
+    }
+
     private let fileURL: URL?
+    private let directoryBoundary: URL?
+    private let operations: Operations
     private struct DescriptorState {
         var descriptor: Int32 = -1
         var acquisitionInProgress = false
     }
     private let descriptorState = Mutex(DescriptorState())
 
-    public init(fileURL: URL?) {
+    public init(fileURL: URL?, directoryBoundary: URL? = nil, operations: Operations = .live) {
         self.fileURL = fileURL
+        self.directoryBoundary = directoryBoundary ?? fileURL?.deletingLastPathComponent()
+        self.operations = operations
     }
 
     public func acquire(
@@ -62,7 +84,7 @@ public final class CrossProcessFileLock:
     }
 
     private func tryAcquire(createIfMissing: Bool) throws -> Bool {
-        guard let fileURL else { throw FileLockError.missingFileURL }
+        guard let fileURL, let directoryBoundary else { throw FileLockError.missingFileURL }
 
         guard
             descriptorState.withLock({ state in
@@ -72,40 +94,47 @@ public final class CrossProcessFileLock:
             })
         else { return false }
 
-        var flags = O_RDWR | O_CLOEXEC
-        if createIfMissing {
-            flags |= O_CREAT
-        }
-        let openedDescriptor = Darwin.open(
-            fileURL.path,
-            flags,
-            S_IRUSR | S_IWUSR
+        var adopted = false
+        defer { if !adopted { finishFailedAcquisition() } }
+        let directories = try AnchoredDirectoryAccess.openParent(
+            of: fileURL, within: directoryBoundary, operations: operations.files.directories
         )
-        guard openedDescriptor >= 0 else {
-            finishFailedAcquisition()
-            throw FileLockError.openFailed
+        defer { directories.forEach(operations.files.directories.close) }
+        let directory = directories[0]
+        let name = fileURL.standardizedFileURL.lastPathComponent
+        let openedDescriptor = try openLockFile(in: directory, name: name, createIfMissing: createIfMissing)
+        defer { if !adopted { operations.files.close(openedDescriptor) } }
+        let initial = try FileSystemCall.retryInterrupted { try operations.files.metadata(openedDescriptor) }
+        guard initial.isRegular else { throw FileLockError.unsafeFile }
+        do {
+            try FileSystemCall.retryInterrupted { try operations.flock(openedDescriptor, LOCK_EX | LOCK_NB) }
+        } catch let error as POSIXError where error.code == .EACCES || error.code == .EAGAIN || error.code.rawValue == EWOULDBLOCK {
+            return false
         }
-
-        while storageSystemFlock(openedDescriptor, LOCK_EX | LOCK_NB) != 0 {
-            let lockError = errno
-            if lockError == EINTR {
-                continue
-            }
-            Darwin.close(openedDescriptor)
-            finishFailedAcquisition()
-            if lockError == EACCES
-                || lockError == EAGAIN
-                || lockError == EWOULDBLOCK {
-                return false
-            }
-            throw FileLockError.lockFailed
-        }
+        let current = try FileSystemCall.retryInterrupted { try operations.files.entryMetadata(directory, name) }
+        guard current.isRegular, current.identifiesSameFile(as: initial) else { throw FileLockError.unsafeFile }
 
         descriptorState.withLock { state in
             state.descriptor = openedDescriptor
             state.acquisitionInProgress = false
         }
+        adopted = true
         return true
+    }
+
+    private func openLockFile(in directory: Int32, name: String, createIfMissing: Bool) throws -> Int32 {
+        let flags = O_RDWR | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK
+        if createIfMissing {
+            // Darwin openat can fail with ENOENT when concurrent creators omit O_EXCL.
+            do {
+                return try FileSystemCall.retryInterrupted {
+                    try operations.files.openFile(directory, name, flags | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR)
+                }
+            } catch let error as POSIXError where error.code == .EEXIST {}
+        }
+        return try FileSystemCall.retryInterrupted {
+            try operations.files.openFile(directory, name, flags, S_IRUSR | S_IWUSR)
+        }
     }
 
     public func release() {
@@ -115,8 +144,8 @@ public final class CrossProcessFileLock:
         }
 
         guard openedDescriptor >= 0 else { return }
-        _ = storageSystemFlock(openedDescriptor, LOCK_UN)
-        Darwin.close(openedDescriptor)
+        try? FileSystemCall.retryInterrupted { try operations.flock(openedDescriptor, LOCK_UN) }
+        operations.files.close(openedDescriptor)
     }
 
     private func finishFailedAcquisition() {

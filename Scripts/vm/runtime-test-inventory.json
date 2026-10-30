@@ -1531,6 +1531,28 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/DurableProfilePersistenceTests/testReadSnapshotUsesInjectedDescriptorOperations",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/DurableProfilePersistenceTests/testRealDiskRejectsSymbolicLinkAncestorBeforeOpeningLeafDirectory",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/DurableProfilePersistenceTests/testRealDiskRejectsSymbolicLinkDestinationsAndDirectories",
       "variants": [
         "macos.debug",
@@ -3394,6 +3416,17 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/ExtensionBridgeStoredRequestTests/testOversizedLedgerLeavesPermissionsAndCommittedBroadcastJournalUntouched",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/ExtensionBridgeStoredRequestTests/testPendingAndCompletedRecordsExpireAtTheirSeparateTTLs",
       "variants": [
         "macos.debug",
@@ -3801,6 +3834,17 @@
     },
     {
       "id": "WalletAuthorityTests/ExtensionBridgeStoredRequestTests/testRevocationAbortsClaimBeforeSignatureCommitButRetainsBroadcastCheckpoint",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/ExtensionBridgeStoredRequestTests/testRevocationCapacityRolloverDisconnectsProfilesAndRetiresReviewsWithoutDiscardingJournal",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -7190,6 +7234,116 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/RevocationLedgerCapacityTests/testBatchThatCannotFitAnEmptyLedgerHasNoCommitSideEffects",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/RevocationLedgerCapacityTests/testByteCapacityRolloverKeepsTheCompleteCurrentBatch",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/RevocationLedgerCapacityTests/testByteOversizedBatchHasNoCommitSideEffects",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/RevocationLedgerCapacityTests/testCoalescingAtCapacityKeepsTheExistingEpoch",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/RevocationLedgerCapacityTests/testConcurrentWritersNearCapacityObserveTheirWholePublishedBatch",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/RevocationLedgerCapacityTests/testEntryCapacityRolloverPublishesTheWholeBatchBeforeSourceCommit",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/RevocationLedgerCapacityTests/testFailedAndUncertainRolloverPublicationPreventSourceCommit",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/RevocationLedgerCapacityTests/testFailureAfterPublishedRolloverKeepsTheNewEpoch",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/RevocationLedgerCapacityTests/testOversizedStoredLedgerIsUnavailableWithoutResettingItsHistory",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/RevocationLedgerCapacityTests/testRolloverRequiresADifferentEpoch",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/SafariApprovalVaultTests/testAccountKeyPublicationAndCatalogReadCostsWithMockedKeychain",
       "variants": [
         "macos.debug",
@@ -9761,7 +9915,40 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/WalletAuthorityRevocationLedgerTests/testByteLimitAcceptsTheExactBoundaryAndRejectsOneExtraByte",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/WalletAuthorityRevocationLedgerTests/testDecodeRejectsCorruptOrInconsistentRevocationHistory",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletAuthorityRevocationLedgerTests/testDecodingRejectsOversizedEntryBeforeReadingMalformedFollowingEntry",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletAuthorityRevocationLedgerTests/testDecodingRejectsRepeatedOversizedStringsWithinFileAndEntryLimits",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -9783,7 +9970,40 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/WalletAuthorityRevocationLedgerTests/testEncodedByteLimitIsIndependentOfEntryLimit",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/WalletAuthorityRevocationLedgerTests/testEncodingIsDeterministicAcrossBatchOrderAndRoundTripsAsBinaryPlist",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletAuthorityRevocationLedgerTests/testEntryLimitAcceptsTheBoundaryAndRejectsGrowthWithoutChangingTheLedger",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletAuthorityRevocationLedgerTests/testEntryLimitCountsWalletsAndAccountsTogetherBeforeDecodingElements",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -9828,6 +10048,17 @@
     },
     {
       "id": "WalletAuthorityTests/WalletAuthorityRevocationLedgerTests/testWalletRemovalSubsumesOlderAccountsButRetainsLaterAccountRevocations",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletAuthorityRevocationLedgerTests/testWholeWalletSubsumptionFitsAtEntryCapacity",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -17543,6 +17774,215 @@
     },
     {
       "id": "WalletNetworkingTests/SafariRPCStreamingTests/testSecondUnauthorizedResponseInvalidatesWithoutAThirdAttempt",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testAnchoredTraversalUsesOpenedParentsAndReturnsLeafFirst",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testConcurrentInitialLockCreationHasExactlyOneOwner",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testLockDoesNotRecreateMissingOrUnsafeEntryAfterExclusiveConflict",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testLockOnlyFallsBackAfterExclusiveCreateConflict",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testLockPreservesExistingOnlyAndContentionSemantics",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testLockRejectsReplacementAfterFlockAndReleasesOldDescriptor",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testLockRejectsUnsafeLeafAndDescendantDirectory",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testLockRetriesInterruptionsAndClosesOnPostAcquisitionFailure",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testLockUsesExclusiveCreationAndPlainExistingOpen",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testSnapshotAcceptsExactLimitAndEmptyFiles",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testSnapshotClosesDescriptorsAfterEveryIOFailure",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testSnapshotDistinguishesMissingAndUnsafeLeaves",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testSnapshotRejectsPathReplacementOrRemovalAfterOpening",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testSnapshotRejectsPathsOutsideBoundaryBeforeOpening",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testSnapshotRejectsSameSizeMetadataChange",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testSnapshotRejectsSparseOversizeBeforeReading",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testSnapshotRejectsSymlinkInAnyDescendantDirectory",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testSnapshotRejectsTruncationAndGrowthAfterInitialStat",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SharedFileAccessTests/testSnapshotRetriesInterruptedOperationsAndCompletesPartialReads",
       "variants": [
         "macos.debug",
         "macos.release",

@@ -15,7 +15,7 @@ final class DurableProfilePersistenceTests: XCTestCase {
         try persistence(disk).replace(Data("checkpoint".utf8), at: profile)
 
         XCTAssertEqual(disk.events, [
-            "openDirectory:/group/bridge/profiles", "openDirectory:/group/bridge", "openDirectory:/group",
+            "openDirectory:/group", "openDirectory:/group/bridge", "openDirectory:/group/bridge/profiles",
             "entryKind", "create", "kind", "write:1", "full:1", "rename",
             "sync:/group/bridge/profiles", "sync:/group/bridge", "sync:/group", "full:2",
         ])
@@ -29,6 +29,8 @@ final class DurableProfilePersistenceTests: XCTestCase {
     func testShortWritesAndInterruptedOperationsAreRetried() throws {
         let disk = DiskModel()
         disk.maximumWrite = 2
+        disk.failures["openDirectory:/group"] = [.EINTR]
+        disk.failures["openDirectory:/group/bridge"] = [.EINTR]
         disk.failures["write:1"] = [.EINTR]
         disk.failures["full:1"] = [.EINTR]
         disk.failures["sync:/group/bridge"] = [.EINTR]
@@ -43,7 +45,7 @@ final class DurableProfilePersistenceTests: XCTestCase {
 
     func testEveryFailedStageClosesDescriptorsAndPreservesTheDurableCheckpoint() throws {
         let stages = [
-            "openDirectory:/group/bridge/profiles", "openDirectory:/group/bridge", "openDirectory:/group",
+            "openDirectory:/group", "openDirectory:/group/bridge", "openDirectory:/group/bridge/profiles",
             "entryKind", "create", "kind", "write:1", "full:1", "rename",
             "sync:/group/bridge/profiles", "sync:/group/bridge", "sync:/group", "full:2",
         ]
@@ -161,6 +163,7 @@ final class DurableProfilePersistenceTests: XCTestCase {
         try withRealDirectory { boundary, profile in
             var operations = DurableProfilePersistence.Operations.live
             let openDirectory = operations.openDirectory
+            let openFile = operations.openFile
             let syncDirectory = operations.syncDirectory
             let paths = LockedTestValue([Int32: String]())
             let synchronizedPaths = LockedTestValue([String]())
@@ -169,6 +172,12 @@ final class DurableProfilePersistenceTests: XCTestCase {
             operations.openDirectory = { path in
                 let descriptor = try openDirectory(path)
                 paths.withValue { $0[descriptor] = path }
+                return descriptor
+            }
+            operations.openFile = { directory, name, flags, mode in
+                let descriptor = try openFile(directory, name, flags, mode)
+                let parent = try XCTUnwrap(paths.value[directory])
+                paths.withValue { $0[descriptor] = (parent as NSString).appendingPathComponent(name) }
                 return descriptor
             }
             operations.syncDirectory = { descriptor in
@@ -246,6 +255,80 @@ final class DurableProfilePersistenceTests: XCTestCase {
         }
     }
 
+    func testRealDiskRejectsSymbolicLinkAncestorBeforeOpeningLeafDirectory() throws {
+        try withRealDirectory { boundary, profile in
+            let linkedDirectory = boundary.appendingPathComponent("linked", isDirectory: true)
+            try FileManager.default.createSymbolicLink(
+                at: linkedDirectory,
+                withDestinationURL: profile.deletingLastPathComponent().deletingLastPathComponent()
+            )
+            let linkedProfile = linkedDirectory.appendingPathComponent("profiles/profile.state")
+            let openedNames = LockedTestValue([String]())
+            var operations = DurableProfilePersistence.Operations.live
+            let openFile = operations.openFile
+            operations.openFile = { directory, name, flags, mode in
+                openedNames.withValue { $0.append(name) }
+                return try openFile(directory, name, flags, mode)
+            }
+            let writer = DurableProfilePersistence(directoryBoundary: boundary, operations: operations)
+            let original = Data("original".utf8)
+            try original.write(to: profile)
+
+            XCTAssertThrowsError(try writer.replace(Data("replacement".utf8), at: linkedProfile))
+            XCTAssertEqual(openedNames.value, ["linked"])
+            XCTAssertEqual(try Data(contentsOf: profile), original)
+
+            openedNames.value = []
+            XCTAssertThrowsError(try writer.synchronizePublishedFile(at: linkedProfile))
+            XCTAssertEqual(openedNames.value, ["linked"])
+        }
+    }
+
+    func testReadSnapshotUsesInjectedDescriptorOperations() throws {
+        try withRealDirectory { boundary, profile in
+            let contents = Data("bounded snapshot".utf8)
+            try contents.write(to: profile)
+            let reads = LockedTestValue(0)
+            let metadataReads = LockedTestValue(0)
+            let opened = LockedTestValue(Set<Int32>())
+            var operations = DurableProfilePersistence.Operations.live
+            let live = operations
+            operations.openDirectory = { path in
+                let descriptor = try live.openDirectory(path)
+                opened.withValue { _ = $0.insert(descriptor) }
+                return descriptor
+            }
+            operations.openFile = { directory, name, flags, mode in
+                let descriptor = try live.openFile(directory, name, flags, mode)
+                opened.withValue { _ = $0.insert(descriptor) }
+                return descriptor
+            }
+            operations.metadata = { descriptor in
+                metadataReads.withValue { $0 += 1 }
+                return try live.metadata(descriptor)
+            }
+            operations.read = { descriptor, bytes, count in
+                reads.withValue { $0 += 1 }
+                return try live.read(descriptor, bytes, min(count, 2))
+            }
+            operations.close = { descriptor in
+                XCTAssertTrue(opened.withValue { $0.remove(descriptor) != nil })
+                live.close(descriptor)
+            }
+            let reader = DurableProfilePersistence(directoryBoundary: boundary, operations: operations)
+
+            XCTAssertEqual(reader.readSnapshot(at: profile, maximumBytes: contents.count), .data(contents))
+            XCTAssertGreaterThan(reads.value, 2)
+            XCTAssertEqual(metadataReads.value, 2)
+            XCTAssertTrue(opened.value.isEmpty)
+
+            reads.value = 0
+            XCTAssertEqual(reader.readSnapshot(at: profile, maximumBytes: contents.count - 1), .tooLarge)
+            XCTAssertEqual(reads.value, 0)
+            XCTAssertTrue(opened.value.isEmpty)
+        }
+    }
+
     private func persistence(_ disk: DiskModel) -> DurableProfilePersistence {
         DurableProfilePersistence(
             directoryBoundary: boundary,
@@ -309,6 +392,12 @@ final class DurableProfilePersistenceTests: XCTestCase {
                 openFile: { directory, name, flags, mode in
                     try self.state.withLock { model in
                     let path = try model.path(directory, name)
+                    if flags & O_DIRECTORY != 0 {
+                        try model.event("openDirectory:\(path)")
+                        XCTAssertEqual(flags, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW)
+                        XCTAssertEqual(mode, 0)
+                        return model.allocate(.directory(path))
+                    }
                     if flags & O_CREAT != 0 {
                         try model.event("create")
                         model.createFlags = flags

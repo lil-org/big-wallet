@@ -10,8 +10,7 @@ final class ExtensionRequestStoreFiles: Sendable {
     struct IO: Sendable {
         var replace: @Sendable (Data, URL) throws -> Void
         var synchronizePublishedFile: @Sendable (URL) throws -> Void
-        var readData: @Sendable (URL) throws -> Data
-        var readFileSize: @Sendable (URL) throws -> Int?
+        var readSnapshot: @Sendable (URL, Int) -> RegularFileSnapshotReader.Result
         var removeItem: @Sendable (URL) throws -> Void
 
         init(persistence: DurableProfilePersistence?) {
@@ -23,8 +22,9 @@ final class ExtensionRequestStoreFiles: Sendable {
                 guard let persistence else { throw CocoaError(.fileWriteUnknown) }
                 try persistence.synchronizePublishedFile(at: url)
             }
-            readData = { try Data(contentsOf: $0) }
-            readFileSize = { try $0.resourceValues(forKeys: [.fileSizeKey]).fileSize }
+            readSnapshot = { url, maximumBytes in
+                persistence?.readSnapshot(at: url, maximumBytes: maximumBytes) ?? .unavailable
+            }
             removeItem = { try FileManager.default.removeItem(at: $0) }
         }
 
@@ -76,6 +76,7 @@ final class ExtensionRequestStoreFiles: Sendable {
     private static let operationLockDirectoryName = "operation-locks-v9"
 
     private let rootURL: URL?
+    private let directoryBoundary: URL?
     private let storeLock: CrossProcessFileLock?
     private let lockTimeout: UInt64
     private let lockPoll: UInt64
@@ -89,12 +90,13 @@ final class ExtensionRequestStoreFiles: Sendable {
         dependencies: ExtensionRequestFileStore.Dependencies
     ) {
         self.rootURL = rootURL
+        self.directoryBoundary = directoryBoundary
         messages = dependencies.messages
         lockTimeout = dependencies.crossProcessLockTimeoutNanoseconds
         lockPoll = dependencies.crossProcessLockPollNanoseconds
         io = dependencies.fileIO ?? .live(directoryBoundary: directoryBoundary)
         storeLock = dependencies.crossProcessLock ?? rootURL.map {
-            CrossProcessFileLock(fileURL: $0.appendingPathComponent("bridge-v9.lock"))
+            CrossProcessFileLock(fileURL: $0.appendingPathComponent("bridge-v9.lock"), directoryBoundary: directoryBoundary)
         }
     }
 
@@ -131,7 +133,7 @@ final class ExtensionRequestStoreFiles: Sendable {
         case .unsafe, .unavailable:
             return nil
         }
-        let lock = CrossProcessFileLock(fileURL: url)
+        let lock = CrossProcessFileLock(fileURL: url, directoryBoundary: directoryBoundary)
         do {
             try lock.acquire(
                 timeoutNanoseconds: lockTimeout,
@@ -160,7 +162,7 @@ final class ExtensionRequestStoreFiles: Sendable {
         case .unavailable:
             return .unavailable
         }
-        let lock = CrossProcessFileLock(fileURL: url)
+        let lock = CrossProcessFileLock(fileURL: url, directoryBoundary: directoryBoundary)
         do {
             guard try lock.tryAcquireExisting() else { return .held }
             lock.release()
@@ -181,29 +183,17 @@ final class ExtensionRequestStoreFiles: Sendable {
     }
 
     func readProfileDataLocked(at url: URL) -> ProfileDataRead {
-        switch regularFileStatusLocked(at: url) {
+        switch io.readSnapshot(url, ExtensionRequestProfile.maximumProfileBytes) {
         case .missing:
             return .missing
-        case .regular:
-            break
-        case .unsafe:
-            return .corrupt
-        case .unavailable:
-            return .unavailable
-        }
-        do {
-            guard let size = try io.readFileSize(url) else {
-                return .unavailable
-            }
-            guard size > 0, size <= ExtensionRequestProfile.maximumProfileBytes else {
-                return .corrupt
-            }
-            let data = try io.readData(url)
+        case .data(let data):
             guard !data.isEmpty, data.count <= ExtensionRequestProfile.maximumProfileBytes else {
                 return .corrupt
             }
             return .data(data)
-        } catch {
+        case .unsafe, .tooLarge:
+            return .corrupt
+        case .changed, .unavailable:
             return .unavailable
         }
     }
@@ -214,17 +204,17 @@ final class ExtensionRequestStoreFiles: Sendable {
     }
 
     func readRevocationLedgerDataLocked() -> RevocationLedgerDataRead {
-        let url = revocationLedgerURL
-        switch regularFileStatusLocked(at: url) {
+        switch io.readSnapshot(revocationLedgerURL, WalletAuthorityRevocationLedger.maximumEncodedBytes) {
         case .missing: return .missing
-        case .regular: break
-        case .unsafe, .unavailable: return .unavailable
+        case .data(let data):
+            guard data.count <= WalletAuthorityRevocationLedger.maximumEncodedBytes else { return .unavailable }
+            return .data(data)
+        case .unsafe, .tooLarge, .changed, .unavailable: return .unavailable
         }
-        do { return .data(try io.readData(url)) }
-        catch { return .unavailable }
     }
 
     func publishRevocationLedgerDataLocked(_ data: Data) -> Bool {
+        guard data.count <= WalletAuthorityRevocationLedger.maximumEncodedBytes else { return false }
         let url = revocationLedgerURL
         switch regularFileStatusLocked(at: url) {
         case .missing, .regular: break

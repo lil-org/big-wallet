@@ -209,42 +209,63 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     ) throws -> Result {
         try files.withRequiredLock {
             let prepared = try preparing()
+            let revocations = try prepareWalletAuthorityRemovalsLocked(prepared.authorityRemovals)
             try beforeCommit()
-            try recordWalletAuthorityRemovalsLocked(prepared.authorityRemovals)
+            if let revocations, !files.publishRevocationLedgerDataLocked(revocations) {
+                throw WalletAuthorityRemovalError.unavailable
+            }
             return try commit(prepared.payload)
         }
     }
 
-    private func recordWalletAuthorityRemovalsLocked(_ removals: [WalletAuthorityRemoval]) throws {
+    private func prepareWalletAuthorityRemovalsLocked(_ removals: [WalletAuthorityRemoval]) throws -> Data? {
         guard removals.contains(where: {
             if case .accounts(let accounts) = $0 { return !accounts.isEmpty }
             return true
-        }) else { return }
+        }) else { return nil }
         var ledger: WalletAuthorityRevocationLedger
         switch readRevocationLedgerLocked() {
         case .ledger(let stored) where stored.sequence < Int.max:
             ledger = stored
-        case .ledger, .resetRequired:
+        case .ledger(let stored):
+            ledger = try freshRevocationLedger(excluding: stored.epoch)
+        case .resetRequired:
             ledger = WalletAuthorityRevocationLedger(epoch: revocationEpoch())
         case .unavailable:
             throw WalletAuthorityRemovalError.unavailable
         }
         do {
-            guard try ledger.record(removals) else { return }
-            guard files.publishRevocationLedgerDataLocked(try ledger.encoded()) else {
-                throw WalletAuthorityRemovalError.unavailable
+            do {
+                guard try ledger.record(removals) else { return nil }
+                return try ledger.encoded()
+            } catch WalletAuthorityRevocationLedger.Error.capacityExceeded {
+                var replacement = try freshRevocationLedger(excluding: ledger.epoch)
+                guard try replacement.record(removals) else { return nil }
+                return try replacement.encoded()
             }
         } catch {
             throw WalletAuthorityRemovalError.unavailable
         }
     }
 
+    private func freshRevocationLedger(excluding epoch: UUID) throws -> WalletAuthorityRevocationLedger {
+        let replacement = revocationEpoch()
+        guard replacement != epoch else {
+            throw WalletAuthorityRemovalError.unavailable
+        }
+        return WalletAuthorityRevocationLedger(epoch: replacement)
+    }
+
     private func readRevocationLedgerLocked() -> RevocationLedgerRead {
         switch files.readRevocationLedgerDataLocked() {
         case .missing: return .resetRequired
         case .data(let data):
-            guard let ledger = WalletAuthorityRevocationLedger.decode(data) else { return .resetRequired }
-            return .ledger(ledger)
+            do {
+                guard let ledger = try WalletAuthorityRevocationLedger.decode(data) else { return .resetRequired }
+                return .ledger(ledger)
+            } catch {
+                return .unavailable
+            }
         case .unavailable: return .unavailable
         }
     }

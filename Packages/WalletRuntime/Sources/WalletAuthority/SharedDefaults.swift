@@ -65,7 +65,8 @@ struct SharedDefaults {
         fileURL: containerURL?.appendingPathComponent(
             ".custom-ethereum-networks.lock",
             isDirectory: false
-        )
+        ),
+        directoryBoundary: containerURL
     )
     private static let customNetworksStorageLockTimeoutNanoseconds: UInt64 = 1_000_000_000
     private static let customNetworksStorageLockPollNanoseconds: UInt64 = 10_000_000
