@@ -566,6 +566,50 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         XCTAssertEqual(manager.wallets, originalWallets)
     }
 
+    func testOversizedStoredCatalogAllowsExportAndRemovalButNotAdditions() async throws {
+        for useEnabledAccounts in [false, true] {
+            let fixture = try makeRemovalFixture()
+            let siblingData = try fixture.walletData(accountCount: 16_384)
+            fixture.keychain.walletData[fixture.siblingID] = siblingData
+            let manager = fixture.manager { _ in }
+            await assertWalletReload(manager)
+            XCTAssertEqual(manager.wallets.flatMap(\.accounts).count, 16_386)
+            XCTAssertNil(manager.reviewCatalog())
+            let wallet = try XCTUnwrap(manager.currentWallet(id: fixture.walletID))
+            let mnemonic = try await exportMnemonicForTesting(manager: manager, wallet: wallet)
+            XCTAssertEqual(mnemonic, Vectors.walletCoreJSONMnemonic)
+            let originalData = fixture.keychain.walletData
+
+            do {
+                try await manager.update(wallet: wallet, enabledAccounts: wallet.accounts + [fixture.additionalAccount(index: 2)],
+                                         access: manager.accessForTesting())
+                XCTFail("Oversized stores must not accept account additions")
+            } catch WalletsManager.Error.invalidInput {
+            }
+            XCTAssertEqual(fixture.keychain.walletData, originalData)
+            XCTAssertTrue(fixture.keychain.events.isEmpty)
+
+            if useEnabledAccounts {
+                try await manager.update(wallet: wallet, enabledAccounts: Array(wallet.accounts.dropLast()),
+                                         access: manager.accessForTesting())
+            } else {
+                try await manager.update(wallet: wallet, removeAccounts: [try XCTUnwrap(wallet.accounts.last)],
+                                         access: manager.accessForTesting())
+            }
+            await assertWalletReload(manager)
+            XCTAssertEqual(manager.wallets.flatMap(\.accounts).count, 16_385)
+            XCTAssertNil(manager.reviewCatalog())
+
+            try await manager.delete(wallet: try XCTUnwrap(manager.currentWallet(id: fixture.walletID)),
+                                     access: manager.accessForTesting())
+            await assertWalletReload(manager)
+            XCTAssertEqual(manager.wallets.flatMap(\.accounts).count, 16_384)
+            XCTAssertNotNil(manager.reviewCatalog())
+            XCTAssertEqual(fixture.keychain.walletData[fixture.siblingID], siblingData)
+            XCTAssertEqual(fixture.keychain.events, ["update", "delete"])
+        }
+    }
+
     func testWalletCreationAndImportCountPersistedAccountsAtTransactionEntry() async throws {
         for createWallet in [true, false] {
             let fixture = try makeRemovalFixture()

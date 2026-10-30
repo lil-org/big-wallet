@@ -11650,6 +11650,17 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/WalletRemovalIntegrationTests/testOversizedStoredCatalogAllowsExportAndRemovalButNotAdditions",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/WalletRemovalIntegrationTests/testOversizedWalletInputRejectsValidationAndImportBeforeSourceMutation",
       "variants": [
         "macos.debug",

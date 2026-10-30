@@ -315,7 +315,9 @@ public final class WalletsManager: NSObject {
     }
 
     public func reviewCatalog() -> WalletReviewCatalog? {
-        guard isStoreReady, let data = try? WalletAccountCatalog(snapshots: wallets).canonicalData() else { return nil }
+        guard isStoreReady else { return nil }
+        let catalog = WalletAccountCatalog(snapshots: wallets)
+        guard catalog.isValid, let data = try? catalog.canonicalData() else { return nil }
         return WalletReviewCatalog(
             identity: WalletCatalogIdentity(generation: nil, catalogData: data),
             orderedAccounts: wallets.flatMap { wallet in
@@ -679,7 +681,7 @@ actor WalletRepository {
     func reload() throws -> State {
         defer { retireStalePreviews() }
         let loaded = try readWallets()
-        guard WalletAccountCatalog(wallets: loaded).isValid else { throw WalletsManager.LoadFailure.corrupt }
+        guard WalletAccountCatalog(wallets: loaded).hasValidAccounts else { throw WalletsManager.LoadFailure.corrupt }
         try Task.checkCancellation()
         wallets = loaded
         return snapshot()
@@ -702,9 +704,11 @@ actor WalletRepository {
     }
 
     private func validateCatalog(replacing wallet: WalletContainer) throws {
-        var proposed = try readWallets().filter { $0.id != wallet.id }
-        proposed.append(wallet)
-        guard WalletAccountCatalog(wallets: proposed).isValid else { throw WalletsManager.Error.invalidInput }
+        let current = try readWallets()
+        let proposed = WalletAccountCatalog(wallets: current.filter { $0.id != wallet.id } + [wallet])
+        guard proposed.isValid ||
+              (proposed.hasValidAccounts && Set(proposed.accounts).isSubset(of: Set(WalletAccountCatalog(wallets: current).accounts)))
+        else { throw WalletsManager.Error.invalidInput }
     }
 
     func prepareNewWallet(input: String?, inputPassword: String?) async throws -> PreparedCreation {
