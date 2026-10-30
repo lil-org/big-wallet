@@ -523,11 +523,11 @@ public final class SolanaRPCClient: Sendable {
         let httpResponse = transport.response as? HTTPURLResponse
         let decodedResponse: Response?
         do {
-            if let policyError = transport.error as? NativeRPCResponsePolicyError { throw policyError }
+            if let policyError = transport.error as? HTTPResponsePolicyError { throw policyError }
             decodedResponse = try transport.data.flatMap {
                 try NativeRPCResponseDecoder.decode(Response.self, from: $0, expectedID: Self.requestID)
             }
-        } catch is NativeRPCResponsePolicyError {
+        } catch is HTTPResponsePolicyError {
             try Task.checkCancellation()
             if httpResponse?.statusCode == 401, let authorization {
                 await requestAuthorization.invalidate(afterUnauthorized: authorization)

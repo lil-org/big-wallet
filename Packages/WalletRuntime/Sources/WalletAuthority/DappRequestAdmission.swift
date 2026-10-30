@@ -57,7 +57,9 @@ public final class DappRequestAdmission {
         guard let binding = snapshot.requestBinding else { return .unavailable }
         guard await store.authorityIsCurrent(handle: handle) else { return .unavailable }
         let preparation: DappRequestPreparation
-        switch requestProcessor.prepare(binding, loadingCatalog: { reviewCatalog?() }) {
+        let prepared = await requestProcessor.prepare(binding, loadingCatalog: { reviewCatalog?() })
+        guard !Task.isCancelled else { return .unavailable }
+        switch prepared {
         case .catalogUnavailable:
             return await currentAdmissionDisposition(
                 handle: handle,

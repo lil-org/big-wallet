@@ -161,8 +161,8 @@ final class NativeApprovalResponseTests: XCTestCase {
         let catalog = WalletReviewCatalog(
             identity: .init(generation: nil, catalogData: Data()), orderedAccounts: [account.specificAccount]
         )
-        guard case .approval(let intent) = requestProcessorForTesting().prepare(
-            try XCTUnwrap(snapshot.requestBinding), catalog: catalog
+        guard case .approval(let intent) = prepareRequestSynchronouslyForTesting(
+            requestProcessorForTesting(), binding: try XCTUnwrap(snapshot.requestBinding), catalog: catalog
         ) else { throw CocoaError(.coderInvalidValue) }
         let permit = try fixture.authorize(
             snapshot: snapshot, action: intent.action,

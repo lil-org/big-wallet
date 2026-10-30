@@ -195,5 +195,20 @@
     "path": "Negative/ReviewHandleDecoding.swift",
     "succeeds": false,
     "diagnostic": "Decodable|decode"
+  },
+  {
+    "path": "Negative/TypedDataDigestConstructor.swift",
+    "succeeds": false,
+    "diagnostic": "extra arguments|extra argument|incorrect argument label|inaccessible"
+  },
+  {
+    "path": "Negative/TypedDataDecoding.swift",
+    "succeeds": false,
+    "diagnostic": "Decodable|decode"
+  },
+  {
+    "path": "Negative/UnpreparedTypedData.swift",
+    "succeeds": false,
+    "diagnostic": "cannot convert value of type.*String.*PreparedEthereumTypedData"
   }
 ]

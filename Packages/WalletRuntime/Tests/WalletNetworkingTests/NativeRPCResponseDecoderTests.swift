@@ -162,7 +162,7 @@ final class NativeRPCResponseDecoderTests: XCTestCase {
                     Response.self, from: data, expectedID: 1,
                     limits: .init(maximumResponseBytes: data.count - 1)
                 )) { error in
-                    XCTAssertEqual(error as? NativeRPCResponsePolicyError, .responseTooLarge)
+                    XCTAssertEqual(error as? HTTPResponsePolicyError, .responseTooLarge)
                 }
             }
         }
@@ -181,7 +181,7 @@ final class NativeRPCResponseDecoderTests: XCTestCase {
                 Response.self, from: data, expectedID: 1,
                 limits: .init(maximumResponseBytes: body.utf8.count - 1)
             )) { error in
-                XCTAssertEqual(error as? NativeRPCResponsePolicyError, .responseTooLarge)
+                XCTAssertEqual(error as? HTTPResponsePolicyError, .responseTooLarge)
             }
         }
     }
@@ -207,7 +207,7 @@ final class NativeRPCResponseDecoderTests: XCTestCase {
                         XCTAssertThrowsError(try NativeRPCResponseDecoder.decode(
                             Response.self, from: data, expectedID: 1
                         )) { error in
-                            XCTAssertEqual(error as? NativeRPCResponsePolicyError, .jsonTooDeep)
+                            XCTAssertEqual(error as? HTTPResponsePolicyError, .jsonTooDeep)
                         }
                     }
                 }
@@ -229,7 +229,7 @@ final class NativeRPCResponseDecoderTests: XCTestCase {
                     Response.self, from: data, expectedID: 1,
                     limits: .init(maximumJSONTokens: 14)
                 )) { error in
-                    XCTAssertEqual(error as? NativeRPCResponsePolicyError, .tooManyJSONTokens)
+                    XCTAssertEqual(error as? HTTPResponsePolicyError, .tooManyJSONTokens)
                 }
             }
         }
@@ -242,7 +242,7 @@ final class NativeRPCResponseDecoderTests: XCTestCase {
         for suffix in ["0]}", "0,"] {
             let body = prefix + String(repeating: "0,", count: 65_527) + suffix
             XCTAssertThrowsError(try decode(body)) { error in
-                XCTAssertEqual(error as? NativeRPCResponsePolicyError, .tooManyJSONTokens)
+                XCTAssertEqual(error as? HTTPResponsePolicyError, .tooManyJSONTokens)
             }
         }
     }
@@ -253,6 +253,29 @@ final class NativeRPCResponseDecoderTests: XCTestCase {
             let encoded = try XCTUnwrap(body.data(using: encoding))
             for data in [encoded, Data(bom) + encoded] {
                 XCTAssertNil(try NativeRPCResponseDecoder.decode(Response.self, from: data, expectedID: 1))
+            }
+        }
+    }
+
+    func testSharedJSONBudgetSupportsSmallObjectsAndMetadataLimits() throws {
+        XCTAssertEqual(try HTTPJSONBudget.normalizedBytes(
+            from: Data("{}".utf8), limits: .init(maximumResponseBytes: 2, maximumJSONDepth: 1, maximumJSONTokens: 1)
+        ), Data("{}".utf8))
+        let body = #"{"ethereum":{"usd":12.5},"extra":"\"\\[]{}:, 🪙"}"#
+        for (encoding, bom) in Self.jsonEncodings {
+            let encoded = try XCTUnwrap(body.data(using: encoding))
+            for data in [encoded, Data(bom) + encoded] {
+                let normalized = try XCTUnwrap(HTTPJSONBudget.normalizedBytes(
+                    from: data, limits: .init(maximumResponseBytes: 1024, maximumJSONDepth: 2, maximumJSONTokens: 7)
+                ))
+                let object = try XCTUnwrap(JSONSerialization.jsonObject(with: normalized) as? [String: Any])
+                XCTAssertEqual((object["ethereum"] as? [String: Double])?["usd"], 12.5)
+                XCTAssertThrowsError(try HTTPJSONBudget.normalizedBytes(
+                    from: data, limits: .init(maximumJSONDepth: 1, maximumJSONTokens: 7)
+                )) { XCTAssertEqual($0 as? HTTPResponsePolicyError, .jsonTooDeep) }
+                XCTAssertThrowsError(try HTTPJSONBudget.normalizedBytes(
+                    from: data, limits: .init(maximumJSONDepth: 2, maximumJSONTokens: 6)
+                )) { XCTAssertEqual($0 as? HTTPResponsePolicyError, .tooManyJSONTokens) }
             }
         }
     }

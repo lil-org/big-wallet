@@ -221,11 +221,11 @@ public final class EthereumRPC: EthereumRPCClient {
                 let data = transport.data
                 let decoded: RPCResponse<Value>?
                 do {
-                    if let policyError = transport.error as? NativeRPCResponsePolicyError { throw policyError }
+                    if let policyError = transport.error as? HTTPResponsePolicyError { throw policyError }
                     decoded = try data.flatMap {
                         try NativeRPCResponseDecoder.decode(RPCResponse<Value>.self, from: $0, expectedID: Self.requestID)
                     }
-                } catch is NativeRPCResponsePolicyError {
+                } catch is HTTPResponsePolicyError {
                     try Task.checkCancellation()
                     if response?.statusCode == 401, let rejected = authorization {
                         await requestAuthorization.invalidate(afterUnauthorized: rejected)

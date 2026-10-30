@@ -91,7 +91,9 @@ func preparationForTesting(
         }
         return .missing
     })
-    return processor.prepare(binding, catalog: reviewCatalogForTesting(action: action, accounts: accounts))
+    return prepareRequestSynchronouslyForTesting(
+        processor, binding: binding, catalog: reviewCatalogForTesting(action: action, accounts: accounts)
+    )
 }
 
 @MainActor
@@ -293,7 +295,9 @@ func reviewActionForTesting(
             identity: .init(generation: nil, catalogData: Data()),
             orderedAccounts: [approval.approvedAccount.specificAccount]
         )
-        guard case .approval(let intent) = requestProcessorForTesting().prepare(binding, catalog: catalog) else {
+        guard case .approval(let intent) = prepareRequestSynchronouslyForTesting(
+            requestProcessorForTesting(), binding: binding, catalog: catalog
+        ) else {
             throw CocoaError(.coderInvalidValue)
         }
         return intent.action
@@ -777,10 +781,10 @@ func approvedWalletSigningPermitForTesting(
         name = "signPersonalMessage"
         subject = .signPersonalMessage
         parameters = ["data": WalletCrypto.hexString(data: data)]
-    case .signature(.ethereumTypedData(let raw)):
+    case .signature(.ethereumTypedData(let prepared)):
         name = "signTypedMessage"
         subject = .signTypedData
-        parameters = ["raw": raw]
+        parameters = ["raw": prepared.rawJSON]
     case .signature(.solanaMessage(let data)):
         name = "signMessage"
         subject = .signMessage
@@ -826,8 +830,8 @@ func approvedWalletSigningPermitForTesting(
         identity: .init(generation: nil, catalogData: Data()),
         orderedAccounts: [approvedAccount.specificAccount]
     )
-    guard case .approval(let intent) = requestProcessorForTesting().prepare(
-        try XCTUnwrap(snapshot.requestBinding), catalog: catalog
+    guard case .approval(let intent) = prepareRequestSynchronouslyForTesting(
+        requestProcessorForTesting(), binding: try XCTUnwrap(snapshot.requestBinding), catalog: catalog
     ), case .approveMessage(let action) = intent.action else { throw CocoaError(.coderInvalidValue) }
     XCTAssertEqual(action.subject, subject)
     let permit = try fixture.authorize(

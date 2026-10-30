@@ -36,6 +36,22 @@ export requires its own source-bound challenge and grant. Initial backup uses a
 short-lived, one-use authorization issued when a wallet is created. Ordinary
 review, preparation, and signing results contain no mnemonic or private key.
 
+Ethereum typed data is validated off the main actor before signing authentication.
+Catalog resolution reuses the prepared content rather than parsing it again.
+After asynchronous preparation, approval presentation rechecks the current
+request and wallet state before publishing a review. A prepared value
+retains the original JSON and its digest through review, consent, and execution;
+signing does not parse or hash typed data while holding the authority store lock.
+Construction accepts only validated JSON, never a caller-supplied digest.
+
+Typed-data preparation permits at most 256 KiB of UTF-8 input, 64 JSON nesting
+levels, 65,536 JSON tokens, 256 types, 128 fields per type, and 4,096 declared
+fields. Dependency, value, and array-type nesting is limited to 32, with 4,096
+elements per array. Repeated traversal and encoding share budgets of 65,536 work
+steps and 8 MiB of processed bytes. Invalid or over-budget data follows the normal
+request failure path without opening a signing prompt. Existing supported values
+within the limits retain their signing semantics.
+
 Transaction edits are applied to the existing review. Authority validates
 preflight output against that review before accepting it. A fee change requiring
 new consent returns to review; preparation cannot replace immutable signing
@@ -158,6 +174,24 @@ and after UTF-8 normalization. A limit violation discards the response and stops
 the operation without retry or authorization replacement; an observed HTTP 401
 still invalidates its credential. Submission remains uncertain, and a Solana
 confirmation failure retains the already accepted signature.
+
+Optional metadata uses the same bounded streaming transport. Price responses are
+limited to 64 KiB and 10 seconds total, with 16 JSON nesting levels and 4,096
+tokens; the byte limit also applies after UTF-8 normalization. Function-signature
+responses are limited to 16 KiB and 5 seconds total, with 32 levels of tuple/array
+nesting and 1,024 type nodes before caching or decoding. Both reject redirects and
+discard partial responses on failure. Deadlines do not restart when data arrives
+or another subscriber joins. Failed price refreshes retain the previous prices;
+failed signature lookups are not cached. One signature subscriber's cancellation
+does not stop other subscribers, but the last cancellation stops the request.
+
+ABI interpretation also limits decoded expansion. Each call shares budgets of
+16,384 decoded values, 65,536 work steps, 1 MiB of decoded string data, and 1 MiB
+of JSON output. Fixed and dynamic arrays consume the same budget, including
+zero-size tuples and repeated offsets. Schema parsing is limited to 1,024 nodes
+and 32 nesting levels, with at most 256 KiB of ABI JSON and 1 MiB of calldata.
+Decoding and serialization check cancellation. Exceeding a limit discards the
+interpretation; transaction presentation retains its raw-data fallback.
 
 Compatibility is required for released-main wallet storage and external protocol
 standards. Intermediate development formats do not require fallback readers or

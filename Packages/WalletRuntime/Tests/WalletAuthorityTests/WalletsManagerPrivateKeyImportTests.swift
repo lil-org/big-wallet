@@ -941,11 +941,11 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         let retryRequest = try XCTUnwrap(retry.request)
         XCTAssertNil(retryRequest.authorizedAccount)
         let binding = try XCTUnwrap(retry.requestBinding)
-        guard case .needsCatalog = requestProcessorForTesting().prepare(binding, catalog: nil) else {
+        guard case .needsCatalog = await requestProcessorForTesting().prepare(binding, catalog: nil) else {
             return XCTFail("Expected a catalog requirement")
         }
         let catalog = try XCTUnwrap(manager.reviewCatalog())
-        guard case .approval(let intent) = requestProcessorForTesting().prepare(binding, catalog: catalog),
+        guard case .approval(let intent) = await requestProcessorForTesting().prepare(binding, catalog: catalog),
               case .selectAccount = intent.action else {
             return XCTFail("Reimported keys require a fresh site approval")
         }
@@ -1744,7 +1744,7 @@ final class WalletSigningScopeTests: XCTestCase {
         let catalog = WalletReviewCatalog(
             identity: .init(generation: nil, catalogData: Data()), orderedAccounts: [account.specificAccount]
         )
-        guard case .approval(let intent) = requestProcessorForTesting().prepare(try XCTUnwrap(snapshot.requestBinding), catalog: catalog) else {
+        guard case .approval(let intent) = prepareRequestSynchronouslyForTesting(requestProcessorForTesting(), binding: try XCTUnwrap(snapshot.requestBinding), catalog: catalog) else {
             throw CocoaError(.coderInvalidValue)
         }
         let permit = try fixture.authorize(
@@ -1877,7 +1877,7 @@ final class WalletSigningScopeTests: XCTestCase {
         let options = try SolanaSigner.preparedSendOptions(from: [:]).get()
         let cases: [(SignMessageAction.Payload, WalletCoin, Bool)] = [
             (.signature(.ethereumPersonalMessage(walletSigningTestMessage)), .ethereum, false),
-            (.signature(.ethereumTypedData(Vectors.typedDataJSON)), .ethereum, false),
+            (.signature(.ethereumTypedData(try XCTUnwrap(PreparedEthereumTypedData(json: Vectors.typedDataJSON)))), .ethereum, false),
             (.signature(.solanaMessage(walletSigningTestMessage)), .solana, false),
             (.signature(.solanaTransaction(transaction)), .solana, false),
             (.signature(.solanaTransactions([transaction])), .solana, false),
@@ -1938,7 +1938,7 @@ final class WalletSigningScopeTests: XCTestCase {
     func testEthereumSigningModesUseTheCapturedPayload() async throws {
         let cases: [(SignMessageAction.Payload, String)] = [
             (.signature(.ethereumPersonalMessage(Vectors.ethereumPersonalMessage)), Vectors.ethereumPersonalMessageSignature),
-            (.signature(.ethereumTypedData(Vectors.typedDataJSON)), Vectors.ethereumTypedDataSignature),
+            (.signature(.ethereumTypedData(try XCTUnwrap(PreparedEthereumTypedData(json: Vectors.typedDataJSON)))), Vectors.ethereumTypedDataSignature),
         ]
         for (payload, expectedSignature) in cases {
             let (account, access) = try unlockedSigningAccess(coin: .ethereum, key: Vectors.ethereumSignerPrivateKey)
@@ -1961,7 +1961,8 @@ final class WalletSigningScopeTests: XCTestCase {
     func testCryptographicFailureConsumesTheAttachedSigner() async throws {
         let (account, access) = try unlockedSigningAccess(coin: .ethereum, key: Vectors.ethereumSignerPrivateKey)
         let permit = try approvedWalletSigningPermitForTesting(
-            approvedAccount: account, payload: .signature(.ethereumTypedData(Vectors.malformedTypedDataJSON))
+            approvedAccount: account,
+            payload: .signature(.ethereumTypedData(try XCTUnwrap(PreparedEthereumTypedData(json: Vectors.typedDataJSON))))
         )
         let signerPreparation = makeWalletSigningPreparationForTesting(
             scope: try XCTUnwrap(WalletSigningScope(permit: permit)),
@@ -1971,8 +1972,12 @@ final class WalletSigningScopeTests: XCTestCase {
             commit: .native
         )
         let signer = try XCTUnwrap(signerPreparation.consume(permit: permit))
-        guard case .failure(.failedToSign) = await signer.sign() else {
-            return XCTFail("Expected malformed typed data to fail")
+        let hooks = AuthorityExecutionHooks(checkpoint: { _, _ in }, event: { event in
+            if event.kind == .signingStarted { access.invalidate() }
+        })
+        let result = await AuthorityExecutionHooks.$current.withValue(hooks) { await signer.sign() }
+        guard case .failure(.failedToSign) = result else {
+            return XCTFail("Expected invalidated key material to fail signing")
         }
         assertUnavailable(await signer.sign())
     }
@@ -2092,7 +2097,7 @@ final class WalletSigningScopeTests: XCTestCase {
         }
     }
 
-    func testMalformedSolanaBatchCannotProducePartialApproval() throws {
+    func testMalformedSolanaBatchCannotProducePartialApproval() async throws {
         let account = WalletAccountDescriptor(walletID: walletID, account: solanaAccount())
         let publicKey = try XCTUnwrap(WalletCrypto.base58Decode(string: account.normalizedAddress))
         let message = WalletCrypto.base58Encode(data: SolanaMessageFixture.wireMessage(
@@ -2113,7 +2118,7 @@ final class WalletSigningScopeTests: XCTestCase {
             ]))
             request.authorizedAccount = account
             let binding = try requestBindingForTesting(request)
-            guard case .immediate(let resolution) = requestProcessorForTesting().prepare(binding, catalog: catalog) else {
+            guard case .immediate(let resolution) = await requestProcessorForTesting().prepare(binding, catalog: catalog) else {
                 return XCTFail("A malformed batch must not issue a partial signing approval")
             }
             let response = try XCTUnwrap(resolution.response(for: request))

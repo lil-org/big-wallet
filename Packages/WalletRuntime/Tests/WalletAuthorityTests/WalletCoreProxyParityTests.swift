@@ -841,22 +841,17 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
 
     func testEthereumTypedSigningMatchesMigrationVectors() throws {
         let privateKey = try requirePrivateKey(Vectors.ethereumSignerPrivateKey)
-        XCTAssertEqual(try EthereumSigner.sign(typedData: Vectors.typedDataJSON, privateKey: privateKey),
+        XCTAssertEqual(try EthereumSigner.sign(typedData: requireTypedData(Vectors.typedDataJSON), privateKey: privateKey),
                        Vectors.ethereumTypedDataSignature)
-        XCTAssertEqual(try EthereumSigner.sign(typedData: Vectors.typedDataMinifiedJSON, privateKey: privateKey),
+        XCTAssertEqual(try EthereumSigner.sign(typedData: requireTypedData(Vectors.typedDataMinifiedJSON), privateKey: privateKey),
                        Vectors.ethereumTypedDataSignature)
-        XCTAssertEqual(try EthereumSigner.sign(typedData: Vectors.typedDataReorderedJSON, privateKey: privateKey),
+        XCTAssertEqual(try EthereumSigner.sign(typedData: requireTypedData(Vectors.typedDataReorderedJSON), privateKey: privateKey),
                        Vectors.ethereumTypedDataSignature)
-        XCTAssertEqual(try EthereumSigner.sign(typedData: Vectors.permitTypedDataJSON, privateKey: privateKey),
+        XCTAssertEqual(try EthereumSigner.sign(typedData: requireTypedData(Vectors.permitTypedDataJSON), privateKey: privateKey),
                        Vectors.permitTypedDataSignature)
-        XCTAssertEqual(try EthereumSigner.sign(typedData: Vectors.complexTypedDataJSON, privateKey: privateKey),
+        XCTAssertEqual(try EthereumSigner.sign(typedData: requireTypedData(Vectors.complexTypedDataJSON), privateKey: privateKey),
                        Vectors.complexTypedDataSignature)
-        XCTAssertThrowsError(try EthereumSigner.sign(typedData: Vectors.malformedTypedDataJSON, privateKey: privateKey)) {
-            guard let error = $0 as? EthereumSigner.SigningFailure, case .failedToSign = error else {
-                XCTFail("Expected failedToSign for malformed typed data, got \($0)")
-                return
-            }
-        }
+        XCTAssertNil(PreparedEthereumTypedData(json: Vectors.malformedTypedDataJSON))
     }
 
     func testInvalidPublicKeyInputsReturnEmptyAddresses() {
@@ -3087,34 +3082,24 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
                           Data())
     }
 
-    func testTypedDataSigningRejectsMalformedShapesAndOutOfRangeIntegersAndAcceptsStringChainIDs() throws {
+    func testTypedDataPreparationRejectsMalformedShapesAndSigningAcceptsStringChainIDs() throws {
         let privateKey = try requirePrivateKey(Vectors.ethereumSignerPrivateKey)
 
-        XCTAssertEqual(try EthereumSigner.sign(typedData: Vectors.decimalStringChainIDTypedDataJSON, privateKey: privateKey),
+        XCTAssertEqual(try EthereumSigner.sign(typedData: requireTypedData(Vectors.decimalStringChainIDTypedDataJSON), privateKey: privateKey),
                        Vectors.ethereumTypedDataSignature)
-        XCTAssertEqual(try EthereumSigner.sign(typedData: Vectors.hexStringChainIDTypedDataJSON, privateKey: privateKey),
+        XCTAssertEqual(try EthereumSigner.sign(typedData: requireTypedData(Vectors.hexStringChainIDTypedDataJSON), privateKey: privateKey),
                        Vectors.ethereumTypedDataSignature)
-        XCTAssertNoThrow(try EthereumSigner.sign(typedData: Vectors.negativeZeroTypedDataJSON, privateKey: privateKey))
-        XCTAssertNoThrow(try EthereumSigner.sign(typedData: Vectors.shortFixedBytesTypedDataJSON, privateKey: privateKey),
+        XCTAssertNoThrow(try EthereumSigner.sign(typedData: requireTypedData(Vectors.negativeZeroTypedDataJSON), privateKey: privateKey))
+        XCTAssertNoThrow(try EthereumSigner.sign(typedData: requireTypedData(Vectors.shortFixedBytesTypedDataJSON), privateKey: privateKey),
                          "WalletCore accepts undersized odd-length EIP-712 bytesN values")
         for fixture in Vectors.invalidTypedDataJSONFixtures {
-            XCTAssertThrowsError(try EthereumSigner.sign(typedData: fixture.json, privateKey: privateKey), fixture.name) {
-                guard let error = $0 as? EthereumSigner.SigningFailure, case .failedToSign = error else {
-                    XCTFail("Expected failedToSign for \(fixture.name), got \($0)")
-                    return
-                }
-            }
+            XCTAssertNil(PreparedEthereumTypedData(json: fixture.json), fixture.name)
         }
         for fixture in [
             ("uint8 overflow", Vectors.uint8OverflowTypedDataJSON),
             ("int8 underflow", Vectors.int8UnderflowTypedDataJSON),
         ] {
-            XCTAssertThrowsError(try EthereumSigner.sign(typedData: fixture.1, privateKey: privateKey), fixture.0) {
-                guard let error = $0 as? EthereumSigner.SigningFailure, case .failedToSign = error else {
-                    XCTFail("Expected failedToSign for \(fixture.0), got \($0)")
-                    return
-                }
-            }
+            XCTAssertNil(PreparedEthereumTypedData(json: fixture.1), fixture.0)
         }
     }
 
@@ -3645,6 +3630,12 @@ final class WalletCoreProxySolanaCallSiteTests: XCTestCase {
         XCTAssertNil(SolanaSigner().decodeTransactionMessage(message))
     }
 
+}
+
+private func requireTypedData(_ json: String,
+                              file: StaticString = #filePath,
+                              line: UInt = #line) throws -> PreparedEthereumTypedData {
+    try XCTUnwrap(PreparedEthereumTypedData(json: json), file: file, line: line)
 }
 
 private func requirePrivateKey(_ data: Data,

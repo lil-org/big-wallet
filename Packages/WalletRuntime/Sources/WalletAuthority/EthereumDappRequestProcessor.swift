@@ -10,6 +10,7 @@ struct EthereumDappRequestProcessor {
     static func prepare(
         request: SafariRequest,
         body: SafariRequest.Ethereum,
+        signingContent: SigningReviewContent?,
         catalog: WalletReviewCatalog?,
         networkResolver: @MainActor (Int) -> ApprovalNetworkResolution,
         customDefinitionResult: @MainActor (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult
@@ -38,7 +39,8 @@ struct EthereumDappRequestProcessor {
             )
             return .approval(.selectAccount(action))
         case .signTypedMessage, .signPersonalMessage:
-            guard let content = signingReviewContent(for: body) else {
+            guard !Task.isCancelled else { return .unavailable }
+            guard let content = signingContent else {
                 return .immediate(immediateGenericFailure(to: request))
             }
             guard catalog != nil else { return .needsCatalog }
@@ -130,11 +132,12 @@ struct EthereumDappRequestProcessor {
     static func signingReviewContent(for body: SafariRequest.Ethereum) -> SigningReviewContent? {
         switch body.method {
         case .signTypedMessage:
-            guard let raw = body.raw else { return nil }
+            guard let raw = body.raw,
+                  let prepared = PreparedEthereumTypedData(json: raw) else { return nil }
             return SigningReviewContent(
                 subject: .signTypedData,
-                meta: raw,
-                payload: .signature(.ethereumTypedData(raw))
+                meta: prepared.rawJSON,
+                payload: .signature(.ethereumTypedData(prepared))
             )
         case .signPersonalMessage:
             guard let data = body.message else { return nil }

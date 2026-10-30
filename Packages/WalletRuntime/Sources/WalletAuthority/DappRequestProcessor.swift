@@ -28,6 +28,7 @@ struct DappRequestProcessor: DappRequestProcessing {
     private let ethereumNetworkResolver: @MainActor @Sendable (Int) -> ApprovalNetworkResolution
     private let selectionNetworkResolver: @MainActor @Sendable (String?) -> EthereumNetwork?
     private let customDefinitionResult: @MainActor @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult
+    private let ethereumSigningContent: @Sendable (SafariRequest.Ethereum) -> SigningReviewContent?
     private let solana: SolanaSigner
     private let solanaEndpoints: any SolanaEndpointResolving
 
@@ -36,11 +37,15 @@ struct DappRequestProcessor: DappRequestProcessing {
         selectionNetworkResolver: @escaping @MainActor @Sendable (String?) -> EthereumNetwork?,
         customDefinitionResult: @escaping @MainActor @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult,
         solanaEndpoints: any SolanaEndpointResolving,
-        solana: SolanaSigner = SolanaSigner()
+        solana: SolanaSigner = SolanaSigner(),
+        ethereumSigningContent: @escaping @Sendable (SafariRequest.Ethereum) -> SigningReviewContent? = {
+            EthereumDappRequestProcessor.signingReviewContent(for: $0)
+        }
     ) {
         self.ethereumNetworkResolver = ethereumNetworkResolver
         self.selectionNetworkResolver = selectionNetworkResolver
         self.customDefinitionResult = customDefinitionResult
+        self.ethereumSigningContent = ethereumSigningContent
         self.solana = solana
         self.solanaEndpoints = solanaEndpoints
     }
@@ -48,7 +53,26 @@ struct DappRequestProcessor: DappRequestProcessing {
     func prepare(
         _ binding: ExtensionBridge.RequestBinding,
         catalog: WalletReviewCatalog?
+    ) async -> DappRequestPreparation {
+        let signingContent: SigningReviewContent?
+        if case .ethereum(let body) = binding.request.body,
+           body.method == .signTypedMessage || body.method == .signPersonalMessage {
+            guard let prepared = await awaitBackgroundOperation({ [ethereumSigningContent] in
+                ethereumSigningContent(body)
+            }) else { return .unavailable }
+            signingContent = prepared
+        } else {
+            signingContent = nil
+        }
+        return resolvePreparation(binding, catalog: catalog, ethereumSigningContent: signingContent)
+    }
+
+    func resolvePreparation(
+        _ binding: ExtensionBridge.RequestBinding,
+        catalog: WalletReviewCatalog?,
+        ethereumSigningContent: SigningReviewContent?
     ) -> DappRequestPreparation {
+        guard !Task.isCancelled else { return .unavailable }
         let request = binding.request
         let preparation: UnboundDappRequestPreparation
         switch request.body {
@@ -56,6 +80,7 @@ struct DappRequestProcessor: DappRequestProcessing {
             preparation = EthereumDappRequestProcessor.prepare(
                 request: request,
                 body: body,
+                signingContent: ethereumSigningContent,
                 catalog: catalog,
                 networkResolver: ethereumNetworkResolver,
                 customDefinitionResult: customDefinitionResult
@@ -70,23 +95,29 @@ struct DappRequestProcessor: DappRequestProcessing {
             )
         case .unknown:
             guard let context = request.manualSwitchContext else { return .unavailable }
-            guard let catalog else { return .needsCatalog }
-            preparation = Self.prepareSwitchAccount(
-                context: context,
-                catalog: catalog,
-                networkResolver: selectionNetworkResolver
-            )
+            if let catalog {
+                preparation = Self.prepareSwitchAccount(
+                    context: context,
+                    catalog: catalog,
+                    networkResolver: selectionNetworkResolver
+                )
+            } else {
+                preparation = .needsCatalog
+            }
         }
-        return bind(preparation, to: binding)
+        return bind(preparation, to: binding, ethereumSigningContent: ethereumSigningContent)
     }
 
     private func bind(
         _ preparation: UnboundDappRequestPreparation,
-        to binding: ExtensionBridge.RequestBinding
+        to binding: ExtensionBridge.RequestBinding,
+        ethereumSigningContent: SigningReviewContent?
     ) -> DappRequestPreparation {
         switch preparation {
         case .needsCatalog:
-            return .needsCatalog
+            return .needsCatalog { catalog in
+                resolvePreparation(binding, catalog: catalog, ethereumSigningContent: ethereumSigningContent)
+            }
         case .unavailable:
             return .unavailable
         case .immediate(let resolution):

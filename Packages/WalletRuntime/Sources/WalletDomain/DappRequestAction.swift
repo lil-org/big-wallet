@@ -50,7 +50,7 @@ public struct SigningReviewContent: Sendable {
 
 public enum SignaturePayload: Sendable {
     case ethereumPersonalMessage(Data)
-    case ethereumTypedData(String)
+    case ethereumTypedData(PreparedEthereumTypedData)
     case solanaMessage(Data)
     case solanaTransaction(SolanaPreparedTransactionMessage)
     case solanaTransactions([SolanaPreparedTransactionMessage])

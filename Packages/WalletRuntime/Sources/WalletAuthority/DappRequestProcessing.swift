@@ -7,7 +7,7 @@ protocol DappRequestProcessing {
     func prepare(
         _ binding: ExtensionBridge.RequestBinding,
         catalog: WalletReviewCatalog?
-    ) -> DappRequestPreparation
+    ) async -> DappRequestPreparation
 
     func execute(
         permit: ExtensionBridge.ApprovedExecutionPermit,
@@ -24,9 +24,10 @@ extension DappRequestProcessing {
     func prepare(
         _ binding: ExtensionBridge.RequestBinding,
         loadingCatalog: () -> WalletReviewCatalog?
-    ) -> DappRequestPreparationResult {
-        let initial = prepare(binding, catalog: nil)
-        guard case .needsCatalog = initial else {
+    ) async -> DappRequestPreparationResult {
+        let initial = await prepare(binding, catalog: nil)
+        guard !Task.isCancelled else { return .prepared(.unavailable, catalog: nil) }
+        guard case .needsCatalog(let resolve) = initial else {
             return .prepared(initial, catalog: nil)
         }
         guard let catalog = loadingCatalog() else { return .catalogUnavailable }
@@ -34,7 +35,8 @@ extension DappRequestProcessing {
            catalog.availability(of: account) == .unavailable {
             return .catalogUnavailable
         }
-        return .prepared(prepare(binding, catalog: catalog), catalog: catalog)
+        guard !Task.isCancelled else { return .prepared(.unavailable, catalog: nil) }
+        return .prepared(resolve(catalog), catalog: catalog)
     }
 }
 

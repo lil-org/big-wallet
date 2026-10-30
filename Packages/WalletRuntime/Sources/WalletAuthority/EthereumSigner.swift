@@ -34,9 +34,8 @@ enum EthereumSigner {
         return WalletCrypto.hexString(data: signed).withHexPrefix
     }
     
-    static func sign(typedData: String, privateKey: WalletPrivateKey) throws -> String {
-        let digest = WalletCrypto.ethereumTypedDataDigest(messageJson: typedData)
-        return try sign(digest: digest, privateKey: privateKey)
+    static func sign(typedData: PreparedEthereumTypedData, privateKey: WalletPrivateKey) throws -> String {
+        return try sign(digest: typedData.digest, privateKey: privateKey)
     }
     
     static func signedTransaction(

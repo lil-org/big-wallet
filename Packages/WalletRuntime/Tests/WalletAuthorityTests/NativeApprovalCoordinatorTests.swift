@@ -290,10 +290,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 },
             wait: { _ in try? await TestDeferred<Void>().value() },
-            prepare: { binding, catalog in
-                guard catalog != nil else { return .needsCatalog }
-                preparations += 1
-                return self.approvalPreparation(binding)
+            prepare: { binding, _ in
+                .needsCatalog { _ in
+                    preparations += 1
+                    return self.approvalPreparation(binding)
+                }
             },
             reloadWallets: {
                 started.fulfill()
@@ -1062,9 +1063,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let fixture = try makeFixture(clock: clock, environment: .init(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             wait: { _ in try? await TestDeferred<Void>().value() },
-            prepare: { binding, catalog in
-                guard catalog != nil else { return .needsCatalog }
-                return needsCatalog ? .needsCatalog : self.approvalPreparation(binding)
+            prepare: { binding, _ in
+                .needsCatalog { _ in
+                    if needsCatalog { return .needsCatalog { _ in .unavailable } }
+                    return self.approvalPreparation(binding)
+                }
             },
             reloadWallets: {
                 reloads += 1
@@ -1105,10 +1108,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 if reloads < 2 { await Task.yield() }
                 else { try? await TestDeferred<Void>().value() }
             },
-            prepare: { binding, catalog in
-                guard catalog != nil else { return .needsCatalog }
-                preparations += 1
-                return self.approvalPreparation(binding)
+            prepare: { binding, _ in
+                .needsCatalog { _ in
+                    preparations += 1
+                    return self.approvalPreparation(binding)
+                }
             },
             reloadWallets: {
                 reloads += 1
@@ -1139,10 +1143,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             let fixture = try makeFixture(clock: clock, environment: .init(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in XCTFail("Expired preparation must not retry") },
-                prepare: { _, catalog in
-                    guard catalog != nil else { return .needsCatalog }
-                    XCTFail("Expired preparation must not create a review")
-                    return .unavailable
+                prepare: { _, _ in
+                    .needsCatalog { _ in
+                        XCTFail("Expired preparation must not create a review")
+                        return .unavailable
+                    }
                 },
                 reloadWallets: {
                     if expiresRequest {
@@ -1174,9 +1179,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in clock.advance(to: clock.date.addingTimeInterval(301)) },
-            prepare: { binding, catalog in
-                guard catalog != nil else { return .needsCatalog }
-                return requestProcessorForTesting().prepare(binding, catalog: catalog)
+            prepare: { binding, _ in
+                .needsCatalog { catalog in
+                    prepareRequestSynchronouslyForTesting(requestProcessorForTesting(), binding: binding, catalog: catalog)
+                }
             },
             reloadWallets: {
                 reloads += 1
@@ -1499,10 +1505,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 clock.advance(to: clock.date.addingTimeInterval(Double(delay) / 1_000_000_000))
                 await Task.yield()
             },
-            prepare: { request, catalog in
-                guard catalog != nil else { return .needsCatalog }
-                preparations += 1
-                return .immediate(.failure(.userRejected))
+            prepare: { _, _ in
+                .needsCatalog { _ in
+                    preparations += 1
+                    return .immediate(.failure(.userRejected))
+                }
             },
             reloadWallets: { reloads += 1; return reloads == 7 },
             currentReviewCatalog: { reviewCatalogForTesting(action: self.accountSelectionAction()) }
@@ -2659,9 +2666,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                     await Task.yield()
                 }
             },
-            prepare: { binding, catalog in
-                guard catalog != nil else { return .needsCatalog }
-                return self.approvalPreparation(binding)
+            prepare: { binding, _ in
+                .needsCatalog { _ in self.approvalPreparation(binding) }
             },
             reloadWallets: { available.value },
             currentReviewCatalog: { reviewCatalogForTesting(action: self.accountSelectionAction()) }
@@ -2862,10 +2868,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 clock.advance(to: clock.date.addingTimeInterval(Double(delay) / 1_000_000_000))
                 await Task.yield()
             },
-            prepare: { request, catalog in
-                guard catalog != nil else { return .needsCatalog }
-                preparations += 1
-                return .immediate(.failure(.userRejected))
+            prepare: { _, _ in
+                .needsCatalog { _ in
+                    preparations += 1
+                    return .immediate(.failure(.userRejected))
+                }
             },
             reloadWallets: { available.value },
             currentReviewCatalog: { reviewCatalogForTesting(action: self.accountSelectionAction()) }

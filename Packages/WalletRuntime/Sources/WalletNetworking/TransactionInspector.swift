@@ -4,10 +4,25 @@ import Foundation
 import WalletDomain
 
 public struct TransactionInspector: Sendable {
+    static let responsePolicy = HTTPResponsePolicy(maximumResponseBytes: 16_384, totalTimeout: .seconds(5))
 
     private enum ParsedArgument {
         case type(String)
         case tuple([ParsedArgument], suffix: String)
+    }
+
+    private struct SignatureResourceFrame {
+        var maximumDepth = 0
+        var argumentDepth = 0
+        var hasArgument = false
+        var inArraySuffix = false
+
+        mutating func finishArgument() {
+            maximumDepth = max(maximumDepth, argumentDepth)
+            argumentDepth = 0
+            hasArgument = false
+            inArraySuffix = false
+        }
     }
     
     private let methodSignatures: MethodSignatureStore
@@ -21,7 +36,19 @@ public struct TransactionInspector: Sendable {
             (@Sendable (_ data: String, _ nameHex: String, _ signature: String) -> String?)?
             = nil
     ) {
-        methodSignatures = MethodSignatureStore(urlSession: urlSession, onSubscriberRegistered: onSubscriberRegistered)
+        self.init(urlSession: urlSession, responsePolicy: Self.responsePolicy,
+                  onSubscriberRegistered: onSubscriberRegistered, decoder: decoder)
+    }
+
+    init(
+        urlSession: URLSession,
+        responsePolicy: HTTPResponsePolicy,
+        timing: HTTPResponseTiming = .live,
+        onSubscriberRegistered: (@Sendable () -> Void)? = nil,
+        decoder: (@Sendable (_ data: String, _ nameHex: String, _ signature: String) -> String?)? = nil
+    ) {
+        methodSignatures = MethodSignatureStore(urlSession: urlSession, responsePolicy: responsePolicy, timing: timing,
+                                               onSubscriberRegistered: onSubscriberRegistered)
         self.decoder = decoder
     }
 
@@ -43,6 +70,7 @@ public struct TransactionInspector: Sendable {
     }
 
     public func decode(data: String, nameHex: String, signature: String) -> String? {
+        guard Self.hasSafeSignatureResources(signature) else { return nil }
         guard let start = signature.firstIndex(of: "("), signature.hasSuffix(")") else { return nil }
         let name = signature.prefix(upTo: start)
         let args = String(signature.dropFirst(name.count + 1).dropLast())
@@ -64,6 +92,50 @@ public struct TransactionInspector: Sendable {
         } else {
             return nil
         }
+    }
+
+    fileprivate static func hasSafeSignatureResources(_ signature: String) -> Bool {
+        guard signature.utf8.count <= responsePolicy.maximumResponseBytes else { return false }
+        guard let start = signature.firstIndex(of: "(") else { return true }
+        var nodes = 0
+        var frames = [SignatureResourceFrame()]
+        for character in signature[signature.index(after: start)...] {
+            let current = frames.count - 1
+            switch character {
+            case "(":
+                nodes += 1
+                frames.append(SignatureResourceFrame())
+            case ")":
+                frames[current].finishArgument()
+                if frames.count > 1 {
+                    let tupleDepth = frames.removeLast().maximumDepth + 1
+                    frames[frames.count - 1].argumentDepth += tupleDepth
+                    frames[frames.count - 1].hasArgument = true
+                }
+            case ",":
+                frames[current].finishArgument()
+            case "[":
+                nodes += 1
+                frames[current].argumentDepth += 1
+                frames[current].inArraySuffix = true
+            case "]":
+                frames[current].inArraySuffix = false
+            default:
+                if !character.isWhitespace, !frames[current].hasArgument, !frames[current].inArraySuffix {
+                    nodes += 1
+                    frames[current].hasArgument = true
+                }
+            }
+            guard frames.count <= 33, nodes <= 1_024,
+                  frames.last!.argumentDepth <= 32, frames.last!.maximumDepth <= 32 else { return false }
+        }
+        while frames.count > 1 {
+            frames[frames.count - 1].finishArgument()
+            let tupleDepth = frames.removeLast().maximumDepth + 1
+            frames[frames.count - 1].argumentDepth += tupleDepth
+        }
+        frames[0].finishArgument()
+        return frames[0].maximumDepth <= 32
     }
     
     private func parseArguments(_ arguments: String) -> [ParsedArgument]? {
@@ -211,13 +283,17 @@ private actor MethodSignatureStore {
     }
 
     private let urlSession: URLSession
+    private let responsePolicy: HTTPResponsePolicy
+    private let timing: HTTPResponseTiming
     private let onSubscriberRegistered: (@Sendable () -> Void)?
     private var cache = [String: String]()
     private var cacheOrder = [String]()
     private var pendingRequests = [String: PendingRequest]()
 
-    public init(urlSession: URLSession, onSubscriberRegistered: (@Sendable () -> Void)?) {
+    init(urlSession: URLSession, responsePolicy: HTTPResponsePolicy, timing: HTTPResponseTiming, onSubscriberRegistered: (@Sendable () -> Void)?) {
         self.urlSession = urlSession
+        self.responsePolicy = responsePolicy
+        self.timing = timing
         self.onSubscriberRegistered = onSubscriberRegistered
     }
 
@@ -241,15 +317,17 @@ private actor MethodSignatureStore {
                     return
                 }
                 let requestID = UUID()
-                let task = Task { [weak self, urlSession] in
+                let task = Task { [weak self, urlSession, responsePolicy, timing] in
                     let result: Result<String?, Error>
                     do {
-                        let (data, response) = try await urlSession.data(from: url)
+                        let response = try await urlSession.responsePreservingTransportError(for: URLRequest(url: url), policy: responsePolicy, timing: timing)
                         try Task.checkCancellation()
-                        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-                        let signature = String(data: data, encoding: .utf8)
+                        if let error = response.error { throw error }
+                        let statusCode = (response.response as? HTTPURLResponse)?.statusCode ?? 0
+                        let signature = response.data.flatMap { String(data: $0, encoding: .utf8) }
                         result = .success(
-                            (200...299).contains(statusCode) && signature?.isEmpty == false ? signature : nil)
+                            (200...299).contains(statusCode) && signature?.isEmpty == false &&
+                                signature.map(TransactionInspector.hasSafeSignatureResources) == true ? signature : nil)
                     } catch {
                         result = .failure(error)
                     }

@@ -228,7 +228,7 @@ public final class NativeApprovalAuthority {
         let uptime: @MainActor @Sendable () -> TimeInterval
         let wait: @MainActor @Sendable (UInt64) async -> Void
         let waitForAuthenticationExpiry: @MainActor @Sendable (TimeInterval) async throws -> Void
-        let prepare: @MainActor @Sendable (ExtensionBridge.RequestBinding, WalletReviewCatalog?) -> DappRequestPreparation
+        let prepare: @MainActor @Sendable (ExtensionBridge.RequestBinding, WalletReviewCatalog?) async -> DappRequestPreparation
         let reloadWallets: @MainActor @Sendable () async -> Bool
         let currentReviewCatalog: @MainActor @Sendable () -> WalletReviewCatalog?
         let attemptNativeDecision: @MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult
@@ -241,7 +241,7 @@ public final class NativeApprovalAuthority {
             uptime: (@MainActor @Sendable () -> TimeInterval)? = nil,
             wait: @escaping @MainActor @Sendable (UInt64) async -> Void,
             waitForAuthenticationExpiry: (@MainActor @Sendable (TimeInterval) async throws -> Void)? = nil,
-            prepare: (@MainActor @Sendable (ExtensionBridge.RequestBinding, WalletReviewCatalog?) -> DappRequestPreparation)? = nil,
+            prepare: (@MainActor @Sendable (ExtensionBridge.RequestBinding, WalletReviewCatalog?) async -> DappRequestPreparation)? = nil,
             reloadWallets: (@MainActor @Sendable () async -> Bool)? = nil,
             currentReviewCatalog: (@MainActor @Sendable () -> WalletReviewCatalog?)? = nil,
             attemptNativeDecision: (@MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult)? = nil
@@ -280,7 +280,7 @@ public final class NativeApprovalAuthority {
                     let clock = ContinuousClock()
                     try? await clock.sleep(until: clock.now.advanced(by: .nanoseconds(Int64(clamping: nanoseconds))), tolerance: nil)
                 },
-                prepare: { processor.prepare($0, catalog: $1) },
+                prepare: { await processor.prepare($0, catalog: $1) },
                 reloadWallets: { await wallets.reloadFromStore() },
                 currentReviewCatalog: { wallets.reviewCatalog() },
                 attemptNativeDecision: { await finalizer.attempt(consent: $0) }
@@ -363,25 +363,29 @@ public final class NativeApprovalAuthority {
                 ? .unavailable : .changed
         }
         guard environment.now() < binding.request.admissionDeadline else { return .unavailable }
-        var preparation = environment.prepare(binding, nil)
+        var preparation = await environment.prepare(binding, nil)
+        guard isCurrent(revision, access: access, deadline: deadline),
+              environment.now() < binding.request.admissionDeadline else { return .unavailable }
         if case .needsCatalog = preparation {
             guard await environment.reloadWallets() else { return .retry }
-            guard isCurrent(revision, access: access, deadline: deadline),
-                  environment.now() < binding.request.admissionDeadline else { return .unavailable }
-            let refreshed = await deliveryStore.load(handle: handle)
-            guard isCurrent(revision, access: access, deadline: deadline),
-                  environment.now() < binding.request.admissionDeadline else { return .unavailable }
-            guard case .found(let current) = refreshed else {
-                if case .unavailable = refreshed { return .retry }
-                return .changed
-            }
-            guard let refreshedBinding = currentBinding(current, owner: owner) else {
-                return current.nativeDeliveryReceipt?.owner.runtimeInstanceIdentifier == owner.runtimeInstanceIdentifier
-                    ? .unavailable : .changed
-            }
-            guard refreshedBinding == binding else { return .changed }
+        }
+        guard isCurrent(revision, access: access, deadline: deadline),
+              environment.now() < binding.request.admissionDeadline else { return .unavailable }
+        let refreshed = await deliveryStore.load(handle: handle)
+        guard isCurrent(revision, access: access, deadline: deadline),
+              environment.now() < binding.request.admissionDeadline else { return .unavailable }
+        guard case .found(let current) = refreshed else {
+            if case .unavailable = refreshed { return .retry }
+            return .changed
+        }
+        guard let refreshedBinding = currentBinding(current, owner: owner) else {
+            return current.nativeDeliveryReceipt?.owner.runtimeInstanceIdentifier == owner.runtimeInstanceIdentifier
+                ? .unavailable : .changed
+        }
+        guard refreshedBinding == binding else { return .changed }
+        if case .needsCatalog(let resolve) = preparation {
             guard let catalog = environment.currentReviewCatalog() else { return .retry }
-            preparation = environment.prepare(binding, catalog)
+            preparation = resolve(catalog)
         }
         guard isCurrent(revision, access: access, deadline: deadline), environment.now() < binding.request.admissionDeadline else { return .unavailable }
         let receipt = NativeDeliveryReceipt(nativeDeliveryNonce: nativeDeliveryNonce, owner: owner)

@@ -2,7 +2,7 @@ import Foundation
 import WalletDomain
 
 enum DappRequestPreparation: Sendable {
-    case needsCatalog
+    case needsCatalog(@MainActor @Sendable (WalletReviewCatalog) -> DappRequestPreparation)
     case immediate(ImmediateResolution)
     case approval(BoundApprovalIntent)
     case unavailable

@@ -8,10 +8,10 @@ import XCTest
 extension NativeApprovalCoordinatorTests {
     func testAuthorityRetiresPreviousReviewAndItsIssuedGrant() async throws {
         var attempts = 0
-        let fixture = try makeAuthorityBoundaryFixture { _ in
+        let fixture = try makeAuthorityBoundaryFixture(finalize: { _ in
             attempts += 1
             return .responseReady
-        }
+        })
         guard case .review(let first) = await fixture.authority.prepareReview(owner: fixture.owner, access: fixture.access) else {
             return XCTFail("Expected the first core review")
         }
@@ -80,13 +80,72 @@ extension NativeApprovalCoordinatorTests {
         XCTAssertTrue(current.isActive)
     }
 
+    func testAuthorityDiscardsCancelledAsynchronousPreparation() async throws {
+        let started = expectation(description: "Preparation suspended")
+        let release = TestGate<Void>()
+        defer { release.resolve(()) }
+        var preparations = 0
+        let fixture = try makeAuthorityBoundaryFixture(beforePreparation: {
+            preparations += 1
+            if preparations == 1 {
+                started.fulfill()
+                await release.wait()
+            }
+        })
+        let preparation = Task { await fixture.authority.prepareReview(owner: fixture.owner, access: fixture.access) }
+        await fulfillment(of: [started], timeout: 1)
+        preparation.cancel()
+        release.resolve(())
+        guard case .unavailable = await preparation.value else {
+            return XCTFail("Cancelled asynchronous preparation must not publish a review")
+        }
+        guard case .review(let review) = await fixture.authority.prepareReview(owner: fixture.owner, access: fixture.access) else {
+            return XCTFail("Fresh preparation must remain available")
+        }
+        XCTAssertTrue(review.isActive)
+    }
+
+    func testAuthorityRechecksRequestAfterAsynchronousPreparation() async throws {
+        let started = expectation(description: "Preparation suspended")
+        let release = TestGate<Void>()
+        defer { release.resolve(()) }
+        let fixture = try makeAuthorityBoundaryFixture(beforePreparation: {
+            started.fulfill()
+            await release.wait()
+        })
+        let preparation = Task { await fixture.authority.prepareReview(owner: fixture.owner, access: fixture.access) }
+        await fulfillment(of: [started], timeout: 1)
+        fixture.store.snapshot = nil
+        release.resolve(())
+        guard case .changed = await preparation.value else {
+            return XCTFail("A retired request must not be presented after asynchronous preparation")
+        }
+    }
+
+    func testAuthorityDiscardsAsynchronousPreparationAfterAccessReplacement() async throws {
+        let started = expectation(description: "Preparation suspended")
+        let release = TestGate<Void>()
+        defer { release.resolve(()) }
+        let fixture = try makeAuthorityBoundaryFixture(beforePreparation: {
+            started.fulfill()
+            await release.wait()
+        })
+        let preparation = Task { await fixture.authority.prepareReview(owner: fixture.owner, access: fixture.access) }
+        await fulfillment(of: [started], timeout: 1)
+        XCTAssertTrue(fixture.authority.acceptAccess(NativeApprovalTestAuthorization.accessSession()))
+        release.resolve(())
+        guard case .unavailable = await preparation.value else {
+            return XCTFail("Access replacement must retire suspended preparation")
+        }
+    }
+
     func testAcceptedNativeOperationSurvivesPresentationRetirement() async throws {
         var attempts = 0
-        let fixture = try makeAuthorityBoundaryFixture { consent in
+        let fixture = try makeAuthorityBoundaryFixture(finalize: { consent in
             attempts += 1
             XCTAssertTrue(consent.authorizationIsAvailable)
             return .responseReady
-        }
+        })
         guard case .review(let first) = await fixture.authority.prepareReview(owner: fixture.owner, access: fixture.access) else {
             return XCTFail("Expected the original review")
         }
@@ -109,6 +168,7 @@ extension NativeApprovalCoordinatorTests {
     }
 
     private func makeAuthorityBoundaryFixture(
+        beforePreparation: @escaping @MainActor @Sendable () async -> Void = {},
         finalize: @escaping @MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult = { _ in .responseReady }
     ) throws -> AuthorityBoundaryFixture {
         let clock = TestClock(uptimeNanoseconds: 0)
@@ -126,7 +186,10 @@ extension NativeApprovalCoordinatorTests {
         let authority = NativeApprovalAuthority(handle: key.handle, nativeDeliveryNonce: key.nativeDeliveryNonce,
             store: store, environment: .init(now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
                 uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 }, wait: { _ in },
-                prepare: { binding, _ in self.approvalPreparation(binding, action: action) }, attemptNativeDecision: finalize))
+                prepare: { binding, _ in
+                    await beforePreparation()
+                    return self.approvalPreparation(binding, action: action)
+                }, attemptNativeDecision: finalize))
         let access = NativeApprovalTestAuthorization.accessSession()
         XCTAssertTrue(authority.acceptAccess(access))
         return AuthorityBoundaryFixture(authority: authority, store: store, owner: owner, access: access)

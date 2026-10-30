@@ -12,7 +12,7 @@ final class SolanaEndpointBindingTests: XCTestCase {
         let original = SolanaRPCEndpoint(url: URL(string: "https://original.example/devnet")!, allowsAlchemyAuthorization: false)
         let replacement = SolanaRPCEndpoint(url: URL(string: "https://replacement.example/devnet")!, allowsAlchemyAuthorization: true)
         let resolver = MutableEndpoints([.devnet: original])
-        guard case .approval(let intent) = requestProcessorForTesting(solanaEndpoints: resolver).prepare(
+        guard case .approval(let intent) = await requestProcessorForTesting(solanaEndpoints: resolver).prepare(
             try XCTUnwrap(snapshot.requestBinding), catalog: catalog
         ) else { return XCTFail("Expected a broadcast review") }
         resolver.replace([.devnet: replacement])
@@ -42,10 +42,10 @@ final class SolanaEndpointBindingTests: XCTestCase {
         XCTAssertEqual(resolver.reads, Solana.Cluster.allCases.count)
     }
 
-    func testUnavailableSelectedEndpointCannotProduceSigningAuthority() throws {
+    func testUnavailableSelectedEndpointCannotProduceSigningAuthority() async throws {
         let (fixture, snapshot, catalog, _) = try requestFixture()
         let resolver = MutableEndpoints([.devnet: .init(url: URL(string: "https://devnet.example")!, allowsAlchemyAuthorization: false)])
-        guard case .approval(let intent) = requestProcessorForTesting(solanaEndpoints: resolver).prepare(
+        guard case .approval(let intent) = await requestProcessorForTesting(solanaEndpoints: resolver).prepare(
             try XCTUnwrap(snapshot.requestBinding), catalog: catalog
         ) else { return XCTFail("Expected a review with one available cluster") }
         let consent = try XCTUnwrap(ApprovalReview(intent: intent).acceptMessage(cluster: .testnet, approvedAt: fixture.now))
@@ -56,7 +56,7 @@ final class SolanaEndpointBindingTests: XCTestCase {
         XCTAssertNil(nativeReview.makeMessageAuthenticationChallenge(solanaCluster: .testnet))
 
         resolver.replace([:])
-        guard case .unavailable = requestProcessorForTesting(solanaEndpoints: resolver).prepare(
+        guard case .unavailable = await requestProcessorForTesting(solanaEndpoints: resolver).prepare(
             try XCTUnwrap(snapshot.requestBinding), catalog: catalog
         ) else { return XCTFail("No endpoint must stop broadcast review preparation") }
     }

@@ -798,12 +798,16 @@ final class UnlockedAccountSignerTests: XCTestCase {
         let key = try XCTUnwrap(WalletPrivateKey(data: Data(1...32)))
         let approved = descriptor(coin: .ethereum, key: key)
         let signer = try XCTUnwrap(UnlockedAccountSigner(approvedAccount: approved, taking: key))
-        let malformed = try approvedWalletSigningPermitForTesting(
+        let permit = try approvedWalletSigningPermitForTesting(
             approvedAccount: approved,
-            payload: .signature(.ethereumTypedData(WalletCoreProxyTestVectors.malformedTypedDataJSON))
+            payload: .signature(.ethereumTypedData(try XCTUnwrap(PreparedEthereumTypedData(json: WalletCoreProxyTestVectors.typedDataJSON))))
         )
-        guard case .failure(.failedToSign) = await sign(malformed, using: signer) else {
-            return XCTFail("Malformed typed data must fail cryptographic signing")
+        let hooks = AuthorityExecutionHooks(checkpoint: { _, _ in }, event: { event in
+            if event.kind == .signingStarted { key.invalidate() }
+        })
+        let result = await AuthorityExecutionHooks.$current.withValue(hooks) { await sign(permit, using: signer) }
+        guard case .failure(.failedToSign) = result else {
+            return XCTFail("Invalidated key material must fail cryptographic signing")
         }
         let valid = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
         assertUnavailable(await sign(valid, using: signer))
@@ -1004,7 +1008,7 @@ private func unconsumedSigningPermitForSessionTests(
     let catalog = WalletReviewCatalog(
         identity: .init(generation: nil, catalogData: Data()), orderedAccounts: [approvedAccount.specificAccount]
     )
-    guard case .approval(let intent) = requestProcessorForTesting().prepare(try XCTUnwrap(snapshot.requestBinding), catalog: catalog) else {
+    guard case .approval(let intent) = prepareRequestSynchronouslyForTesting(requestProcessorForTesting(), binding: try XCTUnwrap(snapshot.requestBinding), catalog: catalog) else {
         throw CocoaError(.coderInvalidValue)
     }
     let permit = try fixture.authorize(

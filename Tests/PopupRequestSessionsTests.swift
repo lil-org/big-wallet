@@ -164,7 +164,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         let prepared = popupPreparedTransaction(try XCTUnwrap(preparationInput))
         preparationUpdate?(prepared)
         complete(.success(prepared))
-        let ready = await controller.dispatchJSON(request: read, profileIdentifier: nil)
+        let ready = try await controller.dispatchPreparedJSON(request: read, profileIdentifier: nil)
         let readyReview = try XCTUnwrap(ready["review"] as? [String: Any])
         XCTAssertNil(readyReview["phase"])
         XCTAssertEqual(readyReview["canBackOffRefresh"] as? Bool, true)
@@ -185,6 +185,34 @@ final class PopupRequestSessionsTests: XCTestCase {
         let refreshed = popupResponseJSON(await controller.dispatch(request: read, profileIdentifier: nil))
         XCTAssertEqual(Set(refreshed.keys), ["status", "approval"])
         XCTAssertEqual(refreshed["approval"] as? NSDictionary, unchanged as NSDictionary)
+    }
+
+    func testRejectedRequestCannotReappearAfterSuspendedPreparation() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 706, provider: .ethereum), in: store)
+        let started = expectation(description: "Preparation started")
+        let gate = makeGate()
+        let processor = PreparationRecordingDappRequestProcessor()
+        processor.beforePreparation = {
+            started.fulfill()
+            await gate.wait()
+        }
+        let controller = makePopupSessionsForTesting(
+            store: store, walletEnvironment: popupWalletEnvironment(), loadsTransactionContext: false,
+            executionEnvironment: popupExecutionEnvironment(requestProcessor: processor)
+        )
+        let read = try popupCommand(subject: "getApprovalState", id: snapshot.handle.id,
+                                    requestToken: snapshot.handle.requestToken)
+        let pending = Task { await controller.dispatchJSON(request: read, profileIdentifier: nil) }
+        await fulfillment(of: [started], timeout: 2)
+        let rejected = await controller.dispatchJSON(request: try popupCommand(
+            subject: "rejectRequest", id: snapshot.handle.id, requestToken: snapshot.handle.requestToken
+        ), profileIdentifier: nil)
+        XCTAssertEqual(rejected["state"] as? String, "missing")
+        gate.resolve(())
+        let completed = await pending.value
+        XCTAssertEqual(completed["state"] as? String, "missing")
+        XCTAssertNil(completed["review"])
     }
 
     func testNativeDeliveryFencesCachedTransactionMutations() async throws {
@@ -2341,7 +2369,7 @@ extension PopupRequestSessionsTests {
                            testCase.name)
             XCTAssertEqual(response["actions"] as? [String], ["retry", "reject"], testCase.name)
             XCTAssertNil(response["review"], testCase.name)
-            XCTAssertEqual(catalogReads, testCase.walletIndependent ? 0 : 2, testCase.name)
+            XCTAssertEqual(catalogReads, testCase.walletIndependent ? 0 : (testCase.catalogAvailable ? 3 : 2), testCase.name)
             XCTAssertEqual(preparations, testCase.catalogAvailable ? 2 : 0, testCase.name)
             let events = await store.events()
             XCTAssertTrue(events.isEmpty, testCase.name)
@@ -2377,7 +2405,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(unavailable["state"] as? String, "error")
         XCTAssertEqual(unavailable["error"] as? String, Strings.secureApprovalSetupRequired)
         XCTAssertNil(unavailable["review"])
-        XCTAssertEqual(catalogReads, 2)
+        XCTAssertEqual(catalogReads, 3)
         let events = await store.events()
         XCTAssertTrue(events.isEmpty)
     }
@@ -10150,15 +10178,17 @@ private final class CompactPopupProcessor: DappRequestProcessing {
         self.execution = execute
     }
 
-    func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog?) -> DappRequestPreparation {
-        guard let handler else { return processor.prepare(binding, catalog: catalog) }
-        guard catalog != nil || walletIndependent else { return .needsCatalog }
+    func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog?) async -> DappRequestPreparation {
+        guard let handler else { return await processor.prepare(binding, catalog: catalog) }
+        guard catalog != nil || walletIndependent else {
+            return .needsCatalog { _ in self.preparation(handler(binding.request), binding: binding) }
+        }
         return preparation(handler(binding.request), binding: binding)
     }
 
     private func preparation(_ unbound: UnboundDappRequestPreparation, binding: ExtensionBridge.RequestBinding) -> DappRequestPreparation {
         switch unbound {
-        case .needsCatalog: return .needsCatalog
+        case .needsCatalog: return .needsCatalog { _ in .unavailable }
         case .immediate(let resolution): return .immediate(resolution)
         case .approval(let action): return preparationForTesting(binding: binding, action: action)
         case .unavailable: return .unavailable
@@ -10175,10 +10205,19 @@ private final class CompactPopupProcessor: DappRequestProcessing {
 private final class PreparationRecordingDappRequestProcessor: DappRequestProcessing {
     private let processor = requestProcessorForTesting(ethereumNetworkResolver: popupApprovalNetwork)
     private(set) var preparations = 0
+    var beforePreparation: (() async -> Void)?
 
-    func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog?) -> DappRequestPreparation {
+    func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog?) async -> DappRequestPreparation {
+        await beforePreparation?()
         if catalog != nil { preparations += 1 }
-        return processor.prepare(binding, catalog: catalog)
+        let result = await processor.prepare(binding, catalog: catalog)
+        if case .needsCatalog(let resolve) = result {
+            return .needsCatalog { catalog in
+                self.preparations += 1
+                return resolve(catalog)
+            }
+        }
+        return result
     }
 
     func execute(permit: ExtensionBridge.ApprovedExecutionPermit, signer: (any WalletSigning)?) async -> ApprovedExecutionResult {
@@ -10202,9 +10241,9 @@ private final class CompactPopupAccessProcessor: DappRequestProcessing {
     }
 
     func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog?) -> DappRequestPreparation {
-        guard let catalog else { return .needsCatalog }
+        guard let catalog else { return .needsCatalog { catalog in self.prepare(binding, catalog: catalog) } }
         switch handler(binding.request, catalog) {
-        case .needsCatalog: return .needsCatalog
+        case .needsCatalog: return .needsCatalog { _ in .unavailable }
         case .immediate(let resolution): return .immediate(resolution)
         case .approval(let action):
             return preparationForTesting(binding: binding, action: action, accounts: catalog.orderedAccounts)

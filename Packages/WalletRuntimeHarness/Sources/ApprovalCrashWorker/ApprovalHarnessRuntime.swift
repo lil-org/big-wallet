@@ -487,7 +487,7 @@ final class HarnessRuntime {
             environment: .init(now: clock.now, authorityID: authorityID, hooks: executionHooks, uptime: { Double(clock.uptime()) / 1_000_000_000 },
                 wait: { duration in try? await clock.sleep(for: duration) },
                 waitForAuthenticationExpiry: { seconds in try await clock.sleep(until: clock.now().addingTimeInterval(seconds)) },
-                prepare: { [processor] binding, catalog in processor.prepare(binding, catalog: catalog) },
+                prepare: { [processor] binding, catalog in await processor.prepare(binding, catalog: catalog) },
                 reloadWallets: { [wallets] in await wallets.reloadFromStore() },
                 currentReviewCatalog: { [wallets] in wallets.reviewCatalog() },
                 attemptNativeDecision: { [weak self] consent in

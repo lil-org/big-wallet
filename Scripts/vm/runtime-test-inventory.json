@@ -640,6 +640,17 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/DappRequestProcessorTests/testCancelledTypedDataAdmissionLeavesValidRequestQueued",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/DappRequestProcessorTests/testDisconnectedSwitchAccountStillSuggestsDefaultAccount",
       "variants": [
         "macos.debug",
@@ -1433,6 +1444,28 @@
     },
     {
       "id": "WalletAuthorityTests/DappRequestProcessorTests/testTrustedSolanaConnectUsesNativeGrantWithoutApproval",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/DappRequestProcessorTests/testTypedDataAdmissionRejectsInvalidAndOverBudgetInputBeforeLoadingCatalog",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/DappRequestProcessorTests/testTypedDataReviewRetainsItsOriginalJSONAndValidatedDigest",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -4704,7 +4737,40 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/NativeApprovalCoordinatorTests/testAuthorityDiscardsAsynchronousPreparationAfterAccessReplacement",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/NativeApprovalCoordinatorTests/testAuthorityDiscardsCancelledAsynchronousPreparation",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/NativeApprovalCoordinatorTests/testAuthorityDiscardsPreparationThatFinishesAfterItsReplacement",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/NativeApprovalCoordinatorTests/testAuthorityRechecksRequestAfterAsynchronousPreparation",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -9552,6 +9618,50 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/TypedDataPreparationConcurrencyTests/testCancelledBackgroundPreparationDiscardsLateContentWithoutLoadingCatalog",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/TypedDataPreparationConcurrencyTests/testCatalogContinuationReusesPreparedContentWithFreshCatalog",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/TypedDataPreparationConcurrencyTests/testCatalogResolutionPreparesTypedDataOnceOffMainActor",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/TypedDataPreparationConcurrencyTests/testPreCancelledPreparationDoesNotStartTypedDataWork",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/UnlockedAccountSignerTests/testCancellationBeforeSigningConsumesTheAccountKey",
       "variants": [
         "macos.debug",
@@ -10366,7 +10476,7 @@
       ]
     },
     {
-      "id": "WalletAuthorityTests/WalletCoreProxyEthereumTests/testTypedDataSigningRejectsMalformedShapesAndOutOfRangeIntegersAndAcceptsStringChainIDs",
+      "id": "WalletAuthorityTests/WalletCoreProxyEthereumTests/testTypedDataPreparationRejectsMalformedShapesAndSigningAcceptsStringChainIDs",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -13125,6 +13235,358 @@
     },
     {
       "id": "WalletDomainTests/BigUIntTests/testSubtraction",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testArrayElementLimitIsInclusive",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testArrayTypeDepthIsCheckedEvenForEmptyValues",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testBudgetAcceptanceDoesNotDependOnTypeDictionaryOrder",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testCancellationRejectsPreparationAndDigestHelpers",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testDependencyDepthCountsShallowJSONTypeChains",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testInputUTF8ByteLimitIsInclusive",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testIntegerConversionRejectsLargeMagnitudesAndPreservesLeadingZeros",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testPerTypeAndTotalFieldLimitsIncludeUnusedDeclarations",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testPreparedPayloadPreservesExactJSONAndReleasedDigest",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testRawJSONDepthLimitRunsBeforeFoundationDecoding",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testRawJSONTokenLimitIncludesUnusedValues",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testRepeatedFieldExpansionConsumesAggregateWork",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testRepeatedLargeValuesConsumeAggregateBytes",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testSeededMalformedMutationsHaveDeterministicOutcomes",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testTypeCachesPreserveCanonicalEquivalentUTF8Spellings",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testTypeCountLimitIsInclusive",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EIP712PreparationTests/testValueDepthAndRecursiveArrayTermination",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EthereumABIBudgetTests/testAggregateWorkLimitIsInclusive",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EthereumABIBudgetTests/testAliasedStringsConsumeAggregateDecodedBytes",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EthereumABIBudgetTests/testCancellationIsObservedDuringExpansionAndSerialization",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EthereumABIBudgetTests/testCancelledTaskDoesNotDecode",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EthereumABIBudgetTests/testDecodedValueBudgetIncludesArrayContainersAndEveryTuple",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EthereumABIBudgetTests/testDynamicEmptyTupleArrayCannotExpandFromItsLengthWord",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EthereumABIBudgetTests/testFinalJSONBudgetCountsEscapingAndUTF8Exactly",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EthereumABIBudgetTests/testFixedEmptyTupleArrayCannotExpandFromSelectorOnlyCalldata",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EthereumABIBudgetTests/testInputByteLimitsAreInclusive",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EthereumABIBudgetTests/testInvalidUTF8CountsReplacementBytesBeforeRetainingTheString",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EthereumABIBudgetTests/testOrdinaryFixedAndDynamicArraysKeepTheirValues",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EthereumABIBudgetTests/testRepeatedDynamicOffsetsConsumeTheAggregateValueBudget",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EthereumABIBudgetTests/testRepeatedTupleMetadataCountsAgainstFinalJSONBudget",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EthereumABIBudgetTests/testSchemaNodeAndArrayDepthLimitsAreInclusive",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletDomainTests/EthereumABIBudgetTests/testSmallEmptyTupleArraysRemainSupported",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -16849,6 +17311,17 @@
       ]
     },
     {
+      "id": "WalletNetworkingTests/NativeRPCResponseDecoderTests/testSharedJSONBudgetSupportsSmallObjectsAndMetadataLimits",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletNetworkingTests/NativeRPCResponseDecoderTests/testValidErrorPreservesCodeMessageAndData",
       "variants": [
         "macos.debug",
@@ -16937,7 +17410,128 @@
       ]
     },
     {
+      "id": "WalletNetworkingTests/NativeRPCTransportTests/testExpiredDeadlineDoesNotDispatch",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCTransportTests/testExpiredHeadersAndCompletionRejectBeforeDelayedTimerRuns",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletNetworkingTests/NativeRPCTransportTests/testLimitFailureIgnoresLateSuccessAndFailureCallbacks",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCTransportTests/testStreamingChunksDoNotExtendTheOriginalDeadline",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCTransportTests/testSuccessAndPolicyRejectionsCancelTheDeadlineTimer",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCTransportTests/testTotalDeadlineStopsStalledResponsesBeforeAndAfterHeaders",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/PriceServiceTests/testPriceDeadlineReleasesSharedRequestAndAllowsFreshUpdate",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/PriceServiceTests/testPriceFailuresPreserveLastPriceAndPermitRetry",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/PriceServiceTests/testPriceResponsesAcceptExactByteBudgetAndRejectOneExtraByte",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/PriceServiceTests/testPriceResponsesEnforceJSONDepthAndTokenBoundaries",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/PriceServiceTests/testPriceResponsesEnforceNormalizedByteBudgetAndRejectMalformedEncoding",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/PriceServiceTests/testPriceUpdatesShareRequestWhenOneCallerIsCancelled",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -18334,6 +18928,17 @@
       ]
     },
     {
+      "id": "WalletNetworkingTests/TransactionInspectorTests/testDecodedArrayExpansionIsBoundedAfterSignatureValidation",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletNetworkingTests/TransactionInspectorTests/testEmptyArrayValues",
       "variants": [
         "macos.debug",
@@ -18357,6 +18962,17 @@
     },
     {
       "id": "WalletNetworkingTests/TransactionInspectorTests/testEthereumPreparationDoesNotInspectContractCreationInitcode",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/TransactionInspectorTests/testExcessiveDecodedOutputFallsBackToRawTransactionData",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -18401,6 +19017,83 @@
     },
     {
       "id": "WalletNetworkingTests/TransactionInspectorTests/testMintPublic",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/TransactionInspectorTests/testPublicDecodeEnforcesSignatureResourceBoundaries",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/TransactionInspectorTests/testSignatureBudgetAcceptsExactTupleArrayAndNodeBoundaries",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/TransactionInspectorTests/testSignatureBudgetFailuresAreNotDecodedOrCached",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/TransactionInspectorTests/testSignatureFailuresAndMalformedUTF8PermitRetry",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/TransactionInspectorTests/testSignatureResponseAcceptsExactByteBudgetAndRejectsOneExtraByte",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/TransactionInspectorTests/testSignatureSubscribersKeepOriginalDeadlineAndRetryAfterTimeout",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/TransactionInspectorTests/testSignatureWithinBudgetPreservesUndecodableFallback",
       "variants": [
         "macos.debug",
         "macos.release",

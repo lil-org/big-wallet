@@ -43,15 +43,34 @@ func requestProcessorForTesting(
     },
     customDefinitionResult: @escaping @MainActor @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult = { _ in .unavailable },
     solanaEndpoints: any SolanaEndpointResolving = AuthorityTestSolanaEndpoints(),
-    solana: SolanaSigner? = nil
+    solana: SolanaSigner? = nil,
+    ethereumSigningContent: @escaping @Sendable (SafariRequest.Ethereum) -> SigningReviewContent? = {
+        EthereumDappRequestProcessor.signingReviewContent(for: $0)
+    }
 ) -> DappRequestProcessor {
     DappRequestProcessor(
         ethereumNetworkResolver: ethereumNetworkResolver,
         selectionNetworkResolver: selectionNetworkResolver,
         customDefinitionResult: customDefinitionResult,
         solanaEndpoints: solanaEndpoints,
-        solana: solana ?? SolanaSigner()
+        solana: solana ?? SolanaSigner(),
+        ethereumSigningContent: ethereumSigningContent
     )
+}
+
+@MainActor
+func prepareRequestSynchronouslyForTesting(
+    _ processor: DappRequestProcessor,
+    binding: ExtensionBridge.RequestBinding,
+    catalog: WalletReviewCatalog?
+) -> DappRequestPreparation {
+    let content: SigningReviewContent?
+    if case .ethereum(let body) = binding.request.body {
+        content = EthereumDappRequestProcessor.signingReviewContent(for: body)
+    } else {
+        content = nil
+    }
+    return processor.resolvePreparation(binding, catalog: catalog, ethereumSigningContent: content)
 }
 
 @MainActor

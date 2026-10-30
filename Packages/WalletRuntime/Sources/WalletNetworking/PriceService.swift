@@ -5,6 +5,11 @@ import WalletDomain
 
 @MainActor
 public final class PriceService {
+    static let responsePolicy = HTTPResponsePolicy(maximumResponseBytes: 65_536, totalTimeout: .seconds(10))
+    private nonisolated static let responseLimits = NativeRPCResponseLimits(
+        maximumResponseBytes: 65_536, maximumJSONDepth: 16, maximumJSONTokens: 4_096
+    )
+
     private struct Prices: Codable, Sendable {
         let eth: Price?
         let bnb: Price?
@@ -35,7 +40,11 @@ public final class PriceService {
     public init(fetchPrices: @escaping PriceFetcher) { self.fetchPrices = fetchPrices }
 
     public convenience init(urlSession: URLSession) {
-        self.init(fetchPrices: { await Self.fetchPrices(using: urlSession) })
+        self.init(urlSession: urlSession, responsePolicy: Self.responsePolicy)
+    }
+
+    convenience init(urlSession: URLSession, responsePolicy: HTTPResponsePolicy, timing: HTTPResponseTiming = .live) {
+        self.init(fetchPrices: { await Self.fetchPrices(using: urlSession, policy: responsePolicy, timing: timing) })
     }
 
     isolated deinit {
@@ -80,14 +89,17 @@ public final class PriceService {
     }
 
     @concurrent
-    private nonisolated static func fetchPrices(using session: URLSession) async -> [String: Double]? {
+    private nonisolated static func fetchPrices(using session: URLSession, policy: HTTPResponsePolicy, timing: HTTPResponseTiming) async -> [String: Double]? {
         let ids = Prices.CodingKeys.allCases.map(\.rawValue).joined(separator: "%2C")
         guard let url = URL(string: "https://api.coingecko.com/api/v3/simple/price?ids=\(ids)&vs_currencies=usd") else { return nil }
         do {
-            let (data, response) = try await session.data(from: url)
+            let result = try await session.responsePreservingTransportError(for: URLRequest(url: url), policy: policy, timing: timing)
             try Task.checkCancellation()
-            guard let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode) else { return nil }
-            let prices = try JSONDecoder().decode(Prices.self, from: data)
+            guard result.error == nil, let data = result.data,
+                  let response = result.response as? HTTPURLResponse,
+                  (200..<300).contains(response.statusCode),
+                  let normalized = try HTTPJSONBudget.normalizedBytes(from: data, limits: responseLimits) else { return nil }
+            let prices = try JSONDecoder().decode(Prices.self, from: normalized)
             return ["ETH": prices.eth?.usd, "BNB": prices.bnb?.usd, "MATIC": prices.matic?.usd, "FTM": prices.ftm?.usd, "AVAX": prices.avax?.usd].compactMapValues { $0 }
         } catch {
             return nil

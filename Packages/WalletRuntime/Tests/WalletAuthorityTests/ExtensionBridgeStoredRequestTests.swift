@@ -265,7 +265,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             bridge = makeBridge(clock: { testClock.date })
             guard case .found(let snapshot) = await bridge.load(handle: handle),
                   let binding = snapshot.requestBinding,
-                  case .approval(let intent) = processor.prepare(binding, catalog: catalog),
+                  case .approval(let intent) = prepareRequestSynchronouslyForTesting(processor, binding: binding, catalog: catalog),
                   case .switchAccount(let action) = intent.action else {
                 return XCTFail("Expected the persisted manual switch")
             }
@@ -279,7 +279,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let missingGrantedAccounts = WalletReviewCatalog(
                 identity: catalog.identity, orderedAccounts: duplicates.map(\.specificAccount)
             )
-            guard case .approval(let unavailableIntent) = processor.prepare(binding, catalog: missingGrantedAccounts),
+            guard case .approval(let unavailableIntent) = prepareRequestSynchronouslyForTesting(processor, binding: binding, catalog: missingGrantedAccounts),
                   case .switchAccount(let unavailable) = unavailableIntent.action else {
                 return XCTFail("Expected manual selection without the granted wallets")
             }
@@ -3320,13 +3320,13 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let admitted = try accepted(await bridge.enqueue(ingress: fixture.ingress, profileIdentifier: nil))
             guard case .found(let originalSnapshot) = await bridge.load(handle: admitted.handle),
                   let originalBinding = originalSnapshot.requestBinding,
-                  case .immediate(let expected) = requestProcessorForTesting().prepare(originalBinding, catalog: nil) else {
+                  case .immediate(let expected) = prepareRequestSynchronouslyForTesting(requestProcessorForTesting(), binding: originalBinding, catalog: nil) else {
                 return XCTFail("Expected the existing deferred provider error")
             }
             bridge = makeBridge(clock: { [clock = clock!] in clock.date })
             guard case .found(let snapshot) = await bridge.load(handle: admitted.handle),
                   let binding = snapshot.requestBinding,
-                  case .immediate(let actual) = requestProcessorForTesting().prepare(binding, catalog: nil) else {
+                  case .immediate(let actual) = prepareRequestSynchronouslyForTesting(requestProcessorForTesting(), binding: binding, catalog: nil) else {
                 return XCTFail("Expected the deferred provider error after restart")
             }
             XCTAssertEqual(actual.response(for: binding.request)?.json as NSDictionary?, expected.response(for: originalBinding.request)?.json as NSDictionary?)
@@ -6196,7 +6196,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let request = claim.request
         let account = try XCTUnwrap(request.authorizedAccount)
         let catalog = WalletReviewCatalog(identity: .init(generation: nil, catalogData: Data()), orderedAccounts: [account.specificAccount])
-        guard case .approval(let intent) = requestProcessorForTesting().prepare(claim.binding, catalog: catalog),
+        guard case .approval(let intent) = prepareRequestSynchronouslyForTesting(requestProcessorForTesting(), binding: claim.binding, catalog: catalog),
               case .approveTransaction(let transaction) = intent.action,
               case .found(let snapshot) = await bridge.load(handle: handle) else { return XCTFail("Expected transaction review") }
         let execution = try XCTUnwrap(DappApprovalDecision.TransactionExecution(Self.preparedTransactionForStorage(transaction), reviewedNetwork: transaction.resolvedNetwork, approvedAccount: account))
@@ -10254,8 +10254,8 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
         init(broadcasts: Bool) { self.broadcasts = broadcasts }
 
-        func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog?) -> DappRequestPreparation {
-            requestProcessorForTesting().prepare(binding, catalog: catalog)
+        func prepare(_ binding: ExtensionBridge.RequestBinding, catalog: WalletReviewCatalog?) async -> DappRequestPreparation {
+            await requestProcessorForTesting().prepare(binding, catalog: catalog)
         }
 
         func execute(permit: ExtensionBridge.ApprovedExecutionPermit, signer: (any WalletSigning)?) async -> ApprovedExecutionResult {
@@ -10387,7 +10387,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             }
             return AuthorityTestNetworks.resolver.approvalResolution(chainId: chainID)
         })
-        guard case .approval(let intent) = processor.prepare(
+        guard case .approval(let intent) = prepareRequestSynchronouslyForTesting(processor, binding:
             try XCTUnwrap(snapshot.requestBinding), catalog: catalog
         ) else { throw Failure.expectedValue }
         let action = intent.action

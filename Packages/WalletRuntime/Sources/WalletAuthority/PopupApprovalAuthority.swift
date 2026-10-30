@@ -535,7 +535,7 @@ public final class PopupApprovalAuthority {
 
     private func ensureSession(
         snapshot: ExtensionBridge.Snapshot
-    ) -> ActiveSessionResult {
+    ) async -> ActiveSessionResult {
         guard !snapshot.isQueuedForNativeApproval else {
             discardEntry(handle: snapshot.handle)
             return .absent
@@ -555,7 +555,7 @@ public final class PopupApprovalAuthority {
                 if currentAccess.identity != reviewedAccess.identity ||
                     currentAccess.orderedAccounts != reviewedAccess.orderedAccounts {
                     discardSession(handle: snapshot.handle)
-                    return ensureSession(snapshot: snapshot)
+                    return await ensureSession(snapshot: snapshot)
                 }
             }
             return .available(session)
@@ -565,10 +565,29 @@ public final class PopupApprovalAuthority {
         if case .immediateResponse(let persistence) = entries[snapshot.handle] {
             return .immediateResponse(persistence.state)
         }
-        guard case .prepared(let preparation, let preparedCatalog) = requestProcessor.prepare(
+        let prepared = await requestProcessor.prepare(
             binding,
             loadingCatalog: walletEnvironment.currentReviewCatalog
-        ) else { return .secureSetupRequired }
+        )
+        guard !Task.isCancelled else { return .unavailable }
+        let current: ExtensionBridge.Snapshot
+        switch await store.load(handle: snapshot.handle) {
+        case .found(let value): current = value
+        case .missing: return .absent
+        case .unavailable: return .unavailable
+        }
+        guard !Task.isCancelled else { return .unavailable }
+        guard case .queued(_, .unowned) = current.state,
+              current.requestBinding == binding else { return .absent }
+        if entries[snapshot.handle] != nil {
+            return await ensureSession(snapshot: current)
+        }
+        guard case .prepared(let preparation, let preparedCatalog) = prepared else { return .secureSetupRequired }
+        if let preparedCatalog {
+            guard let catalog = walletEnvironment.currentReviewCatalog() else { return .secureSetupRequired }
+            guard catalog.identity == preparedCatalog.identity,
+                  catalog.orderedAccounts == preparedCatalog.orderedAccounts else { return .unavailable }
+        }
         switch preparation {
         case .needsCatalog, .unavailable:
             return .unavailable
@@ -614,9 +633,9 @@ public final class PopupApprovalAuthority {
 
     private func activeSession(
         snapshot: ExtensionBridge.Snapshot
-    ) -> ActiveSessionResult {
+    ) async -> ActiveSessionResult {
         guard snapshot.phase != .responded else { return .absent }
-        return ensureSession(snapshot: snapshot)
+        return await ensureSession(snapshot: snapshot)
     }
 
     private func discardSession(handle: RequestHandle) {
@@ -651,7 +670,7 @@ public final class PopupApprovalAuthority {
             return PopupAuthorityState(id: handle.id, host: snapshot.host, content: .working)
         }
         let sessionWasCached = entries[handle]?.session != nil
-        let activeSession = activeSession(snapshot: snapshot)
+        let activeSession = await activeSession(snapshot: snapshot)
         guard case .available(let session) = activeSession else {
             if case .unavailable = activeSession {
                 return PopupAuthorityState(id: handle.id, host: snapshot.host,
@@ -710,7 +729,7 @@ public final class PopupApprovalAuthority {
         case .unavailable: return .unavailable
         }
         guard snapshot.phase != .responded,
-              case .available(let session) = activeSession(snapshot: snapshot),
+              case .available(let session) = await activeSession(snapshot: snapshot),
               reviewToken(for: request) == session.reviewToken,
               session.canBeginApproval else {
             return .ignored
