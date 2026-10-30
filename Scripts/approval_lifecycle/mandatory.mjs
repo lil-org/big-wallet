@@ -17,10 +17,14 @@ export function mandatoryScenarios(mode, seed = 1) {
         {kind: "success"}, {kind: "competition"}, {kind: "consentReplay"}, {kind: "revocationCrash"},
         {kind: "authenticationCancellation"}, {kind: "revocationBeforeSigning"},
         ...(mode === "native" ? [{kind: "retryRequiredFocus"}, {kind: "chainSwitchAuthentication"}, {kind: "manualSwitchCoalescing"}] : []),
-        ...(mode === "popup" ? [{kind: "editedReview"}, {kind: "abandonedPopupReview"}, {kind: "walletReconciliationAfterClockJump"}] : []),
+        ...(mode === "popup" ? [{kind: "editedReview"}, {kind: "abandonedPopupReview"}, {kind: "walletReconciliationAfterClockJump"},
+            {kind: "contenderDuringBroadcast"}] : []),
     ];
     for (const provider of ["ethereum", "solana"]) {
         cases.push(...persistenceRecoveryScenarios(provider));
+        for (const side of ["before", "after"]) {
+            cases.push({kind: "grantPublicationCrash", provider, checkpoint: `persistence.rename.${side}`});
+        }
         for (const checkpoint of [...semanticStages, ...(mode === "native" ? ["receipt.after"] : [])]) {
             cases.push({kind: "crash", provider, checkpoint});
         }
@@ -80,8 +84,9 @@ export async function awaitReview(session, provider, {tab = 0, name} = {}) {
                 const popup = session.browser.profile(request.handle.profileIdentifier).popup;
                 const current = popup && vm.runInContext("popupQueue?.currentRequest?.request ?? null", popup.harness.context);
                 if (current?.id === request.handle.id && current.requestToken === request.handle.token &&
-                    state?.actions.includes("approve") &&
+                    state?.actions.includes("approve") && session.browser.popupPrimaryAction(request.handle.profileIdentifier) === "approve" &&
                     (state.review?.requiresClusterSelection || !popup.harness.get("button-approve").disabled)) { return request; }
+                await session.decide({}, "retry", request);
             }
         }
         await session.advance(250);
@@ -100,6 +105,7 @@ export async function approveOnce(session, request) {
     const deadline = performance.now() + session.options.timeout;
     while (performance.now() < deadline) {
         if (await session.decide({}, "approve", request)) { return; }
+        if (session.mode === "popup") { await session.decide({}, "retry", request); }
         await session.pump();
         await session.advance(250);
     }
@@ -220,6 +226,45 @@ async function crash(session, specification) {
     session.coverage.add(`crash:${checkpoint}:${storeOperation || "semantic"}`);
 }
 
+async function grantPublicationCrash(session, {provider, checkpoint}) {
+    const operation = session.request({tab: 0, provider, method: "connect"});
+    const request = await awaitReview(session, provider);
+    const role = session.mode === "native" ? "approval" : "bridge";
+    const writer = session.child(role);
+    await writer.command("checkpoints", {rules: [{name: checkpoint, operation: "completion",
+        requestToken: request.handle.token, occurrence: 1, action: "hold"}]});
+    await approveOnce(session, request);
+    const matching = event => (event.handle || event.identity) && handleKey(event.handle || event.identity) === handleKey(request.handle);
+    await session.pumpUntil(() => [...session.gates.values()].some(gate => gate.child === writer &&
+        gate.details.name === checkpoint && matching(gate.details)), {advance: true});
+    const published = checkpoint.endsWith(".after");
+    const proofs = () => session.ledger.events.filter(event => event.type === "grant-proof" && matching(event));
+    assert.equal(proofs().length, published ? 1 : 0, "Only an actually published grant may be acknowledged");
+    const proof = proofs()[0];
+    if (published) {
+        assert.equal(proof.creatorEpoch, writer.epoch);
+        assert.equal(proof.creatorRole, role);
+        assert.equal(proof.configurationKey, request.configurationKey);
+        assert.ok(session.ledger.events.some(event => event.type === "checkpoint" && event.name === "authorize.after" &&
+            matching(event) && event.executionID === proof.executionID));
+    }
+    await session.restart(role);
+    if (published) { await session.complete(operation, {approve: false, expectedSuccess: true}); }
+    await session.quiesce({rejectReviews: true});
+    assert.notEqual(operation.status, "pending");
+    if (!published) { assert.notEqual(operation.status, "fulfilled"); }
+    const logicalProofs = new Set(proofs().map(event => `${event.executionID}|${event.profileSHA256}`));
+    assert.equal(logicalProofs.size, published ? 1 : 0);
+    for (const repeated of proofs()) {
+        assert.deepEqual(repeated.state, proof.state);
+        assert.deepEqual(repeated.response, proof.response);
+        assert.equal(repeated.creatorEpoch, proof.creatorEpoch);
+        assert.equal(repeated.creatorRole, proof.creatorRole);
+    }
+    assert.deepEqual(countEffects(session), {signing: 0, submissions: 0, accepted: 0});
+    session.coverage.add(`grant-publication:${provider}:${published ? "after" : "before"}`);
+}
+
 async function competition(session) {
     await session.connect(0, "ethereum");
     const operation = session.request({tab: 0, provider: "ethereum", method: "message"});
@@ -272,6 +317,34 @@ async function consentReplay(session) {
     session.coverage.add("old-process-consent");
     await session.quiesce();
     assert.deepEqual(countEffects(session), before, "Stale replay must not start deferred work during recovery");
+}
+
+async function contenderDuringBroadcast(session) {
+    await session.connect(0, "ethereum");
+    const operation = session.request({tab: 0, provider: "ethereum", method: "broadcast"});
+    const request = await awaitReview(session, "ethereum");
+    const owner = session.child("bridge");
+    await owner.command("checkpoints", {rules: [{name: "broadcast.prepared", requestToken: request.handle.token,
+        label: "contender-startup-broadcast", occurrence: 1, action: "hold"}]});
+    await approveOnce(session, request);
+    const held = () => [...session.gates.values()].find(gate => gate.child === owner &&
+        gate.details.name === "broadcast.prepared" && handleKey(gate.details.handle) === handleKey(request.handle));
+    await session.pumpUntil(() => held() !== undefined, {advance: true});
+    const gate = held();
+    assert.equal(session.children.has("approval"), false, "The contender must start after the commit lease is held");
+    const contender = await session.start("approval");
+    const result = await contender.command("claim", {handle: request.handle, label: "contender"});
+    assert.equal(result, "executing", "A newly started contender must observe the live broadcast owner");
+    const fence = await owner.fence();
+    assert.ok(fence.gates.some(value => value.gate === gate.event.gate), "Contender startup must preserve the held broadcast checkpoint");
+    assert.deepEqual(countEffects(session), {signing: 1, submissions: 0, accepted: 0});
+    owner.release(gate.event.gate);
+    session.gates.delete(`${owner.epoch}:${gate.event.gate}`);
+    await session.complete(operation, {approve: false, expectedSuccess: true});
+    await session.quiesce();
+    assert.deepEqual(countEffects(session), {signing: 1, submissions: 1, accepted: 1},
+        "The original approval must sign and broadcast exactly once after the contender starts");
+    session.coverage.add("contender-startup-during-broadcast");
 }
 
 async function revocationCrash(session) {
@@ -553,8 +626,10 @@ export async function runMandatory(session, scenario) {
     switch (specification.kind) {
     case "success": await success(session); break;
     case "crash": await crash(session, specification); break;
+    case "grantPublicationCrash": await grantPublicationCrash(session, specification); break;
     case "persistenceRecovery": await runPersistenceRecovery(session, specification, {awaitReview, approveOnce}); break;
     case "competition": await competition(session); break;
+    case "contenderDuringBroadcast": await contenderDuringBroadcast(session); break;
     case "consentReplay": await consentReplay(session); break;
     case "revocationCrash": await revocationCrash(session); break;
     case "authenticationCancellation": await authenticationCancellation(session); break;

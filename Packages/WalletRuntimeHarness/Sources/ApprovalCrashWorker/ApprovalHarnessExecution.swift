@@ -38,7 +38,7 @@ final class HarnessObservedStore: NativeApprovalStore, NativeDeliveryStore, Nati
         _ operation: @Sendable () async throws -> Value
     ) async throws -> Value {
         try await HarnessOperation.$name.withValue(name) {
-            try await HarnessOperation.$identity.withValue(harnessHandle(handle)) {
+            try await HarnessOperation.$identity.withValue(harnessHandle(handle).merging(extra.object)) {
                 let details = extra.merging(["handle": harnessHandle(handle)])
                 try await ipc.checkpoint(name + ".before", details: details)
                 let value = try await operation()

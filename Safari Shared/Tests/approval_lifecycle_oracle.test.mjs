@@ -577,7 +577,7 @@ test("one approval cannot become another grant at a later observed or committed 
             const network = providerState(provider, 4, address);
             if (provider === "ethereum") { network.ethereum.chainId = "0xa"; }
             oracle.configuration({...envelope, generation: "first-page", state: network});
-            oracle.recordCommittedGrant({handle, state: network});
+            assert.throws(() => oracle.recordCommittedGrant({handle, state: network}), error => error.invariant === "replay");
             assert.throws(() => oracle.configuration({...envelope, generation: "late-page", state: providerState(provider, 2, null)}),
                 error => error.invariant === "replay", `${provider}: ${evidence}`);
         }
@@ -854,6 +854,235 @@ test("a delayed committed grant is historical after account removal and cannot a
             oracle.acceptConsent({...consentProcess, handle: fresh, label: "fresh"});
             oracle.configuration({...envelope, state: state(3, true)});
         }
+    }
+});
+
+test("exact native grant proof precedes delayed page delivery without relying on later inspection", () => {
+    for (const provider of ["ethereum", "solana"]) {
+        const oracle = new LifecycleOracle;
+        const address = provider === "ethereum" ? "0xab" : "selected-solana";
+        const scope = {profileIdentifier: null, configurationKey: request.configurationKey};
+        const state = providerState(provider, 5, address);
+        oracle.configuration({...scope, generation: "page", state: providerState(provider, 2, null)});
+        oracle.register({...request, provider: "unknown", name: "switchAccount",
+            authority: {context: "context", revisions: providerState(provider, 2, null).revisions}});
+        oracle.approvalIntent({handle, label: "manual-switch", selectedAccounts: [{coin: provider, address}]});
+        oracle.acceptConsent({...consentProcess, handle, label: "manual-switch"});
+        oracle.authorized({...consentProcess, handle, executionID: "manual-permit"});
+        const proof = {handle, configurationKey: request.configurationKey, state,
+            response: {id: handle.id, provider: "multiple", name: "switchAccount", kind: "result", result: null, approvalCommitted: true},
+            executionID: "manual-permit", creatorEpoch: consentProcess.epoch, creatorRole: consentProcess.role, profileSHA256: "a".repeat(64)};
+        oracle.recordGrantProof(proof);
+        oracle.revoke({...scope, provider, account: address});
+        const permission = oracle.permission(null, request.configurationKey, provider);
+        const generation = permission.generation;
+        oracle.configuration({...scope, generation: "delayed-page", state});
+        assert.equal(permission.revoked, true);
+        assert.equal(permission.generation, generation);
+        assert.equal(permission.tickets.length, 0);
+        oracle.recordGrantProof(structuredClone(proof));
+        assert.equal(permission.revoked, true);
+        assert.equal(permission.generation, generation);
+        oracle.configuration({...scope, generation: "page", state: providerState(provider, 6, null)});
+        assert.throws(() => oracle.configuration({...scope, generation: "delayed-page", state: providerState(provider, 7, address)}),
+            error => error.invariant === "replay");
+    }
+});
+
+test("a later exact grant cannot authorize an unrelated snapshot from before its commit", () => {
+    for (const provider of ["ethereum", "solana"]) {
+        const oracle = new LifecycleOracle;
+        const scope = {profileIdentifier: null, configurationKey: request.configurationKey};
+        const first = provider === "ethereum" ? "0xaa" : "first-solana";
+        const second = provider === "ethereum" ? "0xbb" : "second-solana";
+        const name = provider === "ethereum" ? "requestAccounts" : "connect";
+        const approve = (h, address, reviewedRevision, committedRevision) => {
+            const label = `approval-${h.id}`;
+            const executionID = `permit-${h.id}`;
+            oracle.register({...request, handle: h, provider, name,
+                authority: {context: "context", revisions: providerState(provider, reviewedRevision, null).revisions}});
+            oracle.approvalIntent({handle: h, label, selectedAccounts: [{coin: provider, address}]});
+            oracle.acceptConsent({...consentProcess, handle: h, label});
+            oracle.authorized({...consentProcess, handle: h, executionID});
+            const proof = {handle: h, configurationKey: request.configurationKey,
+                state: providerState(provider, committedRevision, address),
+                response: {id: h.id, provider, name, kind: "result", approvalCommitted: true,
+                    result: provider === "ethereum" ? [address] : {publicKey: address}},
+                executionID, creatorEpoch: consentProcess.epoch, creatorRole: consentProcess.role, profileSHA256: "a".repeat(64)};
+            oracle.recordGrantProof(proof);
+            return proof;
+        };
+        oracle.configuration({...scope, generation: "current", state: providerState(provider, 0, null)});
+        approve(handle, first, 0, 4);
+        oracle.configuration({...scope, generation: "current", state: providerState(provider, 4, first)});
+        const other = {...handle, id: 2, token: "second"};
+        const proof = approve(other, second, 2, 5);
+        const stale = providerState(provider, 3, second);
+        assert.throws(() => oracle.recordGrantProof({...proof, state: stale}), error => error.invariant === "replay");
+        assert.throws(() => oracle.recordCommittedGrant({handle: other, state: stale}), error => error.invariant === "replay");
+        assert.equal(oracle.permission(null, request.configurationKey, provider).grantBoundaries.get("approval-2").revision, 5);
+        oracle.revoke({...scope, provider, account: second});
+        assert.throws(() => oracle.configuration({...scope, generation: "late", state: stale}), error => error.invariant === "replay");
+        oracle.configuration({...scope, generation: "current", state: providerState(provider, 6, null)});
+        assert.throws(() => oracle.configuration({...scope, generation: "late", state: stale}), error => error.invariant === "replay");
+    }
+});
+
+test("grant proof rejects missing authorization, mismatched identities and invalid committed state", () => {
+    for (const invalid of ["no-consent", "no-permit", "failed", "uncommitted", "wrong-handle", "wrong-result-id", "wrong-result-provider",
+        "wrong-result-name", "wrong-execution", "wrong-epoch", "wrong-role", "missing-creator", "missing-hash", "wrong-hash",
+        "revoked", "wrong-profile", "wrong-origin", "wrong-context", "wrong-account", "wrong-result-account", "before-reviewed-authority", "invalid-revision"]) {
+        const oracle = new LifecycleOracle;
+        const scope = {profileIdentifier: null, configurationKey: request.configurationKey};
+        const state = providerState("ethereum", 5, "0xab");
+        oracle.configuration({...scope, generation: "page", state: providerState("ethereum", 2, null)});
+        oracle.register({...request, name: "requestAccounts", authority: {context: "context", revisions: {ethereum: 2, solana: 0}}});
+        oracle.approvalIntent({handle, label: "connect", selectedAccounts: [{coin: "ethereum", address: "0xab"}]});
+        if (invalid !== "no-consent") { oracle.acceptConsent({...consentProcess, handle, label: "connect"}); }
+        if (!["no-consent", "no-permit"].includes(invalid)) { oracle.authorized({...consentProcess, handle, executionID: "permit"}); }
+        const proof = {handle: {...handle}, configurationKey: request.configurationKey, state: structuredClone(state),
+            response: {id: handle.id, provider: "ethereum", name: "requestAccounts", kind: "result", result: ["0xab"], approvalCommitted: true},
+            executionID: "permit", creatorEpoch: consentProcess.epoch, creatorRole: consentProcess.role, profileSHA256: "a".repeat(64)};
+        if (invalid === "failed") { proof.response.kind = "error"; }
+        if (invalid === "uncommitted") { proof.response.approvalCommitted = false; }
+        if (invalid === "wrong-handle") { proof.handle.token = "other-handle"; }
+        if (invalid === "wrong-result-id") { proof.response.id = 77; }
+        if (invalid === "wrong-result-provider") { proof.response.provider = "solana"; }
+        if (invalid === "wrong-result-name") { proof.response.name = "switchAccount"; }
+        if (invalid === "wrong-execution") { proof.executionID = "other-permit"; }
+        if (invalid === "wrong-epoch") { proof.creatorEpoch = "approval-2"; }
+        if (invalid === "wrong-role") { proof.creatorRole = "bridge"; }
+        if (invalid === "missing-creator") { delete proof.creatorEpoch; }
+        if (invalid === "missing-hash") { delete proof.profileSHA256; }
+        if (invalid === "wrong-hash") { proof.profileSHA256 = "not-a-profile-hash"; }
+        if (invalid === "revoked") { oracle.revoke({...scope, provider: "ethereum", account: "0xab"}); }
+        if (invalid === "wrong-profile") { proof.handle.profileIdentifier = "another-profile"; }
+        if (invalid === "wrong-origin") { proof.configurationKey = "https://other.example"; }
+        if (invalid === "wrong-context") { proof.state.context = "another-context"; }
+        if (invalid === "wrong-account") { proof.state.ethereum.address = "0xcd"; }
+        if (invalid === "wrong-result-account") { proof.response.result = ["0xcd"]; }
+        if (invalid === "before-reviewed-authority") { proof.state.revisions.ethereum = 1; }
+        if (invalid === "invalid-revision") { proof.state.revisions.ethereum = -1; }
+        assert.throws(() => oracle.recordGrantProof(proof), error => ["oracle-input", "consent", "replay"].includes(error.invariant), invalid);
+        oracle.revoke({...scope, provider: "ethereum", account: "0xab"});
+        assert.throws(() => oracle.configuration({...scope, generation: "late-page", state}), error => error.invariant === "replay", invalid);
+    }
+});
+
+test("completed inspection evidence cannot substitute for exact grant proof", () => {
+    const oracle = new LifecycleOracle;
+    const scope = {profileIdentifier: null, configurationKey: request.configurationKey};
+    oracle.configuration({...scope, generation: "current", state: providerState("ethereum", 2, null)});
+    oracle.register({...request, name: "requestAccounts", authority: {context: "context", revisions: {ethereum: 2, solana: 0}}});
+    oracle.approvalIntent({handle, label: "connect", selectedAccounts: [{coin: "ethereum", address: "0xab"}]});
+    oracle.acceptConsent({...consentProcess, handle, label: "connect"});
+    oracle.authorized({...consentProcess, handle, executionID: "permit"});
+    oracle.completed(handle);
+    oracle.observeDurable({handle, terminal: true, terminalResponse: {
+        id: handle.id, provider: "ethereum", name: "requestAccounts", kind: "result", approvalCommitted: true,
+    }});
+    oracle.revoke({...scope, provider: "ethereum", account: "0xab"});
+    assert.throws(() => oracle.configuration({...scope, generation: "late", state: providerState("ethereum", 5, "0xab")}),
+        error => error.invariant === "replay");
+});
+
+test("execution permits remain bound to the accepted selection and process", () => {
+    const oracle = new LifecycleOracle;
+    oracle.register({...request, name: "requestAccounts"});
+    oracle.approvalIntent({handle, label: "first", selectedAccounts: [{coin: "ethereum", address: "0xab"}]});
+    oracle.acceptConsent({...consentProcess, handle, label: "first"});
+    oracle.authorized({...consentProcess, handle, executionID: "first-permit"});
+    oracle.approvalIntent({handle, label: "second", selectedAccounts: [{coin: "ethereum", address: "0xcd"}]});
+    oracle.acceptConsent({...consentProcess, handle, label: "second"});
+    assert.throws(() => oracle.authorized({...consentProcess, handle, executionID: "first-permit"}), error => error.invariant === "consent");
+    assert.throws(() => oracle.authorized({...consentProcess, epoch: "another-process", handle, executionID: "second-permit"}),
+        error => error.invariant === "consent");
+    const proof = {handle, configurationKey: request.configurationKey, state: providerState("ethereum", 1, "0xcd"),
+        response: {id: handle.id, provider: "ethereum", name: "requestAccounts", kind: "result", result: ["0xcd"], approvalCommitted: true},
+        executionID: "first-permit", creatorEpoch: consentProcess.epoch, creatorRole: consentProcess.role, profileSHA256: "a".repeat(64)};
+    assert.throws(() => oracle.recordGrantProof(proof), error => error.invariant === "consent");
+    oracle.recordGrantProof({...proof, state: providerState("ethereum", 1, "0xab"), response: {...proof.response, result: ["0xab"]}});
+});
+
+test("an approved empty manual selection produces no account grant", () => {
+    const oracle = new LifecycleOracle;
+    oracle.register({...request, provider: "unknown", name: "switchAccount"});
+    oracle.approvalIntent({handle, label: "disconnect", selectedAccounts: []});
+    oracle.acceptConsent({...consentProcess, handle, label: "disconnect"});
+    oracle.authorized({...consentProcess, handle, executionID: "permit"});
+    const proof = {handle, configurationKey: request.configurationKey, state: providerState("ethereum", 1, null),
+        response: {id: handle.id, provider: "multiple", name: "switchAccount", kind: "result", result: null, approvalCommitted: true},
+        executionID: "permit", creatorEpoch: consentProcess.epoch, creatorRole: consentProcess.role, profileSHA256: "a".repeat(64)};
+    oracle.recordGrantProof(proof);
+    assert.equal(oracle.permission(null, request.configurationKey, "ethereum").committedGrants.size, 0);
+    assert.equal(oracle.permission(null, request.configurationKey, "solana").committedGrants.size, 0);
+});
+
+test("exact manual disconnections prevent resurrection even when the page misses the disconnected state", () => {
+    for (const provider of ["ethereum", "solana"]) {
+        for (const partial of [false, true]) {
+            const oracle = new LifecycleOracle;
+            const scope = {profileIdentifier: null, configurationKey: request.configurationKey};
+            const address = provider === "ethereum" ? "0xab" : "selected-solana";
+            const initial = providerState(provider, 1, address);
+            oracle.register({...request, provider, name: provider === "ethereum" ? "requestAccounts" : "connect"});
+            oracle.approvalIntent({handle, label: "connect", selectedAccounts: [{coin: provider, address}]});
+            oracle.acceptConsent({...consentProcess, handle, label: "connect"});
+            oracle.recordCommittedGrant({handle, state: initial});
+            oracle.configuration({...scope, generation: "page", state: initial});
+            const manual = {...handle, id: 2, token: "manual"};
+            const other = provider === "ethereum" ? "solana" : "ethereum";
+            const otherAddress = other === "ethereum" ? "0xcd" : "other-solana";
+            const disconnected = providerState(provider, 5, null);
+            if (partial) {
+                disconnected.revisions[other] = 5;
+                disconnected[other] = other === "ethereum" ? {address: otherAddress, chainId: "0x1"} : {publicKey: otherAddress};
+            }
+            oracle.register({...request, handle: manual, provider: "unknown", name: "switchAccount",
+                authority: {context: initial.context, revisions: initial.revisions}});
+            oracle.approvalIntent({handle: manual, label: "manual", selectedAccounts: partial ? [{coin: other, address: otherAddress}] : []});
+            oracle.acceptConsent({...consentProcess, handle: manual, label: "manual"});
+            oracle.authorized({...consentProcess, handle: manual, executionID: "manual-permit"});
+            const proof = {handle: manual, configurationKey: scope.configurationKey, state: disconnected,
+                response: {id: 2, provider: "multiple", name: "switchAccount", kind: "result", result: null, approvalCommitted: true},
+                executionID: "manual-permit", creatorEpoch: consentProcess.epoch, creatorRole: consentProcess.role, profileSHA256: "a".repeat(64)};
+            oracle.recordGrantProof(proof);
+            const permission = oracle.permission(null, scope.configurationKey, provider);
+            const generation = permission.generation;
+            assert.equal(permission.revoked, true);
+            assert.equal(permission.tickets.length, 0);
+            oracle.configuration({...scope, generation: "old-page", state: initial});
+            const resurrected = structuredClone(disconnected);
+            resurrected.revisions[provider] = 6;
+            resurrected[provider] = initial[provider];
+            assert.throws(() => oracle.configuration({...scope, generation: "page", state: resurrected}), error => error.invariant === "replay");
+            oracle.configuration({...scope, generation: "page", state: disconnected});
+            oracle.recordGrantProof(proof);
+            assert.equal(permission.generation, generation, "Repeated proof and page delivery must not revoke twice");
+            const fresh = {...handle, id: 3, token: "fresh"};
+            oracle.register({...request, handle: fresh, provider, name: provider === "ethereum" ? "requestAccounts" : "connect",
+                authority: {context: disconnected.context, revisions: disconnected.revisions}});
+            oracle.approvalIntent({handle: fresh, label: "fresh", selectedAccounts: [{coin: provider, address}]});
+            oracle.acceptConsent({...consentProcess, handle: fresh, label: "fresh"});
+            oracle.recordCommittedGrant({handle: fresh, state: resurrected});
+            oracle.configuration({...scope, generation: "page", state: resurrected});
+        }
+    }
+});
+
+test("exact manual grant proofs cannot retain an account that was deselected", () => {
+    for (const retained of ["ethereum", "solana"]) {
+        const oracle = new LifecycleOracle;
+        oracle.register({...request, provider: "unknown", name: "switchAccount"});
+        oracle.approvalIntent({handle, label: "disconnect", selectedAccounts: []});
+        oracle.acceptConsent({...consentProcess, handle, label: "disconnect"});
+        oracle.authorized({...consentProcess, handle, executionID: "permit"});
+        const proof = {handle, configurationKey: request.configurationKey,
+            state: providerState(retained, 1, retained === "ethereum" ? "0xab" : "unselected-solana"),
+            response: {id: handle.id, provider: "multiple", name: "switchAccount", kind: "result", result: null, approvalCommitted: true},
+            executionID: "permit", creatorEpoch: consentProcess.epoch, creatorRole: consentProcess.role, profileSHA256: "a".repeat(64)};
+        assert.throws(() => oracle.recordGrantProof(proof), error => error.invariant === "consent");
+        assert.equal(oracle.permission(null, request.configurationKey, retained).committedGrants.size, 0);
     }
 });
 

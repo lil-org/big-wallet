@@ -1,4 +1,5 @@
 import Darwin
+import CryptoKit
 import WalletDomain
 @testable import WalletAuthority
 @testable import WalletNetworking
@@ -242,6 +243,7 @@ final class HarnessFixtureStorage: Sendable {
 final class HarnessPersistence: Sendable {
     private struct Descriptor: Sendable { var path: String; var syncs = 0 }
     private let descriptors = Mutex([Int32: Descriptor]())
+    private let acknowledgedGrantProofs = Mutex(Set<String>())
     private let ipc: HarnessIPC
 
     init(ipc: HarnessIPC) { self.ipc = ipc }
@@ -249,13 +251,26 @@ final class HarnessPersistence: Sendable {
     func fileIO(directoryBoundary: URL) -> ExtensionRequestStoreFiles.IO {
         var io = ExtensionRequestStoreFiles.IO(
             persistence: DurableProfilePersistence(
-                directoryBoundary: directoryBoundary, operations: operations()
+                directoryBoundary: directoryBoundary, operations: operations(directoryBoundary: directoryBoundary)
             ))
         let baseIO = io
-        io.readData = { [ipc] url in
+        io.replace = { [self] data, url in
+            if url.standardizedFileURL == directoryBoundary.appendingPathComponent("bridge/wallet-authority-revocations.state").standardizedFileURL {
+                try confirmPublishedGrants(directoryBoundary: directoryBoundary)
+            }
+            try prepareGrantCandidate(data: data, url: url, directoryBoundary: directoryBoundary)
+            try baseIO.replace(data, url)
+            try confirmPublishedGrant(at: url, directoryBoundary: directoryBoundary)
+        }
+        io.synchronizePublishedFile = { [self] url in
+            try baseIO.synchronizePublishedFile(url)
+            try confirmPublishedGrant(at: url, directoryBoundary: directoryBoundary)
+        }
+        io.readData = { [self] url in
             let details = HarnessValue.object(["path": .string(url.path)])
             try ipc.checkpointSync("persistence.read.before", details: details)
             let data = try baseIO.readData(url)
+            try confirmPublishedGrant(data: data, url: url, directoryBoundary: directoryBoundary)
             try ipc.checkpointSync("persistence.read.after", details: details)
             return data
         }
@@ -269,7 +284,7 @@ final class HarnessPersistence: Sendable {
         return io
     }
 
-    private func operations() -> DurableProfilePersistence.Operations {
+    private func operations(directoryBoundary: URL) -> DurableProfilePersistence.Operations {
         let live = DurableProfilePersistence.Operations.live
         var operations = live
         operations.openDirectory = { [self] path in
@@ -300,12 +315,25 @@ final class HarnessPersistence: Sendable {
             let stage = count == 1 ? "fileSync" : "finalSync"
             try ipc.checkpointSync("persistence.\(stage).before", details: details(descriptor))
             try live.fullSync(descriptor)
+            if stage == "finalSync", let path = descriptors.withLock({ $0[descriptor]?.path }) {
+                try confirmPublishedGrant(at: URL(fileURLWithPath: path), directoryBoundary: directoryBoundary)
+            }
             try ipc.checkpointSync("persistence.\(stage).after", details: details(descriptor))
         }
         operations.rename = { [self] directory, source, destination in
             let details = details(directory).merging(["source": .string(source), "destination": .string(destination)])
             try ipc.checkpointSync("persistence.rename.before", details: details)
             try live.rename(directory, source, destination)
+            if let parent = descriptors.withLock({ $0[directory]?.path }) {
+                let sourcePath = (parent as NSString).appendingPathComponent(source)
+                let destinationPath = (parent as NSString).appendingPathComponent(destination)
+                descriptors.withLock { state in
+                    for descriptor in state.keys where state[descriptor]?.path == sourcePath {
+                        state[descriptor]?.path = destinationPath
+                    }
+                }
+                try confirmPublishedGrant(at: URL(fileURLWithPath: destinationPath), directoryBoundary: directoryBoundary)
+            }
             try ipc.checkpointSync("persistence.rename.after", details: details)
         }
         operations.syncDirectory = { [self] directory in
@@ -322,5 +350,153 @@ final class HarnessPersistence: Sendable {
 
     private func details(_ descriptor: Int32) -> HarnessValue {
         .object(["path": .string(descriptors.withLock { $0[descriptor]?.path ?? "unknown" })])
+    }
+
+    private func isProfile(_ url: URL, directoryBoundary: URL) -> Bool {
+        url.deletingLastPathComponent().standardizedFileURL == directoryBoundary
+            .appendingPathComponent("bridge/profiles-v\(ExtensionRequestProfile.profileSchemaVersion)", isDirectory: true).standardizedFileURL &&
+            url.pathExtension == "state"
+    }
+
+    private func prepareGrantCandidate(data: Data, url: URL, directoryBoundary: URL) throws {
+        guard isProfile(url, directoryBoundary: directoryBoundary), HarnessOperation.name == "completion",
+              let handle = try? harnessDecodeHandle(HarnessOperation.identity),
+              let executionID = HarnessOperation.identity["executionID"].string,
+              UUID(uuidString: executionID) != nil else { return }
+        let beforeData = try readBounded(url, maximum: 16 * 1024 * 1024)
+        let before = try PropertyListDecoder().decode(ExtensionRequestProfile.State.self, from: beforeData)
+        let after = try PropertyListDecoder().decode(ExtensionRequestProfile.State.self, from: data)
+        guard before.profileIdentifier == handle.profileIdentifier, after.profileIdentifier == handle.profileIdentifier,
+              let oldRecord = before.records.first(where: { $0.handle == handle }),
+              case .claimed(_, let request, _) = oldRecord.state,
+              let record = after.records.first(where: { $0.handle == handle }),
+              record.configurationKey == oldRecord.configurationKey, record.requestFingerprint == oldRecord.requestFingerprint,
+              case .completed(_, let responseData, _) = record.state,
+              let response = ExtensionRequestProfileCodec.decodeResponseData(responseData, id: handle.id),
+              response.approvalCommitted, case .result = response.payload,
+              ["requestAccounts", "connect", "switchAccount"].contains(request.name), response.name == request.name,
+              response.provider == (request.provider == .unknown && request.name == "switchAccount" ? .multiple : request.provider) else { return }
+        let digest = Self.profileDigest(data)
+        let proof = HarnessValue.object([
+            "handle": harnessHandle(handle), "executionID": .string(executionID),
+            "configurationKey": .string(record.configurationKey),
+            "state": try HarnessValue.convert(ExtensionRequestProfile.authoritySnapshot(after, configurationKey: record.configurationKey).json),
+            "response": try HarnessValue.convert(response.json), "profileSHA256": .string(digest),
+            "creatorEpoch": .string(ipc.epoch), "creatorRole": .string(ipc.role),
+        ])
+        let candidate = candidateURL(digest, directoryBoundary: directoryBoundary)
+        try FileManager.default.createDirectory(at: candidate.deletingLastPathComponent(), withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700])
+        if FileManager.default.fileExists(atPath: candidate.path) {
+            let existing = try readCandidate(candidate, digest: digest)
+            guard try harnessDecodeHandle(existing["handle"]) == handle,
+                  existing["configurationKey"].string == record.configurationKey else {
+                throw HarnessError.invalid("Grant candidate identity changed")
+            }
+            if existing["executionID"].string == executionID { return }
+            let published = try readBounded(url, maximum: 16 * 1024 * 1024)
+            guard published == beforeData, Self.profileDigest(published) != digest else {
+                throw HarnessError.invalid("Cannot replace a published grant candidate")
+            }
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let encoded = try encoder.encode(proof)
+        guard encoded.count <= 1_048_576 else { throw HarnessError.invalid("Grant candidate exceeds its bound") }
+        try DurableProfilePersistence(directoryBoundary: directoryBoundary).replace(encoded, at: candidate)
+    }
+
+    private func confirmPublishedGrants(directoryBoundary: URL) throws {
+        guard HarnessOperation.taskID != nil else { return }
+        let directory = directoryBoundary.appendingPathComponent("bridge/profiles-v\(ExtensionRequestProfile.profileSchemaVersion)", isDirectory: true)
+        var metadata = stat()
+        guard lstat(directory.path, &metadata) == 0 else {
+            if errno == ENOENT { return }
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        guard metadata.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR) else {
+            throw HarnessError.invalid("Invalid grant profile directory")
+        }
+        let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        guard names.count <= 20_000 else { throw HarnessError.invalid("Grant profile inventory exceeds its bound") }
+        for name in names.sorted() where name.hasSuffix(".state") {
+            let profile = String(name.dropLast(".state".count))
+            guard profile == "default" || UUID(uuidString: profile)?.uuidString.lowercased() == profile else {
+                throw HarnessError.invalid("Invalid grant profile identity")
+            }
+            try confirmPublishedGrant(at: directory.appendingPathComponent(name), directoryBoundary: directoryBoundary)
+        }
+    }
+
+    private func confirmPublishedGrant(at url: URL, directoryBoundary: URL) throws {
+        guard isProfile(url, directoryBoundary: directoryBoundary), HarnessOperation.taskID != nil else { return }
+        try confirmPublishedGrant(data: readBounded(url, maximum: 16 * 1024 * 1024), url: url, directoryBoundary: directoryBoundary)
+    }
+
+    private func confirmPublishedGrant(data: Data, url: URL, directoryBoundary: URL) throws {
+        guard isProfile(url, directoryBoundary: directoryBoundary), HarnessOperation.taskID != nil else { return }
+        let digest = Self.profileDigest(data)
+        guard !acknowledgedGrantProofs.withLock({ $0.contains(digest) }) else { return }
+        let candidate = candidateURL(digest, directoryBoundary: directoryBoundary)
+        guard FileManager.default.fileExists(atPath: candidate.path) else { return }
+        let proof = try readCandidate(candidate, digest: digest)
+        let handle = try harnessDecodeHandle(proof["handle"])
+        let profile = try PropertyListDecoder().decode(ExtensionRequestProfile.State.self, from: data)
+        guard profile.profileIdentifier == handle.profileIdentifier,
+              url.lastPathComponent == "\(handle.profileIdentifier?.uuidString.lowercased() ?? "default").state",
+              let record = profile.records.first(where: { $0.handle == handle }),
+              record.configurationKey == proof["configurationKey"].string,
+              case .completed(_, let responseData, _) = record.state,
+              let response = ExtensionRequestProfileCodec.decodeResponseData(responseData, id: handle.id),
+              response.approvalCommitted, case .result = response.payload else {
+            throw HarnessError.invalid("Published grant does not match its candidate")
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard try encoder.encode(proof["state"]) == encoder.encode(HarnessValue.convert(
+            ExtensionRequestProfile.authoritySnapshot(profile, configurationKey: record.configurationKey).json)),
+              try encoder.encode(proof["response"]) == encoder.encode(HarnessValue.convert(response.json)) else {
+            throw HarnessError.invalid("Published grant snapshot changed")
+        }
+        try ipc.publishGrantSync(proof)
+        acknowledgedGrantProofs.withLock { _ = $0.insert(digest) }
+    }
+
+    private func candidateURL(_ digest: String, directoryBoundary: URL) -> URL {
+        directoryBoundary.appendingPathComponent("grant-proofs", isDirectory: true).appendingPathComponent(digest + ".json")
+    }
+
+    private func readCandidate(_ url: URL, digest: String) throws -> HarnessValue {
+        let value = try JSONDecoder().decode(HarnessValue.self, from: readBounded(url, maximum: 1_048_576))
+        guard value["profileSHA256"].string == digest, let executionID = value["executionID"].string,
+              UUID(uuidString: executionID) != nil, let creatorEpoch = value["creatorEpoch"].string, !creatorEpoch.isEmpty,
+              ["bridge", "approval"].contains(value["creatorRole"].string ?? "") else {
+            throw HarnessError.invalid("Invalid grant candidate")
+        }
+        return value
+    }
+
+    private func readBounded(_ url: URL, maximum: Int) throws -> Data {
+        let descriptor = Darwin.open(url.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK)
+        guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        defer { Darwin.close(descriptor) }
+        var metadata = stat()
+        guard fstat(descriptor, &metadata) == 0, metadata.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+              metadata.st_size >= 0, metadata.st_size <= Int64(maximum) else { throw HarnessError.invalid("Invalid grant evidence file") }
+        var data = Data(count: Int(metadata.st_size))
+        try data.withUnsafeMutableBytes { bytes in
+            var offset = 0
+            while offset < bytes.count {
+                let count = Darwin.read(descriptor, bytes.baseAddress!.advanced(by: offset), bytes.count - offset)
+                if count < 0 && errno == EINTR { continue }
+                guard count > 0 else { throw HarnessError.invalid("Truncated grant evidence file") }
+                offset += count
+            }
+        }
+        return data
+    }
+
+    private static func profileDigest(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 }

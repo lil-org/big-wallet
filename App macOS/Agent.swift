@@ -90,7 +90,17 @@ class Agent: NSObject, WalletAccessObserver {
             guard let self else { return }
             isDismissed = true
             coordinator.reject()
+#if BW_SAFARI_VM_TESTING
+            SafariVMFixtures.shared.observeApprovalRetirement(
+                handle: coordinator.handle,
+                windowIdentifier: fixtureWindowIdentifier,
+                bridge: ApplicationServices.shared.requests
+            )
+#endif
         }
+#if BW_SAFARI_VM_TESTING
+        private var fixtureWindowIdentifier = ""
+#endif
         private(set) var isDismissed = false
         private var lastRenderedRevision: UInt64?
         private(set) var isRetired = false
@@ -99,7 +109,8 @@ class Agent: NSObject, WalletAccessObserver {
                 guard !isRetired else { return }
                 if let window = windowController?.window {
 #if BW_SAFARI_VM_TESTING
-                    window.setAccessibilityIdentifier("safari.approval.window.\(UUID().uuidString)")
+                    fixtureWindowIdentifier = "safari.approval.window.\(UUID().uuidString)"
+                    window.setAccessibilityIdentifier(fixtureWindowIdentifier)
 #endif
                     windowCloseObserver.observe(window)
                 }

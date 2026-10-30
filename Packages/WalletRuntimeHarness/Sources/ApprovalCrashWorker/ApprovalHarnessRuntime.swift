@@ -143,7 +143,7 @@ final class HarnessRuntime {
 
     func start() async throws {
         guard await wallets.start() else { throw HarnessError.invalid("Cannot read isolated wallet fixtures") }
-        try await reconcileVault()
+        if options.role == "bridge" { try await reconcileVault() }
         let encodedIdentity = try JSONEncoder().encode(identity)
         ipc.event("ready", details: .object(["role": .string(options.role), "mode": .string(options.mode),
             "pid": .number(Double(identity.processIdentifier)), "identity": try JSONDecoder().decode(HarnessValue.self, from: encodedIdentity),

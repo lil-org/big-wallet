@@ -283,10 +283,15 @@ export async function main(arguments_ = process.argv.slice(2)) {
     if (!options.replay) {
         const required = options.mandatory ? ["consent", "signer.before", "signer.after", "broadcast.prepared",
             "broadcast.dispatch", "broadcast.accepted", "process-lock-recovery", "old-process-consent",
-            "wallet-revocation-crash", "authentication-cancelled", "revocation-before-signing"] : [];
-        if (options.mandatory && options.mode !== "native") { required.push("edited-review-token", "wallet-reconciliation-after-clock-jump"); }
+            "wallet-revocation-crash", "authentication-cancelled", "revocation-before-signing", "authority-grant-proof"] : [];
+        if (options.mandatory && options.mode !== "native") {
+            required.push("edited-review-token", "wallet-reconciliation-after-clock-jump", "contender-startup-during-broadcast");
+        }
         if (options.mandatory && options.mode !== "popup") { required.push("native-explicit-review-retry", "native-chain-switch-authentication"); }
         if (options.mandatory) {
+            for (const provider of ["ethereum", "solana"]) {
+                for (const side of ["before", "after"]) { required.push(`grant-publication:${provider}:${side}`); }
+            }
             const modes = options.mode === "alternate" ? ["native", "popup"] : [options.mode];
             for (const mode of modes) {
                 for (const provider of ["ethereum", "solana"]) {

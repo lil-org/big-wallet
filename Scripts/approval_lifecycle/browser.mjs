@@ -528,6 +528,26 @@ export class BrowserLifecycle {
         const popup = this.profile(profileIdentifier).popup;
         return popup ? vm.runInContext("popupQueue?.currentRequest?.state ?? null", popup.harness.context) : null;
     }
+    popupPrimaryAction(profileIdentifier = null) {
+        const popup = this.profile(profileIdentifier).popup;
+        return popup ? vm.runInContext(`(() => {
+            const current = popupQueue?.currentRequest;
+            return current && (current.state || current.interaction.kind === "failed")
+                ? current.primaryAction(current.state).kind : null;
+        })()`, popup.harness.context) : null;
+    }
+    popupQueueRefreshAvailable(profileIdentifier = null) {
+        const popup = this.profile(profileIdentifier).popup;
+        return popup ? vm.runInContext(`popupQueue?.presentation.kind === "idle" &&
+            popupQueue.snapshot.kind === "failed" && popupQueue.presentation.operation === null &&
+            popupQueue.refresh.kind === "idle" && !document.getElementById("idle-check-status").disabled`,
+        popup.harness.context) : false;
+    }
+    popupQueueIdleAndEmpty(profileIdentifier = null) {
+        const popup = this.profile(profileIdentifier).popup;
+        return popup ? vm.runInContext(`popupQueue?.presentation.kind === "idle" && popupQueue.isEmpty &&
+            popupQueue.presentation.operation === null && popupQueue.refresh.kind === "idle"`, popup.harness.context) : false;
+    }
     popupPresentation(profileIdentifier = null) {
         const popup = this.profile(profileIdentifier).popup;
         return popup ? clone(vm.runInContext("popupQueue?.currentRequest?.presentation ?? null", popup.harness.context)) : null;

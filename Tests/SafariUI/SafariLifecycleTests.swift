@@ -311,9 +311,13 @@ final class SafariLifecycleTests: XCTestCase {
             self.safari.terminate()
             try self.require(self.safari.wait(for: .notRunning, timeout: 10), "Safari did not terminate")
             try await control.assertNoSigningOrBroadcast()
+#if os(macOS)
+            let interruptedApprovals = try self.closeOwnedApprovalIfPresent()
+            try self.require(!interruptedApprovals.isEmpty, "The interrupted native approval was not available for retirement")
+            try await control.waitForApprovalRetirement(interruptedApprovals)
+#endif
             self.safari.launch()
             try await self.enableExtension(control: control)
-            try self.closeOwnedApprovalIfPresent()
             try self.open(config.dappURL)
 #if os(iOS)
             try await self.retirePopupRequests()
@@ -2179,9 +2183,10 @@ final class SafariLifecycleTests: XCTestCase {
     }
 
     @MainActor
-    private func closeOwnedApprovalIfPresent() throws {
+    @discardableResult
+    private func closeOwnedApprovalIfPresent() throws -> [String] {
 #if os(macOS)
-        if !helperIsRunning { return }
+        if !helperIsRunning { return [] }
         helper.activate()
         let windows = helper.windows.matching(NSPredicate(format: "identifier BEGINSWITH %@", "safari.approval.window."))
         let identifiers = windows.allElementsBoundByIndex.map(\.identifier)
@@ -2192,6 +2197,9 @@ final class SafariLifecycleTests: XCTestCase {
             try click(window.buttons[XCUIIdentifierCloseWindow], "retire the interrupted request's approval window")
             try require(window.waitForNonExistence(timeout: 10), "The interrupted approval window did not close")
         }
+        return identifiers
+#else
+        return []
 #endif
     }
 
@@ -3289,6 +3297,20 @@ private final class SafariUIControl {
     func eventCount(_ kind: String) async throws -> Int {
         try await rows("events").filter { $0["kind"] as? String == kind }.count
     }
+
+#if os(macOS)
+    func waitForApprovalRetirement(_ windowIdentifiers: [String]) async throws {
+        let expected = Set(windowIdentifiers)
+        let deadline = Date().addingTimeInterval(15)
+        while Date() < deadline {
+            let retired = try await rows("events").filter { $0["kind"] as? String == "approvalRetired" }
+            let identifiers = Set(retired.compactMap { $0["windowIdentifier"] as? String })
+            if expected.isSubset(of: identifiers) { return }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        throw SafariUIFailure("The interrupted native approval did not persist its retirement before helper termination")
+    }
+#endif
 
     func consentIdentifiers() async throws -> Set<String> {
         let consents = try await rows("events").filter { $0["kind"] as? String == "consentAccepted" }

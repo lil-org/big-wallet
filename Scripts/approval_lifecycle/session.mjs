@@ -118,12 +118,7 @@ export class LifecycleSession {
         return child;
     }
     sendNative(message, profileIdentifier) {
-        const promise = this.child("bridge").command("native", {message, profileIdentifier}, {timeout: 60000}).then(reply => {
-            if (message.subject === "pollResponse" && reply?.response?.kind === "result" && reply.response.approvalCommitted === true && reply.state) {
-                this.oracle.recordCommittedGrant({handle: {id: message.id, token: message.requestToken, profileIdentifier}, state: reply.state});
-            }
-            return reply;
-        });
+        const promise = this.child("bridge").command("native", {message, profileIdentifier}, {timeout: 60000});
         this.track(promise);
         return promise;
     }
@@ -283,6 +278,16 @@ export class LifecycleSession {
     async nativeEvent(event, child) {
         const details = {...event.details, epoch: child.epoch, role: child.role};
         if (event.event === "ready") { return; }
+        if (event.event === "grantProof") {
+            if (typeof event.gate !== "string" || !event.gate) {
+                throw new LifecycleFailure("protocol", "Grant publication omitted its acknowledgement gate", {event});
+            }
+            this.oracle.recordGrantProof(details);
+            this.ledger.append({type: "grant-proof", ...details});
+            this.coverage.add("authority-grant-proof");
+            child.release(event.gate);
+            return;
+        }
         if (event.event === "task") {
             if (typeof details.id !== "string" || typeof details.label !== "string" || typeof details.active !== "boolean") {
                 throw new LifecycleFailure("protocol", "Malformed tracked native task", {details});
@@ -370,6 +375,7 @@ export class LifecycleSession {
             }
             if (name === "signer.before") { this.oracle.execution({...details, account: details.approvedAccount}); }
             if (name === "signer.after") { this.oracle.signed(details); if (details.succeeded) { this.verifySigning(details); } }
+            if (name === "authorize.after" && details.executionID) { this.oracle.authorized(details); }
             if (name === "broadcast.prepared") { this.oracle.checkpoint(details); }
             if (name === "completion.after" && details.handle) { this.oracle.completed(details.handle); }
             if (name === "revocation.after") {
@@ -635,7 +641,10 @@ export class LifecycleSession {
                 const requests = await this.inspect();
                 request = requests.find(value => operation.handle && handleKey(value.handle) === handleKey(operation.handle));
                 if (request && (this.mode === "native" ? request.presentation === "review" :
-                    this.browser.popupState(tab.profile.id)?.id === request.handle.id && this.browser.popupState(tab.profile.id)?.actions.includes("approve"))) { break; }
+                    this.browser.popupState(tab.profile.id)?.id === request.handle.id &&
+                    this.browser.popupState(tab.profile.id)?.actions.includes("approve") &&
+                    this.browser.popupPrimaryAction(tab.profile.id) === "approve")) { break; }
+                if (request && this.mode === "popup") { await this.decide({}, "retry", request); }
                 await this.advance(100);
             }
             if (!request) { throw new LifecycleFailure("coverage", "Native gate request did not reach a review", {action}); }
@@ -659,16 +668,18 @@ export class LifecycleSession {
             await this.pump();
             let state = this.browser.popupState(profileIdentifier);
             const displayed = this.browser.popupRequest(profileIdentifier);
-            if (!state || !this.browser.popupReviewing(profileIdentifier) || displayed?.id !== request.handle.id ||
+            if (!this.browser.popupReviewing(profileIdentifier) || displayed?.id !== request.handle.id ||
                 displayed.requestToken !== request.handle.token) { return false; }
-            if (decision === "approve" && state.review?.requiresClusterSelection) {
+            if (decision === "approve" && state?.review?.requiresClusterSelection) {
                 const popup = this.browser.profile(profileIdentifier).popup;
                 const index = state.review.clusters.findIndex(cluster => cluster.value === "devnet");
                 if (index >= 0) { await popup.harness.get("clusters").children[index].click(); state = this.browser.popupState(profileIdentifier); }
             }
-            if (decision === "approve" && !state.actions.includes("approve")) { return false; }
-            if (decision === "reject" && !state.actions.includes("reject")) { return false; }
-            if (decision === "retry" && !state.actions.includes("retry") && !state.actions.includes("retryTransaction")) { return false; }
+            const primaryAction = this.browser.popupPrimaryAction(profileIdentifier);
+            const retrySubject = {retryApproval: "retryApproval", retryTransaction: "retryTransaction", refresh: "getApprovalState"}[primaryAction];
+            if (decision === "approve" && (primaryAction !== "approve" || !state?.actions.includes("approve"))) { return false; }
+            if (decision === "reject" && !state?.actions.includes("reject")) { return false; }
+            if (decision === "retry" && !retrySubject) { return false; }
             const popup = this.browser.profile(profileIdentifier).popup;
             const buttonID = decision === "reject" ? "button-reject" : "button-approve";
             if (popup.harness.get(buttonID).disabled) { return false; }
@@ -686,9 +697,9 @@ export class LifecycleSession {
                 intent = {handle: structuredClone(request.handle), payload, review: structuredClone(state.review)};
                 this.popupApprovals.set(popup.owner, intent);
             }
-            const subjects = decision === "approve" ? ["approveRequest"] : decision === "reject" ? ["rejectRequest"]
-                : ["retryApproval", "retryTransaction"];
-            const attempted = () => popup.harness.nativeMessages.slice(before).some(message => subjects.includes(message.subject));
+            const subject = decision === "approve" ? "approveRequest" : decision === "reject" ? "rejectRequest" : retrySubject;
+            const attempted = () => popup.harness.nativeMessages.slice(before).some(message => message.subject === subject &&
+                message.id === request.handle.id && message.requestToken === request.handle.token);
             let clickFinished = false;
             try {
                 this.trackPopup(Promise.resolve(this.browser.clickPopup(profileIdentifier, buttonID)).finally(() => {
@@ -933,7 +944,9 @@ export class LifecycleSession {
             if (approve) {
                 const request = requests.find(request => request.provider === operation.provider && request.handle.profileIdentifier === operation.profileIdentifier &&
                     request.configurationKey === new URL(operation.url).origin && !["responded", "completed"].includes(request.phase));
-                if (request) { await this.decide({}, "approve", request); }
+                if (request && !await this.decide({}, "approve", request) && this.mode === "popup") {
+                    await this.decide({}, "retry", request);
+                }
             }
             await this.pump();
             if (operation.status === "pending") { await this.advance(1000); }
@@ -998,6 +1011,18 @@ export class LifecycleSession {
             }
             if (this.mode === "popup" && this.lastInspectionAvailable && this.background.size === 0 &&
                 this.scheduler.pending({kind: "message"}).length === 0) {
+                const failedQueueProfile = profiles.find(profileIdentifier => this.browser.popupQueueRefreshAvailable(profileIdentifier));
+                if (failedQueueProfile !== undefined) {
+                    this.trackPopup(this.browser.clickPopup(failedQueueProfile, "idle-check-status"), failedQueueProfile);
+                    continue;
+                }
+                const idleProfile = profiles.find(profileIdentifier => this.browser.popupQueueIdleAndEmpty(profileIdentifier) &&
+                    requests.some(request => request.handle.profileIdentifier === profileIdentifier && request.phase === "queued"));
+                if (idleProfile !== undefined) {
+                    this.browser.closePopup(idleProfile);
+                    await this.browser.openPopup(idleProfile);
+                    continue;
+                }
                 const terminalProfile = profiles.find(profileIdentifier => {
                     const current = this.browser.popupRequest(profileIdentifier);
                     return current && requests.some(request => request.handle.profileIdentifier === profileIdentifier &&

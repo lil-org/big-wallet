@@ -68,6 +68,7 @@ export class LifecycleOracle {
         this.requests = new Map;
         this.admissions = new Map;
         this.approvals = new Map;
+        this.authorizations = new Map;
         this.executions = new Map;
         this.settlements = new Map;
         this.authorities = new Map;
@@ -81,7 +82,7 @@ export class LifecycleOracle {
         if (!this.permissions.has(key)) {
             this.permissions.set(key, {profileIdentifier: profileIdentifier ?? null, configurationKey, provider,
                 generation: 0, revoked: false, tickets: [], lastAllowed: null, lastObserved: null, revocations: new Set, accountGenerations: new Map,
-                committedGrants: new Map, authorityHistory: new Map, grantBoundaries: new Map});
+                committedGrants: new Map, authorityHistory: new Map, grantBoundaries: new Map, exactGrantBoundaries: new Map});
         }
         return this.permissions.get(key);
     }
@@ -89,17 +90,22 @@ export class LifecycleOracle {
         if (!permission.authorityHistory.has(context)) { permission.authorityHistory.set(context, new Map); }
         return permission.authorityHistory.get(context);
     }
-    recordAuthority(permission, context, revision, snapshot, label) {
+    recordAuthority(permission, context, revision, snapshot, label, exact = false) {
         const history = this.authorityHistory(permission, context);
         const previous = history.get(revision);
         if (previous && previous.state !== snapshot.state) {
             this.fail("replay", "Provider changed a known authority snapshot", {context, revision, snapshot, previous});
         }
         const priorGrant = label && permission.grantBoundaries.get(label);
+        const committed = label && permission.exactGrantBoundaries.get(label);
         if (priorGrant && priorGrant.context !== context) {
             this.fail("replay", "A connection approval granted another authority context", {label, context, priorGrant});
         }
-        const grant = label && {context, revision: Math.min(priorGrant?.revision ?? Infinity, revision)};
+        if (committed && (committed.context !== context || exact &&
+            (committed.revision !== revision || committed.state !== snapshot.state))) {
+            this.fail("replay", "A committed approval changed its exact authority boundary", {label, context, revision, snapshot, committed});
+        }
+        const grant = label && {context, revision: committed?.revision ?? (exact ? revision : Math.min(priorGrant?.revision ?? Infinity, revision))};
         const grantRevisions = new Set([...permission.grantBoundaries].filter(([key, value]) => key !== label && value.context === context)
             .map(([, value]) => value.revision));
         if (grant) { grantRevisions.add(grant.revision); }
@@ -113,6 +119,18 @@ export class LifecycleOracle {
         }
         history.set(revision, snapshot);
         if (grant) { permission.grantBoundaries.set(label, grant); }
+        if (exact) { permission.exactGrantBoundaries.set(label, {context, revision, ...snapshot}); }
+    }
+    recordDisconnection(permission, context, revision, snapshot) {
+        this.recordAuthority(permission, context, revision, snapshot);
+        if (permission.lastObserved?.context === context && permission.lastObserved.revision >= revision) { return; }
+        const generation = permission.generation;
+        permission.generation += 1;
+        permission.revoked = true;
+        permission.tickets = permission.tickets.filter(ticket => ticket.generation === generation &&
+            ticket.authority?.context === context && ticket.authority.revisions[permission.provider] >= revision);
+        for (const ticket of permission.tickets) { ticket.generation = permission.generation; }
+        permission.lastObserved = {context, revision, address: null};
     }
     register({handle, configurationKey, provider, name, payloadDigest, account, enqueueAttempt, authority}) {
         const key = handleKey(handle);
@@ -198,32 +216,103 @@ export class LifecycleOracle {
         this.coverage.add("consent");
         return approval;
     }
-    recordCommittedGrant({handle, state}) {
-        const request = this.requests.get(handleKey(handle));
-        if (!request || request.revoked || !["requestAccounts", "connect", "switchAccount"].includes(request.name)) { return; }
-        for (const label of request.approvals) {
-            const approval = this.approvals.get(label);
-            if (!approval.accepted || approval.revoked) { continue; }
-            for (const [provider, address] of Object.entries(approval.grantAccounts)) {
-                if (canonicalAccount(provider === "ethereum" ? state.ethereum?.address : state.solana?.publicKey) !== address) { continue; }
-                const revision = state.revisions[provider];
-                if (request.authority && (request.authority.context !== state.context || revision < request.authority.revisions[provider])) { continue; }
-                const permission = this.permission(request.handle.profileIdentifier, request.configurationKey, provider);
-                const accountGeneration = permission.accountGenerations.get(address) || 0;
-                const value = JSON.stringify(canonical(state[provider]));
-                const allowed = permission.lastAllowed;
-                const ticket = permission.tickets.some(ticket => ticket.label === label && ticket.generation === permission.generation &&
-                    ticket.accountGeneration === accountGeneration);
-                const boundary = permission.grantBoundaries.get(label);
-                const earlier = boundary?.context === state.context && revision < boundary.revision;
-                if (!ticket && (permission.revoked || allowed?.context !== state.context ||
-                    !earlier && (allowed.revision !== state.revisions[provider] || allowed.state !== value))) { continue; }
-                const key = `${state.context}|${state.revisions[provider]}`;
-                this.recordAuthority(permission, state.context, revision, {address, state: value}, label);
-                if (!permission.committedGrants.has(key)) { permission.committedGrants.set(key, {generation: permission.generation, accountGeneration}); }
-                request.completedBeforeRevocation = true;
-            }
+    authorized({handle, executionID, epoch, role}) {
+        if (!validProcessIdentity(epoch, role) || typeof executionID !== "string" || !executionID) {
+            this.fail("oracle-input", "Authorization omitted its permit or process identity", {handle, executionID, epoch, role});
         }
+        const key = handleKey(handle);
+        const request = this.requests.get(key);
+        const approval = request?.approvals.map(label => this.approvals.get(label)).findLast(value =>
+            value.accepted && value.acceptedEpoch === epoch && value.acceptedRole === role);
+        if (!approval) { this.fail("consent", "Authorization has no matching accepted consent", {handle, executionID, epoch, role}); }
+        const binding = {key, label: approval.label, epoch, role};
+        const previous = this.authorizations.get(executionID);
+        if (previous && JSON.stringify(previous) !== JSON.stringify(binding)) {
+            this.fail("consent", "An execution permit was rebound to another approval", {executionID, previous, binding});
+        }
+        this.authorizations.set(executionID, binding);
+    }
+    recordGrantProof({handle, configurationKey, state, response, executionID, creatorEpoch, creatorRole, profileSHA256}) {
+        const key = handleKey(handle);
+        const request = this.requests.get(key);
+        const binding = this.authorizations.get(executionID);
+        if (!request || configurationKey !== request.configurationKey ||
+            !["requestAccounts", "connect", "switchAccount"].includes(request.name) ||
+            response?.kind !== "result" || response.approvalCommitted !== true || response.id !== request.handle.id ||
+            response.name !== request.name || response.provider !== (request.provider === "unknown" ? "multiple" : request.provider) ||
+            !validProcessIdentity(creatorEpoch, creatorRole) || !binding || binding.key !== key ||
+            binding.epoch !== creatorEpoch || binding.role !== creatorRole ||
+            typeof profileSHA256 !== "string" || !/^[a-f0-9]{64}$/.test(profileSHA256)) {
+            this.fail("oracle-input", "Grant proof does not match a successful authorized request", {
+                handle, configurationKey, response, executionID, creatorEpoch, creatorRole,
+            });
+        }
+        const proof = JSON.stringify(canonical({configurationKey, state, response, executionID, creatorEpoch, creatorRole, profileSHA256}));
+        if (request.exactGrantProof !== undefined) {
+            if (request.exactGrantProof !== proof) {
+                this.fail("replay", "A request published conflicting exact grant proofs", {handle, executionID});
+            }
+            return;
+        }
+        const approval = this.approvals.get(binding.label);
+        const affected = request.provider === "unknown" ? ["ethereum", "solana"] : [request.provider];
+        if (!state || typeof state.context !== "string" || !state.context || !state.revisions ||
+            affected.some(provider => !["ethereum", "solana"].includes(provider) ||
+                !Number.isSafeInteger(state.revisions[provider]) || state.revisions[provider] < 0 ||
+                (canonicalAccount(provider === "ethereum" ? state.ethereum?.address : state.solana?.publicKey) || null) !==
+                    (approval.grantAccounts[provider] || null)) ||
+            request.provider === "unknown" && response.result !== null ||
+            request.provider === "ethereum" && (!Array.isArray(response.result) || response.result.length !== 1 ||
+                canonicalAccount(response.result[0]) !== approval.grantAccounts.ethereum) ||
+            request.provider === "solana" && canonicalAccount(response.result?.publicKey) !== approval.grantAccounts.solana) {
+            this.fail("consent", "Grant proof differs from the reviewed account selection", {handle, state, response, executionID});
+        }
+        if (!this.recordCommittedGrant({handle, state, label: binding.label})) {
+            this.fail("consent", "Grant proof has no current matching reviewed account selection", {handle, state, executionID});
+        }
+        request.exactGrantProof = proof;
+    }
+    recordCommittedGrant({handle, state, label}) {
+        const request = this.requests.get(handleKey(handle));
+        if (!request || request.revoked || !["requestAccounts", "connect", "switchAccount"].includes(request.name)) { return false; }
+        const approval = label === undefined ? request.approvals.map(value => this.approvals.get(value)).findLast(value => value.accepted) : this.approvals.get(label);
+        if (!approval || approval.key !== handleKey(handle) || !approval.accepted || approval.revoked) { return false; }
+        if (!state || typeof state.context !== "string" || !state.context || !state.revisions) { return false; }
+        const entries = [];
+        const affected = request.provider === "unknown" ? ["ethereum", "solana"] : Object.keys(approval.grantAccounts);
+        for (const provider of affected) {
+            const address = approval.grantAccounts[provider] || null;
+            if ((canonicalAccount(provider === "ethereum" ? state.ethereum?.address : state.solana?.publicKey) || null) !== address) { return false; }
+            const revision = state.revisions[provider];
+            if (!Number.isSafeInteger(revision) || revision < 0 ||
+                request.authority && (request.authority.context !== state.context || revision < request.authority.revisions[provider])) { return false; }
+            const permission = this.permission(request.handle.profileIdentifier, request.configurationKey, provider);
+            const accountGeneration = permission.accountGenerations.get(address) || 0;
+            const value = JSON.stringify(canonical(state[provider]));
+            if (!address) {
+                entries.push({permission, provider, address, revision, value});
+                continue;
+            }
+            const allowed = permission.lastAllowed;
+            const ticket = permission.tickets.some(ticket => ticket.label === approval.label && ticket.generation === permission.generation &&
+                ticket.accountGeneration === accountGeneration);
+            const boundary = permission.grantBoundaries.get(approval.label);
+            const earlier = boundary?.context === state.context && revision < boundary.revision;
+            if (!ticket && (permission.revoked || allowed?.context !== state.context ||
+                !earlier && (allowed.revision !== revision || allowed.state !== value))) { return false; }
+            entries.push({permission, provider, address, revision, accountGeneration, value});
+        }
+        for (const {permission, address, revision, accountGeneration, value} of entries) {
+            if (!address) {
+                this.recordDisconnection(permission, state.context, revision, {address, state: value});
+                continue;
+            }
+            this.recordAuthority(permission, state.context, revision, {address, state: value}, approval.label, true);
+            const key = `${state.context}|${revision}`;
+            if (!permission.committedGrants.has(key)) { permission.committedGrants.set(key, {generation: permission.generation, accountGeneration}); }
+        }
+        request.completedBeforeRevocation = true;
+        return true;
     }
     execution({handle, executionID, epoch, role, consentLabel, account, payloadDigest}) {
         if (!validProcessIdentity(epoch, role)) {
@@ -384,14 +473,7 @@ export class LifecycleOracle {
             if (observed?.context === state.context && observed.revision === revision) { continue; }
             if (committed && (committed.generation !== permission.generation || committed.accountGeneration !== (permission.accountGenerations.get(address) || 0))) { continue; }
             if (!address) {
-                this.recordAuthority(permission, state.context, revision, snapshot);
-                const generation = permission.generation;
-                permission.generation += 1;
-                permission.revoked = true;
-                permission.tickets = permission.tickets.filter(ticket => ticket.generation === generation &&
-                    ticket.authority?.context === state.context && ticket.authority.revisions[provider] >= revision);
-                for (const ticket of permission.tickets) { ticket.generation = permission.generation; }
-                permission.lastObserved = {context: state.context, revision, address};
+                this.recordDisconnection(permission, state.context, revision, snapshot);
                 continue;
             }
             const needsConsent = !allowed || allowed.address !== address || permission.revoked || allowed.context !== state.context;
@@ -442,6 +524,7 @@ export class LifecycleOracle {
         if (terminal === true && !request.definitelyRevoked && (terminalResponse ?? recoveryResponse)?.approvalCommitted === true) {
             request.completedBeforeRevocation = true;
         }
+
     }
     requireCoverage(names) {
         const missing = names.filter(name => !this.coverage.has(name));

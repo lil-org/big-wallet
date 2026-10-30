@@ -328,6 +328,11 @@ final class HarnessIPC: Sendable {
         } onCancel: { [self] in release(identifier, result: .failure(CancellationError())) }
     }
 
+    func publishGrantSync(_ details: HarnessValue) throws {
+        let (_, gate) = try makeGate(name: "grantProof", details: details)
+        try validateRelease(gate.waitSync())
+    }
+
     func checkpoint(_ name: String, details: HarnessValue = .object([:])) async throws {
         let decision = checkpointDecision(name, details: details)
         let details = checkpointDetails(details, decision: decision)

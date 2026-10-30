@@ -265,7 +265,8 @@ test("recorded scheduling decisions cannot be skipped or reordered", () => {
 
 function recoverySession(requests, available = true) {
     const session = new LifecycleSession({seed: 1, mode: "native"});
-    session.browser = {faults: [], operations: new Map(), snapshot: () => [], wake() {}};
+    session.browser = {faults: [], operations: new Map(), snapshot: () => [], wake() {},
+        popupQueueRefreshAvailable: () => false, popupQueueIdleAndEmpty: () => false};
     session.pump = async () => {};
     session.inspect = async () => { session.lastInspectionAvailable = available; return requests; };
     session.decide = async () => false;
@@ -386,6 +387,74 @@ test("popup recovery reopens an explicitly terminal head and preserves a queued 
         assert.equal(session.background.size, 0);
         assert.equal(session.scheduler.pending({kind: "message"}).length, 0);
     } finally { session.browser.close(); }
+});
+
+test("popup recovery refreshes a failed queue through Check Status before rejecting its surviving request", async () => {
+    for (const failure of ["queue", "completion"]) {
+        const session = new LifecycleSession({seed: 1, mode: "popup", timeout: 1000});
+        const profileIdentifier = "00000000-0000-0000-0000-000000000001";
+        const request = {phase: "queued", provider: "ethereum", name: "signPersonalMessage", configurationKey: "https://one.example",
+            handle: {id: 1, token: "00000000-0000-0000-0000-000000000001", profileIdentifier}};
+        const completed = {id: 11, requestToken: "00000000-0000-0000-0000-000000000011", configurationKey: request.configurationKey, host: "one.example"};
+        let failed = false, hasCompleted = failure === "completion", refreshes = 0;
+        const messages = [];
+        session.browser = new BrowserLifecycle({scheduler: session.scheduler, mode: "popup", native: async (message, profile) => {
+            messages.push(message);
+            if (message.subject === "getLatestConfiguration") { return {id: message.id, state: disconnected}; }
+            if (message.subject === "getRecoveryRequests") { return {id: message.id, requests: []}; }
+            if (message.subject === "getPendingRequests") {
+                if (profile !== profileIdentifier) { return {requests: [], completedResponses: []}; }
+                if (failure === "queue" && !failed) { failed = true; return {unavailable: true}; }
+                return {requests: request.phase === "queued" ? [{id: request.handle.id, requestToken: request.handle.token,
+                    provider: request.provider, configurationKey: request.configurationKey, host: "one.example",
+                    receivedAt: session.scheduler.now, sequence: 1}] : [], completedResponses: hasCompleted ? [completed] : []};
+            }
+            if (message.subject === "pollResponse") {
+                assert.equal(message.requestToken, completed.requestToken);
+                if (!failed) { failed = true; return {id: message.id, unavailable: true}; }
+                hasCompleted = false;
+                return {id: message.id, missing: true};
+            }
+            if (message.subject === "getApprovalState") {
+                return {status: "ok", approval: {id: request.handle.id, host: "one.example", state: "review", actions: ["approve", "reject"],
+                    review: {kind: "signMessage", title: "Sign Message", meta: "0x010203", account: {name: "Account", croppedAddress: "1234"},
+                        reviewToken: "00000000-0000-0000-0000-000000000101"}}};
+            }
+            assert.equal(message.subject, "rejectRequest");
+            assert.equal(message.id, request.handle.id);
+            assert.equal(message.requestToken, request.handle.token);
+            request.phase = "responded";
+            return {status: "ok", approval: {id: request.handle.id, state: "missing", actions: []}};
+        }});
+        const click = session.browser.clickPopup.bind(session.browser);
+        session.browser.clickPopup = (profile, button) => {
+            if (button === "idle-check-status") {
+                assert.equal(profile, profileIdentifier);
+                assert.equal(session.browser.popupRequest(profile), null);
+                assert.equal(session.browser.popupQueueRefreshAvailable(profile), true);
+                refreshes += 1;
+            }
+            return click(profile, button);
+        };
+        session.inspect = async () => { session.lastInspectionAvailable = true; return [request]; };
+        try {
+            const tab = session.browser.openTab({profileIdentifier, url: "https://one.example/page"});
+            const otherTab = session.browser.openTab({profileIdentifier: "00000000-0000-0000-0000-000000000002", url: "https://other.example/page"});
+            await session.pumpUntil(() => session.browser.configurationReady(tab.id, disconnected) &&
+                session.browser.configurationReady(otherTab.id, disconnected));
+            await session.quiesce({rejectReviews: true});
+            assert.equal(failed, true, failure);
+            assert.equal(refreshes, 1, failure);
+            assert.equal(request.phase, "responded", failure);
+            assert.equal(session.browser.profile(profileIdentifier).popupSerial, 1, "Recovery must use the visible control without replacing the popup");
+            assert.equal(messages.filter(message => message.subject === "rejectRequest").length, 1);
+            assert.equal(messages.some(message => ["approveRequest", "retryTransaction"].includes(message.subject)), false);
+            assert.equal(session.oracle.approvals.size, 0);
+            assert.equal(session.background.size, 0);
+            assert.equal(session.scheduler.pending({kind: "message"}).length, 0);
+            session.check();
+        } finally { session.browser.close(); }
+    }
 });
 
 test("popup recovery requires exact terminal evidence and drained work before replacing a head", async () => {
@@ -590,6 +659,67 @@ test("recovery waits for native admissions after navigation even when their brow
     } finally { session.browser.close(); }
 });
 
+test("popup recovery reopens an idle empty queue after a delayed admission outlives its document", async () => {
+    const session = new LifecycleSession({seed: 1, mode: "popup", timeout: 1000});
+    const profileIdentifier = "00000000-0000-0000-0000-000000000001";
+    const otherProfile = "00000000-0000-0000-0000-000000000002";
+    const request = {phase: "queued", provider: "ethereum", name: "requestAccounts", configurationKey: "https://one.example",
+        handle: {id: 1, token: "00000000-0000-0000-0000-000000000001", profileIdentifier}};
+    let admitted = false, emptyPopup, rejections = 0;
+    const trace = [];
+    session.browser = new BrowserLifecycle({scheduler: session.scheduler, mode: "popup", trace: event => trace.push(event),
+        native: async (message, profile) => {
+            if (message.subject === "getLatestConfiguration") { return {id: message.id, state: disconnected}; }
+            if (message.subject === "getRecoveryRequests") { return {id: message.id, requests: []}; }
+            if (message.name === "requestAccounts") {
+                assert.equal(session.browser.popupQueueIdleAndEmpty(profileIdentifier), true);
+                emptyPopup = session.browser.profile(profileIdentifier).popup;
+                request.handle.id = message.id;
+                admitted = true;
+                return {id: message.id, approvalRequired: true, requestToken: request.handle.token, admissionKind: "new", state: disconnected};
+            }
+            if (message.subject === "getPendingRequests") {
+                return {requests: profile === profileIdentifier && admitted && request.phase === "queued" ? [{
+                    id: request.handle.id, requestToken: request.handle.token, provider: request.provider,
+                    configurationKey: request.configurationKey, host: "one.example", receivedAt: session.scheduler.now, sequence: 1,
+                }] : [], completedResponses: []};
+            }
+            if (message.subject === "getApprovalState") {
+                return {status: "ok", approval: {id: request.handle.id, host: "one.example", state: "review", actions: ["approve", "reject"],
+                    review: {kind: "accountSelection", title: "Connect", allowsEmptySelection: false, canSelectNetwork: false, accounts: [],
+                        reviewToken: "00000000-0000-0000-0000-000000000101"}}};
+            }
+            assert.equal(message.subject, "rejectRequest");
+            assert.equal(message.requestToken, request.handle.token);
+            rejections += 1;
+            request.phase = "responded";
+            return {status: "ok", approval: {id: request.handle.id, state: "missing", actions: []}};
+        }});
+    session.inspect = async () => { session.lastInspectionAvailable = true; return admitted ? [request] : []; };
+    try {
+        const tab = session.browser.openTab({profileIdentifier, url: "https://one.example/page"});
+        const other = session.browser.openTab({profileIdentifier: otherProfile, url: "https://other.example/page"});
+        await session.pumpUntil(() => session.browser.configurationReady(tab.id, disconnected) && session.browser.configurationReady(other.id, disconnected));
+        session.browser.addFault({channel: "native", phase: "request", subject: "requestAccounts", action: "delay", delay: 20001});
+        const operation = session.browser.request(tab.id, "ethereum", {method: "eth_requestAccounts"});
+        await session.pumpUntil(() => trace.some(event => event.fault?.action === "delay"));
+        session.browser.navigate(tab.id, "https://one.example/replacement");
+        await session.quiesce({rejectReviews: true});
+        assert.equal(operation.status, "abandoned");
+        assert.equal(admitted, true);
+        assert.equal(request.phase, "responded");
+        assert.equal(rejections, 1);
+        assert.equal(emptyPopup.alive, false);
+        assert.equal(session.browser.profile(profileIdentifier).popupSerial, 2);
+        assert.equal(session.browser.profile(otherProfile).popupSerial, 1);
+        assert.equal(trace.some(event => event.message?.subject === "pendingRequestAvailable"), false);
+        assert.equal(session.oracle.approvals.size, 0);
+        assert.equal(session.background.size, 0);
+        assert.equal(session.scheduler.pending({kind: "message"}).length, 0);
+        session.check();
+    } finally { session.browser.close(); }
+});
+
 test("configuration refresh cannot hide newly started native work during recovery", async () => {
     const session = recoverySession([]);
     session.tabs = [{alive: true}];
@@ -646,28 +776,79 @@ test("tracked native failures retain fatal diagnostics while restarted commands 
     }
 });
 
-test("committed grant observations precede browser delivery and preserve their request handle", async () => {
+test("authority-bearing replies cannot manufacture exact grant provenance", async () => {
+    const session = new LifecycleSession({seed: 1, mode: "native"});
+    const state = {context: "context", revisions: {ethereum: 3, solana: 0}, ethereum: {address: "0xab", chainId: "0x1"}, solana: null};
+    session.oracle.recordCommittedGrant = () => assert.fail("A current configuration is not a commit proof");
+    session.oracle.recordGrantProof = () => assert.fail("A response flag is not a publication observation");
+    const message = {subject: "pollResponse", id: 1, requestToken: "request", configurationKey: "https://one.example"};
+    for (const subject of ["pollResponse", "getLatestConfiguration"]) {
+        for (const approvalCommitted of [false, true]) {
+            const reply = {id: 1, state, response: {id: 1, kind: "result", approvalCommitted}};
+            session.children.set("bridge", {command: async () => reply});
+            assert.equal(await session.sendNative({...message, subject}, null), reply);
+        }
+    }
+});
+
+test("publication proof is acknowledged before a delayed page is checked without ordinary inspection", async () => {
     const session = new LifecycleSession({seed: 1, mode: "native"});
     const profileIdentifier = "00000000-0000-0000-0000-000000000001";
-    const message = {subject: "pollResponse", id: 1, requestToken: "request"};
-    const state = {context: "context", revisions: {ethereum: 1, solana: 0}, ethereum: {address: "0xab", chainId: "0x1"}, solana: null};
-    const observed = [];
-    session.oracle.recordCommittedGrant = value => observed.push(structuredClone(value));
-    let reply = {state, response: {kind: "result", approvalCommitted: true}};
-    session.children.set("bridge", {command: async () => reply});
-    assert.equal(await session.sendNative(message, profileIdentifier), reply);
-    assert.deepEqual(observed, [{handle: {id: 1, token: "request", profileIdentifier}, state}]);
-    for (const response of [{kind: "error", approvalCommitted: true}, {kind: "result", approvalCommitted: false}]) {
-        reply = {state, response};
-        await session.sendNative(message, profileIdentifier);
-    }
-    reply = {state, response: {kind: "result", approvalCommitted: true}};
-    await session.sendNative({...message, subject: "getLatestConfiguration"}, profileIdentifier);
-    assert.equal(observed.length, 1);
-    const failure = new LifecycleFailure("consent", "Invalid committed grant");
-    session.oracle.recordCommittedGrant = () => { throw failure; };
-    await assert.rejects(session.sendNative(message, profileIdentifier), error => error === failure);
-    assert.throws(() => session.check(), error => error === failure);
+    const configurationKey = "https://one.example";
+    const handle = {id: 1, token: "00000000-0000-0000-0000-000000000101", profileIdentifier};
+    const owner = {epoch: "approval-1", role: "approval"};
+    const executionID = "00000000-0000-0000-0000-000000000201";
+    const state = {context: "context", revisions: {ethereum: 5, solana: 0}, ethereum: {address: "0xab", chainId: "0x1"}, solana: null};
+    const scope = {profileIdentifier, configurationKey};
+    session.oracle.configuration({...scope, generation: "initial", state: {...state, revisions: {ethereum: 2, solana: 0},
+        ethereum: {...state.ethereum, address: ""}}});
+    session.oracle.register({handle, configurationKey, provider: "ethereum", name: "requestAccounts",
+        authority: {context: "context", revisions: {ethereum: 2, solana: 0}}});
+    session.oracle.approvalIntent({handle, label: "connect", selectedAccounts: [{coin: "ethereum", address: "0xab"}]});
+    session.oracle.acceptConsent({...owner, handle, label: "connect"});
+    session.oracle.authorized({...owner, handle, executionID});
+    const proof = {handle, configurationKey, executionID, creatorEpoch: owner.epoch, creatorRole: owner.role,
+        profileSHA256: "a".repeat(64), state,
+        response: {id: 1, provider: "ethereum", name: "requestAccounts", kind: "result", result: ["0xab"], approvalCommitted: true}};
+    const order = [];
+    session.ledger = {append: () => order.push("proof-recorded")};
+    session.inspect = () => assert.fail("A page check must not depend on a later ordinary inspection");
+    let unlock;
+    const published = new Promise(resolve => { unlock = resolve; });
+    const reply = {id: 2, state, response: {id: 2, kind: "result", approvalCommitted: false}};
+    session.children.set("bridge", {command: async () => { await published; return reply; }});
+    const delivery = session.sendNative({subject: "pollResponse", id: 2, requestToken: "unrelated", configurationKey}, profileIdentifier);
+    let delivered = false;
+    void delivery.then(() => { delivered = true; });
+    await Promise.resolve();
+    assert.equal(delivered, false);
+    const observer = {role: "bridge", epoch: "bridge-recovery", release: gate => {
+        assert.equal(gate, "grant-publication");
+        assert.deepEqual(order, ["proof-recorded"]);
+        order.push("unlock");
+        unlock();
+    }};
+    await session.nativeEvent({event: "grantProof", gate: "grant-publication", details: proof}, observer);
+    session.oracle.revoke({...scope, provider: "ethereum", account: "0xab"});
+    const historical = await delivery;
+    session.browser = {check() {}, snapshot: () => [{profileIdentifier, configuration: {
+        configurationKey, providerGeneration: "delayed-page", state: historical.state,
+    }}]};
+    session.check();
+    assert.deepEqual(order, ["proof-recorded", "unlock"]);
+    assert.equal(session.oracle.permission(profileIdentifier, configurationKey, "ethereum").revoked, true);
+    assert.throws(() => session.oracle.configuration({...scope, generation: "new-page",
+        state: {...state, revisions: {ethereum: 7, solana: 0}}}), error => error.invariant === "replay");
+});
+
+test("invalid or unacknowledged publication evidence cannot release the native writer", async () => {
+    const session = new LifecycleSession({seed: 1, mode: "native"});
+    session.ledger = {append: () => assert.fail("Invalid proof must not be recorded")};
+    const child = {epoch: "approval-1", role: "approval", release: () => assert.fail("Invalid proof must not unlock publication")};
+    await assert.rejects(session.nativeEvent({event: "grantProof", details: {}}, child), error => error.invariant === "protocol");
+    const failure = new LifecycleFailure("replay", "Invalid exact grant proof");
+    session.oracle.recordGrantProof = () => { throw failure; };
+    await assert.rejects(session.nativeEvent({event: "grantProof", gate: "proof", details: {}}, child), error => error === failure);
 });
 
 test("retired popup promises do not keep recovery alive but cannot hide native work", async () => {
@@ -1052,30 +1233,30 @@ test("an older tab snapshot cannot make a never-approved account appear authoriz
     }
 });
 
-async function popupSession() {
+async function popupSession({approve = () => new Promise(() => {}), transformState = state => state} = {}) {
     const session = new LifecycleSession({seed: 1, mode: "popup", timeout: 1000});
     const handle = {id: 1, token: "00000000-0000-0000-0000-000000000001", profileIdentifier: null};
     const request = {handle, configurationKey: "https://one.example", provider: "ethereum", name: "requestAccounts"};
     const queued = {id: handle.id, requestToken: handle.token, provider: request.provider, configurationKey: request.configurationKey,
         host: "one.example", receivedAt: session.scheduler.now, sequence: 0};
-    const state = {id: handle.id, host: queued.host, state: "review", actions: ["approve", "reject"], review: {
+    const state = transformState({id: handle.id, host: queued.host, state: "review", actions: ["approve", "reject"], review: {
         kind: "accountSelection", title: "Connect", reviewToken: "00000000-0000-0000-0000-000000000101",
         allowsEmptySelection: false, canSelectNetwork: true, networks: [{chainId: "0x1", name: "Ethereum", isSelected: true}],
         accounts: [{walletId: "chosen-wallet", coin: "ethereum", address: "0x" + "1".repeat(40), derivationPath: "path",
             name: "Selected", croppedAddress: "1111", isSelected: true}],
-    }};
+    }});
     session.oracle.register(request);
     session.browser = new BrowserLifecycle({scheduler: session.scheduler, mode: "popup", onNative: event => session.observeNativeMessage(event), native: async message => {
         if (message.subject === "getLatestConfiguration") { return {id: message.id, state: disconnected}; }
         if (message.subject === "getRecoveryRequests") { return {id: message.id, requests: []}; }
         if (message.subject === "getPendingRequests") { return {requests: [queued], completedResponses: []}; }
-        if (message.subject === "getApprovalState") { return {status: "ok", approval: state}; }
-        if (message.subject === "approveRequest") { return new Promise(() => {}); }
+        if (message.subject === "getApprovalState" || message.subject === "retryApproval") { return {status: "ok", approval: state}; }
+        if (message.subject === "approveRequest") { return approve(message, state); }
         throw new Error(`Unexpected popup command ${message.subject}`);
     }});
     session.browser.openTab({url: "https://one.example/page"});
     const popup = await session.browser.openPopup();
-    await session.pumpUntil(() => session.browser.popupState()?.actions.includes("approve"));
+    await session.pumpUntil(() => session.browser.popupState() !== null);
     return {session, request, popup};
 }
 
@@ -1089,6 +1270,67 @@ test("popup consent comes from the driver's click and the displayed account sele
         assert.deepEqual(approval.grantAccounts, {ethereum: "0x" + "1".repeat(40)});
         assert.equal(popup.harness.nativeMessages.filter(message => message.subject === "approveRequest").length, 1);
         assert.equal(session.popupApprovals.size, 0);
+    } finally { session.browser.close(); }
+});
+
+test("a failed popup approval retries its visible action without granting consent or waiting for a dropped reply", async () => {
+    const {session, request, popup} = await popupSession({approve: async () => { throw new Error("Native process restarted"); }});
+    try {
+        assert.equal(await session.decide({}, "approve", request), true);
+        await session.pumpUntil(() => session.browser.popupPrimaryAction() === "retryApproval");
+        assert.ok(session.browser.popupState().actions.includes("approve"));
+        const consentCount = session.oracle.approvals.size;
+        popup.harness.clearMessages();
+        session.browser.addFault({channel: "native", phase: "request", subject: "retryApproval", action: "drop"});
+        const now = session.scheduler.now;
+        assert.equal(await session.decide({}, "approve", request), false);
+        assert.equal(popup.harness.nativeMessages.length, 0);
+        assert.equal(await session.decide({}, "retry", request), true);
+        assert.deepEqual(popup.harness.nativeMessages.map(message => message.subject), ["retryApproval"]);
+        assert.equal(session.browser.faults.length, 0);
+        assert.equal(session.scheduler.now, now);
+        assert.ok(session.background.size > 0, "The dropped retry must remain pending after its click is recorded");
+        assert.equal(session.oracle.approvals.size, consentCount);
+        assert.equal(session.popupApprovals.size, 0);
+        session.check();
+    } finally { session.browser.close(); }
+});
+
+test("refreshing an empty account selection reads state without becoming approval consent", async () => {
+    const {session, request, popup} = await popupSession({transformState: state => ({...state, review: {...state.review, accounts: []}})});
+    try {
+        assert.equal(session.browser.popupPrimaryAction(), "refresh");
+        popup.harness.clearMessages();
+        session.browser.addFault({channel: "native", phase: "request", subject: "getApprovalState", action: "drop"});
+        assert.equal(await session.decide({}, "approve", request), false);
+        assert.equal(await session.decide({}, "retry", request), true);
+        assert.deepEqual(popup.harness.nativeMessages.map(message => message.subject), ["getApprovalState"]);
+        assert.equal(session.browser.faults.length, 0);
+        assert.equal(session.oracle.approvals.size, 0);
+        assert.equal(session.popupApprovals.size, 0);
+        session.check();
+    } finally { session.browser.close(); }
+});
+
+test("completion retries a failed popup before asking for a fresh approval", async () => {
+    const operation = {status: "pending", provider: "ethereum", profileIdentifier: null, url: "https://one.example/page"};
+    let attempts = 0;
+    const {session, request, popup} = await popupSession({approve: async (_, state) => {
+        if (++attempts === 1) { throw new Error("Native process restarted"); }
+        operation.status = "fulfilled";
+        return {status: "ok", approval: state};
+    }});
+    try {
+        assert.equal(await session.decide({}, "approve", request), true);
+        await session.pumpUntil(() => session.browser.popupPrimaryAction() === "retryApproval");
+        const consentCount = session.oracle.approvals.size;
+        popup.harness.clearMessages();
+        session.inspect = async () => [request];
+        await session.complete(operation, {expectedSuccess: true});
+        assert.deepEqual(popup.harness.nativeMessages.map(message => message.subject), ["retryApproval", "approveRequest"]);
+        assert.equal(session.oracle.approvals.size, consentCount + 1);
+        assert.equal(session.popupApprovals.size, 0);
+        session.check();
     } finally { session.browser.close(); }
 });
 

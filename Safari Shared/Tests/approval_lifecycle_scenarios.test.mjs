@@ -202,6 +202,7 @@ test("Mandatory corpus contains success, process competition, capability replay,
         assert.equal(cases.some(({mandatory}) => mandatory.kind === "editedReview"), mode === "popup");
         assert.equal(cases.some(({mandatory}) => mandatory.kind === "abandonedPopupReview"), mode === "popup");
         assert.equal(cases.some(({mandatory}) => mandatory.kind === "walletReconciliationAfterClockJump"), mode === "popup");
+        assert.equal(cases.some(({mandatory}) => mandatory.kind === "contenderDuringBroadcast"), mode === "popup");
         for (const provider of ["ethereum", "solana"]) {
             for (const operation of ["claim", "completion", "acknowledgement"]) {
                 for (const side of ["before", "after"]) {
@@ -232,4 +233,6 @@ test("Mandatory replay rejects unknown scenarios and altered crash target identi
     assert.throws(() => validateMandatoryScenario({...abandonedPopupReview, mode: "native"}));
     const walletReconciliation = mandatoryScenarios("popup").find(({mandatory}) => mandatory.kind === "walletReconciliationAfterClockJump");
     assert.throws(() => validateMandatoryScenario({...walletReconciliation, mode: "native"}));
+    const contenderDuringBroadcast = mandatoryScenarios("popup").find(({mandatory}) => mandatory.kind === "contenderDuringBroadcast");
+    assert.throws(() => validateMandatoryScenario({...contenderDuringBroadcast, mode: "native"}));
 });

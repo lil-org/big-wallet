@@ -183,6 +183,27 @@ final class SafariVMFixtures: Sendable {
         "\(handle.profileIdentifier?.uuidString ?? "default"):\(handle.id):\(handle.requestToken)"
     }
 
+#if os(macOS)
+    func observeApprovalRetirement(handle: RequestHandle, windowIdentifier: String, bridge: ExtensionBridge) {
+        let operation = capture(handle: handle)
+        Task {
+            let deadline = Date().addingTimeInterval(10)
+            while Date() < deadline {
+                if case .found(let snapshot) = await bridge.load(handle: handle), snapshot.phase == .responded {
+                    event("approvalRetired", requestID: handle.id, metadata: [
+                        "windowIdentifier": windowIdentifier,
+                        "requestToken": handle.requestToken,
+                        "profileIdentifier": handle.profileIdentifier.map { $0.uuidString.lowercased() as Any } ?? NSNull(),
+                    ], operation: operation)
+                    return
+                }
+                do { try await Task.sleep(for: .milliseconds(100)) }
+                catch { return }
+            }
+        }
+    }
+#endif
+
     func event(_ kind: String, requestID: Int? = nil, metadata: [String: Any] = [:], operation: Operation? = nil) {
         let context = operation ?? Self.operation ?? capture(requestID: requestID)
         var record = metadata
