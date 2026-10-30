@@ -1449,6 +1449,37 @@ final class PopupRequestSessionsTests: XCTestCase {
         }
     }
 
+    func testTransactionSessionInvalidationCancelsContextAndIgnoresLateResult() async throws {
+        let session = PopupTransactionSession(
+            action: SendTransactionAction(
+                transaction: popupReadyTransaction(),
+                resolvedNetwork: ResolvedEthereumNetwork(network: popupTransactionNetwork(), source: .custom),
+                walletId: "wallet", account: popupTestAccount()
+            ),
+            operations: unusedPopupTransactionOperations()
+        )
+        let gate = makeGate()
+        let cancellation = PopupCancellationRecorder()
+        let started = expectation(description: "context loading started")
+        let finished = expectation(description: "late context returned")
+        session.loadContext {
+            await withTaskCancellationHandler {
+                started.fulfill()
+                await gate.wait()
+                finished.fulfill()
+                return "1 ETH"
+            } onCancel: {
+                cancellation.cancel()
+            }
+        }
+        await fulfillment(of: [started], timeout: 2)
+        session.invalidate()
+        XCTAssertTrue(cancellation.isCancelled)
+        gate.resolve(())
+        await fulfillment(of: [finished], timeout: 2)
+        XCTAssertNil(session.balance)
+    }
+
     func testTransactionSessionCompletesSynchronousPreflightOnce() async throws {
         let session = await makeTransactionApprovalSession { transaction, _ in
             let source = PopupPreflightSource()

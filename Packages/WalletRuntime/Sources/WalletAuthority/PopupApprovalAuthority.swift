@@ -1212,9 +1212,7 @@ public final class PopupApprovalAuthority {
         transactionSession.start()
         guard loadsTransactionContext else { return }
         let load = loadTransactionContext
-        Task { [weak transactionSession] in
-            transactionSession?.balance = await load(action)
-        }
+        transactionSession.loadContext { await load(action) }
     }
 
     private func setTransactionSpeed(

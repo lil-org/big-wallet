@@ -8,7 +8,8 @@ import Foundation
 final class PopupTransactionSession {
 
     private let coordinator: TransactionApprovalCoordinator
-    var balance: String?
+    private var contextTask: Task<Void, Never>?
+    private(set) var balance: String?
     var onChange: () -> Void = {}
 
     init(
@@ -23,6 +24,8 @@ final class PopupTransactionSession {
         coordinator.onSnapshot = { [weak self] _ in self?.onChange() }
     }
 
+    isolated deinit { contextTask?.cancel() }
+
     var snapshot: TransactionApprovalSnapshot {
         return coordinator.snapshot
     }
@@ -31,7 +34,20 @@ final class PopupTransactionSession {
         coordinator.startPreparation(forceGasCheck: false)
     }
 
+    func loadContext(using load: @escaping @MainActor @Sendable () async -> String?) {
+        contextTask?.cancel()
+        contextTask = Task { [weak self] in
+            guard !Task.isCancelled else { return }
+            let balance = await load()
+            guard !Task.isCancelled else { return }
+            self?.balance = balance
+            self?.contextTask = nil
+        }
+    }
+
     func invalidate() {
+        contextTask?.cancel()
+        contextTask = nil
         coordinator.invalidate()
     }
 
