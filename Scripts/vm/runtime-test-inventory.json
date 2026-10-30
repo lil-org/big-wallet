@@ -11540,6 +11540,17 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/WalletRemovalIntegrationTests/testAccountLimitRejectsOverflowBeforeWritingOrRevoking",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/WalletRemovalIntegrationTests/testAdmittedMnemonicSolanaAndJSONImportsRoundTripThroughManager",
       "variants": [
         "macos.debug",
@@ -11673,6 +11684,17 @@
     },
     {
       "id": "WalletAuthorityTests/WalletRemovalIntegrationTests/testSourceWriteFailureKeepsCleanupAppliedWithoutDeletingMetadata",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletRemovalIntegrationTests/testWalletCreationAndImportCountPersistedAccountsAtTransactionEntry",
       "variants": [
         "macos.debug",
         "macos.release",

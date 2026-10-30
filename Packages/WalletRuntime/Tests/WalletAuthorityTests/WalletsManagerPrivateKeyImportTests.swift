@@ -536,6 +536,69 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         XCTAssertNotNil(fixture.keychain.walletData[imported.id])
     }
 
+    func testAccountLimitRejectsOverflowBeforeWritingOrRevoking() async throws {
+        let fixture = try makeRemovalFixture()
+        fixture.keychain.walletData[fixture.siblingID] = try fixture.walletData(accountCount: 16_381)
+        let manager = fixture.manager { _ in XCTFail("Rejected edits must not revoke authority") }
+        await assertWalletReload(manager)
+        let wallet = try XCTUnwrap(manager.currentWallet(id: fixture.walletID))
+
+        try await manager.update(wallet: wallet, enabledAccounts: wallet.accounts + [fixture.additionalAccount(index: 2)],
+                                 access: manager.accessForTesting())
+        await assertWalletReload(manager)
+        XCTAssertEqual(manager.wallets.flatMap(\.accounts).count, 16_384)
+        let current = try XCTUnwrap(manager.currentWallet(id: fixture.walletID))
+        let originalData = fixture.keychain.walletData
+        let originalWallets = manager.wallets
+        let replacement = Array(current.accounts.dropFirst()) + [fixture.additionalAccount(index: 3), fixture.additionalAccount(index: 4)]
+
+        do {
+            try await manager.update(wallet: current, enabledAccounts: replacement, access: manager.accessForTesting())
+            XCTFail("Expected the aggregate account limit to reject the edit")
+        } catch WalletsManager.Error.invalidInput {
+        }
+
+        XCTAssertEqual(fixture.keychain.events, ["update"])
+        XCTAssertEqual(fixture.keychain.walletData, originalData)
+        XCTAssertEqual(manager.wallets, originalWallets)
+        XCTAssertEqual(fixture.mutationCount, 1)
+        await assertWalletReload(manager)
+        XCTAssertEqual(manager.wallets, originalWallets)
+    }
+
+    func testWalletCreationAndImportCountPersistedAccountsAtTransactionEntry() async throws {
+        for createWallet in [true, false] {
+            let fixture = try makeRemovalFixture()
+            let siblingData = try fixture.walletData(accountCount: 16_382)
+            let manager = fixture.transactionManager(ObservedWalletSourceMutator(
+                base: WalletSourceMutationStub(onRevoke: { _ in XCTFail("Creation must not revoke authority") }),
+                beforePreparation: { fixture.keychain.walletData[fixture.siblingID] = siblingData }
+            ))
+            await assertWalletReload(manager)
+            let originalWallets = manager.wallets
+            var expectedData = fixture.keychain.walletData
+            expectedData[fixture.siblingID] = siblingData
+
+            do {
+                if createWallet {
+                    _ = try await manager.createWallet(access: manager.accessForTesting())
+                } else {
+                    _ = try await manager.addWallet(input: WalletCrypto.hexString(data: Vectors.onePrivateKey),
+                                                    inputPassword: nil, access: manager.accessForTesting())
+                }
+                XCTFail("Expected the aggregate account limit to reject the insertion")
+            } catch WalletsManager.Error.invalidInput {
+            }
+
+            XCTAssertTrue(fixture.keychain.events.isEmpty)
+            XCTAssertEqual(fixture.keychain.walletData, expectedData)
+            XCTAssertEqual(manager.wallets, originalWallets)
+            XCTAssertEqual(fixture.mutationCount, 0)
+            await assertWalletReload(manager)
+            XCTAssertEqual(manager.wallets.flatMap(\.accounts).count, 16_384)
+        }
+    }
+
     func testWalletCreationAndImportDoNotPublishAfterFailedInsertion() async throws {
         for createWallet in [true, false] {
             for status in [errSecDuplicateItem, errSecIO] {
@@ -1094,6 +1157,16 @@ final class WalletRemovalIntegrationTests: XCTestCase {
                 )
             }
             return try XCTUnwrap(key.exportJSON())
+        }
+
+        func walletData(accountCount: Int) throws -> Data {
+            var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Vectors.walletCoreJSONMnemonicFixture) as? [String: Any])
+            object["activeAccounts"] = (0..<accountCount).map { index in
+                let account = additionalAccount(index: index)
+                return ["address": account.address, "coin": account.coin.rawValue,
+                        "derivationPath": account.derivationPath] as [String: Any]
+            }
+            return try JSONSerialization.data(withJSONObject: object)
         }
 
         func additionalAccount(index: Int) -> WalletAccount {
