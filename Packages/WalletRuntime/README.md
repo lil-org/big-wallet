@@ -148,6 +148,13 @@ and cannot authorize another submission. Public RPC admission and
 response budgets are independent of approval execution. Networking retains only
 its separate RPC-auth Keychain credentials.
 
+Native Ethereum and Solana RPC reject redirects and limit each response to 16 MiB,
+64 JSON nesting levels, and 65,536 JSON tokens. Byte limits apply while streaming
+and after UTF-8 normalization. A limit violation discards the response and stops
+the operation without retry or authorization replacement; an observed HTTP 401
+still invalidates its credential. Submission remains uncertain, and a Solana
+confirmation failure retains the already accepted signature.
+
 Compatibility is required for released-main wallet storage and external protocol
 standards. Intermediate development formats do not require fallback readers or
 migrations.

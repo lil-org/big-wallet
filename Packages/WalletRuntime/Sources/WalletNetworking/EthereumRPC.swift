@@ -2,7 +2,6 @@
 
 import Foundation
 import WalletDomain
-import Synchronization
 
 public protocol EthereumFeeRPCClient: Sendable {
     func fetchChainID(endpoint: EthereumRPCEndpoint) async throws -> String
@@ -71,102 +70,6 @@ private struct RPCResponse<ResultValue: Decodable & Sendable>: Decodable, Sendab
     struct Failure: Decodable, Sendable {
         let code: Int
         let message: String
-    }
-}
-
-struct HTTPTransportResponse: Sendable {
-    let data: Data?
-    let response: URLResponse?
-    let error: (any Error)?
-}
-
-extension URLSession {
-    func responsePreservingTransportError(
-        for request: URLRequest,
-        delegate: (any URLSessionTaskDelegate)? = nil
-    ) async throws -> HTTPTransportResponse {
-        let operation = HTTPTransportOperation()
-        let response = try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
-                let task = dataTask(with: request) { data, response, error in
-                    operation.finish(HTTPTransportResponse(data: data, response: response, error: error))
-                }
-                task.delegate = delegate
-                operation.start(task: task, continuation: continuation)
-            }
-        } onCancel: {
-            operation.cancel()
-        }
-        try Task.checkCancellation()
-        return response
-    }
-}
-
-private final class HTTPTransportOperation: Sendable {
-    private struct State {
-        var task: URLSessionDataTask?
-        var continuation: CheckedContinuation<HTTPTransportResponse, Error>?
-        var isFinished = false
-    }
-
-    private let state = Mutex(State())
-
-    func start(task: URLSessionDataTask, continuation: CheckedContinuation<HTTPTransportResponse, Error>) {
-        let canStart = state.withLock { state in
-            guard !state.isFinished else { return false }
-            state.task = task
-            state.continuation = continuation
-            return true
-        }
-        if canStart {
-            task.resume()
-        } else {
-            task.cancel()
-            continuation.resume(throwing: CancellationError())
-        }
-    }
-
-    func finish(_ response: HTTPTransportResponse) {
-        let continuation = state.withLock { state in
-            guard !state.isFinished else { return Optional<CheckedContinuation<HTTPTransportResponse, Error>>.none }
-            state.isFinished = true
-            state.task = nil
-            let continuation = state.continuation
-            state.continuation = nil
-            return continuation
-        }
-        continuation?.resume(returning: response)
-    }
-
-    func cancel() {
-        let resources = state.withLock {
-            state -> (URLSessionDataTask?, CheckedContinuation<HTTPTransportResponse, Error>?) in
-            guard !state.isFinished else { return (nil, nil) }
-            state.isFinished = true
-            let resources = (state.task, state.continuation)
-            state.task = nil
-            state.continuation = nil
-            return resources
-        }
-        resources.0?.cancel()
-        resources.1?.resume(throwing: CancellationError())
-    }
-}
-
-final class NoRedirectSessionDelegate: NSObject, URLSessionTaskDelegate, Sendable {
-    private let rejectedRedirect = Mutex(false)
-
-    var didRejectRedirect: Bool { rejectedRedirect.withLock { $0 } }
-
-    func urlSession(
-        _ session: URLSession,
-        task: URLSessionTask,
-        willPerformHTTPRedirection response: HTTPURLResponse,
-        newRequest request: URLRequest,
-        completionHandler: @escaping (URLRequest?) -> Void
-    ) {
-        rejectedRedirect.withLock { $0 = true }
-        completionHandler(nil)
     }
 }
 
@@ -312,18 +215,27 @@ public final class EthereumRPC: EthereumRPCClient {
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.httpBody = body
                 authorization?.apply(to: &request)
-                let redirectDelegate = NoRedirectSessionDelegate()
-                let transport = try await urlSession.responsePreservingTransportError(
-                    for: request, delegate: redirectDelegate)
+                let transport = try await urlSession.responsePreservingTransportError(for: request)
                 try Task.checkCancellation()
-                guard !redirectDelegate.didRejectRedirect else { throw EthereumRPCError.unknown }
-                guard let response = transport.response as? HTTPURLResponse else {
+                let response = transport.response as? HTTPURLResponse
+                let data = transport.data
+                let decoded: RPCResponse<Value>?
+                do {
+                    if let policyError = transport.error as? NativeRPCResponsePolicyError { throw policyError }
+                    decoded = try data.flatMap {
+                        try NativeRPCResponseDecoder.decode(RPCResponse<Value>.self, from: $0, expectedID: Self.requestID)
+                    }
+                } catch is NativeRPCResponsePolicyError {
+                    try Task.checkCancellation()
+                    if response?.statusCode == 401, let rejected = authorization {
+                        await requestAuthorization.invalidate(afterUnauthorized: rejected)
+                    }
+                    try Task.checkCancellation()
+                    throw EthereumRPCError.unknown
+                }
+                guard let response else {
                     failure = EthereumRPCError.unknown
                     break attempt
-                }
-                let data = transport.data
-                let decoded = data.flatMap {
-                    NativeRPCResponseDecoder.decode(RPCResponse<Value>.self, from: $0, expectedID: Self.requestID)
                 }
                 try Task.checkCancellation()
                 if response.statusCode == 401, retryPolicy == .never {

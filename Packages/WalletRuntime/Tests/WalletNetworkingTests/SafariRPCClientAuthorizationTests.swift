@@ -451,42 +451,6 @@ final class SafariRPCClientAuthorizationTests: XCTestCase {
         }
     }
 
-    func testSafariRPCClientRejectsAllRedirects() async throws {
-        let sourceURL = try XCTUnwrap(URL(string: "https://rpc.example/source"))
-        let redirectURL = try XCTUnwrap(URL(string: "https://rpc.example/redirect"))
-
-        let session = URLSession(configuration: .ephemeral)
-        defer {
-            session.invalidateAndCancel()
-        }
-        let task = session.dataTask(with: sourceURL)
-        let delegate = NoRedirectSessionDelegate()
-
-        for statusCode in [307, 308] {
-            let completion = expectation(
-                description: "Redirect \(statusCode) was rejected"
-            )
-            let response = try XCTUnwrap(
-                HTTPURLResponse(
-                    url: sourceURL,
-                    statusCode: statusCode,
-                    httpVersion: "HTTP/1.1",
-                    headerFields: ["Location": redirectURL.absoluteString]
-                )
-            )
-            delegate.urlSession(
-                session,
-                task: task,
-                willPerformHTTPRedirection: response,
-                newRequest: URLRequest(url: redirectURL)
-            ) { request in
-                XCTAssertNil(request)
-                completion.fulfill()
-            }
-            await fulfillment(of: [completion], timeout: 1)
-        }
-    }
-
     func testSafariRPCClientRejectsRedirectResponseBody() async throws {
         let sourceURL = try XCTUnwrap(URL(string: "https://rpc.example/source"))
         let redirectURL = try XCTUnwrap(URL(string: "https://rpc.example/redirect"))

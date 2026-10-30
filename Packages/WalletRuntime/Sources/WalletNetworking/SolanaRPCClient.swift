@@ -12,6 +12,7 @@ public final class SolanaRPCClient: Sendable {
     private enum RPCRequestOutcome<Response: Sendable>: Sendable {
         case response(Response)
         case retryableFailure
+        case terminalPolicyFailure
         case authorizationAcquisitionFailed
         case authorizationRecoveryFailed(
             statusCode: Int,
@@ -304,7 +305,6 @@ public final class SolanaRPCClient: Sendable {
     private let urlSession: URLSession
     private let authorizationProvider: any AlchemyAuthorizationProviding
     private let authorizeRequest: @Sendable (inout URLRequest) throws -> Void
-    private let rejectsRedirects: Bool
     private let messages: Messages
     private let signatureStatusInitialPollInterval: TimeInterval = 0.5
     private let signatureStatusMaxPollInterval: TimeInterval = 2
@@ -316,15 +316,13 @@ public final class SolanaRPCClient: Sendable {
         authorizationProvider: any AlchemyAuthorizationProviding,
         timing: Timing = .live,
         messages: Messages,
-        authorizeRequest: @escaping @Sendable (inout URLRequest) throws -> Void = { _ in },
-        rejectsRedirects: Bool = false
+        authorizeRequest: @escaping @Sendable (inout URLRequest) throws -> Void = { _ in }
     ) {
         self.urlSession = urlSession
         self.authorizationProvider = authorizationProvider
         self.timing = timing
         self.messages = messages
         self.authorizeRequest = authorizeRequest
-        self.rejectsRedirects = rejectsRedirects
     }
 
     @concurrent
@@ -383,7 +381,7 @@ public final class SolanaRPCClient: Sendable {
             }
         )
         switch outcome {
-        case .retryableFailure:
+        case .retryableFailure, .terminalPolicyFailure:
             throw Solana.SendTransactionError.unknown
         case .authorizationAcquisitionFailed:
             throw Solana.SendTransactionError.notSubmitted
@@ -434,6 +432,8 @@ public final class SolanaRPCClient: Sendable {
             switch outcome {
             case .retryableFailure:
                 break
+            case .terminalPolicyFailure:
+                throw confirmationFailure(signature: signature, failure: .unknown)
             case .authorizationAcquisitionFailed:
                 let failure = confirmationFailure(signature: signature, failure: .rpcUnavailable)
                 lastFailure = failure
@@ -518,15 +518,25 @@ public final class SolanaRPCClient: Sendable {
         try Task.checkCancellation()
         var authorizedRequest = request
         authorization?.apply(to: &authorizedRequest)
-        let redirectDelegate = rejectsRedirects ? NoRedirectSessionDelegate() : nil
-        let transport = try await urlSession.responsePreservingTransportError(for: authorizedRequest, delegate: redirectDelegate)
-        guard redirectDelegate?.didRejectRedirect != true else { throw Solana.SendTransactionError.rpcUnavailable }
-        let decodedResponse = transport.data.flatMap {
-            NativeRPCResponseDecoder.decode(Response.self, from: $0, expectedID: Self.requestID)
+        let transport = try await urlSession.responsePreservingTransportError(for: authorizedRequest)
+        try Task.checkCancellation()
+        let httpResponse = transport.response as? HTTPURLResponse
+        let decodedResponse: Response?
+        do {
+            if let policyError = transport.error as? NativeRPCResponsePolicyError { throw policyError }
+            decodedResponse = try transport.data.flatMap {
+                try NativeRPCResponseDecoder.decode(Response.self, from: $0, expectedID: Self.requestID)
+            }
+        } catch is NativeRPCResponsePolicyError {
+            try Task.checkCancellation()
+            if httpResponse?.statusCode == 401, let authorization {
+                await requestAuthorization.invalidate(afterUnauthorized: authorization)
+            }
+            try Task.checkCancellation()
+            return .terminalPolicyFailure
         }
         try Task.checkCancellation()
-        if let httpResponse = transport.response as? HTTPURLResponse,
-           httpResponse.statusCode == 401,
+        if httpResponse?.statusCode == 401,
            let authorization {
             if !shouldRecoverUnauthorizedResponse(decodedResponse) {
                 await requestAuthorization.invalidate(afterUnauthorized: authorization)

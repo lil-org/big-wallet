@@ -888,7 +888,7 @@ struct SafariVMApplicationServices {
         let solana = SolanaRPCClient(urlSession: WalletHTTPSession.make(),
             authorizationProvider: authorization, messages: .init(failedToSend: Strings.failedToSend,
                 blockhashNotFound: Strings.solanaBlockhashNotFound),
-            authorizeRequest: routing.authorize, rejectsRedirects: true)
+            authorizeRequest: routing.authorize)
         let safariRPC = SafariRPCClient(urlSession: WalletHTTPSession.make(), authorizationProvider: authorization,
             authorizeRequest: routing.authorize)
         let vault: SafariApprovalVault

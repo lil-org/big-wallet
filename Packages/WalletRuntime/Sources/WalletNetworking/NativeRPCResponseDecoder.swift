@@ -4,15 +4,32 @@ enum NativeRPCResponseDecoder {
     static func decode<Response: Decodable>(
         _ type: Response.Type,
         from data: Data,
-        expectedID: Int
-    ) -> Response? {
-        guard let envelope = try? JSONDecoder().decode(Envelope<Response>.self, from: data),
+        expectedID: Int,
+        limits: NativeRPCResponseLimits = .live
+    ) throws -> Response? {
+        try Task.checkCancellation()
+        guard data.count <= limits.maximumResponseBytes else {
+            throw NativeRPCResponsePolicyError.responseTooLarge
+        }
+        guard let bytes = try utf8Bytes(data, limits: limits) else { return nil }
+        try validateJSONBudget(bytes, limits: limits)
+        let decoded: Envelope<Response>?
+        do {
+            decoded = try JSONDecoder().decode(Envelope<Response>.self, from: data)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            decoded = nil
+        }
+        try Task.checkCancellation()
+        guard let envelope = decoded,
               envelope.id == expectedID,
-              let tokens = numericTokens(in: data),
+              let tokens = try numericTokens(in: bytes),
               isExactInteger(tokens.id, equalTo: expectedID) else { return nil }
         if let code = envelope.errorCode {
             guard let token = tokens.error?.code, isExactInteger(token, equalTo: code) else { return nil }
         }
+        try Task.checkCancellation()
         return envelope.response
     }
 
@@ -24,14 +41,14 @@ enum NativeRPCResponseDecoder {
         let error: Failure?
     }
 
-    private static func numericTokens(in data: Data) -> NumericTokens? {
-        guard let bytes = utf8Bytes(data) else { return nil }
+    private static func numericTokens(in bytes: Data) throws -> NumericTokens? {
         var quoted = Data(capacity: bytes.count)
         var inString = false
         var escaped = false
         var inNumber = false
         // Preserve numeric literals as strings after the original decode has checked their JSON types.
-        for byte in bytes {
+        for (offset, byte) in bytes.enumerated() {
+            if offset % 4096 == 0 { try Task.checkCancellation() }
             if inString {
                 quoted.append(byte)
                 if escaped { escaped = false }
@@ -55,10 +72,13 @@ enum NativeRPCResponseDecoder {
             quoted.append(byte)
         }
         if inNumber { quoted.append(34) }
-        return try? JSONDecoder().decode(NumericTokens.self, from: quoted)
+        try Task.checkCancellation()
+        let decoded = try? JSONDecoder().decode(NumericTokens.self, from: quoted)
+        try Task.checkCancellation()
+        return decoded
     }
 
-    private static func utf8Bytes(_ data: Data) -> Data? {
+    private static func utf8Bytes(_ data: Data, limits: NativeRPCResponseLimits) throws -> Data? {
         let prefix = Array(data.prefix(4))
         guard prefix.count == 4 else { return nil }
         let encoding: String.Encoding
@@ -69,7 +89,55 @@ enum NativeRPCResponseDecoder {
         case (0xff, 0xfe, _, _), (_, 0, _, 0): encoding = .utf16LittleEndian
         default: return data
         }
-        return String(data: data, encoding: encoding).map { Data($0.utf8) }
+        guard let string = String(data: data, encoding: encoding) else { return nil }
+        try Task.checkCancellation()
+        guard string.utf8.count <= limits.maximumResponseBytes else {
+            throw NativeRPCResponsePolicyError.responseTooLarge
+        }
+        return Data(string.utf8)
+    }
+
+    private static func validateJSONBudget(_ bytes: Data, limits: NativeRPCResponseLimits) throws {
+        var tokens = 0
+        var depth = 0
+        var inString = false
+        var escaped = false
+        var inScalar = false
+        let json = bytes.dropFirst(bytes.starts(with: [0xEF, 0xBB, 0xBF]) ? 3 : 0)
+        for (offset, byte) in json.enumerated() {
+            if offset % 4096 == 0 { try Task.checkCancellation() }
+            if inString {
+                if escaped { escaped = false }
+                else if byte == 92 { escaped = true }
+                else if byte == 34 { inString = false }
+                continue
+            }
+            switch byte {
+            case 34:
+                tokens += 1
+                inString = true
+                inScalar = false
+            case 91, 123:
+                tokens += 1
+                depth += 1
+                inScalar = false
+                guard depth <= limits.maximumJSONDepth else {
+                    throw NativeRPCResponsePolicyError.jsonTooDeep
+                }
+            case 93, 125:
+                depth -= 1
+                inScalar = false
+            case 9, 10, 13, 32, 44, 58:
+                inScalar = false
+            default:
+                if !inScalar { tokens += 1 }
+                inScalar = true
+            }
+            guard tokens <= limits.maximumJSONTokens else {
+                throw NativeRPCResponsePolicyError.tooManyJSONTokens
+            }
+        }
+        try Task.checkCancellation()
     }
 
     private static func isExactInteger(_ token: String, equalTo value: Int) -> Bool {

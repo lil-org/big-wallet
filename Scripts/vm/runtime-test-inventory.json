@@ -16354,6 +16354,182 @@
       ]
     },
     {
+      "id": "WalletNetworkingTests/NativeRPCClientPolicyTests/testBroadcastPolicyFailuresRemainUnknownWithoutResubmission",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCClientPolicyTests/testBroadcastRejectsEveryRedirectWithoutTargetDispatchOrResubmission",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCClientPolicyTests/testEthereumReadPolicyFailuresDoNotRetryOrReplaceAuthorization",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCClientPolicyTests/testEthereumReadRejectsEveryRedirectWithoutRetrying",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCClientPolicyTests/testEthereumReadStillRecoversFromValidUnauthorizedResponseOnce",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCClientPolicyTests/testEthereumSubmissionStillDoesNotReplayValidUnauthorizedResponse",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCClientPolicyTests/testFailedTransfersDiscardValidJSONPrefixesWithoutResubmitting",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCClientPolicyTests/testSolanaConfirmationPolicyFailuresPreserveSubmittedSignature",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCClientPolicyTests/testSolanaConfirmationRedirectsPreserveSignatureWithoutAnotherPoll",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCClientPolicyTests/testSolanaSendStillRecoversFromValidUnauthorizedResponseOnce",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCResponseDecoderTests/testCancellationFromPayloadDecoderPropagates",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCResponseDecoderTests/testCancelledTaskDoesNotDecodeResponse",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCResponseDecoderTests/testJSONDepthLimitIncludesIgnoredFieldsAcrossEncodings",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCResponseDecoderTests/testJSONTokenLimitCountsKeysAndValuesButNotStringContents",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCResponseDecoderTests/testJSONTokenLimitRejectsIgnoredCompactArraysBeforeParsingMalformedTails",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCResponseDecoderTests/testMalformedResponseWithinBudgetStillReturnsNil",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletNetworkingTests/NativeRPCResponseDecoderTests/testNestedNullStatusRemainsAValidResult",
       "variants": [
         "macos.debug",
@@ -16420,6 +16596,28 @@
       ]
     },
     {
+      "id": "WalletNetworkingTests/NativeRPCResponseDecoderTests/testResponseByteLimitAcceptsExactEncodedSizeAndRejectsOneByteOver",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCResponseDecoderTests/testResponseByteLimitAlsoBoundsNormalizedUTF8",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletNetworkingTests/NativeRPCResponseDecoderTests/testValidErrorPreservesCodeMessageAndData",
       "variants": [
         "macos.debug",
@@ -16432,6 +16630,83 @@
     },
     {
       "id": "WalletNetworkingTests/NativeRPCResponseDecoderTests/testValidResultsRequireMatchingNumericIDs",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCTransportTests/testAcceptsExactByteLimitAcrossChunksAndPreservesHTTPResponse",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCTransportTests/testActualByteLimitRejectsMissingAndMisleadingContentLengths",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCTransportTests/testAlreadyCancelledCallerDoesNotDispatch",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCTransportTests/testCancellationStopsUnfinishedResponseAndIgnoresLateCallbacks",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCTransportTests/testDeclaredOversizeCancelsWithoutWaitingForBody",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCTransportTests/testDiscardsBodyButPreservesHTTPStatusWithTransportFailure",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCTransportTests/testLimitFailureIgnoresLateSuccessAndFailureCallbacks",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -16652,17 +16927,6 @@
     },
     {
       "id": "WalletNetworkingTests/SafariRPCClientAuthorizationTests/testSafariRPCClientNeverReplaysUnknownOrMutatingMethodsAfter401",
-      "variants": [
-        "macos.debug",
-        "macos.release",
-        "ios.debug",
-        "ios.release",
-        "visionos.debug",
-        "visionos.release"
-      ]
-    },
-    {
-      "id": "WalletNetworkingTests/SafariRPCClientAuthorizationTests/testSafariRPCClientRejectsAllRedirects",
       "variants": [
         "macos.debug",
         "macos.release",
