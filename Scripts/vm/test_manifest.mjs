@@ -8,7 +8,7 @@ export {RUNTIME_TEST_TARGETS};
 export const RUNTIME_MODULES = ["WalletDomain", "WalletNetworking", "WalletAuthority", "WalletFlows"];
 const runtimeInventory = loadRuntimeInventory(new URL("./runtime-test-inventory.json", import.meta.url));
 
-export const SELECTORS = ["build", "test", "performance", "tsan", "fuzz", "approval", "upgrade", "safari", "repository", "worker", "runtime"];
+export const SELECTORS = ["build", "test", "performance", "tsan", "asan", "fuzz", "approval", "upgrade", "safari", "repository", "worker", "runtime"];
 export const BOOTSTRAP_TOOL_NAMES = ["VMGuestAgent", "guest_runner", "guest_bootstrap.mjs"];
 const LOCAL_SIGNING_SETTINGS = [
     "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "PROVISIONING_PROFILE=",
@@ -48,6 +48,16 @@ export const EXTENDED_TSAN_TESTS = [
     "AccountsListViewControllerTests", "NativeAccountSelectionViewControllerTests",
     "TransactionApprovalCoordinatorTests",
 ];
+export const ASAN_RUNTIME_TESTS = [
+    "SecretBytesTests", "ScryptROMixShimTests", "WalletCoreProxyCoinAndCryptoTests",
+    "WalletCoreProxyPrivateKeyTests", "WalletCoreProxyHDWalletTests", "WalletCoreProxyStoredKeyTests",
+    "WalletCoreProxyParallelDerivationTests", "WalletSigningSessionTests", "WalletSigningScopeTests",
+    "UnlockedAccountSignerTests", "WalletsManagerPrivateKeyImportTests",
+    "WalletCoreProxyPerformanceGateTests/testScryptDefaultParametersAndSequentialDerivationVectors",
+].map(name => `WalletAuthorityTests/${name}`);
+export const ASAN_APP_TESTS = [
+    "SecretHandlingTests", "MacSecretLifetimeTests", "NativeSecretAlertPresentationTests",
+].map(name => `Tests macOS/${name}`);
 export const SHELL_TESTS = [
     "test_alchemy_jwt_request_proof_key_packaging.sh", "test_alchemy_key_artifact_cleanup.sh",
     "test_asc_alchemy_release_guard.sh", "test_asc_build_marker.sh", "test_embed_ambient_helper.sh",
@@ -211,6 +221,23 @@ export function runtimeTestsForPlatform(selectors, platform, configuration) {
     }))).map(test => test.id);
 }
 
+function matchesTestSelector(identifier, rawSelector) {
+    const selector = rawSelector.replace(/\(\)$/, "");
+    const name = identifier.split("/").slice(1).join("/");
+    return identifier === selector || identifier.startsWith(`${selector}/`) || name === selector || name.startsWith(`${selector}/`);
+}
+
+function asanTests(inventory, focus, selectors) {
+    const available = inventory.filter(test => test.variants.includes("macos.debug"));
+    for (const selector of focus) {
+        if (!available.some(test => matchesTestSelector(test.id, selector))) {
+            throw new Error(`ASan test inventory is missing ${selector}`);
+        }
+    }
+    return available.filter(test => focus.some(selector => matchesTestSelector(test.id, selector)) &&
+        (!selectors.length || selectors.some(selector => matchesTestSelector(test.id, selector)))).map(test => test.id);
+}
+
 export function safariTestsForPlatform(selectors, platform) {
     const selected = testingForPlatform(selectors, platform).map(selector => selector.replace(/\(\)$/, ""));
     const scenarios = SAFARI_SCENARIOS.filter(scenario => scenario.platforms.includes(platform.id));
@@ -257,9 +284,15 @@ export function createManifest(job) {
     ]) { add(`worker.${id}`, "worker", "npm", ["run", script, ...suffix], {cwd: worker, dependencies: ["worker.install"]}); }
 
     const configurations = options.configuration ? [options.configuration] : ["Debug", "Release"];
+    const asanRuntimeTests = asanTests(runtimeInventory.tests, ASAN_RUNTIME_TESTS, options.onlyTesting);
+    const asanAppTests = asanTests(runtimeInventory.appTests, ASAN_APP_TESTS, options.onlyTesting);
+    if (options.stages.includes("asan") && !asanRuntimeTests.length && !asanAppTests.length) {
+        throw new Error("ASan selection did not match any focused macOS tests");
+    }
     for (const selector of options.onlyTesting.filter(selector => RUNTIME_TEST_TARGETS.some(target => selector === target || selector.startsWith(`${target}/`)))) {
         if (!(options.runtimePlatforms?.length ? options.runtimePlatforms : PLATFORMS.map(platform => platform.id)).some(platform =>
-            configurations.some(configuration => runtimeTestsForPlatform([selector], platform, configuration).length))) {
+            configurations.some(configuration => runtimeTestsForPlatform([selector], platform, configuration).length)) &&
+            !((!options.stages.length || options.stages.includes("asan")) && asanRuntimeTests.some(test => matchesTestSelector(test, selector)))) {
             throw new Error(`Runtime selection did not match any tests on the selected platforms: ${selector}`);
         }
     }
@@ -377,6 +410,23 @@ export function createManifest(job) {
                 nativeAudit: {configuration: "Debug", platform: "macos", kind: "tsan"}, resultBundle: true,
             });
         }
+    }
+    const asanArguments = ["-configuration", "Debug", "-enableAddressSanitizer", "YES", "-enableThreadSanitizer", "NO"];
+    if (asanRuntimeTests.length) {
+        add("asan.focused.runtime", "asan", "xcodebuild", [...runtimeNativeBase, ...asanArguments, "-destination", "$destination:macos",
+            ...asanRuntimeTests.map(test => `-only-testing:${test}`)], {
+            cwd: "Packages/WalletRuntime", dependencies: runtimeChecks, requirements: ["xcode", "macos"], timeoutSeconds: 14400,
+            nativeAudit: {configuration: "Debug", platform: "macos", kind: "asan", runtime: true, requiredTests: asanRuntimeTests,
+                filtered: options.onlyTesting.length > 0}, resultBundle: true,
+        });
+    }
+    if (asanAppTests.length) {
+        add("asan.focused", "asan", "xcodebuild", [...nativeBase, ...asanArguments,
+            ...asanAppTests.map(test => `-only-testing:${test}`)], {
+            dependencies: [...nativeDependencies, "runtime.inventory"], requirements: nativeRequirements, proofKey: true, timeoutSeconds: 14400,
+            nativeAudit: {configuration: "Debug", platform: "macos", kind: "asan", requiredTests: asanAppTests,
+                filtered: options.onlyTesting.length > 0}, resultBundle: true,
+        });
     }
     add("fuzz.default", "fuzz", "node", ["Scripts/fuzz_wire_protocol.mjs"], {dependencies: ["protocol.check"], requirements: ["node", "xcode"], timeoutSeconds: 3600, failureDirectory: true});
     add("fuzz.regressions", "fuzz", "node", ["Scripts/fuzz_wire_protocol.mjs", "--replay", "Safari Shared/Tests/fixtures/protocol_fuzz_regressions.json"], {

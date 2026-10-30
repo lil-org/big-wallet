@@ -9,7 +9,7 @@ import {availableParallelism, cpus, freemem, loadavg, totalmem, userInfo} from "
 import {dirname, isAbsolute, join, resolve, sep} from "node:path";
 import {pathToFileURL} from "node:url";
 import {createManifest, validateJob, commandForStage} from "./test_manifest.mjs";
-import {auditApprovalResult, auditNativeResult, auditResults, auditSafariPreparation, auditSafariResult} from "./result_audit.mjs";
+import {asanDiagnostics, auditApprovalResult, auditNativeResult, auditResults, auditSafariPreparation, auditSafariResult} from "./result_audit.mjs";
 import {auditUpgradeResult} from "../wallet_upgrade/audit.mjs";
 
 const EXCHANGE_PATH = "/Volumes/BigWalletBuild/Exchange";
@@ -379,6 +379,37 @@ export async function auditSafariLog(path, {stopRequested = async () => false} =
     } finally { await file.close(); }
 }
 
+export async function auditASanLog(path, {stopRequested = async () => false} = {}) {
+    const maximum = 256 * 1024 * 1024;
+    const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    try {
+        const info = await file.stat();
+        if (!info.isFile() || info.size === 0 || info.size > maximum) {
+            throw new Error("AddressSanitizer log must be a nonempty bounded regular file");
+        }
+        const bytes = Buffer.alloc(64 * 1024);
+        const diagnostics = new Set();
+        let bytesScanned = 0;
+        let carry = "";
+        for (;;) {
+            if (await stopRequested()) { throw Object.assign(new Error("AddressSanitizer log auditing was cancelled"), {cancelled: true}); }
+            const {bytesRead} = await file.read(bytes, 0, bytes.length, bytesScanned);
+            if (!bytesRead) { break; }
+            bytesScanned += bytesRead;
+            if (bytesScanned > maximum) { throw new Error("AddressSanitizer log exceeded its size limit"); }
+            const chunk = carry + bytes.subarray(0, bytesRead).toString("latin1");
+            for (const diagnostic of asanDiagnostics(chunk)) { diagnostics.add(diagnostic); }
+            carry = chunk.slice(-8192);
+        }
+        const after = await file.stat();
+        if (bytesScanned !== info.size || after.size !== info.size || after.mtimeMs !== info.mtimeMs || after.ctimeMs !== info.ctimeMs) {
+            throw new Error("AddressSanitizer log changed during auditing");
+        }
+        const issues = [...diagnostics].map(diagnostic => `${diagnostic} in the stage log`);
+        return {ok: !issues.length, issues, diagnostics: [...diagnostics], bytesScanned};
+    } finally { await file.close(); }
+}
+
 export async function prepareNativeSimulators(platform, {destinations, artifacts, stageId, execute, writeJSON, stopRequested = async () => false}) {
     const preparation = {platform, status: "running", artifact: `${stageId}.simulators.json`, startedAt: timestamp(), steps: []};
     const invoke = async (args, timeoutSeconds) => {
@@ -566,6 +597,20 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
             if (stage.nativeAudit && !outcome.cancelled && !outcome.timedOut) {
                 const bundle = join(artifacts, `${stage.id}.xcresult`);
                 result.resultBundle = `${stage.id}.xcresult`;
+                let asanLog;
+                if (stage.nativeAudit.kind === "asan") {
+                    try {
+                        asanLog = await auditASanLog(join(artifacts, result.log), {stopRequested});
+                    } catch (error) {
+                        if (error.cancelled) { throw error; }
+                        asanLog = {ok: false, issues: [`AddressSanitizer stage log could not be audited: ${String(error.message).slice(0, 2048)}`]};
+                    }
+                    if (outcome.outputDrainTimedOut) {
+                        asanLog.ok = false;
+                        asanLog.issues.push("AddressSanitizer stage output did not finish draining");
+                    }
+                    result.audit = {ok: false, issues: [...asanLog.issues], asanLog};
+                }
                 const auditQuery = async kind => {
                     const outcome = await execute("xcrun", ["xcresulttool", "get", "test-results", kind, "--path", bundle], {timeoutSeconds: 120, stopRequested});
                     if (outcome.cancelled || await stopRequested()) {
@@ -583,6 +628,11 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
                 await writeJSON(join(artifacts, `${stage.id}.summary.json`), summary);
                 await writeJSON(join(artifacts, `${stage.id}.tests.json`), tree);
                 result.audit = auditNativeResult(summary, tree, stage.nativeAudit);
+                if (asanLog) {
+                    result.audit.asanLog = asanLog;
+                    result.audit.issues.push(...asanLog.issues);
+                    result.audit.ok = result.audit.ok && asanLog.ok;
+                }
                 if (stage.nativeAudit.kind === "safari") {
                     try {
                         result.audit.safariLog = await auditSafariLog(join(artifacts, result.log), {stopRequested});

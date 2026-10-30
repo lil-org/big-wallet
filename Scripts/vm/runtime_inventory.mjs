@@ -5,6 +5,15 @@ import {fileURLToPath, pathToFileURL} from "node:url";
 export const RUNTIME_TEST_TARGETS = ["WalletDomainTests", "WalletAuthorityTests", "WalletFlowsTests", "WalletNetworkingTests"];
 const PLATFORMS = ["macos", "ios", "visionos"];
 const CONFIGURATIONS = ["Debug", "Release"];
+const APP_TEST_TARGETS = {macos: "Tests macOS", ios: "Tests iOS", visionos: "Tests visionOS"};
+export const APP_TEST_CLASS_PLATFORMS = {
+    NativeApprovalCoordinatorTests: ["macos"],
+    TransactionApprovalCoordinatorTests: PLATFORMS,
+    PasswordStorageTests: PLATFORMS,
+    SecretHandlingTests: ["macos"],
+    MacSecretLifetimeTests: ["macos"],
+    NativeSecretAlertPresentationTests: ["macos"],
+};
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 function blank(text) { return text.replace(/[^\n]/g, " "); }
@@ -182,14 +191,13 @@ export function generateRuntimeInventory(root = ROOT) {
         }
     }
     const appTests = new Map();
-    for (const name of ["NativeApprovalCoordinatorTests", "TransactionApprovalCoordinatorTests", "PasswordStorageTests"]) {
+    for (const [name, platforms] of Object.entries(APP_TEST_CLASS_PLATFORMS)) {
         const file = join(root, "Tests", `${name}.swift`);
         if (!existsSync(file)) { continue; }
         const source = readFileSync(file, "utf8");
-        for (const platform of PLATFORMS) {
-            if (name === "NativeApprovalCoordinatorTests" && platform !== "macos") { continue; }
+        for (const platform of platforms) {
             for (const configuration of CONFIGURATIONS) {
-                const target = {macos: "Tests macOS", ios: "Tests iOS", visionos: "Tests visionOS"}[platform];
+                const target = APP_TEST_TARGETS[platform];
                 for (const test of declaredTests(source, platform, configuration, {swiftPackage: false}).filter(test => test.startsWith(`${name}/`))) {
                     const id = `${target}/${test}`;
                     const entry = appTests.get(id) ?? {id, variants: []};
@@ -222,9 +230,11 @@ export function validateRuntimeInventory(value) {
         }
     }
     for (const entry of value.appTests) {
-        if (!entry || !/^Tests (?:macOS|iOS|visionOS)\/(?:NativeApprovalCoordinatorTests|TransactionApprovalCoordinatorTests|PasswordStorageTests)\/test[A-Za-z0-9_]+$/.test(entry.id) || seen.has(entry.id) ||
+        const match = /^(Tests (?:macOS|iOS|visionOS))\/([A-Za-z_]\w*)\/test[A-Za-z0-9_]+$/.exec(entry?.id ?? "");
+        const platform = match && Object.keys(APP_TEST_TARGETS).find(platform => APP_TEST_TARGETS[platform] === match[1]);
+        if (!match || !Object.hasOwn(APP_TEST_CLASS_PLATFORMS, match[2]) || !APP_TEST_CLASS_PLATFORMS[match[2]].includes(platform) || seen.has(entry.id) ||
             !Array.isArray(entry.variants) || !entry.variants.length || new Set(entry.variants).size !== entry.variants.length ||
-            entry.variants.some(variant => !/^(?:macos|ios|visionos)\.(?:debug|release)$/.test(variant))) { throw new Error("Invalid split app test entry"); }
+            entry.variants.some(variant => !CONFIGURATIONS.some(configuration => variant === `${platform}.${configuration.toLowerCase()}`))) { throw new Error("Invalid app test entry"); }
         seen.add(entry.id);
     }
     return value;

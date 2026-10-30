@@ -33,6 +33,24 @@ export function performanceTestName(identifier) {
         new RegExp(`(?:^|/)${name}(?:\\(\\))?(?:$|/)`).test(identifier));
 }
 
+export function asanDiagnostics(text) {
+    const diagnostics = [];
+    if (/\b(?:ERROR|SUMMARY):[ \t]*Address[ \t]*Sanitizer\b/i.test(text) ||
+        /\bAddress[ \t]*Sanitizer:[ \t]*(?:heap-use-after-free|heap-buffer-overflow|stack-buffer-overflow|stack-buffer-underflow|dynamic-stack-buffer-overflow|stack-overflow|global-buffer-overflow|stack-use-after-return|stack-use-after-scope|use-after-poison|container-overflow|alloc-dealloc-mismatch|new-delete-type-mismatch|double-free|attempting free|bad-free|[a-z]+-param-overlap|negative-size-param|invalid-pointer-pair|allocation-size-too-big|odr-violation)\b/i.test(text)) {
+        diagnostics.push("AddressSanitizer memory error");
+    }
+    if (/\bAddress[ \t]*Sanitizer(?::[ \t]*|[ \t]+)(?:DEADLYSIGNAL|CHECK failed|ERROR\b|WARNING\b)/i.test(text)) {
+        diagnostics.push("AddressSanitizer fatal diagnostic");
+    }
+    if (/\b(?:ASan|Address[ \t]*Sanitizer)(?:[ \t]+runtime)?[^\r\n]{0,160}(?:does not come first|cannot proceed correctly|is not loaded|failed to (?:initialize|allocate|mmap|map|create)|unable to (?:mmap|map)|is loaded too late)/i.test(text) ||
+        /\b(?:incompatible[ \t]+ASan[ \t]+runtimes|Sanitizer[ \t]+load[ \t]+violates[ \t]+platform[ \t]+policy)\b/i.test(text) ||
+        /\b(?:Library not loaded|failed to load|could not load):?[ \t]*[^\r\n]{0,4096}libclang_rt\.asan/i.test(text) ||
+        /\b(?:dyld|dlopen)[^\r\n]{0,4096}libclang_rt\.asan[^\r\n]{0,1024}(?:not found|could not be loaded|no suitable image|not permitted|code signature)/i.test(text)) {
+        diagnostics.push("AddressSanitizer runtime initialization failure");
+    }
+    return diagnostics;
+}
+
 export function auditNativeResult(summary, tree, policy) {
     if (!summary || typeof summary !== "object") { throw new Error("Missing XCTest summary"); }
     const counts = {
@@ -69,31 +87,53 @@ export function auditNativeResult(summary, tree, policy) {
     if (policy.kind === "performance") {
         for (const name of PERFORMANCE_TESTS) { if (!performancePassed.includes(name)) { issues.push(`Release performance gate did not pass: ${name}`); } }
     }
-    if (policy.runtime === true) {
+    if (policy.runtime === true || policy.kind === "asan") {
+        const label = policy.runtime === true ? "Runtime" : "AddressSanitizer";
+        const targets = policy.runtime === true ? RUNTIME_TEST_TARGETS : ["Tests macOS"];
         const expected = policy.requiredTests;
         if (!Array.isArray(expected) || !expected.length || expected.some(name => typeof name !== "string" ||
-            !RUNTIME_TEST_TARGETS.some(target => name.startsWith(`${target}/`))) || new Set(expected).size !== expected.length) {
-            issues.push("Runtime audit requires a nonempty, unique expected-test inventory");
+            !targets.some(target => name.startsWith(`${target}/`)) ||
+            policy.kind === "asan" && !/^[^/]+\/[A-Za-z_][A-Za-z0-9_]*\/[A-Za-z_][A-Za-z0-9_]*$/.test(name)) || new Set(expected).size !== expected.length) {
+            issues.push(`${label} audit requires a nonempty, unique expected-test inventory`);
         } else {
             const inventory = new Map();
             for (const test of cases) {
                 let identifier = test.identifier.replace(/\(\)$/, "");
-                if (!(identifier.split("/").length === 3 && RUNTIME_TEST_TARGETS.some(target => identifier.startsWith(`${target}/`)))) {
-                    if (RUNTIME_TEST_TARGETS.includes(test.target)) { identifier = `${test.target}/${identifier}`; }
+                if (!(identifier.split("/").length === 3 && targets.some(target => identifier.startsWith(`${target}/`)))) {
+                    if (targets.includes(test.target)) { identifier = `${test.target}/${identifier}`; }
                     else if (!test.target) {
                         const matches = expected.filter(name => name.endsWith(`/${identifier}`));
                         if (matches.length === 1) { identifier = matches[0]; }
                     }
                 }
                 inventory.set(identifier, (inventory.get(identifier) ?? 0) + 1);
-                if (!expected.includes(identifier)) { issues.push(`Unexpected runtime test: ${test.identifier}`); }
+                if (!expected.includes(identifier)) { issues.push(`Unexpected ${label.toLowerCase()} test: ${test.identifier}`); }
+                if (policy.kind === "asan" && test.target && identifier.split("/")[0] !== test.target) {
+                    issues.push(`AddressSanitizer test bundle does not match its identifier: ${test.identifier}`);
+                }
                 if (test.result !== "passed" && !(test.result === "skipped" && policy.configuration === "Debug" &&
                     policy.kind === "full" && performanceTestName(identifier))) {
-                    issues.push(`Runtime test did not pass: ${test.identifier} (${test.result})`);
+                    issues.push(`${label} test did not pass: ${test.identifier} (${test.result})`);
                 }
             }
             for (const identifier of expected) {
-                if (inventory.get(identifier) !== 1) { issues.push(`Runtime test must execute exactly once: ${identifier}`); }
+                if (inventory.get(identifier) !== 1) { issues.push(`${label} test must execute exactly once: ${identifier}`); }
+            }
+        }
+    }
+    if (policy.kind === "asan") {
+        if (summary.runtimeWarnings !== undefined && !Array.isArray(summary.runtimeWarnings)) {
+            issues.push("AddressSanitizer XCTest summary has an invalid runtime-warning inventory");
+        } else {
+            for (const warning of summary.runtimeWarnings ?? []) {
+                const message = warning?.message ?? warning?.warningText;
+                if (!warning || typeof warning !== "object" || Array.isArray(warning) ||
+                    typeof message !== "string" || !message.trim() ||
+                    warning.issueType !== undefined && typeof warning.issueType !== "string") {
+                    issues.push("AddressSanitizer XCTest summary has an invalid runtime-warning entry");
+                } else if (/\bAddress[ \t]*Sanitizer\b/i.test(warning.issueType ?? "") || asanDiagnostics(message).length) {
+                    issues.push("AddressSanitizer diagnostic in XCTest runtime warnings");
+                }
             }
         }
     }
@@ -369,6 +409,9 @@ export function auditResults(stages) {
         if (stage.status === "passed") {
             if (stage.nativeAudit?.runtime === true && stage.audit?.ok !== true) {
                 issues.push(`${stage.id} has no passing runtime XCTest audit`);
+            }
+            if (stage.nativeAudit?.kind === "asan" && (stage.audit?.ok !== true || stage.audit.asanLog?.ok !== true)) {
+                issues.push(`${stage.id} has no passing AddressSanitizer diagnostic audit`);
             }
             if (stage.approvalAudit && stage.audit?.ok !== true) {
                 issues.push(`${stage.id} has no passing approval exploration audit`);

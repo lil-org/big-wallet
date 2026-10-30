@@ -356,6 +356,10 @@ class PlannedInventoryTests(unittest.TestCase):
             {},
             {'payload': {'stages': ['test'], 'onlyTesting': [], 'signing': 'local'}},
             {'payload': {'stages': ['test'], 'onlyTesting': [], 'signing': 'apple'}},
+            {'payload': {'stages': ['asan'], 'onlyTesting': []}},
+            {'payload': {'stages': ['asan'], 'configuration': 'Release', 'runtimePlatforms': ['ios'],
+                         'onlyTesting': ['WalletAuthorityTests/SecretBytesTests']}},
+            {'payload': {'stages': ['asan'], 'onlyTesting': ['Tests macOS/MacSecretLifetimeTests']}},
             {'profile': 'extended'},
             {'payload': {'stages': ['safari'], 'onlyTesting': []}},
             {'payload': {'stages': ['safari'], 'configuration': 'Release', 'onlyTesting': ['Safari UI Tests iOS'], 'signing': 'apple'}},
@@ -378,6 +382,17 @@ class PlannedInventoryTests(unittest.TestCase):
                 self.assertEqual(len(commands.call_args_list), 2)
                 self.assertTrue(all(Path(call.args[0][0]).name == 'node' for call in commands.call_args_list))
                 ids = {stage['id'] for stage in plan['stages']}
+                if selection.get('stages') == ['asan']:
+                    asan = [stage for stage in plan['stages'] if stage['group'] == 'asan']
+                    self.assertTrue(asan)
+                    for stage in asan:
+                        self.assertEqual(stage['nativeAudit']['platform'], 'macos')
+                        self.assertEqual(stage['nativeAudit']['configuration'], 'Debug')
+                        self.assertTrue(stage['nativeAudit']['requiredTests'])
+                    if selection.get('onlyTesting') == ['WalletAuthorityTests/SecretBytesTests']:
+                        self.assertEqual({stage['id'] for stage in asan}, {'asan.focused.runtime'})
+                    elif selection.get('onlyTesting') == ['Tests macOS/MacSecretLifetimeTests']:
+                        self.assertEqual({stage['id'] for stage in asan}, {'asan.focused'})
                 if selection.get('onlyTesting') == ['Tests visionOS']:
                     self.assertTrue({'provider.install', 'protocol.check', 'build-tests.visionos.debug',
                                      'test.visionos.debug'} <= ids)

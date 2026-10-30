@@ -20,6 +20,8 @@ Scripts/test_vm.sh run extended
 Scripts/test_vm.sh run all --signing apple
 Scripts/test_vm.sh run all --stage safari
 Scripts/test_vm.sh run all --stage upgrade
+Scripts/test_vm.sh run all --stage asan
+Scripts/test_vm.sh run all --stage asan --only-testing WalletAuthorityTests/SecretBytesTests
 Scripts/test_vm.sh run all --stage safari --configuration Debug --interactive-safari \
   --only-testing 'Safari UI Tests macOS/SafariLifecycleTests/testInstallAndNativeRoundtrip'
 Scripts/test_vm.sh run extended --stage safari --configuration Release
@@ -65,6 +67,37 @@ target without running it or requiring unrelated package targets to compile.
 The four production module names are also accepted. `ApprovalCrashWorker`
 validates the closed package dependency graph and builds the standalone harness.
 These focused compilation runs do not establish runtime test coverage.
+
+### Address Sanitizer
+
+Both `all` and `extended` include the same focused Address Sanitizer suite:
+`asan.focused.runtime` runs the package tests and `asan.focused` runs the macOS
+app tests. These stages build and test with Address Sanitizer enabled and Thread
+Sanitizer disabled, using serial XCTest execution and the default DerivedData
+location. They always use macOS Debug, independently of `--configuration` and
+`--runtime-platform`, and use the run's existing signing mode.
+
+The current selection contains 172 runtime tests for secret buffers, Scrypt,
+private keys, HD derivation, stored keys, signing lifetime, and private-key imports,
+plus 38 app tests for secret handling, lifetime, and alert presentation. The
+functional Scrypt vector test is included; timed performance gates are excluded.
+The selected app methods are recorded alongside the package tests in
+`runtime-test-inventory.json`. Regenerate that inventory after adding or moving
+tests in these app classes as well.
+
+Use `--stage asan` to run only these checks and their prerequisites.
+`--only-testing` narrows the focused selection by target, class, or method;
+unrelated invocations are omitted. An explicit ASan selection that matches no
+focused tests fails before execution. Mobile-only vault and UIKit paths are
+outside this coverage. Sanitizer instrumentation adds build time, execution time,
+and memory use to normal acceptance runs.
+
+Each stage retains its full build/test log, XCTest bundle, summary, and test
+inventory. Every expected test must run exactly once and pass without skipping.
+The runner checks both XCTest runtime warnings and the complete bounded log for
+Address Sanitizer diagnostics and initialization failures; a zero exit status
+alone cannot establish a pass. Missing or unreadable audit evidence fails the
+stage. Unrelated runtime warnings remain recorded without becoming ASan failures.
 
 The [approval lifecycle guide](#approval-lifecycle-and-crash-tests) describes the
 isolated crash worker and its fixture boundaries.
@@ -596,7 +629,7 @@ helper, extension, and containing app using their existing identities. Reports
 identify this additional test-only file access explicitly; these results establish
 coverage of modified Apple-signed test products, with distribution validation kept separate.
 
-Selectors are `build`, `test`, `runtime`, `performance`, `tsan`, `fuzz`, `approval`, `safari`,
+Selectors are `build`, `test`, `runtime`, `performance`, `tsan`, `asan`, `fuzz`, `approval`, `safari`,
 `repository`, and `worker`. Repeat `--stage` to select more than one. Dependencies
 are included automatically. Repeat `--only-testing` for XCTest classes or
 methods, or an entire test target; a target-qualified filter limits testing to

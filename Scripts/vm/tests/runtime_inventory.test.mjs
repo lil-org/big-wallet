@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
+import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import test from "node:test";
-import {declaredTests, generateRuntimeInventory, RUNTIME_TEST_TARGETS, swiftCode, validateRuntimeInventory} from "../runtime_inventory.mjs";
+import {declaredTests, generateRuntimeInventory, loadRuntimeInventory, RUNTIME_TEST_TARGETS, swiftCode, validateRuntimeInventory} from "../runtime_inventory.mjs";
 import {auditApprovalResult, auditNativeResult, auditResults} from "../result_audit.mjs";
 import {BOOTSTRAP_TOOL_NAMES, createManifest, PLATFORMS, runtimeTestsForPlatform, testingForPlatform, validateJob} from "../test_manifest.mjs";
 
@@ -56,6 +56,79 @@ test("generated inventory requires every test target and rejects duplicate decla
         assert.throws(() => generateRuntimeInventory(root), /Duplicate/);
         assert.throws(() => validateRuntimeInventory({...inventory, tests: inventory.tests.slice(1)}), /omits/);
     } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
+test("app inventory limits secret classes to macOS while preserving split test platforms", () => {
+    const root = mkdtempSync(join(tmpdir(), "wallet-app-inventory-"));
+    const secretClasses = ["SecretHandlingTests", "MacSecretLifetimeTests", "NativeSecretAlertPresentationTests"];
+    try {
+        for (const target of RUNTIME_TEST_TARGETS) {
+            const directory = join(root, "Packages/WalletRuntime/Tests", target);
+            mkdirSync(directory, {recursive: true});
+            writeFileSync(join(directory, "Tests.swift"), `@testable import ${target.slice(0, -5)}\nclass ${target}: XCTestCase { func testOne() {} }`);
+        }
+        mkdirSync(join(root, "Tests"));
+        for (const name of [...secretClasses, "NativeApprovalCoordinatorTests", "TransactionApprovalCoordinatorTests", "PasswordStorageTests"]) {
+            writeFileSync(join(root, "Tests", `${name}.swift`), `class ${name}: XCTestCase {
+    #if canImport(Big_Wallet) && !SWIFT_PACKAGE
+    func testAppOnly() {}
+    #endif
+    #if os(macOS) && DEBUG
+    func testMacDebug() {}
+    #elseif canImport(UIKit)
+    func testMobile() {}
+    #endif
+}
+class UnselectedTests: XCTestCase { func testIgnored() {} }
+`);
+        }
+        const inventory = validateRuntimeInventory(generateRuntimeInventory(root));
+        for (const name of [...secretClasses, "NativeApprovalCoordinatorTests"]) {
+            assert.deepEqual(inventory.appTests.filter(entry => entry.id.includes(`/${name}/`)), [
+                {id: `Tests macOS/${name}/testAppOnly`, variants: ["macos.debug", "macos.release"]},
+                {id: `Tests macOS/${name}/testMacDebug`, variants: ["macos.debug"]},
+            ]);
+        }
+        for (const name of ["TransactionApprovalCoordinatorTests", "PasswordStorageTests"]) {
+            for (const platform of PLATFORMS) {
+                const entries = inventory.appTests.filter(entry => entry.id.startsWith(`${platform.target}/${name}/`));
+                assert.equal(entries.length, 2);
+                assert.ok(entries.some(entry => entry.id.endsWith("/testAppOnly")));
+                assert.ok(entries.some(entry => entry.id.endsWith(platform.id === "macos" ? "/testMacDebug" : "/testMobile")));
+            }
+        }
+        assert.ok(inventory.appTests.every(entry => !entry.id.includes("UnselectedTests")));
+        const entry = inventory.appTests.find(entry => entry.id === "Tests macOS/SecretHandlingTests/testAppOnly");
+        for (const invalid of [
+            {...entry, id: "Tests iOS/SecretHandlingTests/testAppOnly", variants: ["ios.debug"]},
+            {...entry, variants: ["ios.debug"]},
+            {...entry, variants: ["macos.debug", "macos.debug"]},
+            {...entry, variants: []},
+            {...entry, id: "Tests macOS/UnselectedTests/testAppOnly"},
+            {...entry, id: "Tests macOS/__proto__/testAppOnly"},
+        ]) {
+            assert.throws(() => validateRuntimeInventory({...inventory, appTests: [invalid]}), /Invalid app test entry/);
+        }
+    } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
+test("committed secret app inventory includes all 38 macOS tests and excludes UIKit branches", () => {
+    const inventory = loadRuntimeInventory();
+    const counts = {SecretHandlingTests: 18, MacSecretLifetimeTests: 12, NativeSecretAlertPresentationTests: 8};
+    const selected = inventory.appTests.filter(entry => Object.hasOwn(counts, entry.id.split("/")[1]));
+    assert.equal(selected.length, 38);
+    for (const [name, count] of Object.entries(counts)) {
+        const entries = selected.filter(entry => entry.id.startsWith(`Tests macOS/${name}/`));
+        assert.equal(entries.length, count);
+        for (const entry of entries) { assert.deepEqual(entry.variants, ["macos.debug", "macos.release"]); }
+        const source = readFileSync(new URL(`../../../Tests/${name}.swift`, import.meta.url), "utf8");
+        for (const configuration of ["Debug", "Release"]) {
+            assert.deepEqual(entries.map(entry => entry.id).sort(),
+                declaredTests(source, "macos", configuration, {swiftPackage: false}).map(name => `Tests macOS/${name}`).sort());
+        }
+    }
+    assert.ok(selected.some(entry => entry.id.endsWith("/testManagedClipboardExpiresWhileTaskIsInsideAppKitModalLoop")));
+    assert.ok(!selected.some(entry => entry.id.endsWith("/testUIKitAdapterWritesLocalOnlySystemExpirationWithoutAdoptingReplacement")));
 });
 
 test("runtime extensions resolve XCTest classes across files for each active variant", () => {

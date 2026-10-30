@@ -57,7 +57,8 @@ const passedManifest = manifest => manifest.map(stage => ({id: stage.id, status:
     ...(stage.approvalAudit ? {approvalAudit: stage.approvalAudit} : {}),
     ...(stage.upgradeAudit ? {upgradeAudit: stage.upgradeAudit} : {}),
     ...(stage.nativeAudit?.runtime || stage.approvalAudit || stage.upgradeAudit ? {audit: {ok: true}} : {}),
-    ...(stage.nativeAudit?.kind === "safari" ? {audit: {ok: true, safari: {ok: true}, safariLog: {ok: true}}} : {})}));
+    ...(stage.nativeAudit?.kind === "safari" ? {audit: {ok: true, safari: {ok: true}, safariLog: {ok: true}}} : {}),
+    ...(stage.nativeAudit?.kind === "asan" ? {audit: {ok: true, asanLog: {ok: true}}} : {})}));
 
 test("job validation admits the host snapshot contract and rejects execution injection", () => {
     assert.deepEqual(validateJob(job({source: {...job().source, fileCount: 4, bytes: 100}})).source.fileCount, 4);
@@ -122,7 +123,7 @@ test("all matrix includes every native configuration/platform and all repository
     }
     for (const id of ["provider.test", "provider.bundle", "protocol.check", "pins.check", "scripts.approval-worker-target", "metadata.localizations", "runner.node-tests", "runner.python-tests", "safari.runner-tests",
         "worker.check", "worker.test", "worker.validate-self", "worker.validate-dry-run", "worker.deploy-dry-run", "worker.startup", "performance.release",
-        "tsan.focused", "fuzz.default", "fuzz.regressions", "approval.debug", "approval.release"]) { assert.ok(ids.has(id), id); }
+        "tsan.focused", "asan.focused", "asan.focused.runtime", "fuzz.default", "fuzz.regressions", "approval.debug", "approval.release"]) { assert.ok(ids.has(id), id); }
     assert.equal(stages.length, ids.size);
     for (const [index, stage] of stages.entries()) {
         for (const dependency of stage.dependencies) { assert.ok(stages.slice(0, index).some(prior => prior.id === dependency), `${stage.id}: ${dependency}`); }
@@ -277,7 +278,7 @@ test("native stages retain audited result bundles without long-running system di
                     assert.equal(stage.resultBundle, true, stage.id);
                     assert.equal(stage.nativeAudit.configuration, stage.args[stage.args.indexOf("-configuration") + 1], stage.id);
                     assert.equal(stage.nativeAudit.kind, stage.group === "test" ? "full" : stage.group, stage.id);
-                    assert.equal(stage.timeoutSeconds, stage.group === "tsan" ? 14400 : 7200, stage.id);
+                    assert.equal(stage.timeoutSeconds, ["tsan", "asan"].includes(stage.group) ? 14400 : 7200, stage.id);
                     const command = commandForStage(stage, {destinations: {macos: "macos", ios: "ios", visionos: "visionos"}, artifacts: "/artifacts"});
                     assert.equal(command.args[command.args.indexOf("-resultBundlePath") + 1], `/artifacts/${stage.id}.xcresult`, stage.id);
                 }

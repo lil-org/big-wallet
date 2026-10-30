@@ -391,6 +391,12 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(args.stage, ['test'])
         self.assertEqual(args.only_testing, ['Tests macOS/WindowAuthenticationSessionTests'])
 
+    def test_cli_accepts_filtered_asan_stage(self):
+        args = host.parser().parse_args(['run', 'all', '--stage', 'asan', '--only-testing',
+                                        'WalletAuthorityTests/SecretBytesTests'])
+        self.assertEqual(args.stage, ['asan'])
+        self.assertEqual(args.only_testing, ['WalletAuthorityTests/SecretBytesTests'])
+
     def test_replay_is_copied_and_rewritten_for_the_guest(self):
         source = self.root / 'failure.json'
         source.write_text('{"fixture":true}')

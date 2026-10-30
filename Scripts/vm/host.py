@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 TOOLS = Path(__file__).resolve().parent
 DEFAULT_VM = Path.home() / 'Library/Application Support/VirtualBuddy/tests machine.vbvm'
 DEFAULT_STATE = Path.home() / 'Library/Application Support/Big Wallet Test VM'
-STAGES = ('build', 'test', 'performance', 'tsan', 'fuzz', 'approval', 'upgrade', 'safari', 'repository', 'worker', 'runtime')
+STAGES = ('build', 'test', 'performance', 'tsan', 'asan', 'fuzz', 'approval', 'upgrade', 'safari', 'repository', 'worker', 'runtime')
 EXCLUDED_PARTS = {'.git', '.asc-runtime', 'node_modules', 'DerivedData', 'build', '.build',
                   '.cache', '.vm-testing', '__pycache__', '.venv', 'venv'}
 SECRET_SUFFIXES = {'.p12', '.p8', '.pem', '.key', '.mobileprovision', '.provisionprofile'}

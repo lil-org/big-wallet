@@ -19239,6 +19239,90 @@
       ]
     },
     {
+      "id": "Tests macOS/MacSecretLifetimeTests/testAccountsNavigationCancelsPendingMutationBeforeLockAndReleasesItsController",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/MacSecretLifetimeTests/testCancelAndLockDuringStoreRecoveryPreventLateImport",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/MacSecretLifetimeTests/testCancelClearsTheDraftAndRejectsLateValidationInTheSameAccessSession",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/MacSecretLifetimeTests/testCancellingKeystorePromptClearsOnlyItsPassword",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/MacSecretLifetimeTests/testImportRevalidatesChangedCredentialsBeforeMutatingTheWallet",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/MacSecretLifetimeTests/testImportSecretEditingDoesNotCreateUndoOrDeleteUnrelatedTextUndo",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/MacSecretLifetimeTests/testLockDuringKeystorePromptClearsBothInputsAndRejectsItsConfirmation",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/MacSecretLifetimeTests/testRecoverableFailureKeepsTheDraftButClearsTheKeystorePasswordBeforeImport",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/MacSecretLifetimeTests/testRemovalCloseAndLockRetireAnImportBeforeItsLateSuccess",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/MacSecretLifetimeTests/testRetiredPasswordClearsItsRealFieldEditorWithoutUndo",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/MacSecretLifetimeTests/testStoreRecoveryRetryPreservesTheDraftUntilImportSucceeds",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/MacSecretLifetimeTests/testSuccessfulImportClearsTheDraftBeforeReplacingContent",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
       "id": "Tests macOS/NativeApprovalCoordinatorTests/testAccessibilityRetryRenewsAccessAndRetiredRetryCannotRenewAgain",
       "variants": [
         "macos.debug",
@@ -19533,6 +19617,62 @@
       ]
     },
     {
+      "id": "Tests macOS/NativeSecretAlertPresentationTests/testClosingAndAbortingNeverCopy",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeSecretAlertPresentationTests/testCopyClearsPresentationBeforeCopyingAndOnlyRunsOnce",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeSecretAlertPresentationTests/testInactiveOwnerCannotCopyAndDisplayDoesNotAllowUnprotectedCopying",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeSecretAlertPresentationTests/testKeyWindowValidationRejectsStaleOwnershipAndUnrelatedWindows",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeSecretAlertPresentationTests/testNativeCopyActionRunsBeforeSheetIsDetached",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeSecretAlertPresentationTests/testObsoletePresentationCannotCopyOrInvalidateReplacement",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeSecretAlertPresentationTests/testResignedSheetCannotUseStaleKeyWindowReferenceToCopy",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeSecretAlertPresentationTests/testRevocationPreventsLateCopyCallback",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
       "id": "Tests macOS/PasswordStorageTests/testMacPasswordEntryAcceptsExistingShortPasswordAfterRetry",
       "variants": [
         "macos.debug",
@@ -19548,6 +19688,132 @@
     },
     {
       "id": "Tests macOS/PasswordStorageTests/testMacWelcomeReportsUnavailableStorageAndRetiresItsCallbacks",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testActivationRechecksOverdueClipboardWithoutWaitingForTimer",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testAppDeactivationLeavesClipboardTimerRunning",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testClipboardExpirationPreservesReplacementContents",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testClipboardUsesLocalOnlyOptionsAndExpiresAfterThirtySeconds",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testClipboardUsesOwnershipReturnedByPrepareRatherThanLaterChangeCount",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testFailedClipboardWriteDoesNotScheduleCleanupForAnotherOwner",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testInvalidationRejectsLateSecretResultsAndCallbacks",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testManagedClipboardExpiresWhileTaskIsInsideAppKitModalLoop",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testManagedClipboardPreservesReplacementInsideAppKitModalLoop",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testNewPresentationClearsOldSecretAndRejectsOldTokens",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testPresentationInvalidationDoesNotCancelClipboardExpiration",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testReleasingClipboardCancelsTimerAndRejectsItsLateCallback",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testRepeatedCopiesRetireOldTimerAndUseNewDeadline",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testSystemManagedClipboardNeverSchedulesOrManuallyClearsContents",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testTerminationClearsOnlyOwnedSecret",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testWakeClearsOverdueSecretAndRetiresScheduledTimer",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testWakeReschedulesRemainingTimeWithoutClearingNewContents",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/SecretHandlingTests/testWallClockRollbackCannotExtendManagedClipboardExpiration",
       "variants": [
         "macos.debug",
         "macos.release"

@@ -225,7 +225,7 @@ inventory rejects missing, duplicate, skipped, unexpected, and zero-test results
 Run native validation only through `Scripts/test_vm.sh`; see
 [`Scripts/vm/README.md`](../../Scripts/vm/README.md). Focused package compilation is
 available through `--stage runtime`; executing XCTest requires `--stage test`.
-The complete acceptance run includes builds, tests, thread sanitizer, lifecycle
+The complete acceptance run includes builds, tests, thread and address sanitizers, lifecycle
 exploration, wire fuzzing, and Safari integration in the VM.
 
 ## Deterministic race coverage
