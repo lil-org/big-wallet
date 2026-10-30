@@ -21,6 +21,7 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
     private var previewPagingTask: Task<Void, Never>?
     private var mutationTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
+    private var closeObserver: NativeApprovalWindowCloseObserver?
     private var didAppear = false
     private var isSaving = false
     private var isRetired = false
@@ -38,14 +39,19 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
     private var originalBottomInset: CGFloat = 0
 
     func retireForWalletLock() {
+        retireEditor()
+    }
+
+    private func retireEditor() {
         guard !isRetired else { return }
         isRetired = true
-        previewLayoutTask?.cancel()
-        previewPagingTask?.cancel()
-        previewPagingTask = nil
+        closeObserver?.disable()
+        closeObserver = nil
+        invalidatePreviewAccounts()
         mutationTask?.cancel()
+        mutationTask = nil
         retryTask?.cancel()
-        previewState?.invalidate()
+        retryTask = nil
         previewState = nil
         wallet = nil
         getBackToRect = nil
@@ -99,7 +105,11 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
 
     override func viewDidAppear() {
         super.viewDidAppear()
-        guard acceptsManagementActions else { return }
+        guard acceptsManagementActions, let window = viewIfLoaded?.window else { return }
+        closeObserver?.disable()
+        let observer = NativeApprovalWindowCloseObserver { [weak self] in self?.retireEditor() }
+        closeObserver = observer
+        observer.observe(window)
         didAppear = true
         previewMoreAccountsIfNeededForCurrentViewport()
     }
@@ -109,6 +119,7 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
         previewPagingTask?.cancel()
         mutationTask?.cancel()
         retryTask?.cancel()
+        closeObserver?.disable()
         previewState?.invalidate()
         NotificationCenter.default.removeObserver(self)
     }
@@ -162,19 +173,18 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
 
     private func showAccountsList() {
         guard acceptsManagementActions else { return }
-        isRetired = true
-        mutationTask?.cancel()
-        retryTask?.cancel()
-        invalidatePreviewAccounts()
-        NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .walletsLoadStateChanged, object: walletsManager)
+        let destination = viewIfLoaded?.window
+        let access = walletAccess
+        let scrollPosition = getBackToRect
+        retireEditor()
         let accountsListViewController = AccountsListViewController()
-        accountsListViewController.walletAccess = walletAccess
-        accountsListViewController.getBackToRect = getBackToRect
-        if let window = view.window?.windowController as? WalletWindowController {
-            window.installProtectedContent(accountsListViewController, access: walletAccess)
+        accountsListViewController.walletAccess = access
+        accountsListViewController.getBackToRect = scrollPosition
+        if let window = destination?.windowController as? WalletWindowController {
+            window.installProtectedContent(accountsListViewController, access: access)
         } else {
-            view.window?.contentViewController = accountsListViewController
+            guard access.isCurrent else { return }
+            destination?.contentViewController = accountsListViewController
         }
     }
     

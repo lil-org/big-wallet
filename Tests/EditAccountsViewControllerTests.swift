@@ -13,6 +13,46 @@ import UIKit
 
 @MainActor
 final class EditAccountsViewControllerTests: XCTestCase {
+#if os(macOS)
+    func testClosingWindowRetiresPreviewAndSuppressesLateSaveFailure() async throws {
+        let entered = expectation(description: "Save reached storage")
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        let fixture = try AccountEditorFixture(beforeUpdate: {
+            entered.fulfill()
+            release.wait()
+            return errSecInteractionNotAllowed
+        })
+        addTeardownBlock { try await fixture.tearDown() }
+        await assertWalletReload(fixture.manager)
+        let host = try AccountEditorHost(manager: fixture.manager, access: fixture.accessFixture.access)
+        defer { host.close() }
+        host.showWindow()
+        let state = try XCTUnwrap(host.controller.previewState)
+        await expectEventually(timeout: 5) { state.canEdit && state.accounts.contains { !state.isEnabled($0) } }
+        let index = try XCTUnwrap(state.accounts.firstIndex { !state.isEnabled($0) })
+        state.toggle(at: index)
+        host.controller.okButtonTapped(host.controller.okButton as Any)
+        await fulfillment(of: [entered], timeout: 5)
+        host.closeWindow()
+        XCTAssertFalse(state.canEdit, "Closing the editor should retire its decrypted preview session")
+        let lateAlert = expectation(description: "No error modal should open for the closed editor")
+        lateAlert.isInverted = true
+        let dismissLateAlert = Timer(timeInterval: 0.05, repeats: true) { _ in
+            MainActor.assumeIsolated {
+                guard let modal = NSApp.modalWindow else { return }
+                lateAlert.fulfill()
+                NSApp.abortModal()
+                modal.orderOut(nil)
+            }
+        }
+        RunLoop.main.add(dismissLateAlert, forMode: .modalPanel)
+        defer { dismissLateAlert.invalidate() }
+        release.signal()
+        await fulfillment(of: [lateAlert], timeout: 2)
+    }
+#endif
+
     func testSuccessfulStoreReloadRestartsPendingInitialPreview() async throws {
         let fixture = try AccountEditorFixture()
         addTeardownBlock { try await fixture.tearDown() }
@@ -473,7 +513,7 @@ private final class AccountEditorFixture {
     private let defaultsSuite: String
 #endif
 
-    init(beforeInventoryRead: @escaping @Sendable () -> Void = {}, postMutation: @escaping @MainActor @Sendable () -> Void = {
+    init(beforeInventoryRead: @escaping @Sendable () -> Void = {}, beforeUpdate: @escaping @Sendable () -> OSStatus = { errSecSuccess }, postMutation: @escaping @MainActor @Sendable () -> Void = {
         NotificationCenter.default.post(name: Notification.Name("walletsChanged"), object: nil, userInfo: nil)
     }) throws {
         let accessFixture = WalletAccessTestFixture(password: String(decoding: WalletCoreProxyTestVectors.walletCoreJSONMnemonicPassword, as: UTF8.self))
@@ -509,6 +549,8 @@ private final class AccountEditorFixture {
             XCTFail("Account editing must not add Keychain items")
             return errSecParam
         }, update: { query, attributes in
+            let status = beforeUpdate()
+            guard status == errSecSuccess else { return status }
             guard let key = (query as NSDictionary)[kSecAttrAccount as String] as? String,
                   key.hasPrefix("org.lil.wallet.wallet."),
                   let data = (attributes as NSDictionary)[kSecValueData as String] as? Data else { return errSecParam }
@@ -656,6 +698,11 @@ private final class AccountEditorHost {
         window.contentViewController = controller
 #endif
     }
+
+#if os(macOS)
+    func showWindow() { window.orderFront(nil) }
+    func closeWindow() { window.close() }
+#endif
 
     func close() {
 #if os(macOS)
