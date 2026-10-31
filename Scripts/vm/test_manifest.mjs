@@ -227,11 +227,11 @@ function matchesTestSelector(identifier, rawSelector) {
     return identifier === selector || identifier.startsWith(`${selector}/`) || name === selector || name.startsWith(`${selector}/`);
 }
 
-function asanTests(inventory, focus, selectors) {
+function focusedTests(inventory, focus, selectors, sanitizer) {
     const available = inventory.filter(test => test.variants.includes("macos.debug"));
     for (const selector of focus) {
         if (!available.some(test => matchesTestSelector(test.id, selector))) {
-            throw new Error(`ASan test inventory is missing ${selector}`);
+            throw new Error(`${sanitizer} test inventory is missing ${selector}`);
         }
     }
     return available.filter(test => focus.some(selector => matchesTestSelector(test.id, selector)) &&
@@ -284,8 +284,8 @@ export function createManifest(job) {
     ]) { add(`worker.${id}`, "worker", "npm", ["run", script, ...suffix], {cwd: worker, dependencies: ["worker.install"]}); }
 
     const configurations = options.configuration ? [options.configuration] : ["Debug", "Release"];
-    const asanRuntimeTests = asanTests(runtimeInventory.tests, ASAN_RUNTIME_TESTS, options.onlyTesting);
-    const asanAppTests = asanTests(runtimeInventory.appTests, ASAN_APP_TESTS, options.onlyTesting);
+    const asanRuntimeTests = focusedTests(runtimeInventory.tests, ASAN_RUNTIME_TESTS, options.onlyTesting, "ASan");
+    const asanAppTests = focusedTests(runtimeInventory.appTests, ASAN_APP_TESTS, options.onlyTesting, "ASan");
     if (options.stages.includes("asan") && !asanRuntimeTests.length && !asanAppTests.length) {
         throw new Error("ASan selection did not match any focused macOS tests");
     }
@@ -395,21 +395,39 @@ export function createManifest(job) {
         }
     }
     for (const [id, classes] of [["tsan.focused", TSAN_TESTS], ...(job.profile === "extended" ? [["tsan.extended", EXTENDED_TSAN_TESTS]] : [])]) {
-        const packageTests = runtimeTestsForPlatform(classes, "macos", "Debug");
+        const packageTests = runtimeTestsForPlatform(classes, "macos", "Debug").filter(test =>
+            !options.onlyTesting.length || options.onlyTesting.some(selector => matchesTestSelector(test, selector)));
         if (packageTests.length) {
             add(`${id}.runtime`, "tsan", "xcodebuild", [...runtimeNativeBase, "-configuration", "Debug", "-destination", "$destination:macos",
                 "-enableThreadSanitizer", "YES", ...packageTests.map(test => `-only-testing:${test}`)], {
                 cwd: "Packages/WalletRuntime", dependencies: runtimeChecks, requirements: ["xcode", "macos"], timeoutSeconds: 14400,
-                nativeAudit: {configuration: "Debug", platform: "macos", kind: "tsan", runtime: true, requiredTests: packageTests}, resultBundle: true,
+                nativeAudit: {configuration: "Debug", platform: "macos", kind: "tsan", runtime: true, requiredTests: packageTests,
+                    filtered: options.onlyTesting.length > 0}, resultBundle: true,
             });
         }
-        const appTests = testingForPlatform(classes, PLATFORMS[0], "Debug");
+        const focusedAppTests = testingForPlatform(classes, PLATFORMS[0], "Debug");
+        if (!options.stages.length || options.stages.includes("tsan")) {
+            for (const rawSelector of options.onlyTesting) {
+                const normalized = rawSelector.replace(/\(\)$/, "");
+                const selector = normalized.startsWith("Tests macOS/") ? normalized : `Tests macOS/${normalized}`;
+                if (focusedAppTests.some(focus => selector.startsWith(`${focus}/`)) &&
+                    !runtimeInventory.appTests.some(test => test.id === selector && test.variants.includes("macos.debug")) &&
+                    !runtimeTestsForPlatform([normalized], "macos", "Debug").length) {
+                    throw new Error(`TSan app method is not available on macOS Debug: ${selector}`);
+                }
+            }
+        }
+        const appTests = focusedTests(runtimeInventory.appTests, focusedAppTests, options.onlyTesting, "TSan");
         if (appTests.length) {
             add(id, "tsan", "xcodebuild", [...nativeBase, "-configuration", "Debug", "-enableThreadSanitizer", "YES", ...appTests.map(test => `-only-testing:${test}`)], {
-                dependencies: nativeDependencies, requirements: nativeRequirements, proofKey: true, timeoutSeconds: 14400,
-                nativeAudit: {configuration: "Debug", platform: "macos", kind: "tsan"}, resultBundle: true,
+                dependencies: [...nativeDependencies, "runtime.inventory"], requirements: nativeRequirements, proofKey: true, timeoutSeconds: 14400,
+                nativeAudit: {configuration: "Debug", platform: "macos", kind: "tsan", requiredTests: appTests,
+                    filtered: options.onlyTesting.length > 0}, resultBundle: true,
             });
         }
+    }
+    if (options.stages.includes("tsan") && !stages.some(stage => stage.group === "tsan")) {
+        throw new Error("TSan selection did not match any tests in the selected profile");
     }
     const asanArguments = ["-configuration", "Debug", "-enableAddressSanitizer", "YES", "-enableThreadSanitizer", "NO"];
     if (asanRuntimeTests.length) {

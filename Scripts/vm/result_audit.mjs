@@ -87,13 +87,14 @@ export function auditNativeResult(summary, tree, policy) {
     if (policy.kind === "performance") {
         for (const name of PERFORMANCE_TESTS) { if (!performancePassed.includes(name)) { issues.push(`Release performance gate did not pass: ${name}`); } }
     }
-    if (policy.runtime === true || policy.kind === "asan") {
-        const label = policy.runtime === true ? "Runtime" : "AddressSanitizer";
+    const sanitizerInventory = policy.kind === "asan" || policy.kind === "tsan";
+    if (policy.runtime === true || sanitizerInventory) {
+        const label = policy.runtime === true ? "Runtime" : policy.kind === "tsan" ? "ThreadSanitizer" : "AddressSanitizer";
         const targets = policy.runtime === true ? RUNTIME_TEST_TARGETS : ["Tests macOS"];
         const expected = policy.requiredTests;
         if (!Array.isArray(expected) || !expected.length || expected.some(name => typeof name !== "string" ||
             !targets.some(target => name.startsWith(`${target}/`)) ||
-            policy.kind === "asan" && !/^[^/]+\/[A-Za-z_][A-Za-z0-9_]*\/[A-Za-z_][A-Za-z0-9_]*$/.test(name)) || new Set(expected).size !== expected.length) {
+            sanitizerInventory && !/^[^/]+\/[A-Za-z_][A-Za-z0-9_]*\/[A-Za-z_][A-Za-z0-9_]*$/.test(name)) || new Set(expected).size !== expected.length) {
             issues.push(`${label} audit requires a nonempty, unique expected-test inventory`);
         } else {
             const inventory = new Map();
@@ -108,8 +109,9 @@ export function auditNativeResult(summary, tree, policy) {
                 }
                 inventory.set(identifier, (inventory.get(identifier) ?? 0) + 1);
                 if (!expected.includes(identifier)) { issues.push(`Unexpected ${label.toLowerCase()} test: ${test.identifier}`); }
-                if (policy.kind === "asan" && test.target && identifier.split("/")[0] !== test.target) {
-                    issues.push(`AddressSanitizer test bundle does not match its identifier: ${test.identifier}`);
+                if (sanitizerInventory && test.target && identifier.split("/")[0] !== test.target) {
+                    const sanitizer = policy.kind === "tsan" ? "ThreadSanitizer" : "AddressSanitizer";
+                    issues.push(`${sanitizer} test bundle does not match its identifier: ${test.identifier}`);
                 }
                 if (test.result !== "passed" && !(test.result === "skipped" && policy.configuration === "Debug" &&
                     policy.kind === "full" && performanceTestName(identifier))) {
@@ -409,6 +411,9 @@ export function auditResults(stages) {
         if (stage.status === "passed") {
             if (stage.nativeAudit?.runtime === true && stage.audit?.ok !== true) {
                 issues.push(`${stage.id} has no passing runtime XCTest audit`);
+            }
+            if (stage.nativeAudit?.kind === "tsan" && stage.audit?.ok !== true) {
+                issues.push(`${stage.id} has no passing ThreadSanitizer XCTest audit`);
             }
             if (stage.nativeAudit?.kind === "asan" && (stage.audit?.ok !== true || stage.audit.asanLog?.ok !== true)) {
                 issues.push(`${stage.id} has no passing AddressSanitizer diagnostic audit`);

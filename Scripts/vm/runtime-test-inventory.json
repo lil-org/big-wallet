@@ -19629,6 +19629,279 @@
       ]
     },
     {
+      "id": "Tests macOS/AccountPreviewStateTests/testDeinitializationCancelsSessionCreation",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testDeinitializationRetiresAnIdleInstalledSession",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testDisablingAndRestoringTheLastSelection",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testElapsedThrottleAndExhaustionDoNotScheduleExtraWork",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testExternallyFulfilledEditsBecomeCleanAndLaterChangesFollowTheNewBaseline",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testFailedRecoveryPreservesTheEntireCachedPageRangeAndLateRetryIsSilenced",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testFailuresRequireExplicitRetryAndRebuildCachedPagesWithoutLosingSelection",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testInitialPageCallbackCanRetireTheAdoptedSession",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testInvalidationCancelsWorkAndSilencesLateResults",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testInvalidationRetiresInitialSessionBeforeTheFirstPageReturns",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testLoadingDoesNotRetainStateAndDeinitializationCancelsTheRequest",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testPagingWaitsForLayoutAndCoalescesViewportRequests",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testRefreshCanLeaveAnEmptyDraftForTheUserToRepair",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testRefreshClosesOnlyRemovedOrDifferentWallets",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testRefreshDiscardsLateSessionCreationWithoutStartingItsFirstPage",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testRefreshKeepsMetadataChangesAndPristinePreviewPages",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testRefreshPreservesFailureUntilExplicitRetryWithTheLatestWallet",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testRefreshRebasesDraftAndOffPageSelectionsWithoutRestartingPendingPagination",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testRefreshRestartsPendingFirstPageAndIgnoresItsLateResult",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testReloadCallbackCanInvalidateBeforeTheLoadStarts",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testResetRejectsLateAdditionalPageAndOldLayoutActivation",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testResetRejectsLateFirstPageWithoutClearingTheReplacementLoad",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testSelectionPreservesUndiscoveredAccountsAndOutputOrder",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testStoreFailureRetainsCachedRowsAndCancelsPendingPagination",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testThrottleUsesSuccessfulCompletionAndRemainingDelay",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountsListViewControllerTests/testAccountHeaderTeardownCancelsItsMenu",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountsListViewControllerTests/testEmptyWalletCreateCanBeActivatedWithReturn",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountsListViewControllerTests/testEmptyWalletOptionsSupportKeyboardAndMouseImport",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountsListViewControllerTests/testFailedForegroundReloadOrLockRetiresAuthenticationWithoutExportOrDelete",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountsListViewControllerTests/testFailedRefreshPreservesCachedRowsAndAllowsOnlyPublicAccountActions",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountsListViewControllerTests/testInitialReadFailureOffersRetryBeforeEmptyWalletActions",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountsListViewControllerTests/testOrdinaryWalletCloseStillFencesRetainedActions",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountsListViewControllerTests/testPendingAuthenticationSurvivesSuccessfulForegroundReload",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountsListViewControllerTests/testRetiredWalletListDoesNotResumeLoadingOrPublishRows",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountsListViewControllerTests/testSuccessfulAuthenticationWaitsForTheForegroundReloadBeforeExportOrDelete",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountsListViewControllerTests/testWalletListCancelledDragClearsSelectionAndAllowsNextClick",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountsListViewControllerTests/testWalletListHidesApprovalControls",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountsListViewControllerTests/testWalletListKeyboardSelectionOpensMenuAndAllowsNextClick",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountsListViewControllerTests/testWalletListPendingMenuDoesNotOpenAfterSelectionClears",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
       "id": "Tests macOS/MacSecretLifetimeTests/testAccountsNavigationCancelsPendingMutationBeforeLockAndReleasesItsController",
       "variants": [
         "macos.debug",
@@ -19707,6 +19980,146 @@
     },
     {
       "id": "Tests macOS/MacSecretLifetimeTests/testSuccessfulImportClearsTheDraftBeforeReplacingContent",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountPickerKeyboardNavigatesAndActivatesWithoutSubmitting",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountPickerKeyboardSkipsDisabledCoinsAndFollowsMouseFocus",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountSelectionClickIgnoresOtherCoinAndCanClearSelection",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountSelectionClickSwitchesAndDeselectsOncePreservingOtherCoin",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountSelectionCompletionUsesSessionNetwork",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountSelectionQueriesDoNotChangeSelectedAccounts",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountSelectionSubmissionImmediatelyFencesControls",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountSelectionTeardownFencesNavigationAndClosesItsSheet",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountSelectionUsesCompactNetworkButtonWithAccessibleIdentity",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testApprovalPickerBlocksWalletManagementActions",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testApprovalPickerRefreshPreservesOnlyExistingSelectionsWithoutSubmitting",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testControllersLoadIndependentInstancesOfTheSharedAccountView",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testEmptyApprovalShowsRequesterAndSeparateWalletManagement",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testFailedStoreLoadKeepsApprovalPendingAndAllowsCancellation",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testManageWalletsCanRetryAfterReloadAbortsItsQueuedLaunch",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testManageWalletsHandoffKeepsApprovalPendingAndFencesLateCallbacks",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testNetworkSheetCanDismissAfterStoreFailureWithoutApplyingASelection",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testSelectionSubmissionKeepsReviewAliveAndFencesReentrantSubmission",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testStoreRetryRestoresAccountSelectionWithoutReplacingApproval",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeAccountSelectionViewControllerTests/testSwitchAccountHeaderDoesNotDependOnConnectedProviders",
       "variants": [
         "macos.debug",
         "macos.release"
@@ -20078,6 +20491,1273 @@
     },
     {
       "id": "Tests macOS/PasswordStorageTests/testMacWelcomeReportsUnavailableStorageAndRetiresItsCallbacks",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testAccountSelectionPreservesSelectedNetworkAndNormalizedAddressThroughExecution",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testAccountSelectionRejectsInvalidEntriesWithoutClaimingOrDroppingAccounts",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testAddChainApprovalSkipsRevisionsAndRejectUsesSingleActionPath",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testAdmissionDistinguishesUnavailableSigningAccountsFromRemovedAccounts",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testApprovalDispatchAwaitsAuthenticationAndFinalPersistence",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testApprovalDispatchAwaitsBroadcastSend",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testAuthenticationCancellationDoesNotRestoreUnavailableReviewContext",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testAuthenticationCancellationPreservesReviewedFeeNotice",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testAuthenticationCancellationRebuildsReviewWhenNetworkChanges",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testAuthenticationCancellationRebuildsReviewWhenWalletAuthorityChanges",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testAuthenticationCancellationReleasesClaimAndReturnsToReview",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testAuthenticationDeadlineReleasesClaimAndInvalidatesSignerRegardlessOfTimerOrder",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testAuthenticationPreflightCatalogExecutionAndLeaseShareOneDeadline",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testBroadcastCheckpointsBeforeSendAndCompletion",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testBroadcastStillSendsWhenDeadlineExpiresAfterCheckpoint",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCachedControllerShowsWorkingAfterForeignClaim",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCachedReviewsRefreshWhenAvailableAccountsChangeWithinSameGeneration",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCachedSigningAndSelectionReviewsDetectVaultTombstone",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCallerCancellationAfterCheckpointPersistsTheBroadcastResult",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCallerCancellationDuringAuthenticationReviewRestorationRemainsInterrupted",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCallerCancellationStopsUncommittedWorkAndDisposesLateResults",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCanceledNativeExecutionCannotCheckpointOrBroadcast",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCancellationAtCommittedCheckpointStillStartsBroadcastOnce",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCancellationBeforePreparationReturnsOrdinaryAbandonment",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCancelledTransactionAuthenticationPreservesEditsAndRequiresFreshApproval",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCancelledTransactionSpeedLeavesFeeAndSelectionUnchanged",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCatalogPreparationFailuresPreserveAdmissionAndPopupRecovery",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCatalogResolutionDeadlineReleasesClaimAndDiscardsLateApproval",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCatalogReviewsReloadAccountNamesWithoutRestarting",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testChangedChainSwitchMaterializesImmediateResponseFromCatalog",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testChangedVaultDuringAuthenticationReleasesBeforeRematerializing",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testColdControllerRejectsQueuedHandleWithoutMaterializingSession",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testColdControllerShowsWorkingForApprovingSnapshot",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCommandRepliesCarryCurrentStateWithoutAnotherRead",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCompletedPopupSpeedChangePublishesConsistentSelectionAndPreparesOnce",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCompletedRequestPollingSettlesPendingTransactionPreflight",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCompletionOwnershipLossToReceiptRequiresApprovalDelivery",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testConsumedSignerCanAcquireLeaseAndIsInvalidatedBeforeBroadcastSend",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCopiedClaimCannotPrepareTwiceAcrossExecutors",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCorrectionReviewRequiresCurrentBindingCatalogAndNetwork",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCustomFeeEditReplacesSliderProvenanceForBothFields",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testCustomNetworkRetryWaitsForFreshStorageBeforeReviewingOrRejecting",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testDuplicateExecutionCannotReleaseTheOriginalPermit",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testEmptyReviewCatalogIsRetainedForSubsequentAvailabilityChecks",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testExecutingApprovalIgnoresPopupRetryAndStaleActions",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testExecutionLeaseCoversDurableCommitAndEndsBeforeBroadcast",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testExecutorMapsClaimAbandonmentOutcomes",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testExecutorReleasesUnapprovedLeaseWhenAuthorizationAndAbandonFail",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testExpiredOperationDeadlineNeverStartsWorkOrAcquiresLease",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testFailedClaimReleaseDoesNotRestoreActionableReview",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testFailedRejectPreservesCachedReviewSession",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testFeeCapEditPreservesUntouchedPriorityFeeProvenance",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testFinalSelectionDistinguishesRemovedAndUnavailableAccountsAfterClaim",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testFreshTransactionSessionUsesCurrentSuggestedNonce",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testHungBroadcastTimesOutToRecoveryAndInvokesSendOnce",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testImmediatePersistenceFailureRetriesExplicitlyAndDuplicateRetryDoesNotRestartWork",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testImmediatePersistenceRetryCanMaterializeAReview",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testImmediateResponsePersistenceShowsWorkingUntilReconciled",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testInvalidCustomFeeDoesNotApplyNonceAndNoOpDoesNotRestartPreparation",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testLateCatalogFailureCannotDiscardAuthenticatingSession",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testMaterialReviewChangesRotateTheSingleReviewToken",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testMessageApprovalPersistsDenialWhenAccountDisappears",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testMessageApprovalRetainsReviewedActionAndUsesFreshUnlockedAccess",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testMissingVaultDuringAuthenticationShowsSecureSetupRequired",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testMobileDeadlineRollsBackAtEveryExactPrecommitBoundary",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeAgentCannotQuitWithoutCapturedProcessStart",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeAgentConfirmationUsesProcessStartWhenLaunchDateIsNil",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeAgentFailsClosedWhenProcessStartLookupBecomesUnavailable",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeAgentLaunchConfigurationIsPrivateAndCopyIsolated",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeAgentQuitDoesNotTargetReusedProcessIdentifier",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeAgentQuitTargetsOnlyTheRevalidatedProcess",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeAgentTreatsUnidentifiedLiveProcessAsRunning",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeAuthorityChangeDuringAuthenticationReleasesWithoutSigning",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeCancellationAfterClaimRetiresConsentBeforePreparation",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeCoordinatorOwnsFailedAttemptInterruption",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeCoordinatorRequiresFreshReviewAfterDeliveryOwnerIsCleared",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeDeliveryFencesCachedTransactionMutations",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerAddChainDoesNotCreateOrPassSigner",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerDistinguishesMissingAndChangedReviewedRPCEndpoint",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerDoesNotAgeMessageSigning",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerDoesNotReprepareAcceptedIntent",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerEnforcesTransactionDecisionCutoff",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerExecutesDeliveredApprovalWithoutWorkerTrigger",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerExecutesMatchingDecisionExactlyOnce",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerFailureCannotExecuteAgain",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerKeepsApprovedWalletWhenAnotherWalletHasSameAddress",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerMissingSigningAccountPreservesProviderDenialAndSolanaRevocation",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerNeverResendsAfterAmbiguousCheckpointFailure",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerOverlappingAttemptPreservesExecutingConsent",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerPreservesGrantWhenSigningAccountIsKnownButUnavailable",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerRechecksSolanaTransactionAgeBeforeExecution",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerRechecksTransactionAgeAfterClaim",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerRechecksTransactionAgeAfterRefreshingFacts",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerRejectsFutureSolanaTransactionDecisions",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerRejectsFutureTransactionDecisionBeforeResolve",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerRejectsRevokedAuthorityBeforeResolve",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerRequiresFreshConsentAfterWalletRefreshFailure",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerSharesCanonicalSelectionAndDisconnectRules",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerTerminalAndMissingRequestsDoNoPrivilegedWork",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNonceOnlyEditKeepsFailedTransactionUnapprovable",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testNonceOnlyEditPreservesFeeProvenance",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testOldImmediatePersistenceCompletionPreservesReplacementFailure",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testOldImmediatePersistenceCompletionPreservesReplacementReview",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testOperationTimeoutReturnsBeforeUncooperativeWorkAndNeverSendsLateBroadcast",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testOrdinarySigningClaimRejectsNativeCommitBeforeResolution",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testPendingResponseCarriesCompletedIdentitiesBeforeQueuedRequests",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testPendingResponseIsFIFO",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testPopupRejectsSignerBoundToAnotherReviewedCatalogAccount",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testPopupSignerSignsOnlyReviewedAccountAndPayloadOnce",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testPreflightFeeNoticeRetainsUpdatedReviewAndRequiresFreshApproval",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testPreflightWarningAtDeadlineDoesNotRestoreCorrectionReview",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testPriorityFeeEditPreservesUntouchedFeeCapProvenance",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testPrivatePopupCommandsNeverExposeStoredReview",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testQueueCleanupPreservesOtherProfileReviewAndImmediatePersistence",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testReadsPreserveCachedErrorUntilIdentityBoundRetry",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testReceiptOwnedApprovalStateInvalidatesCachedReview",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testReceiptOwnedReplaySkipsWalletMaterialization",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testRecoveryWorkerCommandsUseExactNativeEnvelopes",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testRejectedRequestCannotReappearAfterSuspendedCatalogValidation",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testRejectedRequestCannotReappearAfterSuspendedPreparation",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testReleasedNativeCoordinatorCannotReplayFailedClaimOrCheckpoint",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testRemovedSelectedAccountDuringAuthenticationPersistsDenial",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testRequestScopeInvalidatesOwnedAccessOnceWithoutClearingBorrowedCatalog",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testRetryNeverRematerializesNativeOwnedOrApprovingCachedErrors",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testReusedTransactionRequestIDAndReplacementAccountDoNotInheritEdits",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testReviewPresentationTitlesCoverEveryAction",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testRevokedAuthorityCannotBeApproved",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testRuntimeIdentityPrefersLiveProcessStartOverLaunchDate",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testRuntimeIdentityRejectsLaunchDateWithoutProcessStart",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testSafariSandboxAllowsAppleEventsOnlyToAmbient",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testSelectionCatalogFailureRebuildsReviewAndRequiresExplicitRetryNetwork",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testSelectionCatalogRemovalRequiresSecureSetup",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testSelectionDraftPreservesPreparedActionAndReviewRevision",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testSelectionPersistsFailureWhenNetworkDisappearsAfterClaim",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testSelectionResolvesNetworkLossBetweenReviewAndApproval",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testSessionCanReturnToReviewFromUnclaimedAndFailedAttempts",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testSessionPreservesFeedbackAcrossAuthentication",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testSessionUsesFourDisposablePhasesAndOneReviewToken",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testSigningApprovalTakesExecutionDeadlineFromNativeClaim",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testSigningContinuesWhenSiblingAccountBecomesUnavailableDuringAuthentication",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testSigningValidationRollbackDoesNotAcquireWalletLease",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testStaleReviewTokenCannotMutateSession",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testStaleReviewTokenRejectsApproveAndMutation",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testStoppedPreparationPreservesReasonAndClaimReleaseOutcome",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testSuggestedEditRestoresNonceAndOwnershipOfUnchangedFee",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testSupersededAuthenticationInvalidatesSignerAndPreservesReplacementReview",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTaskCancellationDuringAuthenticationDiscardsLateUnlockAndRequiresRetry",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionApprovalAwaitsSynchronousAuthenticationOutputAndPreflight",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionApprovalPreservesReviewedPayloadDespiteChangedPreflightOutput",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionApprovalRejectsFreshRPCEndpointDrift",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionApprovalRetainsReviewedPayloadAndAppliesExecutionEdits",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionNoticeReleasesClaimAndRetryRequiresCurrentReview",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionPreflightDeadlineReleasesClaimAndIgnoresLateResults",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionPresentationChangeWhileCheckingAuthorityReturnsToReview",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionPresentationChangeWhileClaimingRequiresRetry",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionPresentationRetainsEditsAndSessionWithoutChangingIntent",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionRematerializesAfterRetryableExecutionStartFailure",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionResponsesOwnLoadingPresentationAndTransientEditFeedback",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionSessionAuthenticationRefusalAllowsFreshApproval",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionSessionCompletesSynchronousPreflightOnce",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionSessionInvalidationCancelsContextAndIgnoresLateResult",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionSessionInvalidationRejectsLateAuthentication",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionSessionInvalidationSettlesPreflightAndIgnoresLateResults",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionSessionInvalidationWinsAlreadyResumedPreflight",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionSessionPreflightNoticesRemainPresentable",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionSessionRejectsDuplicatesAndFreezesPreparationDuringAuthentication",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testTransactionTokenRotationDuringCatalogReadReturnsCurrentReview",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testUnavailableAuthenticationKeepsFeedbackUntilFreshReviewRetry",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testUnavailableAuthorityPreservesReviewForRetry",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testUnavailableCatalogAllowsRetryAndRejection",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testUnavailablePreparationAbandonsOrdinaryAndNativeClaimsBeforeResolution",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testUnavailableReviewedSigningAccountWithUsableSiblingRequiresFreshReview",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testUnavailableStoreNeverLooksLikeCompletedRequest",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testUnavailableVaultCommitAbandonsOrdinaryAndNativeClaims",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testUnknownNonemptySwitchPersistsWithoutReadingCatalog",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testVaultAuthenticationCancellationCreatesFreshReviewAuthority",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testVaultRotationDuringSigningDiscardsPreparedBroadcast",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testWalletDependentAdmissionDefersWithoutCatalogProvider",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testWalletDependentImmediateResponseUsesInjectedCatalog",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testWalletIndependentApprovalDoesNotRequireVaultCatalog",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testZeroBroadcastTimeoutPersistsRecoveryWithoutLateRedispatch",
       "variants": [
         "macos.debug",
         "macos.release"

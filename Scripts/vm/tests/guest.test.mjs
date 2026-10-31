@@ -56,7 +56,7 @@ const passedManifest = manifest => manifest.map(stage => ({id: stage.id, status:
     ...(stage.nativeAudit ? {nativeAudit: stage.nativeAudit} : {}),
     ...(stage.approvalAudit ? {approvalAudit: stage.approvalAudit} : {}),
     ...(stage.upgradeAudit ? {upgradeAudit: stage.upgradeAudit} : {}),
-    ...(stage.nativeAudit?.runtime || stage.approvalAudit || stage.upgradeAudit ? {audit: {ok: true}} : {}),
+    ...(stage.nativeAudit?.runtime || stage.nativeAudit?.kind === "tsan" || stage.approvalAudit || stage.upgradeAudit ? {audit: {ok: true}} : {}),
     ...(stage.nativeAudit?.kind === "safari" ? {audit: {ok: true, safari: {ok: true}, safariLog: {ok: true}}} : {}),
     ...(stage.nativeAudit?.kind === "asan" ? {audit: {ok: true, asanLog: {ok: true}}} : {})}));
 
@@ -337,6 +337,77 @@ test("extended matrix retains baseline checks and adds bounded seeds, soak, and 
     }
     for (const name of TSAN_TESTS) { assert.ok(extended.filter(stage => stage.id.startsWith("tsan.focused")).some(stage => stage.args.some(arg => arg === `-only-testing:Tests macOS/${name}` || arg.includes(`/${name}/`)))); }
     assert.deepEqual(extended.find(stage => stage.id === "performance.release").env, PERFORMANCE_ENV);
+});
+
+test("TSan filters runtime classes, targets, and individual methods", () => {
+    for (const selector of ["WalletSigningSessionTests", "WalletAuthorityTests/WalletSigningSessionTests"]) {
+        const stages = createManifest(job({payload: {stages: ["tsan"], onlyTesting: [selector]}})).filter(stage => stage.group === "tsan");
+        assert.deepEqual(stages.map(stage => stage.id), ["tsan.focused.runtime"]);
+        assert.ok(stages[0].nativeAudit.requiredTests.length > 0);
+        assert.ok(stages[0].nativeAudit.requiredTests.every(id => id.startsWith("WalletAuthorityTests/WalletSigningSessionTests/")));
+        assert.equal(stages[0].nativeAudit.filtered, true);
+    }
+    const method = "WalletAuthorityTests/WalletSigningSessionTests/testMismatchedSourceAccountDoesNotConsumePermit";
+    const selected = createManifest(job({payload: {stages: ["tsan"], onlyTesting: [`${method}()`, method]}}))
+        .filter(stage => stage.group === "tsan");
+    assert.deepEqual(selected.map(stage => stage.nativeAudit.requiredTests), [[method]]);
+    const target = createManifest(job({payload: {stages: ["tsan"], onlyTesting: ["WalletAuthorityTests"]}}))
+        .filter(stage => stage.group === "tsan");
+    assert.deepEqual(target.map(stage => stage.id), ["tsan.focused.runtime"]);
+    assert.ok(target[0].nativeAudit.requiredTests.every(id => id.startsWith("WalletAuthorityTests/")));
+});
+
+test("TSan filters app selectors and retains only matching focused or extended stages", () => {
+    const selected = (onlyTesting, profile = "all") => createManifest(job({profile, payload: {stages: ["tsan"], onlyTesting}}))
+        .filter(stage => stage.group === "tsan");
+    const selectors = stages => stages.flatMap(stage => stage.args.filter(arg => arg.startsWith("-only-testing:")));
+    const appClass = "Tests macOS/AccountPreviewStateTests";
+    const appMethod = `${appClass}/testDisablingAndRestoringTheLastSelection`;
+    const fullClass = selectors(selected([appClass]));
+    assert.ok(fullClass.length > 1);
+    assert.ok(fullClass.every(selector => selector.startsWith(`-only-testing:${appClass}/`)));
+    for (const selector of ["Tests macOS", "AccountPreviewStateTests", appClass]) {
+        const stages = selected([selector]);
+        assert.deepEqual(stages.map(stage => stage.id), ["tsan.focused"]);
+        assert.deepEqual(selectors(stages), fullClass);
+        assert.deepEqual(stages[0].nativeAudit.requiredTests.map(id => `-only-testing:${id}`), fullClass);
+        assert.ok(stages[0].dependencies.includes("runtime.inventory"));
+        assert.equal(stages[0].nativeAudit.filtered, true);
+    }
+    assert.deepEqual(selectors(selected([`${appMethod}()`, appMethod])), [`-only-testing:${appMethod}`]);
+    assert.deepEqual(selectors(selected([appClass, appMethod])), fullClass);
+    assert.deepEqual(selectors(selected(["AccountPreviewStateTests/testDisablingAndRestoringTheLastSelection"])), [`-only-testing:${appMethod}`]);
+    const runtimeMethod = "WalletAuthorityTests/WalletSigningSessionTests/testMismatchedSourceAccountDoesNotConsumePermit";
+    assert.deepEqual(selectors(selected([appMethod, runtimeMethod])), [`-only-testing:${runtimeMethod}`, `-only-testing:${appMethod}`]);
+    const extended = selected(["Tests macOS/PopupRequestSessionsTests"], "extended");
+    assert.deepEqual(extended.map(stage => stage.id), ["tsan.extended"]);
+    assert.ok(selectors(extended).length > 1);
+    assert.ok(selectors(extended).every(selector => selector.startsWith("-only-testing:Tests macOS/PopupRequestSessionsTests/")));
+    assert.deepEqual(selectors(extended), extended[0].nativeAudit.requiredTests.map(id => `-only-testing:${id}`));
+});
+
+test("TSan rejects nonexistent app methods even beside valid methods or class selectors", () => {
+    const valid = "Tests macOS/AccountPreviewStateTests/testDisablingAndRestoringTheLastSelection";
+    for (const profile of ["all", "extended"]) {
+        const classes = ["AccountPreviewStateTests", ...(profile === "extended" ? ["NativeApprovalCoordinatorTests"] : [])];
+        for (const name of classes) {
+            for (const selector of [`${name}/thisDoesNotExist`, `Tests macOS/${name}/testMissing()`]) {
+                for (const onlyTesting of [[selector], [valid, selector], [`Tests macOS/${name}`, selector]]) {
+                    assert.throws(() => createManifest(job({profile, payload: {stages: ["tsan"], onlyTesting}})), /TSan app method is not available/);
+                }
+            }
+        }
+    }
+    assert.doesNotThrow(() => createManifest(job({payload: {stages: ["test"], onlyTesting: ["AccountPreviewStateTests/thisDoesNotExist"]}})));
+});
+
+test("explicit empty TSan selections fail without changing unrelated filtered runs", () => {
+    for (const selector of ["Tests macOS/WindowAuthenticationSessionTests", "MissingTests", "Tests iOS",
+        "WalletDomainTests/BigUIntTests", "Tests macOS/PopupRequestSessionsTests"]) {
+        assert.throws(() => createManifest(job({payload: {stages: ["tsan"], onlyTesting: [selector]}})), /TSan selection did not match/);
+    }
+    const unrelated = createManifest(job({payload: {onlyTesting: ["Tests iOS"]}}));
+    assert.ok(!unrelated.some(stage => stage.group === "tsan"));
 });
 
 test("explicit approval soaks use the six-hour budget without adding duplicate workloads", () => {

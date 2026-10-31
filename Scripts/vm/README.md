@@ -536,6 +536,10 @@ lifecycle runs. `extended` adds broader TSan, three fixed 20,000-case fuzz seeds
 Debug/Release lifecycle soaks of 1,000 sequences × 200 actions, and ten iterations
 of every selected Safari lifecycle scenario in Release on both browser platforms.
 
+`--only-testing` narrows TSan to matching tests in the selected profile. An explicit
+`--stage tsan` selection with no matching tests fails before execution. App methods
+must exist in the macOS Debug inventory, and every selected test must run exactly once.
+
 Both signing modes run the same selected tests, performance thresholds, crash
 scenarios, and result audits. Local native unit-test verification removes production
 entitlements, App Sandbox, and Hardened Runtime settings from its ad-hoc products.

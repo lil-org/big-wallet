@@ -7,7 +7,11 @@ const PLATFORMS = ["macos", "ios", "visionos"];
 const CONFIGURATIONS = ["Debug", "Release"];
 const APP_TEST_TARGETS = {macos: "Tests macOS", ios: "Tests iOS", visionos: "Tests visionOS"};
 export const APP_TEST_CLASS_PLATFORMS = {
+    AccountPreviewStateTests: ["macos"],
+    AccountsListViewControllerTests: ["macos"],
     NativeApprovalCoordinatorTests: ["macos"],
+    NativeAccountSelectionViewControllerTests: ["macos"],
+    PopupRequestSessionsTests: ["macos"],
     TransactionApprovalCoordinatorTests: PLATFORMS,
     PasswordStorageTests: PLATFORMS,
     SecretHandlingTests: ["macos"],
