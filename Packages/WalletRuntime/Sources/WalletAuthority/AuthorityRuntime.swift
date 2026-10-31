@@ -40,6 +40,7 @@ public final class AuthorityRuntime {
     private let vault: SafariApprovalVault
     private let authorityID: UUID
     private nonisolated let clock: @Sendable () -> Date
+    private let monotonicClock: @Sendable () -> ContinuousClock.Instant
     private let hooks: AuthorityExecutionHooks
     private let definitionResult: @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult
     private nonisolated let invalidateCache: @Sendable () -> Void
@@ -89,6 +90,7 @@ public final class AuthorityRuntime {
         notifications: WalletStoreChangeNotifications = .live,
         credentialAuthentication: WalletCredentialAuthentication = .live,
         clock: @escaping @Sendable () -> Date = Date.init,
+        monotonicClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now },
         hooks: AuthorityExecutionHooks = .none
     ) -> AuthorityRuntime {
         configured(
@@ -99,7 +101,7 @@ public final class AuthorityRuntime {
             freshCustomSnapshot: freshCustomSnapshot, definitionResult: definitionResult,
             insertNetwork: insertNetwork, invalidateCache: invalidateCache, fileIO: fileIO,
             metadataMutations: metadataMutations, notifications: notifications,
-            credentialAuthentication: credentialAuthentication, clock: clock, hooks: hooks
+            credentialAuthentication: credentialAuthentication, clock: clock, monotonicClock: monotonicClock, hooks: hooks
         )
     }
 
@@ -128,6 +130,7 @@ public final class AuthorityRuntime {
         notifications: WalletStoreChangeNotifications = .live,
         credentialAuthentication: WalletCredentialAuthentication = .live,
         clock: @escaping @Sendable () -> Date = Date.init,
+        monotonicClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now },
         hooks: AuthorityExecutionHooks = .none
     ) -> AuthorityRuntime {
         let networks = NetworkResolver(
@@ -164,7 +167,7 @@ public final class AuthorityRuntime {
         let authorityID = UUID()
         let metadata = suppliedMetadata ?? WalletsMetadataService.live()
         let wallets = WalletsManager(keychain: keychain, reloadMetadata: { metadata.reload() }, walletSourceMutator: store,
-            notifications: notifications, metadataMutations: metadataMutations ?? metadata.mutations, authorityID: authorityID, clock: clock)
+            notifications: notifications, metadataMutations: metadataMutations ?? metadata.mutations, authorityID: authorityID, clock: monotonicClock)
         let requests = ExtensionBridge(store: store, hooks: hooks)
         let vault = suppliedVault ?? SafariApprovalVault(
             fileURL: storage.containerURL?.appendingPathComponent("SafariApprovalVault.v1", isDirectory: false),
@@ -176,9 +179,9 @@ public final class AuthorityRuntime {
             try await repository.safariApprovalSourceSnapshot()
         }
         wallets.approvalVaultHost = vaultHost
-        let credentials = WalletCredentials(keychain: keychain, messages: messages, authorityID: authorityID, vaultHost: vaultHost, authentication: credentialAuthentication, clock: clock, postCreation: notifications.postMutation)
+        let credentials = WalletCredentials(keychain: keychain, messages: messages, authorityID: authorityID, vaultHost: vaultHost, authentication: credentialAuthentication, accessClock: monotonicClock, postCreation: notifications.postMutation)
 #else
-        let credentials = WalletCredentials(keychain: keychain, messages: messages, authorityID: authorityID, authentication: credentialAuthentication, clock: clock, postCreation: notifications.postMutation)
+        let credentials = WalletCredentials(keychain: keychain, messages: messages, authorityID: authorityID, authentication: credentialAuthentication, accessClock: monotonicClock, postCreation: notifications.postMutation)
 #endif
         let processor = DappRequestProcessor(
             ethereumNetworkResolver: networks.approvalResolution,
@@ -201,9 +204,11 @@ public final class AuthorityRuntime {
             customDefinitionResult: definitionResult
         )
 #if os(iOS) || os(visionOS)
-        let admissionCatalog: (() -> WalletReviewCatalog?)? = { vault.reviewCatalog() }
+        let admissionCatalog: (() async -> WalletReviewCatalog?)? = {
+            await awaitBackgroundOperation { vault.reviewCatalog() } ?? nil
+        }
 #else
-        let admissionCatalog: (() -> WalletReviewCatalog?)? = nil
+        let admissionCatalog: (() async -> WalletReviewCatalog?)? = nil
 #endif
         let admission = DappRequestAdmission(
             store: requests,
@@ -216,7 +221,7 @@ public final class AuthorityRuntime {
             admission: admission, networks: networks, messages: messages, metadata: metadata,
             processor: processor, finalizer: finalizer, executionEnvironment: environment,
             preparation: preparation, vault: vault, authorityID: authorityID,
-            definitionResult: definitionResult, invalidateCache: invalidateCache, clock: clock, hooks: hooks
+            definitionResult: definitionResult, invalidateCache: invalidateCache, clock: clock, monotonicClock: monotonicClock, hooks: hooks
         )
     }
 
@@ -237,6 +242,7 @@ public final class AuthorityRuntime {
         definitionResult: @escaping @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult,
         invalidateCache: @escaping @Sendable () -> Void,
         clock: @escaping @Sendable () -> Date,
+        monotonicClock: @escaping @Sendable () -> ContinuousClock.Instant,
         hooks: AuthorityExecutionHooks
     ) {
         self.wallets = wallets
@@ -253,6 +259,7 @@ public final class AuthorityRuntime {
         self.vault = vault
         self.authorityID = authorityID
         self.clock = clock
+        self.monotonicClock = monotonicClock
         self.hooks = hooks
         self.definitionResult = definitionResult
         self.invalidateCache = invalidateCache
@@ -274,7 +281,8 @@ public final class AuthorityRuntime {
             handle: handle,
             nativeDeliveryNonce: nativeDeliveryNonce,
             store: requests,
-            environment: .live(processor: processor, wallets: wallets, finalizer: finalizer, messages: messages, authorityID: authorityID, clock: clock, hooks: hooks)
+            environment: .live(processor: processor, wallets: wallets, finalizer: finalizer, messages: messages,
+                authorityID: authorityID, clock: clock, monotonicClock: monotonicClock, hooks: hooks)
         )
         nativeAuthorities[key] = NativeAuthorityReference(authority)
         return authority
@@ -287,8 +295,12 @@ public final class AuthorityRuntime {
         PopupApprovalAuthority(
             store: requests,
             walletEnvironment: PopupWalletEnvironment(
-                reviewCatalog: { self.vault.reviewCatalog() },
-                approvalCatalog: { self.vault.approvalCatalog() },
+                reviewCatalog: { [vault] in
+                    await awaitBackgroundOperation { vault.reviewCatalog() } ?? nil
+                },
+                approvalCatalog: { [vault] in
+                    await awaitBackgroundOperation { vault.approvalCatalog() } ?? nil
+                },
                 unlockWallets: { await self.vault.unlockResult(reason: $0, scope: $1) },
                 reloadMetadata: { self.metadata.reload() }
             ),

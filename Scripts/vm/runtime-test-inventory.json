@@ -145,7 +145,27 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/AuthorityMessageIsolationTests/testAdmissionCatalogDurabilityReadKeepsMainActorResponsive",
+      "variants": [
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/AuthorityMessageIsolationTests/testConcurrentSystemsRetainTheirCatalogThroughLateDetachedCleanup",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/AuthorityMessageIsolationTests/testPopupCatalogDurabilityReadKeepsMainActorResponsive",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -1499,6 +1519,72 @@
     },
     {
       "id": "WalletAuthorityTests/DurableProfilePersistenceTests/testBoundaryValidationPrecedesFilesystemOperations",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/DurableProfilePersistenceTests/testDurableEmptySnapshotStillSynchronizesItsPublication",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/DurableProfilePersistenceTests/testDurableSnapshotBarrierFailuresNeverReturnData",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/DurableProfilePersistenceTests/testDurableSnapshotFlushesTheReadFileBeforeValidatingItsIdentity",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/DurableProfilePersistenceTests/testDurableSnapshotReadsAreBoundedAndRetryInterruptedOperations",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/DurableProfilePersistenceTests/testDurableSnapshotRejectsInPlaceModificationDuringSynchronization",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/DurableProfilePersistenceTests/testDurableSnapshotRejectsReplacementWithIdenticalBytesDuringSynchronization",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -7234,6 +7320,17 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/ResponseDeliveryPollerTests/testCompletedDocumentOwnerSurvivesRestartAcknowledgementAndPermissionRepair",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/ResponseDeliveryPollerTests/testCompletedPollRequiresDurabilityAndLeavesAcknowledgementExplicit",
       "variants": [
         "macos.debug",
@@ -7245,7 +7342,40 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/ResponseDeliveryPollerTests/testDocumentAccessIsCheckedBeforeEveryPollingSideEffect",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/ResponseDeliveryPollerTests/testEachModeForwardsTheExactIdentityAndPreparesOnlyAfterReadiness",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/ResponseDeliveryPollerTests/testForeignDocumentReplayDoesNotRecoverExpiredRequests",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/ResponseDeliveryPollerTests/testMissingResponseOwnerCannotBecomeTrustedDuringRecovery",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -7589,6 +7719,17 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/SafariApprovalVaultTests/testDurablePublicationAndRevocationSurviveCrash",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/SafariApprovalVaultTests/testEmptyKeyInventoryDoesNotQueryKeychain",
       "variants": [
         "macos.debug",
@@ -7601,6 +7742,26 @@
     },
     {
       "id": "WalletAuthorityTests/SafariApprovalVaultTests/testEmptyPublicationNeedsNoAccountKeysOrKeychainReads",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/SafariApprovalVaultTests/testEnvelopeBarrierFailureDoesNotAdvanceHostMetadata",
+      "variants": [
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/SafariApprovalVaultTests/testEnvelopeBarrierFailuresDoNotPublishOrRetainKeys",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -7688,6 +7849,17 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/SafariApprovalVaultTests/testExpirationDuringFinalBarrierRetainsCoordinationUntilDurable",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/SafariApprovalVaultTests/testExpirationDuringFirstAccountKeyStoreStopsPublication",
       "variants": [
         "macos.debug",
@@ -7712,6 +7884,17 @@
     {
       "id": "WalletAuthorityTests/SafariApprovalVaultTests/testExpirationReleasesLeaseBeforeBlockedSourceReturnsAndPreservesNewerPublication",
       "variants": [
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/SafariApprovalVaultTests/testExpiredFailedPublicationRequiresDurableReaderRecovery",
+      "variants": [
+        "macos.debug",
+        "macos.release",
         "ios.debug",
         "ios.release",
         "visionos.debug",
@@ -8139,6 +8322,17 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/SafariApprovalVaultTests/testReaderDurabilityFailureRetiresUnlockedSigningAndBlocksCommit",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/SafariApprovalVaultTests/testReconciliationAssertionCoversLeaseAndSourceAndUsesFirstFactory",
       "variants": [
         "ios.debug",
@@ -8337,6 +8531,48 @@
       "variants": [
         "macos.debug",
         "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/SafariApprovalVaultTests/testTombstoneBarrierFailuresStopPublicationBeforeKeyChanges",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/SafariApprovalVaultTests/testTombstoneRequiresExactReadableSnapshotBeforeKeyDeletion",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/SafariApprovalVaultTests/testUncertainEnvelopeAndFailedCleanupKeepDurableTombstone",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/SafariApprovalVaultTests/testUncertainTombstoneBarrierAbortsSourceMutationWithoutAdvancingMetadata",
+      "variants": [
         "ios.debug",
         "ios.release",
         "visionos.debug",
@@ -8629,6 +8865,17 @@
     },
     {
       "id": "WalletAuthorityTests/SigningRaceTests/testEveryTaskCancellationAndLateBiometricResultOrdering",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/SigningRaceTests/testLateBiometricSuccessCannotIssueAnElapsedChallengeAfterWallClockRollback",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -9871,6 +10118,17 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/WalletAuthenticationTests/testExpiryDuringCredentialIdentityValidationDoesNotIssueOrConsumeGrant",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/WalletAuthenticationTests/testExpiryDuringCredentialReadDoesNotMintAStaleGrant",
       "variants": [
         "macos.debug",
@@ -9937,6 +10195,61 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/WalletAuthenticationTests/testNativeChallengeAlsoExpiresAtTheAbsoluteRequestDeadline",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletAuthenticationTests/testNativeChallengePreservesTheRequestLifetimeBeyondStandaloneExpiry",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletAuthenticationTests/testNativeChallengeReplacementCannotExtendTheReviewDeadline",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletAuthenticationTests/testNativeReviewCapsItsElapsedLifetimeAtTheAdmittedRequestHorizon",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletAuthenticationTests/testNativeReviewRechecksDeadlinesAfterCredentialValidation",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/WalletAuthenticationTests/testObservingPendingExpiryRetiresAllReferencesAfterClockRewind",
       "variants": [
         "macos.debug",
@@ -9949,6 +10262,17 @@
     },
     {
       "id": "WalletAuthorityTests/WalletAuthenticationTests/testReadAccessIsReusableButCannotBecomeSigningAuthorization",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletAuthenticationTests/testStandaloneChallengeLifetimeIgnoresWallClockChanges",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -11650,6 +11974,28 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/WalletRemovalIntegrationTests/testInitialBackupCanBeExportedOnceWithinItsElapsedLifetime",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletRemovalIntegrationTests/testInitialBackupExpiresBeforeTakingWithOrWithoutReloadPruning",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/WalletRemovalIntegrationTests/testOversizedStoredCatalogAllowsExportAndRemovalButNotAdditions",
       "variants": [
         "macos.debug",
@@ -11694,7 +12040,29 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/WalletRemovalIntegrationTests/testSecretExportGrantsExpireAtTheirOriginalElapsedDeadline",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/WalletRemovalIntegrationTests/testSourceWriteFailureKeepsCleanupAppliedWithoutDeletingMetadata",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletRemovalIntegrationTests/testTakingInitialBackupNearExpiryDoesNotRenewItsDeadline",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -12091,6 +12459,17 @@
     },
     {
       "id": "WalletAuthorityTests/WalletSigningSessionTests/testAuthorityValidationKeepsMainActorResponsiveWhileStoreIsLocked",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletSigningSessionTests/testBlockedConsumptionKeepsMainActorResponsiveAndCancellationPreservesPermit",
       "variants": [
         "macos.debug",
         "macos.release",

@@ -25,7 +25,7 @@ final class WalletSigningSessionTests: XCTestCase {
         )
         let releaseLock = DispatchSemaphore(value: 0)
         defer { releaseLock.signal() }
-        let session = try XCTUnwrap(sessionPreparation.consume(permit: permit))
+        let session = try await boundWalletSigningSessionForTesting(sessionPreparation, permit: permit)
         sourceCheckThreads.withLock { $0.removeAll() }
         let lockHeld = expectation(description: "Approval store lock held by another worker")
         let holder = Task.detached {
@@ -62,8 +62,8 @@ final class WalletSigningSessionTests: XCTestCase {
             retireSigningMaterial: material.invalidate,
             commit: .native
         )
-        XCTAssertNil(preparation.consume(permit: different))
-        XCTAssertNil(preparation.consume(permit: permit))
+        assertWalletSigningSessionUnavailableForTesting(await preparation.consume(permit: different))
+        assertWalletSigningSessionUnavailableForTesting(await preparation.consume(permit: permit))
         XCTAssertFalse(preparation.validateCurrent())
         XCTAssertEqual(material.signCount, 0)
         XCTAssertEqual(material.erasureCount, 1)
@@ -72,7 +72,7 @@ final class WalletSigningSessionTests: XCTestCase {
             let rightful = makeWalletSigningPreparationForTesting(
                 scope: try XCTUnwrap(WalletSigningScope(permit: untouchedPermit)), commit: .native
             )
-            let session = try XCTUnwrap(rightful.consume(permit: untouchedPermit))
+            let session = try await boundWalletSigningSessionForTesting(rightful, permit: untouchedPermit)
             guard case .success = await session.sign(),
                   case .failure(.authorizationUnavailable) = await session.sign() else {
                 return XCTFail("A matching preparation must retain one signing use of the untouched permit")
@@ -99,9 +99,9 @@ final class WalletSigningSessionTests: XCTestCase {
             retireSigningMaterial: secondMaterial.invalidate,
             commit: .native
         )
-        let first = try XCTUnwrap(firstPreparation.consume(permit: firstPermit))
-        XCTAssertNil(firstPreparation.consume(permit: replacementPermit))
-        let second = try XCTUnwrap(secondPreparation.consume(permit: replacementPermit))
+        let first = try await boundWalletSigningSessionForTesting(firstPreparation, permit: firstPermit)
+        assertWalletSigningSessionUnavailableForTesting(await firstPreparation.consume(permit: replacementPermit))
+        let second = try await boundWalletSigningSessionForTesting(secondPreparation, permit: replacementPermit)
         guard case .success = await first.sign(), case .success = await second.sign() else {
             return XCTFail("Each permit must remain with the session that successfully attached it")
         }
@@ -122,7 +122,7 @@ final class WalletSigningSessionTests: XCTestCase {
         )
         let mismatched = WalletSigningPreparation(source: mismatchedSource, scope: authorization)
 
-        XCTAssertNil(mismatched.consume(permit: permit))
+        assertWalletSigningSessionUnavailableForTesting(await mismatched.consume(permit: permit))
         XCTAssertEqual(mismatchedSource.invalidationCount, 1)
         XCTAssertEqual(material.erasureCount, 1)
         XCTAssertFalse(mismatched.validateCurrent())
@@ -130,7 +130,7 @@ final class WalletSigningSessionTests: XCTestCase {
 
         let matchingSource = TestWalletSigningSource(approvedAccount: authorization.approvedAccount)
         let matchingPreparation = WalletSigningPreparation(source: matchingSource, scope: authorization)
-        let matching = try XCTUnwrap(matchingPreparation.consume(permit: permit))
+        let matching = try await boundWalletSigningSessionForTesting(matchingPreparation, permit: permit)
         guard case .success = await matching.sign() else {
             return XCTFail("A mismatched source must leave the permit available to its matching session")
         }
@@ -153,7 +153,7 @@ final class WalletSigningSessionTests: XCTestCase {
         )
         reference.withLock { $0 = preparation }
         defer { reference.withLock { $0 = nil } }
-        let session = try XCTUnwrap(preparation.consume(permit: permit))
+        let session = try await boundWalletSigningSessionForTesting(preparation, permit: permit)
         preparation.invalidate()
         XCTAssertFalse(preparation.validateCurrent())
         XCTAssertEqual(material.erasureCount, 0)
@@ -176,17 +176,56 @@ final class WalletSigningSessionTests: XCTestCase {
             retireSigningMaterial: material.invalidate,
             commit: .native
         )
-        let consume = Task { preparation.consume(permit: permit) }
+        let consume = Task { await preparation.consume(permit: permit) }
         let session = await consume.value
         XCTAssertNil(session)
         XCTAssertEqual(material.erasureCount, 1)
-        XCTAssertNil(preparation.consume(permit: permit))
+        assertWalletSigningSessionUnavailableForTesting(await preparation.consume(permit: permit))
         let rightful = makeWalletSigningPreparationForTesting(
             scope: try XCTUnwrap(WalletSigningScope(permit: permit)), commit: .native
         )
-        let bound = try XCTUnwrap(rightful.consume(permit: permit))
+        let bound = try await boundWalletSigningSessionForTesting(rightful, permit: permit)
         guard case .success = await bound.sign() else {
             return XCTFail("Cancellation during validation must leave the permit available")
+        }
+    }
+
+    func testBlockedConsumptionKeepsMainActorResponsiveAndCancellationPreservesPermit() async throws {
+        let permit = try permit()
+        let material = SessionSigningMaterial()
+        let validationStarted = expectation(description: "Source validation started")
+        let validationOnMainThread = Mutex<Bool?>(nil)
+        let releaseValidation = DispatchSemaphore(value: 0)
+        let preparation = makeWalletSigningPreparationForTesting(
+            scope: try XCTUnwrap(WalletSigningScope(permit: permit)),
+            isCurrent: {
+                validationOnMainThread.withLock { $0 = Thread.isMainThread }
+                validationStarted.fulfill()
+                return releaseValidation.wait(timeout: .now() + 5) == .success
+            },
+            retireSigningMaterial: material.invalidate,
+            commit: .native
+        )
+        let consumption = Task { await preparation.consume(permit: permit) }
+        defer {
+            releaseValidation.signal()
+            consumption.cancel()
+        }
+        await fulfillment(of: [validationStarted], timeout: 2)
+
+        XCTAssertEqual(validationOnMainThread.withLock { $0 }, false)
+        consumption.cancel()
+        XCTAssertEqual(material.erasureCount, 1)
+        releaseValidation.signal()
+        assertWalletSigningSessionUnavailableForTesting(await consumption.value)
+        assertWalletSigningSessionUnavailableForTesting(await preparation.consume(permit: permit))
+
+        let rightful = makeWalletSigningPreparationForTesting(
+            scope: try XCTUnwrap(WalletSigningScope(permit: permit)), commit: .native
+        )
+        let session = try await boundWalletSigningSessionForTesting(rightful, permit: permit)
+        guard case .success = await session.sign() else {
+            return XCTFail("Canceling blocked validation must leave the permit available")
         }
     }
 
@@ -226,12 +265,12 @@ final class WalletSigningSessionTests: XCTestCase {
             commit: .native,
             clock: { clock.date }
         )
-        XCTAssertNil(preparation.consume(permit: permit))
+        assertWalletSigningSessionUnavailableForTesting(await preparation.consume(permit: permit))
         XCTAssertEqual(material.erasureCount, 1)
         let current = makeWalletSigningPreparationForTesting(
             scope: scope, commit: .native, clock: { deadline.addingTimeInterval(-1) }
         )
-        let session = try XCTUnwrap(current.consume(permit: permit))
+        let session = try await boundWalletSigningSessionForTesting(current, permit: permit)
         guard case .success = await session.sign() else {
             return XCTFail("A source check that outlives its deadline must not consume the permit")
         }
@@ -244,7 +283,7 @@ final class WalletSigningSessionTests: XCTestCase {
         let preparation = WalletSigningPreparation(source: source, scope: scope)
         XCTAssertTrue(preparation.requiresCommitLease)
         XCTAssertTrue(preparation.requiresCommitLease)
-        let session = try XCTUnwrap(preparation.consume(permit: permit))
+        let session = try await boundWalletSigningSessionForTesting(preparation, permit: permit)
         let outcome = await session.takeCommit()
         let lease = try walletCommitLeaseForTesting(outcome)
         lease.release()
@@ -270,7 +309,7 @@ final class WalletSigningSessionTests: XCTestCase {
             commit: .native,
             clock: { deadline }
         )
-        XCTAssertNil(expired.consume(permit: permit))
+        assertWalletSigningSessionUnavailableForTesting(await expired.consume(permit: permit))
         let currentMaterial = SessionSigningMaterial()
         let currentPreparation = makeWalletSigningPreparationForTesting(
             scope: authorization,
@@ -279,7 +318,7 @@ final class WalletSigningSessionTests: XCTestCase {
             commit: .native,
             clock: { deadline.addingTimeInterval(-1) }
         )
-        let current = try XCTUnwrap(currentPreparation.consume(permit: permit))
+        let current = try await boundWalletSigningSessionForTesting(currentPreparation, permit: permit)
         guard case .success = await current.sign() else {
             return XCTFail("A session's expired clock must not consume the current permit")
         }
@@ -306,7 +345,7 @@ final class WalletSigningSessionTests: XCTestCase {
                 },
                 commit: .native
             )
-            let session = try XCTUnwrap(sessionPreparation.consume(permit: permit))
+            let session = try await boundWalletSigningSessionForTesting(sessionPreparation, permit: permit)
             if signed {
                 guard case .success = await session.sign() else {
                     return XCTFail("Expected signing before source retirement")
@@ -323,7 +362,7 @@ final class WalletSigningSessionTests: XCTestCase {
             XCTAssertEqual(material.signCount, signed ? 1 : 0)
             XCTAssertEqual(material.erasureCount, 1)
             assertWalletCommitUnavailableForTesting(await session.takeCommit())
-            XCTAssertNil(sessionPreparation.consume(permit: permit))
+            assertWalletSigningSessionUnavailableForTesting(await sessionPreparation.consume(permit: permit))
             session.invalidate()
             XCTAssertEqual(material.erasureCount, 1)
             assertWalletCommitUnavailableForTesting(await session.takeCommit())
@@ -343,13 +382,13 @@ final class WalletSigningSessionTests: XCTestCase {
             })
         )
 
-        let session = try XCTUnwrap(preparation.consume(permit: permit))
+        let session = try await boundWalletSigningSessionForTesting(preparation, permit: permit)
         assertWalletCommitUnavailableForTesting(await session.takeCommit())
         assertWalletCommitUnavailableForTesting(await session.takeCommit())
 
         XCTAssertEqual(acquisitions, 1)
         XCTAssertEqual(material.erasureCount, 1)
-        XCTAssertNil(preparation.consume(permit: permit))
+        assertWalletSigningSessionUnavailableForTesting(await preparation.consume(permit: permit))
     }
 
     func testAlreadyCancelledCommitRetiresMaterialWithoutAcquiringLease() async throws {
@@ -364,7 +403,7 @@ final class WalletSigningSessionTests: XCTestCase {
                     return WalletExecutionLease(release: {})
                 })
             )
-            let session = try XCTUnwrap(preparation.consume(permit: permit))
+            let session = try await boundWalletSigningSessionForTesting(preparation, permit: permit)
             let task = Task {
                 withUnsafeCurrentTask { $0?.cancel() }
                 return await session.takeCommit()
@@ -390,12 +429,12 @@ final class WalletSigningSessionTests: XCTestCase {
                 return WalletExecutionLease(release: {})
             })
         )
-        let session = try XCTUnwrap(preparation.consume(permit: permit))
+        let session = try await boundWalletSigningSessionForTesting(preparation, permit: permit)
         let acquired = await session.takeCommit()
         let lease = try walletCommitLeaseForTesting(acquired)
         let duplicate = await session.takeCommit()
         assertWalletCommitUnavailableForTesting(duplicate)
-        XCTAssertNil(preparation.consume(permit: permit))
+        assertWalletSigningSessionUnavailableForTesting(await preparation.consume(permit: permit))
         XCTAssertEqual(acquisitions, 1)
         XCTAssertEqual(material.signCount, 0)
         XCTAssertEqual(material.erasureCount, 1)
@@ -419,7 +458,7 @@ final class WalletSigningSessionTests: XCTestCase {
                 return WalletExecutionLease { released.fulfill() }
             })
         )
-        let session = try XCTUnwrap(sessionPreparation.consume(permit: permit))
+        let session = try await boundWalletSigningSessionForTesting(sessionPreparation, permit: permit)
         guard case .failure(.failedToSign) = await session.sign() else {
             return XCTFail("The signing failure must be preserved")
         }
@@ -452,7 +491,7 @@ final class WalletSigningSessionTests: XCTestCase {
                     return await resolution.value()
                 })
             )
-            let session = try XCTUnwrap(sessionPreparation.consume(permit: permit))
+            let session = try await boundWalletSigningSessionForTesting(sessionPreparation, permit: permit)
             let acquisition = Task { await session.takeCommit() }
             await fulfillment(of: [acquisitionStarted], timeout: 1)
             XCTAssertEqual(material.erasureCount, 1)
@@ -484,7 +523,7 @@ final class WalletSigningSessionTests: XCTestCase {
             retireSigningMaterial: material.invalidate,
             commit: .vault(acquire: { WalletExecutionLease(release: {}) })
         )
-        let session = try XCTUnwrap(sessionPreparation.consume(permit: permit))
+        let session = try await boundWalletSigningSessionForTesting(sessionPreparation, permit: permit)
         let signing = Task { await session.sign() }
         await fulfillment(of: [signingStarted], timeout: 1)
         guard case .failure(.authorizationUnavailable) = await session.sign() else {
@@ -530,8 +569,8 @@ final class WalletSigningSessionTests: XCTestCase {
             commit: .native
         )
         let copiedPermit = permit
-        let first = try XCTUnwrap(firstPreparation.consume(permit: permit))
-        XCTAssertNil(second.consume(permit: copiedPermit))
+        let first = try await boundWalletSigningSessionForTesting(firstPreparation, permit: permit)
+        assertWalletSigningSessionUnavailableForTesting(await second.consume(permit: copiedPermit))
         XCTAssertEqual(WalletSigningScope(permit: permit), authorization)
         second.invalidate()
         XCTAssertTrue(permit.consumeExecution())
@@ -557,7 +596,7 @@ final class WalletSigningSessionTests: XCTestCase {
                 retireSigningMaterial: material.invalidate,
                 commit: .native
             )
-            let session = try XCTUnwrap(sessionPreparation.consume(permit: permit))
+            let session = try await boundWalletSigningSessionForTesting(sessionPreparation, permit: permit)
             if released {
                 XCTAssertTrue(permit.consumeExecution())
                 permit.releaseLease()
@@ -586,7 +625,7 @@ final class WalletSigningSessionTests: XCTestCase {
             retireSigningMaterial: material.invalidate,
             commit: .native
         )
-        let session = try XCTUnwrap(sessionPreparation.consume(permit: permit))
+        let session = try await boundWalletSigningSessionForTesting(sessionPreparation, permit: permit)
         XCTAssertTrue(permit.consumeExecution())
         guard case .failure(.authorizationUnavailable) = await session.sign() else {
             return XCTFail("A result must not escape after execution ownership is released")
@@ -612,7 +651,7 @@ final class WalletSigningSessionTests: XCTestCase {
                 retireSigningMaterial: material.invalidate,
                 commit: .native
             )
-            let session = try XCTUnwrap(sessionPreparation.consume(permit: permit))
+            let session = try await boundWalletSigningSessionForTesting(sessionPreparation, permit: permit)
             sourceCheck.arm(check: suspendedCheck)
             XCTAssertTrue(permit.consumeExecution())
             let signing = Task { await session.sign() }
@@ -657,7 +696,7 @@ final class WalletSigningSessionTests: XCTestCase {
                 commit: .native,
                 clock: { clock.date }
             )
-            let session = try XCTUnwrap(sessionPreparation.consume(permit: permit))
+            let session = try await boundWalletSigningSessionForTesting(sessionPreparation, permit: permit)
             let signing = Task { await session.sign() }
             await fulfillment(of: [entered], timeout: 2)
             clock.setDate(deadline.addingTimeInterval(offset))
@@ -969,7 +1008,7 @@ final class UnlockedAccountSignerTests: XCTestCase {
             sign: signing,
             commit: .native
         )
-        guard let session = preparation.consume(permit: permit) else {
+        guard let session = await preparation.consume(permit: permit) else {
             return .failure(.authorizationUnavailable)
         }
         return await session.sign()

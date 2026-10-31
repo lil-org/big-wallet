@@ -2242,29 +2242,31 @@
     }
 
     function n271(value, context) {
-        record(value, ["workflowVersion","subject"], []);
+        record(value, ["workflowVersion","subject","documentSession"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n44(read(value, "workflowVersion"), context));
             put(result, "subject", n270(read(value, "subject"), context));
+            put(result, "documentSession", n56(read(value, "documentSession"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
     function n272(value, context) {
-        record(value, ["workflowVersion","subject"], []);
+        record(value, ["workflowVersion","subject","documentSession"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "workflowVersion", n44(read(value, "workflowVersion"), context));
             put(result, "subject", n53(read(value, "subject"), context));
+            put(result, "documentSession", n56(read(value, "documentSession"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
     function n273(value, context) {
-        record(value, ["workflowVersion","subject","message","enqueueAttempt","admissionDeadline","authority"], []);
+        record(value, ["workflowVersion","subject","message","enqueueAttempt","admissionDeadline","authority","documentSession"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
@@ -2274,6 +2276,7 @@
             put(result, "enqueueAttempt", n56(read(value, "enqueueAttempt"), context));
             put(result, "admissionDeadline", n107(read(value, "admissionDeadline"), context));
             put(result, "authority", n57(read(value, "authority"), context));
+            put(result, "documentSession", n56(read(value, "documentSession"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
@@ -2283,7 +2286,7 @@
     }
 
     function n275(value, context) {
-        record(value, ["workflowVersion","subject","id","provider","attempt","authority"], []);
+        record(value, ["workflowVersion","subject","id","provider","attempt","authority","documentSession"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
@@ -2293,12 +2296,13 @@
             put(result, "provider", n27(read(value, "provider"), context));
             put(result, "attempt", n56(read(value, "attempt"), context));
             put(result, "authority", n57(read(value, "authority"), context));
+            put(result, "documentSession", n56(read(value, "documentSession"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
     function n276(value, context) {
-        record(value, ["workflowVersion","subject","id","body","chainId"], []);
+        record(value, ["workflowVersion","subject","id","body","chainId","documentSession"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
@@ -2307,12 +2311,13 @@
             put(result, "id", n43(read(value, "id"), context));
             put(result, "body", n17(read(value, "body"), context));
             put(result, "chainId", n18(read(value, "chainId"), context));
+            put(result, "documentSession", n56(read(value, "documentSession"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
 
     function n277(value, context) {
-        record(value, ["workflowVersion","subject","id","requestToken"], []);
+        record(value, ["workflowVersion","subject","id","requestToken","documentSession"], []);
         const previous = enter(value, context);
         try {
             const result = create(null);
@@ -2320,6 +2325,7 @@
             put(result, "subject", n278(read(value, "subject"), context));
             put(result, "id", n43(read(value, "id"), context));
             put(result, "requestToken", n60(read(value, "requestToken"), context));
+            put(result, "documentSession", n56(read(value, "documentSession"), context));
             return freeze(result);
         } finally { context.path = previous; }
     }
@@ -2533,12 +2539,13 @@
     }
 
     function n315(value, context) {
-        record(value, ["tabId","frameId"], ["documentId"]);
+        record(value, ["tabId","frameId","documentSession"], ["documentId"]);
         const previous = enter(value, context);
         try {
             const result = create(null);
             put(result, "tabId", n12(read(value, "tabId"), context));
             put(result, "frameId", n316(read(value, "frameId"), context));
+            put(result, "documentSession", n56(read(value, "documentSession"), context));
             if (descriptor(value, "documentId")) { put(result, "documentId", n317(read(value, "documentId"), context)); }
             return freeze(result);
         } finally { context.path = previous; }
@@ -2722,12 +2729,12 @@
     /** @typedef {{workflowVersion: WorkflowVersion, subject: "workflowProbe", nonce: PrivateToken}} WorkflowProbe */
     /** @typedef {{workflowVersion: WorkflowVersion, subject: "workflowProbe", nonce: PrivateToken, buildVersion: string}} WorkflowProbeReply */
     /** @typedef {{workflowVersion: WorkflowVersion, subject: "manualSwitchIntent", configurationKey: string}} ManualSwitchIntent */
-    /** @typedef {{workflowVersion: WorkflowVersion, subject: "manualSwitchIntent"}} RuntimeManualSwitchIntent */
-    /** @typedef {{workflowVersion: WorkflowVersion, subject: "getLatestConfiguration"}} RuntimeConfigurationRequest */
-    /** @typedef {{workflowVersion: WorkflowVersion, subject: "message-to-wallet", message: ProviderRequest, enqueueAttempt: PrivateToken, admissionDeadline: PositiveInteger, authority: AuthorityVersion}} RuntimeDappRequest */
-    /** @typedef {{workflowVersion: WorkflowVersion, subject: "disconnect", id: RequestID, provider: Provider, attempt: PrivateToken, authority: AuthorityVersion}} RuntimeDisconnect */
-    /** @typedef {{workflowVersion: WorkflowVersion, subject: "rpc", id: RequestID, body: string, chainId: EthereumChainID}} RuntimeRPC */
-    /** @typedef {{workflowVersion: WorkflowVersion, subject: "getResponse", id: RequestID, requestToken: RequestToken}} RuntimeResponseRequest */
+    /** @typedef {{workflowVersion: WorkflowVersion, subject: "manualSwitchIntent", documentSession: PrivateToken}} RuntimeManualSwitchIntent */
+    /** @typedef {{workflowVersion: WorkflowVersion, subject: "getLatestConfiguration", documentSession: PrivateToken}} RuntimeConfigurationRequest */
+    /** @typedef {{workflowVersion: WorkflowVersion, subject: "message-to-wallet", message: ProviderRequest, enqueueAttempt: PrivateToken, admissionDeadline: PositiveInteger, authority: AuthorityVersion, documentSession: PrivateToken}} RuntimeDappRequest */
+    /** @typedef {{workflowVersion: WorkflowVersion, subject: "disconnect", id: RequestID, provider: Provider, attempt: PrivateToken, authority: AuthorityVersion, documentSession: PrivateToken}} RuntimeDisconnect */
+    /** @typedef {{workflowVersion: WorkflowVersion, subject: "rpc", id: RequestID, body: string, chainId: EthereumChainID, documentSession: PrivateToken}} RuntimeRPC */
+    /** @typedef {{workflowVersion: WorkflowVersion, subject: "getResponse", id: RequestID, requestToken: RequestToken, documentSession: PrivateToken}} RuntimeResponseRequest */
     /** @typedef {{workflowVersion: WorkflowVersion, subject: "updatePendingRequestBadge", hasPendingRequests: boolean}} RuntimeBadgeUpdate */
     /** @typedef {{workflowVersion: WorkflowVersion, subject: "applyCompletedResponse", id: RequestID, configurationKey: string, requestToken: RequestToken, __bwContext: NativePopupContext}} RuntimeApplyCompletedResponse */
     /** @typedef {(RuntimeRPC|RuntimeDappRequest|RuntimeManualSwitchIntent|RuntimeResponseRequest|RuntimeConfigurationRequest|RuntimeDisconnect)} ContentToWorker */
@@ -2743,7 +2750,7 @@
     /** @typedef {number} ErrorCode */
     /** @typedef {({applied: true}|{id: RequestID, missing: true})} RuntimeApplyCompletedReply */
     /** @typedef {{host: string, configurationKey: string}} TransportSiteIdentity */
-    /** @typedef {{tabId: NonnegativeInteger, frameId: 0, documentId?: string}} TransportDocumentIdentity */
+    /** @typedef {{tabId: NonnegativeInteger, frameId: 0, documentSession: PrivateToken, documentId?: string}} TransportDocumentIdentity */
     /** @typedef {{source: "site", privateBrowsing: boolean, site: TransportSiteIdentity, document: TransportDocumentIdentity}} NativeSiteContext */
     /** @typedef {{source: "popup", privateBrowsing: boolean}} NativePopupContext */
     /** @typedef {{source: "worker", privateBrowsing: boolean}} NativeWorkerContext */

@@ -203,7 +203,7 @@ final class DurableApprovalExecutor {
             return .finished(await abandon(claim: claim))
         }
         defer { consent.invalidateAuthorization() }
-        guard signingPreparationMatches(signing, consent: consent, claim: claim),
+        guard await signingPreparationMatches(signing, consent: consent, claim: claim),
               claim.authority.allowsExecution(at: clock(), isCancelled: Task.isCancelled) else {
             return .finished(await abandon(claim: claim))
         }
@@ -239,7 +239,7 @@ final class DurableApprovalExecutor {
         _ preparation: WalletSigningPreparation?,
         consent: ReviewConsent,
         claim: ExtensionBridge.ApprovalClaim
-    ) -> Bool {
+    ) async -> Bool {
         guard let account = consent.intent.action.signingAccount else { return preparation == nil }
         let expected = WalletSigningScope(
             handle: claim.handle, approvedAccount: account,
@@ -249,7 +249,7 @@ final class DurableApprovalExecutor {
         if case .ordinary = claim.authority {
             guard preparation.requiresCommitLease else { return false }
         }
-        return preparation.validateCurrent()
+        return await awaitBackgroundOperation({ preparation.validateCurrent() }) == true
     }
 
     private func executeApproved(
@@ -294,7 +294,7 @@ final class DurableApprovalExecutor {
         AuthorityExecutionHooks.emit(.init(.authorization))
         let signing: WalletSigningSession?
         if let preparation {
-            guard let session = preparation.consume(permit: permit) else {
+            guard let session = await preparation.consume(permit: permit) else {
                 return await abandon(permit: permit)
             }
             signing = session

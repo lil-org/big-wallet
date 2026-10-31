@@ -168,9 +168,10 @@ export class LifecycleSession {
                 observe(exercised, exercised ? "completed" : "unchanged");
             } catch (error) {
                 const unavailable = error.native === true && error.details === "unavailable";
+                const authorizationUnavailable = error.native === true && error.details === "authorizationUnavailable";
                 const interrupted = child.expectedExit && error.invariant === "process-restarted";
-                if (!unavailable && !interrupted) { this.asyncFailure ??= error; }
-                observe(false, unavailable ? "unavailable" : interrupted ? "interrupted" : "failed", error);
+                if (!unavailable && !authorizationUnavailable && !interrupted) { this.asyncFailure ??= error; }
+                observe(false, unavailable ? "unavailable" : authorizationUnavailable ? "authorizationUnavailable" : interrupted ? "interrupted" : "failed", error);
             }
         }).finally(() => {
             if (this.walletMutations.get(child) === completion) { this.walletMutations.delete(child); }

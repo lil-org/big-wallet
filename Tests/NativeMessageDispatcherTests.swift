@@ -18,7 +18,7 @@ final class NativeMessageDispatcherTests: XCTestCase {
                 transport[WireProtocol.nativeContextKey] = [
                     "source": "site", "privateBrowsing": privateBrowsing,
                     "site": ["host": "wallet.example", "configurationKey": fixture.origin],
-                    "document": ["tabId": 1, "frameId": 0],
+                    "document": ["tabId": 1, "frameId": 0, "documentSession": "0123456789abcdef0123456789abcdef"],
                 ]
                 let context = try XCTUnwrap(NativeRequestContext.extract(from: transport, profileIdentifier: profile)).context
                 guard case .accepted(let ingress) = ExtensionBridge.admittedIngress(wire: wire, context: context) else {
@@ -85,6 +85,76 @@ final class NativeMessageDispatcherTests: XCTestCase {
                 return XCTFail("Expected stored request")
             }
             XCTAssertEqual(requests.count, 1)
+        }
+    }
+
+    func testDocumentOwnershipRejectsForeignReplayFocusPollAndAcknowledgement() async throws {
+        try await withFixture { fixture in
+            let original = NativeRequestContext.DocumentIdentity(tabID: 1, frameID: 0,
+                documentID: "original-document", documentSession: String(repeating: "a", count: 32))
+            let message = try await fixture.connectionMessage()
+            let admitted = try await fixture.dispatch(message, document: original)
+            let token = try XCTUnwrap(RequestToken(rawValue: admitted["requestToken"] as? String ?? ""))
+            let handle = RequestHandle(id: 1, token: token, profileIdentifier: nil)
+            let identity: [String: Any] = ["configurationKey": fixture.origin, "requestToken": token.rawValue]
+            for foreign in [
+                NativeRequestContext.DocumentIdentity(tabID: 2, frameID: 0,
+                    documentID: original.documentID, documentSession: original.documentSession),
+                NativeRequestContext.DocumentIdentity(tabID: 1, frameID: 0,
+                    documentID: "replacement-document", documentSession: original.documentSession),
+                NativeRequestContext.DocumentIdentity(tabID: 1, frameID: 0,
+                    documentID: original.documentID, documentSession: String(repeating: "b", count: 32)),
+                NativeRequestContext.DocumentIdentity(tabID: 1, frameID: 0,
+                    documentID: nil, documentSession: original.documentSession),
+            ] {
+                fixture.calls.value = []
+                let replay = try await fixture.dispatch(message, document: foreign)
+                XCTAssertNil(replay["requestToken"])
+                await assertFailure(.invalidMessage) {
+                    try await fixture.dispatch(fixture.command("showApproval", fields: identity), document: foreign)
+                }
+                XCTAssertTrue(fixture.calls.value.isEmpty)
+                let poll = try await fixture.dispatch(fixture.command("pollResponse", fields:
+                    identity.merging(["maintenance": "interactive"]) { _, new in new }), document: foreign)
+                XCTAssertEqual(poll["missing"] as? Bool, true)
+                let acknowledgement = try await fixture.dispatch(fixture.command("acknowledgeResponse", fields: identity), document: foreign)
+                XCTAssertEqual(acknowledgement["missing"] as? Bool, true)
+            }
+            let rejected = await fixture.bridge.reject(handle: handle)
+            XCTAssertEqual(rejected, .persisted)
+            let poll = fixture.command("pollResponse", fields: identity.merging(["maintenance": "none"]) { _, new in new })
+            let delivered = try await fixture.dispatch(poll, document: original)
+            XCTAssertNotNil(delivered["response"])
+            let acknowledgement = try await fixture.dispatch(fixture.command("acknowledgeResponse", fields: identity), document: original)
+            XCTAssertEqual(acknowledgement["acknowledged"] as? Bool, true)
+        }
+    }
+
+    func testManualSwitchCoalescingKeepsDocumentAndWorkerOwnersSeparate() async throws {
+        try await withFixture { fixture in
+            let firstDocument = NativeRequestContext.DocumentIdentity(tabID: 1, frameID: 0,
+                documentID: nil, documentSession: String(repeating: "a", count: 32))
+            let secondDocument = NativeRequestContext.DocumentIdentity(tabID: 1, frameID: 0,
+                documentID: nil, documentSession: String(repeating: "b", count: 32))
+            func manualMessage() async throws -> [String: Any] {
+                var message = try await fixture.connectionMessage()
+                message["provider"] = "unknown"
+                message["name"] = "switchAccount"
+                message["body"] = [String: Any]()
+                return message
+            }
+            let first = try await fixture.dispatch(try await manualMessage(), document: firstDocument)
+            let repeated = try await fixture.dispatch(try await manualMessage(), document: firstDocument)
+            let second = try await fixture.dispatch(try await manualMessage(), document: secondDocument)
+            let worker = try await fixture.dispatch(try await manualMessage(), source: "worker")
+            let repeatedWorker = try await fixture.dispatch(try await manualMessage(), source: "worker")
+            XCTAssertEqual(repeated["admissionKind"] as? String, "coalesced")
+            XCTAssertEqual(repeated["requestToken"] as? String, first["requestToken"] as? String)
+            XCTAssertEqual(second["admissionKind"] as? String, "new")
+            XCTAssertNotEqual(second["requestToken"] as? String, first["requestToken"] as? String)
+            XCTAssertEqual(worker["admissionKind"] as? String, "new")
+            XCTAssertEqual(repeatedWorker["admissionKind"] as? String, "coalesced")
+            XCTAssertEqual(repeatedWorker["requestToken"] as? String, worker["requestToken"] as? String)
         }
     }
 
@@ -622,7 +692,9 @@ final class NativeMessageDispatcherTests: XCTestCase {
         func dispatch(
             _ message: [String: Any], policy: NativeMessageDispatcher.ApprovalPolicy = .native,
             source: String = "site", privateBrowsing: Bool = false, profile: UUID? = nil,
-            siteOrigin: String? = nil
+            siteOrigin: String? = nil,
+            document: NativeRequestContext.DocumentIdentity = .init(tabID: 1, frameID: 0,
+                documentID: nil, documentSession: "0123456789abcdef0123456789abcdef")
         ) async throws -> [String: Any] {
             let calls = calls
             let bridge = bridge
@@ -655,10 +727,10 @@ final class NativeMessageDispatcherTests: XCTestCase {
                 bridge: TrackingBridge(bridge: bridge, calls: bridgeCalls),
                 materialize: { _ in calls.withValue { $0.append("materialize") }; return .approvalRequired },
                 reconcile: { _, _ in calls.withValue { $0.append("reconcile") }; return .opened },
-                pollResponse: { handle, origin, _ in
+                pollResponse: { handle, origin, _, access in
                     bridgeCalls.withValue { $0.append("poll") }
                     return await bridge.prepareResponseDelivery(id: handle.id, configurationKey: origin,
-                        requestToken: handle.requestToken, profileIdentifier: handle.profileIdentifier)
+                        requestToken: handle.requestToken, profileIdentifier: handle.profileIdentifier, access: access)
                 },
                 rpc: rpc,
                 popup: { _, _ in calls.withValue { $0.append("popup") }; return popup() },
@@ -670,7 +742,10 @@ final class NativeMessageDispatcherTests: XCTestCase {
             if source == "site" {
                 let origin = siteOrigin ?? self.origin
                 transportContext["site"] = ["host": try XCTUnwrap(URL(string: origin)?.host), "configurationKey": origin]
-                transportContext["document"] = ["tabId": 1, "frameId": 0]
+                var documentFields: [String: Any] = ["tabId": document.tabID, "frameId": document.frameID,
+                    "documentSession": document.documentSession]
+                documentFields["documentId"] = document.documentID
+                transportContext["document"] = documentFields
             }
             var transport = message
             transport[WireProtocol.nativeContextKey] = transportContext
@@ -715,9 +790,13 @@ final class NativeMessageDispatcherTests: XCTestCase {
             return await bridge.load(handle: handle)
         }
 
-        func acknowledgeResponse(handle: RequestHandle, configurationKey: String) async -> ExtensionBridge.StoreMutationResult {
+        func authorizeResponseAccess(handle: RequestHandle, configurationKey: String, access: NativeRequestContext.ResponseAccess) async -> ExtensionBridge.ResponseAccessResult {
+            await bridge.authorizeResponseAccess(handle: handle, configurationKey: configurationKey, access: access)
+        }
+
+        func acknowledgeResponse(handle: RequestHandle, configurationKey: String, access: NativeRequestContext.ResponseAccess) async -> ExtensionBridge.StoreMutationResult {
             calls.withValue { $0.append("acknowledge") }
-            return await bridge.acknowledgeResponse(handle: handle, configurationKey: configurationKey)
+            return await bridge.acknowledgeResponse(handle: handle, configurationKey: configurationKey, access: access)
         }
     }
 }

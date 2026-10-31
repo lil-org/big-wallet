@@ -79,6 +79,27 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
     }
 
+    private func durableFileIO(
+        _ disk: DurablePersistenceDiskModel,
+        at url: URL
+    ) -> SafariApprovalVault.FileIO {
+        let persistence = DurableProfilePersistence(
+            directoryBoundary: url.deletingLastPathComponent(),
+            operations: disk.operations
+        )
+        return .init(
+            replace: { try persistence.replace($0, at: $1) },
+            readSnapshot: { url, maximumBytes in
+                XCTAssertEqual(maximumBytes, SafariApprovalVault.maximumEnvelopeBytes)
+                return disk.readSnapshot(at: url, maximumBytes: maximumBytes)
+            },
+            readDurableSnapshot: { url, maximumBytes in
+                XCTAssertEqual(maximumBytes, SafariApprovalVault.maximumEnvelopeBytes)
+                return persistence.readDurableSnapshot(at: url, maximumBytes: maximumBytes)
+            }
+        )
+    }
+
     private func accountCountFixture(_ count: Int) throws -> SafariApprovalSourceSnapshot {
         let key = try XCTUnwrap(WalletStoredKey.importJSON(
             json: WalletCoreProxyTestVectors.walletCoreJSONVariantPrivateKeyFixtures[0].json
@@ -184,7 +205,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 handle: access.scope.handle, deadline: access.scope.signingDeadline
             )
         )
-        guard let session = access.consume(permit: permit) else {
+        guard let session = await access.consume(permit: permit) else {
             XCTAssertFalse(expectedSuccess, "Expected preparation to bind the permit", file: file, line: line)
             return nil
         }
@@ -595,7 +616,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         try vault?.publish(source: fixture().source, integrityKey: integrityKey)
         let unlocked = await vault?.unlockSignerForTesting(reason: "Approve")
         let signer = try XCTUnwrap(unlocked)
-        let signerSession = try boundWalletSigningSessionForTesting(signer)
+        let signerSession = try await boundWalletSigningSessionForTesting(signer)
 
         vault = nil
 
@@ -624,7 +645,8 @@ final class SafariApprovalVaultTests: XCTestCase {
             let permit = try approvedWalletSigningPermitForTesting(
                 approvedAccount: selected, authorization: signer.scope
             )
-            let session = try XCTUnwrap(signer.consume(permit: permit))
+            let consumed = await signer.consume(permit: permit)
+            let session = try XCTUnwrap(consumed)
             if alreadySigned {
                 try assertWalletSigningSuccessForTesting(await session.sign(), permit: permit, account: selected.account)
             }
@@ -926,10 +948,10 @@ final class SafariApprovalVaultTests: XCTestCase {
                 publicationEvents.withValue { $0.append("random-key") }
                 return SecretBytes(copying: Data(repeating: 20, count: 32))
              },
-            atomicWrite: { data, destination in
+            fileIO: .init(replace: { data, destination in
                 publicationEvents.withValue { $0.append("write") }
-                try data.write(to: destination, options: .atomic)
-            }
+                try SafariApprovalVault.FileIO.live.replace(data, destination)
+            })
         )
         let fixture = try mnemonicFixture()
         var object = try XCTUnwrap(
@@ -1414,7 +1436,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let unlocked = try XCTUnwrap(unlockedValue)
         let executionValue = await vault.unlockSignerForTesting(reason: "Approve")
         let execution = try XCTUnwrap(executionValue)
-        let executionSession = try boundWalletSigningSessionForTesting(execution)
+        let executionSession = try await boundWalletSigningSessionForTesting(execution)
 
         try keys.removeAll()
 
@@ -1441,7 +1463,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let unlocked = try XCTUnwrap(unlockedValue)
         let executionValue = await vault.unlockSignerForTesting(reason: "Approve")
         let execution = try XCTUnwrap(executionValue)
-        let executionSession = try boundWalletSigningSessionForTesting(execution)
+        let executionSession = try await boundWalletSigningSessionForTesting(execution)
         let originalData = try Data(contentsOf: url)
 
         try originalData.write(to: url, options: .atomic)
@@ -1507,7 +1529,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
         let unlocked = await vault.unlockSignerForTesting(reason: "Approve")
         let access = try XCTUnwrap(unlocked)
-        let accessSession = try boundWalletSigningSessionForTesting(access)
+        let accessSession = try await boundWalletSigningSessionForTesting(access)
         let executionLeaseValue = await accessSession.takeCommit()
         let executionLease = try walletCommitLeaseForTesting(executionLeaseValue)
         let reusedLease = await accessSession.takeCommit()
@@ -1542,9 +1564,9 @@ final class SafariApprovalVaultTests: XCTestCase {
         let firstAccessValue = await vault.unlockSignerForTesting(reason: "First approval")
         let secondAccessValue = await vault.unlockSignerForTesting(reason: "Second approval")
         let firstAccess = try XCTUnwrap(firstAccessValue)
-        let firstAccessSession = try boundWalletSigningSessionForTesting(firstAccess)
+        let firstAccessSession = try await boundWalletSigningSessionForTesting(firstAccess)
         let secondAccess = try XCTUnwrap(secondAccessValue)
-        let secondAccessSession = try boundWalletSigningSessionForTesting(secondAccess)
+        let secondAccessSession = try await boundWalletSigningSessionForTesting(secondAccess)
         let firstLeaseValue = await firstAccessSession.takeCommit()
         let firstLease = try walletCommitLeaseForTesting(firstLeaseValue)
         defer { firstLease.release() }
@@ -1575,7 +1597,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                     return await release.wait()
                 })
             )
-            let accessSession = try boundWalletSigningSessionForTesting(access)
+            let accessSession = try await boundWalletSigningSessionForTesting(access)
             let acquisition = Task { await accessSession.takeCommit() }
             await fulfillment(of: [started], timeout: 1)
             if cancel {
@@ -2528,20 +2550,436 @@ final class SafariApprovalVaultTests: XCTestCase {
         }
         let vault = SafariApprovalVault(
             fileURL: url, keyStore: keys,
-            atomicWrite: { data, destination in
+            fileIO: .init(replace: { data, destination in
                 events.withValue { $0.append(data.isEmpty ? "tombstone" : "envelope") }
                 if !data.isEmpty {
                     XCTAssertEqual(keys.keys.count, 3)
                     XCTAssertEqual(keys.availabilityRequests.last?.count, 3)
                 }
-                try data.write(to: destination, options: .atomic)
-            }
+                try SafariApprovalVault.FileIO.live.replace(data, destination)
+            })
         )
         try vault.publish(source: source, integrityKey: integrityKey)
         XCTAssertEqual(events.value, ["tombstone", "delete", "store", "store", "store", "envelope"])
         XCTAssertEqual(vault.reviewCatalog()?.orderedAccounts.count, 3)
         XCTAssertTrue(keys.loadedIdentities.isEmpty)
     }
+
+    func testDurablePublicationAndRevocationSurviveCrash() throws {
+        let source = try fixture().source
+        for removesKeys in [false, true] {
+            let url = temporaryURL()
+            defer { try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock")) }
+            let disk = DurablePersistenceDiskModel(fileURL: url, contents: nil)
+            let keys = MemoryApprovalKeyStore()
+            keys.onStore = { _ in XCTAssertEqual(disk.durablePublished, Data()) }
+            let vault = SafariApprovalVault(fileURL: url, keyStore: keys, fileIO: durableFileIO(disk, at: url))
+            let publication = try vault.publish(source: source, integrityKey: integrityKey)
+            let envelope = try XCTUnwrap(disk.published)
+            XCTAssertEqual(disk.durablePublished, envelope)
+            disk.crash()
+            XCTAssertEqual(vault.reviewCatalog()?.identity.generation, publication.generation)
+
+            if removesKeys { try vault.clear() }
+            else { try vault.markUnavailable() }
+
+            disk.crash()
+            XCTAssertEqual(disk.published, Data())
+            XCTAssertNil(vault.reviewCatalog())
+            XCTAssertEqual(keys.keys.count, removesKeys ? 0 : source.catalog.accounts.count)
+            XCTAssertEqual(vault.publicationStatus(
+                source: source, expectedGeneration: publication.generation,
+                expectedEnvelopeDigest: publication.envelopeDigest, expectedSourceMAC: publication.sourceMAC,
+                integrityKey: integrityKey
+            ), .stale)
+            XCTAssertTrue(disk.openDescriptors.isEmpty)
+            XCTAssertFalse(disk.hasTemporaryEntry)
+        }
+    }
+
+    func testTombstoneBarrierFailuresStopPublicationBeforeKeyChanges() throws {
+        let source = try fixture().source
+        for stage in ["openDirectory", "entryKind", "create", "kind", "full:1", "rename", "sync", "full:2"] {
+            let url = temporaryURL()
+            defer { try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock")) }
+            let disk = DurablePersistenceDiskModel(fileURL: url, contents: nil)
+            let keys = MemoryApprovalKeyStore()
+            let vault = SafariApprovalVault(fileURL: url, keyStore: keys, fileIO: durableFileIO(disk, at: url))
+            let publication = try vault.publish(source: source, integrityKey: integrityKey)
+            let envelope = disk.published
+            let identities = Set(keys.keys.keys)
+            disk.resetEvents()
+            keys.onRemove = { disk.recordEvent("delete keys") }
+            keys.onStore = { _ in disk.recordEvent("store key") }
+            let event = ["openDirectory", "sync"].contains(stage)
+                ? "\(stage):\(url.deletingLastPathComponent().standardizedFileURL.path)" : stage
+            disk.failures[event] = [.EIO]
+
+            XCTAssertThrowsError(try vault.publish(source: source, integrityKey: integrityKey), stage) {
+                XCTAssertEqual($0 as? SafariApprovalVault.Error, .unavailable, stage)
+            }
+            XCTAssertFalse(disk.events.contains("delete keys"), stage)
+            XCTAssertFalse(disk.events.contains("store key"), stage)
+            XCTAssertEqual(Set(keys.keys.keys), identities, stage)
+            XCTAssertTrue(disk.openDescriptors.isEmpty, stage)
+            XCTAssertFalse(disk.hasTemporaryEntry, stage)
+            disk.crash()
+            XCTAssertEqual(disk.published, envelope, stage)
+            XCTAssertEqual(vault.reviewCatalog()?.identity.generation, publication.generation, stage)
+        }
+    }
+
+    func testEnvelopeBarrierFailuresDoNotPublishOrRetainKeys() throws {
+        let source = try fixture().source
+        for stage in ["openDirectory", "entryKind", "create", "kind", "write:1", "full:1", "rename", "sync", "full:2"] {
+            let url = temporaryURL()
+            defer { try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock")) }
+            let disk = DurablePersistenceDiskModel(fileURL: url, contents: nil)
+            let keys = MemoryApprovalKeyStore()
+            var fileIO = durableFileIO(disk, at: url)
+            let replace = fileIO.replace
+            fileIO.replace = { data, destination in
+                if !data.isEmpty {
+                    disk.resetEvents()
+                    let event = ["openDirectory", "sync"].contains(stage)
+                        ? "\(stage):\(destination.deletingLastPathComponent().standardizedFileURL.path)" : stage
+                    disk.failures[event] = [.EIO]
+                }
+                try replace(data, destination)
+            }
+            let vault = SafariApprovalVault(fileURL: url, keyStore: keys, fileIO: fileIO)
+
+            XCTAssertThrowsError(try vault.publish(source: source, integrityKey: integrityKey), stage) {
+                XCTAssertEqual($0 as? SafariApprovalVault.Error, .unavailable, stage)
+            }
+            XCTAssertTrue(keys.keys.isEmpty, stage)
+            XCTAssertNil(vault.reviewCatalog(), stage)
+            XCTAssertTrue(disk.openDescriptors.isEmpty, stage)
+            XCTAssertFalse(disk.hasTemporaryEntry, stage)
+            disk.crash()
+            XCTAssertEqual(disk.published, Data(), stage)
+            XCTAssertNil(vault.reviewCatalog(), stage)
+        }
+    }
+
+    func testUncertainEnvelopeAndFailedCleanupKeepDurableTombstone() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock")) }
+        let disk = DurablePersistenceDiskModel(fileURL: url, contents: nil)
+        let keys = MemoryApprovalKeyStore()
+        let deletes = LockedTestValue(0)
+        keys.onRemove = { [weak keys] in
+            if deletes.withValue({ $0 += 1; return $0 }) == 2 {
+                keys?.removeError = SafariApprovalVault.Error.keychainFailure(errSecIO)
+            }
+        }
+        let attemptedEnvelope = LockedTestValue(false)
+        var fileIO = durableFileIO(disk, at: url)
+        let replace = fileIO.replace
+        let readDurableSnapshot = fileIO.readDurableSnapshot
+        fileIO.readDurableSnapshot = { url, maximumBytes in
+            disk.resetEvents()
+            disk.failures["full:1"] = [.EIO]
+            return readDurableSnapshot(url, maximumBytes)
+        }
+        fileIO.replace = { data, destination in
+            if data.isEmpty, attemptedEnvelope.value { throw POSIXError(.EIO) }
+            if !data.isEmpty {
+                attemptedEnvelope.value = true
+                disk.resetEvents()
+                disk.failures["full:2"] = [.EIO]
+            }
+            try replace(data, destination)
+        }
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys, fileIO: fileIO)
+        let fixture = try fixture()
+        XCTAssertThrowsError(try vault.publish(source: fixture.source, integrityKey: integrityKey)) {
+            XCTAssertEqual($0 as? SafariApprovalVault.Error, .unavailable)
+        }
+        XCTAssertEqual(deletes.value, 2)
+        XCTAssertFalse(try XCTUnwrap(disk.published).isEmpty)
+        XCTAssertFalse(keys.keys.isEmpty)
+        XCTAssertEqual(disk.durablePublished, Data())
+        let freshReader = SafariApprovalVault(fileURL: url, keyStore: keys, fileIO: fileIO)
+        let scope = walletSigningScopeForTesting(approvedAccount: WalletAccountDescriptor(walletID: "wallet", account: fixture.account))
+        for reader in [vault, freshReader] {
+            XCTAssertNil(reader.reviewCatalog())
+            XCTAssertNil(reader.approvalCatalog())
+            guard case .unavailable = await reader.unlockResult(reason: "Approve", scope: scope) else {
+                return XCTFail("Uncertain publication must be unavailable before a crash")
+            }
+        }
+        XCTAssertTrue(keys.loadedIdentities.isEmpty)
+        disk.crash()
+        XCTAssertEqual(disk.published, Data())
+        XCTAssertNil(vault.reviewCatalog())
+    }
+
+    func testExpiredFailedPublicationRequiresDurableReaderRecovery() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock")) }
+        let disk = DurablePersistenceDiskModel(fileURL: url, contents: nil)
+        let keys = MemoryApprovalKeyStore()
+        let activity = try XCTUnwrap(SafariApprovalReconciliationActivity(begin: { _ in {} }))
+        var operations = disk.operations
+        let fullSync = operations.fullSync
+        let flushes = LockedTestValue(0)
+        operations.fullSync = { descriptor in
+            if flushes.withValue({ $0 += 1; return $0 }) == 4 {
+                activity.finish()
+                throw POSIXError(.EIO)
+            }
+            try fullSync(descriptor)
+        }
+        let persistence = DurableProfilePersistence(directoryBoundary: url.deletingLastPathComponent(), operations: operations)
+        let rejectReadSynchronization = LockedTestValue(true)
+        var fileIO = durableFileIO(disk, at: url)
+        let readDurableSnapshot = fileIO.readDurableSnapshot
+        fileIO.replace = { try persistence.replace($0, at: $1) }
+        fileIO.readDurableSnapshot = { url, maximumBytes in
+            if rejectReadSynchronization.value {
+                disk.resetEvents()
+                disk.failures["full:1"] = [.EIO]
+            }
+            return readDurableSnapshot(url, maximumBytes)
+        }
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys, fileIO: fileIO)
+        let lease = try XCTUnwrap(activity.acquireLease(from: vault))
+        let fixture = try fixture()
+
+        XCTAssertThrowsError(try vault.publish(source: fixture.source, integrityKey: integrityKey,
+            coordinationLease: lease, activity: activity)) {
+            XCTAssertEqual($0 as? SafariApprovalVault.Error, .unavailable)
+        }
+        let envelope = try XCTUnwrap(disk.published)
+        XCTAssertFalse(envelope.isEmpty)
+        XCTAssertFalse(keys.keys.isEmpty)
+        XCTAssertEqual(disk.durablePublished, Data())
+
+        let reader = SafariApprovalVault(fileURL: url, keyStore: keys,
+            canEvaluateAuthentication: { _, _ in true }, authentication: { _, _, _ in true }, fileIO: fileIO)
+        let scope = walletSigningScopeForTesting(approvedAccount: WalletAccountDescriptor(walletID: "wallet", account: fixture.account))
+        XCTAssertNil(reader.reviewCatalog())
+        guard case .unavailable = await reader.unlockResult(reason: "Approve", scope: scope) else {
+            return XCTFail("Expired reconciliation must not expose an uncertain publication")
+        }
+        XCTAssertTrue(keys.loadedIdentities.isEmpty)
+
+        rejectReadSynchronization.value = false
+        XCTAssertNotNil(reader.reviewCatalog())
+        XCTAssertEqual(disk.durablePublished, envelope)
+        guard case .unlocked(_, let preparation) = await reader.unlockResult(reason: "Approve", scope: scope) else {
+            return XCTFail("A later successful durability barrier should permit recovery")
+        }
+        preparation.invalidate()
+        disk.crash()
+        XCTAssertEqual(disk.published, envelope)
+        XCTAssertNotNil(reader.reviewCatalog())
+    }
+
+    func testReaderDurabilityFailureRetiresUnlockedSigningAndBlocksCommit() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock")) }
+        let disk = DurablePersistenceDiskModel(fileURL: url, contents: nil)
+        let keys = MemoryApprovalKeyStore()
+        let rejectReadSynchronization = LockedTestValue(false)
+        var fileIO = durableFileIO(disk, at: url)
+        let readDurableSnapshot = fileIO.readDurableSnapshot
+        fileIO.readDurableSnapshot = { url, maximumBytes in
+            if rejectReadSynchronization.value {
+                disk.resetEvents()
+                disk.failures["full:1"] = [.EIO]
+            }
+            return readDurableSnapshot(url, maximumBytes)
+        }
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys,
+            canEvaluateAuthentication: { _, _ in true }, authentication: { _, _, _ in true }, fileIO: fileIO)
+        try vault.publish(source: fixture().source, integrityKey: integrityKey)
+        let unlocked = await vault.unlockSignerForTesting(reason: "Validate")
+        let preparation = try XCTUnwrap(unlocked)
+        defer { preparation.invalidate() }
+        let commitUnlocked = await vault.unlockSignerForTesting(reason: "Commit")
+        let commitPreparation = try XCTUnwrap(commitUnlocked)
+        let session = try await boundWalletSigningSessionForTesting(commitPreparation)
+        defer { session.invalidate() }
+
+        rejectReadSynchronization.value = true
+
+        XCTAssertFalse(preparation.validateCurrent())
+        let commit = await session.takeCommit()
+        assertWalletCommitUnavailableForTesting(commit)
+        let lease = try XCTUnwrap(vault.tryAcquireCoordinationLease())
+        lease.release()
+    }
+
+    func testTombstoneRequiresExactReadableSnapshotBeforeKeyDeletion() throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock")) }
+        let disk = DurablePersistenceDiskModel(fileURL: url, contents: nil)
+        let keys = MemoryApprovalKeyStore()
+        let fileIO = durableFileIO(disk, at: url)
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys, fileIO: fileIO)
+        let source = try fixture().source
+        try vault.publish(source: source, integrityKey: integrityKey)
+        let identities = Set(keys.keys.keys)
+        var unavailableIO = fileIO
+        unavailableIO.readSnapshot = { _, _ in .unavailable }
+        let unavailable = SafariApprovalVault(fileURL: url, keyStore: keys, fileIO: unavailableIO)
+        XCTAssertThrowsError(try unavailable.clear()) {
+            XCTAssertEqual($0 as? SafariApprovalVault.Error, .unavailable)
+        }
+        XCTAssertEqual(Set(keys.keys.keys), identities)
+        XCTAssertEqual(disk.durablePublished, Data())
+        XCTAssertNil(vault.reviewCatalog())
+    }
+
+    func testExpirationDuringFinalBarrierRetainsCoordinationUntilDurable() throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock")) }
+        let disk = DurablePersistenceDiskModel(fileURL: url, contents: nil)
+        let keys = MemoryApprovalKeyStore()
+        let activity = try XCTUnwrap(SafariApprovalReconciliationActivity(begin: { _ in {} }))
+        let competingVault = SafariApprovalVault(fileURL: url, keyStore: keys)
+        var operations = disk.operations
+        let fullSync = operations.fullSync
+        let flushes = LockedTestValue(0)
+        operations.fullSync = { descriptor in
+            if flushes.withValue({ $0 += 1; return $0 }) == 4 {
+                activity.finish()
+                let unexpectedLease = try competingVault.tryAcquireCoordinationLease()
+                XCTAssertNil(unexpectedLease)
+                unexpectedLease?.release()
+            }
+            try fullSync(descriptor)
+        }
+        let persistence = DurableProfilePersistence(directoryBoundary: url.deletingLastPathComponent(), operations: operations)
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys, fileIO: .init(
+            replace: { try persistence.replace($0, at: $1) },
+            readSnapshot: { disk.readSnapshot(at: $0, maximumBytes: $1) },
+            readDurableSnapshot: { destination, maximumBytes in
+                DurableProfilePersistence(directoryBoundary: url.deletingLastPathComponent(), operations: disk.operations)
+                    .readDurableSnapshot(at: destination, maximumBytes: maximumBytes)
+            }
+        ))
+        let lease = try XCTUnwrap(activity.acquireLease(from: vault))
+        let publication = try vault.publish(
+            source: fixture().source, integrityKey: integrityKey,
+            coordinationLease: lease, activity: activity
+        )
+        let nextLease = try XCTUnwrap(competingVault.tryAcquireCoordinationLease())
+        nextLease.release()
+        disk.crash()
+        XCTAssertEqual(vault.reviewCatalog()?.identity.generation, publication.generation)
+        XCTAssertEqual(flushes.value, 4)
+    }
+
+#if os(iOS) || os(visionOS)
+    func testUncertainTombstoneBarrierAbortsSourceMutationWithoutAdvancingMetadata() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock")) }
+        let disk = DurablePersistenceDiskModel(fileURL: url, contents: nil)
+        let keys = MemoryApprovalKeyStore()
+        let rejectTombstone = LockedTestValue(false)
+        var fileIO = durableFileIO(disk, at: url)
+        let replace = fileIO.replace
+        fileIO.replace = { data, destination in
+            if data.isEmpty, rejectTombstone.value {
+                disk.resetEvents()
+                disk.failures["full:2"] = [.EIO]
+            }
+            try replace(data, destination)
+        }
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys, fileIO: fileIO)
+        let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let source = try fixture().source
+        let reconciliationQueue = ReconciliationTestGate(label: "testUncertainTombstoneBarrierAbortsSourceMutation")
+        let host = SafariApprovalVaultHost(
+            vault: vault, defaults: defaults,
+            integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
+            waitToReconcile: { await reconciliationQueue.wait() },
+            sourceSnapshot: { source.copyForTesting() }
+        )
+        await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
+        await host.waitForReconciliation()
+        let publication = try XCTUnwrap(vault.reviewCatalog()?.identity)
+        let envelope = try XCTUnwrap(disk.durablePublished)
+        let metadata = try XCTUnwrap(defaults.data(forKey: "SafariApprovalVault.hostPublicationMetadata.v1"))
+        let identities = Set(keys.keys.keys)
+        reconciliationQueue.suspend()
+        defer { reconciliationQueue.resume() }
+        rejectTombstone.value = true
+        let didMutate = LockedTestValue(false)
+
+        do {
+            try await host.performSourceMutation(preparing: {}) { _ in didMutate.value = true }
+            XCTFail("Source mutation must wait for a durable tombstone")
+        } catch {
+            XCTAssertEqual(error as? SafariApprovalVault.Error, .unavailable)
+        }
+        XCTAssertFalse(didMutate.value)
+        XCTAssertEqual(Set(keys.keys.keys), identities)
+        XCTAssertEqual(defaults.data(forKey: "SafariApprovalVault.hostPublicationMetadata.v1"), metadata)
+        XCTAssertEqual(disk.published, Data())
+        XCTAssertEqual(disk.durablePublished, envelope)
+        disk.crash()
+        rejectTombstone.value = false
+        reconciliationQueue.resume()
+        await host.waitForReconciliation()
+        XCTAssertEqual(vault.reviewCatalog()?.identity, publication)
+        XCTAssertEqual(defaults.data(forKey: "SafariApprovalVault.hostPublicationMetadata.v1"), metadata)
+    }
+
+    func testEnvelopeBarrierFailureDoesNotAdvanceHostMetadata() async throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock")) }
+        let disk = DurablePersistenceDiskModel(fileURL: url, contents: nil)
+        let keys = MemoryApprovalKeyStore()
+        let rejectEnvelope = LockedTestValue(true)
+        var fileIO = durableFileIO(disk, at: url)
+        let replace = fileIO.replace
+        fileIO.replace = { data, destination in
+            if !data.isEmpty, rejectEnvelope.value {
+                disk.resetEvents()
+                disk.failures["full:2"] = [.EIO]
+            }
+            try replace(data, destination)
+        }
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys, fileIO: fileIO)
+        let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let source = try fixture().source
+        let host = SafariApprovalVaultHost(
+            vault: vault, defaults: defaults,
+            integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
+            synchronizeDefaults: { defaults in
+                if defaults.object(forKey: "SafariApprovalVault.hostPublicationMetadata.v1") != nil {
+                    XCTAssertEqual(disk.published, disk.durablePublished)
+                    XCTAssertFalse(disk.durablePublished?.isEmpty ?? true)
+                }
+                return defaults.synchronize()
+            },
+            sourceSnapshot: { source.copyForTesting() }
+        )
+        await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
+        await host.waitForReconciliation()
+        XCTAssertNil(defaults.data(forKey: "SafariApprovalVault.hostPublicationMetadata.v1"))
+        XCTAssertNil(vault.reviewCatalog())
+        XCTAssertTrue(keys.keys.isEmpty)
+        disk.crash()
+        XCTAssertEqual(disk.published, Data())
+
+        rejectEnvelope.value = false
+        await host.reconcile()
+        await host.waitForReconciliation()
+        XCTAssertNotNil(defaults.data(forKey: "SafariApprovalVault.hostPublicationMetadata.v1"))
+        let publication = try XCTUnwrap(vault.reviewCatalog()?.identity)
+        disk.crash()
+        XCTAssertEqual(vault.reviewCatalog()?.identity, publication)
+    }
+#endif
 
     func testPartialKeyInsertionCleansUpIndependentlyAndCanRecover() throws {
         let source = try accountCountFixture(3)
@@ -2567,12 +3005,12 @@ final class SafariApprovalVaultTests: XCTestCase {
             }
             let vault = SafariApprovalVault(
                 fileURL: url, keyStore: keys,
-                atomicWrite: { data, destination in
+                fileIO: .init(replace: { data, destination in
                     let writesCount = writes.withValue { $0 += 1; return $0 }
                     events.withValue { $0.append(data.isEmpty ? "tombstone" : "envelope") }
                     if writesCount == 2 && cleanupFailure == "tombstone" { throw CocoaError(.fileWriteUnknown) }
-                    try data.write(to: destination, options: .atomic)
-                }
+                    try SafariApprovalVault.FileIO.live.replace(data, destination)
+                })
             )
             XCTAssertThrowsError(try vault.publish(source: source, integrityKey: integrityKey))
             XCTAssertEqual(events.value, ["tombstone", "delete", "store", "store", "tombstone", "delete"])
@@ -2673,10 +3111,10 @@ final class SafariApprovalVaultTests: XCTestCase {
         let vault = SafariApprovalVault(
             fileURL: url,
             keyStore: keychain.store,
-            atomicWrite: { data, destination in
+            fileIO: .init(replace: { data, destination in
                 keychain.recordEvent(data.isEmpty ? "tombstone" : "envelope")
-                try data.write(to: destination, options: .atomic)
-            }
+                try SafariApprovalVault.FileIO.live.replace(data, destination)
+            })
         )
         let source = try fixture().source
 
@@ -2806,10 +3244,10 @@ final class SafariApprovalVaultTests: XCTestCase {
             let vault = SafariApprovalVault(
                 fileURL: url,
                 keyStore: keys,
-                atomicWrite: { data, destination in
+                fileIO: .init(replace: { data, destination in
                     writes.withValue { $0 += 1 }
-                    try data.write(to: destination, options: .atomic)
-                }
+                    try SafariApprovalVault.FileIO.live.replace(data, destination)
+                })
             )
             let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
             let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
@@ -2959,10 +3397,10 @@ final class SafariApprovalVaultTests: XCTestCase {
                 expire.value?()
                 return SecretBytes(copying: Data(repeating: 7, count: 32))
              },
-            atomicWrite: { data, destination in
+            fileIO: .init(replace: { data, destination in
                 events.withValue { $0.append("write") }
-                try data.write(to: destination, options: .atomic)
-            }
+                try SafariApprovalVault.FileIO.live.replace(data, destination)
+            })
         )
         let lease = try XCTUnwrap(activity.acquireLease(from: vault))
         XCTAssertThrowsError(try vault.publish(
@@ -3712,7 +4150,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let original = try XCTUnwrap(vault.reviewCatalog()?.identity)
         let accessValue = await vault.unlockSignerForTesting(reason: "Approve")
         let access = try XCTUnwrap(accessValue)
-        let accessSession = try boundWalletSigningSessionForTesting(access)
+        let accessSession = try await boundWalletSigningSessionForTesting(access)
         let leaseValue = await accessSession.takeCommit()
         let lease = try walletCommitLeaseForTesting(leaseValue)
         defer { lease.release() }
@@ -3906,12 +4344,12 @@ final class SafariApprovalVaultTests: XCTestCase {
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
             randomKey: { SecretBytes(copying: Data(repeating: 7, count: 32)) },
-            atomicWrite: { data, destination in
+            fileIO: .init(replace: { data, destination in
                 if rejectTombstone.value && data.isEmpty {
                     throw CocoaError(.fileWriteUnknown)
                 }
-                try data.write(to: destination, options: .atomic)
-            }
+                try SafariApprovalVault.FileIO.live.replace(data, destination)
+            })
         )
         let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
@@ -4442,7 +4880,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let first = try XCTUnwrap(vault.reviewCatalog()?.identity)
         let originalUnlock = await vault.unlockSignerForTesting(reason: "Before mutation")
         let previousAccess = try XCTUnwrap(originalUnlock)
-        let previousAccessSession = try boundWalletSigningSessionForTesting(previousAccess)
+        let previousAccessSession = try await boundWalletSigningSessionForTesting(previousAccess)
         failNextSynchronization.value = true
         let mutations = LockedTestValue(0)
 
@@ -4508,7 +4946,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let cachedEnvelope = try Data(contentsOf: url)
         let unlocked = await vault.unlockSignerForTesting(reason: "Before mutation")
         let priorAccess = try XCTUnwrap(unlocked)
-        let priorAccessSession = try boundWalletSigningSessionForTesting(priorAccess)
+        let priorAccessSession = try await boundWalletSigningSessionForTesting(priorAccess)
         let attemptsBeforeRevocation = synchronizationAttempts.value
         reconciliationQueue.suspend()
         defer { reconciliationQueue.resume() }
@@ -4565,10 +5003,10 @@ final class SafariApprovalVaultTests: XCTestCase {
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
             randomKey: { SecretBytes(copying: Data(repeating: 14, count: 32)) },
-            atomicWrite: { data, destination in
+            fileIO: .init(replace: { data, destination in
                 events.withValue { $0.append(data.isEmpty ? "tombstone" : "envelope") }
-                try data.write(to: destination, options: .atomic)
-            }
+                try SafariApprovalVault.FileIO.live.replace(data, destination)
+            })
         )
         let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
@@ -4673,12 +5111,12 @@ final class SafariApprovalVaultTests: XCTestCase {
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
             randomKey: { SecretBytes(copying: Data(repeating: 16, count: 32)) },
-            atomicWrite: { data, destination in
+            fileIO: .init(replace: { data, destination in
                 if rejectEnvelope.value && !data.isEmpty {
                     throw CocoaError(.fileWriteUnknown)
                 }
-                try data.write(to: destination, options: .atomic)
-            }
+                try SafariApprovalVault.FileIO.live.replace(data, destination)
+            })
         )
         let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
@@ -4730,12 +5168,12 @@ final class SafariApprovalVaultTests: XCTestCase {
             canEvaluateAuthentication: { _, _ in true },
             authentication: { _, _, _ in true },
             randomKey: { SecretBytes(copying: Data(repeating: 20, count: 32)) },
-            atomicWrite: { data, destination in
+            fileIO: .init(replace: { data, destination in
                 if rejectTombstone.value && data.isEmpty {
                     throw CocoaError(.fileWriteUnknown)
                 }
-                try data.write(to: destination, options: .atomic)
-            }
+                try SafariApprovalVault.FileIO.live.replace(data, destination)
+            })
         )
         let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))

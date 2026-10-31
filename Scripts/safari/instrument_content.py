@@ -156,7 +156,7 @@ REPLACEMENTS = [(
     const identity = bigWalletCurrentIdentity();
     let response;
     try {
-        response = await bigWalletWire.withTimeout(browser.runtime.sendMessage({
+        response = await bigWalletWire.withTimeout(bigWalletSendRuntimeMessage({
             subject: "getLatestConfiguration", workflowVersion: bigWalletWorkflowVersion,
         }), bigWalletTransportTimeout);
     } catch {}
@@ -169,7 +169,7 @@ REPLACEMENTS = [(
     let diagnosticReturned = false;
     let response;
     try {
-        const pending = browser.runtime.sendMessage({
+        const pending = bigWalletSendRuntimeMessage({
             subject: "getLatestConfiguration", workflowVersion: bigWalletWorkflowVersion,
         });
         diagnosticReturned = true;

@@ -351,7 +351,7 @@ final class NativeAuthorityTransportTests: XCTestCase {
             ]],
         ]
         let request = try XCTUnwrap(SafariRequest(json: object))
-        guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: object),
+        guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: object, responseOwner: testDocumentResponseOwner),
               case .accepted(let handle, _, _, _, _) = await bridge.enqueue(
                 ingress: ingress, profileIdentifier: nil
               ) else { return XCTFail("Permission-free recovery must admit the original snapshot") }
@@ -360,7 +360,7 @@ final class NativeAuthorityTransportTests: XCTestCase {
         XCTAssertEqual(disposition, .responseReady)
         guard case .response(let envelope) = await bridge.prepareResponseDelivery(
             id: handle.id, configurationKey: origin,
-            requestToken: handle.requestToken, profileIdentifier: nil
+            requestToken: handle.requestToken, profileIdentifier: nil, access: .worker
         ) else { return XCTFail("Expected completed recovery") }
         let terminal = try XCTUnwrap(envelope["response"] as? [String: Any])
         let expectedAddress = WalletCrypto.addressFromPublicKeyData(key.publicKeyData(coin: .ethereum), coin: .ethereum)

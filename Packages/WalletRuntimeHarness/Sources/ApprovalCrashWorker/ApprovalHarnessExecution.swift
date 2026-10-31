@@ -217,16 +217,20 @@ final class HarnessObservedStore: NativeApprovalStore, NativeDeliveryStore, Nati
         await bridge.listRecoveryRequests(profileIdentifier: profileIdentifier)
     }
 
-    func acknowledgeResponse(handle: RequestHandle, configurationKey: String) async -> ExtensionBridge.StoreMutationResult {
+    func authorizeResponseAccess(handle: RequestHandle, configurationKey: String, access: NativeRequestContext.ResponseAccess) async -> ExtensionBridge.ResponseAccessResult {
+        await bridge.authorizeResponseAccess(handle: handle, configurationKey: configurationKey, access: access)
+    }
+
+    func acknowledgeResponse(handle: RequestHandle, configurationKey: String, access: NativeRequestContext.ResponseAccess) async -> ExtensionBridge.StoreMutationResult {
         do { return try await perform("acknowledgement", handle: handle, successful: { $0 == .persisted }) {
-            await self.bridge.acknowledgeResponse(handle: handle, configurationKey: configurationKey)
+            await self.bridge.acknowledgeResponse(handle: handle, configurationKey: configurationKey, access: access)
         } } catch { return .retryablePersistenceFailure }
     }
 
-    func prepareDelivery(handle: RequestHandle, configurationKey: String) async -> ExtensionBridge.ResponseReadResult {
+    func prepareDelivery(handle: RequestHandle, configurationKey: String, access: NativeRequestContext.ResponseAccess) async -> ExtensionBridge.ResponseReadResult {
         do { return try await perform("delivery", handle: handle, successful: { if case .response = $0 { true } else { false } }) {
             await self.bridge.prepareResponseDelivery(id: handle.id, configurationKey: configurationKey,
-                requestToken: handle.requestToken, profileIdentifier: handle.profileIdentifier)
+                requestToken: handle.requestToken, profileIdentifier: handle.profileIdentifier, access: access)
         } } catch { return .unavailable }
     }
 }

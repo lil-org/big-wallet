@@ -626,7 +626,7 @@ final class DappRequestProcessorTests: XCTestCase {
                 "authority": authority.version.json, "body": requestBodyForTesting(request),
             ]
             let unowned = try XCTUnwrap(SafariRequest(json: raw))
-            guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: unowned, rawObject: raw),
+            guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: unowned, rawObject: raw, responseOwner: testDocumentResponseOwner),
                   case .unauthorized = disconnected.store.enqueue(ingress: ingress, profileIdentifier: nil) else {
                 return XCTFail("An address match must not substitute for a native grant")
             }
@@ -2534,7 +2534,7 @@ final class DappRequestProcessorTests: XCTestCase {
                 XCTAssertEqual(disposition, .responseReady)
                 XCTAssertEqual(catalogReads, 0)
                 guard case .response(let delivery) = fixture.store.prepareResponseDelivery(
-                    handle: snapshot.handle, configurationKey: snapshot.configurationKey
+                    handle: snapshot.handle, configurationKey: snapshot.configurationKey, access: .worker
                 ) else { return XCTFail("Rejected typed data must finish before an approval is needed") }
                 let response = try XCTUnwrap(delivery.json["response"] as? [String: Any])
                 XCTAssertEqual((response["error"] as? [String: Any])?["code"] as? Int,

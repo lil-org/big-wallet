@@ -46,6 +46,35 @@ async function settle() {
     for (let index = 0; index < 80; index += 1) { await Promise.resolve(); }
 }
 
+test("document sessions survive reinjection and provider resets without reaching the page", async () => {
+    const harness = makeHarness();
+    await settle();
+    const session = harness.context.bigWalletDocumentSession;
+    assert.match(session, /^[0-9a-f]{32}$/);
+    const generation = harness.generation();
+    harness.reevaluate();
+    harness.context.bigWalletProviderGeneration = undefined;
+    harness.reevaluate();
+    harness.show();
+    await settle();
+    assert.notEqual(harness.generation(), generation);
+    assert.equal(harness.context.bigWalletDocumentSession, session);
+    assert.ok(harness.runtimeMessages.every(message => message.documentSession === session));
+    assert.equal(JSON.stringify(harness.postedMessages).includes(session), false);
+    assert.equal(harness.injectedScripts.some(script => script.includes(session)), false);
+    const replacement = makeHarness();
+    assert.notEqual(replacement.context.bigWalletDocumentSession, session);
+});
+
+test("content transport always stamps its own document session", async () => {
+    const harness = makeHarness();
+    await settle();
+    await harness.context.bigWalletSendRuntimeMessage({
+        subject: "getLatestConfiguration", workflowVersion: 4, documentSession: "f".repeat(32),
+    });
+    assert.equal(harness.runtimeMessages.at(-1).documentSession, harness.context.bigWalletDocumentSession);
+});
+
 function makeHarness({
     buildVersion = packagedBuildVersion,
     configurationResponse,
@@ -2193,6 +2222,7 @@ test("manual switch intent forwards exact trusted identity and worker status", a
         ), [{
             subject: "manualSwitchIntent",
             workflowVersion: 4,
+            documentSession: harness.context.bigWalletDocumentSession,
         }]);
     }
 });
@@ -2321,8 +2351,9 @@ test("response polling delivers a terminal payload without another worker operat
     assert.equal(harness.pendingTimers(), 0);
     const query = harness.runtimeMessages.at(-1);
     assert.deepEqual(Object.keys(query).sort(), [
-        "id", "requestToken", "subject", "workflowVersion",
+        "documentSession", "id", "requestToken", "subject", "workflowVersion",
     ]);
+    assert.equal(query.documentSession, harness.context.bigWalletDocumentSession);
 });
 
 test("response polling retries the same identity and waits for the explicit delivery result", async () => {

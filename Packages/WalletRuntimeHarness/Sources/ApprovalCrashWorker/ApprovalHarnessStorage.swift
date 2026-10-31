@@ -9,6 +9,7 @@ import Synchronization
 
 final class HarnessClock: Sendable {
     private let file: URL
+    private let anchor = ContinuousClock.now
     private struct State {
         var milliseconds: Double
         var uptime: UInt64 = 1_000_000_000
@@ -29,6 +30,10 @@ final class HarnessClock: Sendable {
     }
 
     func uptime() -> UInt64 { state.withLock { $0.uptime } }
+    func instant() -> ContinuousClock.Instant {
+        let elapsed = uptime() - 1_000_000_000
+        return anchor + .seconds(Int64(elapsed / 1_000_000_000)) + .nanoseconds(Int64(elapsed % 1_000_000_000))
+    }
     var pendingSleeps: Int { state.withLock { $0.sleepers.count } }
     func observeWaits(_ observer: @escaping @Sendable (UUID, Double, Bool) -> Void) {
         waitObserver.withLock { $0 = observer }

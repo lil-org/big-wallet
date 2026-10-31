@@ -2443,6 +2443,9 @@
         },
         "subject": {
           "constant": "MANUAL_SWITCH_INTENT_SUBJECT"
+        },
+        "documentSession": {
+          "ref": "PrivateToken"
         }
       },
       "optional": {}
@@ -2455,6 +2458,9 @@
         },
         "subject": {
           "const": "getLatestConfiguration"
+        },
+        "documentSession": {
+          "ref": "PrivateToken"
         }
       },
       "optional": {}
@@ -2479,6 +2485,9 @@
         },
         "authority": {
           "ref": "AuthorityVersion"
+        },
+        "documentSession": {
+          "ref": "PrivateToken"
         }
       },
       "optional": {}
@@ -2503,6 +2512,9 @@
         },
         "authority": {
           "ref": "AuthorityVersion"
+        },
+        "documentSession": {
+          "ref": "PrivateToken"
         }
       },
       "optional": {}
@@ -2524,6 +2536,9 @@
         },
         "chainId": {
           "ref": "EthereumChainID"
+        },
+        "documentSession": {
+          "ref": "PrivateToken"
         }
       },
       "optional": {}
@@ -2542,6 +2557,9 @@
         },
         "requestToken": {
           "ref": "RequestToken"
+        },
+        "documentSession": {
+          "ref": "PrivateToken"
         }
       },
       "optional": {}
@@ -2740,6 +2758,9 @@
         },
         "frameId": {
           "const": 0
+        },
+        "documentSession": {
+          "ref": "PrivateToken"
         }
       },
       "optional": {

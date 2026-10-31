@@ -693,14 +693,30 @@ final class SafariApprovalVault: Sendable {
     typealias Authentication = @Sendable (SafariApprovalAuthenticationContext, LAPolicy, String) async -> Bool
     typealias CanEvaluateAuthentication = @Sendable (LAContext, LAPolicy) -> Bool
     typealias RandomKey = @Sendable () throws -> SecretBytes
-    typealias AtomicWrite = @Sendable (Data, URL) throws -> Void
+
+    struct FileIO: Sendable {
+        var replace: @Sendable (Data, URL) throws -> Void
+        var readSnapshot: @Sendable (URL, Int) -> RegularFileSnapshotReader.Result = { url, maximumBytes in
+            DurableProfilePersistence(directoryBoundary: url.deletingLastPathComponent())
+                .readSnapshot(at: url, maximumBytes: maximumBytes)
+        }
+        var readDurableSnapshot: @Sendable (URL, Int) -> RegularFileSnapshotReader.Result = { url, maximumBytes in
+            DurableProfilePersistence(directoryBoundary: url.deletingLastPathComponent())
+                .readDurableSnapshot(at: url, maximumBytes: maximumBytes)
+        }
+
+        static let live = Self(replace: { data, url in
+            try DurableProfilePersistence(directoryBoundary: url.deletingLastPathComponent())
+                .replace(data, at: url)
+        })
+    }
 
     private let fileURL: URL?
     private let keyStore: SafariApprovalKeyStoring
     private let authentication: Authentication
     private let canEvaluateAuthentication: CanEvaluateAuthentication
     private let randomKey: RandomKey
-    private let atomicWrite: AtomicWrite
+    private let fileIO: FileIO
     private let coordinationLockURL: URL?
     private let clock: @Sendable () -> Date
     private let hooks: AuthorityExecutionHooks
@@ -719,9 +735,7 @@ final class SafariApprovalVault: Sendable {
             await $0.evaluate(policy: $1, reason: $2)
         },
         randomKey: @escaping RandomKey = { try SafariApprovalVault.makeRandomKey() },
-        atomicWrite: @escaping AtomicWrite = {
-            try $0.write(to: $1, options: .atomic)
-        },
+        fileIO: FileIO = .live,
         clock: @escaping @Sendable () -> Date = Date.init,
         hooks: AuthorityExecutionHooks = .none
     ) {
@@ -730,7 +744,7 @@ final class SafariApprovalVault: Sendable {
         self.canEvaluateAuthentication = canEvaluateAuthentication
         self.authentication = authentication
         self.randomKey = randomKey
-        self.atomicWrite = atomicWrite
+        self.fileIO = fileIO
         self.clock = clock
         self.hooks = hooks
         coordinationLockURL = fileURL?.appendingPathExtension(
@@ -907,12 +921,12 @@ final class SafariApprovalVault: Sendable {
             }
             try withActive {
                 do {
-                    try atomicWrite(envelopeData, fileURL)
+                    try fileIO.replace(envelopeData, fileURL)
                 } catch {
                     SafariApprovalDiagnostics.record("write envelope", error: error)
                     throw Error.unavailable
                 }
-                guard let record = loadEnvelopeRecordLocked(),
+                guard let record = loadEnvelopeRecordLocked(requiringDurability: false),
                       record.data == envelopeData,
                       record.envelope == envelope else {
                     SafariApprovalDiagnostics.record(
@@ -1212,17 +1226,17 @@ final class SafariApprovalVault: Sendable {
     private func writeTombstoneLocked() throws {
         guard let fileURL else { throw Error.unavailable }
         do {
-            try atomicWrite(Data(), fileURL)
+            try fileIO.replace(Data(), fileURL)
         } catch {
             SafariApprovalDiagnostics.record("write tombstone", error: error)
             throw Error.unavailable
         }
-        guard loadEnvelopeRecordLocked() == nil else { throw Error.unavailable }
+        guard readEnvelopeData(at: fileURL)?.isEmpty == true else { throw Error.unavailable }
     }
 
-    private func loadEnvelopeRecordLocked() -> EnvelopeRecord? {
+    private func loadEnvelopeRecordLocked(requiringDurability: Bool = true) -> EnvelopeRecord? {
         guard let fileURL,
-              let data = Self.readEnvelopeData(at: fileURL),
+              let data = readEnvelopeData(at: fileURL, requiringDurability: requiringDurability),
               !data.isEmpty,
               data.count <= Self.maximumEnvelopeBytes,
               let envelope = try? JSONDecoder().decode(Envelope.self, from: data),
@@ -1250,9 +1264,12 @@ final class SafariApprovalVault: Sendable {
         )
     }
 
-    private static func readEnvelopeData(at fileURL: URL) -> Data? {
-        let reader = RegularFileSnapshotReader(directoryBoundary: fileURL.deletingLastPathComponent())
-        guard case .data(let data) = reader.read(at: fileURL, maximumBytes: maximumEnvelopeBytes) else { return nil }
+    private func readEnvelopeData(at fileURL: URL, requiringDurability: Bool = false) -> Data? {
+        let snapshot = requiringDurability
+            ? fileIO.readDurableSnapshot(fileURL, Self.maximumEnvelopeBytes)
+            : fileIO.readSnapshot(fileURL, Self.maximumEnvelopeBytes)
+        guard case .data(let data) = snapshot,
+              data.count <= Self.maximumEnvelopeBytes else { return nil }
         return data
     }
 
@@ -1261,7 +1278,7 @@ final class SafariApprovalVault: Sendable {
         keyIdentity: SafariApprovalKeyIdentity
     ) -> Bool {
         withLock {
-            fileURL.flatMap(Self.readEnvelopeData(at:)) == snapshotData &&
+            fileURL.flatMap { readEnvelopeData(at: $0, requiringDurability: true) } == snapshotData &&
                 keyStore.availability(identities: [keyIdentity])[keyIdentity]?
                     .permitsPublishedEnvelope == true
         }

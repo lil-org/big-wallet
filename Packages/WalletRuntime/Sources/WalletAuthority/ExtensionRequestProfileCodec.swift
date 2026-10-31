@@ -122,6 +122,7 @@ struct ExtensionRequestProfileCodec: Sendable {
         }
         for record in profile.records {
             guard record.profileIdentifier == expectedIdentifier,
+                  record.responseOwner.isValid,
                   !record.host.isEmpty,
                   record.authority.context == ExtensionRequestProfile.authoritySnapshot(profile, configurationKey: record.configurationKey).version.context,
                   record.authorizedAccount.map(\.isValid) ?? true,

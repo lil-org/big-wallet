@@ -50,7 +50,7 @@ final class NativeToolbarRoutingTests: XCTestCase {
     func testCoalescedToolbarSwitchStillCarriesExplicitFocus() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
-        let original = try await fixture.dispatch(fixture.message(manual: true), source: "site")
+        let original = try await fixture.dispatch(fixture.message(manual: true), source: "worker")
         let coalesced = try await fixture.dispatch(fixture.message(manual: true, id: 2), source: "worker")
         XCTAssertEqual(coalesced["admissionKind"] as? String, "coalesced")
         XCTAssertEqual(coalesced["requestToken"] as? String, original["requestToken"] as? String)
@@ -59,7 +59,7 @@ final class NativeToolbarRoutingTests: XCTestCase {
         _ = try await fixture.focus(coalesced, source: "worker")
         let calls = fixture.log.values.withLock { $0 }
         XCTAssertEqual(calls.count, 3)
-        XCTAssertFalse(calls[0].reference.isToolbarAction)
+        XCTAssertTrue(calls[0].reference.isToolbarAction)
         XCTAssertTrue(calls[1].reference.isToolbarAction)
         XCTAssertTrue(calls[1].intent == .admission)
         XCTAssertTrue(calls[2].reference.isToolbarAction)
@@ -70,7 +70,7 @@ final class NativeToolbarRoutingTests: XCTestCase {
     func testCoalescedToolbarIntentSurvivesRejectionBeforeFocus() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
-        let original = try await fixture.dispatch(fixture.message(manual: true), source: "site")
+        let original = try await fixture.dispatch(fixture.message(manual: true), source: "worker")
         let coalesced = try await fixture.dispatch(fixture.message(manual: true, id: 2), source: "worker")
         XCTAssertEqual(coalesced["admissionKind"] as? String, "coalesced")
         let handle = try await fixture.complete(original)
@@ -233,7 +233,7 @@ final class NativeToolbarRoutingTests: XCTestCase {
                 reconcile: { reference, intent in
                     log.values.withLock { $0.append(.init(reference: reference, intent: intent)) }
                     return .opened
-                }, pollResponse: { _, _, _ in .unavailable }, rpc: RejectingRPC(),
+                }, pollResponse: { _, _, _, _ in .unavailable }, rpc: RejectingRPC(),
                 popup: { _, _ in .command(.init(status: .ignored, approvalState: nil)) },
                 privatePopup: { _ in .command(.init(status: .ignored, approvalState: nil)) },
                 openApp: { false }, invalidateNetworkCache: {}
@@ -241,7 +241,7 @@ final class NativeToolbarRoutingTests: XCTestCase {
             var context: [String: Any] = ["source": source, "privateBrowsing": false]
             if source == "site" {
                 context["site"] = ["host": "wallet.example", "configurationKey": origin]
-                context["document"] = ["tabId": 1, "frameId": 0]
+                context["document"] = ["tabId": 1, "frameId": 0, "documentSession": "0123456789abcdef0123456789abcdef"]
             }
             var transport = message
             transport[WireProtocol.nativeContextKey] = context

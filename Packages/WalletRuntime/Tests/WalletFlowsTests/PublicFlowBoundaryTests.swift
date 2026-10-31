@@ -40,7 +40,7 @@ final class PublicFlowBoundaryTests: XCTestCase {
             bridge: UnavailableBridge(),
             materialize: { _ in await calls.record("materialize"); return .unavailable },
             reconcile: { _, _ in await calls.record("reconcile"); return .unavailable },
-            pollResponse: { _, _, _ in await calls.record("poll"); return .unavailable },
+            pollResponse: { _, _, _, _ in await calls.record("poll"); return .unavailable },
             rpc: UnavailableRPC(),
             popup: { _, _ in await calls.record("popup"); return .queueUnavailable },
             privatePopup: { _ in await calls.record("privatePopup"); return .queueUnavailable },
@@ -55,7 +55,7 @@ final class PublicFlowBoundaryTests: XCTestCase {
         var context: [String: Any] = ["source": source, "privateBrowsing": privateBrowsing]
         if source == "site" {
             context["site"] = ["host": "wallet.example", "configurationKey": "https://wallet.example"]
-            context["document"] = ["tabId": 1, "frameId": 0]
+            context["document"] = ["tabId": 1, "frameId": 0, "documentSession": "0123456789abcdef0123456789abcdef"]
         }
         return try XCTUnwrap(NativeRequestContext.extract(from: [
             "id": 1, "subject": subject, "workflowVersion": ExtensionBridge.workflowVersion,
@@ -82,5 +82,6 @@ private struct UnavailableBridge: NativeMessageBridge {
                 profileIdentifier: UUID?) async -> ExtensionBridge.AuthorityMutationResult { .unavailable }
     func listRecoveryRequests(profileIdentifier: UUID?) async -> ExtensionBridge.RecoveryRequestsResult { .unavailable }
     func load(handle: RequestHandle) async -> ExtensionBridge.SnapshotResult { .unavailable }
-    func acknowledgeResponse(handle: RequestHandle, configurationKey: String) async -> ExtensionBridge.StoreMutationResult { .retryablePersistenceFailure }
+    func authorizeResponseAccess(handle: RequestHandle, configurationKey: String, access: NativeRequestContext.ResponseAccess) async -> ExtensionBridge.ResponseAccessResult { .unavailable }
+    func acknowledgeResponse(handle: RequestHandle, configurationKey: String, access: NativeRequestContext.ResponseAccess) async -> ExtensionBridge.StoreMutationResult { .retryablePersistenceFailure }
 }

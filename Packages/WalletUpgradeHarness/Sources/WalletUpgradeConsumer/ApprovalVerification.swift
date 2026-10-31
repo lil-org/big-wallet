@@ -175,7 +175,7 @@ final class ConsumerServices {
             throw UpgradeFailure.invalid("\(context) request parsing failed")
         }
         let ingress: ExtensionBridge.Ingress
-        switch ExtensionBridge.dappIngressResult(request: request, rawObject: raw) {
+        switch ExtensionBridge.dappIngressResult(request: request, rawObject: raw, responseOwner: .document(.init(tabID: 1, frameID: 0, documentID: nil, documentSession: "0123456789abcdef0123456789abcdef"))) {
         case .accepted(let value): ingress = value
         case .payloadTooLarge: throw UpgradeFailure.invalid("\(context) ingress payload exceeded limit")
         case .invalid: throw UpgradeFailure.invalid("\(context) ingress validation failed")
@@ -194,7 +194,7 @@ final class ConsumerServices {
         }
         let coordinator = NativeApprovalCoordinator(authority: NativeApprovalAuthority(handle: handle, nativeDeliveryNonce: nonce, store: bridge,
             environment: .live(processor: processor, wallets: wallets, finalizer: finalizer, messages: .testingEnglish,
-                authorityID: authorityID, clock: Date.init, hooks: .none)))
+                authorityID: authorityID, clock: Date.init, monotonicClock: { .now }, hooks: .none)))
         let resolved = ApprovalResolution<Result<Void, UpgradeFailure>>()
         var decided = false
         let credentials = credentials
@@ -255,7 +255,7 @@ final class ConsumerServices {
             waitForTimeout: { try? await Task.sleep(for: .seconds(30)) }, operation: { await resolved.value() })
         try result.get()
         guard case .response(let delivery) = await bridge.prepareResponseDelivery(id: handle.id, configurationKey: origin,
-            requestToken: handle.requestToken, profileIdentifier: nil),
+            requestToken: handle.requestToken, profileIdentifier: nil, access: .worker),
               let json = delivery["response"] as? [String: Any], let response = ResponseToExtension(json: json),
               response.approvalCommitted else { throw UpgradeFailure.invalid("Native response was not durably approved") }
         try require(attempts.count == 0, "Unexpected network or biometric attempt")

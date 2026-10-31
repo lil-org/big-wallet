@@ -49,7 +49,7 @@ public struct NativeMessageDispatcher: Sendable {
             ApprovalReference, ReconciliationIntent
             ) async -> NativeApprovalReconciliationResult
         public let pollResponse: @Sendable (
-            RequestHandle, String, ResponseMaintenance
+            RequestHandle, String, ResponseMaintenance, NativeRequestContext.ResponseAccess
         ) async -> ExtensionBridge.ResponseReadResult
         public let rpc: any PublicRPCForwarding
         public let popup: @Sendable (InternalSafariRequest, UUID?) async -> PopupResponse
@@ -61,7 +61,7 @@ public struct NativeMessageDispatcher: Sendable {
             bridge: any NativeMessageBridge,
             materialize: @escaping @Sendable (RequestHandle) async -> DappAdmissionDisposition,
             reconcile: @escaping @Sendable ( ApprovalReference, ReconciliationIntent ) async -> NativeApprovalReconciliationResult,
-            pollResponse: @escaping @Sendable (RequestHandle, String, ResponseMaintenance) async -> ExtensionBridge.ResponseReadResult,
+            pollResponse: @escaping @Sendable (RequestHandle, String, ResponseMaintenance, NativeRequestContext.ResponseAccess) async -> ExtensionBridge.ResponseReadResult,
             rpc: any PublicRPCForwarding,
             popup: @escaping @Sendable (InternalSafariRequest, UUID?) async -> PopupResponse,
             privatePopup: @escaping @Sendable (InternalSafariRequest) async -> PopupResponse,
@@ -139,7 +139,7 @@ public struct NativeMessageDispatcher: Sendable {
             return try await handle(command, request: request, context: context)
         case .worker(let command):
             guard !context.privateBrowsing else { throw Error.unsupportedOperation }
-            return try await handle(command, request: request, profileIdentifier: context.profileIdentifier)
+            return try await handle(command, request: request, context: context)
         case .popup:
             guard policy == .popup else { throw Error.unsupportedOperation }
             let response = context.privateBrowsing
@@ -155,8 +155,9 @@ public struct NativeMessageDispatcher: Sendable {
     private func handle(
         _ command: InternalSafariRequest.WorkerCommand,
         request: InternalSafariRequest,
-        profileIdentifier: UUID?
+        context: NativeRequestContext
     ) async throws -> WireProtocol.ValidatedObject {
+        let profileIdentifier = context.profileIdentifier
         switch command {
         case .getRecoveryRequests:
             switch await dependencies.bridge.listRecoveryRequests(profileIdentifier: profileIdentifier) {
@@ -170,7 +171,7 @@ public struct NativeMessageDispatcher: Sendable {
                 id: request.id, token: identity.response.token, profileIdentifier: profileIdentifier
             )
             let result = await dependencies.pollResponse(
-                handle, identity.response.configurationKey, identity.maintenance
+                handle, identity.response.configurationKey, identity.maintenance, context.responseAccess
             )
             let response: [String: Any]
             switch result {
@@ -316,6 +317,13 @@ public struct NativeMessageDispatcher: Sendable {
         case .showApproval(let identity):
             guard policy == .native else { throw Error.unsupportedOperation }
             let handle = RequestHandle(id: request.id, token: identity.token, profileIdentifier: profileIdentifier)
+            switch await dependencies.bridge.authorizeResponseAccess(
+                handle: handle, configurationKey: identity.configurationKey, access: context.responseAccess
+            ) {
+            case .authorized: break
+            case .missing: throw Error.invalidMessage
+            case .unavailable: throw Error.bridgeUnavailable
+            }
             guard case .found(let snapshot) = await dependencies.bridge.load(handle: handle),
                   snapshot.configurationKey == identity.configurationKey else { throw Error.invalidMessage }
             let isToolbarAction = context.source == .worker && snapshot.isManualSwitch
@@ -331,7 +339,7 @@ public struct NativeMessageDispatcher: Sendable {
             }
         case .acknowledgeResponse(let identity):
             let handle = RequestHandle(id: request.id, token: identity.token, profileIdentifier: profileIdentifier)
-            switch await dependencies.bridge.acknowledgeResponse(handle: handle, configurationKey: identity.configurationKey) {
+            switch await dependencies.bridge.acknowledgeResponse(handle: handle, configurationKey: identity.configurationKey, access: context.responseAccess) {
             case .persisted:
                 return try Self.encode(["id": request.id, "acknowledged": true], as: .nativeAcknowledgementReply)
             case .ownershipLost:

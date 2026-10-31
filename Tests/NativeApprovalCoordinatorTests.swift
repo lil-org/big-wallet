@@ -576,7 +576,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testStartupPasswordCanAuthenticateAfterChallengeLifetime() async throws {
         let clock = TestClock()
-        let credentials = authenticationCredentials(clock: { clock.date })
+        let credentials = authenticationCredentials(accessClock: { clock.instant })
         var events = [StartupCredentialCoordinator.Event]()
         let startup = StartupCredentialCoordinator(
             dependencies: .init(credentials: credentials, attemptBiometrics: { _, _ in nil }),
@@ -706,7 +706,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let status = LockedTestValue(WalletCredentialIdentity.Status.current)
         let authorityID = NativeApprovalTestAuthorization.authorityID
         let challenge = WalletAuthenticationChallenge(authorityID: authorityID,
-            purpose: .walletAccess(UUID()), deadline: .distantFuture)
+            purpose: .walletAccess(UUID()), deadline: .now + .seconds(150))
         let grant = try XCTUnwrap(challenge.issueGrant(for: authorityID,
             credentialIdentity: .init(status: { status.value })))
         let access = try XCTUnwrap(grant.accessSession(authorityID: authorityID))
@@ -1811,13 +1811,13 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
 
     func authenticationCredentials(
-        password: String? = "test-password", clock: @escaping @Sendable () -> Date = Date.init,
+        password: String? = "test-password",
         accessClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }
     ) -> WalletCredentials {
         let reader = KeychainCopyMatchingStub()
         reader.passwordData = password.map { Data($0.utf8) }
         return WalletCredentials(keychain: Keychain(copyMatching: reader.copyMatching), messages: .testingEnglish,
-            authorityID: NativeApprovalTestAuthorization.authorityID, clock: clock, accessClock: accessClock)
+            authorityID: NativeApprovalTestAuthorization.authorityID, accessClock: accessClock)
     }
 
 

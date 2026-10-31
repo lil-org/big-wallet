@@ -19,7 +19,7 @@ final class SigningRaceTests: XCTestCase {
             let authorityID = UUID()
             let purpose = WalletAuthenticationChallenge.Purpose.message(review: UUID(), cluster: nil)
             let challenge = WalletAuthenticationChallenge(authorityID: authorityID, purpose: purpose,
-                deadline: clock.date.addingTimeInterval(60), clock: { clock.date })
+                deadline: clock.instant + .seconds(60), clock: { clock.instant })
             let credentials = credentialFixture(authorityID: authorityID) { _ in
                 ready.resolve(())
                 await biometricResult.wait()
@@ -86,6 +86,28 @@ final class SigningRaceTests: XCTestCase {
         }
     }
 
+    func testLateBiometricSuccessCannotIssueAnElapsedChallengeAfterWallClockRollback() async throws {
+        let clock = TestClock()
+        let ready = TestGate<Void>()
+        let result = TestGate<Void>()
+        let authorityID = UUID()
+        let challenge = WalletAuthenticationChallenge(authorityID: authorityID,
+            purpose: .walletAccess(UUID()), deadline: clock.instant + .seconds(150), clock: { clock.instant })
+        let credentials = credentialFixture(authorityID: authorityID) { _ in
+            ready.resolve(())
+            await result.wait()
+            return .succeeded
+        }
+        let authentication = Task { await credentials.attemptBiometrics(reason: "fixture", challenge: challenge) }
+        defer { result.resolve(()); authentication.cancel(); challenge.invalidate() }
+        await ready.wait()
+        clock.setDate(.distantPast)
+        clock.advanceUptime(by: 150_000_000_000)
+        result.resolve(())
+        guard case .failed = await authentication.value else { return XCTFail("Elapsed authentication must discard biometric success") }
+        XCTAssertFalse(challenge.isPending(for: authorityID))
+    }
+
     func testEveryLateLeaseAndSessionInvalidationOrdering() async throws {
         try await exerciseLeaseSchedules(cancelTask: false)
     }
@@ -124,7 +146,7 @@ final class SigningRaceTests: XCTestCase {
                     return await acquisitionResult.wait()
                 }), clock: { clock.date }
             )
-            let session = try XCTUnwrap(preparation.consume(permit: permit))
+            let session = try await boundWalletSigningSessionForTesting(preparation, permit: permit)
             let hooks = AuthorityExecutionHooks(checkpoint: { checkpoint, _ in
                 if checkpoint == .afterCommitLease {
                     transferEntered.resolve(())
@@ -161,7 +183,7 @@ final class SigningRaceTests: XCTestCase {
                     assertWalletCommitUnavailableForTesting(await session.takeCommit())
                 case (.second, 2):
                     preparation.invalidate()
-                    XCTAssertNil(preparation.consume(permit: permit))
+                    assertWalletSigningSessionUnavailableForTesting(await preparation.consume(permit: permit))
                 default: XCTFail("Unexpected schedule step")
                 }
             }

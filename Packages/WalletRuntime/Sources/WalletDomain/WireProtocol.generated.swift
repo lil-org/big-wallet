@@ -2122,27 +2122,30 @@ public enum WireProtocol {
     }
 
     private static func n271(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject"], optional: []) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "documentSession"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n44(field0) else { return false }
         guard let field1 = value["subject"], n270(field1) else { return false }
+        guard let field2 = value["documentSession"], n56(field2) else { return false }
         return true
     }
 
     private static func n272(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject"], optional: []) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "documentSession"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n44(field0) else { return false }
         guard let field1 = value["subject"], n53(field1) else { return false }
+        guard let field2 = value["documentSession"], n56(field2) else { return false }
         return true
     }
 
     private static func n273(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "message", "enqueueAttempt", "admissionDeadline", "authority"], optional: []) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "message", "enqueueAttempt", "admissionDeadline", "authority", "documentSession"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n44(field0) else { return false }
         guard let field1 = value["subject"], n274(field1) else { return false }
         guard let field2 = value["message"], n246(field2) else { return false }
         guard let field3 = value["enqueueAttempt"], n56(field3) else { return false }
         guard let field4 = value["admissionDeadline"], n107(field4) else { return false }
         guard let field5 = value["authority"], n57(field5) else { return false }
+        guard let field6 = value["documentSession"], n56(field6) else { return false }
         return true
     }
 
@@ -2152,32 +2155,35 @@ public enum WireProtocol {
     }
 
     private static func n275(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "id", "provider", "attempt", "authority"], optional: []) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "id", "provider", "attempt", "authority", "documentSession"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n44(field0) else { return false }
         guard let field1 = value["subject"], n55(field1) else { return false }
         guard let field2 = value["id"], n43(field2) else { return false }
         guard let field3 = value["provider"], n27(field3) else { return false }
         guard let field4 = value["attempt"], n56(field4) else { return false }
         guard let field5 = value["authority"], n57(field5) else { return false }
+        guard let field6 = value["documentSession"], n56(field6) else { return false }
         return true
     }
 
     private static func n276(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "id", "body", "chainId"], optional: []) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "id", "body", "chainId", "documentSession"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n44(field0) else { return false }
         guard let field1 = value["subject"], n51(field1) else { return false }
         guard let field2 = value["id"], n43(field2) else { return false }
         guard let field3 = value["body"], n17(field3) else { return false }
         guard let field4 = value["chainId"], n18(field4) else { return false }
+        guard let field5 = value["documentSession"], n56(field5) else { return false }
         return true
     }
 
     private static func n277(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "id", "requestToken"], optional: []) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["workflowVersion", "subject", "id", "requestToken", "documentSession"], optional: []) else { return false }
         guard let field0 = value["workflowVersion"], n44(field0) else { return false }
         guard let field1 = value["subject"], n278(field1) else { return false }
         guard let field2 = value["id"], n43(field2) else { return false }
         guard let field3 = value["requestToken"], n60(field3) else { return false }
+        guard let field4 = value["documentSession"], n56(field4) else { return false }
         return true
     }
 
@@ -2352,9 +2358,10 @@ public enum WireProtocol {
     }
 
     private static func n315(_ value: Any) -> Bool {
-        guard let value = value as? [String: Any], exactKeys(value, required: ["tabId", "frameId"], optional: ["documentId"]) else { return false }
+        guard let value = value as? [String: Any], exactKeys(value, required: ["tabId", "frameId", "documentSession"], optional: ["documentId"]) else { return false }
         guard let field0 = value["tabId"], n12(field0) else { return false }
         guard let field1 = value["frameId"], n316(field1) else { return false }
+        guard let field2 = value["documentSession"], n56(field2) else { return false }
         if let field = value["documentId"], !n317(field) { return false }
         return true
     }

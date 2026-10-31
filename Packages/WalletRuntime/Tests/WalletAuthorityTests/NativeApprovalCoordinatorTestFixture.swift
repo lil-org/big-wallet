@@ -13,7 +13,7 @@ enum NativeApprovalTestAuthorization {
 
     static func grant(_ challenge: WalletAuthenticationChallenge? = nil) -> WalletAuthenticationGrant {
         let challenge = challenge ?? WalletAuthenticationChallenge(authorityID: authorityID,
-            purpose: .walletAccess(UUID()), deadline: .distantFuture)
+            purpose: .walletAccess(UUID()), deadline: .now + .seconds(150))
         return challenge.issueGrant(for: challenge.authorityID, credentialIdentity: .init(status: { .current }))!
     }
 

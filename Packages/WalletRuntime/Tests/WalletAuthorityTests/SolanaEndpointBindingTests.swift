@@ -30,7 +30,7 @@ final class SolanaEndpointBindingTests: XCTestCase {
             scope: WalletSigningScope(handle: claim.handle, approvedAccount: account, signingDeadline: claim.executionDeadline),
             commit: .native, clock: { fixture.now }
         )
-        let session = try XCTUnwrap(signing.consume(permit: permit))
+        let session = try await boundWalletSigningSessionForTesting(signing, permit: permit)
         defer { session.invalidate() }
         guard case .broadcast(let broadcast) = try await session.sign().get(),
               case .prepared(let dispatch) = fixture.store.prepareBroadcast(permit: permit, broadcast: broadcast) else {

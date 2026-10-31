@@ -17,19 +17,61 @@ public struct NativeRequestContext: Sendable {
         }
     }
 
-    public struct DocumentIdentity: Equatable, Sendable {
+    public struct DocumentIdentity: Codable, Equatable, Sendable {
         public let tabID: Int
         public let frameID: Int
         public let documentID: String?
+        public let documentSession: String
 
         public init(
             tabID: Int,
             frameID: Int,
-            documentID: String?
+            documentID: String?,
+            documentSession: String
         ) {
             self.tabID = tabID
             self.frameID = frameID
             self.documentID = documentID
+            self.documentSession = documentSession
+        }
+
+        public static func == (lhs: Self, rhs: Self) -> Bool {
+            guard lhs.tabID == rhs.tabID, lhs.frameID == rhs.frameID,
+                  lhs.documentSession == rhs.documentSession else { return false }
+            switch (lhs.documentID, rhs.documentID) {
+            case (.none, .none): return true
+            case (.some(let lhs), .some(let rhs)): return lhs.utf8.elementsEqual(rhs.utf8)
+            default: return false
+            }
+        }
+
+        var isValid: Bool {
+            tabID >= 0 && tabID <= 9_007_199_254_740_991 && frameID == 0 &&
+                WireProtocol.validate(.privateToken, value: documentSession) &&
+                documentID.map { !$0.isEmpty && $0.utf16.count <= 128 } != false
+        }
+    }
+
+    enum ResponseOwner: Codable, Equatable, Sendable {
+        case document(DocumentIdentity)
+        case worker
+
+        var isValid: Bool {
+            if case .document(let identity) = self { return identity.isValid }
+            return true
+        }
+    }
+
+    public enum ResponseAccess: Equatable, Sendable {
+        case document(DocumentIdentity)
+        case popup
+        case worker
+
+        func authorizes(_ owner: ResponseOwner) -> Bool {
+            switch self {
+            case .document(let document): return document.isValid && owner == .document(document)
+            case .popup, .worker: return true
+            }
         }
     }
 
@@ -43,6 +85,22 @@ public struct NativeRequestContext: Sendable {
     public let privateBrowsing: Bool
     public let profileIdentifier: UUID?
 
+    public var responseAccess: ResponseAccess {
+        switch source {
+        case .site(_, let document): .document(document)
+        case .popup: .popup
+        case .worker: .worker
+        }
+    }
+
+    var responseOwner: ResponseOwner? {
+        switch source {
+        case .site(_, let document): .document(document)
+        case .popup: nil
+        case .worker: .worker
+        }
+    }
+
     private init?(_ wire: WireProtocol.ValidatedObject, profileIdentifier: UUID?) {
         guard wire.contract == .nativeTransportContext,
               let source = wire.json["source"] as? String,
@@ -55,10 +113,12 @@ public struct NativeRequestContext: Sendable {
                   ExtensionBridge.isValidIdentity(host: host, configurationKey: configurationKey),
                   let document = wire.json["document"] as? [String: Any],
                   let tabID = document["tabId"] as? Int,
-                  let frameID = document["frameId"] as? Int else { return nil }
+                  let frameID = document["frameId"] as? Int,
+                  let documentSession = document["documentSession"] as? String else { return nil }
             self.source = .site(
                 SiteIdentity(host: host, configurationKey: configurationKey),
-                DocumentIdentity(tabID: tabID, frameID: frameID, documentID: document["documentId"] as? String)
+                DocumentIdentity(tabID: tabID, frameID: frameID, documentID: document["documentId"] as? String,
+                    documentSession: documentSession)
             )
         case "popup":
             self.source = .popup
@@ -149,7 +209,8 @@ public protocol NativeMessageBridge: Sendable {
     ) async -> ExtensionBridge.AuthorityMutationResult
     func listRecoveryRequests(profileIdentifier: UUID?) async -> ExtensionBridge.RecoveryRequestsResult
     func load(handle: RequestHandle) async -> ExtensionBridge.SnapshotResult
-    func acknowledgeResponse(handle: RequestHandle, configurationKey: String) async -> ExtensionBridge.StoreMutationResult
+    func authorizeResponseAccess(handle: RequestHandle, configurationKey: String, access: NativeRequestContext.ResponseAccess) async -> ExtensionBridge.ResponseAccessResult
+    func acknowledgeResponse(handle: RequestHandle, configurationKey: String, access: NativeRequestContext.ResponseAccess) async -> ExtensionBridge.StoreMutationResult
 }
 
 extension ExtensionBridge: NativeMessageBridge {}

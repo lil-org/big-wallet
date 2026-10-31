@@ -123,11 +123,11 @@ final class HarnessRuntime {
         let authorityID = UUID()
         self.authorityID = authorityID
         credentials = WalletCredentials(keychain: fixtures.keychain, messages: .testingEnglish, authorityID: authorityID,
-            authentication: .init(canUseBiometrics: { false }, attemptBiometrics: { _ in .failed }), clock: fixtures.clock.now)
+            authentication: .init(canUseBiometrics: { false }, attemptBiometrics: { _ in .failed }), accessClock: fixtures.clock.instant)
         wallets = WalletsManager(keychain: fixtures.keychain, reloadMetadata: {}, publishLocalChange: {},
             walletSourceMutator: HarnessWalletMutator(store: fileStore, ipc: ipc),
             notifications: .init(postLocalChange: {}, postMutation: {}, startObserving: { _, _ in }, stopObserving: { _ in }, isExternalChange: { _ in false }),
-            metadataMutations: .init(removeWallet: { _ in }, removeAccounts: { _, _ in }), authorityID: authorityID, clock: fixtures.clock.now)
+            metadataMutations: .init(removeWallet: { _ in }, removeAccounts: { _, _ in }), authorityID: authorityID, clock: fixtures.clock.instant)
         processor = HarnessObservedProcessor(base: DappRequestProcessor(ethereumNetworkResolver: networks.approval,
             selectionNetworkResolver: networks.network, customDefinitionResult: networks.matches,
             solanaEndpoints: SolanaRPCClient.RPCConfiguration(trustsAlchemyURLBuilderOutput: false,
@@ -273,14 +273,23 @@ final class HarnessRuntime {
         }, networkResolver: networks.approval, customDefinitionResult: networks.matches)
 
     private lazy var admission = DappRequestAdmission(store: store, requestProcessor: processor,
-        reviewCatalog: options.mode == "popup" ? { [weak self] in self?.vault.reviewCatalog() } : nil)
+        reviewCatalog: options.mode == "popup" ? { [weak self] in
+            guard let vault = self?.vault else { return nil }
+            return await awaitBackgroundOperation { vault.reviewCatalog() } ?? nil
+        } : nil)
 
     private lazy var popupSessions = makePopupSessions()
 
     private func makePopupSessions() -> PopupRequestSessions {
         let presentation = popupPresentation
         let authority = PopupApprovalAuthority(store: store, walletEnvironment: PopupWalletEnvironment(
-        reviewCatalog: { [weak self] in self?.vault.reviewCatalog() }, approvalCatalog: { [weak self] in self?.vault.approvalCatalog() },
+        reviewCatalog: { [weak self] in
+            guard let vault = self?.vault else { return nil }
+            return await awaitBackgroundOperation { vault.reviewCatalog() } ?? nil
+        }, approvalCatalog: { [weak self] in
+            guard let vault = self?.vault else { return nil }
+            return await awaitBackgroundOperation { vault.approvalCatalog() } ?? nil
+        },
         unlockWallets: { [weak self] reason, authorization in
             guard let self else { return .canceled }
             defer { ipc.event("observation", details: .object(["handle": harnessHandle(authorization.handle), "boundary": .string("authentication.terminal")])) }
@@ -343,7 +352,7 @@ final class HarnessRuntime {
     private func makeNativeService() -> NativeApprovalService {
         NativeApprovalService(dependencies: .init(launcher: launcher,
         load: { [bridge] in await bridge.load(handle: $0) },
-        responseStatus: { [bridge] in await bridge.responseStatus(handle: $0, configurationKey: $1) },
+        responseStatus: { [bridge] in await bridge.responseStatus(handle: $0, configurationKey: $1, access: .worker) },
         maintainProfile: { [bridge] in await bridge.performMaintenance(profileIdentifier: $0) },
         clearReceipt: { [bridge] handle, receipt in
             await bridge.clearNativeDeliveryReceipt(handle: handle, nativeDeliveryNonce: receipt.nativeDeliveryNonce,
@@ -354,8 +363,9 @@ final class HarnessRuntime {
     }
 
     private lazy var poller = ResponseDeliveryPoller(
-        responseStatus: { [bridge] in await bridge.responseStatus(handle: $0, configurationKey: $1) },
-        maintain: { [weak self] handle, key, maintenance in
+        authorize: { [bridge] in await bridge.authorizeResponseAccess(handle: $0, configurationKey: $1, access: $2) },
+        responseStatus: { [bridge] in await bridge.responseStatus(handle: $0, configurationKey: $1, access: $2) },
+        maintain: { [weak self] handle, key, maintenance, access in
             guard let self else { return .unavailable }
             if options.mode == "native" {
                 let result = await nativeService.reconcile(.init(handle: handle, configurationKey: key),
@@ -368,8 +378,8 @@ final class HarnessRuntime {
                 }
             }
             await bridge.performMaintenance(profileIdentifier: handle.profileIdentifier)
-            return await bridge.responseStatus(handle: handle, configurationKey: key)
-        }, prepareDelivery: { [store] in await store.prepareDelivery(handle: $0, configurationKey: $1) })
+            return await bridge.responseStatus(handle: handle, configurationKey: key, access: access)
+        }, prepareDelivery: { [store] in await store.prepareDelivery(handle: $0, configurationKey: $1, access: $2) })
 
     private lazy var dispatcher = NativeMessageDispatcher(policy: options.mode == "native" ? .native : .popup,
         dependencies: .init(bridge: store, materialize: { [weak self] handle in
@@ -387,9 +397,9 @@ final class HarnessRuntime {
             case .missing: return .missing
             case .unavailable: return .unavailable
             }
-        }, pollResponse: { [weak self] handle, key, maintenance in
+        }, pollResponse: { [weak self] handle, key, maintenance, access in
             guard let self else { return .unavailable }
-            return await poller.poll(handle: handle, configurationKey: key, maintenance: maintenance)
+            return await poller.poll(handle: handle, configurationKey: key, maintenance: maintenance, access: access)
         }, rpc: HarnessPublicRPCForwarder(ipc: ipc, networks: networks), popup: { [weak self] request, profile in
             guard let self else { return .command(.init(status: .unavailable, approvalState: nil)) }
             return await popupSessions.dispatch(request: request, profileIdentifier: profile)
@@ -484,7 +494,7 @@ final class HarnessRuntime {
         guard let owner = identity.nativeDeliveryOwner else { throw HarnessError.invalid("Invalid fixture delivery owner") }
         let clock = fixtures.clock
         let coordinator = NativeApprovalCoordinator(authority: NativeApprovalAuthority(handle: handle, nativeDeliveryNonce: nonce, store: store,
-            environment: .init(now: clock.now, authorityID: authorityID, hooks: executionHooks, uptime: { Double(clock.uptime()) / 1_000_000_000 },
+            environment: .init(now: clock.now, monotonicClock: clock.instant, authorityID: authorityID, hooks: executionHooks, uptime: { Double(clock.uptime()) / 1_000_000_000 },
                 wait: { duration in try? await clock.sleep(for: duration) },
                 waitForAuthenticationExpiry: { seconds in try await clock.sleep(until: clock.now().addingTimeInterval(seconds)) },
                 prepare: { [processor] binding, catalog in await processor.prepare(binding, catalog: catalog) },

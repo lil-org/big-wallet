@@ -8,6 +8,10 @@ import WalletDomain
 import WalletRuntimeTestSupport
 #endif
 
+let testDocumentResponseOwner = NativeRequestContext.ResponseOwner.document(.init(
+    tabID: 1, frameID: 0, documentID: nil, documentSession: "0123456789abcdef0123456789abcdef"
+))
+
 final class LockedTestValue<Value: Sendable>: Sendable {
     private let state: Mutex<Value>
 
@@ -400,7 +404,8 @@ final class ApprovedExecutionTestFixture {
         provider: InpageProvider,
         body: [String: Any],
         handle: RequestHandle? = nil,
-        configurationKey: String = "https://wallet.example"
+        configurationKey: String = "https://wallet.example",
+        admissionLifetime: TimeInterval = 150
     ) throws -> ExtensionBridge.Snapshot {
         let profileIdentifier = handle?.profileIdentifier
         guard case .snapshot(let authority) = store.configurationSnapshot(
@@ -412,12 +417,12 @@ final class ApprovedExecutionTestFixture {
             "host": configurationKey.components(separatedBy: "://").last!,
             "configurationKey": configurationKey,
             "enqueueAttempt": UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased(),
-            "admissionDeadline": Int(ceil(now.addingTimeInterval(150).timeIntervalSince1970 * 1_000)),
+            "admissionDeadline": Int(ceil(now.addingTimeInterval(admissionLifetime).timeIntervalSince1970 * 1_000)),
             "workflowVersion": ExtensionBridge.workflowVersion,
             "authority": authority.version.json,
         ]
         let request = try XCTUnwrap(SafariRequest(json: raw))
-        guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: raw) else {
+        guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: raw, responseOwner: testDocumentResponseOwner) else {
             throw CocoaError(.coderInvalidValue)
         }
         identifiers.next = handle?.token.value
@@ -481,7 +486,7 @@ final class ApprovedExecutionTestFixture {
         guard store.complete(permit: permit, result: completion) == .persisted else {
             throw CocoaError(.fileWriteUnknown)
         }
-        _ = store.acknowledgeResponse(handle: snapshot.handle, configurationKey: configurationKey)
+        _ = store.acknowledgeResponse(handle: snapshot.handle, configurationKey: configurationKey, access: .worker)
     }
 }
 
@@ -524,7 +529,7 @@ extension XCTestCase {
             "authority": authority.version.json,
         ]
         let request = try XCTUnwrap(SafariRequest(json: raw))
-        guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: raw),
+        guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: raw, responseOwner: testDocumentResponseOwner),
             case .accepted(let admitted, _, _, _, _) = store.enqueue(
                 ingress: ingress, profileIdentifier: handle.profileIdentifier
             ), admitted == handle,
@@ -576,13 +581,24 @@ func makeWalletSigningPreparationForTesting(
 @MainActor
 func boundWalletSigningSessionForTesting(
     _ preparation: WalletSigningPreparation,
-    permit: ExtensionBridge.ApprovedExecutionPermit? = nil
-) throws -> WalletSigningSession {
+    permit: ExtensionBridge.ApprovedExecutionPermit? = nil,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) async throws -> WalletSigningSession {
     let permit = try permit ?? approvedWalletSigningPermitForTesting(
         approvedAccount: preparation.approvedAccount,
         authorization: preparation.scope
     )
-    return try XCTUnwrap(preparation.consume(permit: permit))
+    let session = await preparation.consume(permit: permit)
+    return try XCTUnwrap(session, file: file, line: line)
+}
+
+func assertWalletSigningSessionUnavailableForTesting(
+    _ session: WalletSigningSession?,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    XCTAssertNil(session, file: file, line: line)
 }
 
 func walletCommitLeaseForTesting(
@@ -729,7 +745,7 @@ func walletSigningOutputForTesting(
         },
         commit: .native, clock: clock
     )
-    guard let session = preparation.consume(permit: permit) else {
+    guard let session = await preparation.consume(permit: permit) else {
         throw WalletSigningFailure.authorizationUnavailable
     }
     defer { session.invalidate() }
@@ -1004,7 +1020,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         rawObject["authority"] = authority.version.json
         let request = try XCTUnwrap(SafariRequest(json: rawObject))
         guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(
-            request: request, rawObject: rawObject
+            request: request, rawObject: rawObject, responseOwner: testDocumentResponseOwner
         ) else { throw CocoaError(.coderInvalidValue) }
         guard case .accepted(let handle, _, _, _, _) = await bridge.enqueue(
             ingress: ingress, profileIdentifier: profileIdentifier
@@ -1154,7 +1170,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
             "workflowVersion": request.workflowVersion, "authority": authority.version.json,
             "body": body.json,
         ]
-        guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: raw),
+        guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: raw, responseOwner: testDocumentResponseOwner),
               case .accepted(let handle, _, _, _, _) = await bridge.enqueue(ingress: ingress, profileIdentifier: profileIdentifier) else {
             throw CocoaError(.fileWriteUnknown)
         }
@@ -1177,7 +1193,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
               await bridge.complete(permit: permit, result: completion) == .persisted else {
             throw CocoaError(.fileWriteUnknown)
         }
-        _ = await bridge.acknowledgeResponse(handle: handle, configurationKey: configurationKey)
+        _ = await bridge.acknowledgeResponse(handle: handle, configurationKey: configurationKey, access: .worker)
     }
 
     func transformNextLoad(_ transform: @escaping @Sendable (ExtensionBridge.Snapshot) -> ExtensionBridge.Snapshot) {
@@ -1209,7 +1225,7 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         guard let snapshot = try? await snapshot(handle: handle),
               case .response(let response) = await bridge.prepareResponseDelivery(
                 id: handle.id, configurationKey: snapshot.configurationKey,
-                requestToken: handle.requestToken, profileIdentifier: handle.profileIdentifier
+                requestToken: handle.requestToken, profileIdentifier: handle.profileIdentifier, access: .worker
               ) else { return nil }
         return response["response"] as? [String: Any]
     }

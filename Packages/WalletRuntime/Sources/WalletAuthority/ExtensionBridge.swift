@@ -209,6 +209,7 @@ public actor ExtensionBridge {
         let fingerprint: Data
         let authority: RequestAuthorityVersion
         let replayOnly: Bool
+        let responseOwner: NativeRequestContext.ResponseOwner
         var transportContext: NativeRequestContext? = nil
     }
 
@@ -278,6 +279,7 @@ public actor ExtensionBridge {
 
     public enum ResponseReadResult: Sendable { case response(WireProtocol.JSONObject), pending, missing, unavailable }
     public enum ResponseStatusResult: Equatable, Sendable { case pending, ready, missing, unavailable }
+    public enum ResponseAccessResult: Equatable, Sendable { case authorized, missing, unavailable }
 
     public static let workflowVersion = WireProtocol.workflowVersion
     public static let maximumPayloadBytes = WireProtocol.maximumPayloadBytes
@@ -318,17 +320,19 @@ public actor ExtensionBridge {
 
     static func dappIngressResult(
         request: SafariRequest,
-        rawObject: [String: Any]
+        rawObject: [String: Any],
+        responseOwner: NativeRequestContext.ResponseOwner
     ) -> DappIngressResult {
         guard let wire = WireProtocol.object(.dappRequest, value: rawObject) else { return .invalid }
-        return dappIngressResult(request: request, wire: wire)
+        return dappIngressResult(request: request, wire: wire, responseOwner: responseOwner)
     }
 
     static func dappIngressResult(
         request: SafariRequest,
-        wire: WireProtocol.ValidatedObject
+        wire: WireProtocol.ValidatedObject,
+        responseOwner: NativeRequestContext.ResponseOwner
     ) -> DappIngressResult {
-        guard wire.contract == .dappRequest else { return .invalid }
+        guard wire.contract == .dappRequest, responseOwner.isValid else { return .invalid }
         var rawObject = wire.json
         let replayOnly = rawObject.removeValue(forKey: "replayOnly") as? Bool ?? false
         guard request.workflowVersion == workflowVersion,
@@ -353,6 +357,7 @@ public actor ExtensionBridge {
             fingerprint: fingerprint,
             authority: authority,
             replayOnly: replayOnly,
+            responseOwner: responseOwner,
             transportContext: nil
         ))
     }
@@ -423,8 +428,8 @@ public actor ExtensionBridge {
     public static func admittedIngress(wire: WireProtocol.ValidatedObject,
                                        context: NativeRequestContext) -> DappIngressResult {
         guard wire.contract == .dappRequest, let request = SafariRequest(wire: wire),
-              context.authorizes(request) else { return .invalid }
-        switch dappIngressResult(request: request, wire: wire) {
+              context.authorizes(request), let responseOwner = context.responseOwner else { return .invalid }
+        switch dappIngressResult(request: request, wire: wire, responseOwner: responseOwner) {
         case .accepted(var ingress):
             ingress.transportContext = context
             return .accepted(ingress)
@@ -440,7 +445,8 @@ public actor ExtensionBridge {
     ) -> EnqueueResult {
         guard !privateBrowsing else { return .rejected }
         if let context = ingress.transportContext {
-            guard !context.privateBrowsing, context.profileIdentifier == profileIdentifier else { return .rejected }
+            guard !context.privateBrowsing, context.profileIdentifier == profileIdentifier,
+                  context.responseOwner == ingress.responseOwner else { return .rejected }
         }
         let result = store.enqueue(ingress: ingress, profileIdentifier: profileIdentifier)
         if case .accepted(let handle, _, _, _, _) = result {
@@ -482,11 +488,20 @@ public actor ExtensionBridge {
 
     public func responseStatus(
         handle: RequestHandle,
-        configurationKey: String
+        configurationKey: String,
+        access: NativeRequestContext.ResponseAccess
     ) -> ResponseStatusResult {
         store.responseStatus(
-            handle: handle, configurationKey: configurationKey
+            handle: handle, configurationKey: configurationKey, access: access
         )
+    }
+
+    public func authorizeResponseAccess(
+        handle: RequestHandle,
+        configurationKey: String,
+        access: NativeRequestContext.ResponseAccess
+    ) -> ResponseAccessResult {
+        store.authorizeResponseAccess(handle: handle, configurationKey: configurationKey, access: access)
     }
 
     public func load(handle: RequestHandle) -> SnapshotResult { store.load(handle: handle) }
@@ -601,23 +616,26 @@ public actor ExtensionBridge {
         id: Int,
         configurationKey: String,
         requestToken: String,
-        profileIdentifier: UUID?
+        profileIdentifier: UUID?,
+        access: NativeRequestContext.ResponseAccess
     ) -> ResponseReadResult {
         guard let handle = RequestHandle(
             id: id,
             requestToken: requestToken,
             profileIdentifier: profileIdentifier
         ) else { return .missing }
-        return store.prepareResponseDelivery(handle: handle, configurationKey: configurationKey)
+        return store.prepareResponseDelivery(handle: handle, configurationKey: configurationKey, access: access)
     }
 
     public func acknowledgeResponse(
         handle: RequestHandle,
-        configurationKey: String
+        configurationKey: String,
+        access: NativeRequestContext.ResponseAccess
     ) -> StoreMutationResult {
         store.acknowledgeResponse(
             handle: handle,
-            configurationKey: configurationKey
+            configurationKey: configurationKey,
+            access: access
         )
     }
     

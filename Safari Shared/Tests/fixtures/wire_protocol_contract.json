@@ -5726,7 +5726,8 @@
           "ethereum": 2,
           "solana": 3
         }
-      }
+      },
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -5769,7 +5770,8 @@
           "ethereum": 2,
           "solana": 3
         }
-      }
+      },
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -5788,7 +5790,8 @@
           "ethereum": 2,
           "solana": 3
         }
-      }
+      },
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -5807,7 +5810,8 @@
           "ethereum": 2,
           "solana": 3
         }
-      }
+      },
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -5819,7 +5823,8 @@
       "workflowVersion": 4,
       "subject": "rpc",
       "body": "{\"vendorExtra\": {\"unknown\": [null, true, 1.25, {\"__proto__\": \"literal\", \"toJSON\": \"literal\"}]}, \"transaction\": {\"customExtension\": 42}}",
-      "chainId": "0x1"
+      "chainId": "0x1",
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -5831,7 +5836,8 @@
       "workflowVersion": 4,
       "subject": "rpc",
       "body": "{\"vendorExtra\": {\"unknown\": [null, true, 1.25, {\"__proto__\": \"literal\", \"toJSON\": \"literal\"}]}, \"transaction\": {\"customExtension\": 42}}",
-      "chainId": "0x1"
+      "chainId": "0x1",
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -5842,7 +5848,8 @@
       "id": 91,
       "workflowVersion": 4,
       "subject": "getResponse",
-      "requestToken": "00000000-0000-4000-8000-000000000091"
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -5853,7 +5860,8 @@
       "id": 91,
       "workflowVersion": 4,
       "subject": "getResponse",
-      "requestToken": "00000000-0000-4000-8000-000000000091"
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -5862,7 +5870,8 @@
     "valid": true,
     "value": {
       "subject": "getLatestConfiguration",
-      "workflowVersion": 4
+      "workflowVersion": 4,
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -5871,7 +5880,8 @@
     "valid": true,
     "value": {
       "subject": "getLatestConfiguration",
-      "workflowVersion": 4
+      "workflowVersion": 4,
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -5880,7 +5890,8 @@
     "valid": true,
     "value": {
       "subject": "manualSwitchIntent",
-      "workflowVersion": 4
+      "workflowVersion": 4,
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -5889,7 +5900,8 @@
     "valid": true,
     "value": {
       "subject": "manualSwitchIntent",
-      "workflowVersion": 4
+      "workflowVersion": 4,
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -6634,7 +6646,8 @@
           "ethereum": 2,
           "solana": 3
         }
-      }
+      },
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -6653,7 +6666,8 @@
           "ethereum": 2,
           "solana": 3
         }
-      }
+      },
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -6665,7 +6679,8 @@
       "workflowVersion": 4,
       "subject": "rpc",
       "body": "{\"vendorExtra\": {\"unknown\": [null, true, 1.25, {\"__proto__\": \"literal\", \"toJSON\": \"literal\"}]}, \"transaction\": {\"customExtension\": 42}}",
-      "chainId": "0x1"
+      "chainId": "0x1",
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -6676,7 +6691,8 @@
       "id": 91,
       "workflowVersion": 4,
       "subject": "getResponse",
-      "requestToken": "00000000-0000-4000-8000-000000000091"
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -6685,7 +6701,8 @@
     "valid": true,
     "value": {
       "subject": "getLatestConfiguration",
-      "workflowVersion": 4
+      "workflowVersion": 4,
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -6694,7 +6711,8 @@
     "valid": true,
     "value": {
       "subject": "manualSwitchIntent",
-      "workflowVersion": 4
+      "workflowVersion": 4,
+      "documentSession": "0123456789abcdef0123456789abcdef"
     }
   },
   {
@@ -7465,7 +7483,8 @@
     "type": "TransportDocumentIdentity",
     "value": {
       "tabId": 1,
-      "frameId": 0
+      "frameId": 0,
+      "documentSession": "0123456789abcdef0123456789abcdef"
     },
     "valid": true
   },
@@ -7481,7 +7500,8 @@
       },
       "document": {
         "tabId": 1,
-        "frameId": 0
+        "frameId": 0,
+        "documentSession": "0123456789abcdef0123456789abcdef"
       }
     },
     "valid": true
@@ -7525,7 +7545,8 @@
       },
       "document": {
         "tabId": 1,
-        "frameId": 0
+        "frameId": 0,
+        "documentSession": "0123456789abcdef0123456789abcdef"
       }
     },
     "valid": true
@@ -7542,7 +7563,8 @@
       },
       "document": {
         "tabId": 1,
-        "frameId": 0
+        "frameId": 0,
+        "documentSession": "0123456789abcdef0123456789abcdef"
       }
     },
     "valid": true
@@ -7558,7 +7580,8 @@
       },
       "document": {
         "tabId": 1,
-        "frameId": 0
+        "frameId": 0,
+        "documentSession": "0123456789abcdef0123456789abcdef"
       }
     },
     "valid": false
@@ -7574,7 +7597,8 @@
       },
       "document": {
         "tabId": 1,
-        "frameId": 0
+        "frameId": 0,
+        "documentSession": "0123456789abcdef0123456789abcdef"
       }
     },
     "valid": false
@@ -7591,7 +7615,8 @@
       },
       "document": {
         "tabId": 1,
-        "frameId": 0
+        "frameId": 0,
+        "documentSession": "0123456789abcdef0123456789abcdef"
       }
     },
     "valid": false
@@ -7608,7 +7633,8 @@
       },
       "document": {
         "tabId": 1,
-        "frameId": 0
+        "frameId": 0,
+        "documentSession": "0123456789abcdef0123456789abcdef"
       }
     },
     "valid": false
@@ -7625,7 +7651,8 @@
       },
       "document": {
         "tabId": 1,
-        "frameId": 0
+        "frameId": 0,
+        "documentSession": "0123456789abcdef0123456789abcdef"
       }
     },
     "valid": false
@@ -7642,7 +7669,8 @@
       },
       "document": {
         "tabId": 1,
-        "frameId": 0
+        "frameId": 0,
+        "documentSession": "0123456789abcdef0123456789abcdef"
       }
     },
     "valid": false
@@ -7659,7 +7687,8 @@
       },
       "document": {
         "tabId": 1,
-        "frameId": 0
+        "frameId": 0,
+        "documentSession": "0123456789abcdef0123456789abcdef"
       }
     },
     "valid": false
@@ -7676,7 +7705,8 @@
       },
       "document": {
         "tabId": 1,
-        "frameId": 0
+        "frameId": 0,
+        "documentSession": "0123456789abcdef0123456789abcdef"
       },
       "profileIdentifier": "00000000-0000-4000-8000-000000000001"
     },
@@ -7866,7 +7896,8 @@
     "value": {
       "tabId": 1,
       "frameId": 0,
-      "documentId": "00000000-0000-4000-8000-000000000091"
+      "documentId": "00000000-0000-4000-8000-000000000091",
+      "documentSession": "0123456789abcdef0123456789abcdef"
     },
     "valid": true
   },
@@ -7876,7 +7907,8 @@
     "value": {
       "tabId": 1,
       "frameId": 0,
-      "documentId": ""
+      "documentId": "",
+      "documentSession": "0123456789abcdef0123456789abcdef"
     },
     "valid": false
   },
@@ -7886,7 +7918,8 @@
     "value": {
       "tabId": 1,
       "frameId": 0,
-      "documentId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      "documentId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "documentSession": "0123456789abcdef0123456789abcdef"
     },
     "valid": false
   },
@@ -7895,7 +7928,8 @@
     "type": "TransportDocumentIdentity",
     "value": {
       "tabId": 1,
-      "frameId": 1
+      "frameId": 1,
+      "documentSession": "0123456789abcdef0123456789abcdef"
     },
     "valid": false
   },
@@ -7904,7 +7938,8 @@
     "type": "TransportDocumentIdentity",
     "value": {
       "tabId": -1,
-      "frameId": 0
+      "frameId": 0,
+      "documentSession": "0123456789abcdef0123456789abcdef"
     },
     "valid": false
   },
@@ -7914,7 +7949,8 @@
     "value": {
       "tabId": 1,
       "frameId": 0,
-      "providerGeneration": "forged"
+      "providerGeneration": "forged",
+      "documentSession": "0123456789abcdef0123456789abcdef"
     },
     "valid": false
   },
@@ -7938,7 +7974,8 @@
           "tabId": 1,
           "frameId": 0
         }
-      }
+      },
+      "documentSession": "0123456789abcdef0123456789abcdef"
     },
     "valid": false
   },
@@ -7962,7 +7999,8 @@
           "tabId": 1,
           "frameId": 0
         }
-      }
+      },
+      "documentSession": "0123456789abcdef0123456789abcdef"
     },
     "valid": false
   },
@@ -7972,7 +8010,8 @@
     "value": {
       "subject": "getLatestConfiguration",
       "workflowVersion": 4,
-      "host": "attacker.example"
+      "host": "attacker.example",
+      "documentSession": "0123456789abcdef0123456789abcdef"
     },
     "valid": false
   },
@@ -7982,7 +8021,8 @@
     "value": {
       "subject": "getLatestConfiguration",
       "workflowVersion": 4,
-      "configurationKey": "https://attacker.example"
+      "configurationKey": "https://attacker.example",
+      "documentSession": "0123456789abcdef0123456789abcdef"
     },
     "valid": false
   },
@@ -7994,7 +8034,8 @@
       "privateBrowsing": false,
       "document": {
         "tabId": 1,
-        "frameId": 0
+        "frameId": 0,
+        "documentSession": "0123456789abcdef0123456789abcdef"
       }
     },
     "valid": false
@@ -8097,5 +8138,236 @@
       }
     },
     "valid": false
+  },
+  {
+    "name": "RuntimeManualSwitchIntent rejects null document session",
+    "type": "RuntimeManualSwitchIntent",
+    "valid": false,
+    "value": {
+      "subject": "manualSwitchIntent",
+      "workflowVersion": 4,
+      "documentSession": null
+    }
+  },
+  {
+    "name": "RuntimeManualSwitchIntent requires document session",
+    "type": "RuntimeManualSwitchIntent",
+    "valid": false,
+    "value": {
+      "subject": "manualSwitchIntent",
+      "workflowVersion": 4
+    }
+  },
+  {
+    "name": "RuntimeResponseRequest rejects null document session",
+    "type": "RuntimeResponseRequest",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "getResponse",
+      "requestToken": "00000000-0000-4000-8000-000000000091",
+      "documentSession": null
+    }
+  },
+  {
+    "name": "RuntimeResponseRequest requires document session",
+    "type": "RuntimeResponseRequest",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "getResponse",
+      "requestToken": "00000000-0000-4000-8000-000000000091"
+    }
+  },
+  {
+    "name": "RuntimeDisconnect rejects null document session",
+    "type": "RuntimeDisconnect",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "disconnect",
+      "provider": "ethereum",
+      "attempt": "0123456789abcdef0123456789abcdef",
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "documentSession": null
+    }
+  },
+  {
+    "name": "RuntimeDisconnect requires document session",
+    "type": "RuntimeDisconnect",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "disconnect",
+      "provider": "ethereum",
+      "attempt": "0123456789abcdef0123456789abcdef",
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "RuntimeRPC rejects null document session",
+    "type": "RuntimeRPC",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "rpc",
+      "body": "{\"vendorExtra\": {\"unknown\": [null, true, 1.25, {\"__proto__\": \"literal\", \"toJSON\": \"literal\"}]}, \"transaction\": {\"customExtension\": 42}}",
+      "chainId": "0x1",
+      "documentSession": null
+    }
+  },
+  {
+    "name": "RuntimeRPC requires document session",
+    "type": "RuntimeRPC",
+    "valid": false,
+    "value": {
+      "id": 91,
+      "workflowVersion": 4,
+      "subject": "rpc",
+      "body": "{\"vendorExtra\": {\"unknown\": [null, true, 1.25, {\"__proto__\": \"literal\", \"toJSON\": \"literal\"}]}, \"transaction\": {\"customExtension\": 42}}",
+      "chainId": "0x1"
+    }
+  },
+  {
+    "name": "TransportDocumentIdentity rejects null document session",
+    "type": "TransportDocumentIdentity",
+    "valid": false,
+    "value": {
+      "tabId": 1,
+      "frameId": 0,
+      "documentSession": null
+    }
+  },
+  {
+    "name": "TransportDocumentIdentity requires document session",
+    "type": "TransportDocumentIdentity",
+    "valid": false,
+    "value": {
+      "tabId": 1,
+      "frameId": 0
+    }
+  },
+  {
+    "name": "RuntimeDappRequest rejects null document session",
+    "type": "RuntimeDappRequest",
+    "valid": false,
+    "value": {
+      "workflowVersion": 4,
+      "subject": "message-to-wallet",
+      "message": {
+        "id": 91,
+        "provider": "ethereum",
+        "name": "signTransaction",
+        "body": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1",
+          "object": {
+            "vendorExtra": {
+              "unknown": [
+                null,
+                true,
+                1.25,
+                {
+                  "__proto__": "literal",
+                  "toJSON": "literal"
+                }
+              ]
+            },
+            "transaction": {
+              "customExtension": 42
+            }
+          }
+        }
+      },
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      },
+      "documentSession": null
+    }
+  },
+  {
+    "name": "RuntimeDappRequest requires document session",
+    "type": "RuntimeDappRequest",
+    "valid": false,
+    "value": {
+      "workflowVersion": 4,
+      "subject": "message-to-wallet",
+      "message": {
+        "id": 91,
+        "provider": "ethereum",
+        "name": "signTransaction",
+        "body": {
+          "address": "0x1212121212121212121212121212121212121212",
+          "chainId": "0x1",
+          "object": {
+            "vendorExtra": {
+              "unknown": [
+                null,
+                true,
+                1.25,
+                {
+                  "__proto__": "literal",
+                  "toJSON": "literal"
+                }
+              ]
+            },
+            "transaction": {
+              "customExtension": 42
+            }
+          }
+        }
+      },
+      "enqueueAttempt": "0123456789abcdef0123456789abcdef",
+      "admissionDeadline": 2000000900000,
+      "authority": {
+        "context": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "revisions": {
+          "ethereum": 2,
+          "solana": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "RuntimeConfigurationRequest rejects null document session",
+    "type": "RuntimeConfigurationRequest",
+    "valid": false,
+    "value": {
+      "subject": "getLatestConfiguration",
+      "workflowVersion": 4,
+      "documentSession": null
+    }
+  },
+  {
+    "name": "RuntimeConfigurationRequest requires document session",
+    "type": "RuntimeConfigurationRequest",
+    "valid": false,
+    "value": {
+      "subject": "getLatestConfiguration",
+      "workflowVersion": 4
+    }
   }
 ]

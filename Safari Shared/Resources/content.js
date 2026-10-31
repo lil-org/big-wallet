@@ -6,6 +6,7 @@ var bigWalletPageDirection = bigWalletWire.PAGE_TO_CONTENT_DIRECTION;
 var bigWalletContentDirection = bigWalletWire.CONTENT_TO_PAGE_DIRECTION;
 var bigWalletRequests;
 var bigWalletRPCBudget;
+var bigWalletDocumentSession;
 var bigWalletProviderGeneration;
 var bigWalletProviderGenerationSerial;
 var bigWalletContentInstalled;
@@ -21,6 +22,9 @@ var bigWalletResponsePollTimeout = bigWalletTransportTimeout * 4;
 var bigWalletNativeOperationRelayTimeout = 190 * 1000;
 
 if (!(bigWalletRequests instanceof Map)) { bigWalletRequests = new Map; }
+if (!bigWalletWire.isMessage("PrivateToken", bigWalletDocumentSession)) {
+    bigWalletDocumentSession = bigWalletWire.genPrivateToken();
+}
 if (!bigWalletRPCBudget) {
     bigWalletRPCBudget = bigWalletWire.createRPCRequestBudget(bigWalletWire.RPC_POLICY.maximumOutstandingPerOrigin);
 }
@@ -61,6 +65,10 @@ if (typeof bigWalletProviderGeneration !== "string" &&
 
 function bigWalletCurrentIdentity() {
     return bigWalletWire.configurationIdentityForURL(window.location.href);
+}
+
+function bigWalletSendRuntimeMessage(request) {
+    return browser.runtime.sendMessage({...request, documentSession: bigWalletDocumentSession});
 }
 
 function bigWalletNextGeneration() {
@@ -226,7 +234,7 @@ function bigWalletRPC({message, providerGeneration: generation}) {
     let pending;
     try {
         pending = bigWalletWire.withTimeout(
-            browser.runtime.sendMessage({
+            bigWalletSendRuntimeMessage({
                 subject: "rpc",
                 id: message.id,
                 chainId: message.chainId,
@@ -348,7 +356,7 @@ async function bigWalletSendEnqueue(state) {
     }
     let response;
     try {
-        response = await bigWalletWire.withTimeout(browser.runtime.sendMessage({
+        response = await bigWalletWire.withTimeout(bigWalletSendRuntimeMessage({
             admissionDeadline: state.admissionDeadline,
             authority: state.authority,
             subject: "message-to-wallet",
@@ -383,7 +391,7 @@ async function bigWalletReadResponse(state) {
     const startedAt = Date.now();
     let response;
     try {
-        response = await bigWalletWire.withTimeout(browser.runtime.sendMessage({
+        response = await bigWalletWire.withTimeout(bigWalletSendRuntimeMessage({
             subject: "getResponse",
             id: state.message.id,
             requestToken: state.requestToken,
@@ -515,7 +523,7 @@ function bigWalletDisconnect({message, providerGeneration: generation, observedR
         let lostReplies = 0;
         for (;;) {
             let response;
-            try { response = await bigWalletWire.withTimeout(browser.runtime.sendMessage(request), bigWalletDisconnectTimeout); } catch {}
+            try { response = await bigWalletWire.withTimeout(bigWalletSendRuntimeMessage(request), bigWalletDisconnectTimeout); } catch {}
             terminal = bigWalletTerminal(response, id);
             if (!bigWalletMatchesGeneration(generation)) { break; }
             if (!terminal) {
@@ -587,7 +595,7 @@ async function bigWalletReadConfiguration(generation, attempt, serial) {
     const identity = bigWalletCurrentIdentity();
     let response;
     try {
-        response = await bigWalletWire.withTimeout(browser.runtime.sendMessage({
+        response = await bigWalletWire.withTimeout(bigWalletSendRuntimeMessage({
             subject: "getLatestConfiguration", workflowVersion: bigWalletWorkflowVersion,
         }), bigWalletTransportTimeout);
     } catch {}
@@ -656,7 +664,7 @@ function bigWalletRuntimeMessage(
         }
         let pending;
         try {
-            pending = browser.runtime.sendMessage({
+            pending = bigWalletSendRuntimeMessage({
                 subject: bigWalletWire.MANUAL_SWITCH_INTENT_SUBJECT,
                 workflowVersion: bigWalletWorkflowVersion,
             });

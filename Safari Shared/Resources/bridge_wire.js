@@ -198,9 +198,11 @@
 
     function runtimeNativeContext(context, request) {
         if (context?.kind === "content") {
+            const documentSession = protocol.decode("PrivateToken", request?.documentSession);
+            if (!documentSession) { return null; }
             return makeNativeContext("site", context.privacy === "unknown" ? undefined : context.privacy === "private", {
                 site: context.identity,
-                document: context.document,
+                document: {...context.document, documentSession},
             });
         }
         if (context?.kind === "popup") {

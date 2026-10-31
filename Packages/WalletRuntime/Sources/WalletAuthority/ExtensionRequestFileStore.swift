@@ -323,6 +323,17 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     ) -> ExtensionBridge.EnqueueResult {
         files.withLock(or: .unavailable) {
             let now = clock()
+            guard ingress.responseOwner.isValid else { return .rejected }
+            switch observeProfileFileLocked(
+                at: files.profileURL(profileIdentifier), profileIdentifier: profileIdentifier,
+                now: now, recoverAuthority: true
+            ) {
+            case .state(let profile):
+                if let existing = profile.state.records.first(where: { $0.enqueueAttempt == ingress.request.enqueueAttempt }),
+                   existing.responseOwner != ingress.responseOwner { return .rejected }
+            case .missing: break
+            case .corrupt, .unavailable: return .unavailable
+            }
             guard case .state(var profile) = recoverProfileLocked(
                 profileIdentifier: profileIdentifier,
                 now: now
@@ -334,6 +345,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 guard existing.id == ingress.request.id,
                       existing.host == ingress.request.host,
                       existing.configurationKey == ingress.request.configurationKey,
+                      existing.responseOwner == ingress.responseOwner,
                       existing.requestFingerprint == ingress.fingerprint else {
                     return .rejected
                 }
@@ -392,6 +404,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             if isManualSwitchRequest,
                let existing = profile.state.records.first(where: { record in
                    record.configurationKey == ingress.request.configurationKey &&
+                       record.responseOwner == ingress.responseOwner &&
                        !record.responseAcknowledged && ExtensionRequestProfile.isManualSwitch(record, in: profile)
                }) {
                 guard files.synchronizeProfileLocked(profileIdentifier) else { return .unavailable }
@@ -432,6 +445,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 profileIdentifier: profileIdentifier,
                 enqueueAttempt: ingress.request.enqueueAttempt,
                 requestToken: requestToken,
+                responseOwner: ingress.responseOwner,
                 host: ingress.request.host,
                 configurationKey: ingress.request.configurationKey,
                 requestFingerprint: ingress.fingerprint,
@@ -531,7 +545,8 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
 
     func responseStatus(
         handle: RequestHandle,
-        configurationKey: String
+        configurationKey: String,
+        access: NativeRequestContext.ResponseAccess
     ) -> ExtensionBridge.ResponseStatusResult {
         let profile: ValidatedProfile
         switch observeProfile(
@@ -542,12 +557,41 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         case .corrupt, .unavailable: return .unavailable
         }
         guard let record = profile.state.records.first(where: {
-            $0.handle == handle && $0.configurationKey == configurationKey
+            $0.handle == handle && $0.configurationKey == configurationKey && access.authorizes($0.responseOwner)
         }) else {
             return .missing
         }
         if case .completed = record.state { return .ready }
         return .pending
+    }
+
+    func authorizeResponseAccess(
+        handle: RequestHandle,
+        configurationKey: String,
+        access: NativeRequestContext.ResponseAccess
+    ) -> ExtensionBridge.ResponseAccessResult {
+        files.withExistingStoreLock(unavailable: .unavailable, missing: .missing) {
+            authorizeResponseAccessLocked(handle: handle, configurationKey: configurationKey, access: access)
+        }
+    }
+
+    private func authorizeResponseAccessLocked(
+        handle: RequestHandle,
+        configurationKey: String,
+        access: NativeRequestContext.ResponseAccess
+    ) -> ExtensionBridge.ResponseAccessResult {
+        switch observeProfileFileLocked(
+            at: files.profileURL(handle.profileIdentifier), profileIdentifier: handle.profileIdentifier,
+            now: clock(), recoverAuthority: true
+        ) {
+        case .state(let profile):
+            guard let record = profile.state.records.first(where: {
+                $0.handle == handle && $0.configurationKey == configurationKey
+            }), access.authorizes(record.responseOwner) else { return .missing }
+            return .authorized
+        case .missing: return .missing
+        case .corrupt, .unavailable: return .unavailable
+        }
     }
 
     func claim(
@@ -1166,15 +1210,22 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
 
     func prepareResponseDelivery(
         handle: RequestHandle,
-        configurationKey: String
+        configurationKey: String,
+        access: NativeRequestContext.ResponseAccess
     ) -> ExtensionBridge.ResponseReadResult {
         files.withLock(or: .unavailable) {
+            switch authorizeResponseAccessLocked(handle: handle, configurationKey: configurationKey, access: access) {
+            case .authorized: break
+            case .missing: return .missing
+            case .unavailable: return .unavailable
+            }
             guard case .state(let profile) = recoverProfileLocked(
                 profileIdentifier: handle.profileIdentifier,
                 now: clock()
             ) else { return .unavailable }
             guard let record = profile.state.records.first(where: { $0.handle == handle }),
-                  record.configurationKey == configurationKey else { return .missing }
+                  record.configurationKey == configurationKey,
+                  access.authorizes(record.responseOwner) else { return .missing }
             switch record.state {
             case .pending, .claimed, .broadcastPrepared:
                 return .pending
@@ -1194,15 +1245,21 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
 
     func acknowledgeResponse(
         handle: RequestHandle,
-        configurationKey: String
+        configurationKey: String,
+        access: NativeRequestContext.ResponseAccess
     ) -> ExtensionBridge.StoreMutationResult {
         files.withLock(or: .retryablePersistenceFailure) {
+            switch authorizeResponseAccessLocked(handle: handle, configurationKey: configurationKey, access: access) {
+            case .authorized: break
+            case .missing: return .ownershipLost
+            case .unavailable: return .retryablePersistenceFailure
+            }
             guard case .state(var profile) = recoverProfileLocked(
                 profileIdentifier: handle.profileIdentifier,
                 now: clock()
             ) else { return .retryablePersistenceFailure }
             guard let index = profile.state.records.firstIndex(where: {
-                $0.handle == handle && $0.configurationKey == configurationKey
+                $0.handle == handle && $0.configurationKey == configurationKey && access.authorizes($0.responseOwner)
             }) else { return .ownershipLost }
             switch profile.state.records[index].acknowledgeResponse() {
             case .notCompleted: return .retryablePersistenceFailure
@@ -1281,7 +1338,8 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     private func observeProfileFileLocked(
         at url: URL,
         profileIdentifier: UUID?,
-        now: Date
+        now: Date,
+        recoverAuthority: Bool = false
     ) -> ProfileRead {
         let data: Data
         switch files.readProfileDataLocked(at: url) {
@@ -1292,7 +1350,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         }
         guard let decoded = codec.withLock({ $0.decodeProfile(
             data, expectedIdentifier: profileIdentifier,
-            recoverAuthority: false, now: now
+            recoverAuthority: recoverAuthority, now: now
         ) }) else { return .corrupt }
         return .state(decoded.profile)
     }

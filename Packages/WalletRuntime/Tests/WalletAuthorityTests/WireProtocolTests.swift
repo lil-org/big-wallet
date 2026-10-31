@@ -84,7 +84,7 @@ final class WireProtocolTests: XCTestCase {
     func testNativeContextDetachesBrowserMetadataAndKeepsTheOSProfile() throws {
         let profile = UUID()
         let site = NSMutableDictionary(dictionary: ["host": "wallet.example", "configurationKey": "https://wallet.example"])
-        let document = NSMutableDictionary(dictionary: ["tabId": 9, "frameId": 0, "documentId": "browser-document"])
+        let document = NSMutableDictionary(dictionary: ["tabId": 9, "frameId": 0, "documentSession": "0123456789abcdef0123456789abcdef", "documentId": "browser-document"])
         let context = NSMutableDictionary(dictionary: [
             "source": "site", "privateBrowsing": false, "site": site, "document": document,
         ])
@@ -96,6 +96,7 @@ final class WireProtocolTests: XCTestCase {
         context["privateBrowsing"] = true
         site["configurationKey"] = "https://other.example"
         document["documentId"] = "different-document"
+        document["documentSession"] = String(repeating: "f", count: 32)
         source["body"] = "changed"
 
         XCTAssertFalse(ingress.context.privateBrowsing)
@@ -108,6 +109,7 @@ final class WireProtocolTests: XCTestCase {
         XCTAssertEqual(browserDocument.tabID, 9)
         XCTAssertEqual(browserDocument.frameID, 0)
         XCTAssertEqual(browserDocument.documentID, "browser-document")
+        XCTAssertEqual(browserDocument.documentSession, "0123456789abcdef0123456789abcdef")
         XCTAssertEqual(ingress.message["body"] as? String, "{}")
         XCTAssertNil(ingress.message[WireProtocol.nativeContextKey])
         XCTAssertNotNil(WireProtocol.object(.nativeCommand, value: ingress.message.json))
@@ -141,7 +143,7 @@ final class WireProtocolTests: XCTestCase {
         let site: [String: Any] = ["host": "wallet.example", "configurationKey": "https://wallet.example"]
         let context: [String: Any] = [
             "source": "site", "privateBrowsing": false, "site": site,
-            "document": ["tabId": 9_007_199_254_740_991, "frameId": 0, "documentId": String(repeating: "a", count: 128)],
+            "document": ["tabId": 9_007_199_254_740_991, "frameId": 0, "documentSession": "0123456789abcdef0123456789abcdef", "documentId": String(repeating: "a", count: 128)],
         ]
         XCTAssertNotNil(NativeRequestContext.extract(from: [WireProtocol.nativeContextKey: context], profileIdentifier: nil))
         for field in ["site", "document", "privateBrowsing"] {
@@ -150,14 +152,21 @@ final class WireProtocolTests: XCTestCase {
             XCTAssertNil(NativeRequestContext.extract(from: [WireProtocol.nativeContextKey: missing], profileIdentifier: nil))
         }
         for document: [String: Any] in [
-            ["tabId": -1, "frameId": 0], ["tabId": true, "frameId": 0],
-            ["tabId": 1.5, "frameId": 0], ["tabId": 9_007_199_254_740_992, "frameId": 0],
-            ["tabId": 1, "frameId": 1], ["tabId": 1, "frameId": false],
-            ["tabId": 1, "frameId": 0, "documentId": ""],
-            ["tabId": 1, "frameId": 0, "documentId": NSNull()],
-            ["tabId": 1, "frameId": 0, "documentId": String(repeating: "a", count: 129)],
+            ["tabId": -1, "frameId": 0, "documentSession": "0123456789abcdef0123456789abcdef"], ["tabId": true, "frameId": 0, "documentSession": "0123456789abcdef0123456789abcdef"],
+            ["tabId": 1.5, "frameId": 0, "documentSession": "0123456789abcdef0123456789abcdef"], ["tabId": 9_007_199_254_740_992, "frameId": 0, "documentSession": "0123456789abcdef0123456789abcdef"],
+            ["tabId": 1, "frameId": 1, "documentSession": "0123456789abcdef0123456789abcdef"], ["tabId": 1, "frameId": false, "documentSession": "0123456789abcdef0123456789abcdef"],
+            ["tabId": 1, "frameId": 0, "documentSession": "0123456789abcdef0123456789abcdef", "documentId": ""],
+            ["tabId": 1, "frameId": 0, "documentSession": "0123456789abcdef0123456789abcdef", "documentId": NSNull()],
+            ["tabId": 1, "frameId": 0, "documentSession": "0123456789abcdef0123456789abcdef", "documentId": String(repeating: "a", count: 129)],
         ] {
             var invalid = context
+            invalid["document"] = document
+            XCTAssertNil(NativeRequestContext.extract(from: [WireProtocol.nativeContextKey: invalid], profileIdentifier: nil))
+        }
+        for session in [nil, NSNull(), "", String(repeating: "a", count: 31), String(repeating: "A", count: 32)] as [Any?] {
+            var invalid = context
+            var document: [String: Any] = ["tabId": 1, "frameId": 0]
+            document["documentSession"] = session
             invalid["document"] = document
             XCTAssertNil(NativeRequestContext.extract(from: [WireProtocol.nativeContextKey: invalid], profileIdentifier: nil))
         }

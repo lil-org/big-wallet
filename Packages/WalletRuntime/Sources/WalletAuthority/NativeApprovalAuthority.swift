@@ -17,6 +17,8 @@ public final class NativeApprovalReview {
     let approval: ApprovalReview
     private let authorityID: UUID
     private let clock: @Sendable () -> Date
+    private let monotonicClock: @Sendable () -> ContinuousClock.Instant
+    private let authenticationDeadline: ContinuousClock.Instant
     private let authenticationScope = UUID()
     private let access: WalletAccessSession?
     private let receipt: NativeDeliveryReceipt?
@@ -29,7 +31,8 @@ public final class NativeApprovalReview {
     public var handle: RequestHandle { approval.binding.handle }
     public var action: DappRequestAction { approval.action }
 
-    init(intent: BoundApprovalIntent, authorityID: UUID = UUID(), clock: @escaping @Sendable () -> Date = Date.init, hooks: AuthorityExecutionHooks = .none,
+    init(intent: BoundApprovalIntent, authorityID: UUID = UUID(), clock: @escaping @Sendable () -> Date = Date.init,
+         monotonicClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }, hooks: AuthorityExecutionHooks = .none,
          access: WalletAccessSession? = nil, receipt: NativeDeliveryReceipt? = nil,
          finalize: @escaping @MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult = { _ in .pending }) {
         self.access = access
@@ -38,6 +41,13 @@ public final class NativeApprovalReview {
         approval = ApprovalReview(intent: intent, hooks: hooks)
         self.authorityID = authorityID
         self.clock = clock
+        self.monotonicClock = monotonicClock
+        let instant = monotonicClock()
+        let remaining = intent.binding.request.admissionDeadline.timeIntervalSince(clock())
+        let lifetime = remaining.isFinite
+            ? min(max(0, remaining), ExtensionBridge.requestTTL + ExtensionBridge.admissionDeadlineFutureSkew)
+            : 0
+        authenticationDeadline = instant + .seconds(lifetime)
     }
 
     public func makeMessageAuthenticationChallenge(solanaCluster: Solana.Cluster?) -> WalletAuthenticationChallenge? {
@@ -62,7 +72,8 @@ public final class NativeApprovalReview {
     private func makeChallenge(_ purpose: WalletAuthenticationChallenge.Purpose) -> WalletAuthenticationChallenge {
         authenticationChallenge?.invalidate()
         let challenge = WalletAuthenticationChallenge(
-            authorityID: authorityID, purpose: purpose, deadline: request.admissionDeadline, clock: clock
+            authorityID: authorityID, purpose: purpose, deadline: authenticationDeadline, clock: monotonicClock,
+            requestDeadline: request.admissionDeadline, requestClock: clock
         )
         authenticationChallenge = challenge
         return challenge
@@ -113,7 +124,9 @@ public final class NativeApprovalReview {
     }
 
     private var canAccept: Bool {
-        isActive && clock() < request.admissionDeadline && access?.validateCredentials(for: authorityID) == true
+        guard isActive, monotonicClock() < authenticationDeadline, clock() < request.admissionDeadline,
+              access?.validateCredentials(for: authorityID) == true else { return false }
+        return isActive && monotonicClock() < authenticationDeadline && clock() < request.admissionDeadline
     }
 
     private func accept(_ decision: (ApprovalReview, Date, NativeDeliveryReceipt) -> ReviewConsent?) -> NativeApprovalOperation? {
@@ -225,6 +238,7 @@ public final class NativeApprovalAuthority {
         let authorityID: UUID
         let hooks: AuthorityExecutionHooks
         let now: @Sendable () -> Date
+        let monotonicClock: @Sendable () -> ContinuousClock.Instant
         let uptime: @MainActor @Sendable () -> TimeInterval
         let wait: @MainActor @Sendable (UInt64) async -> Void
         let waitForAuthenticationExpiry: @MainActor @Sendable (TimeInterval) async throws -> Void
@@ -235,6 +249,7 @@ public final class NativeApprovalAuthority {
 
         init(
             now: @escaping @Sendable () -> Date,
+            monotonicClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now },
             messages: AuthorityMessages = .testingEnglish,
             authorityID: UUID = UUID(),
             hooks: AuthorityExecutionHooks = .none,
@@ -247,6 +262,7 @@ public final class NativeApprovalAuthority {
             attemptNativeDecision: (@MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult)? = nil
         ) {
             self.now = now
+            self.monotonicClock = monotonicClock
             self.messages = messages
             self.authorityID = authorityID
             self.hooks = hooks
@@ -269,10 +285,12 @@ public final class NativeApprovalAuthority {
             messages: AuthorityMessages,
             authorityID: UUID,
             clock: @escaping @Sendable () -> Date,
+            monotonicClock: @escaping @Sendable () -> ContinuousClock.Instant,
             hooks: AuthorityExecutionHooks
         ) -> Environment {
             Environment(
                 now: clock,
+                monotonicClock: monotonicClock,
                 messages: messages,
                 authorityID: authorityID,
                 hooks: hooks,
@@ -394,7 +412,8 @@ public final class NativeApprovalAuthority {
         case .approval(let intent):
             guard intent.binding == binding else { return .unavailable }
             let review = NativeApprovalReview(intent: intent, authorityID: environment.authorityID,
-                clock: environment.now, hooks: environment.hooks, access: access, receipt: receipt,
+                clock: environment.now, monotonicClock: environment.monotonicClock,
+                hooks: environment.hooks, access: access, receipt: receipt,
                 finalize: { [environment] consent in
                     await AuthorityMessageContext.$current.withValue(environment.messages) {
                         await AuthorityExecutionHooks.$current.withValue(environment.hooks) {

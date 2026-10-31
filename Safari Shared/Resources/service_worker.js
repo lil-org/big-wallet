@@ -213,7 +213,10 @@ async function handleRPC(request, nativeContext) {
             error: WIRE.rpcAdmissionError(bytes === null ? "request_too_large" : "busy")};
     }
     try {
-        const response = await WIRE.withTimeout(sendNativeMessage(request, nativeContext), NATIVE_OPERATION_TIMEOUT);
+        const response = await WIRE.withTimeout(sendNativeMessage({
+            subject: request.subject, id: request.id, chainId: request.chainId,
+            body: request.body, workflowVersion: request.workflowVersion,
+        }, nativeContext), NATIVE_OPERATION_TIMEOUT);
         if (!WIRE.isCorrelatedRPCResponse(response, request.id)) { return pageFailure(request.id, "ethereum", null); }
         const base = {id: request.id, provider: "ethereum", name: null, state: null};
         if (Object.prototype.hasOwnProperty.call(response, "error")) {

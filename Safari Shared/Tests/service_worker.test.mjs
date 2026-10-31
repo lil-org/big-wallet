@@ -17,6 +17,7 @@ const [wireSource, protocolSource, workerSource, sharedManifestSource, macManife
     ]);
 const requestToken = "123e4567-e89b-12d3-a456-426614174000";
 const attempt = "00000001000000020000000300000004";
+const documentSession = "0123456789abcdef0123456789abcdef";
 const admissionDeadline = 1_700_000_900_000;
 const wireContext = vm.createContext({URL, crypto: webcrypto, clearTimeout, setTimeout});
 new vm.Script(protocolSource).runInContext(wireContext);
@@ -32,6 +33,14 @@ const recoveryAlarmName = "manualSwitchRecovery";
 function clone(value) {
     return typeof value === "undefined" ? undefined : JSON.parse(JSON.stringify(value));
 }
+
+test("worker rejects missing or malformed document sessions before native dispatch", async () => {
+    const harness = makeHarness();
+    for (const documentSession of [undefined, null, "", "0".repeat(31), "A".repeat(32)]) {
+        assert.equal(await harness.dispatch(request(7, {documentSession})), undefined);
+    }
+    assert.equal(harness.nativeMessages.length, 0);
+});
 
 function snapshot({ethereum = {address: "", chainId: "0x1"}, solana = null, revisions = {ethereum: 0, solana: 0}} = {}) {
     return {context: "a".repeat(64), revisions, ethereum, solana};
@@ -344,6 +353,7 @@ function makeHarness({
             return startupListener();
         },
         dispatch(request, sender = defaultSender) {
+            if (sender?.tab) { request = {documentSession, ...request}; }
             return new Promise(resolve => {
                 const delivery = {handled: null, replies: []};
                 runtimeDeliveries.push(delivery);
@@ -538,7 +548,7 @@ test("RPC carries immutable browser-derived site and document provenance", async
     assert.deepEqual(harness.nativeMessages[0].message.__bwContext, {
         source: "site", privateBrowsing: false,
         site: {host: "wallet.example", configurationKey: "https://wallet.example"},
-        document: {tabId: 9, frameId: 0, documentId: "document-one"},
+        document: {documentSession, tabId: 9, frameId: 0, documentId: "document-one"},
     });
 });
 
@@ -625,7 +635,7 @@ test("admission relays native authority preconditions and obtains native ACK", a
     assert.equal(message.host, "wallet.example");
     assert.equal(message.configurationKey, "https://wallet.example");
     assert.deepEqual(message.__bwContext, {source: "site", privateBrowsing: false,
-        site: {host: "wallet.example", configurationKey: "https://wallet.example"}, document: {tabId: 9, frameId: 0}});
+        site: {host: "wallet.example", configurationKey: "https://wallet.example"}, document: {documentSession, tabId: 9, frameId: 0}});
     assert.equal(Object.hasOwn(message, "revisions"), false);
     assert.equal(Object.hasOwn(message, "replayOnly"), false);
     assert.equal(harness.popupCalls.length, 1);
@@ -1043,7 +1053,7 @@ test("live content polls permit exact native redelivery at most once every thirt
         subject: "pollResponse", id: descriptor.id, requestToken: descriptor.requestToken,
         configurationKey: descriptor.configurationKey, workflowVersion: 4,
         maintenance: "interactive", __bwContext: {source: "site", privateBrowsing: false,
-            site: {host: "wallet.example", configurationKey: "https://wallet.example"}, document: {tabId: 9, frameId: 0}},
+            site: {host: "wallet.example", configurationKey: "https://wallet.example"}, document: {documentSession, tabId: 9, frameId: 0}},
     });
     now += 29_999;
     assert.deepEqual(clone(await harness.dispatch(responseRequest("getResponse"))), {id: 7, pending: true});

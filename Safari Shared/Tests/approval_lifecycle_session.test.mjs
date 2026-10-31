@@ -999,29 +999,62 @@ test("wallet mutation coverage requires an explicit native changed result", asyn
     assert.equal(session.coverage.has("action:removeAccount"), false);
 });
 
-test("wallet actions recover only from the expected native store-unavailable error", async () => {
+test("wallet actions recover only from expected native storage or authorization failures", async () => {
     for (const kind of ["removeAccount", "restoreAccount"]) {
-        for (const failure of ["unavailable", "other-native", "other-error"]) {
+        for (const [native, details, status] of [
+            [true, "unavailable", "unavailable"],
+            [true, "authorizationUnavailable", "authorizationUnavailable"],
+            [true, "other failure", null],
+            [false, "unavailable", null],
+            [false, "authorizationUnavailable", null],
+        ]) {
             const session = new LifecycleSession({seed: 1, mode: "native"});
-            const error = Object.assign(new Error(failure), {native: failure !== "other-error",
-                details: failure === "other-native" ? "other failure" : "unavailable"});
+            const error = Object.assign(new Error(details), {native, details});
             session.accounts = ["ethereum", "solana"].map(coin => ({walletID: "fixture-multicoin", coin, address: coin}));
             session.tabs = [{profile: {id: null}}];
             session.snapshots.set(null, {accounts: session.accounts});
-            session.children.set("bridge", {command: async () => { throw error; }});
+            let attempts = 0;
+            session.children.set("bridge", {command: async () => { attempts += 1; throw error; }});
             let inspected = false;
             session.inspect = async () => { inspected = true; return []; };
             session.pump = async () => {};
             session.oracle.revoke = () => { assert.fail("Failed wallet mutations must not revoke oracle permission"); };
             const action = session.action({kind, tab: 0, selector: 0});
-            if (failure === "unavailable") {
+            if (status) {
                 await action;
                 assert.equal(inspected, true);
                 assert.equal(session.trace.find(event => event.type === "action-result").exercised, false);
+                const settlement = session.trace.find(event => event.type === "wallet-mutation-result");
+                assert.equal(settlement.status, status);
+                assert.equal(settlement.exercised, false);
                 assert.equal(session.coverage.has(`action:${kind}`), false);
+                assert.equal(session.asyncFailure, null);
             } else { await assert.rejects(action, value => value === error); }
+            assert.equal(attempts, 1);
         }
     }
+});
+
+test("expired wallet authorization does not retry removal or block a separately queued action", {timeout: 1000}, async () => {
+    const removal = deferred();
+    const calls = [];
+    const {session, revocations} = walletActionSession(async (_, payload) => {
+        calls.push(payload.action);
+        return calls.length === 1 ? removal.promise : {changed: true};
+    });
+    await session.action({kind: "removeAccount", tab: 0, selector: 0});
+    await session.action({kind: "restoreAccount", tab: 0, selector: 0});
+    assert.deepEqual(calls, ["removeAccount"]);
+    removal.reject(Object.assign(new Error("authorizationUnavailable"), {native: true, details: "authorizationUnavailable"}));
+    await Promise.all([...session.background]);
+    session.check();
+    assert.deepEqual(calls, ["removeAccount", "restore"]);
+    assert.equal(revocations.length, 0);
+    assert.equal(session.coverage.has("action:removeAccount"), false);
+    assert.equal(session.coverage.has("action:restoreAccount"), true);
+    assert.equal(session.walletMutations.size, 0);
+    assert.deepEqual(session.trace.filter(event => event.type === "wallet-mutation-result").map(event => [event.sourceAction, event.status, event.exercised]),
+        [[0, "authorizationUnavailable", false], [1, "completed", true]]);
 });
 
 test("admission correlation separates transport kinds and provider generations when wire IDs repeat", async () => {

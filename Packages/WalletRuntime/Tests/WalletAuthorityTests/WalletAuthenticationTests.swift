@@ -2,6 +2,7 @@ import Foundation
 import Security
 import Synchronization
 import WalletDomain
+import WalletRuntimeTestSupport
 import XCTest
 @testable import WalletAuthority
 
@@ -172,7 +173,7 @@ final class WalletAuthenticationTests: XCTestCase {
         let wallClock = Mutex(Date(timeIntervalSince1970: 100))
         let credentials = makeCredentials(
             keychain: fixture.keychain, authorityID: UUID(),
-            clock: { wallClock.withLock { $0 } }, accessClock: { monotonic.withLock { $0 } }
+            accessClock: { monotonic.withLock { $0 } }
         )
         let access = try makeAccessSession(credentials: credentials)
 
@@ -383,8 +384,8 @@ final class WalletAuthenticationTests: XCTestCase {
     func testExpiredChallengeNeverIssuesOrConsumesAuthorization() throws {
         let authorityID = UUID()
         let purpose = WalletAuthenticationChallenge.Purpose.message(review: UUID(), cluster: nil)
-        let deadline = Date(timeIntervalSince1970: 100)
-        let clock = Mutex(deadline.addingTimeInterval(-1))
+        let deadline = ContinuousClock.now + .seconds(1)
+        let clock = Mutex(deadline - .seconds(1))
         let pending = WalletAuthenticationChallenge(authorityID: authorityID, purpose: purpose, deadline: deadline,
             clock: { clock.withLock { $0 } })
         let issued = WalletAuthenticationChallenge(authorityID: authorityID, purpose: purpose, deadline: deadline,
@@ -396,7 +397,7 @@ final class WalletAuthenticationTests: XCTestCase {
         XCTAssertNil(pending.issueGrant(for: authorityID, credentialIdentity: .init(status: { .current })))
         XCTAssertFalse(grant.consume(authorityID: authorityID, purpose: purpose))
 
-        clock.withLock { $0 = deadline.addingTimeInterval(-1) }
+        clock.withLock { $0 = deadline - .seconds(1) }
         XCTAssertFalse(pending.isPending(for: authorityID))
         XCTAssertNil(pending.issueGrant(for: authorityID, credentialIdentity: .init(status: { .current })))
         XCTAssertFalse(retainedGrant.consume(authorityID: authorityID, purpose: purpose))
@@ -404,42 +405,42 @@ final class WalletAuthenticationTests: XCTestCase {
 
     func testObservingPendingExpiryRetiresAllReferencesAfterClockRewind() {
         let authorityID = UUID()
-        let deadline = Date(timeIntervalSince1970: 100)
-        let clock = Mutex(deadline.addingTimeInterval(-1))
+        let deadline = ContinuousClock.now + .seconds(1)
+        let clock = Mutex(deadline - .seconds(1))
         let challenge = WalletAuthenticationChallenge(authorityID: authorityID, purpose: .walletAccess(UUID()),
             deadline: deadline, clock: { clock.withLock { $0 } })
         let retained = challenge
         XCTAssertTrue(challenge.isPending(for: authorityID))
         clock.withLock { $0 = deadline }
         XCTAssertFalse(challenge.isPending(for: authorityID))
-        clock.withLock { $0 = deadline.addingTimeInterval(-1) }
+        clock.withLock { $0 = deadline - .seconds(1) }
         XCTAssertFalse(retained.isPending(for: authorityID))
         XCTAssertNil(retained.issueGrant(for: authorityID, credentialIdentity: .init(status: { .current })))
     }
 
     func testWrongAuthorityCheckDoesNotRetireAnotherSystemsChallenge() {
         let authorityID = UUID()
-        let deadline = Date(timeIntervalSince1970: 100)
+        let deadline = ContinuousClock.now
         let clock = Mutex(deadline)
         let challenge = WalletAuthenticationChallenge(authorityID: authorityID, purpose: .walletAccess(UUID()),
             deadline: deadline, clock: { clock.withLock { $0 } })
         XCTAssertFalse(challenge.isPending(for: UUID()))
         XCTAssertNil(challenge.issueGrant(for: UUID(), credentialIdentity: .init(status: { .current })))
-        clock.withLock { $0 = deadline.addingTimeInterval(-1) }
+        clock.withLock { $0 = deadline - .seconds(1) }
         XCTAssertTrue(challenge.isPending(for: authorityID))
         XCTAssertNotNil(challenge.issueGrant(for: authorityID, credentialIdentity: .init(status: { .current })))
     }
 
     func testExpiredCredentialChallengeThrowsRatherThanReportingPasswordMismatch() throws {
         let authorityID = UUID()
-        let clock = Mutex(Date(timeIntervalSince1970: 100))
+        let clock = TestClock()
         let keychain = Keychain(copyMatching: { _, _ in
             XCTFail("An expired challenge must not read credentials")
             return errSecItemNotFound
         })
-        let credentials = makeCredentials(keychain: keychain, authorityID: authorityID, clock: { clock.withLock { $0 } })
+        let credentials = makeCredentials(keychain: keychain, authorityID: authorityID, accessClock: { clock.instant })
         let challenge = credentials.makeWalletAccessChallenge()
-        clock.withLock { $0 = Date(timeIntervalSince1970: 251) }
+        clock.advanceUptime(by: 150_000_000_000)
         XCTAssertThrowsError(try credentials.verify(password: "correct", challenge: challenge)) {
             guard case .authorizationUnavailable? = $0 as? WalletCredentialError else { return XCTFail("Expected unavailable authorization") }
         }
@@ -447,31 +448,186 @@ final class WalletAuthenticationTests: XCTestCase {
 
     func testExpiryDuringCredentialReadDoesNotMintAStaleGrant() throws {
         let authorityID = UUID()
-        let clock = Mutex(Date(timeIntervalSince1970: 100))
+        let clock = TestClock()
         let keychain = Keychain(copyMatching: { _, output in
-            clock.withLock { $0 = Date(timeIntervalSince1970: 251) }
+            clock.advanceUptime(by: 150_000_000_000)
             output?.pointee = Data("correct".utf8) as CFData
             return errSecSuccess
         })
-        let credentials = makeCredentials(keychain: keychain, authorityID: authorityID, clock: { clock.withLock { $0 } })
+        let credentials = makeCredentials(keychain: keychain, authorityID: authorityID, accessClock: { clock.instant })
         let challenge = credentials.makeWalletAccessChallenge()
         XCTAssertThrowsError(try credentials.verify(password: "correct", challenge: challenge)) {
             guard case .authorizationUnavailable? = $0 as? WalletCredentialError else { return XCTFail("Expected unavailable authorization") }
         }
     }
 
+    func testStandaloneChallengeLifetimeIgnoresWallClockChanges() throws {
+        let fixture = PasswordKeychainFixture()
+        fixture.passwordData = Data("password".utf8)
+        let clock = TestClock()
+        let credentials = makeCredentials(keychain: fixture.keychain, authorityID: UUID(), accessClock: { clock.instant })
+        let pending = credentials.makeWalletAccessChallenge()
+        let issued = credentials.makeWalletAccessChallenge()
+        clock.setDate(.distantFuture)
+        clock.advanceUptime(by: 149_000_000_000)
+        XCTAssertTrue(pending.isPending(for: pending.authorityID))
+        let grant = try XCTUnwrap(credentials.verify(password: "password", challenge: issued))
+        clock.setDate(.distantPast)
+        XCTAssertTrue(pending.isPending(for: pending.authorityID))
+        clock.advanceUptime(by: 1_000_000_000)
+        XCTAssertFalse(pending.isPending(for: pending.authorityID))
+        XCTAssertNil(credentials.accessSession(authorization: grant))
+        XCTAssertNil(credentials.accessSession(authorization: grant))
+    }
+
+    func testExpiryDuringCredentialIdentityValidationDoesNotIssueOrConsumeGrant() throws {
+        for issuing in [true, false] {
+            let clock = TestClock()
+            let expire = Mutex(false)
+            let authorityID = UUID()
+            let purpose = WalletAuthenticationChallenge.Purpose.message(review: UUID(), cluster: nil)
+            let challenge = WalletAuthenticationChallenge(authorityID: authorityID, purpose: purpose,
+                deadline: clock.instant + .seconds(150), clock: { clock.instant })
+            let identity = WalletCredentialIdentity(status: {
+                if expire.withLock({ $0 }) { clock.advanceUptime(by: 150_000_000_000) }
+                return .current
+            })
+            if issuing {
+                expire.withLock { $0 = true }
+                XCTAssertNil(challenge.issueGrant(for: authorityID, credentialIdentity: identity))
+            } else {
+                let grant = try XCTUnwrap(challenge.issueGrant(for: authorityID, credentialIdentity: identity))
+                expire.withLock { $0 = true }
+                XCTAssertFalse(grant.consume(authorityID: authorityID, purpose: purpose))
+            }
+            XCTAssertFalse(challenge.isPending(for: authorityID))
+            XCTAssertNil(challenge.issueGrant(for: authorityID, credentialIdentity: .init(status: { .current })))
+        }
+    }
+
+    func testNativeChallengeReplacementCannotExtendTheReviewDeadline() throws {
+        let clock = TestClock()
+        let review = try nativeMessageReview(clock: clock)
+        defer { review.invalidate() }
+        clock.advanceUptime(by: 100_000_000_000)
+        clock.setDate(clock.date.addingTimeInterval(-3_600))
+        let first = try XCTUnwrap(review.makeMessageAuthenticationChallenge(solanaCluster: nil))
+        let firstGrant = try XCTUnwrap(first.issueGrant(for: first.authorityID, credentialIdentity: .init(status: { .current })))
+        clock.advanceUptime(by: 49_000_000_000)
+        let replacement = try XCTUnwrap(review.makeMessageAuthenticationChallenge(solanaCluster: nil))
+        XCTAssertFalse(firstGrant.consume(authorityID: first.authorityID, purpose: first.purpose))
+        let grant = try XCTUnwrap(replacement.issueGrant(for: replacement.authorityID, credentialIdentity: .init(status: { .current })))
+        clock.advanceUptime(by: 1_000_000_000)
+        XCTAssertFalse(grant.consume(authorityID: replacement.authorityID, purpose: replacement.purpose))
+        let expired = try XCTUnwrap(review.makeMessageAuthenticationChallenge(solanaCluster: nil))
+        XCTAssertFalse(expired.isPending(for: expired.authorityID))
+        XCTAssertNil(expired.issueGrant(for: expired.authorityID, credentialIdentity: .init(status: { .current })))
+    }
+
+    func testNativeChallengeAlsoExpiresAtTheAbsoluteRequestDeadline() throws {
+        let clock = TestClock()
+        let review = try nativeMessageReview(clock: clock)
+        defer { review.invalidate() }
+        let challenge = try XCTUnwrap(review.makeMessageAuthenticationChallenge(solanaCluster: nil))
+        let grant = try XCTUnwrap(challenge.issueGrant(for: challenge.authorityID, credentialIdentity: .init(status: { .current })))
+        clock.setDate(review.request.admissionDeadline)
+        XCTAssertFalse(grant.consume(authorityID: challenge.authorityID, purpose: challenge.purpose))
+        clock.setDate(.distantPast)
+        XCTAssertFalse(grant.consume(authorityID: challenge.authorityID, purpose: challenge.purpose))
+        XCTAssertFalse(challenge.isPending(for: challenge.authorityID))
+    }
+
+    func testNativeChallengePreservesTheRequestLifetimeBeyondStandaloneExpiry() throws {
+        let clock = TestClock()
+        let review = try nativeMessageReview(clock: clock, admissionLifetime: ExtensionBridge.requestTTL)
+        defer { review.invalidate() }
+        clock.advanceUptime(by: 150_000_000_000)
+        let challenge = try XCTUnwrap(review.makeMessageAuthenticationChallenge(solanaCluster: nil))
+        XCTAssertTrue(challenge.isPending(for: challenge.authorityID))
+        clock.advanceUptime(by: 749_000_000_000)
+        XCTAssertTrue(challenge.isPending(for: challenge.authorityID))
+        clock.advanceUptime(by: 1_000_000_000)
+        XCTAssertFalse(challenge.isPending(for: challenge.authorityID))
+    }
+
+    func testNativeReviewCapsItsElapsedLifetimeAtTheAdmittedRequestHorizon() throws {
+        let clock = TestClock()
+        let review = try nativeMessageReview(clock: clock, beforeReview: { clock.setDate(.distantPast) })
+        defer { review.invalidate() }
+        let challenge = try XCTUnwrap(review.makeMessageAuthenticationChallenge(solanaCluster: nil))
+        let horizon = UInt64((ExtensionBridge.requestTTL + ExtensionBridge.admissionDeadlineFutureSkew) * 1_000_000_000)
+        clock.advanceUptime(by: horizon - 1)
+        XCTAssertTrue(challenge.isPending(for: challenge.authorityID))
+        clock.advanceUptime(by: 1)
+        XCTAssertFalse(challenge.isPending(for: challenge.authorityID))
+    }
+
+    func testNativeReviewRechecksDeadlinesAfterCredentialValidation() throws {
+        for expiration in ["none", "continuous", "absolute"] {
+            let clock = TestClock()
+            let authorityID = UUID()
+            let validateReview = Mutex(false)
+            let validations = Mutex(0)
+            let accessChallenge = WalletAuthenticationChallenge(authorityID: authorityID,
+                purpose: .walletAccess(UUID()), deadline: clock.instant + .seconds(150), clock: { clock.instant })
+            let grant = try XCTUnwrap(accessChallenge.issueGrant(for: authorityID, credentialIdentity: .init(status: {
+                if validateReview.withLock({ $0 }) {
+                    validations.withLock { $0 += 1 }
+                    if expiration == "continuous" { clock.advanceUptime(by: 150_000_000_000) }
+                    if expiration == "absolute" { clock.setDate(clock.date.addingTimeInterval(150)) }
+                }
+                return .current
+            })))
+            let access = try XCTUnwrap(grant.accessSession(authorityID: authorityID, accessClock: { clock.instant }))
+            let fixture = try ApprovedExecutionTestFixture(now: clock.date)
+            let snapshot = try fixture.enqueue(id: 43, name: "requestAccounts", provider: .ethereum,
+                body: ["address": ""])
+            let binding = try XCTUnwrap(snapshot.requestBinding)
+            let action = DappRequestAction.selectAccount(.init(coinType: .ethereum, selectedAccounts: [],
+                initiallyConnectedProviders: [], network: AuthorityTestNetworks.ethereum))
+            let intent = try reviewIntentForTesting(binding: binding, action: action)
+            let owner = try XCTUnwrap(NativeDeliveryOwner(runtimeInstanceIdentifier: UUID(), processIdentifier: 1,
+                processStartDate: clock.date, bundleURL: URL(fileURLWithPath: "/Applications/Wallet.app"),
+                marketingVersion: "1", buildVersion: "1"))
+            let receipt = NativeDeliveryReceipt(nativeDeliveryNonce: snapshot.nativeDeliveryNonce, owner: owner)
+            let review = NativeApprovalReview(intent: intent, authorityID: authorityID, clock: { clock.date },
+                monotonicClock: { clock.instant }, access: access, receipt: receipt)
+            defer { review.invalidate() }
+
+            validateReview.withLock { $0 = true }
+            let operation = review.approveAccounts([], ethereumNetwork: nil)
+
+            XCTAssertEqual(operation != nil, expiration == "none", expiration)
+            XCTAssertEqual(validations.withLock { $0 }, 1, expiration)
+        }
+    }
+
+    private func nativeMessageReview(clock: TestClock, admissionLifetime: TimeInterval = 150,
+                                     beforeReview: () -> Void = {}) throws -> NativeApprovalReview {
+        let fixture = try ApprovedExecutionTestFixture(now: clock.date)
+        let account = WalletAccountDescriptor(walletID: "authentication-wallet", coin: .ethereum,
+            normalizedAddress: "0x1111111111111111111111111111111111111111", derivationPath: "m/44'/60'/0'/0/0")
+        try fixture.establishGrant(account)
+        let snapshot = try fixture.enqueue(id: 42, name: "signPersonalMessage", provider: .ethereum,
+            body: ["address": account.normalizedAddress, "object": ["data": "0x6869"]], admissionLifetime: admissionLifetime)
+        let binding = try XCTUnwrap(snapshot.requestBinding)
+        let action = try reviewActionForTesting(binding: binding, decision: .message(.init(approvedAccount: account, solanaCluster: nil)))
+        let intent = try reviewIntentForTesting(binding: binding, action: action)
+        beforeReview()
+        return NativeApprovalReview(intent: intent, clock: { clock.date }, monotonicClock: { clock.instant })
+    }
+
     private func makeCredentials(
         keychain: Keychain,
         authorityID: UUID,
-        clock: @escaping @Sendable () -> Date = Date.init,
         accessClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }
     ) -> WalletCredentials {
 #if os(iOS) || os(visionOS)
-        let vault = SafariApprovalVault(fileURL: nil, clock: clock)
+        let vault = SafariApprovalVault(fileURL: nil)
         let host = SafariApprovalVaultHost(vault: vault, sourceSnapshot: { nil })
-        return WalletCredentials(keychain: keychain, messages: .testingEnglish, authorityID: authorityID, vaultHost: host, clock: clock, accessClock: accessClock)
+        return WalletCredentials(keychain: keychain, messages: .testingEnglish, authorityID: authorityID, vaultHost: host, accessClock: accessClock)
 #else
-        WalletCredentials(keychain: keychain, messages: .testingEnglish, authorityID: authorityID, clock: clock, accessClock: accessClock)
+        WalletCredentials(keychain: keychain, messages: .testingEnglish, authorityID: authorityID, accessClock: accessClock)
 #endif
     }
 
@@ -482,6 +638,6 @@ final class WalletAuthenticationTests: XCTestCase {
     }
 
     private func makeChallenge(authorityID: UUID, purpose: WalletAuthenticationChallenge.Purpose) -> WalletAuthenticationChallenge {
-        WalletAuthenticationChallenge(authorityID: authorityID, purpose: purpose, deadline: Date().addingTimeInterval(60))
+        WalletAuthenticationChallenge(authorityID: authorityID, purpose: purpose, deadline: .now + .seconds(60))
     }
 }

@@ -46,7 +46,7 @@ extension NativeApprovalService.Dependencies {
             load: { await bridge.load(handle: $0) },
             responseStatus: {
                 await bridge.responseStatus(
-                    handle: $0, configurationKey: $1
+                    handle: $0, configurationKey: $1, access: .worker
                 )
             },
             maintainProfile: {

@@ -27,7 +27,8 @@ export function nativeSiteContext(tab) {
     return {source: "site", privateBrowsing: tab.privateBrowsing,
         site: {host: url.protocol === "file:" ? url.href : url.host,
             configurationKey: url.protocol === "file:" ? url.href : url.origin},
-        document: {tabId: tab.id, frameId: 0, documentId: tab.document.owner}};
+        document: {tabId: tab.id, frameId: 0, documentId: tab.document.owner,
+            documentSession: tab.document.contentContext.bigWalletDocumentSession}};
 }
 
 function publicProviderState(document, provider) {

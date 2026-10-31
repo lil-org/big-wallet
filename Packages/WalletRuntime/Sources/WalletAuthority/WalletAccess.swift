@@ -694,22 +694,26 @@ final class WalletSigningPreparation: Sendable {
     }
 
     @MainActor
-    func consume(permit: ExtensionBridge.ApprovedExecutionPermit) -> WalletSigningSession? {
+    func consume(permit: ExtensionBridge.ApprovedExecutionPermit) async -> WalletSigningSession? {
         guard let source = takeSource() else { return nil }
         var transferred = false
         defer { if !transferred { source.invalidate() } }
-        guard !Task.isCancelled,
-              WalletSigningScope(permit: permit) == scope,
-              source.approvedAccount == approvedAccount,
-              clock() < scope.signingDeadline,
-              source.isCurrent(),
-              !Task.isCancelled,
-              clock() < scope.signingDeadline,
-              let operation = ApprovedWalletSigningOperation(permit: permit, scope: scope)
-        else { return nil }
-        let session = WalletSigningSession(source: source, commit: commit, operation: operation, clock: clock)
-        transferred = true
-        return session
+        return await withTaskCancellationHandler {
+            guard !Task.isCancelled,
+                  WalletSigningScope(permit: permit) == scope,
+                  source.approvedAccount == approvedAccount,
+                  clock() < scope.signingDeadline,
+                  await awaitBackgroundOperation({ source.isCurrent() }) == true,
+                  !Task.isCancelled,
+                  clock() < scope.signingDeadline,
+                  let operation = ApprovedWalletSigningOperation(permit: permit, scope: scope)
+            else { return nil }
+            let session = WalletSigningSession(source: source, commit: commit, operation: operation, clock: clock)
+            transferred = true
+            return session
+        } onCancel: {
+            source.invalidate()
+        }
     }
 
     func invalidate() {

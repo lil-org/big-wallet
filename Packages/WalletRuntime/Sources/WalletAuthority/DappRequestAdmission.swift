@@ -13,13 +13,13 @@ public final class DappRequestAdmission {
 
     private let store: PopupRequestStore
     private let requestProcessor: DappRequestProcessing
-    private let reviewCatalog: (() -> WalletReviewCatalog?)?
+    private let reviewCatalog: (() async -> WalletReviewCatalog?)?
     private let messages: AuthorityMessages
 
     init(
         store: PopupRequestStore,
         requestProcessor: DappRequestProcessing,
-        reviewCatalog: (() -> WalletReviewCatalog?)? = nil,
+        reviewCatalog: (() async -> WalletReviewCatalog?)? = nil,
         messages: AuthorityMessages = .testingEnglish
     ) {
         self.store = store
@@ -57,7 +57,7 @@ public final class DappRequestAdmission {
         guard let binding = snapshot.requestBinding else { return .unavailable }
         guard await store.authorityIsCurrent(handle: handle) else { return .unavailable }
         let preparation: DappRequestPreparation
-        let prepared = await requestProcessor.prepare(binding, loadingCatalog: { reviewCatalog?() })
+        let prepared = await requestProcessor.prepare(binding, loadingCatalog: { await reviewCatalog?() })
         guard !Task.isCancelled else { return .unavailable }
         switch prepared {
         case .catalogUnavailable:

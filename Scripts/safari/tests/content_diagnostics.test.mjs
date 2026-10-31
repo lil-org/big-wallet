@@ -73,6 +73,7 @@ function harness(text, send, {url = `https://private.invalid/?token=${secret}`, 
     const context = vm.createContext({URL, Date: FixedDate, document,
         Math: Object.assign(Object.create(Math), {random: () => 0}),
         bigWalletProviderGeneration: generation,
+        bigWalletDocumentSession: "0123456789abcdef0123456789abcdef",
         window: {
             location: {href: pageURL.href, pathname: pageURL.pathname},
             addEventListener() {},

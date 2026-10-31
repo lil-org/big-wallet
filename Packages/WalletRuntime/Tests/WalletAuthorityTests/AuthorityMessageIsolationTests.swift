@@ -79,7 +79,74 @@ final class AuthorityMessageIsolationTests: XCTestCase {
         XCTAssertNil(released)
     }
 
-    private func system(label: String) throws -> (system: AuthorityRuntime, suite: String, root: URL) {
+    func testPopupCatalogDurabilityReadKeepsMainActorResponsive() async throws {
+        try await assertCatalogReadKeepsMainActorResponsive(admission: false)
+    }
+
+#if os(iOS) || os(visionOS)
+    func testAdmissionCatalogDurabilityReadKeepsMainActorResponsive() async throws {
+        try await assertCatalogReadKeepsMainActorResponsive(admission: true)
+    }
+#endif
+
+    private func assertCatalogReadKeepsMainActorResponsive(admission: Bool) async throws {
+        let started = expectation(description: "Durable catalog read started")
+        let finished = LockedTestValue(false)
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        var fileIO = SafariApprovalVault.FileIO.live
+        fileIO.readDurableSnapshot = { _, _ in
+            XCTAssertFalse(Thread.isMainThread)
+            started.fulfill()
+            XCTAssertEqual(release.wait(timeout: .now() + 5), .success)
+            finished.value = true
+            return .unavailable
+        }
+        let vault = SafariApprovalVault(fileURL: FileManager.default.temporaryDirectory
+            .appendingPathComponent("blocked-vault-\(UUID().uuidString)"), fileIO: fileIO)
+        let fixture = try system(label: "background-catalog", vault: vault)
+        defer {
+            UserDefaults.standard.removePersistentDomain(forName: fixture.suite)
+            try? FileManager.default.removeItem(at: fixture.root)
+        }
+        let origin = "https://wallet.example"
+        guard case .snapshot(let authority) = await fixture.system.requests.configurationSnapshot(
+            configurationKey: origin, profileIdentifier: nil
+        ) else { return XCTFail("Expected initial authority") }
+        let raw: [String: Any] = [
+            "id": 1, "name": "requestAccounts", "provider": "ethereum", "body": ["address": ""],
+            "host": "wallet.example", "configurationKey": origin,
+            "enqueueAttempt": UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased(),
+            "admissionDeadline": Int(Date().addingTimeInterval(150).timeIntervalSince1970 * 1_000),
+            "workflowVersion": ExtensionBridge.workflowVersion, "authority": authority.version.json,
+        ]
+        let request = try XCTUnwrap(SafariRequest(json: raw))
+        guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(
+            request: request, rawObject: raw, responseOwner: testDocumentResponseOwner
+        ), case .accepted(let handle, _, _, _, _) = await fixture.system.requests.enqueue(
+            ingress: ingress, profileIdentifier: nil
+        ) else { return XCTFail("Expected admitted request") }
+        let popup = fixture.system.makePopupApprovalAuthority(
+            approvalSubjectTitle: { _ in "Approve" }, loadTransactionContext: { _ in nil }
+        )
+        let commandJSON: [String: Any] = [
+            "id": handle.id, "subject": "getApprovalState", "requestToken": handle.requestToken,
+            "workflowVersion": ExtensionBridge.workflowVersion,
+        ]
+        let command = try InternalSafariRequest(wire: XCTUnwrap(WireProtocol.object(.nativeCommand, value: commandJSON)))
+        let operation = Task {
+            if admission { _ = await fixture.system.admission.materialize(handle: handle) }
+            else { _ = await popup.dispatch(request: command, profileIdentifier: nil) }
+        }
+        defer { operation.cancel() }
+        await fulfillment(of: [started], timeout: 2)
+        XCTAssertFalse(finished.value)
+        release.signal()
+        await operation.value
+        XCTAssertTrue(finished.value)
+    }
+
+    private func system(label: String, vault: SafariApprovalVault? = nil) throws -> (system: AuthorityRuntime, suite: String, root: URL) {
         let suite = "AuthorityMessageIsolation.\(UUID().uuidString)"
         let preferences = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(suite, isDirectory: true)
@@ -96,7 +163,7 @@ final class AuthorityMessageIsolationTests: XCTestCase {
             storage: .init(containerURL: root), messages: messages,
             keychain: Keychain(copyMatching: { _, _ in XCTFail("Unexpected credential read"); return -25300 }),
             metadata: WalletsMetadataService(storage: preferences),
-            vault: SafariApprovalVault(fileURL: nil), integrityKeyStore: UnusedIntegrityStore(),
+            vault: vault ?? SafariApprovalVault(fileURL: nil), integrityKeyStore: UnusedIntegrityStore(),
             vaultHostDefaults: preferences,
             customSnapshot: { .empty }, freshCustomSnapshot: { .loaded(.empty) },
             definitionResult: { _ in .unavailable }, insertNetwork: { _ in .unavailable },

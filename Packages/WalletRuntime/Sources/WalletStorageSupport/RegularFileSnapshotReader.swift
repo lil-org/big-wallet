@@ -110,7 +110,11 @@ public struct RegularFileSnapshotReader: Sendable {
         self.operations = operations
     }
 
-    public func read(at url: URL, maximumBytes: Int) -> Result {
+    public func read(
+        at url: URL,
+        maximumBytes: Int,
+        synchronizing: (@Sendable (Int32, [Int32]) throws -> Void)? = nil
+    ) -> Result {
         guard maximumBytes >= 0 else { return .unavailable }
         do {
             let directories = try AnchoredDirectoryAccess.openParent(
@@ -124,7 +128,8 @@ public struct RegularFileSnapshotReader: Sendable {
             }
             defer { operations.close(descriptor) }
             do {
-                return try read(descriptor: descriptor, directory: directory, name: name, maximumBytes: maximumBytes)
+                return try read(descriptor: descriptor, directories: directories, name: name,
+                    maximumBytes: maximumBytes, synchronizing: synchronizing)
             } catch {
                 return .unavailable
             }
@@ -139,7 +144,13 @@ public struct RegularFileSnapshotReader: Sendable {
         }
     }
 
-    private func read(descriptor: Int32, directory: Int32, name: String, maximumBytes: Int) throws -> Result {
+    private func read(
+        descriptor: Int32,
+        directories: [Int32],
+        name: String,
+        maximumBytes: Int,
+        synchronizing: (@Sendable (Int32, [Int32]) throws -> Void)?
+    ) throws -> Result {
         let initial = try FileSystemCall.retryInterrupted { try operations.metadata(descriptor) }
         guard initial.isRegular, initial.size >= 0 else { return .unsafe }
         guard initial.size <= off_t(maximumBytes) else { return .tooLarge }
@@ -167,11 +178,12 @@ public struct RegularFileSnapshotReader: Sendable {
         }
         guard trailingCount >= 0, trailingCount <= 1 else { throw POSIXError(.EIO) }
         guard trailingCount == 0 else { return .changed }
+        try synchronizing?(descriptor, directories)
         let final = try FileSystemCall.retryInterrupted { try operations.metadata(descriptor) }
         guard final == initial else { return .changed }
         let current: FileDescriptorMetadata
         do {
-            current = try FileSystemCall.retryInterrupted { try operations.entryMetadata(directory, name) }
+            current = try FileSystemCall.retryInterrupted { try operations.entryMetadata(directories[0], name) }
         } catch let error as POSIXError where error.code == .ENOENT {
             return .changed
         }

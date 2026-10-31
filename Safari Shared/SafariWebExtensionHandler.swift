@@ -24,8 +24,9 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         let popupSessions = services.popupSessions
 #endif
         let poller = ResponseDeliveryPoller(
-            responseStatus: { await bridge.responseStatus(handle: $0, configurationKey: $1) },
-            maintain: { handle, configurationKey, maintenance in
+            authorize: { await bridge.authorizeResponseAccess(handle: $0, configurationKey: $1, access: $2) },
+            responseStatus: { await bridge.responseStatus(handle: $0, configurationKey: $1, access: $2) },
+            maintain: { handle, configurationKey, maintenance, access in
 #if os(macOS)
                 let result = await nativeApprovals.reconcile(
                     .init(handle: handle, configurationKey: configurationKey),
@@ -39,12 +40,12 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 }
 #else
                 await bridge.performMaintenance(profileIdentifier: handle.profileIdentifier)
-                return await bridge.responseStatus(handle: handle, configurationKey: configurationKey)
+                return await bridge.responseStatus(handle: handle, configurationKey: configurationKey, access: access)
 #endif
             },
-            prepareDelivery: { handle, configurationKey in
+            prepareDelivery: { handle, configurationKey, access in
                 await bridge.prepareResponseDelivery(id: handle.id, configurationKey: configurationKey,
-                    requestToken: handle.requestToken, profileIdentifier: handle.profileIdentifier)
+                    requestToken: handle.requestToken, profileIdentifier: handle.profileIdentifier, access: access)
             }
         )
 #if os(macOS)
@@ -66,7 +67,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 .unavailable
 #endif
             },
-            pollResponse: { await poller.poll(handle: $0, configurationKey: $1, maintenance: $2) },
+            pollResponse: { await poller.poll(handle: $0, configurationKey: $1, maintenance: $2, access: $3) },
             rpc: PublicRPCForwarder(service: SafariRPCService(limits: .live, clock: .live, serializeRequest: { try $0.serialize() }), client: services.safariRPC,
                 network: { networks.resolve(chainId: $0).resolvedNetwork }),
             popup: { request, profileIdentifier in

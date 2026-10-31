@@ -492,9 +492,9 @@ public final class PopupApprovalAuthority {
         return command.identity?.reviewToken
     }
 
-    private func refreshWalletsAndNetworks() -> WalletReviewCatalog? {
+    private func refreshWalletsAndNetworks() async -> WalletReviewCatalog? {
         invalidateNetworkCache()
-        return walletEnvironment.currentReviewCatalog()
+        return await walletEnvironment.currentReviewCatalog()
     }
 
     private func pendingRequestsResponse(
@@ -548,7 +548,10 @@ public final class PopupApprovalAuthority {
             if snapshot.phase == .queued,
                session.canBeginApproval,
                let reviewedAccess = session.reviewCatalog {
-                guard let currentAccess = walletEnvironment.currentReviewCatalog() else {
+                let currentAccess = await walletEnvironment.currentReviewCatalog()
+                guard !Task.isCancelled, entries[snapshot.handle]?.session === session,
+                      session.canBeginApproval else { return .unavailable }
+                guard let currentAccess else {
                     discardSession(handle: snapshot.handle)
                     return .secureSetupRequired
                 }
@@ -569,6 +572,12 @@ public final class PopupApprovalAuthority {
             binding,
             loadingCatalog: walletEnvironment.currentReviewCatalog
         )
+        let refreshedCatalog: WalletReviewCatalog?
+        if case .prepared(_, let catalog) = prepared, catalog != nil {
+            refreshedCatalog = await walletEnvironment.currentReviewCatalog()
+        } else {
+            refreshedCatalog = nil
+        }
         guard !Task.isCancelled else { return .unavailable }
         let current: ExtensionBridge.Snapshot
         switch await store.load(handle: snapshot.handle) {
@@ -584,7 +593,7 @@ public final class PopupApprovalAuthority {
         }
         guard case .prepared(let preparation, let preparedCatalog) = prepared else { return .secureSetupRequired }
         if let preparedCatalog {
-            guard let catalog = walletEnvironment.currentReviewCatalog() else { return .secureSetupRequired }
+            guard let catalog = refreshedCatalog else { return .secureSetupRequired }
             guard catalog.identity == preparedCatalog.identity,
                   catalog.orderedAccounts == preparedCatalog.orderedAccounts else { return .unavailable }
         }
@@ -965,16 +974,21 @@ public final class PopupApprovalAuthority {
         catalog: WalletReviewCatalog,
         preparation: WalletSigningPreparation
     ) async -> AuthenticationOutcome {
-        guard isCurrent(session, token: token) else { return .abandoned(feedback: nil) }
+        guard !Task.isCancelled, isCurrent(session, token: token) else { return .abandoned(feedback: nil) }
+        let currentCatalog = await walletEnvironment.currentApprovalCatalog()
+        guard !Task.isCancelled, isCurrent(session, token: token),
+              clock() < preparation.scope.signingDeadline else { return .abandoned(feedback: nil) }
         let authorityIsCurrent = await store.authorityIsCurrent(handle: session.handle)
-        guard isCurrent(session, token: token), authorityIsCurrent,
+        guard !Task.isCancelled, isCurrent(session, token: token), authorityIsCurrent,
               clock() < preparation.scope.signingDeadline else { return .abandoned(feedback: nil) }
         if let failure = signingAccountFailure(
             preparation.approvedAccount, request: session.request,
-            catalog: walletEnvironment.currentApprovalCatalog()
+            catalog: currentCatalog
         ) { return failure }
         guard session.reviewCatalog?.identity == catalog.identity,
-              preparation.validateCurrent(), isCurrent(session, token: token) else {
+              await awaitBackgroundOperation({ preparation.validateCurrent() }) == true,
+              !Task.isCancelled, isCurrent(session, token: token),
+              clock() < preparation.scope.signingDeadline else {
             return .abandoned(feedback: nil)
         }
         return .unlocked(catalog: catalog, preparation: preparation)
@@ -1014,7 +1028,7 @@ public final class PopupApprovalAuthority {
             }, resolve: { consent in
                 await DappApprovalResolver.resolve(
                     consent,
-                    refreshWalletCatalog: { self.walletEnvironment.currentApprovalCatalog() },
+                    refreshWalletCatalog: { await self.walletEnvironment.currentApprovalCatalog() },
                     networkResolver: self.approvalNetworkResolver,
                     customDefinitionResult: self.customDefinitionResult,
                     isCurrent: { self.isCurrent(session, token: token) }
@@ -1045,7 +1059,7 @@ public final class PopupApprovalAuthority {
         let result = await context.runBeforeDeadline(discardValue: { outcome in
             if case .unlocked(_, let preparation) = outcome { preparation.invalidate() }
         }) {
-            await self.authenticate(session: session, reason: reason, scope: scope)
+            await self.authenticate(session: session, token: token, reason: reason, scope: scope)
         }
         let outcome: AuthenticationOutcome
         switch result {
@@ -1064,16 +1078,26 @@ public final class PopupApprovalAuthority {
 
     private func authenticate(
         session: PopupRequestSession,
+        token: UUID,
         reason: String,
         scope: WalletSigningScope
     ) async -> AuthenticationOutcome {
-        switch await walletEnvironment.unlock(reason, scope) {
+        let unlocked = await walletEnvironment.unlock(reason, scope)
+        guard !Task.isCancelled, isCurrent(session, token: token), clock() < scope.signingDeadline else {
+            if case .unlocked(_, let preparation) = unlocked { preparation.invalidate() }
+            return .abandoned(feedback: nil)
+        }
+        switch unlocked {
         case .canceled:
             return Task.isCancelled ? .abandoned(feedback: nil) : .authenticationCancelled
         case .unavailable:
+            let catalog = await walletEnvironment.currentApprovalCatalog()
+            guard !Task.isCancelled, isCurrent(session, token: token), clock() < scope.signingDeadline else {
+                return .abandoned(feedback: nil)
+            }
             if let failure = signingAccountFailure(
                 scope.approvedAccount, request: session.request,
-                catalog: walletEnvironment.currentApprovalCatalog()
+                catalog: catalog
             ) { return failure }
             return .abandoned(feedback: AuthorityStrings.somethingWentWrong)
         case .unlocked(let catalog, let preparation):
@@ -1086,7 +1110,8 @@ public final class PopupApprovalAuthority {
             guard let reviewedIdentity = session.reviewCatalog?.identity,
                   catalog.identity == reviewedIdentity,
                   preparation.scope == scope,
-                  preparation.validateCurrent() else {
+                  await awaitBackgroundOperation({ preparation.validateCurrent() }) == true,
+                  !Task.isCancelled, isCurrent(session, token: token), clock() < scope.signingDeadline else {
                 preparation.invalidate()
                 return .abandoned(feedback: nil)
             }
@@ -1154,6 +1179,8 @@ public final class PopupApprovalAuthority {
         token: UUID,
         reason: PreparationStop
     ) async -> Bool {
+        guard !Task.isCancelled, isCurrent(session, token: token) else { return false }
+        let refreshedCatalog = await refreshWalletsAndNetworks()
         guard !Task.isCancelled, isCurrent(session, token: token),
               case .found(let snapshot) = await store.load(handle: session.handle),
               case .queued(_, .unowned) = snapshot.state,
@@ -1164,7 +1191,7 @@ public final class PopupApprovalAuthority {
             discardSession(handle: session.handle)
             return true
         }
-        guard let catalog = refreshWalletsAndNetworks(),
+        guard let catalog = refreshedCatalog,
               let account = session.preparedAction.signingAccount else { return false }
         guard catalog.identity == session.reviewCatalog?.identity else {
             guard reason == .authenticationCancelled else { return false }

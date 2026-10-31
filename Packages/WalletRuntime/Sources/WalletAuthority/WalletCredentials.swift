@@ -33,29 +33,26 @@ public struct WalletCredentials: Sendable {
     private let messages: AuthorityMessages
     private let authorityID: UUID
     private let authentication: WalletCredentialAuthentication
-    private let clock: @Sendable () -> Date
     private let accessClock: @Sendable () -> ContinuousClock.Instant
     private let postCreation: @MainActor @Sendable () -> Void
 #if os(iOS) || os(visionOS)
     private let vaultHost: SafariApprovalVaultHost
 
-    init(keychain: Keychain, messages: AuthorityMessages, authorityID: UUID, vaultHost: SafariApprovalVaultHost, authentication: WalletCredentialAuthentication = .live, clock: @escaping @Sendable () -> Date = Date.init, accessClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }, postCreation: @escaping @MainActor @Sendable () -> Void = {}) {
+    init(keychain: Keychain, messages: AuthorityMessages, authorityID: UUID, vaultHost: SafariApprovalVaultHost, authentication: WalletCredentialAuthentication = .live, accessClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }, postCreation: @escaping @MainActor @Sendable () -> Void = {}) {
         self.keychain = keychain
         self.messages = messages
         self.authorityID = authorityID
         self.authentication = authentication
-        self.clock = clock
         self.accessClock = accessClock
         self.postCreation = postCreation
         self.vaultHost = vaultHost
     }
 #else
-    init(keychain: Keychain, messages: AuthorityMessages, authorityID: UUID, authentication: WalletCredentialAuthentication = .live, clock: @escaping @Sendable () -> Date = Date.init, accessClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }, postCreation: @escaping @MainActor @Sendable () -> Void = {}) {
+    init(keychain: Keychain, messages: AuthorityMessages, authorityID: UUID, authentication: WalletCredentialAuthentication = .live, accessClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }, postCreation: @escaping @MainActor @Sendable () -> Void = {}) {
         self.keychain = keychain
         self.messages = messages
         self.authorityID = authorityID
         self.authentication = authentication
-        self.clock = clock
         self.accessClock = accessClock
         self.postCreation = postCreation
     }
@@ -81,7 +78,7 @@ public struct WalletCredentials: Sendable {
     public func makeWalletAccessChallenge() -> WalletAuthenticationChallenge {
         WalletAuthenticationChallenge(
             authorityID: authorityID, purpose: .walletAccess(UUID()),
-            deadline: clock().addingTimeInterval(ExtensionBridge.executionLifetime), clock: clock
+            deadline: accessClock() + WalletAuthenticationChallenge.standaloneLifetime, clock: accessClock
         )
     }
 

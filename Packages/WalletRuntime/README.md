@@ -28,7 +28,12 @@ receive review values and opaque reference handles. Authentication challenges ar
 bound to the authority instance and a specific purpose. Only credential
 verification can issue a grant. Copies share consumption and invalidation state;
 review changes, cancellation, expiry, and credential changes invalidate the
-corresponding authority.
+corresponding authority. Access/export challenges and initial-backup authorization
+expire after 150 continuous-clock seconds, including device sleep. Backup grant
+issuance preserves its original deadline. Native reviews capture one continuous
+admission horizon and also retain their absolute request deadline; replacement
+challenges cannot renew that horizon. Persisted request and recovery timestamps
+remain wall-clock based.
 
 A wallet access session permits loading and reviewing wallet metadata. Signing
 requires a grant bound to the current message or transaction review. Secret
@@ -91,6 +96,17 @@ Fresh user consent may authorize another signing attempt after an ordinary reque
 On iOS and visionOS, the approval vault encrypts each enabled account's private key in a separate record bound to its identity, catalog, and publication generation. Each record uses an independent random encryption key protected by Keychain user presence. An approval reads only the selected account's encryption key and decrypts only its record. The vault payload excludes passwords, mnemonics, and stored-wallet JSON. A disclosed encryption key decrypts only its matching record, though the shared Keychain access group and authentication context do not isolate accounts from compromised extension code.
 
 The vault publishes a generation only after every account key is stored. If an account key later disappears, its account is hidden while the other accounts remain available; the app rebuilds the full generation during reconciliation. Metadata checks do not read protected key values or prompt for authentication. Generation changes and changes to the published envelope invalidate existing signing sessions.
+
+Safari vault envelopes and empty invalidation markers use the same durable replacement
+helper as request storage: full file synchronization, atomic replacement, directory
+synchronization, and a final file barrier. Publication succeeds only after those
+barriers and readback verification. Catalog, unlock, and signing-current reads
+also synchronize the exact open envelope file and its directory before accepting
+the snapshot, rejecting replacement or modification during synchronization.
+Failed publication remains failed; a later successful reader barrier can establish
+durability independently. Admission, popup, and signing validation perform these
+durable reads off the main actor and recheck cancellation and current ownership
+after awaiting them. Host publication metadata remains advisory.
 
 ## Site permissions and revocation
 

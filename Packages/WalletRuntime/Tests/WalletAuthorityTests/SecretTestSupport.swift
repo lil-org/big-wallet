@@ -254,7 +254,7 @@ func walletAccessForTesting(
     status: @escaping @Sendable () -> WalletCredentialIdentity.Status = { .current }
 ) -> WalletAccessSession {
     let challenge = WalletAuthenticationChallenge(authorityID: authorityID, purpose: .walletAccess(UUID()),
-        deadline: .distantFuture)
+        deadline: clock() + .seconds(150), clock: clock)
     return challenge.issueGrant(for: authorityID, credentialIdentity: .init(status: status))!
         .accessSession(authorityID: authorityID, accessClock: clock)!
 }

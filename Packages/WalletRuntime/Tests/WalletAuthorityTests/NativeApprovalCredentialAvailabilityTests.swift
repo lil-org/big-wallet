@@ -60,7 +60,7 @@ extension NativeApprovalCoordinatorTests {
             let rejected = Mutex(0)
             let authorityID = NativeApprovalTestAuthorization.authorityID
             let challenge = WalletAuthenticationChallenge(authorityID: authorityID,
-                purpose: .walletAccess(UUID()), deadline: .distantFuture)
+                purpose: .walletAccess(UUID()), deadline: .now + .seconds(150))
             let grant = try XCTUnwrap(challenge.issueGrant(for: authorityID,
                 credentialIdentity: .init(status: { status.withLock { $0 } })))
             let access = try XCTUnwrap(grant.accessSession(authorityID: authorityID))
@@ -117,7 +117,7 @@ extension NativeApprovalCoordinatorTests {
                     let status = Mutex(WalletCredentialIdentity.Status.current)
                     let authorityID = NativeApprovalTestAuthorization.authorityID
                     let accessChallenge = WalletAuthenticationChallenge(authorityID: authorityID,
-                        purpose: .walletAccess(UUID()), deadline: .distantFuture)
+                        purpose: .walletAccess(UUID()), deadline: .now + .seconds(150))
                     let accessGrant = try XCTUnwrap(accessChallenge.issueGrant(for: authorityID,
                         credentialIdentity: .init(status: { invalidatesAccess ? status.withLock { $0 } : .current })))
                     let access = try XCTUnwrap(accessGrant.accessSession(authorityID: authorityID))
@@ -180,7 +180,7 @@ extension NativeApprovalCoordinatorTests {
         let status = Mutex(WalletCredentialIdentity.Status.current)
         let authorityID = NativeApprovalTestAuthorization.authorityID
         let challenge = WalletAuthenticationChallenge(authorityID: authorityID,
-            purpose: .walletAccess(UUID()), deadline: .distantFuture)
+            purpose: .walletAccess(UUID()), deadline: .now + .seconds(150))
         let grant = try XCTUnwrap(challenge.issueGrant(for: authorityID,
             credentialIdentity: .init(status: { status.withLock { $0 } })))
         let access = try XCTUnwrap(grant.accessSession(authorityID: authorityID))
@@ -215,7 +215,7 @@ extension NativeApprovalCoordinatorTests {
         let decisions = Mutex(0)
         let authorityID = NativeApprovalTestAuthorization.authorityID
         let challenge = WalletAuthenticationChallenge(authorityID: authorityID,
-            purpose: .walletAccess(UUID()), deadline: .distantFuture)
+            purpose: .walletAccess(UUID()), deadline: .now + .seconds(150))
         let grant = try XCTUnwrap(challenge.issueGrant(for: authorityID,
             credentialIdentity: .init(status: { status.withLock { $0 } })))
         let access = try XCTUnwrap(grant.accessSession(authorityID: authorityID))

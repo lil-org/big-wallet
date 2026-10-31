@@ -23,14 +23,16 @@ enum DappRequestPreparationResult: Sendable {
 extension DappRequestProcessing {
     func prepare(
         _ binding: ExtensionBridge.RequestBinding,
-        loadingCatalog: () -> WalletReviewCatalog?
+        loadingCatalog: () async -> WalletReviewCatalog?
     ) async -> DappRequestPreparationResult {
         let initial = await prepare(binding, catalog: nil)
         guard !Task.isCancelled else { return .prepared(.unavailable, catalog: nil) }
         guard case .needsCatalog(let resolve) = initial else {
             return .prepared(initial, catalog: nil)
         }
-        guard let catalog = loadingCatalog() else { return .catalogUnavailable }
+        let loadedCatalog = await loadingCatalog()
+        guard !Task.isCancelled else { return .prepared(.unavailable, catalog: nil) }
+        guard let catalog = loadedCatalog else { return .catalogUnavailable }
         if let account = binding.request.authorizedAccount,
            catalog.availability(of: account) == .unavailable {
             return .catalogUnavailable

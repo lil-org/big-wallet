@@ -187,6 +187,77 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertEqual(refreshed["approval"] as? NSDictionary, unchanged as NSDictionary)
     }
 
+    func testTransactionTokenRotationDuringCatalogReadReturnsCurrentReview() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 709, provider: .ethereum, method: "signTransaction"), in: store)
+        let catalog = WalletReviewCatalog(account: popupTestAccount())
+        let action = SendTransactionAction(
+            transaction: popupReadyTransaction(),
+            resolvedNetwork: ResolvedEthereumNetwork(network: popupTransactionNetwork(), source: .custom),
+            walletId: "wallet", account: popupTestAccount()
+        )
+        let source = PopupPreparationSource()
+        var preparationInput: Transaction?
+        var preparations = 0
+        let catalogStarted = expectation(description: "Cached catalog read started")
+        let catalogGate = makeGate()
+        defer { catalogGate.resolve(()) }
+        var suspendCatalog = false
+        let controller = makePopupSessionsForTesting(
+            store: store,
+            walletEnvironment: popupWalletEnvironment(reviewCatalog: {
+                if suspendCatalog {
+                    suspendCatalog = false
+                    catalogStarted.fulfill()
+                    await catalogGate.wait()
+                }
+                return catalog
+            }),
+            loadsTransactionContext: false,
+            transactionApprovalOperations: TransactionApprovalOperations(
+                prepare: { incoming, _, _ in
+                    preparationInput = incoming
+                    return source.stream
+                },
+                preflight: { transaction, _ in
+                    XCTFail("A stale approval must not preflight")
+                    return .unavailable(transaction, .init(info: nil, nextBaseFee: nil))
+                }
+            ),
+            executionEnvironment: popupExecutionEnvironment(requestProcessor: CompactPopupProcessor { _ in
+                preparations += 1
+                return .approval(.approveTransaction(action))
+            })
+        )
+        let read = try popupCommand(subject: "getApprovalState", id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken)
+        let initial = await controller.dispatchJSON(request: read, profileIdentifier: nil)
+        let initialToken = try XCTUnwrap((initial["review"] as? [String: Any])?["reviewToken"] as? String)
+        suspendCatalog = true
+        let pending = Task { await controller.dispatchJSON(request: read, profileIdentifier: nil) }
+        defer { pending.cancel() }
+        await fulfillment(of: [catalogStarted], timeout: 2)
+
+        let prepared = popupPreparedTransaction(try XCTUnwrap(preparationInput))
+        source.update(prepared)
+        source.resolve(.success(prepared))
+        let updated = try await controller.dispatchPreparedJSON(request: read, profileIdentifier: nil)
+        let updatedToken = try XCTUnwrap((updated["review"] as? [String: Any])?["reviewToken"] as? String)
+        XCTAssertNotEqual(updatedToken, initialToken)
+        catalogGate.resolve(())
+
+        let completed = await pending.value
+        XCTAssertEqual(completed["state"] as? String, "review")
+        XCTAssertEqual((completed["review"] as? [String: Any])?["reviewToken"] as? String, updatedToken)
+        XCTAssertEqual((completed["review"] as? [String: Any])?["canBackOffRefresh"] as? Bool, true)
+        XCTAssertEqual(preparations, 1)
+        let staleApproval = try popupCommand(subject: "approveRequest", id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken, reviewToken: initialToken, payload: [:])
+        let ignored = await controller.dispatchJSON(request: staleApproval, profileIdentifier: nil)
+        XCTAssertEqual(ignored["status"] as? String, "ignored")
+        XCTAssertEqual((ignored["review"] as? [String: Any])?["reviewToken"] as? String, updatedToken)
+    }
+
     func testRejectedRequestCannotReappearAfterSuspendedPreparation() async throws {
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(id: 706, provider: .ethereum), in: store)
@@ -213,6 +284,94 @@ final class PopupRequestSessionsTests: XCTestCase {
         let completed = await pending.value
         XCTAssertEqual(completed["state"] as? String, "missing")
         XCTAssertNil(completed["review"])
+    }
+
+    func testRejectedRequestCannotReappearAfterSuspendedCatalogValidation() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 707, provider: .ethereum), in: store)
+        let catalog = WalletReviewCatalog(account: popupTestAccount())
+        let started = expectation(description: "Catalog validation started")
+        let gate = makeGate()
+        var catalogReads = 0
+        let controller = makePopupSessionsForTesting(
+            store: store,
+            walletEnvironment: popupWalletEnvironment(reviewCatalog: {
+                catalogReads += 1
+                if catalogReads == 2 {
+                    started.fulfill()
+                    await gate.wait()
+                }
+                return catalog
+            }),
+            loadsTransactionContext: false,
+            executionEnvironment: popupExecutionEnvironment(requestProcessor: PreparationRecordingDappRequestProcessor())
+        )
+        let read = try popupCommand(subject: "getApprovalState", id: snapshot.handle.id,
+                                    requestToken: snapshot.handle.requestToken)
+        let pending = Task { await controller.dispatchJSON(request: read, profileIdentifier: nil) }
+        await fulfillment(of: [started], timeout: 2)
+        let rejected = await controller.dispatchJSON(request: try popupCommand(
+            subject: "rejectRequest", id: snapshot.handle.id, requestToken: snapshot.handle.requestToken
+        ), profileIdentifier: nil)
+        XCTAssertEqual(rejected["state"] as? String, "missing")
+        gate.resolve(())
+        let completed = await pending.value
+        XCTAssertEqual(completed["state"] as? String, "missing")
+        XCTAssertNil(completed["review"])
+    }
+
+    func testLateCatalogFailureCannotDiscardAuthenticatingSession() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 708, provider: .ethereum, method: "signPersonalMessage"), in: store)
+        let account = popupTestAccount()
+        let catalog = WalletReviewCatalog(account: account)
+        let catalogStarted = expectation(description: "Cached catalog validation started")
+        let authenticationStarted = expectation(description: "Authentication started")
+        let catalogGate = makeGate()
+        let authenticationGate = makeGate()
+        var suspendCatalog = false
+        var preparations = 0
+        let controller = makePopupSessionsForTesting(
+            store: store,
+            walletEnvironment: popupWalletEnvironment(reviewCatalog: {
+                if suspendCatalog {
+                    suspendCatalog = false
+                    catalogStarted.fulfill()
+                    await catalogGate.wait()
+                    return nil
+                }
+                return catalog
+            }, unlockWallets: { _, _ in
+                authenticationStarted.fulfill()
+                await authenticationGate.wait()
+                return .canceled
+            }),
+            loadsTransactionContext: false,
+            executionEnvironment: popupExecutionEnvironment(requestProcessor: CompactPopupProcessor { _ in
+                preparations += 1
+                return .approval(.approveMessage(SignMessageAction(
+                    subject: .signPersonalMessage, walletId: "wallet", account: account,
+                    meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))
+                )))
+            })
+        )
+        let token = try await materializeToken(controller: controller, snapshot: snapshot)
+        let read = try popupCommand(subject: "getApprovalState", id: snapshot.handle.id,
+                                    requestToken: snapshot.handle.requestToken)
+        suspendCatalog = true
+        let pendingRead = Task { await controller.dispatchJSON(request: read, profileIdentifier: nil) }
+        await fulfillment(of: [catalogStarted], timeout: 2)
+        let approve = try popupCommand(subject: "approveRequest", id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken, reviewToken: token, payload: [:])
+        let pendingApproval = Task { await controller.dispatchJSON(request: approve, profileIdentifier: nil) }
+        await fulfillment(of: [authenticationStarted], timeout: 2)
+        catalogGate.resolve(())
+        _ = await pendingRead.value
+        authenticationGate.resolve(())
+        let completed = await pendingApproval.value
+        XCTAssertEqual(completed["state"] as? String, "review")
+        XCTAssertEqual(preparations, 1)
+        XCTAssertNotEqual((completed["review"] as? [String: Any])?["reviewToken"] as? String, token)
     }
 
     func testNativeDeliveryFencesCachedTransactionMutations() async throws {
@@ -9696,7 +9855,7 @@ extension PopupRequestSessionsTests {
                 }
             let response = await observer.prepareResponseDelivery(
                 id: snapshot.handle.id, configurationKey: snapshot.configurationKey,
-                requestToken: snapshot.handle.requestToken, profileIdentifier: nil
+                requestToken: snapshot.handle.requestToken, profileIdentifier: nil, access: .worker
             )
             guard case .response(let json) = response,
                   let terminal = ResponseToExtension(json: json["response"] as? [String: Any] ?? [:]) else {
@@ -9834,7 +9993,7 @@ extension PopupRequestSessionsTests {
             let observer = await store.makeObserverBridge()
             let response = await observer.prepareResponseDelivery(
                 id: snapshot.handle.id, configurationKey: snapshot.configurationKey,
-                requestToken: snapshot.handle.requestToken, profileIdentifier: nil
+                requestToken: snapshot.handle.requestToken, profileIdentifier: nil, access: .worker
             )
             guard case .response(let json) = response else {
                 return XCTFail("Expected orphaned execution recovery")
@@ -10743,7 +10902,7 @@ private func popupCommand(
 
 @MainActor
 private func popupWalletEnvironment(
-    reviewCatalog: (@MainActor @Sendable () -> WalletReviewCatalog?)? = nil,
+    reviewCatalog: (@MainActor @Sendable () async -> WalletReviewCatalog?)? = nil,
     unlockWallets: @escaping @MainActor @Sendable (String, WalletSigningScope) async -> WalletUnlockResult = { _, _ in .canceled }
 ) -> PopupWalletEnvironment {
     let catalog = WalletReviewCatalog(account: popupTestAccount())

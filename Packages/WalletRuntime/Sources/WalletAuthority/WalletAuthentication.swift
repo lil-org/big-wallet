@@ -49,36 +49,46 @@ public final class WalletAuthenticationChallenge: Sendable {
 
     let authorityID: UUID
     let purpose: Purpose
-    private let deadline: Date
-    private let clock: @Sendable () -> Date
+    static let standaloneLifetime = Duration.seconds(150)
+    private let deadline: ContinuousClock.Instant
+    private let clock: @Sendable () -> ContinuousClock.Instant
+    private let requestDeadline: Date?
+    private let requestClock: @Sendable () -> Date
     private let state = Mutex(State.pending)
 
-    init(authorityID: UUID, purpose: Purpose, deadline: Date, clock: @escaping @Sendable () -> Date = Date.init) {
+    init(
+        authorityID: UUID,
+        purpose: Purpose,
+        deadline: ContinuousClock.Instant,
+        clock: @escaping @Sendable () -> ContinuousClock.Instant = { .now },
+        requestDeadline: Date? = nil,
+        requestClock: @escaping @Sendable () -> Date = Date.init
+    ) {
         self.authorityID = authorityID
         self.purpose = purpose
         self.deadline = deadline
         self.clock = clock
+        self.requestDeadline = requestDeadline
+        self.requestClock = requestClock
     }
 
-    func isPending(for authorityID: UUID, at date: Date? = nil) -> Bool {
-        let now = date ?? clock()
-        guard self.authorityID == authorityID, lifetimeIsCurrent(at: now) else { return false }
-        return state.withLock {
-            if case .pending = $0 { return true }
+    func isPending(for authorityID: UUID) -> Bool {
+        guard self.authorityID == authorityID else { return false }
+        return state.withLock { state in
+            guard lifetimeIsCurrent(state: &state) else { return false }
+            if case .pending = state { return true }
             return false
         }
     }
 
     func issueGrant(
         for authorityID: UUID,
-        at date: Date? = nil,
         credentialIdentity: WalletCredentialIdentity
     ) -> WalletAuthenticationGrant? {
-        let now = date ?? clock()
-        guard self.authorityID == authorityID, lifetimeIsCurrent(at: now), credentialIdentity.status() == .current else { return nil }
+        guard isPending(for: authorityID), credentialIdentity.status() == .current else { return nil }
         let identifier = UUID()
         let issued = state.withLock { state in
-            guard case .pending = state else { return false }
+            guard lifetimeIsCurrent(state: &state), case .pending = state else { return false }
             state = .issued(identifier)
             return true
         }
@@ -86,11 +96,11 @@ public final class WalletAuthenticationChallenge: Sendable {
         return WalletAuthenticationGrant(challenge: self, identifier: identifier, credentialIdentity: credentialIdentity)
     }
 
-    fileprivate func consume(_ grant: WalletAuthenticationGrant, at date: Date? = nil) -> Bool {
-        let now = date ?? clock()
-        guard grant.challenge === self, lifetimeIsCurrent(at: now) else { return false }
+    fileprivate func consume(_ grant: WalletAuthenticationGrant) -> Bool {
+        guard grant.challenge === self else { return false }
         return state.withLock { state in
-            guard case .issued(let identifier) = state, identifier == grant.identifier else { return false }
+            guard lifetimeIsCurrent(state: &state),
+                  case .issued(let identifier) = state, identifier == grant.identifier else { return false }
             state = .consumed
             return true
         }
@@ -100,9 +110,10 @@ public final class WalletAuthenticationChallenge: Sendable {
         state.withLock { $0 = .invalidated }
     }
 
-    private func lifetimeIsCurrent(at date: Date) -> Bool {
-        guard date < deadline else {
-            invalidate()
+    private func lifetimeIsCurrent(state: inout State) -> Bool {
+        guard clock() < deadline,
+              requestDeadline.map({ requestClock() < $0 }) ?? true else {
+            state = .invalidated
             return false
         }
         return true
@@ -126,8 +137,7 @@ public final class WalletAuthenticationGrant: Sendable {
 
     func consume(
         authorityID: UUID,
-        purpose: WalletAuthenticationChallenge.Purpose,
-        at date: Date? = nil
+        purpose: WalletAuthenticationChallenge.Purpose
     ) -> Bool {
         guard challenge.authorityID == authorityID,
               challenge.purpose == purpose,
@@ -135,7 +145,7 @@ public final class WalletAuthenticationGrant: Sendable {
             invalidate()
             return false
         }
-        return challenge.consume(self, at: date)
+        return challenge.consume(self)
     }
 
     func consumeExport(

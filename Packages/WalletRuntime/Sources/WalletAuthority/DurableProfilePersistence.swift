@@ -202,6 +202,18 @@ struct DurableProfilePersistence: Sendable {
     }
 
     func readSnapshot(at url: URL, maximumBytes: Int) -> RegularFileSnapshotReader.Result {
+        snapshotReader.read(at: url, maximumBytes: maximumBytes)
+    }
+
+    func readDurableSnapshot(at url: URL, maximumBytes: Int) -> RegularFileSnapshotReader.Result {
+        snapshotReader.read(at: url, maximumBytes: maximumBytes, synchronizing: { descriptor, directories in
+            try retryInterrupted { try operations.fullSync(descriptor) }
+            try synchronizeDirectories(directories)
+            try retryInterrupted { try operations.fullSync(descriptor) }
+        })
+    }
+
+    private var snapshotReader: RegularFileSnapshotReader {
         var readerOperations = SharedFileOperations.live
         readerOperations.directories = directoryOperations
         readerOperations.openFile = operations.openFile
@@ -210,7 +222,6 @@ struct DurableProfilePersistence: Sendable {
         readerOperations.read = operations.read
         readerOperations.close = operations.close
         return RegularFileSnapshotReader(directoryBoundary: directoryBoundary, operations: readerOperations)
-            .read(at: url, maximumBytes: maximumBytes)
     }
 
     private var directoryOperations: AnchoredDirectoryAccess.Operations {

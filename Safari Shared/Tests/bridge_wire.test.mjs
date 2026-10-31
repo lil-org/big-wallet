@@ -25,9 +25,25 @@ const context = vm.createContext({
 new vm.Script(source).runInContext(context);
 const wire = context.BigWalletBridgeWire;
 const token = "123e4567-e89b-12d3-a456-426614174000";
+const documentSession = "0123456789abcdef0123456789abcdef";
 const attempt = "00000001000000020000000300000004";
 const solanaPublicKey = "11111111111111111111111111111111";
 const execFileAsync = promisify(execFile);
+
+test("native site context requires a valid isolated document session", () => {
+    const request = {subject: "getLatestConfiguration"};
+    const sender = {id: "extension", url: "https://wallet.example", frameId: 0,
+        tab: {id: 1, incognito: false}};
+    const context = wire.authorizeRuntimeMessage("worker", request, sender, {id: "extension"});
+    for (const documentSession of [undefined, null, "", "a".repeat(31), "A".repeat(32)]) {
+        assert.equal(wire.runtimeNativeContext(context, {...request, documentSession}), null);
+    }
+    const first = wire.runtimeNativeContext(context, {...request, documentSession});
+    const next = wire.runtimeNativeContext(context, {...request, documentSession: "f".repeat(32)});
+    assert.equal(first.document.documentSession, documentSession);
+    assert.notDeepEqual(normalized(first.document), normalized(next.document));
+    assert.equal(Object.isFrozen(first.document), true);
+});
 
 test("RPC request byte limits count UTF-8 without allocating an encoded copy", () => {
     const maximum = wire.RPC_POLICY.maximumRequestBytes;
@@ -504,7 +520,7 @@ test("runtime authorization retains only browser supplied privacy", () => {
             const expected = tabIncognito === true || incognito === true ? "private"
                 : tabIncognito === false && (incognito === undefined || incognito === false) ? "normal" : "unknown";
             assert.equal(result.privacy, expected);
-            const native = wire.runtimeNativeContext(result, {});
+            const native = wire.runtimeNativeContext(result, {documentSession});
             assert.equal(native === null, expected === "unknown");
             if (native) { assert.equal(native.privateBrowsing, expected === "private"); }
             assert.equal(result.tabId, 0);
@@ -582,7 +598,7 @@ test("runtime authorization denies malformed requests and unavailable runtime id
 
 test("runtime authorization fails closed on accessors and runtime failures", () => {
     const fail = () => { throw new Error("unavailable metadata"); };
-    const request = {subject: "rpc"};
+    const request = {subject: "rpc", documentSession};
     const sender = runtimeSenders.content;
     for (const field of ["id", "url", "tab", "frameId", "incognito"]) {
         const hostileSender = {...sender};
@@ -640,10 +656,10 @@ test("stamps validated context on the real first native message", async () => {
     });
     const context = wire.runtimeNativeContext(wire.authorizeRuntimeMessage(
         "worker", {subject: "rpc"}, runtimeSenders.content, runtime
-    ), {});
+    ), {documentSession});
     const privateContext = wire.runtimeNativeContext(wire.authorizeRuntimeMessage(
         "worker", {subject: "rpc"}, {...runtimeSenders.content, incognito: true}, runtime
-    ), {});
+    ), {documentSession});
     await send({subject: "rpc", id: 1, body: "{}", chainId: "0x1", workflowVersion: 4}, context);
     await send({subject: "rpc", id: 2, body: "{}", chainId: "0x1", workflowVersion: 4}, privateContext);
     assert.equal(messages.length, 2);
@@ -676,14 +692,14 @@ test("native sender preserves popup approval tokens and transport failures", asy
 });
 
 test("source contexts preserve optional document metadata and reject conflicting origins", () => {
-    const request = {subject: "rpc"};
+    const request = {subject: "rpc", documentSession};
     const sender = {...runtimeSenders.content, origin: "https://wallet.example", documentId: "document-one"};
     const authorized = wire.authorizeRuntimeMessage("worker", request, sender, runtime);
     const context = wire.runtimeNativeContext(authorized, request);
     assert.deepEqual(normalized(context), {
         source: "site", privateBrowsing: false,
         site: {host: "wallet.example", configurationKey: "https://wallet.example"},
-        document: {tabId: 4, frameId: 0, documentId: "document-one"},
+        document: {documentSession, tabId: 4, frameId: 0, documentId: "document-one"},
     });
     assert.equal(Object.isFrozen(context), true);
     assert.equal(Object.isFrozen(context.site), true);
@@ -725,7 +741,7 @@ test("native sender stamps factory contexts and rejects conflicting payload iden
     const send = wire.createTrustedNativeMessageSender({sendRawNativeMessage: message => messages.push(message)});
     const context = wire.runtimeNativeContext(wire.authorizeRuntimeMessage(
         "worker", {subject: "rpc"}, runtimeSenders.content, runtime
-    ), {});
+    ), {documentSession});
     const request = {subject: "getLatestConfiguration", id: 1, workflowVersion: 4};
     send(request, context);
     assert.equal(messages[0].configurationKey, "https://wallet.example");
@@ -740,7 +756,7 @@ test("native sender stamps factory contexts and rejects conflicting payload iden
 test("flat native transport preserves the full domain nesting budget", () => {
     const context = wire.runtimeNativeContext(wire.authorizeRuntimeMessage(
         "worker", {subject: "rpc"}, runtimeSenders.content, runtime
-    ), {});
+    ), {documentSession});
     const send = wire.createTrustedNativeMessageSender({sendRawNativeMessage: message => message});
     const request = {
         id: 1, provider: "ethereum", name: "signTypedMessage",

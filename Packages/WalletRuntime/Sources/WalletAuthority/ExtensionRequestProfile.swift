@@ -248,6 +248,7 @@ struct ExtensionRequestProfile: Sendable {
         let profileIdentifier: UUID?
         let enqueueAttempt: String
         let requestToken: UUID
+        let responseOwner: NativeRequestContext.ResponseOwner
         let host: String
         let configurationKey: String
         let requestFingerprint: Data

@@ -22,7 +22,7 @@ const now = 1_700_000_000_000;
 const state = {context: "a".repeat(64), revisions: {ethereum: 0, solana: 0},
     ethereum: {address: "", chainId: "0x1"}, solana: null};
 const diagnosticRequest = () => ({subject: "safariVMConfigurationDiagnostics"});
-const configurationRequest = () => ({subject: "getLatestConfiguration", workflowVersion: 4});
+const configurationRequest = () => ({subject: "getLatestConfiguration", workflowVersion: 4, documentSession: "0123456789abcdef0123456789abcdef"});
 const sender = overrides => ({id: extensionID, url: `${origin}/?token=${secret}`, origin,
     tab: {id: 39, incognito: false}, frameId: 0, documentId: `document-${secret}`, ...overrides});
 
@@ -206,7 +206,7 @@ test("pending reads and nonconfiguration requests preserve listener claims and c
         assert.deepEqual(clean.dump().records, []);
     }
     const direct = harness(instrumented);
-    const response = await direct.call(`handleMessage({subject: 'getLatestConfiguration', workflowVersion: 4},
+    const response = await direct.call(`handleMessage({subject: 'getLatestConfiguration', workflowVersion: 4, documentSession: '0123456789abcdef0123456789abcdef'},
         {kind: 'content', privacy: 'private', identity: {host: 'fixture.invalid', configurationKey: 'https://fixture.invalid'},
         document: {tabId: 39, frameId: 0}})`);
     assert.equal(response.error.code, 4200);

@@ -96,7 +96,7 @@ final class NativeApprovalResponseTests: XCTestCase {
 
     func testRevokedAuthorityNeverCallsSigner() async throws {
         let underlying = AuthoritySigningProbe()
-        let context = try signingContext(access: underlying)
+        let context = try await signingContext(access: underlying)
         revokeAuthority(in: context.fixture)
         let result = await context.signer.sign()
         guard case .failure(.authorizationUnavailable) = result else {
@@ -108,7 +108,7 @@ final class NativeApprovalResponseTests: XCTestCase {
 
     func testRevocationDuringSigningDiscardsSignature() async throws {
         let underlying = AuthoritySigningProbe()
-        let context = try signingContext(access: underlying)
+        let context = try await signingContext(access: underlying)
         underlying.operation = { self.revokeAuthority(in: context.fixture) }
         let result = await context.signer.sign()
         guard case .failure(.authorizationUnavailable) = result else {
@@ -120,7 +120,7 @@ final class NativeApprovalResponseTests: XCTestCase {
 
     func testCurrentAuthorityReturnsSignatureOnce() async throws {
         let underlying = AuthoritySigningProbe()
-        let context = try signingContext(access: underlying)
+        let context = try await signingContext(access: underlying)
         let result = await context.signer.sign()
         guard case .success = result else {
             return XCTFail("Expected authorized signature")
@@ -146,7 +146,7 @@ final class NativeApprovalResponseTests: XCTestCase {
 
     private func signingContext(
         access: AuthoritySigningProbe
-    ) throws -> (signer: WalletSigningSession, fixture: ApprovedExecutionTestFixture) {
+    ) async throws -> (signer: WalletSigningSession, fixture: ApprovedExecutionTestFixture) {
         let account = WalletAccountDescriptor(
             walletID: "approved-wallet", coin: .ethereum,
             normalizedAddress: WalletCoreProxyTestVectors.sequentialEthereumAddress.lowercased(),
@@ -177,7 +177,7 @@ final class NativeApprovalResponseTests: XCTestCase {
             retireSigningMaterial: { access.retireSigningMaterial() },
             commit: .native
         )
-        let session = try XCTUnwrap(preparation.consume(permit: permit))
+        let session = try await boundWalletSigningSessionForTesting(preparation, permit: permit)
         return (session, fixture)
     }
 

@@ -12,38 +12,50 @@ final class ResponseDeliveryPollerTests: XCTestCase {
 
     func testEachModeForwardsTheExactIdentityAndPreparesOnlyAfterReadiness() async {
         let expectedConfigurationKey = configurationKey
+        let access = NativeRequestContext.ResponseAccess.document(.init(tabID: 7, frameID: 0,
+            documentID: nil, documentSession: String(repeating: "a", count: 32)))
         for mode in modes {
             let handle = makeHandle()
             let expected = delivery(handle)
             let calls = LockedTestValue([String]())
             let poller = ResponseDeliveryPoller(
-                responseStatus: { receivedHandle, key in
+                authorize: { receivedHandle, key, receivedAccess in
                     XCTAssertEqual(receivedHandle, handle)
                     XCTAssertEqual(key, expectedConfigurationKey)
+                    XCTAssertEqual(receivedAccess, access)
+                    calls.withValue { $0.append("authorize") }
+                    return .authorized
+                },
+                responseStatus: { receivedHandle, key, receivedAccess in
+                    XCTAssertEqual(receivedHandle, handle)
+                    XCTAssertEqual(key, expectedConfigurationKey)
+                    XCTAssertEqual(receivedAccess, access)
                     calls.withValue { $0.append("status") }
                     return .ready
                 },
-                maintain: { receivedHandle, key, receivedMode in
+                maintain: { receivedHandle, key, receivedMode, receivedAccess in
                     XCTAssertEqual(receivedHandle, handle)
                     XCTAssertEqual(key, expectedConfigurationKey)
                     XCTAssertEqual(receivedMode, mode)
+                    XCTAssertEqual(receivedAccess, access)
                     calls.withValue { $0.append("maintain:\(receivedMode.rawValue)") }
                     return .ready
                 },
-                prepareDelivery: { receivedHandle, key in
+                prepareDelivery: { receivedHandle, key, receivedAccess in
                     XCTAssertEqual(receivedHandle, handle)
                     XCTAssertEqual(key, expectedConfigurationKey)
+                    XCTAssertEqual(receivedAccess, access)
                     calls.withValue { $0.append("prepare") }
                     return .response(expected)
                 }
             )
 
             let result = await poller.poll(
-                handle: handle, configurationKey: configurationKey, maintenance: mode
+                handle: handle, configurationKey: configurationKey, maintenance: mode, access: access
             )
 
             assertResult(result, equals: .response(expected))
-            XCTAssertEqual(calls.value, [statusCall(mode), "prepare"])
+            XCTAssertEqual(calls.value, (mode == .none ? [] : ["authorize"]) + [statusCall(mode), "prepare"])
         }
     }
 
@@ -55,22 +67,23 @@ final class ResponseDeliveryPollerTests: XCTestCase {
             for (status, expected) in statuses {
                 let calls = LockedTestValue([String]())
                 let poller = ResponseDeliveryPoller(
-                    responseStatus: { _, _ in
+                    authorize: { _, _, _ in .authorized },
+                    responseStatus: { _, _, _ in
                         calls.withValue { $0.append("status") }
                         return status
                     },
-                    maintain: { _, _, receivedMode in
+                    maintain: { _, _, receivedMode, _ in
                         calls.withValue { $0.append("maintain:\(receivedMode.rawValue)") }
                         return status
                     },
-                    prepareDelivery: { _, _ in
+                    prepareDelivery: { _, _, _ in
                         XCTFail("A nonready request must not prepare delivery")
                         return .unavailable
                     }
                 )
 
                 let result = await poller.poll(
-                    handle: makeHandle(), configurationKey: configurationKey, maintenance: mode
+                    handle: makeHandle(), configurationKey: configurationKey, maintenance: mode, access: .worker
                 )
 
                 assertResult(result, equals: expected)
@@ -79,21 +92,48 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         }
     }
 
+    func testDocumentAccessIsCheckedBeforeEveryPollingSideEffect() async {
+        let access = NativeRequestContext.ResponseAccess.document(.init(tabID: 7, frameID: 0,
+            documentID: nil, documentSession: String(repeating: "a", count: 32)))
+        for mode in modes {
+            let calls = LockedTestValue([String]())
+            let poller = ResponseDeliveryPoller(
+                authorize: { _, _, receivedAccess in
+                    XCTAssertEqual(receivedAccess, access)
+                    calls.withValue { $0.append("authorize") }
+                    return .missing
+                },
+                responseStatus: { _, _, receivedAccess in
+                    XCTAssertEqual(receivedAccess, access)
+                    calls.withValue { $0.append("status") }
+                    return .missing
+                },
+                maintain: { _, _, _, _ in XCTFail("Unauthorized access must not maintain or launch approvals"); return .ready },
+                prepareDelivery: { _, _, _ in XCTFail("Unauthorized access must not prepare delivery"); return .unavailable }
+            )
+            let result = await poller.poll(handle: makeHandle(), configurationKey: configurationKey,
+                maintenance: mode, access: access)
+            assertResult(result, equals: .missing)
+            XCTAssertEqual(calls.value, [mode == .none ? "status" : "authorize"])
+        }
+    }
+
     func testPreparationCanDowngradeAnObservedReadyStatusInAnyMode() async {
         for mode in modes {
             for prepared in [ExtensionBridge.ResponseReadResult.pending, .missing, .unavailable] {
                 let preparations = LockedTestValue(0)
                 let poller = ResponseDeliveryPoller(
-                    responseStatus: { _, _ in .ready },
-                    maintain: { _, _, _ in .ready },
-                    prepareDelivery: { _, _ in
+                    authorize: { _, _, _ in .authorized },
+                    responseStatus: { _, _, _ in .ready },
+                    maintain: { _, _, _, _ in .ready },
+                    prepareDelivery: { _, _, _ in
                         preparations.withValue { $0 += 1 }
                         return prepared
                     }
                 )
 
                 let result = await poller.poll(
-                    handle: makeHandle(), configurationKey: configurationKey, maintenance: mode
+                    handle: makeHandle(), configurationKey: configurationKey, maintenance: mode, access: .worker
                 )
 
                 assertResult(result, equals: prepared)
@@ -106,15 +146,16 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         for mode in modes {
             let gate = TestGate<Void>()
             let poller = ResponseDeliveryPoller(
-                responseStatus: { _, _ in
+                authorize: { _, _, _ in .authorized },
+                responseStatus: { _, _, _ in
                     XCTFail("Canceled polling must not read status")
                     return .ready
                 },
-                maintain: { _, _, _ in
+                maintain: { _, _, _, _ in
                     XCTFail("Canceled polling must not maintain requests")
                     return .ready
                 },
-                prepareDelivery: { _, _ in
+                prepareDelivery: { _, _, _ in
                     XCTFail("Canceled polling must not prepare delivery")
                     return .pending
                 }
@@ -123,7 +164,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
             let task = Task { @MainActor in
                 await gate.wait()
                 result = await poller.poll(
-                    handle: self.makeHandle(), configurationKey: self.configurationKey, maintenance: mode
+                    handle: self.makeHandle(), configurationKey: self.configurationKey, maintenance: mode, access: .worker
                 )
             }
             task.cancel()
@@ -142,19 +183,20 @@ final class ResponseDeliveryPollerTests: XCTestCase {
                 let gate = TestGate<Void>()
                 let calls = LockedTestValue([String]())
                 let poller = ResponseDeliveryPoller(
-                    responseStatus: { _, _ in
+                    authorize: { _, _, _ in .authorized },
+                    responseStatus: { _, _, _ in
                         calls.withValue { $0.append("status") }
                         started.fulfill()
                         await gate.wait()
                         return status
                     },
-                    maintain: { _, _, receivedMode in
+                    maintain: { _, _, receivedMode, _ in
                         calls.withValue { $0.append("maintain:\(receivedMode.rawValue)") }
                         started.fulfill()
                         await gate.wait()
                         return status
                     },
-                    prepareDelivery: { _, _ in
+                    prepareDelivery: { _, _, _ in
                         XCTFail("Cancellation must prevent subsequent preparation")
                         return .pending
                     }
@@ -162,7 +204,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
                 var result: ExtensionBridge.ResponseReadResult?
                 let task = Task { @MainActor in
                     result = await poller.poll(
-                        handle: self.makeHandle(), configurationKey: self.configurationKey, maintenance: mode
+                        handle: self.makeHandle(), configurationKey: self.configurationKey, maintenance: mode, access: .worker
                     )
                 }
                 await fulfillment(of: [started], timeout: 1)
@@ -185,9 +227,10 @@ final class ResponseDeliveryPollerTests: XCTestCase {
             let gate = TestGate<Void>()
             let preparations = LockedTestValue(0)
             let poller = ResponseDeliveryPoller(
-                responseStatus: { _, _ in .ready },
-                maintain: { _, _, _ in .ready },
-                prepareDelivery: { _, _ in
+                authorize: { _, _, _ in .authorized },
+                responseStatus: { _, _, _ in .ready },
+                maintain: { _, _, _, _ in .ready },
+                prepareDelivery: { _, _, _ in
                     preparations.withValue { $0 += 1 }
                     started.fulfill()
                     await gate.wait()
@@ -197,7 +240,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
             var result: ExtensionBridge.ResponseReadResult?
             let task = Task { @MainActor in
                 result = await poller.poll(
-                    handle: handle, configurationKey: self.configurationKey, maintenance: mode
+                    handle: handle, configurationKey: self.configurationKey, maintenance: mode, access: .worker
                 )
             }
             await fulfillment(of: [started], timeout: 1)
@@ -213,10 +256,15 @@ final class ResponseDeliveryPollerTests: XCTestCase {
 
     func testPendingPollDoesNotRecoverExpiredStorageOrWriteOrSynchronize() async throws {
         let now = LockedTestValue(Date(timeIntervalSince1970: 1_800_000_000))
+        let reads = LockedTestValue([URL]())
         let writes = LockedTestValue(0)
         let synchronizations = LockedTestValue(0)
         let (root, store) = try makeStore(clock: { now.value }) { io in
             let baseIO = io
+            io.readSnapshot = { url, maximumBytes in
+                reads.withValue { $0.append(url) }
+                return baseIO.readSnapshot(url, maximumBytes)
+            }
             io.replace = { data, url in
                 writes.withValue { $0 += 1 }
                 try baseIO.replace(data, url)
@@ -231,15 +279,17 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         let profileURL = root.appendingPathComponent("profiles-v9/default.state")
         let originalData = try Data(contentsOf: profileURL)
         let originalPaths = try FileManager.default.subpathsOfDirectory(atPath: root.path).sorted()
+        reads.value = []
         writes.value = 0
         synchronizations.value = 0
         let poller = storePoller(store)
 
         let result = await poller.poll(
-            handle: handle, configurationKey: configurationKey, maintenance: .none
+            handle: handle, configurationKey: configurationKey, maintenance: .none, access: .worker
         )
 
         assertResult(result, equals: .pending)
+        XCTAssertEqual(reads.value, [profileURL])
         XCTAssertEqual(writes.value, 0)
         XCTAssertEqual(synchronizations.value, 0)
         XCTAssertEqual(try Data(contentsOf: profileURL), originalData)
@@ -265,14 +315,14 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         failSynchronization.value = true
 
         let unavailable = await poller.poll(
-            handle: handle, configurationKey: configurationKey, maintenance: .none
+            handle: handle, configurationKey: configurationKey, maintenance: .none, access: .worker
         )
 
         assertResult(unavailable, equals: .unavailable)
         XCTAssertEqual(synchronizations.value, 1)
         failSynchronization.value = false
         let delivered = await poller.poll(
-            handle: handle, configurationKey: configurationKey, maintenance: .none
+            handle: handle, configurationKey: configurationKey, maintenance: .none, access: .worker
         )
         guard case .response(let response) = delivered else { return XCTFail("Expected durable response") }
         XCTAssertEqual(synchronizations.value, 2)
@@ -282,15 +332,85 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         }
         XCTAssertNotNil(unacknowledged[handle])
 
-        XCTAssertEqual(store.acknowledgeResponse(handle: handle, configurationKey: configurationKey), .persisted)
+        XCTAssertEqual(store.acknowledgeResponse(handle: handle, configurationKey: configurationKey, access: .worker), .persisted)
         guard case .available(let acknowledged) = store.list(profileIdentifier: nil) else {
             return XCTFail("Expected acknowledged response listing")
         }
         XCTAssertNil(acknowledged[handle])
         let replay = await poller.poll(
-            handle: handle, configurationKey: configurationKey, maintenance: .none
+            handle: handle, configurationKey: configurationKey, maintenance: .none, access: .worker
         )
         assertResult(replay, equals: delivered)
+    }
+
+    func testCompletedDocumentOwnerSurvivesRestartAcknowledgementAndPermissionRepair() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let (root, store) = try makeStore(clock: { now })
+        let handle = try enqueue(store: store, now: now)
+        XCTAssertEqual(store.completeImmediate(handle: handle, resolution: .failure(.userRejected)), .persisted)
+        let profileURL = root.appendingPathComponent("profiles-v9/default.state")
+        var profile = try XCTUnwrap(PropertyListSerialization.propertyList(
+            from: Data(contentsOf: profileURL), format: nil
+        ) as? [String: Any])
+        profile["origins"] = "corrupt permissions"
+        let damaged = try PropertyListSerialization.data(fromPropertyList: profile, format: .binary, options: 0)
+        try damaged.write(to: profileURL)
+        let restarted = ExtensionRequestFileStore(rootURL: root, directoryBoundary: root, dependencies: .init(clock: { now }))
+        guard case .document(let document) = testDocumentResponseOwner else { return XCTFail("Expected document fixture") }
+        let original = NativeRequestContext.ResponseAccess.document(document)
+        let foreign = NativeRequestContext.ResponseAccess.document(.init(tabID: document.tabID, frameID: 0,
+            documentID: document.documentID, documentSession: String(repeating: "f", count: 32)))
+        XCTAssertEqual(restarted.authorizeResponseAccess(handle: handle, configurationKey: configurationKey, access: foreign), .missing)
+        assertResult(restarted.prepareResponseDelivery(handle: handle, configurationKey: configurationKey, access: foreign), equals: .missing)
+        XCTAssertEqual(restarted.acknowledgeResponse(handle: handle, configurationKey: configurationKey, access: foreign), .ownershipLost)
+        XCTAssertEqual(try Data(contentsOf: profileURL), damaged)
+        XCTAssertEqual(restarted.authorizeResponseAccess(handle: handle, configurationKey: configurationKey, access: original), .authorized)
+        XCTAssertEqual(try Data(contentsOf: profileURL), damaged)
+        let delivered = restarted.prepareResponseDelivery(handle: handle, configurationKey: configurationKey, access: original)
+        guard case .response = delivered else { return XCTFail("Matching owner must still repair permissions and receive completion") }
+        XCTAssertNotEqual(try Data(contentsOf: profileURL), damaged)
+        XCTAssertEqual(restarted.acknowledgeResponse(handle: handle, configurationKey: configurationKey, access: original), .persisted)
+        assertResult(restarted.prepareResponseDelivery(handle: handle, configurationKey: configurationKey, access: original), equals: delivered)
+        assertResult(restarted.prepareResponseDelivery(handle: handle, configurationKey: configurationKey, access: foreign), equals: .missing)
+        for access in [NativeRequestContext.ResponseAccess.worker, .popup] {
+            assertResult(restarted.prepareResponseDelivery(handle: handle, configurationKey: configurationKey, access: access), equals: delivered)
+        }
+    }
+
+    func testForeignDocumentReplayDoesNotRecoverExpiredRequests() throws {
+        let now = LockedTestValue(Date(timeIntervalSince1970: 1_800_000_000))
+        let (root, store) = try makeStore(clock: { now.value })
+        let ingress = try makeIngress(store: store, now: now.value)
+        guard case .accepted = store.enqueue(ingress: ingress, profileIdentifier: nil) else { return XCTFail("Expected admission") }
+        now.withValue { $0.addTimeInterval(151) }
+        let profileURL = root.appendingPathComponent("profiles-v9/default.state")
+        let before = try Data(contentsOf: profileURL)
+        let foreign = ExtensionBridge.Ingress(request: ingress.request, canonicalData: ingress.canonicalData,
+            fingerprint: ingress.fingerprint, authority: ingress.authority, replayOnly: ingress.replayOnly,
+            responseOwner: .document(.init(tabID: 1, frameID: 0, documentID: nil, documentSession: String(repeating: "f", count: 32))))
+        guard case .rejected = store.enqueue(ingress: foreign, profileIdentifier: nil) else { return XCTFail("Foreign replay must be rejected") }
+        XCTAssertEqual(try Data(contentsOf: profileURL), before)
+    }
+
+    func testMissingResponseOwnerCannotBecomeTrustedDuringRecovery() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let (root, store) = try makeStore(clock: { now })
+        let handle = try enqueue(store: store, now: now)
+        XCTAssertEqual(store.completeImmediate(handle: handle, resolution: .failure(.userRejected)), .persisted)
+        let profileURL = root.appendingPathComponent("profiles-v9/default.state")
+        var profile = try XCTUnwrap(PropertyListSerialization.propertyList(
+            from: Data(contentsOf: profileURL), format: nil
+        ) as? [String: Any])
+        var records = try XCTUnwrap(profile["records"] as? [[String: Any]])
+        records[0].removeValue(forKey: "responseOwner")
+        profile["records"] = records
+        let damaged = try PropertyListSerialization.data(fromPropertyList: profile, format: .binary, options: 0)
+        try damaged.write(to: profileURL)
+        let restarted = ExtensionRequestFileStore(rootURL: root, directoryBoundary: root, dependencies: .init(clock: { now }))
+        XCTAssertEqual(restarted.authorizeResponseAccess(handle: handle, configurationKey: configurationKey, access: .worker), .unavailable)
+        assertResult(restarted.prepareResponseDelivery(handle: handle, configurationKey: configurationKey, access: .worker), equals: .unavailable)
+        XCTAssertEqual(restarted.acknowledgeResponse(handle: handle, configurationKey: configurationKey, access: .worker), .retryablePersistenceFailure)
+        XCTAssertEqual(try Data(contentsOf: profileURL), damaged)
     }
 
     func testRevocationBetweenReadinessAndPreparationReturnsFreshAuthorityWithoutRestoringGrant() async throws {
@@ -318,8 +438,9 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         XCTAssertEqual(fixture.store.complete(permit: permit, result: completion), .persisted)
         let revokedRevision = LockedTestValue<Int?>(nil)
         let poller = ResponseDeliveryPoller(
-            responseStatus: { handle, key in
-                let status = fixture.store.responseStatus(handle: handle, configurationKey: key)
+            authorize: { fixture.store.authorizeResponseAccess(handle: $0, configurationKey: $1, access: $2) },
+            responseStatus: { handle, key, _ in
+                let status = fixture.store.responseStatus(handle: handle, configurationKey: key, access: .worker)
                 XCTAssertEqual(status, .ready)
                 guard case .snapshot(let current) = fixture.store.configurationSnapshot(
                     configurationKey: key, profileIdentifier: handle.profileIdentifier
@@ -334,17 +455,17 @@ final class ResponseDeliveryPollerTests: XCTestCase {
                 revokedRevision.value = revoked.version.revisions.ethereum
                 return status
             },
-            maintain: { _, _, _ in
+            maintain: { _, _, _, _ in
                 XCTFail("Ordinary polling must not maintain requests")
                 return .unavailable
             },
-            prepareDelivery: { handle, key in
-                fixture.store.prepareResponseDelivery(handle: handle, configurationKey: key)
+            prepareDelivery: { handle, key, _ in
+                fixture.store.prepareResponseDelivery(handle: handle, configurationKey: key, access: .worker)
             }
         )
 
         let result = await poller.poll(
-            handle: snapshot.handle, configurationKey: configurationKey, maintenance: .none
+            handle: snapshot.handle, configurationKey: configurationKey, maintenance: .none, access: .worker
         )
 
         guard case .response(let envelope) = result else { return XCTFail("Expected completed grant response") }
@@ -413,6 +534,14 @@ final class ResponseDeliveryPollerTests: XCTestCase {
     }
 
     private func enqueue(store: ExtensionRequestFileStore, now: Date) throws -> RequestHandle {
+        let ingress = try makeIngress(store: store, now: now)
+        guard case .accepted(let handle, _, _, _, _) = store.enqueue(ingress: ingress, profileIdentifier: nil) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        return handle
+    }
+
+    private func makeIngress(store: ExtensionRequestFileStore, now: Date) throws -> ExtensionBridge.Ingress {
         guard case .snapshot(let authority) = store.configurationSnapshot(
             configurationKey: configurationKey, profileIdentifier: nil
         ) else { throw CocoaError(.fileReadUnknown) }
@@ -425,21 +554,21 @@ final class ResponseDeliveryPollerTests: XCTestCase {
             "authority": authority.version.json,
         ]
         let request = try XCTUnwrap(SafariRequest(json: raw))
-        guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: raw),
-              case .accepted(let handle, _, _, _, _) = store.enqueue(ingress: ingress, profileIdentifier: nil) else {
+        guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(request: request, rawObject: raw, responseOwner: testDocumentResponseOwner) else {
             throw CocoaError(.fileWriteUnknown)
         }
-        return handle
+        return ingress
     }
 
     private func storePoller(_ store: ExtensionRequestFileStore) -> ResponseDeliveryPoller {
         ResponseDeliveryPoller(
-            responseStatus: { store.responseStatus(handle: $0, configurationKey: $1) },
-            maintain: { _, _, _ in
+            authorize: { store.authorizeResponseAccess(handle: $0, configurationKey: $1, access: $2) },
+            responseStatus: { store.responseStatus(handle: $0, configurationKey: $1, access: $2) },
+            maintain: { _, _, _, _ in
                 XCTFail("Ordinary polling must not maintain requests")
                 return .unavailable
             },
-            prepareDelivery: { store.prepareResponseDelivery(handle: $0, configurationKey: $1) }
+            prepareDelivery: { store.prepareResponseDelivery(handle: $0, configurationKey: $1, access: $2) }
         )
     }
 }

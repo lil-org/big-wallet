@@ -176,10 +176,10 @@ public final class WalletsManager: NSObject {
     private var isObservingExternalChanges = false
     private var externalReload: Task<Void, Never>?
     let authorityID: UUID
-    private let clock: @Sendable () -> Date
+    private let clock: @Sendable () -> ContinuousClock.Instant
     private struct InitialBackupAuthorization {
         let binding: WalletSecretExportBinding
-        let deadline: Date
+        let challenge: WalletAuthenticationChallenge
         let access: WalletAccessSession
     }
     private var initialBackupBindings = [String: InitialBackupAuthorization]()
@@ -193,7 +193,7 @@ public final class WalletsManager: NSObject {
         notifications: WalletStoreChangeNotifications = .live,
         metadataMutations: WalletRepository.MetadataMutations = .none,
         authorityID: UUID = UUID(),
-        clock: @escaping @Sendable () -> Date = Date.init
+        clock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }
     ) {
         repository = WalletRepository(
             keychain: keychain, walletSourceMutator: walletSourceMutator,
@@ -354,7 +354,12 @@ public final class WalletsManager: NSObject {
                 credentialDigest: prepared.credentialDigest
             )
             initialBackupBindings[wallet.id] = InitialBackupAuthorization(
-                binding: binding, deadline: clock().addingTimeInterval(ExtensionBridge.executionLifetime), access: access
+                binding: binding,
+                challenge: WalletAuthenticationChallenge(
+                    authorityID: authorityID, purpose: .secretExport(binding),
+                    deadline: clock() + WalletAuthenticationChallenge.standaloneLifetime, clock: clock
+                ),
+                access: access
             )
         }
         return wallet
@@ -416,21 +421,16 @@ public final class WalletsManager: NSObject {
         try Task.checkCancellation()
         return WalletAuthenticationChallenge(
             authorityID: authorityID, purpose: .secretExport(binding),
-            deadline: clock().addingTimeInterval(ExtensionBridge.executionLifetime), clock: clock
+            deadline: clock() + WalletAuthenticationChallenge.standaloneLifetime, clock: clock
         )
     }
 
     public func takeInitialBackupAuthorization(wallet: WalletSnapshot) -> WalletAuthenticationGrant? {
-        guard isStoreReady, let initial = initialBackupBindings.removeValue(forKey: wallet.id),
-              clock() < initial.deadline else { return nil }
+        guard isStoreReady, let initial = initialBackupBindings.removeValue(forKey: wallet.id) else { return nil }
         let binding = initial.binding
-        let challenge = WalletAuthenticationChallenge(
-            authorityID: authorityID, purpose: .secretExport(binding),
-            deadline: initial.deadline, clock: clock
-        )
         let repository = repository
         let authorityID = authorityID
-        return challenge.issueGrant(for: authorityID, credentialIdentity: .init(status: {
+        return initial.challenge.issueGrant(for: authorityID, credentialIdentity: .init(status: {
             initial.access.validateCredentials(for: authorityID) && repository.sourceMatches(binding) ? .current : .changed
         }))
     }
@@ -518,7 +518,7 @@ public final class WalletsManager: NSObject {
         hasLoadedSnapshot = true
         let currentWalletIDs = Set(wallets.map(\.id))
         initialBackupBindings = initialBackupBindings.filter {
-            currentWalletIDs.contains($0.key) && clock() < $0.value.deadline
+            currentWalletIDs.contains($0.key) && $0.value.challenge.isPending(for: authorityID)
         }
         return true
     }

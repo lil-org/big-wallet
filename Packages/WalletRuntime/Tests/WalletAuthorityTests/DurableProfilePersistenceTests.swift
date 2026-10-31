@@ -11,7 +11,7 @@ final class DurableProfilePersistenceTests: XCTestCase {
     private let profile = URL(fileURLWithPath: "/group/bridge/profiles/profile.state")
 
     func testReplacementFlushesContentsBeforeRenameAndParentsBeforeFinalFlush() throws {
-        let disk = DiskModel()
+        let disk = DurablePersistenceDiskModel()
         try persistence(disk).replace(Data("checkpoint".utf8), at: profile)
 
         XCTAssertEqual(disk.events, [
@@ -27,7 +27,7 @@ final class DurableProfilePersistenceTests: XCTestCase {
     }
 
     func testShortWritesAndInterruptedOperationsAreRetried() throws {
-        let disk = DiskModel()
+        let disk = DurablePersistenceDiskModel()
         disk.maximumWrite = 2
         disk.failures["openDirectory:/group"] = [.EINTR]
         disk.failures["openDirectory:/group/bridge"] = [.EINTR]
@@ -50,7 +50,7 @@ final class DurableProfilePersistenceTests: XCTestCase {
             "sync:/group/bridge/profiles", "sync:/group/bridge", "sync:/group", "full:2",
         ]
         for stage in stages {
-            let disk = DiskModel()
+            let disk = DurablePersistenceDiskModel()
             disk.failures[stage] = [.EIO]
             XCTAssertThrowsError(try persistence(disk).replace(Data("new response".utf8), at: profile), stage)
             XCTAssertTrue(disk.openDescriptors.isEmpty, stage)
@@ -61,7 +61,7 @@ final class DurableProfilePersistenceTests: XCTestCase {
     }
 
     func testZeroByteWriteFailsWithoutPublishing() throws {
-        let disk = DiskModel()
+        let disk = DurablePersistenceDiskModel()
         disk.maximumWrite = 0
         XCTAssertThrowsError(try persistence(disk).replace(Data([1]), at: profile)) { error in
             XCTAssertEqual((error as? POSIXError)?.code, .EIO)
@@ -72,7 +72,7 @@ final class DurableProfilePersistenceTests: XCTestCase {
     }
 
     func testVisibleReplacementNeedsASuccessfulBarrierBeforeItIsDurable() throws {
-        let disk = DiskModel()
+        let disk = DurablePersistenceDiskModel()
         let writer = persistence(disk)
         let data = Data("new response".utf8)
         disk.failures["full:2"] = [.EIO]
@@ -92,7 +92,7 @@ final class DurableProfilePersistenceTests: XCTestCase {
 
     func testLaterProfileMutationCannotReplaceCheckpointWithUnflushedContents() throws {
         for stage in ["write:2", "full:3", "rename", "sync:/group/bridge/profiles", "full:4"] {
-            let disk = DiskModel()
+            let disk = DurablePersistenceDiskModel()
             let writer = persistence(disk)
             let checkpoint = Data("broadcastPrepared A".utf8)
             try writer.replace(checkpoint, at: profile)
@@ -111,12 +111,12 @@ final class DurableProfilePersistenceTests: XCTestCase {
             "sync:/group/bridge/profiles", "sync:/group/bridge", "sync:/group", "full:2",
         ]
         for stage in stages {
-            let disk = DiskModel()
+            let disk = DurablePersistenceDiskModel()
             disk.failures[stage] = [.EIO]
             XCTAssertThrowsError(try persistence(disk).synchronizePublishedFile(at: profile), stage)
             XCTAssertTrue(disk.openDescriptors.isEmpty, stage)
         }
-        let disk = DiskModel()
+        let disk = DurablePersistenceDiskModel()
         var operations = disk.operations
         operations.fileKind = { _ in .other }
         let writer = DurableProfilePersistence(directoryBoundary: boundary, operations: operations)
@@ -126,7 +126,7 @@ final class DurableProfilePersistenceTests: XCTestCase {
 
     func testBoundaryValidationPrecedesFilesystemOperations() throws {
         for path in ["/outside/profile.state", "/group-other/profile.state", "/group"] {
-            let disk = DiskModel()
+            let disk = DurablePersistenceDiskModel()
             XCTAssertThrowsError(try persistence(disk).replace(Data([1]), at: URL(fileURLWithPath: path)))
             XCTAssertTrue(disk.events.isEmpty)
         }
@@ -223,7 +223,7 @@ final class DurableProfilePersistenceTests: XCTestCase {
         let aliasedBoundary = URL(fileURLWithPath: "/private/var", isDirectory: true)
         let aliasedProfile = aliasedBoundary.appendingPathComponent("profile-\(UUID().uuidString).state")
         let canonicalPath = aliasedBoundary.standardizedFileURL.appendingPathComponent(aliasedProfile.lastPathComponent).path
-        let disk = DiskModel()
+        let disk = DurablePersistenceDiskModel()
         let writer = DurableProfilePersistence(directoryBoundary: aliasedBoundary, operations: disk.operations)
         let checkpoint = Data("checkpoint".utf8)
 
@@ -329,7 +329,108 @@ final class DurableProfilePersistenceTests: XCTestCase {
         }
     }
 
-    private func persistence(_ disk: DiskModel) -> DurableProfilePersistence {
+    func testDurableSnapshotFlushesTheReadFileBeforeValidatingItsIdentity() {
+        let disk = DurablePersistenceDiskModel()
+        let data = Data("visible checkpoint".utf8)
+        disk.replaceVisibleContents(data)
+
+        XCTAssertEqual(persistence(disk).readDurableSnapshot(at: profile, maximumBytes: data.count), .data(data))
+        XCTAssertEqual(disk.events, [
+            "openDirectory:/group", "openDirectory:/group/bridge", "openDirectory:/group/bridge/profiles",
+            "openPublished", "metadata", "read:1", "read:2", "full:1",
+            "sync:/group/bridge/profiles", "sync:/group/bridge", "sync:/group", "full:2",
+            "metadata", "entryMetadata",
+        ])
+        XCTAssertTrue(disk.openDescriptors.isEmpty)
+        disk.crash()
+        XCTAssertEqual(disk.published, data)
+    }
+
+    func testDurableSnapshotBarrierFailuresNeverReturnData() {
+        for stage in ["full:1", "sync:/group/bridge/profiles", "sync:/group/bridge", "sync:/group", "full:2"] {
+            let disk = DurablePersistenceDiskModel()
+            let data = Data("visible checkpoint".utf8)
+            disk.replaceVisibleContents(data)
+            disk.failures[stage] = [.EIO]
+
+            XCTAssertEqual(persistence(disk).readDurableSnapshot(at: profile, maximumBytes: data.count), .unavailable, stage)
+            XCTAssertTrue(disk.openDescriptors.isEmpty, stage)
+            XCTAssertFalse(disk.events.contains("entryMetadata"), stage)
+            disk.crash()
+            XCTAssertEqual(disk.published, Data("old checkpoint".utf8), stage)
+        }
+    }
+
+    func testDurableSnapshotRejectsReplacementWithIdenticalBytesDuringSynchronization() {
+        let data = Data("checkpoint".utf8)
+        let disk = DurablePersistenceDiskModel(contents: data)
+        var operations = disk.operations
+        let fullSync = operations.fullSync
+        let changed = LockedTestValue(false)
+        operations.fullSync = { descriptor in
+            try fullSync(descriptor)
+            let replace = changed.withValue { changed in
+                let previous = changed
+                changed = true
+                return !previous
+            }
+            if replace { disk.replaceVisibleContents(data) }
+        }
+        let reader = DurableProfilePersistence(directoryBoundary: boundary, operations: operations)
+
+        XCTAssertEqual(reader.readDurableSnapshot(at: profile, maximumBytes: data.count), .changed)
+        XCTAssertTrue(disk.events.contains("entryMetadata"))
+        XCTAssertTrue(disk.openDescriptors.isEmpty)
+    }
+
+    func testDurableSnapshotRejectsInPlaceModificationDuringSynchronization() {
+        let data = Data("checkpoint".utf8)
+        let disk = DurablePersistenceDiskModel(contents: data)
+        var operations = disk.operations
+        let fullSync = operations.fullSync
+        operations.fullSync = { descriptor in
+            try fullSync(descriptor)
+            disk.modifyVisibleContents(data)
+        }
+        let reader = DurableProfilePersistence(directoryBoundary: boundary, operations: operations)
+
+        XCTAssertEqual(reader.readDurableSnapshot(at: profile, maximumBytes: data.count), .changed)
+        XCTAssertFalse(disk.events.contains("entryMetadata"))
+        XCTAssertTrue(disk.openDescriptors.isEmpty)
+    }
+
+    func testDurableSnapshotReadsAreBoundedAndRetryInterruptedOperations() throws {
+        let disk = DurablePersistenceDiskModel()
+        let data = try XCTUnwrap(disk.published)
+        let reader = persistence(disk)
+        XCTAssertEqual(reader.readDurableSnapshot(at: profile, maximumBytes: data.count - 1), .tooLarge)
+        XCTAssertFalse(disk.events.contains { $0.hasPrefix("read:") || $0.hasPrefix("full:") })
+        XCTAssertTrue(disk.openDescriptors.isEmpty)
+
+        disk.resetEvents()
+        disk.maximumRead = 2
+        disk.failures["read:1"] = [.EINTR]
+        disk.failures["full:1"] = [.EINTR]
+        disk.failures["sync:/group/bridge"] = [.EINTR]
+        XCTAssertEqual(reader.readDurableSnapshot(at: profile, maximumBytes: data.count), .data(data))
+        XCTAssertGreaterThan(disk.events.filter { $0.hasPrefix("read:") }.count, 2)
+        XCTAssertEqual(disk.events.filter { $0 == "sync:/group/bridge" }.count, 2)
+        XCTAssertTrue(disk.openDescriptors.isEmpty)
+    }
+
+    func testDurableEmptySnapshotStillSynchronizesItsPublication() {
+        let disk = DurablePersistenceDiskModel()
+        disk.replaceVisibleContents(Data())
+
+        XCTAssertEqual(persistence(disk).readDurableSnapshot(at: profile, maximumBytes: 0), .data(Data()))
+        XCTAssertEqual(disk.events.filter { $0.hasPrefix("read:") }, ["read:1"])
+        XCTAssertTrue(disk.events.contains("full:2"))
+        XCTAssertTrue(disk.openDescriptors.isEmpty)
+        disk.crash()
+        XCTAssertEqual(disk.published, Data())
+    }
+
+    private func persistence(_ disk: DurablePersistenceDiskModel) -> DurableProfilePersistence {
         DurableProfilePersistence(
             directoryBoundary: boundary,
             operations: disk.operations,
@@ -345,220 +446,4 @@ final class DurableProfilePersistenceTests: XCTestCase {
         try body(boundary, directory.appendingPathComponent("profile.state"))
     }
 
-    private final class DiskModel: Sendable {
-        private let state = Mutex(DiskState())
-        var events: [String] {
-            get { state.withLock { $0.events } }
-            set { state.withLock { $0.events = newValue } }
-        }
-        var failures: [String: [POSIXErrorCode]] {
-            get { state.withLock { $0.failures } }
-            set { state.withLock { $0.failures = newValue } }
-        }
-        var maximumWrite: Int {
-            get { state.withLock { $0.maximumWrite } }
-            set { state.withLock { $0.maximumWrite = newValue } }
-        }
-        var createFlags: Int32? {
-            get { state.withLock { $0.createFlags } }
-        }
-        var createMode: mode_t? {
-            get { state.withLock { $0.createMode } }
-        }
-        var openDescriptors: Set<Int32> {
-            get { state.withLock { $0.openDescriptors } }
-        }
-        var hasTemporaryEntry: Bool {
-            get { state.withLock { $0.hasTemporaryEntry } }
-        }
-        var published: Data? {
-            get { state.withLock { $0.published } }
-        }
-        var durablePublished: Data? {
-            get { state.withLock { $0.durablePublished } }
-        }
-        func contents(at path: String) -> Data? { state.withLock { $0.contents(at: path) } }
-        func crash() { state.withLock { $0.crash() } }
-
-        var operations: DurableProfilePersistence.Operations {
-            .init(
-                openDirectory: { path in
-                    try self.state.withLock { model in
-                    try model.event("openDirectory:\(path)")
-                    return model.allocate(.directory(path))
-
-                    }
-                },
-                openFile: { directory, name, flags, mode in
-                    try self.state.withLock { model in
-                    let path = try model.path(directory, name)
-                    if flags & O_DIRECTORY != 0 {
-                        try model.event("openDirectory:\(path)")
-                        XCTAssertEqual(flags, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW)
-                        XCTAssertEqual(mode, 0)
-                        return model.allocate(.directory(path))
-                    }
-                    if flags & O_CREAT != 0 {
-                        try model.event("create")
-                        model.createFlags = flags
-                        model.createMode = mode
-                        guard model.entries[path] == nil else { throw POSIXError(.EEXIST) }
-                        let file = model.nextFile
-                        model.nextFile += 1
-                        model.files[file] = DiskState.File(contents: Data(), durableContents: Data())
-                        model.entries[path] = file
-                        return model.allocate(.file(file))
-                    }
-                    try model.event("openPublished")
-                    guard let file = model.entries[path] else { throw POSIXError(.ENOENT) }
-                    return model.allocate(.file(file))
-
-                    }
-                },
-                fileKind: { descriptor in
-                    try self.state.withLock { model in
-                    try model.event("kind")
-                    guard case .file = model.descriptors[descriptor] else { return .other }
-                    return .regular
-
-                    }
-                },
-                entryKind: { directory, name in
-                    try self.state.withLock { model in
-                    try model.event("entryKind")
-                    return model.entries[try model.path(directory, name)] == nil ? nil : .regular
-
-                    }
-                },
-                write: { descriptor, bytes, count in
-                    try self.state.withLock { model in
-                    model.writes += 1
-                    try model.event("write:\(model.writes)")
-                    let file = try model.file(descriptor)
-                    let written = min(model.maximumWrite, count)
-                    model.files[file]?.contents.append(bytes.assumingMemoryBound(to: UInt8.self), count: written)
-                    return written
-
-                    }
-                },
-                fullSync: { descriptor in
-                    try self.state.withLock { model in
-                    model.fullSyncs += 1
-                    try model.event("full:\(model.fullSyncs)")
-                    let file = try model.file(descriptor)
-                    let contents = model.files[file]?.contents ?? Data()
-                    model.files[file]?.durableContents = contents
-                    model.durableEntries = model.synchronizedEntries
-
-                    }
-                },
-                syncDirectory: { descriptor in
-                    try self.state.withLock { model in
-                    guard case .directory(let path) = model.descriptors[descriptor] else { throw POSIXError(.EBADF) }
-                    try model.event("sync:\(path)")
-                    model.synchronizedEntries = model.synchronizedEntries.filter { model.parent($0.key) != path }
-                    for (name, file) in model.entries where model.parent(name) == path {
-                        model.synchronizedEntries[name] = file
-                    }
-
-                    }
-                },
-                rename: { directory, source, destination in
-                    try self.state.withLock { model in
-                    try model.event("rename")
-                    let sourcePath = try model.path(directory, source)
-                    let destinationPath = try model.path(directory, destination)
-                    guard let file = model.entries.removeValue(forKey: sourcePath) else { throw POSIXError(.ENOENT) }
-                    model.entries[destinationPath] = file
-
-                    }
-                },
-                unlink: { directory, name in
-                    _ = try self.state.withLock { model in
-                    model.entries.removeValue(forKey: try model.path(directory, name))
-
-                    }
-                },
-                close: { descriptor in
-                    self.state.withLock { model in
-                        _ = model.descriptors.removeValue(forKey: descriptor)
-                    }
-                }
-            )
-        }
-    }
-
-    private final class DiskState {
-        struct File {
-            var contents: Data
-            var durableContents: Data
-        }
-
-        enum Descriptor {
-            case directory(String)
-            case file(Int)
-        }
-
-        let profilePath = "/group/bridge/profiles/profile.state"
-        var files = [1: File(contents: Data("old checkpoint".utf8), durableContents: Data("old checkpoint".utf8))]
-        var entries = ["/group/bridge/profiles/profile.state": 1]
-        var synchronizedEntries = ["/group/bridge/profiles/profile.state": 1]
-        var durableEntries = ["/group/bridge/profiles/profile.state": 1]
-        var descriptors = [Int32: Descriptor]()
-        var nextDescriptor: Int32 = 10
-        var nextFile = 2
-        var writes = 0
-        var fullSyncs = 0
-        var events = [String]()
-        var failures = [String: [POSIXErrorCode]]()
-        var maximumWrite = Int.max
-        var createFlags: Int32?
-        var createMode: mode_t?
-
-        var openDescriptors: Set<Int32> { Set(descriptors.keys) }
-        var hasTemporaryEntry: Bool { entries.keys.contains { $0.contains(".profile-write-") } }
-        var published: Data? { entries[profilePath].flatMap { files[$0]?.contents } }
-        var durablePublished: Data? { durableEntries[profilePath].flatMap { files[$0]?.durableContents } }
-
-        func contents(at path: String) -> Data? { entries[path].flatMap { files[$0]?.contents } }
-
-
-        func crash() {
-            entries = durableEntries
-            synchronizedEntries = durableEntries
-            for file in Array(files.keys) {
-                let contents = files[file]?.durableContents ?? Data()
-                files[file]?.contents = contents
-            }
-        }
-
-        func event(_ name: String) throws {
-            events.append(name)
-            guard var queued = failures[name], !queued.isEmpty else { return }
-            let code = queued.removeFirst()
-            failures[name] = queued
-            throw POSIXError(code)
-        }
-
-        func allocate(_ descriptor: Descriptor) -> Int32 {
-            let value = nextDescriptor
-            nextDescriptor += 1
-            descriptors[value] = descriptor
-            return value
-        }
-
-        func path(_ directory: Int32, _ name: String) throws -> String {
-            guard case .directory(let path) = descriptors[directory] else { throw POSIXError(.EBADF) }
-            return path + "/" + name
-        }
-
-        func file(_ descriptor: Int32) throws -> Int {
-            guard case .file(let file) = descriptors[descriptor] else { throw POSIXError(.EBADF) }
-            return file
-        }
-
-        func parent(_ path: String) -> String {
-            URL(fileURLWithPath: path).deletingLastPathComponent().path
-        }
-    }
 }
