@@ -555,6 +555,35 @@ function swift() {
             self.values = values
         }
 
+        private init(values: [String: JSONValue]) {
+            self.values = values
+        }
+
+        public func removingValue(forKey key: String) -> JSONObject {
+            var remaining = values
+            remaining.removeValue(forKey: key)
+            return JSONObject(values: remaining)
+        }
+
+        public func objectValue(forKey key: String) -> JSONObject? {
+            guard let value = values[key], case .object(let child) = value else { return nil }
+            return JSONObject(values: child)
+        }
+
+        fileprivate func isWithinDepth(_ maximum: Int) -> Bool {
+            func valid(_ value: JSONValue, depth: Int) -> Bool {
+                switch value {
+                case .array(let items):
+                    return depth < maximum && items.allSatisfy { valid($0, depth: depth + 1) }
+                case .object(let items):
+                    return depth < maximum && items.values.allSatisfy { valid($0, depth: depth + 1) }
+                default:
+                    return true
+                }
+            }
+            return maximum > 0 && values.values.allSatisfy { valid($0, depth: 1) }
+        }
+
         var json: [String: Any] { values.mapValues(\.json) }
         subscript(_ key: String) -> Any? { values[key]?.json }
     }
@@ -571,9 +600,15 @@ function swift() {
     }
 
     static func object(_ contract: Message, value: Any) -> ValidatedObject? {
-        guard let object = JSONObject(value, maximumDepth: maximumJSONDepth(for: contract)),
-              validShape(contract, value: object.json) else { return nil }
-        return ValidatedObject(contract: contract, object: object)
+        guard let snapshot = JSONObject(value, maximumDepth: maximumJSONDepth(for: contract)),
+              validShape(contract, value: snapshot.json) else { return nil }
+        return ValidatedObject(contract: contract, object: snapshot)
+    }
+
+    static func object(_ contract: Message, snapshot: JSONObject) -> ValidatedObject? {
+        guard snapshot.isWithinDepth(maximumJSONDepth(for: contract)),
+              validShape(contract, value: snapshot.json) else { return nil }
+        return ValidatedObject(contract: contract, object: snapshot)
     }
 
     static func decode(_ message: Message, from data: Data) -> Any? {

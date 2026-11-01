@@ -12,6 +12,10 @@ const expectedDependencies = {
     WalletNetworking: ["WalletDomain", "WalletStorageSupport"],
 };
 const applicationRoots = ["App iOS", "App macOS", "App visionOS", "Big Wallet Ambient", "Safari Shared", "Safari macOS", "Safari iOS", "Safari visionOS", "Shared"];
+const applicationOnlySources = new Set([
+    "Shared/Services/ApplicationServices.swift", "Shared/Services/SafariVMApplicationServices.swift",
+    "Shared/Wallets/AccountNames.swift", "Shared/Ethereum/Networks.swift", "Shared/Services/ReviewRequester.swift",
+]);
 const privateTypes = /\b(?:SecretBytes|Keychain|WalletCrypto|WalletPrivateKey|WalletStoredKey|WalletHDWallet|WalletRepository|WalletContainer|WalletSigningSource|WalletSigningPreparation|WalletSigningSession|ApprovedWalletSigningOperation|ApprovedExecutionPermit|BroadcastDispatchPermit|SafariApprovalVault|SafariApprovalVaultHost|SafariApprovalKeychainStore|EthereumSigner|SolanaSigner)\b/;
 const networkTypes = /\b(?:URLSession|URLRequest|HTTPURLResponse|AlchemyJWTProvider|EthereumRPC|SafariRPCClient|SafariRPCService|SolanaRPCClient|PriceService|TransactionInspector)\b/;
 
@@ -184,7 +188,7 @@ export function validateRuntimeManifest(source) {
     return true;
 }
 
-export function validateRuntimeSource(path, source, {module, application = false, ownedSymbols = new Set} = {}) {
+export function validateRuntimeSource(path, source, {module, application = false, nativeExtension = false, ownedSymbols = new Set} = {}) {
     const effective = productionSource(source, {application});
     const code = maskNonCode(effective);
     const literalCode = maskNonCode(effective, {strings: false});
@@ -195,6 +199,9 @@ export function validateRuntimeSource(path, source, {module, application = false
     const foreignSymbols = [...literalCode.matchAll(/@_silgen_name\s*\(\s*"([^"\n]+)"\s*\)/g)].map(match => match[1]);
     if (module !== "WalletAuthority" && (imports.includes("CWalletCrypto") || foreignSymbols.some(symbol => module !== "WalletStorageSupport" || symbol !== "flock"))) { fail("Direct private crypto linkage belongs inside Authority"); }
     if (application && (imports.includes("WalletStorageSupport") || privateTypes.test(literalCode))) { fail("Application code reaches private authority or storage implementation"); }
+    if (nativeExtension && /\b(?:ApplicationServices|WalletAuthoritySystem|AuthorityRuntime|SafariVMApplicationServices|SafariVMMutations|Networks|ReviewRequester)\b/.test(code)) {
+        fail("Safari extension source reaches application or native-helper composition");
+    }
     if (module === "WalletDomain") {
         if (imports.some(name => !["Foundation", "CoreFoundation", "CryptoKit", "Synchronization"].includes(name)) ||
             /\b(?:URLSession|URLRequest|FileManager|FileHandle|UserDefaults|Bundle|NotificationCenter|DistributedNotificationCenter|SecItem\w*|NSApplication|UIApplication|NSView|UIView)\b|\b(?:Data|String)\s*\(\s*contentsOf|\.write\s*\(\s*to\s*:/.test(literalCode) || privateTypes.test(literalCode)) {
@@ -266,6 +273,7 @@ export function validateProjectMembership(project, {root, sourceExists = existsS
     walk(objects[project.rootObject].mainGroup, root);
     for (const target of Object.values(objects).filter(value => value.isa === "PBXNativeTarget")) {
         if (/test/i.test(target.productType ?? "") || /Tests/.test(target.name ?? "")) { continue; }
+        const nativeExtension = target.productType === "com.apple.product-type.app-extension";
         if (/Harness|CrashWorker|UpgradeConsumer|ShippedWalletProducer|TestSupport/.test(target.name ?? "")) { throw new Error(`Xcode production graph contains fixture target ${target.name}`); }
         for (const dependencyID of target.packageProductDependencies ?? []) {
             const name = objects[dependencyID]?.productName;
@@ -308,7 +316,10 @@ export function validateProjectMembership(project, {root, sourceExists = existsS
                 if (local === ".." || local.startsWith("../") || /^Packages\/WalletRuntime\/Sources\/|^Packages\/Wallet(?:Runtime|Upgrade)Harness\/|^Scripts\/wallet_upgrade\/|(?:^|\/)Tests\//.test(local) || /big_wallet_.*\.(c|h)$|secp256k1\//.test(local)) {
                     throw new Error(`${target.name} directly compiles private runtime/test source: ${local}`);
                 }
-                validateSource(path);
+                if (nativeExtension && applicationOnlySources.has(local)) {
+                    throw new Error(`${target.name} compiles application or native-helper composition: ${local}`);
+                }
+                validateSource(path, {nativeExtension});
             }
         }
     }
@@ -355,9 +366,9 @@ export function checkRuntimeBoundaries(root) {
         }
     }
     validateProjectMembership(parseProject(readFileSync(join(root, "Wallet.xcodeproj/project.pbxproj"), "utf8")), {root,
-        validateSource: path => {
+        validateSource: (path, {nativeExtension}) => {
             const source = readFileSync(path, "utf8");
-            if (path.endsWith(".swift")) { validateRuntimeSource(relative(root, path), source, {application: true, ownedSymbols}); }
+            if (path.endsWith(".swift")) { validateRuntimeSource(relative(root, path), source, {application: true, nativeExtension, ownedSymbols}); }
             else if (/#\s*(?:import|include)[^\n]*(?:CWalletCrypto|big_wallet|secp256k1)/.test(source)) {
                 throw new Error(`${path}: Application source imports private crypto headers`);
             }

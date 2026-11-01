@@ -8369,5 +8369,139 @@
       "subject": "getLatestConfiguration",
       "workflowVersion": 4
     }
+  },
+  {
+    "name": "native-admission-rejection-busy",
+    "type": "NativeAdmissionRejection",
+    "value": {
+      "id": 7,
+      "workflowVersion": 4,
+      "nativeAdmissionRejected": true,
+      "reason": "busy",
+      "code": -32005,
+      "dispatched": false
+    },
+    "valid": true
+  },
+  {
+    "name": "native-admission-rejection-busy-with-retry",
+    "type": "NativeAdmissionRejection",
+    "value": {
+      "id": 7,
+      "workflowVersion": 4,
+      "nativeAdmissionRejected": true,
+      "reason": "busy",
+      "code": -32005,
+      "dispatched": false,
+      "retryAfterMilliseconds": 500
+    },
+    "valid": true
+  },
+  {
+    "name": "native-admission-rejection-too-large",
+    "type": "NativeAdmissionRejection",
+    "value": {
+      "id": 7,
+      "workflowVersion": 4,
+      "nativeAdmissionRejected": true,
+      "reason": "request_too_large",
+      "code": -32005,
+      "dispatched": false
+    },
+    "valid": true
+  },
+  {
+    "name": "native-admission-rejection-too-complex",
+    "type": "NativeAdmissionRejection",
+    "value": {
+      "id": 7,
+      "workflowVersion": 4,
+      "nativeAdmissionRejected": true,
+      "reason": "request_too_complex",
+      "code": -32005,
+      "dispatched": false
+    },
+    "valid": true
+  },
+  {
+    "name": "native-admission-rejection-unknown-reason",
+    "type": "NativeAdmissionRejection",
+    "value": {
+      "id": 7,
+      "workflowVersion": 4,
+      "nativeAdmissionRejected": true,
+      "reason": "unknown",
+      "code": -32005,
+      "dispatched": false
+    },
+    "valid": false
+  },
+  {
+    "name": "native-admission-rejection-dispatched",
+    "type": "NativeAdmissionRejection",
+    "value": {
+      "id": 7,
+      "workflowVersion": 4,
+      "nativeAdmissionRejected": true,
+      "reason": "busy",
+      "code": -32005,
+      "dispatched": true
+    },
+    "valid": false
+  },
+  {
+    "name": "native-admission-rejection-unexpected-retry",
+    "type": "NativeAdmissionRejection",
+    "value": {
+      "id": 7,
+      "workflowVersion": 4,
+      "nativeAdmissionRejected": true,
+      "reason": "request_too_large",
+      "code": -32005,
+      "dispatched": false,
+      "retryAfterMilliseconds": 500
+    },
+    "valid": false
+  },
+  {
+    "name": "native-admission-rejection-unexpected-retry-delay",
+    "type": "NativeAdmissionRejection",
+    "value": {
+      "id": 7,
+      "workflowVersion": 4,
+      "nativeAdmissionRejected": true,
+      "reason": "busy",
+      "code": -32005,
+      "dispatched": false,
+      "retryAfterMilliseconds": 1000
+    },
+    "valid": false
+  },
+  {
+    "name": "native-admission-rejection-unknown-field",
+    "type": "NativeAdmissionRejection",
+    "value": {
+      "id": 7,
+      "workflowVersion": 4,
+      "nativeAdmissionRejected": true,
+      "reason": "busy",
+      "code": -32005,
+      "dispatched": false,
+      "extra": true
+    },
+    "valid": false
+  },
+  {
+    "name": "native-admission-rejection-wrong-version",
+    "type": "NativeAdmissionRejection",
+    "value": {
+      "id": 7,
+      "workflowVersion": 5,
+      "nativeAdmissionRejected": true,
+      "reason": "busy",
+      "code": -32005,
+      "dispatched": false
+    },
+    "valid": false
   }
 ]

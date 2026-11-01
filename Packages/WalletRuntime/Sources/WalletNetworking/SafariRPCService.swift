@@ -93,13 +93,16 @@ public actor SafariRPCService {
 
     public func perform(
         id: Int, body: String, scope: RPCScope,
+        onAdmissionDecision: @escaping @Sendable () -> Void = {},
         operation: @escaping Operation
     ) async -> RPCResponseToExtension {
         guard !Task.isCancelled else {
+            onAdmissionDecision()
             return SafariRPCFailure.cancelled.response(id: id, dispatched: false)
         }
         let byteCount = body.utf8.prefix(limits.maximumRequestBytes + 1).count
         guard byteCount <= limits.maximumRequestBytes else {
+            onAdmissionDecision()
             return SafariRPCFailure.requestTooLarge.response(id: id, dispatched: false)
         }
         let token = UUID()
@@ -107,12 +110,14 @@ public actor SafariRPCService {
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 guard !Task.isCancelled else {
+                    onAdmissionDecision()
                     continuation.resume(returning: SafariRPCFailure.cancelled.response(id: id, dispatched: false))
                     return
                 }
                 guard jobs.count < limits.maximumOutstandingRequests,
                       outstandingByScope[scope, default: 0] < limits.maximumOutstandingPerOrigin,
                       byteCount <= limits.maximumRetainedRequestBytes - retainedRequestBytes else {
+                    onAdmissionDecision()
                     continuation.resume(returning: SafariRPCFailure.busy.response(id: id, dispatched: false))
                     return
                 }
@@ -134,6 +139,7 @@ public actor SafariRPCService {
                 queues[scope, default: []].append(token)
                 job.queueTimer = timer(token: token, deadline: job.queueDeadline, failure: .queueTimeout)
                 job.lifetimeTimer = timer(token: token, deadline: execution.deadline, failure: .timeout)
+                onAdmissionDecision()
                 drain()
             }
         } onCancel: {

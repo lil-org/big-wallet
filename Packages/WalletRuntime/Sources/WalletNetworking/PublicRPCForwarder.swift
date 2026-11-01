@@ -24,8 +24,11 @@ public struct PublicRPCForwarder: PublicRPCForwarding {
         self.send = send
     }
 
-    public func forward(id: Int, chainId: String, body: String, scope: RPCScope) async -> RPCResponseToExtension {
-        await service.perform(id: id, body: body, scope: scope) { request, execution in
+    public func forward(
+        id: Int, chainId: String, body: String, scope: RPCScope,
+        onAdmissionDecision: @escaping @Sendable () -> Void
+    ) async -> RPCResponseToExtension {
+        await service.perform(id: id, body: body, scope: scope, onAdmissionDecision: onAdmissionDecision) { request, execution in
             guard let chainId = Int(hexString: chainId), chainId > 0 else {
                 throw SafariRPCFailure.invalidRequest
             }

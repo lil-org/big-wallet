@@ -5,7 +5,7 @@ import {webcrypto} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
-import {nativeResult, nativeError} from "./test_helpers.mjs";
+import {nativeResult, nativeError, nativeAdmissionRejection} from "./test_helpers.mjs";
 
 const [wireSource, protocolSource, workerSource, sharedManifestSource, macManifestSource] =
     await Promise.all([
@@ -390,6 +390,43 @@ function request(id = 7, overrides = {}) {
         ...requestOverrides,
     };
 }
+
+test("worker relays exact native admission rejections without opening approval UI", async () => {
+    const harness = makeHarness({native: message => nativeAdmissionRejection(message.id)});
+    const response = await harness.dispatch(request());
+    assert.deepEqual(clone(response), nativeAdmissionRejection(7));
+    assert.equal(harness.nativeMessages.length, 1);
+    assert.deepEqual(harness.popupCalls, []);
+    assert.deepEqual(harness.tabMessages, []);
+});
+
+test("worker maps native RPC overload to a correlated provider limit error", async () => {
+    const harness = makeHarness({native: message => nativeAdmissionRejection(message.id)});
+    const response = await harness.dispatch({subject: "rpc", id: 7, body: "{}", chainId: "0x1", workflowVersion: 4});
+    assert.equal(response.id, 7);
+    assert.equal(response.kind, "error");
+    assert.equal(response.error.code, -32005);
+    assert.deepEqual(clone(response.error.data), {reason: "busy", dispatched: false});
+    assert.equal(harness.nativeMessages.length, 1);
+});
+
+test("poll and acknowledgement overload never publish successful completion", async () => {
+    for (const stage of ["poll", "acknowledge"]) {
+        const harness = makeHarness({
+            pollNative: message => stage === "poll" ? nativeAdmissionRejection(message.id) : {
+                id: message.id, state: snapshot(), response: nativeResult({
+                    id: message.id, provider: "ethereum", name: "requestAccounts", result: [],
+                }),
+            },
+            acknowledgeResponse: message => nativeAdmissionRejection(message.id),
+        });
+        const response = await harness.dispatch(responseRequest("getResponse"));
+        assert.deepEqual(clone(response), nativeAdmissionRejection(7));
+        assert.deepEqual(harness.tabMessages, []);
+        assert.deepEqual(harness.nativeMessages.map(value => value.message.subject),
+            stage === "poll" ? ["pollResponse"] : ["pollResponse", "acknowledgeResponse"]);
+    }
+});
 
 function manualSwitchIntent(overrides = {}) {
     return {

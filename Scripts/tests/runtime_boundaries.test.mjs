@@ -105,6 +105,39 @@ test("Xcode membership forbids duplicated runtime source and production test dep
     assert.throws(() => validateProjectMembership(fixture, options));
 });
 
+test("Safari extension targets exclude application composition and singleton helpers", () => {
+    const options = {root: "/fixture", sourceExists: () => true};
+    for (const path of ["Shared/Services/ApplicationServices.swift", "Shared/Services/SafariVMApplicationServices.swift",
+        "Shared/Wallets/AccountNames.swift", "Shared/Ethereum/Networks.swift", "Shared/Services/ReviewRequester.swift"]) {
+        const app = project(path);
+        assert.equal(validateProjectMembership(app, options), true);
+        app.objects.app.name = "Safari macOS";
+        app.objects.app.productType = "com.apple.product-type.app-extension";
+        assert.throws(() => validateProjectMembership(app, options), /application or native-helper composition/);
+    }
+    const extension = project("Safari Shared/SafariExtensionServices.swift");
+    extension.objects.app.productType = "com.apple.product-type.app-extension";
+    let sourceContext;
+    assert.equal(validateProjectMembership(extension, {...options, validateSource: (_, context) => { sourceContext = context; }}), true);
+    assert.deepEqual(sourceContext, {nativeExtension: true});
+});
+
+test("Safari extension sources cannot regain the broad runtime through another helper", () => {
+    const options = {application: true, nativeExtension: true};
+    for (const source of ["let services = ApplicationServices.shared", "let system: WalletAuthoritySystem",
+        "let runtime: AuthorityRuntime", "let network = Networks.ethereum", "ReviewRequester.request()",
+        "let factory = SafariVMApplicationServices.make", "let mutations = SafariVMMutations.shared"]) {
+        assert.throws(() => validateRuntimeSource("Shared/Adapter.swift", source, options), /application or native-helper composition/);
+    }
+    for (const source of ["let runtime: NativeTransportRuntime", "let runtime: PopupAuthorityRuntime",
+        "let configuration: AuthorityRuntimeConfiguration", "let resources: RuntimeResources",
+        "// ApplicationServices is app-owned\nlet runtime: NativeTransportRuntime"]) {
+        assert.doesNotThrow(() => validateRuntimeSource("Safari Shared/Services.swift", source, options));
+    }
+    assert.doesNotThrow(() => validateRuntimeSource("Shared/Services/ApplicationServices.swift",
+        "let runtime: AuthorityRuntime", {application: true}));
+});
+
 test("production targets cannot package or link upgrade verification artifacts", () => {
     const options = {root: "/fixture", sourceExists: () => true};
     for (const name of ["WalletUpgradeConsumer", "ShippedWalletProducer"]) {

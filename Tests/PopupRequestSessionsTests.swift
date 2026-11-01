@@ -80,6 +80,41 @@ func unusedPopupTransactionOperations() -> TransactionApprovalOperations {
 @MainActor
 final class PopupRequestSessionsTests: XCTestCase {
 
+    func testReservedRejectionAndQueueRepliesNeverPrepareAReview() async throws {
+        let store = try makeStore()
+        let snapshot = try await enqueue(popupSnapshot(id: 700, provider: .ethereum, method: "signTransaction"), in: store)
+        var catalogReads = 0
+        var preparations = 0
+        let controller = makePopupSessionsForTesting(
+            store: store,
+            walletEnvironment: popupWalletEnvironment(reviewCatalog: {
+                catalogReads += 1
+                return WalletReviewCatalog(account: popupTestAccount())
+            }, unlockWallets: { _, _ in
+                XCTFail("Reserved replies must not authenticate")
+                return .canceled
+            }),
+            loadsTransactionContext: false,
+            transactionApprovalOperations: unusedPopupTransactionOperations(),
+            executionEnvironment: popupExecutionEnvironment(requestProcessor: CompactPopupProcessor { _ in
+                preparations += 1
+                return .approval(popupTransactionAction())
+            })
+        )
+        let queue = await controller.dispatchJSON(
+            request: try popupCommand(subject: "getPendingRequests", id: 699), profileIdentifier: nil
+        )
+        XCTAssertEqual((queue["requests"] as? [[String: Any]])?.count, 1)
+        await store.forceNextRejectResult(.ownershipLost)
+        let reply = await controller.dispatchJSON(request: try popupCommand(
+            subject: "rejectRequest", id: snapshot.handle.id, requestToken: snapshot.handle.requestToken
+        ), profileIdentifier: nil)
+        XCTAssertEqual(reply["status"] as? String, "ignored")
+        XCTAssertEqual(reply["state"] as? String, "working")
+        XCTAssertEqual(catalogReads, 0)
+        XCTAssertEqual(preparations, 0)
+    }
+
     func testCommandRepliesCarryCurrentStateWithoutAnotherRead() async throws {
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(id: 701, provider: .ethereum, method: "addEthereumChain"), in: store)
@@ -11011,14 +11046,10 @@ private func makePopupNativeFinalizerForTesting(
 
 @MainActor
 private func popupPresentationEnvironment(metadata: WalletsMetadataService? = nil) -> PopupApprovalStatePresenter.Environment {
-    let base = ApplicationServices.shared.popupPresentation
-    guard let metadata else { return base }
-    return .init(networks: base.networks, customNetworks: base.customNetworks, price: base.price,
-        accountName: { walletID, account in metadata.getAccountName(walletId: walletID, account: account) ?? account.croppedAddress },
-        icon: base.icon, transactionValue: base.transactionValue, transactionFeeLines: base.transactionFeeLines,
-        transactionDataInterpretation: base.transactionDataInterpretation, solanaClusterDescription: base.solanaClusterDescription,
-        approvalSubjectTitle: base.approvalSubjectTitle, transactionNotice: base.transactionNotice,
-        popupStrings: base.popupStrings, layoutDirection: base.layoutDirection)
+    let services = ApplicationServices.shared
+    let metadata = metadata ?? services.metadata
+    return PopupPresentation.make(networks: services.networks, prices: services.prices,
+        accountName: { metadata.getAccountName(walletId: $0, account: $1) })
 }
 
 @_silgen_name("flock")

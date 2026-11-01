@@ -114,14 +114,6 @@ final class SafariVMFixtures: Sendable {
             : Bundle.main.bundleIdentifier == "org.lil.wallet.ambient" ? "helper" : "app"
         activationPreparation = platform == "macos" && role == "app"
             ? try Self.readActivationPreparation(root: root, runID: descriptor.runID, signingMode: descriptor.signingMode) : nil
-        if activationPreparation == nil {
-            if descriptor.signingMode == "local" {
-                try initializeWallets()
-            } else if role != "extension" {
-                try initializeWallets()
-                try initializeAppleWallets()
-            }
-        }
         event("processStarted", metadata: ["bundleID": Bundle.main.bundleIdentifier ?? "", "platform": platform,
             "role": role, "executablePath": Bundle.main.executableURL?.path ?? "",
             "storage": descriptor.signingMode == "local" ? "fixture" : "production"])
@@ -358,92 +350,6 @@ final class SafariVMFixtures: Sendable {
         } catch { return errSecIO }
     }
 
-    private func initializeWallets() throws {
-        try withStorage {
-            let file = root.appendingPathComponent("wallets.plist")
-            let exists: Bool
-            do { _ = try Self.read(file, maximum: 8 * 1_024 * 1_024); exists = true }
-            catch let error as NSError where error.domain == NSPOSIXErrorDomain && error.code == Int(ENOENT) { exists = false }
-            if exists {
-                _ = try Self.read(root.appendingPathComponent("original-wallets.plist"), maximum: 8 * 1_024 * 1_024)
-                return
-            }
-            let password = SecretBytes(utf8: "approval-fixture-password")
-            defer { password.invalidate() }
-            var records = ["org.lil.wallet.password": Data("approval-fixture-password".utf8)]
-            for (name, coin, seed) in [("fixture-ethereum", WalletCoin.ethereum, UInt8(1)), ("fixture-solana", .solana, UInt8(2))] {
-                guard let privateKey = WalletPrivateKey(data: Data(repeating: seed, count: 32)) else { throw Failure.invalidFixture }
-                defer { privateKey.invalidate() }
-                guard let key = WalletStoredKey.importPrivateKey(privateKey: privateKey, name: name, password: password, coin: coin) else { throw Failure.invalidFixture }
-                let wallet = WalletContainer(id: name, key: key)
-                _ = try wallet.getAccount(password: password, coin: coin)
-                guard let data = key.exportJSON() else { throw Failure.invalidFixture }
-                records["org.lil.wallet.wallet." + name] = data
-            }
-            let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
-            guard let stored = WalletStoredKey.importHDWallet(mnemonic: mnemonic, name: "fixture-multicoin", password: password, coin: .ethereum),
-                  let hd = WalletHDWallet(mnemonic: mnemonic, passphrase: ""),
-                  let ethereum = hd.ethereumPreviewAccounts(accountRange: 0..<2),
-                  let solana = hd.solanaPreviewAccounts(accountRange: 0..<2) else { throw Failure.invalidFixture }
-            let wallet = WalletContainer(id: "fixture-multicoin", key: stored)
-            for account in wallet.accounts { stored.removeAccountForCoinDerivationPath(coin: account.coin, derivationPath: account.derivationPath) }
-            for account in ethereum + solana {
-                stored.addAccountDerivation(address: account.address, coin: account.coin, derivation: account.derivation,
-                    derivationPath: account.derivationPath, publicKey: account.publicKey, extendedPublicKey: account.extendedPublicKey)
-            }
-            guard let data = stored.exportJSON() else { throw Failure.invalidFixture }
-            records["org.lil.wallet.wallet.fixture-multicoin"] = data
-            try saveDataRecords(records, name: "original-wallets.plist")
-            try saveDataRecords(records, name: "wallets.plist")
-        }
-    }
-
-    private func initializeAppleWallets() throws {
-        let walletCount = try withStorage {
-            let keychain = Keychain()
-            let password = "approval-fixture-password"
-            let expectedIDs = Set(["fixture-ethereum", "fixture-solana", "fixture-multicoin"])
-            let existingIDs = Set(try keychain.readAllWalletIDs())
-            guard existingIDs.isSubset(of: expectedIDs) else { throw Failure.invalidFixture }
-            if let existingPassword = try keychain.readPasswordSecret() {
-                defer { existingPassword.invalidate() }
-                guard try existingPassword.withUnsafeBytes({ $0.elementsEqual(password.utf8) }) else { throw Failure.invalidFixture }
-            } else {
-                guard existingIDs.isEmpty else { throw Failure.invalidFixture }
-                _ = try keychain.createPasswordIfMissing(password, beforeInsert: {})
-                guard let stored = try keychain.readPasswordSecret() else { throw Failure.invalidFixture }
-                defer { stored.invalidate() }
-                guard try stored.withUnsafeBytes({ $0.elementsEqual(password.utf8) }) else { throw Failure.invalidFixture }
-            }
-            let records = try dataRecords("wallets.plist")
-            let initialized = try dataRecords("apple-wallet-bootstrap.plist")["complete"] != nil
-            for id in expectedIDs.sorted() {
-                guard let expected = records["org.lil.wallet.wallet." + id],
-                      let expectedKey = WalletStoredKey.importJSON(json: expected) else { throw Failure.invalidFixture }
-                if let existing = try keychain.readWalletData(id: id) {
-                    guard let key = WalletStoredKey.importJSON(json: existing), key.isMnemonic == expectedKey.isMnemonic else { throw Failure.invalidFixture }
-                    let current = WalletContainer(id: id, key: key)
-                    let intended = WalletContainer(id: id, key: expectedKey)
-                    let accounts = Set(current.accounts.map { WalletAccountDescriptor(walletID: id, account: $0) })
-                    let expectedAccounts = Set(intended.accounts.map { WalletAccountDescriptor(walletID: id, account: $0) })
-                    guard accounts == expectedAccounts else { throw Failure.invalidFixture }
-                    let credential = SecretBytes(utf8: password)
-                    defer { credential.invalidate() }
-                    let actual = key.isMnemonic ? key.decryptMnemonicSecret(password: credential) : key.decryptPrivateKey(password: credential)
-                    let intendedSecret = key.isMnemonic ? expectedKey.decryptMnemonicSecret(password: credential) : expectedKey.decryptPrivateKey(password: credential)
-                    defer { actual?.invalidate(); intendedSecret?.invalidate() }
-                    guard let actual, let intendedSecret,
-                          try actual.withUnsafeBytes({ left in try intendedSecret.withUnsafeBytes { left.elementsEqual($0) } }) else { throw Failure.invalidFixture }
-                } else if !initialized {
-                    try keychain.saveWallet(id: id, data: expected)
-                }
-            }
-            try saveDataRecords(["complete": Data([1])], name: "apple-wallet-bootstrap.plist")
-            return try keychain.readAllWalletIDs().count
-        }
-        event("fixtureWalletsReady", metadata: ["storage": "production", "walletCount": walletCount])
-    }
-
     func originalWalletData(id: String) throws -> Data {
         guard ["fixture-ethereum", "fixture-solana", "fixture-multicoin"].contains(id) else { throw Failure.invalidFixture }
         return try withStorage {
@@ -517,7 +423,7 @@ final class SafariVMFixtures: Sendable {
         try PropertyListEncoder().encode(values).write(to: root.appendingPathComponent(name), options: .atomic)
     }
 
-    fileprivate static func read(_ url: URL, maximum: Int, privateFile: Bool = false) throws -> Data {
+    static func read(_ url: URL, maximum: Int, privateFile: Bool = false) throws -> Data {
         let fd = Darwin.open(url.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK)
         guard fd >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
         defer { Darwin.close(fd) }
@@ -737,65 +643,6 @@ actor SafariVMLockProbe {
     }
 }
 
-@MainActor
-final class SafariVMMutations {
-    static let shared = SafariVMMutations()
-    private var isProcessing = false
-
-    func processPending() async {
-        await SafariVMLockProbe.shared.contendIfRequested()
-        guard !isProcessing else { return }
-        isProcessing = true
-        defer { isProcessing = false }
-        let fixtures = SafariVMFixtures.shared
-        do {
-            guard let mutation = try fixtures.claimMutation() else { return }
-            let context = SafariVMFixtures.Operation(requestID: nil, scenarioID: mutation.scenario.id, iteration: mutation.scenario.iteration)
-            let result: Result<[String: String], any Error> = await SafariVMFixtures.$operation.withValue(context) {
-                do { return .success(try await perform(mutation, fixtures: fixtures)) }
-                catch { return .failure(error) }
-            }
-            fixtures.completeMutation(mutation, result: result)
-        } catch {
-            fixtures.event("mutationRejected", metadata: ["error": String(describing: error)])
-        }
-    }
-
-    private func perform(_ mutation: SafariVMFixtures.Mutation, fixtures: SafariVMFixtures) async throws -> [String: String] {
-        let wallets = ApplicationServices.shared.wallets
-        guard await wallets.start() else { throw SafariVMFixtures.Failure.unavailable }
-        switch mutation.operation {
-        case .removeEthereumAccount:
-            guard let wallet = wallets.wallets.first(where: { $0.id == "fixture-ethereum" }),
-                  wallet.accounts.count == 1, wallet.accounts[0].coin == .ethereum else { throw SafariVMFixtures.Failure.invalidFixture }
-            let credentials = ApplicationServices.shared.credentials
-            let challenge = credentials.makeWalletAccessChallenge()
-            guard let grant = try credentials.verify(password: "approval-fixture-password", challenge: challenge),
-                  let access = credentials.accessSession(authorization: grant) else { throw SafariVMFixtures.Failure.unavailable }
-            defer { access.invalidate() }
-            try await wallets.delete(wallet: wallet, access: access)
-        case .restoreEthereumAccount:
-            try await SafariVMApplicationServices.restoreWallet(system: ApplicationServices.shared.authority, fixtures: fixtures)
-        case .replaceVaultGeneration:
-#if os(iOS)
-            let generations = try await SafariVMApplicationServices.replaceVaultGeneration(system: ApplicationServices.shared.authority, fixtures: fixtures)
-            return ["previousGeneration": generations.previous, "generation": generations.current]
-#else
-            throw SafariVMFixtures.Failure.invalidFixture
-#endif
-        case .replaceCustomNetwork:
-            guard let chainID = mutation.chainId, let rawURL = mutation.rpcURL else { throw SafariVMFixtures.Failure.invalidFixture }
-            let rpcURL = try fixtures.validateMutationRPCURL(rawURL)
-            try SafariVMApplicationServices.replaceCustomNetwork(chainID: chainID, rpcURL: rpcURL,
-                system: ApplicationServices.shared.authority, fixtures: fixtures)
-        }
-#if os(iOS)
-        await ApplicationServices.shared.authority.waitForVaultReconciliation()
-#endif
-        return [:]
-    }
-}
-
 final class SafariVMPreferenceStorage: SharedPreferenceStorage, Sendable {
     static let shared = SafariVMPreferenceStorage()
     func object(forKey key: String) -> Any? { SafariVMFixtures.shared.preference(key) }
@@ -858,194 +705,8 @@ final class SafariVMApprovalKeyStore: SafariApprovalKeyStoring, SafariApprovalIn
     }
 }
 
-@MainActor
-struct SafariVMApplicationServices {
-    let authority: WalletAuthoritySystem
-    let authorization: any AlchemyAuthorizationProviding
-    let ethereumRPC: EthereumRPC
-    let ethereum: EthereumTransactionPreparation
-    let solana: SolanaRPCClient
-    let safariRPC: SafariRPCClient
-    let prices: PriceService
 
-    static func make(
-        catalog: NetworkCatalog?,
-        catalogOwnedChainIds: Set<Int>,
-        decodedChainIds: Set<Int>,
-        messages: AuthorityMessages
-    ) -> SafariVMApplicationServices {
-        let fixtures = SafariVMFixtures.shared
-        let storage = fixtures.isLocal ? AuthorityStorageConfiguration(containerURL: fixtures.root) : .application
-        let preferences = preferenceStorage(fixtures)
-        let routing = SafariVMRPCRouting(fixtures: fixtures, catalog: catalog)
-        let custom = SafariVMCustomNetworks(preferences: preferences, containerURL: storage.containerURL, routing: routing)
-        let cache = CustomNetworkCache(loader: custom.load, observesDarwinChanges: true)
-        _ = cache.snapshot()
-        let hooks = executionHooks(fixtures)
-        let authorization = SafariVMRPCFixtureAuthorization()
-        let rpc = EthereumRPC(authorizationProvider: authorization, authorizeRequest: routing.authorize)
-        let ethereum = EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil })
-        let solana = SolanaRPCClient(urlSession: WalletHTTPSession.make(),
-            authorizationProvider: authorization, messages: .init(failedToSend: Strings.failedToSend,
-                blockhashNotFound: Strings.solanaBlockhashNotFound),
-            authorizeRequest: routing.authorize)
-        let safariRPC = SafariRPCClient(urlSession: WalletHTTPSession.make(), authorizationProvider: authorization,
-            authorizeRequest: routing.authorize)
-        let vault: SafariApprovalVault
-        let integrity: any SafariApprovalIntegrityKeyStoring
-        if fixtures.isLocal {
-            let keys = SafariVMApprovalKeyStore()
-            integrity = keys
-            vault = SafariApprovalVault(fileURL: fixtures.root.appendingPathComponent("SafariApprovalVault.v1"), keyStore: keys,
-                canEvaluateAuthentication: { _, _ in true }, authentication: { _, _, _ in !Task.isCancelled }, hooks: hooks)
-        } else {
-            integrity = SafariApprovalIntegrityKeychainStore()
-            vault = SafariApprovalVault(fileURL: storage.containerURL?.appendingPathComponent("SafariApprovalVault.v1"), hooks: hooks)
-        }
-        let metadata = fixtures.isLocal ? WalletsMetadataService(storage: preferences, postChange: {
-            WalletStoreSync.postLocalAndExternalChange(defaultsAlreadySynchronized: true)
-        }) : WalletsMetadataService.live()
-        let notifications: WalletStoreChangeNotifications = fixtures.isLocal ? WalletStoreChangeNotifications(
-            postLocalChange: { WalletStoreSync.postLocalChange() },
-            postMutation: { WalletStoreSync.postLocalAndExternalChange(defaultsAlreadySynchronized: true) },
-            startObserving: { WalletStoreSync.startObserving($0, selector: $1) },
-            stopObserving: { WalletStoreSync.stopObserving($0) },
-            isExternalChange: { WalletStoreSync.isExternalChange($0) }
-        ) : .live
-        let publicationStorage: any SharedPreferenceStorage = fixtures.isLocal ? preferences : UserDefaultsPreferenceStorage.standard
-        let runtime = AuthorityRuntime.testing(
-            catalog: catalog, catalogOwnedChainIds: catalogOwnedChainIds, decodedChainIds: decodedChainIds,
-            solanaEndpoints: SolanaRPCClient.RPCConfiguration.bundled,
-            broadcaster: SignedBroadcastClient(ethereum: EthereumBroadcastClient(rpc: rpc), solana: solana),
-            preparation: ethereum.makePreparationOperations(), storage: storage, messages: messages,
-            keychain: fixtures.isLocal ? fixtures.keychain : Keychain(), metadata: metadata, vault: vault, integrityKeyStore: integrity,
-            vaultHostDefaults: publicationStorage,
-            customSnapshot: { cache.snapshot() }, freshCustomSnapshot: { cache.refreshSnapshot() },
-            definitionResult: { network in
-                guard let chainID = Int(hexString: network.chainId), let entry = cache.snapshot().entriesByChainId[chainID] else { return .unavailable }
-                let urls = CustomNetworkDefinition.requestedRPCURLs(for: network)
-                guard !urls.isEmpty else { return .unavailable }
-                return urls.contains {
-                    CustomNetworkDefinition.matches(requested: network, requestedRPCURL: $0,
-                        existing: entry.definition, existingRPCURL: entry.rpcURL)
-                } ? .matching : .conflict
-            },
-            insertNetwork: { network in
-                let result = custom.insert(network)
-                if result.succeeded {
-                    cache.invalidate()
-                    _ = cache.snapshot()
-                    CustomNetworkChangeNotification.post()
-                }
-                return result
-            },
-            invalidateCache: { cache.invalidate() }, notifications: notifications,
-            credentialAuthentication: fixtures.isLocal
-                ? .init(canUseBiometrics: { false }, attemptBiometrics: { _ in .failed }) : .live,
-            hooks: hooks
-        )
-        return SafariVMApplicationServices(authority: WalletAuthoritySystem(runtime: runtime), authorization: authorization, ethereumRPC: rpc,
-            ethereum: ethereum, solana: solana, safariRPC: safariRPC, prices: PriceService(fetchPrices: { ["ETH": 2_000] }))
-    }
-
-    private static func preferenceStorage(_ fixtures: SafariVMFixtures) -> any SharedPreferenceStorage {
-        if fixtures.isLocal { return SafariVMPreferenceStorage.shared }
-        guard let defaults = SharedDefaults.defaults else { fatalError("Safari VM application preferences are unavailable") }
-        return defaults
-    }
-
-    static func restoreWallet(system: WalletAuthoritySystem, fixtures: SafariVMFixtures) async throws {
-        let wallets = system.wallets
-        guard !wallets.wallets.contains(where: { $0.id == "fixture-ethereum" }) else { return }
-        let prepared = WalletRepository.PreparedCreation(walletID: "fixture-ethereum",
-            data: try fixtures.originalWalletData(id: "fixture-ethereum"),
-            credentialDigest: Data(SHA256.hash(data: Data("approval-fixture-password".utf8))))
-        let repository = wallets.repository
-#if os(iOS)
-        _ = try await wallets.approvalVaultHost.performSourceMutation { willMutate in
-            try await repository.saveNewWallet(prepared, willMutateSource: willMutate, validateAccess: {})
-        }
-#else
-        _ = try await repository.saveNewWallet(prepared, willMutateSource: {}, validateAccess: {})
-#endif
-        guard await wallets.reloadFromStore() else { throw SafariVMFixtures.Failure.unavailable }
-#if os(macOS)
-        DistributedNotificationCenter.default().post(name: .walletStoreChanged, object: String(ProcessInfo.processInfo.processIdentifier))
-#endif
-    }
-
-#if os(iOS)
-    static func replaceVaultGeneration(system: WalletAuthoritySystem, fixtures: SafariVMFixtures) async throws -> (previous: String, current: String) {
-        let preferences: any SharedPreferenceStorage = fixtures.isLocal ? preferenceStorage(fixtures) : UserDefaultsPreferenceStorage.standard
-        let key = "SafariApprovalVault.hostPublicationMetadata.v1"
-        func generation() throws -> UUID {
-            guard let data = preferences.object(forKey: key) as? Data,
-                  let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let raw = object["generation"] as? String, let generation = UUID(uuidString: raw) else {
-                throw SafariVMFixtures.Failure.unavailable
-            }
-            return generation
-        }
-        await system.waitForVaultReconciliation()
-        let previous = try generation()
-        try await system.runtime.invalidateVaultForTesting()
-        let current = try generation()
-        guard current != previous else { throw SafariVMFixtures.Failure.unavailable }
-        return (previous.uuidString.lowercased(), current.uuidString.lowercased())
-    }
-#endif
-
-    static func replaceCustomNetwork(chainID: Int, rpcURL: URL, system: WalletAuthoritySystem, fixtures: SafariVMFixtures) throws {
-        let container = fixtures.isLocal ? fixtures.root : AuthorityStorageConfiguration.application.containerURL
-        let storage = SafariVMCustomNetworks(preferences: preferenceStorage(fixtures), containerURL: container)
-        try storage.replace(chainID: chainID, rpcURL: rpcURL)
-        system.invalidateNetworkCache()
-        CustomNetworkChangeNotification.post()
-    }
-
-    private static func executionHooks(_ fixtures: SafariVMFixtures) -> AuthorityExecutionHooks {
-        AuthorityExecutionHooks(checkpoint: { point, context in
-            let operation = context.map { fixtures.capture(handle: $0.handle) }
-            try await fixtures.checkpoint(point.rawValue, requestID: context?.handle.id, operation: operation)
-        }, event: { value in
-            if value.kind == .requestAdmitted {
-                guard let handle = value.handle else { fatalError("Safari admission omitted its request identity") }
-                fixtures.recordOperation(handle: handle)
-                return
-            }
-            let operation = value.handle.map { fixtures.capture(handle: $0) }
-            var metadata = [String: Any]()
-            if let handle = value.handle {
-                metadata["requestToken"] = handle.requestToken
-                metadata["profileIdentifier"] = handle.profileIdentifier.map { $0.uuidString.lowercased() as Any } ?? NSNull()
-            }
-            if let context = value.context {
-                metadata["executionID"] = context.executionID?.uuidString.lowercased()
-                metadata["configurationKey"] = context.configurationKey
-            }
-            if let consentID = value.consentID { metadata["consentID"] = consentID.uuidString.lowercased() }
-            if let account = value.account { metadata["account"] = account.normalizedAddress }
-            if let generation = value.generation { metadata["generation"] = generation.uuidString.lowercased() }
-            if let succeeded = value.succeeded { metadata["succeeded"] = succeeded }
-            if value.kind == .authenticationCompleted { metadata["authentication"] = fixtures.isLocal ? "fixture" : "system" }
-            if value.kind == .protectedKeyRead { metadata["storage"] = fixtures.isLocal ? "fixture" : "production" }
-            if value.kind == .signingStarted, let transaction = value.context?.transaction, let network = value.context?.network {
-                var approved = EthereumRPC.estimateGasTransactionObject(for: transaction)
-                approved["chainId"] = network.network.chainIdHexString
-                approved["nonce"] = transaction.nonce.flatMap { EthereumQuantity.parseUInt256($0, allowPrefixless: true)?.toHexString(withPrefix: true) }
-                approved["value"] = approved["value"] ?? "0x0"
-                approved["to"] = approved["to"] ?? "0x"
-                approved["type"] = approved["type"] ?? "0x0"
-                approved["accessList"] = approved["accessList"] ?? []
-                fixtures.event("authorizedTransaction", requestID: value.handle?.id,
-                    metadata: ["executionID": value.context?.executionID?.uuidString.lowercased() ?? "", "transaction": approved], operation: operation)
-            }
-            fixtures.event(value.kind.rawValue, requestID: value.handle?.id, metadata: metadata, operation: operation)
-        })
-    }
-}
-
-private final class SafariVMRPCRouting: Sendable {
+final class SafariVMRPCRouting: Sendable {
     private enum Destination: Hashable, Sendable {
         case ethereum(Int), solana(Solana.Cluster)
     }
@@ -1086,7 +747,7 @@ private final class SafariVMRPCRouting: Sendable {
     }
 }
 
-private final class SafariVMCustomNetworks: Sendable {
+final class SafariVMCustomNetworks: Sendable {
     private let preferences: any SharedPreferenceStorage
     private let preferencesMutex = Mutex(())
     private let fileLock: AuthorityFileLock
@@ -1154,7 +815,7 @@ private final class SafariVMCustomNetworks: Sendable {
     }
 }
 
-private struct SafariVMRPCFixtureAuthorization: AlchemyAuthorizationProviding {
+struct SafariVMRPCFixtureAuthorization: AlchemyAuthorizationProviding {
     func authorization(for url: URL) async throws -> AlchemyAuthorization? {
         guard AlchemyJWTProvider.isAlchemyRPCURL(url) else { throw SafariVMFixtures.Failure.rejected }
         return AlchemyAuthorization(token: "safari-vm-fixture")
@@ -1164,4 +825,116 @@ private struct SafariVMRPCFixtureAuthorization: AlchemyAuthorizationProviding {
     }
     func invalidateAuthorization(afterUnauthorized rejected: AlchemyAuthorization, for url: URL) async {}
 }
+@MainActor
+struct SafariVMRuntimeEnvironment {
+    let fixtures: SafariVMFixtures
+    let configuration: AuthorityRuntimeConfiguration
+    let composition: AuthorityComposition
+    let preferences: any SharedPreferenceStorage
+    let routing: SafariVMRPCRouting
+
+    init(configuration: AuthorityRuntimeConfiguration) {
+        let fixtures = SafariVMFixtures.shared
+        self.fixtures = fixtures
+        let storage = fixtures.isLocal ? AuthorityStorageConfiguration(containerURL: fixtures.root) : configuration.storage
+        self.configuration = AuthorityRuntimeConfiguration(catalog: configuration.catalog,
+            catalogOwnedChainIds: configuration.catalogOwnedChainIds, decodedChainIds: configuration.decodedChainIds,
+            storage: storage, messages: configuration.messages)
+        let preferences = Self.preferenceStorage(fixtures)
+        self.preferences = preferences
+        let routing = SafariVMRPCRouting(fixtures: fixtures, catalog: configuration.catalog)
+        self.routing = routing
+        let custom = SafariVMCustomNetworks(preferences: preferences, containerURL: storage.containerURL, routing: routing)
+        let cache = CustomNetworkCache(loader: custom.load, observesDarwinChanges: true)
+        _ = cache.snapshot()
+        var dependencies = AuthorityComposition.Dependencies()
+        dependencies.customSnapshot = { cache.snapshot() }
+        dependencies.freshCustomSnapshot = { cache.refreshSnapshot() }
+        dependencies.definitionResult = { network in
+            guard let chainID = Int(hexString: network.chainId), let entry = cache.snapshot().entriesByChainId[chainID] else { return .unavailable }
+            let urls = CustomNetworkDefinition.requestedRPCURLs(for: network)
+            guard !urls.isEmpty else { return .unavailable }
+            return urls.contains {
+                CustomNetworkDefinition.matches(requested: network, requestedRPCURL: $0,
+                    existing: entry.definition, existingRPCURL: entry.rpcURL)
+            } ? .matching : .conflict
+        }
+        dependencies.insertNetwork = { network in
+            let result = custom.insert(network)
+            if result.succeeded {
+                cache.invalidate()
+                _ = cache.snapshot()
+                CustomNetworkChangeNotification.post()
+            }
+            return result
+        }
+        dependencies.invalidateCache = { cache.invalidate() }
+        dependencies.hooks = Self.executionHooks(fixtures)
+        composition = AuthorityComposition(configuration: self.configuration, dependencies: dependencies)
+    }
+
+    func metadata() -> WalletsMetadataService {
+        fixtures.isLocal ? WalletsMetadataService(storage: preferences, postChange: {
+            WalletStoreSync.postLocalAndExternalChange(defaultsAlreadySynchronized: true)
+        }) : WalletsMetadataService.live()
+    }
+
+    func vault() -> SafariApprovalVault {
+        if fixtures.isLocal {
+            return SafariApprovalVault(fileURL: fixtures.root.appendingPathComponent("SafariApprovalVault.v1"),
+                keyStore: SafariVMApprovalKeyStore(), canEvaluateAuthentication: { _, _ in true },
+                authentication: { _, _, _ in !Task.isCancelled }, hooks: composition.dependencies.hooks)
+        }
+        return SafariApprovalVault(fileURL: configuration.storage.containerURL?.appendingPathComponent("SafariApprovalVault.v1"),
+            hooks: composition.dependencies.hooks)
+    }
+
+    static func preferenceStorage(_ fixtures: SafariVMFixtures) -> any SharedPreferenceStorage {
+        if fixtures.isLocal { return SafariVMPreferenceStorage.shared }
+        guard let defaults = SharedDefaults.defaults else { fatalError("Safari VM application preferences are unavailable") }
+        return defaults
+    }
+
+    static func executionHooks(_ fixtures: SafariVMFixtures) -> AuthorityExecutionHooks {
+        AuthorityExecutionHooks(checkpoint: { point, context in
+            let operation = context.map { fixtures.capture(handle: $0.handle) }
+            try await fixtures.checkpoint(point.rawValue, requestID: context?.handle.id, operation: operation)
+        }, event: { value in
+            if value.kind == .requestAdmitted {
+                guard let handle = value.handle else { fatalError("Safari admission omitted its request identity") }
+                fixtures.recordOperation(handle: handle)
+                return
+            }
+            let operation = value.handle.map { fixtures.capture(handle: $0) }
+            var metadata = [String: Any]()
+            if let handle = value.handle {
+                metadata["requestToken"] = handle.requestToken
+                metadata["profileIdentifier"] = handle.profileIdentifier.map { $0.uuidString.lowercased() as Any } ?? NSNull()
+            }
+            if let context = value.context {
+                metadata["executionID"] = context.executionID?.uuidString.lowercased()
+                metadata["configurationKey"] = context.configurationKey
+            }
+            if let consentID = value.consentID { metadata["consentID"] = consentID.uuidString.lowercased() }
+            if let account = value.account { metadata["account"] = account.normalizedAddress }
+            if let generation = value.generation { metadata["generation"] = generation.uuidString.lowercased() }
+            if let succeeded = value.succeeded { metadata["succeeded"] = succeeded }
+            if value.kind == .authenticationCompleted { metadata["authentication"] = fixtures.isLocal ? "fixture" : "system" }
+            if value.kind == .protectedKeyRead { metadata["storage"] = fixtures.isLocal ? "fixture" : "production" }
+            if value.kind == .signingStarted, let transaction = value.context?.transaction, let network = value.context?.network {
+                var approved = EthereumRPC.estimateGasTransactionObject(for: transaction)
+                approved["chainId"] = network.network.chainIdHexString
+                approved["nonce"] = transaction.nonce.flatMap { EthereumQuantity.parseUInt256($0, allowPrefixless: true)?.toHexString(withPrefix: true) }
+                approved["value"] = approved["value"] ?? "0x0"
+                approved["to"] = approved["to"] ?? "0x"
+                approved["type"] = approved["type"] ?? "0x0"
+                approved["accessList"] = approved["accessList"] ?? []
+                fixtures.event("authorizedTransaction", requestID: value.handle?.id,
+                    metadata: ["executionID": value.context?.executionID?.uuidString.lowercased() ?? "", "transaction": approved], operation: operation)
+            }
+            fixtures.event(value.kind.rawValue, requestID: value.handle?.id, metadata: metadata, operation: operation)
+        })
+    }
+}
+
 #endif

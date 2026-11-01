@@ -170,7 +170,11 @@ final class NativeToolbarRoutingTests: XCTestCase {
     }
 
     private struct RejectingRPC: PublicRPCForwarding {
-        func forward(id: Int, chainId: String, body: String, scope: RPCScope) async -> RPCResponseToExtension {
+        func forward(
+            id: Int, chainId: String, body: String, scope: RPCScope,
+            onAdmissionDecision: @escaping @Sendable () -> Void
+        ) async -> RPCResponseToExtension {
+            onAdmissionDecision()
             fatalError("Toolbar routing must not use RPC")
         }
     }

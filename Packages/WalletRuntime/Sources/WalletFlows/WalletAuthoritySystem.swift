@@ -4,37 +4,32 @@ import WalletAuthority
 
 @MainActor
 public final class WalletAuthoritySystem {
-    public let runtime: AuthorityRuntime
+    private let runtime: AuthorityRuntime
     public var wallets: WalletsManager { runtime.wallets }
     public var credentials: WalletCredentials { runtime.credentials }
     public var requests: ExtensionBridge { runtime.requests }
-    public var admission: DappRequestAdmission { runtime.admission }
     public var networks: NetworkResolver { runtime.networks }
     public var messages: AuthorityMessages { runtime.messages }
     public var metadata: WalletsMetadataService { runtime.metadata }
 
     public init(runtime: AuthorityRuntime) { self.runtime = runtime }
 
-    public static func live(
-        catalog: NetworkCatalog?, catalogOwnedChainIds: Set<Int>, decodedChainIds: Set<Int> = [],
-        solanaEndpoints: any SolanaEndpointResolving, broadcaster: any SignedTransactionBroadcasting,
-        preparation: TransactionApprovalOperations, storage: AuthorityStorageConfiguration, messages: AuthorityMessages
-    ) -> WalletAuthoritySystem {
-        WalletAuthoritySystem(runtime: .live(catalog: catalog, catalogOwnedChainIds: catalogOwnedChainIds,
-            decodedChainIds: decodedChainIds, solanaEndpoints: solanaEndpoints, broadcaster: broadcaster,
-            preparation: preparation, storage: storage, messages: messages))
+#if os(macOS)
+    public static func live(configuration: AuthorityRuntimeConfiguration,
+                            solanaEndpoints: any SolanaEndpointResolving,
+                            broadcaster: any SignedTransactionBroadcasting) -> WalletAuthoritySystem {
+        WalletAuthoritySystem(runtime: .live(configuration: configuration,
+            solanaEndpoints: solanaEndpoints, broadcaster: broadcaster))
     }
 
     public func makeNativeApprovalCoordinator(handle: RequestHandle, nativeDeliveryNonce: NativeDeliveryNonce) -> NativeApprovalCoordinator {
         NativeApprovalCoordinator(authority: runtime.makeNativeApprovalAuthority(handle: handle, nativeDeliveryNonce: nativeDeliveryNonce))
     }
-
-    public func makePopupRequestSessions(presentation: PopupApprovalStatePresenter.Environment,
-        loadTransactionContext: @escaping @MainActor @Sendable (SendTransactionAction) async -> String?) -> PopupRequestSessions {
-        PopupRequestSessions(authority: runtime.makePopupApprovalAuthority(
-            approvalSubjectTitle: presentation.approvalSubjectTitle, loadTransactionContext: loadTransactionContext),
-            presentation: presentation, messages: messages)
+#else
+    public static func live(configuration: AuthorityRuntimeConfiguration) -> WalletAuthoritySystem {
+        WalletAuthoritySystem(runtime: .live(configuration: configuration))
     }
+#endif
 
     public func error(_ kind: AuthorityRuntime.ErrorKind) -> ProviderResponseError { runtime.error(kind) }
     nonisolated public func invalidateNetworkCache() { runtime.invalidateNetworkCache() }

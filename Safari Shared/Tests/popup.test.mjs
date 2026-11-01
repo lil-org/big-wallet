@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
-import {deferred, normalized, nativeResult, nativeError} from "./test_helpers.mjs";
+import {deferred, normalized, nativeResult, nativeError, nativeAdmissionRejection} from "./test_helpers.mjs";
 import {createPopupHarness, flushPopup, popupMarkup as markup} from "./popup_harness.mjs";
 
 const wireSource = (await Promise.all(["protocol.generated.js", "bridge_wire.js"].map(name =>
@@ -1241,6 +1241,82 @@ test("malformed queue metadata fails closed without draining completed responses
     assert.equal(harness.controller.request.requestToken, request.requestToken);
     await harness.get("button-approve").click();
     assert.equal(approvalMessages(harness).length, 1);
+});
+
+test("popup admission overload requires observation and another click before approval", async () => {
+    const request = pendingRequest();
+    let overloaded = true;
+    const harness = popupHarness({requests: [request], native: (message, fallback) => {
+        if (message.subject === "getPendingRequests") {
+            return {...fallback(message), strings: {busy: "Localized busy notice"}};
+        }
+        if (message.subject === "approveRequest" && overloaded) { return nativeAdmissionRejection(message.id); }
+        return fallback(message);
+    }});
+    const state = transactionState(request);
+    harness.setState(request, state);
+    await harness.boot();
+    await harness.get("button-approve").click();
+    assert.equal(approvalMessages(harness).length, 1);
+    assert.equal(harness.controller.interaction.kind, "admissionRejected");
+    assert.equal(harness.get("request-error").textContent, "Localized busy notice");
+    assert.equal(harness.get("button-approve").textContent, "Refresh");
+    assert.deepEqual(normalized(harness.controller.state), state);
+    assert.equal(harness.nativeMessages.some(message => message.subject === "retryApproval"), false);
+    overloaded = false;
+    const afterRejection = harness.nativeMessages.length;
+    await harness.get("button-approve").click();
+    assert.deepEqual(harness.nativeMessages.slice(afterRejection).map(message => message.subject), ["getApprovalState"]);
+    assert.equal(approvalMessages(harness).length, 1);
+    assert.equal(harness.controller.interaction.kind, "viewing");
+    await harness.get("button-approve").click();
+    assert.equal(approvalMessages(harness).length, 2);
+});
+
+test("overloaded popup observation cannot enable a stale approval", async () => {
+    const request = pendingRequest();
+    let rejectReads = false;
+    const harness = popupHarness({requests: [request], native: (message, fallback) => {
+        if (message.subject === "approveRequest" || message.subject === "getApprovalState" && rejectReads) {
+            return nativeAdmissionRejection(message.id);
+        }
+        return fallback(message);
+    }});
+    harness.setState(request, messageState(request));
+    await harness.boot();
+    await harness.get("button-approve").click();
+    rejectReads = true;
+    await harness.get("button-approve").click();
+    assert.equal(approvalMessages(harness).length, 1);
+    assert.equal(harness.controller.interaction.kind, "admissionRejected");
+    assert.equal(harness.nativeMessages.some(message => message.subject === "retryApproval"), false);
+    rejectReads = false;
+    harness.setState(request, {id: request.id, state: "working", actions: []});
+    await harness.get("button-approve").click();
+    assert.equal(harness.controller.state.state, "working");
+    assert.equal(harness.get("button-approve").disabled, true);
+    assert.equal(approvalMessages(harness).length, 1);
+});
+
+test("queue and completion overload preserve queued work without clearing the badge", async () => {
+    for (const stage of ["queue", "completion"]) {
+        const request = pendingRequest();
+        const harness = popupHarness({requests: [request],
+            native: (message, fallback) => message.subject === "getPendingRequests" && stage === "queue"
+                ? nativeAdmissionRejection(message.id) : fallback(message),
+            worker: (message, fallback) => message.subject === "applyCompletedResponse"
+                ? nativeAdmissionRejection(message.id) : fallback(message),
+        });
+        harness.model.completed = [completedResponse(2)];
+        await harness.boot();
+        assert.equal(harness.queue.snapshot.kind, "failed");
+        assert.equal(harness.queue.isEmpty, false);
+        assert.equal(harness.model.closed, 0);
+        assert.equal(harness.model.completed.length, 1);
+        assert.equal(harness.get("idle-connection").textContent, "Big Wallet is busy. Try again shortly.");
+        assert.equal(harness.workerMessages.some(message => message.subject === "updatePendingRequestBadge"), false);
+        assert.equal(harness.nativeMessages.filter(message => message.subject === "getPendingRequests").length, 1);
+    }
 });
 
 test("unknown approval display fields prevent approval until a valid refresh", async () => {

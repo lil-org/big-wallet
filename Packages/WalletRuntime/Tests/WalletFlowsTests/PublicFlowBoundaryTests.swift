@@ -70,8 +70,12 @@ private actor Calls {
 }
 
 private struct UnavailableRPC: PublicRPCForwarding {
-    func forward(id: Int, chainId: String, body: String, scope: RPCScope) async -> RPCResponseToExtension {
-        RPCResponseToExtension(upstream: ["id": id, "error": ["code": -32603, "message": "Unavailable"]], expectedResponseID: id)!
+    func forward(
+        id: Int, chainId: String, body: String, scope: RPCScope,
+        onAdmissionDecision: @escaping @Sendable () -> Void
+    ) async -> RPCResponseToExtension {
+        onAdmissionDecision()
+        return RPCResponseToExtension(upstream: ["id": id, "error": ["code": -32603, "message": "Unavailable"]], expectedResponseID: id)!
     }
 }
 

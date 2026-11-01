@@ -3423,10 +3423,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3581025EF15C9A601B581030 /* WalletAccessController.swift in Sources */,
 				B3ADA3C5ED0A4A39C2A37E6C /* PBXBuildFile */,
 				C0DE00500000000000000012 /* PBXBuildFile */,
-				BF3D000D2FB3000000000000 /* PBXBuildFile */,
 				BF3D00112FB3000000000000 /* PBXBuildFile */,
 				BF3D00122FB3000000000000 /* PBXBuildFile */,
 				BF3D00172FB3000000000000 /* PBXBuildFile */,
@@ -3438,12 +3436,14 @@
 				BF3D002D2FB3000000000000 /* PBXBuildFile */,
 				2C09CBA2273979C1009AD39B /* PBXBuildFile */,
 				2C0F8B302FA2770000F094FB /* PBXBuildFile */,
-				31D4D4FB2E9DE71A50990C2F /* PBXBuildFile */,
 				9F37BA097544F69A8125E29B /* PBXBuildFile */,
 				B227809BB2BBC39F2DF4B94A /* PBXBuildFile */,
-				E58098A4845AA61BB0039038 /* PBXBuildFile */,
 				E02A3988CFF6BDA4AD19952B /* PBXBuildFile */,
 				D998ED2E65A7A8907741CC35 /* PBXBuildFile */,
+				3B5F49F5FC8305DC3838DF33 /* RuntimeResources.swift in Sources */,
+				54C28690C38EF82D6C6D05A8 /* PopupPresentation.swift in Sources */,
+				FC7780A709CA86A252D07F3D /* SafariExtensionServices.swift in Sources */,
+				84A38C2EED01C68A3A892DCA /* SafariVMExtensionServices.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3491,6 +3491,10 @@
 				A82534E0914B3FC5196426E3 /* PBXBuildFile */,
 				4F06D49C87D876D988A6ACF1 /* PBXBuildFile */,
 				7A8E4B2F96BBE7415E7CD0CD /* PBXBuildFile */,
+				39BCFC1FD77833EDA6E60298 /* RuntimeResources.swift in Sources */,
+				1075D63AF34F22214F9DA575 /* PopupPresentation.swift in Sources */,
+				234E4A890D8E31072F6CF4CA /* AccountNames.swift in Sources */,
+				DE526EBF094331667C6F2FB9 /* SafariVMApplicationServices.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3555,7 +3559,10 @@
 				082161FB09A3D32F4981A7F1 /* PBXBuildFile */,
 				31ECF57A15365EEF2A2340D6 /* PBXBuildFile */,
 				4AE6477838B28593AFD7248A /* PBXBuildFile */,
-				290DE00430B8825840F54DD9 /* PBXBuildFile */,
+				074AC1398C54804D4B810C38 /* RuntimeResources.swift in Sources */,
+				1F0C2DBB38A122DFB30935F8 /* PopupPresentation.swift in Sources */,
+				A9FAA4E821ADC27AEF8B9B6E /* AccountNames.swift in Sources */,
+				0AB72C583906201FD9809834 /* SafariVMApplicationServices.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3605,6 +3612,10 @@
 				709492A01222FA6C4B58B5A9 /* PBXBuildFile */,
 				62C85AEEC52E63BC539FC6CE /* PBXBuildFile */,
 				713F26ED9F599FA0C4435CCA /* PBXBuildFile */,
+				F4CD8838246FF1C3BC94C289 /* RuntimeResources.swift in Sources */,
+				63CEB093BF729D7A3FC4EF5F /* PopupPresentation.swift in Sources */,
+				C4A60A370DCC46E1C2DD58EB /* AccountNames.swift in Sources */,
+				458C2D912222EE8305EF165A /* SafariVMApplicationServices.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3612,9 +3623,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				14E065D1DB49B7D90A30D081 /* WalletAccessController.swift in Sources */,
 				2C773FDA2D53A5C500879A1F /* PBXBuildFile */,
-				BF3B00162FB1000000000000 /* PBXBuildFile */,
 				BF3B001E2FB1000000000000 /* PBXBuildFile */,
 				BF3B00202FB1000000000000 /* PBXBuildFile */,
 				BF3B002A2FB1000000000000 /* PBXBuildFile */,
@@ -3625,11 +3634,13 @@
 				BF3B00542FB1000000000000 /* PBXBuildFile */,
 				BF3B00562FB1000000000000 /* PBXBuildFile */,
 				BF3B00582FB1000000000000 /* PBXBuildFile */,
-				215C03B27A254587F88854BF /* PBXBuildFile */,
 				E2296088AF43640CCAC25FC2 /* PBXBuildFile */,
 				DCF01388D66121817924AD4E /* PBXBuildFile */,
-				72E1F0F5435E5F05CD11107E /* PBXBuildFile */,
 				82A3304047E430A7E2BB4B25 /* PBXBuildFile */,
+				2FAC04A715D5051EC6893228 /* RuntimeResources.swift in Sources */,
+				B38CDCE56F48D284374D8668 /* PopupPresentation.swift in Sources */,
+				15C0C0256416A867B1771C5A /* SafariExtensionServices.swift in Sources */,
+				BC12155EAF5FBFBC2BAA6753 /* SafariVMExtensionServices.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3732,8 +3743,11 @@
 				A2E9A6DFB12D6E1825909065 /* PBXBuildFile */,
 				A9D54CD00F079EADEAB5991D /* PBXBuildFile */,
 				6D22947E0F200CC9EA2D3246 /* PBXBuildFile */,
-				FAE9760124B3D46E58A3E1EB /* PBXBuildFile */,
 				29B955F811BA556B238797D1 /* PBXBuildFile */,
+				CD87EC62B8AB1F52EDE94122 /* RuntimeResources.swift in Sources */,
+				B01C0E8430306332ED7FA3D4 /* PopupPresentation.swift in Sources */,
+				B4658EC6D6B78D5DABF7C138 /* AccountNames.swift in Sources */,
+				853D87EF772CDAF89C13165B /* SafariVMApplicationServices.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3741,10 +3755,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				173500CEC3775D90586F7EA2 /* WalletAccessController.swift in Sources */,
 				DA422125B14FEEBCAEBD4DD7 /* PBXBuildFile */,
 				2CE0593F27640E300042D844 /* PBXBuildFile */,
-				BF3B00152FB1000000000000 /* PBXBuildFile */,
 				BF3B001D2FB1000000000000 /* PBXBuildFile */,
 				BF3B001F2FB1000000000000 /* PBXBuildFile */,
 				BF3B00292FB1000000000000 /* PBXBuildFile */,
@@ -3755,11 +3767,13 @@
 				BF3B00532FB1000000000000 /* PBXBuildFile */,
 				BF3B00552FB1000000000000 /* PBXBuildFile */,
 				BF3B00572FB1000000000000 /* PBXBuildFile */,
-				DB8473B6DF4F7630B7BB85FE /* PBXBuildFile */,
 				AD908BE0B4813EC14CC30B46 /* PBXBuildFile */,
 				052388298971C243465BB57F /* PBXBuildFile */,
-				3B3B22C2EDC691BF14C0D749 /* PBXBuildFile */,
 				C2E59424259CAC9739924586 /* PBXBuildFile */,
+				427717556142090B34A91A6C /* RuntimeResources.swift in Sources */,
+				051F3FA3579E7748310911B1 /* PopupPresentation.swift in Sources */,
+				606FC430CE8BC66BA301D3D8 /* SafariExtensionServices.swift in Sources */,
+				FB4213ACA94A45507940140B /* SafariVMExtensionServices.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -5123,6 +5137,12 @@
 		F45B0D3AC1FF3AA85A7254F7 /* Runtime Composition */ = {
 			isa = PBXGroup;
 			children = (
+				CA63A3741CBB700C5067F1B8 /* Shared/Services/RuntimeResources.swift */,
+				B39CD40C483F1D493B998699 /* Shared/Services/PopupPresentation.swift */,
+				907E1BFD940D189908A386C0 /* Shared/Wallets/AccountNames.swift */,
+				B7B49A38E8BB684D229BABDB /* Shared/Services/SafariVMApplicationServices.swift */,
+				AE7F49AF02387896DAE407C0 /* Safari Shared/SafariExtensionServices.swift */,
+				89DD36B1714BCCF5DA630314 /* Safari Shared/SafariVMExtensionServices.swift */,
 				2EC290F8E399B7A06AC6B11C /* Tests/MobileWalletAccessTests.swift */,
 				1822C8C4CE6C7CE7535EA264 /* App iOS/Library/MobileWalletAccess.swift */,
 				EE2A2EA5BB1F9EC8BA766D17 /* Tests/WalletAccessControllerTests.swift */,
@@ -5666,6 +5686,41 @@
 
 /* Wallet runtime package and composition */
 
+
+		CA63A3741CBB700C5067F1B8 /* Shared/Services/RuntimeResources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Services/RuntimeResources.swift"; sourceTree = SOURCE_ROOT; };
+		B39CD40C483F1D493B998699 /* Shared/Services/PopupPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Services/PopupPresentation.swift"; sourceTree = SOURCE_ROOT; };
+		907E1BFD940D189908A386C0 /* Shared/Wallets/AccountNames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Wallets/AccountNames.swift"; sourceTree = SOURCE_ROOT; };
+		B7B49A38E8BB684D229BABDB /* Shared/Services/SafariVMApplicationServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/Services/SafariVMApplicationServices.swift"; sourceTree = SOURCE_ROOT; };
+		AE7F49AF02387896DAE407C0 /* Safari Shared/SafariExtensionServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Safari Shared/SafariExtensionServices.swift"; sourceTree = SOURCE_ROOT; };
+		89DD36B1714BCCF5DA630314 /* Safari Shared/SafariVMExtensionServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Safari Shared/SafariVMExtensionServices.swift"; sourceTree = SOURCE_ROOT; };
+		F4CD8838246FF1C3BC94C289 /* Shared/Services/RuntimeResources.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA63A3741CBB700C5067F1B8 /* Shared/Services/RuntimeResources.swift */; };
+		63CEB093BF729D7A3FC4EF5F /* Shared/Services/PopupPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B39CD40C483F1D493B998699 /* Shared/Services/PopupPresentation.swift */; };
+		C4A60A370DCC46E1C2DD58EB /* Shared/Wallets/AccountNames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 907E1BFD940D189908A386C0 /* Shared/Wallets/AccountNames.swift */; };
+		458C2D912222EE8305EF165A /* Shared/Services/SafariVMApplicationServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7B49A38E8BB684D229BABDB /* Shared/Services/SafariVMApplicationServices.swift */; };
+		CD87EC62B8AB1F52EDE94122 /* Shared/Services/RuntimeResources.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA63A3741CBB700C5067F1B8 /* Shared/Services/RuntimeResources.swift */; };
+		B01C0E8430306332ED7FA3D4 /* Shared/Services/PopupPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B39CD40C483F1D493B998699 /* Shared/Services/PopupPresentation.swift */; };
+		B4658EC6D6B78D5DABF7C138 /* Shared/Wallets/AccountNames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 907E1BFD940D189908A386C0 /* Shared/Wallets/AccountNames.swift */; };
+		853D87EF772CDAF89C13165B /* Shared/Services/SafariVMApplicationServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7B49A38E8BB684D229BABDB /* Shared/Services/SafariVMApplicationServices.swift */; };
+		39BCFC1FD77833EDA6E60298 /* Shared/Services/RuntimeResources.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA63A3741CBB700C5067F1B8 /* Shared/Services/RuntimeResources.swift */; };
+		1075D63AF34F22214F9DA575 /* Shared/Services/PopupPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B39CD40C483F1D493B998699 /* Shared/Services/PopupPresentation.swift */; };
+		234E4A890D8E31072F6CF4CA /* Shared/Wallets/AccountNames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 907E1BFD940D189908A386C0 /* Shared/Wallets/AccountNames.swift */; };
+		DE526EBF094331667C6F2FB9 /* Shared/Services/SafariVMApplicationServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7B49A38E8BB684D229BABDB /* Shared/Services/SafariVMApplicationServices.swift */; };
+		074AC1398C54804D4B810C38 /* Shared/Services/RuntimeResources.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA63A3741CBB700C5067F1B8 /* Shared/Services/RuntimeResources.swift */; };
+		1F0C2DBB38A122DFB30935F8 /* Shared/Services/PopupPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B39CD40C483F1D493B998699 /* Shared/Services/PopupPresentation.swift */; };
+		A9FAA4E821ADC27AEF8B9B6E /* Shared/Wallets/AccountNames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 907E1BFD940D189908A386C0 /* Shared/Wallets/AccountNames.swift */; };
+		0AB72C583906201FD9809834 /* Shared/Services/SafariVMApplicationServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7B49A38E8BB684D229BABDB /* Shared/Services/SafariVMApplicationServices.swift */; };
+		2FAC04A715D5051EC6893228 /* Shared/Services/RuntimeResources.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA63A3741CBB700C5067F1B8 /* Shared/Services/RuntimeResources.swift */; };
+		B38CDCE56F48D284374D8668 /* Shared/Services/PopupPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B39CD40C483F1D493B998699 /* Shared/Services/PopupPresentation.swift */; };
+		15C0C0256416A867B1771C5A /* Safari Shared/SafariExtensionServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE7F49AF02387896DAE407C0 /* Safari Shared/SafariExtensionServices.swift */; };
+		BC12155EAF5FBFBC2BAA6753 /* Safari Shared/SafariVMExtensionServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89DD36B1714BCCF5DA630314 /* Safari Shared/SafariVMExtensionServices.swift */; };
+		427717556142090B34A91A6C /* Shared/Services/RuntimeResources.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA63A3741CBB700C5067F1B8 /* Shared/Services/RuntimeResources.swift */; };
+		051F3FA3579E7748310911B1 /* Shared/Services/PopupPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B39CD40C483F1D493B998699 /* Shared/Services/PopupPresentation.swift */; };
+		606FC430CE8BC66BA301D3D8 /* Safari Shared/SafariExtensionServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE7F49AF02387896DAE407C0 /* Safari Shared/SafariExtensionServices.swift */; };
+		FB4213ACA94A45507940140B /* Safari Shared/SafariVMExtensionServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89DD36B1714BCCF5DA630314 /* Safari Shared/SafariVMExtensionServices.swift */; };
+		3B5F49F5FC8305DC3838DF33 /* Shared/Services/RuntimeResources.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA63A3741CBB700C5067F1B8 /* Shared/Services/RuntimeResources.swift */; };
+		54C28690C38EF82D6C6D05A8 /* Shared/Services/PopupPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B39CD40C483F1D493B998699 /* Shared/Services/PopupPresentation.swift */; };
+		FC7780A709CA86A252D07F3D /* Safari Shared/SafariExtensionServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE7F49AF02387896DAE407C0 /* Safari Shared/SafariExtensionServices.swift */; };
+		84A38C2EED01C68A3A892DCA /* Safari Shared/SafariVMExtensionServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89DD36B1714BCCF5DA630314 /* Safari Shared/SafariVMExtensionServices.swift */; };
 
 	};
 	rootObject = 2C1995342674C4B900A8E370 /* Project object */;

@@ -13,9 +13,23 @@ inside the existing processes and uses the existing entitlements.
 
 `WalletStorageSupport` holds the shared file-lock implementation. It has no library
 product. `CWalletCrypto` is reachable only through Authority. Authority and
-Networking cannot import one another. Flows cannot import Networking, private storage support, Security, LocalAuthentication or private crypto. `ApplicationServices` composes the public
-libraries through `WalletAuthoritySystem` in Flows and `AuthorityRuntime` in Authority and injects localized messages, transaction preparation, and signed
-transaction broadcasting. App-owned extensions format values for UI.
+Networking cannot import one another. Flows cannot import Networking, private storage support, Security, LocalAuthentication or private crypto.
+`ApplicationServices` composes application services through `WalletAuthoritySystem`
+in Flows and `AuthorityRuntime` in Authority. `SafariExtensionServices` constructs
+the extension's narrower runtime directly. App-owned extensions format values for UI.
+
+| Composition | Consumers | Constructed authority services |
+| --- | --- | --- |
+| `AuthorityRuntime` | Containing apps and the existing macOS helper | Wallet management, credentials, metadata and revocation; macOS native approval/signing or mobile vault publication/reconciliation |
+| `NativeTransportRuntime` | macOS Safari extension | Request storage, network resolution, request processing and admission without wallet catalog access |
+| `PopupAuthorityRuntime` | iOS and visionOS Safari extensions | Request transport, shared vault reader/unlocker, read-only metadata, popup preparation and execution |
+
+Extension compositions never construct the application runtime. The macOS
+extension also omits transaction preparation, broadcasting, inspection and price
+services. The existing helper retains wallet management because it presents the
+wallet and onboarding UI. These construction and API boundaries do not introduce
+additional OS process isolation. Ordinary-import fixtures and Xcode membership
+checks prevent extension composition from reaching the application facade.
 
 ## Concurrency
 

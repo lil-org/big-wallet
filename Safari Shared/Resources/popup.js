@@ -48,6 +48,12 @@ function transactionEditorValues(editor) {
     };
 }
 
+function admissionRejectionMessage(rejection) {
+    return rejection.reason === "busy"
+        ? localized("busy", "Big Wallet is busy. Try again shortly.")
+        : localized("failedToLoad", "Failed to load");
+}
+
 let popupQueue = null;
 let popupStrings = {};
 let ignoreSliderUntilRelease = false;
@@ -156,7 +162,9 @@ class PopupQueueController {
                     const response = await fetchPendingResponse();
                     if (revision !== this.revision) { continue; }
                     if (!this.canRefresh) { return null; }
-                    this.snapshot = response
+                    this.snapshot = response?.nativeAdmissionRejected
+                        ? {kind: "failed", revision, rejection: response}
+                        : response
                         ? {kind: "ready", revision, requests: response.requests}
                         : {kind: "failed", revision};
                     this.presentSnapshot();
@@ -233,7 +241,8 @@ class PopupQueueController {
         this.renderIdleControls();
         setText("idle-host", tab ? (tab.host || tab.configurationKey) : "");
         if (this.snapshot.kind === "failed" || this.showsUpdateRecovery) {
-            setText("idle-connection", localized("failedToLoad", "Failed to load"));
+            setText("idle-connection", this.snapshot.rejection
+                ? admissionRejectionMessage(this.snapshot.rejection) : localized("failedToLoad", "Failed to load"));
             return;
         }
         if (!tab) {
@@ -247,7 +256,11 @@ class PopupQueueController {
         const configuration = await readLatestConfiguration(tab);
         if (!this.ownsIdle(token, tab)) { return; }
         let connectionText = localized("failedToLoad", "Failed to load");
-        if (configuration) {
+        if (configuration?.kind === "configurationError") {
+            if (configuration.error.code === -32005 && configuration.error.data?.reason === "busy") {
+                connectionText = admissionRejectionMessage(configuration.error.data);
+            }
+        } else if (configuration) {
             const lines = [];
             if (configuration.ethereum?.address) { lines.push(configuration.ethereum.address); }
             if (configuration.solana) { lines.push(configuration.solana.publicKey); }
@@ -278,6 +291,13 @@ class PopupQueueController {
             return;
         }
         const response = outcome.status === "response" ? outcome.response : null;
+        const rejection = BigWalletBridgeWire.decodeNativeAdmissionRejection(response);
+        if (rejection) {
+            this.presentation.operation = null;
+            setText("idle-connection", admissionRejectionMessage(rejection));
+            this.renderIdleControls();
+            return;
+        }
         const id = response?.id;
         const valid = Number.isSafeInteger(id) && (
             BigWalletBridgeWire.isManualSwitchAcknowledgement(response, id, tab.configurationKey) ||
@@ -401,7 +421,8 @@ class PopupRequestController {
                 subject, this.request.id, payload, this.request.requestToken,
                 reviewToken
             )), subject === "approveRequest");
-            return BigWalletPopupWire.decodeCommandResult(response, this.request.id);
+            return BigWalletBridgeWire.decodeNativeAdmissionRejection(response, this.request.id)
+                || BigWalletPopupWire.decodeCommandResult(response, this.request.id);
         } catch {
             return null;
         }
@@ -425,6 +446,7 @@ class PopupRequestController {
     }
 
     acceptReply(reply) {
+        if (reply?.nativeAdmissionRejected) { this.failAdmission(reply); return null; }
         if (!reply?.approval) { this.failTransport(); return null; }
         if (reply.approval.state === "missing") { void this.reconcile(); return null; }
         return reply;
@@ -477,6 +499,26 @@ class PopupRequestController {
         this.setInteraction({kind: "failed"});
         this.renderTransportFailure();
         this.updateInteractionControls();
+    }
+
+    failAdmission(rejection) {
+        if (!this.isActive) { return; }
+        this.stopRead();
+        this.command = null;
+        this.setInteraction({kind: "admissionRejected", rejection});
+        this.renderState({
+            id: this.request.id, state: "error", actions: [],
+            host: this.state?.host || this.request.host,
+            error: admissionRejectionMessage(rejection),
+        });
+        this.updateInteractionControls();
+    }
+
+    async observeAfterRejection() {
+        if (!this.isActive || this.isSubmitting || this.interaction.kind !== "admissionRejected") { return; }
+        const operation = this.beginCommand("observe");
+        const outcome = await this.sendCommand({subject: "getApprovalState"});
+        this.completeCommand(operation, outcome);
     }
 
     beginCommand(kind) {
@@ -754,6 +796,9 @@ class PopupRequestController {
     }
 
     primaryAction(state) {
+        if (this.interaction.kind === "admissionRejected") {
+            return {kind: "observe", title: localized("refresh", "Refresh")};
+        }
         if (this.interaction.kind === "failed" || hasApprovalAction(state, "retry")) {
             return {kind: "retryApproval", title: localized("refresh", "Refresh")};
         }
@@ -775,7 +820,7 @@ class PopupRequestController {
         const approve = document.getElementById("button-approve");
         const action = this.primaryAction(state);
         if (approve.textContent !== action.title) { approve.textContent = action.title; }
-        if (this.interaction.kind === "failed") {
+        if (this.interaction.kind === "failed" || this.interaction.kind === "admissionRejected") {
             approve.disabled = this.isSubmitting;
         } else if (this.isSubmitting || this.interaction.kind !== "viewing") {
             approve.disabled = true;
@@ -890,8 +935,12 @@ class PopupRequestController {
     }
 
     async approveCurrent() {
-        if (!this.isActive || this.isSubmitting || !["viewing", "failed"].includes(this.interaction.kind)) { return; }
+        if (!this.isActive || this.isSubmitting || !["viewing", "failed", "admissionRejected"].includes(this.interaction.kind)) { return; }
         const action = this.primaryAction(this.state);
+        if (action.kind === "observe") {
+            await this.observeAfterRejection();
+            return;
+        }
         if (action.kind === "retryApproval") {
             await this.retry();
             return;
@@ -1296,7 +1345,8 @@ async function readLatestConfiguration(tab) {
     const outcome = await settleExtensionMessage(pending);
     const response = outcome.status === "response"
         ? BigWalletBridgeWire.decodePageResponse(outcome.response) : null;
-    return response?.kind === "configuration" ? response.state : null;
+    return response?.kind === "configuration" ? response.state
+        : response?.kind === "configurationError" ? response : null;
 }
 
 function setPendingRequestBadge(count) {
@@ -1317,6 +1367,8 @@ async function fetchPendingResponse() {
     while (true) {
         const outcome = await settleExtensionMessage(Promise.resolve().then(() => nativeMessage("getPendingRequests", genId())));
         if (outcome.status !== "response") { return null; }
+        const rejection = BigWalletBridgeWire.decodeNativeAdmissionRejection(outcome.response);
+        if (rejection) { return rejection; }
         const response = BigWalletPopupWire.decodeQueue(outcome.response);
         if (!response) { return null; }
         applyStrings(response.strings);
@@ -1324,6 +1376,10 @@ async function fetchPendingResponse() {
         const appliedIDs = [];
         for (const completed of response.completedResponses) {
             const result = await applyCompletedResponse(completed);
+            if (result?.nativeAdmissionRejected) {
+                notifyResponseReadyIds(appliedIDs);
+                return result;
+            }
             if (result === "failure") {
                 notifyResponseReadyIds(appliedIDs);
                 return null;
@@ -1427,6 +1483,8 @@ async function applyCompletedResponse(request) {
     }
     const outcome = await settleExtensionMessage(pending, RESPONSE_DELIVERY_TIMEOUT);
     if (outcome.status !== "response") { return "failure"; }
+    const rejection = BigWalletBridgeWire.decodeNativeAdmissionRejection(outcome.response, id);
+    if (rejection) { return rejection; }
     const reply = decodeWireMessage("RuntimeApplyCompletedReply", outcome.response);
     if (reply?.applied === true) { return "applied"; }
     if (reply?.id === id && reply.missing === true) { return "missing"; }

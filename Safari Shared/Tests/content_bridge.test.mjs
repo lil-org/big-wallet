@@ -5,7 +5,7 @@ import {webcrypto} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
-import {nativeError} from "./test_helpers.mjs";
+import {nativeError, nativeAdmissionRejection} from "./test_helpers.mjs";
 
 const [bridgeSource, protocolSource, contentSource] = await Promise.all([
     readFile(new URL("../Resources/bridge_wire.js", import.meta.url), "utf8"),
@@ -278,6 +278,86 @@ function dappRequest(id = 7) {
         body: {address: "", chainId: "0x1"},
     };
 }
+
+test("a definite native admission rejection fails once without enqueue retries", async () => {
+    for (const reason of ["busy", "request_too_large", "request_too_complex"]) {
+        const harness = makeHarness({sendMessage: message => nativeAdmissionRejection(message.message.id, reason)});
+        await settle();
+        harness.dispatchPage("request", dappRequest());
+        await settle();
+        const response = harness.postedMessages.find(value => value.message.response?.id === 7)?.message.response;
+        assert.equal(response?.error.code, -32005);
+        assert.deepEqual(response.error.data, {reason, dispatched: false});
+        assert.equal(harness.context.bigWalletRequests.size, 0);
+        assert.equal(harness.runtimeMessages.filter(message => message.subject === "message-to-wallet").length, 1);
+        assert.equal(harness.nextTimerDelay(), null);
+    }
+});
+
+test("busy after a lost enqueue acknowledgement preserves the original uncertain attempt", async () => {
+    let enqueues = 0;
+    const harness = makeHarness({sendMessage: message => {
+        if (message.subject === "message-to-wallet") {
+            enqueues += 1;
+            if (enqueues === 1) { return undefined; }
+            if (enqueues === 2) { return nativeAdmissionRejection(message.message.id); }
+            return {id: 7, requestToken, admissionKind: "replay", approvalRequired: true, state: configurationState()};
+        }
+        return {kind: "result", id: 7, name: "requestAccounts", provider: "ethereum",
+            result: [], approvalCommitted: false, state: configurationState()};
+    }});
+    await settle();
+    harness.dispatchPage("request", dappRequest());
+    await settle();
+    await harness.runTimer();
+    assert.equal(enqueues, 2);
+    assert.equal(harness.context.bigWalletRequests.size, 1);
+    assert.equal(harness.postedMessages.some(value => value.message.response?.id === 7), false);
+    await harness.runTimer();
+    const attempts = harness.runtimeMessages.filter(message => message.subject === "message-to-wallet");
+    assert.equal(attempts.length, 3);
+    assert.ok(attempts.every(message => message.enqueueAttempt === attempts[0].enqueueAttempt &&
+        message.admissionDeadline === attempts[0].admissionDeadline));
+    await harness.runTimer();
+    const responses = harness.postedMessages.filter(value => value.message.response?.id === 7);
+    assert.equal(responses.length, 1);
+    assert.equal(responses[0].message.response.kind, "result");
+});
+
+test("native polling overload keeps the request waiting without acknowledging or failing it", async () => {
+    let polls = 0;
+    const harness = makeHarness({sendMessage: message => {
+        if (message.subject === "message-to-wallet") {
+            return {id: 7, requestToken, admissionKind: "new", approvalRequired: true, state: configurationState()};
+        }
+        polls += 1;
+        if (polls === 1) { return nativeAdmissionRejection(7); }
+        return {kind: "result", id: 7, name: "requestAccounts", provider: "ethereum",
+            result: [], approvalCommitted: false, state: configurationState()};
+    }});
+    await settle();
+    harness.dispatchPage("request", dappRequest());
+    await settle();
+    await harness.runTimer();
+    const state = [...harness.context.bigWalletRequests.values()][0];
+    assert.equal(state.phase, "waiting");
+    assert.equal(state.responseFailureMilliseconds, 0);
+    assert.equal(harness.postedMessages.some(value => value.message.response?.id === 7), false);
+    await harness.runTimer();
+    assert.equal(polls, 2);
+    assert.equal(harness.context.bigWalletRequests.size, 0);
+});
+
+test("native revocation overload is not retried or reported as revoked", async () => {
+    const harness = makeHarness({sendMessage: message => nativeAdmissionRejection(message.id)});
+    await settle();
+    harness.dispatchPage("disconnect", {id: 7, provider: "ethereum"});
+    await settle();
+    assert.equal(harness.runtimeMessages.filter(message => message.subject === "disconnect").length, 1);
+    const response = harness.postedMessages.find(value => value.message.response?.id === 7)?.message.response;
+    assert.equal(response?.kind, "error");
+    assert.equal(response.error.code, -32005);
+});
 
 for (const {kind, message, responseName, replies = true} of [
     {kind: "rpc", message: {id: 7, chainId: 1, body: "{}"}, responseName: null},

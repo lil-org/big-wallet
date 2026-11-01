@@ -77,6 +77,8 @@ async function readNativeConfiguration(configurationKey, nativeContext) {
     const response = await WIRE.withTimeout(sendNativeMessage({
         subject: "getLatestConfiguration", id, configurationKey, workflowVersion: WORKFLOW_VERSION,
     }, nativeContext), TRANSPORT_TIMEOUT);
+    const rejection = WIRE.decodeNativeAdmissionRejection(response, id);
+    if (rejection) { return rejection; }
     const decoded = WIRE.decodeMessage("NativeConfigurationReply", response);
     return decoded?.id === id ? decoded.state ?? null : null;
 }
@@ -91,6 +93,9 @@ async function latestConfiguration(request, nativeContext) {
     if (!identity) { return pageConfigurationFailure(); }
     try {
         const state = await readNativeConfiguration(identity.configurationKey, nativeContext);
+        if (state?.nativeAdmissionRejected) {
+            return {kind: "configurationError", error: WIRE.nativeAdmissionError(state)};
+        }
         return state ? {kind: "configuration", state} : pageConfigurationFailure();
     } catch { return pageConfigurationFailure(); }
 }
@@ -116,6 +121,8 @@ async function handleDappRequest(request, nativeContext) {
         admissionDeadline: request.admissionDeadline, enqueueAttempt: request.enqueueAttempt,
         workflowVersion: WORKFLOW_VERSION,
     }, nativeContext), TRANSPORT_TIMEOUT);
+    const rejection = WIRE.decodeNativeAdmissionRejection(response, message.id);
+    if (rejection) { return rejection; }
     if (WIRE.isNativeEnqueueAcknowledgement(response, message.id)) {
         if (response.approvalRequired) { notifyPendingRequestAvailable(); cuePopup(); }
         return response;
@@ -139,13 +146,15 @@ async function handleGetResponse(request, nativeContext) {
         }
     }
     const completed = await consumeStoredResponse(request, nativeContext, maintain ? "interactive" : "none");
-    return completed?.delivery ? pageResponse(completed.delivery) : completed?.status;
+    return completed?.rejection || (completed?.delivery ? pageResponse(completed.delivery) : completed?.status);
 }
 
 async function acknowledgeCompletedResponse(request, nativeContext) {
     const response = await WIRE.withTimeout(sendNativeMessage({
         ...nativeRequestIdentity(request), subject: "acknowledgeResponse",
     }, nativeContext), TRANSPORT_TIMEOUT);
+    const rejection = WIRE.decodeNativeAdmissionRejection(response, request.id);
+    if (rejection) { return rejection; }
     return WIRE.isMessage("NativeAcknowledgementReply", response) && response.id === request.id &&
         (response.acknowledged === true || response.missing === true);
 }
@@ -154,6 +163,8 @@ async function pollStoredResponse(request, nativeContext, maintenance) {
     const response = await WIRE.withTimeout(sendNativeMessage({
         ...nativeRequestIdentity(request), subject: "pollResponse", maintenance,
     }, nativeContext), TRANSPORT_TIMEOUT);
+    const rejection = WIRE.decodeNativeAdmissionRejection(response, request.id);
+    if (rejection) { return {rejection}; }
     const reply = WIRE.decodeMessage("NativeResponsePollReply", response);
     if (reply?.id !== request.id) { return undefined; }
     if (!reply.response) { return {status: reply}; }
@@ -163,7 +174,9 @@ async function pollStoredResponse(request, nativeContext, maintenance) {
 
 async function acknowledgePolledResponse(request, nativeContext, polled) {
     if (!polled?.delivery) { return polled; }
-    if (!await acknowledgeCompletedResponse(request, nativeContext)) { return undefined; }
+    const acknowledged = await acknowledgeCompletedResponse(request, nativeContext);
+    if (acknowledged?.nativeAdmissionRejected) { return {rejection: acknowledged}; }
+    if (!acknowledged) { return undefined; }
     await broadcastConfigurationInvalidated(request.configurationKey);
     return polled;
 }
@@ -176,8 +189,8 @@ async function applyCompletedResponse(request, nativeContext) {
     if (nativeContext?.source !== "popup" || nativeContext.privateBrowsing ||
         WIRE.configurationIdentityForURL(request.configurationKey)?.configurationKey !== request.configurationKey) { return undefined; }
     const completed = await consumeStoredResponse(request, nativeContext);
-    return completed?.delivery ? {applied: true}
-        : completed?.status?.missing ? completed.status : undefined;
+    return completed?.rejection || (completed?.delivery ? {applied: true}
+        : completed?.status?.missing ? completed.status : undefined);
 }
 
 async function disconnect(request, nativeContext) {
@@ -188,6 +201,8 @@ async function disconnect(request, nativeContext) {
         configurationKey, attempt: request.attempt, authority: request.authority,
         workflowVersion: WORKFLOW_VERSION,
     }, nativeContext), TRANSPORT_TIMEOUT);
+    const rejection = WIRE.decodeNativeAdmissionRejection(response, request.id);
+    if (rejection) { return rejection; }
     const decoded = WIRE.decodeMessage("NativeDisconnectReply", response);
     const state = decoded?.state;
     if (decoded?.id !== request.id || !state) { return pageFailure(request.id, request.provider, "revokePermissions"); }
@@ -217,6 +232,10 @@ async function handleRPC(request, nativeContext) {
             subject: request.subject, id: request.id, chainId: request.chainId,
             body: request.body, workflowVersion: request.workflowVersion,
         }, nativeContext), NATIVE_OPERATION_TIMEOUT);
+        const rejection = WIRE.decodeNativeAdmissionRejection(response, request.id);
+        if (rejection) {
+            return {...pageFailure(request.id, "ethereum", null), error: WIRE.nativeAdmissionError(rejection)};
+        }
         if (!WIRE.isCorrelatedRPCResponse(response, request.id)) { return pageFailure(request.id, "ethereum", null); }
         const base = {id: request.id, provider: "ethereum", name: null, state: null};
         if (Object.prototype.hasOwnProperty.call(response, "error")) {
@@ -305,6 +324,7 @@ function beginManualSwitch(identity, nativeContext) {
     const pending = (async () => {
         let state = await readNativeConfiguration(identity.configurationKey, nativeContext);
         if (!state) { return undefined; }
+        if (state.nativeAdmissionRejected) { return state; }
         const admissionDeadline = Date.now() + WIRE.WORKFLOW_POLICY.requestTTLMilliseconds;
         let completionDrainUsed = false;
         let previousID = 0;
@@ -317,14 +337,18 @@ function beginManualSwitch(identity, nativeContext) {
                 authority: {context: state.context, revisions: state.revisions},
                 admissionDeadline, enqueueAttempt: WIRE.genPrivateToken(), workflowVersion: WORKFLOW_VERSION,
             }, nativeContext), NATIVE_APPROVAL_TRANSPORT_TIMEOUT);
+            const rejection = WIRE.decodeNativeAdmissionRejection(response, id);
+            if (rejection) { return rejection; }
             if (WIRE.isNativeEnqueueAcknowledgement(response, response?.id) && response.state.context === state.context &&
                 (response.admissionKind === "coalesced" || response.id === id)) {
                 if (!response.approvalRequired && response.admissionKind === "coalesced") {
                     if (completionDrainUsed) { return undefined; }
                     completionDrainUsed = true;
                     const completed = await consumeStoredResponse({...response, configurationKey: identity.configurationKey}, nativeContext);
+                    if (completed?.rejection) { return completed.rejection; }
                     if (!completed?.delivery && !completed?.status?.missing) { return undefined; }
                     const refreshed = await readNativeConfiguration(identity.configurationKey, nativeContext);
+                    if (refreshed?.nativeAdmissionRejected) { return refreshed; }
                     if (!refreshed || refreshed.context !== state.context) { return undefined; }
                     state = refreshed;
                     continue;
@@ -433,6 +457,7 @@ async function showManualSwitchApproval(response, configurationKey, nativeContex
     for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
             const opened = await WIRE.withTimeout(sendNativeMessage(request, nativeContext), NATIVE_APPROVAL_TRANSPORT_TIMEOUT);
+            if (WIRE.decodeNativeAdmissionRejection(opened, response.id)) { return false; }
             const status = WIRE.decodeMessage("NativeOpenReply", opened);
             if (status?.id !== response.id) { continue; }
             if (status.opened === true) {

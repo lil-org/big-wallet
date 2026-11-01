@@ -377,7 +377,10 @@ public final class PopupApprovalAuthority {
             )
         case .getPendingRequests:
             preconditionFailure()
-        case .approveRequest, .rejectRequest, .setTransactionSpeed,
+        case .rejectRequest:
+            let outcome = await reject(request: request, profileIdentifier: profileIdentifier)
+            return await rejectionResponse(for: outcome, handle: handle)
+        case .approveRequest, .setTransactionSpeed,
              .applyTransactionEdits, .retryTransaction:
             let outcome = await performCommand(
                 command,
@@ -385,6 +388,23 @@ public final class PopupApprovalAuthority {
                 profileIdentifier: profileIdentifier
             )
             return await commandResponse(for: outcome, handle: handle)
+        }
+    }
+
+    private func rejectionResponse(for outcome: PopupCommandStatus, handle: RequestHandle) async -> PopupAuthorityResponse {
+        if case .unavailable = outcome { return .command(status: .unavailable, state: nil) }
+        switch await store.load(handle: handle) {
+        case .missing:
+            discardEntry(handle: handle)
+            return .command(status: outcome, state: PopupAuthorityState(id: handle.id, content: .missing))
+        case .unavailable:
+            return .command(status: .unavailable, state: nil)
+        case .found(let snapshot):
+            if snapshot.phase == .responded {
+                discardEntry(handle: handle)
+                return .command(status: outcome, state: PopupAuthorityState(id: handle.id, content: .missing))
+            }
+            return .command(status: outcome, state: PopupAuthorityState(id: handle.id, host: snapshot.host, content: .working))
         }
     }
 

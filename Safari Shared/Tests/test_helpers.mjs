@@ -21,3 +21,8 @@ export function nativeResult({id, name, provider, result, approvalCommitted = fa
 export function nativeError({id, name, provider, error, approvalCommitted = false, authorizationFailure = false}) {
     return {id, name, provider, kind: "error", error, approvalCommitted, authorizationFailure};
 }
+
+export function nativeAdmissionRejection(id, reason = "busy") {
+    return {id, workflowVersion: 4, nativeAdmissionRejected: true, reason, code: -32005, dispatched: false,
+        ...(reason === "busy" ? {retryAfterMilliseconds: 500} : {})};
+}

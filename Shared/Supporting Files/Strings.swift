@@ -68,6 +68,7 @@ struct Strings {
     static let toShowPrivateKey = loc("to show private key")
     static let loading = loc("Loading")
     static let failedToLoad = loc("Failed to load")
+    static let busy = loc("Big Wallet is busy. Try again shortly.")
     static let tryAgain = loc("Try Again")
     static let noData = loc("There is no data yet")
     static let refresh = loc("Refresh")
@@ -173,6 +174,7 @@ struct Strings {
             "notConnected": notConnected,
             "privateBrowsingUnsupported": privateBrowsingUnsupported,
             "failedToLoad": failedToLoad,
+            "busy": busy,
             "refresh": refresh,
             "calculating": calculating.withEllipsis,
             "queuePosition": queuePosition,

@@ -309,6 +309,7 @@ function bigWalletEnqueue({message, providerGeneration: generation, observedRevi
             bigWalletWire.WORKFLOW_POLICY.responseExpiryMilliseconds,
         responseFailureMilliseconds: 0,
         lastResponseFailureAt: null,
+        admissionUncertain: false,
         authority,
         rerunRequested: false,
         retryDelay: 500,
@@ -370,6 +371,19 @@ async function bigWalletSendEnqueue(state) {
         bigWalletFail(state);
         return;
     }
+    const rejection = bigWalletWire.decodeNativeAdmissionRejection(response, state.message.id);
+    if (rejection) {
+        if (!state.admissionUncertain) {
+            bigWalletDeliver(state, {
+                ...bigWalletErrorResponse(state.message.id, state.message.provider, state.message.name),
+                error: bigWalletWire.nativeAdmissionError(rejection),
+            });
+            return;
+        }
+        bigWalletSchedule(state, Math.max(state.retryDelay, rejection.retryAfterMilliseconds || 0));
+        state.retryDelay = Math.min(state.retryDelay * 2, 5000);
+        return;
+    }
     if (bigWalletWire.isNativeEnqueueAcknowledgement(response, state.message.id)) {
         state.requestToken = response.requestToken;
         bigWalletPublishConfiguration(response.state, state.configurationKey, state.generation);
@@ -383,6 +397,7 @@ async function bigWalletSendEnqueue(state) {
         bigWalletDeliver(state, terminal);
         return;
     }
+    state.admissionUncertain = true;
     bigWalletSchedule(state, state.retryDelay);
     state.retryDelay = Math.min(state.retryDelay * 2, 5000);
 }
@@ -399,6 +414,11 @@ async function bigWalletReadResponse(state) {
         }), bigWalletResponsePollTimeout);
     } catch {}
     if (!bigWalletIsCurrent(state, "waiting")) { return; }
+    const rejection = bigWalletWire.decodeNativeAdmissionRejection(response, state.message.id);
+    if (rejection) {
+        bigWalletRetryResponse(state, false, startedAt);
+        return;
+    }
     const status = bigWalletWire.decodeMessage("NativeStatus", response);
     const correlatedStatus = status?.id === state.message.id ? status : null;
     if (correlatedStatus?.missing === true) {
@@ -524,6 +544,14 @@ function bigWalletDisconnect({message, providerGeneration: generation, observedR
         for (;;) {
             let response;
             try { response = await bigWalletWire.withTimeout(bigWalletSendRuntimeMessage(request), bigWalletDisconnectTimeout); } catch {}
+            const rejection = bigWalletWire.decodeNativeAdmissionRejection(response, id);
+            if (rejection) {
+                terminal = lostReplies === 0 ? {
+                    ...bigWalletErrorResponse(id, message.provider, "revokePermissions"),
+                    error: bigWalletWire.nativeAdmissionError(rejection),
+                } : null;
+                break;
+            }
             terminal = bigWalletTerminal(response, id);
             if (!bigWalletMatchesGeneration(generation)) { break; }
             if (!terminal) {

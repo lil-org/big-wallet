@@ -2657,6 +2657,59 @@
         return n329(value, context);
     }
 
+    function n332(value, context) {
+        try { return n333(value, context); } catch {}
+        try { return n337(value, context); } catch {}
+        return invalid();
+    }
+
+    function n333(value, context) {
+        record(value, ["id","workflowVersion","nativeAdmissionRejected","reason","code","dispatched"], ["retryAfterMilliseconds"]);
+        const previous = enter(value, context);
+        try {
+            const result = create(null);
+            put(result, "id", n43(read(value, "id"), context));
+            put(result, "workflowVersion", n44(read(value, "workflowVersion"), context));
+            put(result, "nativeAdmissionRejected", n148(read(value, "nativeAdmissionRejected"), context));
+            put(result, "reason", n334(read(value, "reason"), context));
+            put(result, "code", n335(read(value, "code"), context));
+            put(result, "dispatched", n180(read(value, "dispatched"), context));
+            if (descriptor(value, "retryAfterMilliseconds")) { put(result, "retryAfterMilliseconds", n336(read(value, "retryAfterMilliseconds"), context)); }
+            return freeze(result);
+        } finally { context.path = previous; }
+    }
+
+    function n334(value, context) {
+        if (value !== "busy") { invalid(); } return value;
+    }
+
+    function n335(value, context) {
+        if (value !== -32005) { invalid(); } return value;
+    }
+
+    function n336(value, context) {
+        if (value !== 500) { invalid(); } return value;
+    }
+
+    function n337(value, context) {
+        record(value, ["id","workflowVersion","nativeAdmissionRejected","reason","code","dispatched"], []);
+        const previous = enter(value, context);
+        try {
+            const result = create(null);
+            put(result, "id", n43(read(value, "id"), context));
+            put(result, "workflowVersion", n44(read(value, "workflowVersion"), context));
+            put(result, "nativeAdmissionRejected", n148(read(value, "nativeAdmissionRejected"), context));
+            put(result, "reason", n338(read(value, "reason"), context));
+            put(result, "code", n335(read(value, "code"), context));
+            put(result, "dispatched", n180(read(value, "dispatched"), context));
+            return freeze(result);
+        } finally { context.path = previous; }
+    }
+
+    function n338(value, context) {
+        if (value !== "request_too_large" && value !== "request_too_complex") { invalid(); } return value;
+    }
+
     const constants = json({"WORKFLOW_VERSION":4,"PAGE_TO_CONTENT_DIRECTION":"big-wallet-provider-v1","CONTENT_TO_PAGE_DIRECTION":"big-wallet-content-v1","PROVIDER_REPLACED_ERROR_CODE":4900,"PROVIDER_REPLACED_MESSAGE":"Big Wallet provider was replaced","NATIVE_CONTEXT_KEY":"__bwContext","MAX_RESPONSE_READY_IDS":16,"MANUAL_SWITCH_INTENT_SUBJECT":"manualSwitchIntent","MANUAL_SWITCH_ACKNOWLEDGED_SUBJECT":"manualSwitchAcknowledged","MAX_MANUAL_SWITCH_JSON_LENGTH":262144,"MAX_PAYLOAD_BYTES":262144,"MAX_POPUP_RESPONSE_BYTES":524288,"RPC_POLICY":{"maximumRequestBytes":4194304,"maximumResponseBytes":16777216,"maximumActivePerOrigin":4,"maximumActiveRequests":8,"maximumOutstandingPerOrigin":64,"maximumOutstandingRequests":128,"maximumRetainedRequestBytes":16777216,"maximumBufferedResponseBytes":33554432,"maximumQueueWaitMilliseconds":30000,"maximumLifetimeMilliseconds":170000},"WORKFLOW_POLICY":{"maximumNativeChainIdHex":"7fffffffffffffff","maximumRequests":8,"maximumRequestsPerHost":4,"maximumRetainedRequests":16,"requestTTLMilliseconds":900000,"responseExpiryMilliseconds":3600000,"selectionAccountCoins":["ethereum","solana"],"solanaClusterValues":["mainnetBeta","devnet","testnet"]},"RUNTIME_MESSAGE_SUBJECTS":{"worker":{"content":["rpc","message-to-wallet","manualSwitchIntent","getResponse","getLatestConfiguration","disconnect"],"popup":["applyCompletedResponse","getLatestConfiguration","updatePendingRequestBadge","responseReady"]},"content":{"worker":["workflowProbe","manualSwitchIntent","configurationInvalidated","responseReady"],"popup":["workflowProbe","manualSwitchIntent"]},"popup":{"worker":["pendingRequestAvailable"]}},"MAX_JSON_DEPTH":64}, {path: null, nodes: 0, maximumDepth: 64});
     /** @typedef {null|boolean|number|string|Array<ProtocolJSONValue>|Object<string, ProtocolJSONValue>} ProtocolJSONValue */
     /** @typedef {number} RequestID */
@@ -2757,7 +2810,8 @@
     /** @typedef {(NativeSiteContext|NativePopupContext|NativeWorkerContext)} NativeTransportContext */
     /** @typedef {{tabId: NonnegativeInteger, configurationKey: string}} PopupTabTarget */
     /** @typedef {{workflowVersion: WorkflowVersion, subject: "getLatestConfiguration", target: PopupTabTarget, __bwContext: NativePopupContext}} RuntimePopupConfigurationRequest */
-    /** @typedef {"RequestID"|"NonnegativeInteger"|"PositiveInteger"|"PrivateToken"|"RequestToken"|"EthereumChainID"|"SolanaPublicKey"|"AuthorityContext"|"Provider"|"RequestProvider"|"SolanaCluster"|"Revisions"|"ProviderRevisions"|"AuthorityVersion"|"EthereumConfiguration"|"SolanaConfiguration"|"ConfigurationSnapshot"|"SelectedAccount"|"ApprovalPayload"|"TransactionSpeedPayload"|"TransactionEditsPayload"|"NativeCommand"|"EthereumRequestBody"|"SolanaRequestObject"|"SolanaRequestBody"|"ManualProviderConfiguration"|"ManualRequestBody"|"ProviderRequest"|"DappRequest"|"ProviderError"|"NativeResult"|"NativeResponse"|"PageResponse"|"NativeEnqueueAcknowledgement"|"NativeAdmission"|"NativeDelivery"|"NativeResponsePollReply"|"NativeStatus"|"NativeConfigurationReply"|"NativeDisconnectReply"|"NativeAcknowledgementReply"|"NativeOpenReply"|"RecoveryRequest"|"NativeRecoveryReply"|"RPCResponse"|"PopupDisplayAccount"|"PopupSelectableAccount"|"PopupNetworkOption"|"PopupClusterOption"|"PopupTransactionSlider"|"PopupTransactionEditor"|"PopupTransactionNotice"|"PopupReview"|"PopupApprovalState"|"PopupPendingRequest"|"PopupCompletedResponse"|"PopupQueue"|"PopupCommandResult"|"PopupResponse"|"PageDisconnect"|"PageRPC"|"PageToContent"|"ContentToPage"|"ResponseReady"|"PendingRequestAvailable"|"ConfigurationInvalidated"|"ManualSwitchAcknowledgement"|"WorkflowProbe"|"WorkflowProbeReply"|"ManualSwitchIntent"|"RuntimeManualSwitchIntent"|"RuntimeConfigurationRequest"|"RuntimeDappRequest"|"RuntimeDisconnect"|"RuntimeRPC"|"RuntimeResponseRequest"|"RuntimeBadgeUpdate"|"RuntimeApplyCompletedResponse"|"ContentToWorker"|"PopupToWorker"|"WorkerToContent"|"PopupToContent"|"WorkerToPopup"|"WorkerRequest"|"PageToContentMessage"|"ContentMessage"|"WorkflowVersion"|"PopupQueueUnavailable"|"ErrorCode"|"RuntimeApplyCompletedReply"|"TransportSiteIdentity"|"TransportDocumentIdentity"|"NativeSiteContext"|"NativePopupContext"|"NativeWorkerContext"|"NativeTransportContext"|"PopupTabTarget"|"RuntimePopupConfigurationRequest"} ProtocolTypeName */
+    /** @typedef {({id: RequestID, workflowVersion: WorkflowVersion, nativeAdmissionRejected: true, reason: "busy", code: -32005, dispatched: false, retryAfterMilliseconds?: 500}|{id: RequestID, workflowVersion: WorkflowVersion, nativeAdmissionRejected: true, reason: ("request_too_large"|"request_too_complex"), code: -32005, dispatched: false})} NativeAdmissionRejection */
+    /** @typedef {"RequestID"|"NonnegativeInteger"|"PositiveInteger"|"PrivateToken"|"RequestToken"|"EthereumChainID"|"SolanaPublicKey"|"AuthorityContext"|"Provider"|"RequestProvider"|"SolanaCluster"|"Revisions"|"ProviderRevisions"|"AuthorityVersion"|"EthereumConfiguration"|"SolanaConfiguration"|"ConfigurationSnapshot"|"SelectedAccount"|"ApprovalPayload"|"TransactionSpeedPayload"|"TransactionEditsPayload"|"NativeCommand"|"EthereumRequestBody"|"SolanaRequestObject"|"SolanaRequestBody"|"ManualProviderConfiguration"|"ManualRequestBody"|"ProviderRequest"|"DappRequest"|"ProviderError"|"NativeResult"|"NativeResponse"|"PageResponse"|"NativeEnqueueAcknowledgement"|"NativeAdmission"|"NativeDelivery"|"NativeResponsePollReply"|"NativeStatus"|"NativeConfigurationReply"|"NativeDisconnectReply"|"NativeAcknowledgementReply"|"NativeOpenReply"|"RecoveryRequest"|"NativeRecoveryReply"|"RPCResponse"|"PopupDisplayAccount"|"PopupSelectableAccount"|"PopupNetworkOption"|"PopupClusterOption"|"PopupTransactionSlider"|"PopupTransactionEditor"|"PopupTransactionNotice"|"PopupReview"|"PopupApprovalState"|"PopupPendingRequest"|"PopupCompletedResponse"|"PopupQueue"|"PopupCommandResult"|"PopupResponse"|"PageDisconnect"|"PageRPC"|"PageToContent"|"ContentToPage"|"ResponseReady"|"PendingRequestAvailable"|"ConfigurationInvalidated"|"ManualSwitchAcknowledgement"|"WorkflowProbe"|"WorkflowProbeReply"|"ManualSwitchIntent"|"RuntimeManualSwitchIntent"|"RuntimeConfigurationRequest"|"RuntimeDappRequest"|"RuntimeDisconnect"|"RuntimeRPC"|"RuntimeResponseRequest"|"RuntimeBadgeUpdate"|"RuntimeApplyCompletedResponse"|"ContentToWorker"|"PopupToWorker"|"WorkerToContent"|"PopupToContent"|"WorkerToPopup"|"WorkerRequest"|"PageToContentMessage"|"ContentMessage"|"WorkflowVersion"|"PopupQueueUnavailable"|"ErrorCode"|"RuntimeApplyCompletedReply"|"TransportSiteIdentity"|"TransportDocumentIdentity"|"NativeSiteContext"|"NativePopupContext"|"NativeWorkerContext"|"NativeTransportContext"|"PopupTabTarget"|"RuntimePopupConfigurationRequest"|"NativeAdmissionRejection"} ProtocolTypeName */
 
     /**
      * @param {ProtocolTypeName} typeName
@@ -2866,6 +2920,7 @@
             case "NativeTransportContext": return n326(value, context);
             case "PopupTabTarget": return n329(value, context);
             case "RuntimePopupConfigurationRequest": return n330(value, context);
+            case "NativeAdmissionRejection": return n332(value, context);
             default: return null;
             }
         } catch { return null; }
@@ -2974,6 +3029,7 @@
                 case "NativeTransportContext": n326(value, context); return true;
                 case "PopupTabTarget": n329(value, context); return true;
                 case "RuntimePopupConfigurationRequest": n330(value, context); return true;
+                case "NativeAdmissionRejection": n332(value, context); return true;
                 default: return false;
                 }
             } catch { return false; }

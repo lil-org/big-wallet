@@ -135,12 +135,18 @@ public struct NativeRequestContext: Sendable {
         from message: Any,
         profileIdentifier: UUID?
     ) -> (message: WireProtocol.JSONObject, context: NativeRequestContext)? {
-        guard var json = WireProtocol.JSONObject(message)?.json,
-              let rawContext = json.removeValue(forKey: WireProtocol.nativeContextKey),
-              let wire = WireProtocol.object(.nativeTransportContext, value: rawContext),
-              let context = NativeRequestContext(wire, profileIdentifier: profileIdentifier),
-              let payload = WireProtocol.JSONObject(json) else { return nil }
-        return (payload, context)
+        guard let snapshot = WireProtocol.JSONObject(message) else { return nil }
+        return extract(from: snapshot, profileIdentifier: profileIdentifier)
+    }
+
+    public static func extract(
+        from snapshot: WireProtocol.JSONObject,
+        profileIdentifier: UUID?
+    ) -> (message: WireProtocol.JSONObject, context: NativeRequestContext)? {
+        guard let rawContext = snapshot.objectValue(forKey: WireProtocol.nativeContextKey),
+              let wire = WireProtocol.object(.nativeTransportContext, snapshot: rawContext),
+              let context = NativeRequestContext(wire, profileIdentifier: profileIdentifier) else { return nil }
+        return (snapshot.removingValue(forKey: WireProtocol.nativeContextKey), context)
     }
 
     public func authorizes(_ request: SafariRequest) -> Bool {

@@ -8,7 +8,7 @@ import test from "node:test";
 import {fileURLToPath} from "node:url";
 import {promisify} from "node:util";
 import vm from "node:vm";
-import {nativeResult, nativeError, normalized} from "./test_helpers.mjs";
+import {nativeResult, nativeError, nativeAdmissionRejection, normalized} from "./test_helpers.mjs";
 
 const resourceURL = name => new URL(`../Resources/${name}`, import.meta.url);
 const [bridgeSource, protocolSource] = await Promise.all([
@@ -691,6 +691,28 @@ test("native sender preserves popup approval tokens and transport failures", asy
     assert.deepEqual(messages[1], messages[0]);
 });
 
+test("native sender accepts only exact correlated admission rejections", async () => {
+    const command = {subject: "getPendingRequests", id: 7, workflowVersion: 4};
+    const context = wire.popupNativeContext({incognito: false}, false);
+    for (const reason of ["busy", "request_too_large", "request_too_complex"]) {
+        const reply = nativeAdmissionRejection(7, reason);
+        const send = wire.createTrustedNativeMessageSender({sendRawNativeMessage: () => reply});
+        const received = await send(command, context);
+        assert.deepEqual(normalized(received), reply);
+        assert.equal(Object.isFrozen(received), true);
+    }
+    for (const changes of [
+        {id: 8}, {workflowVersion: 5}, {nativeAdmissionRejected: false}, {dispatched: true},
+        {code: -32603}, {reason: "unknown"}, {retryAfterMilliseconds: 1000}, {extra: true},
+        {reason: "request_too_large"},
+    ]) {
+        const send = wire.createTrustedNativeMessageSender({
+            sendRawNativeMessage: () => ({...nativeAdmissionRejection(7), ...changes}),
+        });
+        await assert.rejects(send(command, context), /Invalid native admission response/);
+    }
+});
+
 test("source contexts preserve optional document metadata and reject conflicting origins", () => {
     const request = {subject: "rpc", documentSession};
     const sender = {...runtimeSenders.content, origin: "https://wallet.example", documentId: "document-one"};
@@ -753,7 +775,7 @@ test("native sender stamps factory contexts and rejects conflicting payload iden
     assert.equal(messages.length, 1);
 });
 
-test("flat native transport preserves the full domain nesting budget", () => {
+test("flat native transport preserves the full domain nesting budget", async () => {
     const context = wire.runtimeNativeContext(wire.authorizeRuntimeMessage(
         "worker", {subject: "rpc"}, runtimeSenders.content, runtime
     ), {documentSession});
@@ -769,7 +791,7 @@ test("flat native transport preserves the full domain nesting budget", () => {
     for (let depth = 0; depth < 61; depth += 1) { nested = {value: nested}; }
     request.body.object.raw = nested;
     assert.ok(wire.decodeMessage("DappRequest", request));
-    const sent = send(request, context);
+    const sent = await send(request, context);
     assert.equal(sent.body.object.raw.value !== undefined, true);
     const domain = {...sent};
     delete domain.__bwContext;

@@ -134,6 +134,21 @@
         return decoded !== null && decoded.id === id;
     }
 
+    function decodeNativeAdmissionRejection(response, id) {
+        const decoded = decodeMessage("NativeAdmissionRejection", response);
+        return decoded && (id === undefined || decoded.id === id) ? decoded : null;
+    }
+
+    function nativeAdmissionError(rejection) {
+        return {
+            code: rejection.code,
+            message: rejection.reason === "busy" ? "Big Wallet is busy. Try again shortly."
+                : rejection.reason === "request_too_large" ? "Request exceeds the size limit"
+                : "Request exceeds the complexity limit",
+            data: {reason: rejection.reason, dispatched: false},
+        };
+    }
+
     function decodeNativeResponse(value, correlationId) {
         const decoded = decodeMessage("NativeResponse", value);
         if (!decoded || correlationId !== undefined && decoded.id !== correlationId ||
@@ -355,9 +370,15 @@
                 }
             }
             const checked = protocol.build(type, payload);
-            return sendRawNativeMessage({
+            const response = sendRawNativeMessage({
                 ...checked,
                 [NATIVE_CONTEXT_KEY]: trustedContext,
+            });
+            return Promise.resolve(response).then(value => {
+                if (!isRecord(value) || !hasOwn(value, "nativeAdmissionRejected")) { return value; }
+                const rejection = decodeNativeAdmissionRejection(value, checked.id);
+                if (!rejection) { throw new TypeError("Invalid native admission response"); }
+                return rejection;
             });
         };
     }
@@ -382,6 +403,8 @@
         decodeConfigurationSnapshot,
         decodePageResponse,
         decodeNativeResponse,
+        decodeNativeAdmissionRejection,
+        nativeAdmissionError,
         createTrustedNativeMessageSender,
         popupNativeContext,
         privacyForTab,

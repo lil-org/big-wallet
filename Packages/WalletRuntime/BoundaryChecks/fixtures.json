@@ -210,5 +210,40 @@
     "path": "Negative/UnpreparedTypedData.swift",
     "succeeds": false,
     "diagnostic": "cannot convert value of type.*String.*PreparedEthereumTypedData"
+  },
+  {
+    "path": "Negative/TransportManagementAccess.swift",
+    "succeeds": false,
+    "diagnostic": "has no member 'wallets'"
+  },
+  {
+    "path": "Negative/TransportCredentialAccess.swift",
+    "succeeds": false,
+    "diagnostic": "has no member 'credentials'"
+  },
+  {
+    "path": "Negative/PopupManagementAccess.swift",
+    "succeeds": false,
+    "diagnostic": "has no member 'wallets'"
+  },
+  {
+    "path": "Negative/PopupCredentialAccess.swift",
+    "succeeds": false,
+    "diagnostic": "has no member 'credentials'"
+  },
+  {
+    "path": "Negative/PopupPublicationAccess.swift",
+    "succeeds": false,
+    "diagnostic": "has no member 'reconcileVault'"
+  },
+  {
+    "path": "Negative/ApplicationPopupAccess.swift",
+    "succeeds": false,
+    "diagnostic": "has no member 'makePopupApprovalAuthority'"
+  },
+  {
+    "path": "Negative/SystemRuntimeAccess.swift",
+    "succeeds": false,
+    "diagnostic": "runtime.*inaccessible"
   }
 ]

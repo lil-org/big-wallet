@@ -9,12 +9,13 @@ import SafariServices
 let SFExtensionMessageKey = "message"
 
 final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
+    private static let ingressGate = NativeIngressGate.shared
     @MainActor
     private static let dispatcher = makeDispatcher()
 
     @MainActor
     private static func makeDispatcher() -> NativeMessageDispatcher {
-        let services = ApplicationServices.shared
+        let services = SafariExtensionServices.shared
         let system = services.authority
         let bridge = system.requests
         let networks = system.networks
@@ -100,20 +101,27 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         let receivedAt = Date().timeIntervalSince1970
 #endif
         guard let item = context.inputItems.first as? NSExtensionItem,
-              let message = item.userInfo?[SFExtensionMessageKey],
-              let ingress = NativeRequestContext.extract(
-                  from: message,
-                  profileIdentifier: item.userInfo?[SFExtensionProfileKey] as? UUID
-              ) else {
+              let message = item.userInfo?[SFExtensionMessageKey] else {
             context.cancelRequest(withError: NativeMessageDispatcher.Error.invalidMessage)
             return
         }
         // Foundation's borrowed context is handed exclusively to one terminal responder.
         nonisolated(unsafe) let transferredContext = context
         let responder = ExtensionRequestResponder(context: transferredContext)
+        let ingress: NativeIngressGate.Admission
+        do {
+            ingress = try Self.ingressGate.admit(message, profileIdentifier: item.userInfo?[SFExtensionProfileKey] as? UUID)
+        } catch NativeIngressGate.Failure.rejected(let rejection) {
+            if let response = rejection.response { responder.complete(with: response) }
+            else { responder.cancelRequest(withError: NativeMessageDispatcher.Error.invalidMessage) }
+            return
+        } catch {
+            responder.cancelRequest(withError: NativeMessageDispatcher.Error.invalidMessage)
+            return
+        }
 #if BW_SAFARI_VM_TESTING
         let fixtures = SafariVMFixtures.shared
-        let operation = fixtures.capture(requestID: ingress.message.json["id"] as? Int)
+        let operation = fixtures.capture(requestID: ingress.message["id"] as? Int)
         var metadata: [String: Any] = ["profileIdentifier": ingress.context.profileIdentifier.map { $0.uuidString.lowercased() as Any } ?? NSNull(),
                                        "privateBrowsing": ingress.context.privateBrowsing,
                                        "receivedAt": receivedAt]
@@ -131,18 +139,21 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         fixtures.event("nativeIngress", requestID: operation.requestID, metadata: metadata, operation: operation)
 #endif
         Task {
+            defer { ingress.finish() }
 #if BW_SAFARI_VM_TESTING
             let lockProbe = Task { await SafariVMLockProbe.shared.holdIfRequested() }
 #endif
             do {
 #if BW_SAFARI_VM_TESTING
                 let response = try await SafariVMFixtures.$operation.withValue(operation) {
-                    try await Self.dispatcher.dispatch(message: ingress.message, context: ingress.context)
+                    try await Self.dispatcher.dispatch(message: ingress.message, context: ingress.context,
+                                                       rpcAdmissionDecision: { ingress.rpcAdmissionDecided() })
                 }
 #else
                 let response = try await Self.dispatcher.dispatch(
                     message: ingress.message,
-                    context: ingress.context
+                    context: ingress.context,
+                    rpcAdmissionDecision: { ingress.rpcAdmissionDecided() }
                 )
 #endif
 #if BW_SAFARI_VM_TESTING

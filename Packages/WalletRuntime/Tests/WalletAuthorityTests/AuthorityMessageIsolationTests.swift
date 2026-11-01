@@ -55,6 +55,7 @@ final class AuthorityMessageIsolationTests: XCTestCase {
         XCTAssertEqual(second.system.error(.internalError).message, "second.somethingWentWrong")
     }
 
+#if os(macOS)
     func testRuntimeSharesNativeReviewAuthorityOnlyWithinItsExactRoute() throws {
         let fixture = try system(label: "native-route-cache")
         defer {
@@ -78,6 +79,8 @@ final class AuthorityMessageIsolationTests: XCTestCase {
         }
         XCTAssertNil(released)
     }
+
+#endif
 
     func testPopupCatalogDurabilityReadKeepsMainActorResponsive() async throws {
         try await assertCatalogReadKeepsMainActorResponsive(admission: false)
@@ -104,7 +107,7 @@ final class AuthorityMessageIsolationTests: XCTestCase {
         }
         let vault = SafariApprovalVault(fileURL: FileManager.default.temporaryDirectory
             .appendingPathComponent("blocked-vault-\(UUID().uuidString)"), fileIO: fileIO)
-        let fixture = try system(label: "background-catalog", vault: vault)
+        let fixture = try popupSystem(label: "background-catalog", vault: vault)
         defer {
             UserDefaults.standard.removePersistentDomain(forName: fixture.suite)
             try? FileManager.default.removeItem(at: fixture.root)
@@ -146,31 +149,56 @@ final class AuthorityMessageIsolationTests: XCTestCase {
         XCTAssertTrue(finished.value)
     }
 
-    private func system(label: String, vault: SafariApprovalVault? = nil) throws -> (system: AuthorityRuntime, suite: String, root: URL) {
+    private func composition(label: String) throws -> (composition: AuthorityComposition, preferences: UserDefaultsPreferenceStorage, suite: String, root: URL) {
         let suite = "AuthorityMessageIsolation.\(UUID().uuidString)"
         let preferences = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(suite, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let messages = AuthorityMessages(values: Dictionary(uniqueKeysWithValues:
             AuthorityMessages.Key.allCases.map { ($0, "\(label).\($0.rawValue)") }))
+        var dependencies = AuthorityComposition.Dependencies()
+        dependencies.customSnapshot = { .empty }
+        dependencies.freshCustomSnapshot = { .loaded(.empty) }
+        dependencies.definitionResult = { _ in .unavailable }
+        dependencies.insertNetwork = { _ in .unavailable }
+        dependencies.invalidateCache = {}
+        let configuration = AuthorityRuntimeConfiguration(catalog: nil, catalogOwnedChainIds: [],
+            storage: .init(containerURL: root), messages: messages)
+        return (AuthorityComposition(configuration: configuration, dependencies: dependencies), preferences, suite, root)
+    }
+
+    private func system(label: String) throws -> (system: AuthorityRuntime, suite: String, root: URL) {
+        let fixture = try composition(label: label)
+        var management = WalletManagementServices.Dependencies()
+        management.makeKeychain = { Keychain(copyMatching: { _, _ in XCTFail("Unexpected credential read"); return -25300 }) }
+        management.makeMetadata = { WalletsMetadataService(storage: fixture.preferences) }
+        management.notifications = .init(postLocalChange: {}, postMutation: {}, startObserving: { _, _ in },
+            stopObserving: { _ in }, isExternalChange: { _ in false })
+#if os(macOS)
+        let system = AuthorityRuntime(composition: fixture.composition, management: management,
+            solanaEndpoints: AuthorityTestSolanaEndpoints(), broadcaster: RejectingBroadcastForTesting())
+#else
+        management.makeVault = { _, _ in SafariApprovalVault(fileURL: nil) }
+        management.makeIntegrityKeyStore = { UnusedIntegrityStore() }
+        management.vaultHostDefaults = fixture.preferences
+        let system = AuthorityRuntime(composition: fixture.composition, management: management)
+#endif
+        return (system, fixture.suite, fixture.root)
+    }
+
+    private func popupSystem(label: String, vault: SafariApprovalVault) throws -> (system: PopupAuthorityRuntime, suite: String, root: URL) {
+        let fixture = try composition(label: label)
+        var dependencies = PopupAuthorityRuntime.Dependencies()
+        dependencies.makeVault = { _, _ in vault }
+        dependencies.makeMetadata = { WalletsMetadataService(storage: fixture.preferences) }
         let preparation = TransactionApprovalOperations(
             prepare: { _, _, _ in AsyncThrowingStream { $0.finish() } },
             preflight: { transaction, _ in .unavailable(transaction, .init(info: nil, nextBaseFee: nil)) }
         )
-        let system = AuthorityRuntime.testing(
-            catalog: nil, catalogOwnedChainIds: [], solanaEndpoints: AuthorityTestSolanaEndpoints(),
-            broadcaster: RejectingBroadcastForTesting(), preparation: preparation,
-            storage: .init(containerURL: root), messages: messages,
-            keychain: Keychain(copyMatching: { _, _ in XCTFail("Unexpected credential read"); return -25300 }),
-            metadata: WalletsMetadataService(storage: preferences),
-            vault: vault ?? SafariApprovalVault(fileURL: nil), integrityKeyStore: UnusedIntegrityStore(),
-            vaultHostDefaults: preferences,
-            customSnapshot: { .empty }, freshCustomSnapshot: { .loaded(.empty) },
-            definitionResult: { _ in .unavailable }, insertNetwork: { _ in .unavailable },
-            notifications: .init(postLocalChange: {}, postMutation: {}, startObserving: { _, _ in },
-                stopObserving: { _ in }, isExternalChange: { _ in false })
-        )
-        return (system, suite, root)
+        let system = PopupAuthorityRuntime(composition: fixture.composition,
+            solanaEndpoints: AuthorityTestSolanaEndpoints(), broadcaster: RejectingBroadcastForTesting(),
+            preparation: preparation, dependencies: dependencies)
+        return (system, fixture.suite, fixture.root)
     }
 
     private final class UnusedIntegrityStore: SafariApprovalIntegrityKeyStoring, Sendable {

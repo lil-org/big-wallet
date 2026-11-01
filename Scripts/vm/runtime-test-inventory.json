@@ -179,11 +179,7 @@
       "id": "WalletAuthorityTests/AuthorityMessageIsolationTests/testRuntimeSharesNativeReviewAuthorityOnlyWithinItsExactRoute",
       "variants": [
         "macos.debug",
-        "macos.release",
-        "ios.debug",
-        "ios.release",
-        "visionos.debug",
-        "visionos.release"
+        "macos.release"
       ]
     },
     {
@@ -7540,6 +7536,39 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/RuntimeCompositionTests/testApplicationConstructsOnlyItsPlatformManagementServices",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/RuntimeCompositionTests/testPopupConstructsOneVaultAndMetadataReaderWithoutManagement",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/RuntimeCompositionTests/testTransportMaterializesApprovalWithoutWalletOrVaultStorage",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/SafariApprovalVaultTests/testAccountKeyPublicationAndCatalogReadCostsWithMockedKeychain",
       "variants": [
         "macos.debug",
@@ -14229,6 +14258,281 @@
       ]
     },
     {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testBroadFoundationArrayIsRejectedBeforeReadingItsElements",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testCancellationRetainsAdmissionUntilUncooperativeWorkActuallyExits",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testCompletionCommandsUseBoundedProcessProfileAndScopeCapacity",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testContextBudgetCountsUTF8IndependentlyOfPayloadText",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testCopiedAdmissionFinishesOnceAndDeinitializationReleasesTheLastCopy",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testDepthLimitIncludesTheRootAndAcceptsTheWireMaximum",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testEncodedPayloadLimitIncludesEscapingButExcludesTheTransportContext",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testFoundationCyclesAreRejectedButSharedAcyclicValuesAreAccepted",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testMaintenancePollingAndApprovalWorkCannotUseCompletionCapacity",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testNodeBudgetCountsKeysValuesAndContainersAtItsExactBoundary",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testOrdinaryProcessLimitIsSharedAcrossProfiles",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testOrdinaryProfileAndDocumentScopeLimitsAreIndependent",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testOrdinaryRetainedByteBudgetAcceptsExactlyOneEnvelopeAndReleasesIt",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testOverloadRepliesRequireSafeCorrelationAndDoNotAdvertiseDispatch",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testPayloadAndContextTextBudgetsAcceptExactBytesAndRejectOneLess",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testPrivateBrowsingAndOSProfileRemainBoundToDetachedContext",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testRPCAdmissionHandoffReleasesInspectionAndBytesExactlyOnce",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testRPCBodyHasItsOwnFourMiBBudgetAndPreservesTheOriginalPayload",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testRPCMetadataNodesAndTextRemainBoundedSeparatelyFromTheBody",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testRawFoundationUnicodeKeyCollisionsCannotBecomeValidCommands",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testReservedRejectionRevocationAndCompletionRemainAvailableWhenOrdinaryIsFull",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testReservedRetainedBytesAreBoundedIndependentlyOfOrdinaryBytes",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testScopeAndProfileInventoriesAreBoundedAndRemovedWhenLeasesFinish",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testTimeoutCancellationDoesNotReleaseAnExecutingAdmissionEarly",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletFlowsTests/NativeIngressGateTests/testUnauthorizedReservedSubjectsAndProfileOverridesNeverProduceAdmissions",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletFlowsTests/PublicFlowBoundaryTests/testPrivatePopupUsesOnlyItsIsolatedPresentationHandler",
       "variants": [
         "macos.debug",
@@ -18471,6 +18775,17 @@
       ]
     },
     {
+      "id": "WalletNetworkingTests/SafariRPCServiceTests/testAdmissionDecisionTransfersInputBudgetBeforeParsingAndNetworkCompletion",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletNetworkingTests/SafariRPCServiceTests/testAggregateRequestBytesRejectBeforeParsingAndAreReleasedOnCancellation",
       "variants": [
         "macos.debug",
@@ -18483,6 +18798,17 @@
     },
     {
       "id": "WalletNetworkingTests/SafariRPCServiceTests/testCancellationBeforeAdmissionNeverInvokesOperationOrRetainsCapacity",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SafariRPCServiceTests/testCancellationBetweenInitialCheckAndReservationResolvesAdmissionOnce",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -18593,6 +18919,39 @@
     },
     {
       "id": "WalletNetworkingTests/SafariRPCServiceTests/testOutstandingLimitsRejectBeforeParsingWithoutLeakingScopes",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SafariRPCServiceTests/testPreadmissionRejectionsResolveAdmissionExactlyOnceWithoutReservingCapacity",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SafariRPCServiceTests/testPublicForwarderTransfersAdmissionBeforeEndpointResolution",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/SafariRPCServiceTests/testQueuedAdmissionDecisionTransfersBudgetBeforeActiveWorkCompletes",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -21814,6 +22173,13 @@
     },
     {
       "id": "Tests macOS/PopupRequestSessionsTests/testRequestScopeInvalidatesOwnedAccessOnceWithoutClearingBorrowedCatalog",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/PopupRequestSessionsTests/testReservedRejectionAndQueueRepliesNeverPrepareAReview",
       "variants": [
         "macos.debug",
         "macos.release"

@@ -124,6 +124,7 @@ public enum WireProtocol {
         case nativeTransportContext = "NativeTransportContext"
         case popupTabTarget = "PopupTabTarget"
         case runtimePopupConfigurationRequest = "RuntimePopupConfigurationRequest"
+        case nativeAdmissionRejection = "NativeAdmissionRejection"
     }
 
     public static func maximumJSONDepth(for message: Message) -> Int {
@@ -235,6 +236,7 @@ public enum WireProtocol {
         case .nativeTransportContext: return n326(value)
         case .popupTabTarget: return n329(value)
         case .runtimePopupConfigurationRequest: return n330(value)
+        case .nativeAdmissionRejection: return n332(value)
         }
     }
 
@@ -255,6 +257,35 @@ public enum WireProtocol {
             self.values = values
         }
 
+        private init(values: [String: JSONValue]) {
+            self.values = values
+        }
+
+        public func removingValue(forKey key: String) -> JSONObject {
+            var remaining = values
+            remaining.removeValue(forKey: key)
+            return JSONObject(values: remaining)
+        }
+
+        public func objectValue(forKey key: String) -> JSONObject? {
+            guard let value = values[key], case .object(let child) = value else { return nil }
+            return JSONObject(values: child)
+        }
+
+        fileprivate func isWithinDepth(_ maximum: Int) -> Bool {
+            func valid(_ value: JSONValue, depth: Int) -> Bool {
+                switch value {
+                case .array(let items):
+                    return depth < maximum && items.allSatisfy { valid($0, depth: depth + 1) }
+                case .object(let items):
+                    return depth < maximum && items.values.allSatisfy { valid($0, depth: depth + 1) }
+                default:
+                    return true
+                }
+            }
+            return maximum > 0 && values.values.allSatisfy { valid($0, depth: 1) }
+        }
+
         public var json: [String: Any] { values.mapValues(\.json) }
         public subscript(_ key: String) -> Any? { values[key]?.json }
     }
@@ -271,9 +302,15 @@ public enum WireProtocol {
     }
 
     public static func object(_ contract: Message, value: Any) -> ValidatedObject? {
-        guard let object = JSONObject(value, maximumDepth: maximumJSONDepth(for: contract)),
-              validShape(contract, value: object.json) else { return nil }
-        return ValidatedObject(contract: contract, object: object)
+        guard let snapshot = JSONObject(value, maximumDepth: maximumJSONDepth(for: contract)),
+              validShape(contract, value: snapshot.json) else { return nil }
+        return ValidatedObject(contract: contract, object: snapshot)
+    }
+
+    public static func object(_ contract: Message, snapshot: JSONObject) -> ValidatedObject? {
+        guard snapshot.isWithinDepth(maximumJSONDepth(for: contract)),
+              validShape(contract, value: snapshot.json) else { return nil }
+        return ValidatedObject(contract: contract, object: snapshot)
     }
 
     public static func decode(_ message: Message, from data: Data) -> Any? {
@@ -2451,5 +2488,50 @@ public enum WireProtocol {
 
     private static func n331(_ value: Any) -> Bool {
         return n329(value)
+    }
+
+    private static func n332(_ value: Any) -> Bool {
+        return n333(value) || n337(value)
+    }
+
+    private static func n333(_ value: Any) -> Bool {
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "nativeAdmissionRejected", "reason", "code", "dispatched"], optional: ["retryAfterMilliseconds"]) else { return false }
+        guard let field0 = value["id"], n43(field0) else { return false }
+        guard let field1 = value["workflowVersion"], n44(field1) else { return false }
+        guard let field2 = value["nativeAdmissionRejected"], n148(field2) else { return false }
+        guard let field3 = value["reason"], n334(field3) else { return false }
+        guard let field4 = value["code"], n335(field4) else { return false }
+        guard let field5 = value["dispatched"], n180(field5) else { return false }
+        if let field = value["retryAfterMilliseconds"], !n336(field) { return false }
+        return true
+    }
+
+    private static func n334(_ value: Any) -> Bool {
+        guard let value = value as? String else { return false }
+        return exactString(value, "busy")
+    }
+
+    private static func n335(_ value: Any) -> Bool {
+        return number(value) == -32005
+    }
+
+    private static func n336(_ value: Any) -> Bool {
+        return number(value) == 500
+    }
+
+    private static func n337(_ value: Any) -> Bool {
+        guard let value = value as? [String: Any], exactKeys(value, required: ["id", "workflowVersion", "nativeAdmissionRejected", "reason", "code", "dispatched"], optional: []) else { return false }
+        guard let field0 = value["id"], n43(field0) else { return false }
+        guard let field1 = value["workflowVersion"], n44(field1) else { return false }
+        guard let field2 = value["nativeAdmissionRejected"], n148(field2) else { return false }
+        guard let field3 = value["reason"], n338(field3) else { return false }
+        guard let field4 = value["code"], n335(field4) else { return false }
+        guard let field5 = value["dispatched"], n180(field5) else { return false }
+        return true
+    }
+
+    private static func n338(_ value: Any) -> Bool {
+        guard let value = value as? String else { return false }
+        return exactString(value, "request_too_large") || exactString(value, "request_too_complex")
     }
 }

@@ -15,12 +15,16 @@ func authorityContract(system: WalletAuthoritySystem, wallet: WalletSnapshot, re
     _ = credentials.permitsAuthenticatedPresentation(access)
     let _: Duration? = credentials.recordInteraction(access)
     _ = credentials.remainingAccessLifetime(access)
+#if os(macOS)
     let coordinator = system.makeNativeApprovalCoordinator(handle: handle, nativeDeliveryNonce: nonce)
     coordinator.resumeAfterAuthentication(authorization: access)
+#endif
     _ = review.makeMessageAuthenticationChallenge(solanaCluster: nil)
     _ = review.makeTransactionAuthenticationChallenge(transaction: transaction, reviewedNetwork: network)
+#if os(macOS)
     coordinator.approveMessage(solanaCluster: nil, review: review, authorization: grant)
     coordinator.approveTransaction(transaction, reviewedNetwork: network, review: review, authorization: grant)
+#endif
     _ = try await system.wallets.makeExportChallenge(wallet: wallet, kind: .mnemonic)
     _ = try await system.wallets.exportMnemonic(wallet: wallet, authorization: grant)
     _ = try await system.wallets.exportPrivateKey(wallet: wallet, authorization: grant)
@@ -34,4 +38,22 @@ func authorityContract(system: WalletAuthoritySystem, wallet: WalletSnapshot, re
     challenge.invalidate()
     grant.invalidate()
     access.invalidate()
+}
+
+@MainActor
+func transportRuntimeContract(configuration: AuthorityRuntimeConfiguration, endpoints: any SolanaEndpointResolving) {
+    let runtime = NativeTransportRuntime.live(configuration: configuration, solanaEndpoints: endpoints)
+    let _: ExtensionBridge = runtime.requests
+    let _: DappRequestAdmission = runtime.admission
+    let _: NetworkResolver = runtime.networks
+    runtime.invalidateNetworkCache()
+}
+
+@MainActor
+func popupRuntimeContract(configuration: AuthorityRuntimeConfiguration, endpoints: any SolanaEndpointResolving,
+    broadcaster: any SignedTransactionBroadcasting, preparation: TransactionApprovalOperations, account: WalletAccount) {
+    let runtime = PopupAuthorityRuntime.live(configuration: configuration, solanaEndpoints: endpoints,
+        broadcaster: broadcaster, preparation: preparation)
+    _ = runtime.accountName(walletID: "fixture", account: account)
+    _ = runtime.makePopupApprovalAuthority(approvalSubjectTitle: { _ in "Approve" }, loadTransactionContext: { _ in nil })
 }

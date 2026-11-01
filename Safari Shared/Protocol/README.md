@@ -24,6 +24,46 @@ JavaScript exposes `BigWalletProtocol.constants`, `decode(name, value)`, `isVali
 
 Swift exposes `WireProtocol.Message`, `validate(_:value:)`, and `decode(_:value:)`. `object(_:value:)` produces a detached `ValidatedObject` containing its contract and `json` dictionary. The raw `Data` overloads `decode(_:from:)` and `object(_:from:)` check the original Foundation object tree before bridging dictionaries. Application models map these values to their domain types; consumers accepting a validated object check its contract. Safari ingress snapshots the original message before dictionary conversion and maps internal commands directly from validated objects. The generic `Decoder` overload supports already-decoded domain/storage values; it cannot recover keys already merged by a decoder, so raw untrusted JSON must use the `Data` or original-Foundation-value entry points.
 
+## Native ingress admission
+
+One process-wide gate admits Safari native messages before application snapshotting
+or asynchronous dispatch. It examines the original Foundation containers without
+serializing them, allocating key lists, or bridging whole dictionaries. This bounds
+application work after Safari delivers a message; it does not control Safari's own
+IPC deserialization. Existing Unicode-key validation remains authoritative.
+
+Non-RPC payloads retain the 256 KiB encoded limit, with a separate 16 KiB transport
+context allowance and a preflight limit of 262,656 values plus keys. RPC bodies stay
+opaque at this boundary and retain their 4 MiB limit; remaining metadata is limited
+to 16 KiB and 512 nodes. Both paths retain the 64-container nesting limit. Output
+contracts and the 16 MiB RPC response limit are unchanged.
+
+Inspection has four ordinary slots and two reserved slots. Retained-input
+accounting is capped at 16 MiB ordinary and 512 KiB reserved, charging UTF-8 text
+bytes plus 64 bytes per node; this is conservative resource accounting, not an
+exact heap measurement. Non-RPC dispatch allows eight ordinary operations per
+process, four per Safari profile, and two per document/origin or popup/worker role.
+Separate capacity reserves one rejection, one revocation, and four completion
+operations, with completion limited to two per profile and scope. Ordinary work
+cannot borrow these reserves. Active scope/profile records are bounded and removed
+when idle.
+
+Reserved completion covers observation-only polling, acknowledgement, and bounded
+queue/recovery listing. These paths and rejection replies cannot prepare reviews,
+authenticate, refresh fees, or launch helpers. RPC transfers its input reservation
+to its existing admission service before releasing inspection capacity; its queue
+never occupies the non-RPC lanes. Leases release once when work actually exits,
+not merely when its caller times out or cancels.
+
+The gate does not queue overload. `NativeAdmissionRejection` carries the correlated
+request ID, workflow version, code `-32005`, a rejection reason, and
+`dispatched: false`; busy includes a 500 ms retry hint. That flag describes only
+the rejected transport invocation. After a lost admission acknowledgement, the
+document retains its original enqueue attempt and bounded recovery because an
+earlier invocation may already be committed. A first definite rejection becomes
+a provider resource-limit error. Popup decisions require observation and another
+explicit action; overload never means missing, completed, acknowledged, or empty.
+
 ## Caller context
 
 The codecs check structure. Browser ingress constructs one immutable transport context from extension sender metadata before asynchronous work. Content-to-worker requests do not supply host, origin, or privacy assertions. Native messages carry a flat `__bwContext` with a source (`site`, `popup`, or `worker`), explicit privacy, and site/document metadata for site requests. The flat metadata does not add nesting around the existing domain payload. Each content script creates a random `documentSession` in its isolated world and includes it in content-to-worker messages. It survives same-document reinjection, provider resets, SPA navigation, and BFCache restoration, but never appears in page messages or browser storage. Native admission binds responses to that session plus browser-supplied tab/frame IDs and the optional `documentId`. Polling, acknowledgement, admission replay, and approval focusing require the original document owner; missing browser document IDs are supported only when consistently absent. Permissions remain origin-scoped. Native ingress snapshots the original Foundation tree, extracts and validates context once, and adds the OS-provided Safari profile identifier. Source/command restrictions and site/payload consistency are checked before dispatch; native authority revisions, response correlation, ownership, deadlines, account selection, and transaction validity retain their existing checks. Unknown or malformed privacy metadata blocks wallet operations without lookup fallbacks; explicit private evidence takes precedence. The authenticated popup may assert its browser-derived privacy in popup-only runtime messages. Popup-selected tabs and retained requests are operation targets, not caller identities, and worker recovery does not depend on an active tab. Native code trusts these validated extension assertions about sites; the context is not independent OS attestation of webpage origins and does not protect against a compromised extension.

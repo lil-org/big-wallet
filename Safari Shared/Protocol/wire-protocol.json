@@ -2856,6 +2856,65 @@
         }
       },
       "optional": {}
+    },
+    "NativeAdmissionRejection": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "nativeAdmissionRejected": {
+              "const": true
+            },
+            "reason": {
+              "const": "busy"
+            },
+            "code": {
+              "const": -32005
+            },
+            "dispatched": {
+              "const": false
+            }
+          },
+          "optional": {
+            "retryAfterMilliseconds": {
+              "const": 500
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": {
+            "id": {
+              "ref": "RequestID"
+            },
+            "workflowVersion": {
+              "ref": "WorkflowVersion"
+            },
+            "nativeAdmissionRejected": {
+              "const": true
+            },
+            "reason": {
+              "enum": [
+                "request_too_large",
+                "request_too_complex"
+              ]
+            },
+            "code": {
+              "const": -32005
+            },
+            "dispatched": {
+              "const": false
+            }
+          },
+          "optional": {}
+        }
+      ]
     }
   },
   "depthReservations": {

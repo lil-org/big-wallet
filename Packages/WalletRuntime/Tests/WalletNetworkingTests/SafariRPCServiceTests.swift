@@ -37,6 +37,110 @@ private final class SafariRPCServiceProbe: Sendable {
 
 @MainActor
 final class SafariRPCServiceTests: XCTestCase {
+    func testAdmissionDecisionTransfersInputBudgetBeforeParsingAndNetworkCompletion() async {
+        let decisions = Mutex([SafariRPCService.Statistics]())
+        let serializerCalls = Mutex(0)
+        let service = makeService(limits: limits(), serializeRequest: { prepared in
+            serializerCalls.withLock { $0 += 1 }
+            return try prepared.serialize()
+        })
+        let probe = SafariRPCServiceProbe(blocking: [1])
+        defer { probe.releaseAll() }
+        let first = start(service, id: 1, scope: scope("a"), probe: probe, onAdmissionDecision: {
+            decisions.withLock { $0.append(service.assumeIsolated { $0.statistics }) }
+            XCTAssertEqual(serializerCalls.withLock { $0 }, 0)
+        })
+
+        await expectEventually { probe.started == [1] }
+        let snapshots = decisions.withLock { $0 }
+        XCTAssertEqual(snapshots.count, 1)
+        XCTAssertEqual(snapshots.first?.outstandingRequests, 1)
+        XCTAssertEqual(snapshots.first?.retainedRequestBytes, Self.body(1).utf8.count)
+        XCTAssertEqual(snapshots.first?.scopeCount, 1)
+        await assertRetainedActiveRequest(service, id: 1)
+
+        probe.release(1)
+        assertSuccess(await first.value, id: 1)
+        await assertDrained(service)
+        XCTAssertEqual(decisions.withLock { $0.count }, 1)
+    }
+
+    func testQueuedAdmissionDecisionTransfersBudgetBeforeActiveWorkCompletes() async {
+        let service = makeService(limits: limits(active: 1))
+        let probe = SafariRPCServiceProbe(blocking: [1])
+        let decisions = Mutex([SafariRPCService.Statistics]())
+        defer { probe.releaseAll() }
+        let first = start(service, id: 1, scope: scope("a"), probe: probe)
+        await expectEventually { probe.started == [1] }
+        let queued = start(service, id: 2, scope: scope("b"), probe: probe, onAdmissionDecision: {
+            decisions.withLock { $0.append(service.assumeIsolated { $0.statistics }) }
+        })
+        await expectOutstanding(2, in: service)
+
+        let snapshots = decisions.withLock { $0 }
+        XCTAssertEqual(snapshots.count, 1)
+        XCTAssertEqual(snapshots.first?.outstandingRequests, 2)
+        XCTAssertEqual(snapshots.first?.retainedRequestBytes, Self.body(1).utf8.count * 2 + Self.body(2).utf8.count)
+        XCTAssertEqual(probe.started, [1])
+
+        queued.cancel()
+        assertFailure(await queued.value, id: 2, reason: "cancelled", code: -32_603)
+        XCTAssertEqual(decisions.withLock { $0.count }, 1)
+        await assertRetainedActiveRequest(service, id: 1)
+        probe.release(1)
+        assertSuccess(await first.value, id: 1)
+        await assertDrained(service)
+    }
+
+    func testPreadmissionRejectionsResolveAdmissionExactlyOnceWithoutReservingCapacity() async {
+        for rejection in 0..<4 {
+            var configured = limits()
+            switch rejection {
+            case 0: configured.maximumRequestBytes = Self.body(1).utf8.count - 1
+            case 1: configured.maximumOutstandingRequests = 0
+            case 2: configured.maximumOutstandingPerOrigin = 0
+            default: configured.maximumRetainedRequestBytes = Self.body(1).utf8.count - 1
+            }
+            let service = makeService(limits: configured)
+            let decisions = Mutex([SafariRPCService.Statistics]())
+            let probe = SafariRPCServiceProbe()
+            let response = await service.perform(id: 1, body: Self.body(1), scope: scope("a"), onAdmissionDecision: {
+                decisions.withLock { $0.append(service.assumeIsolated { $0.statistics }) }
+            }, operation: probe.run)
+
+            assertFailure(response, id: 1, reason: rejection == 0 ? "request_too_large" : "busy", code: -32_005)
+            XCTAssertEqual(decisions.withLock { $0 }, [SafariRPCService.Statistics(
+                activeRequests: 0, outstandingRequests: 0, retainedRequestBytes: 0, scopeCount: 0
+            )])
+            XCTAssertTrue(probe.started.isEmpty)
+            await assertDrained(service)
+        }
+    }
+
+    func testPublicForwarderTransfersAdmissionBeforeEndpointResolution() async {
+        let service = makeService(limits: limits())
+        let decisions = Mutex([SafariRPCService.Statistics]())
+        let endpointLookups = Mutex(0)
+        let forwarder = PublicRPCForwarder(service: service, network: { _ in
+            XCTAssertEqual(decisions.withLock { $0.count }, 1)
+            endpointLookups.withLock { $0 += 1 }
+            return nil
+        }, send: { _, _, _ in
+            XCTFail("An unavailable endpoint must not dispatch")
+            throw SafariRPCFailure.transport
+        })
+
+        let response = await forwarder.forward(id: 1, chainId: "0x1", body: Self.body(1), scope: scope("a"), onAdmissionDecision: {
+            decisions.withLock { $0.append(service.assumeIsolated { $0.statistics }) }
+        })
+
+        assertFailure(response, id: 1, reason: "transport", code: -32_603)
+        XCTAssertEqual(endpointLookups.withLock { $0 }, 1)
+        XCTAssertEqual(decisions.withLock { $0.count }, 1)
+        XCTAssertEqual(decisions.withLock { $0.first?.retainedRequestBytes }, Self.body(1).utf8.count)
+        await assertDrained(service)
+    }
+
     func testGlobalAndPerOriginActiveLimitsAllowOtherOriginsToProgress() async {
         let service = makeService(limits: limits(active: 2, activePerOrigin: 1))
         let probe = SafariRPCServiceProbe(blocking: [1, 2, 3, 4])
@@ -358,9 +462,13 @@ final class SafariRPCServiceTests: XCTestCase {
         for dispatches in [false, true] {
             let service = makeService(limits: limits(active: 1, outstanding: 1))
             let probe = SafariRPCServiceProbe(blocking: [1], dispatches: dispatches)
+            let decisions = Mutex(0)
             defer { probe.releaseAll() }
-            let first = start(service, id: 1, scope: scope("a"), probe: probe)
+            let first = start(service, id: 1, scope: scope("a"), probe: probe, onAdmissionDecision: {
+                decisions.withLock { $0 += 1 }
+            })
             await expectEventually { probe.started == [1] }
+            XCTAssertEqual(decisions.withLock { $0 }, 1)
 
             first.cancel()
             let cancelled = await first.value
@@ -372,6 +480,7 @@ final class SafariRPCServiceTests: XCTestCase {
             probe.release(1)
             await assertDrained(service)
             XCTAssertEqual(probe.cancelledOnExit[1], true)
+            XCTAssertEqual(decisions.withLock { $0 }, 1)
             assertFailure(await first.value, id: 1, reason: "cancelled", code: -32_603, dispatched: dispatches)
             assertSuccess(await service.perform(id: 3, body: Self.body(3), scope: scope("b"), operation: probe.run), id: 3)
             XCTAssertEqual(probe.started, [1, 3])
@@ -385,9 +494,13 @@ final class SafariRPCServiceTests: XCTestCase {
         configured.maximumLifetime = .seconds(5)
         let service = makeService(limits: configured, clock: clock)
         let probe = SafariRPCServiceProbe(blocking: [1], dispatches: true)
+        let decisions = Mutex(0)
         defer { probe.releaseAll() }
-        let first = start(service, id: 1, scope: scope("a"), probe: probe)
+        let first = start(service, id: 1, scope: scope("a"), probe: probe, onAdmissionDecision: {
+            decisions.withLock { $0 += 1 }
+        })
         await expectEventually { probe.started == [1] }
+        XCTAssertEqual(decisions.withLock { $0 }, 1)
 
         clock.advance(by: 5_000_000_000)
         assertFailure(await first.value, id: 1, reason: "timeout", code: -32_603, dispatched: true)
@@ -398,6 +511,7 @@ final class SafariRPCServiceTests: XCTestCase {
         probe.release(1)
         await assertDrained(service)
         XCTAssertEqual(probe.cancelledOnExit[1], true)
+        XCTAssertEqual(decisions.withLock { $0 }, 1)
         assertFailure(await first.value, id: 1, reason: "timeout", code: -32_603, dispatched: true)
         assertSuccess(await service.perform(id: 3, body: Self.body(3), scope: scope("b"), operation: probe.run), id: 3)
         XCTAssertEqual(probe.started, [1, 3])
@@ -434,15 +548,39 @@ final class SafariRPCServiceTests: XCTestCase {
         let service = makeService(limits: limits())
         let probe = SafariRPCServiceProbe()
         let admit = TestGate<Void>()
+        let decisions = Mutex(0)
         let requestScope = scope("a")
         let task = Task {
             await admit.wait()
-            return await service.perform(id: 1, body: Self.body(1), scope: requestScope, operation: probe.run)
+            return await service.perform(id: 1, body: Self.body(1), scope: requestScope, onAdmissionDecision: {
+                decisions.withLock { $0 += 1 }
+            }, operation: probe.run)
         }
         task.cancel()
         admit.resolve(())
 
         assertFailure(await task.value, id: 1, reason: "cancelled", code: -32_603)
+        XCTAssertEqual(decisions.withLock { $0 }, 1)
+        XCTAssertTrue(probe.started.isEmpty)
+        await assertDrained(service)
+    }
+
+    func testCancellationBetweenInitialCheckAndReservationResolvesAdmissionOnce() async {
+        let service = SafariRPCService(limits: limits(), clock: .init(now: {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return .now
+        }, sleepUntil: { _ in }))
+        let probe = SafariRPCServiceProbe()
+        let decisions = Mutex(0)
+        let requestScope = scope("a")
+        let task = Task {
+            await service.perform(id: 1, body: Self.body(1), scope: requestScope, onAdmissionDecision: {
+                decisions.withLock { $0 += 1 }
+            }, operation: probe.run)
+        }
+
+        assertFailure(await task.value, id: 1, reason: "cancelled", code: -32_603)
+        XCTAssertEqual(decisions.withLock { $0 }, 1)
         XCTAssertTrue(probe.started.isEmpty)
         await assertDrained(service)
     }
@@ -462,8 +600,12 @@ final class SafariRPCServiceTests: XCTestCase {
             (Self.body(1, method: "personal_unlockAccount"), "prohibited_method", 4_200),
         ]
         for (body, reason, code) in inputs {
-            let response = await service.perform(id: 1, body: body, scope: scope("a"), operation: probe.run)
+            let decisions = Mutex(0)
+            let response = await service.perform(id: 1, body: body, scope: scope("a"), onAdmissionDecision: {
+                decisions.withLock { $0 += 1 }
+            }, operation: probe.run)
             assertFailure(response, id: 1, reason: reason, code: code)
+            XCTAssertEqual(decisions.withLock { $0 }, 1)
             await assertDrained(service)
             XCTAssertEqual(serializerCalls.withLock { $0 }, 0)
         }
@@ -507,8 +649,14 @@ final class SafariRPCServiceTests: XCTestCase {
         "{\"jsonrpc\":\"2.0\",\"id\":\(id),\"method\":\"\(method)\",\"params\":[]}"
     }
 
-    private func start(_ service: SafariRPCService, id: Int, body: String? = nil, scope: RPCScope, probe: SafariRPCServiceProbe) -> Task<RPCResponseToExtension, Never> {
-        let task = Task { await service.perform(id: id, body: body ?? Self.body(id), scope: scope, operation: probe.run) }
+    private func start(
+        _ service: SafariRPCService, id: Int, body: String? = nil, scope: RPCScope, probe: SafariRPCServiceProbe,
+        onAdmissionDecision: @escaping @Sendable () -> Void = {}
+    ) -> Task<RPCResponseToExtension, Never> {
+        let task = Task {
+            await service.perform(id: id, body: body ?? Self.body(id), scope: scope,
+                onAdmissionDecision: onAdmissionDecision, operation: probe.run)
+        }
         addTeardownBlock {
             task.cancel()
             probe.releaseAll()

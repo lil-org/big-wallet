@@ -24,13 +24,16 @@ final class HarnessPublicRPCForwarder: PublicRPCForwarding {
         self.networks = networks
     }
 
-    func forward(id: Int, chainId: String, body: String, scope: RPCScope) async -> RPCResponseToExtension {
+    func forward(
+        id: Int, chainId: String, body: String, scope: RPCScope,
+        onAdmissionDecision: @escaping @Sendable () -> Void
+    ) async -> RPCResponseToExtension {
         let endpoint = Int(hexString: chainId).flatMap { networks.resolved($0)?.rpcEndpoint.url }
         let transport = HarnessRPCTransport(ipc: ipc, identity: .object([:]), endpoints: endpoint.map { [$0] } ?? [])
         defer { transport.close() }
         let client = SafariRPCClient(urlSession: transport.session, authorizationProvider: HarnessRejectAuthorization())
         return await PublicRPCForwarder(service: service, client: client, network: networks.resolved)
-            .forward(id: id, chainId: chainId, body: body, scope: scope)
+            .forward(id: id, chainId: chainId, body: body, scope: scope, onAdmissionDecision: onAdmissionDecision)
     }
 }
 
