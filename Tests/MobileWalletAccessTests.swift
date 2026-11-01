@@ -273,14 +273,14 @@ final class MobileWalletAccessTests: XCTestCase {
             makeAccounts: { _ in UIViewController() }, makeAuthentication: { access in
                 AuthenticationViewController {
                     firstAttempts += 1
-                    access.beginAuthentication { firstCancellations += 1 }
+                    access.beginAuthentication { _ in firstCancellations += 1 }
                 }
             })
         let second = MobileWalletRootViewController(access: fixture.access, registerWindow: { _ in },
             makeAccounts: { _ in UIViewController() }, makeAuthentication: { access in
                 AuthenticationViewController {
                     secondAttempts += 1
-                    access.beginAuthentication(cancel: {})
+                    access.beginAuthentication(onCancelled: { _ in })
                 }
             })
         first.loadViewIfNeeded()
@@ -332,7 +332,64 @@ final class MobileWalletAccessTests: XCTestCase {
         let generation = fixture.access.generation
         controller.passwordTextField.text = "password"
         controller.okButtonTapped(controller.okButton as Any)
-        XCTAssertEqual(fixture.access.generation, generation)
+        XCTAssertEqual(fixture.access.generation, generation, "SECURITY-MUTATION[mobile.retired-form]")
+    }
+
+    func testWrongPasswordCancellationClearsTheDraftAndRestoresTheForm() async throws {
+        let fixture = WalletAccessTestFixture()
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive })
+        let previousKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let controller = instantiate(PasswordViewController.self, from: .main)
+        controller.credentials = WalletCredentials(
+            keychain: fixture.keychain.keychain, messages: .testingEnglish, authorityID: fixture.authorityID,
+            vaultHost: SafariApprovalVaultHost(vault: SafariApprovalVault(fileURL: nil), sourceSnapshot: { nil }),
+            authentication: .init(canUseBiometrics: { false }, attemptBiometrics: { _ in .failed })
+        )
+        controller.access = fixture.access
+        let navigation = controller.inNavigationController
+        let window = UIWindow(windowScene: scene)
+        addTeardownBlock { @MainActor in
+            let presented = controller.presentedViewController ?? navigation.presentedViewController
+            fixture.access.lock(reason: .background)
+            if let presented {
+                await withCheckedContinuation { continuation in
+                    presented.dismissAfterCurrentTransition(animated: false) { continuation.resume() }
+                }
+            }
+            window.isHidden = true
+            window.rootViewController = nil
+            previousKeyWindow?.makeKey()
+        }
+        window.rootViewController = navigation
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+        await expectEventually(timeout: 5) {
+            controller.viewIfLoaded?.window === window && navigation.visibleViewController === controller &&
+                controller.transitionCoordinator == nil && !controller.isBeingPresented
+        }
+        guard controller.viewIfLoaded?.window === window, navigation.visibleViewController === controller,
+              controller.transitionCoordinator == nil, !controller.isBeingPresented else {
+            return XCTFail("Password form did not finish attaching to its source window")
+        }
+        controller.passwordTextField.text = "incorrect-password"
+
+        controller.okButtonTapped(controller.okButton as Any)
+
+        await expectEventually(timeout: 5) {
+            guard let alert = (controller.presentedViewController ?? navigation.presentedViewController) as? UIAlertController else { return false }
+            return alert.viewIfLoaded?.window != nil && !alert.isBeingPresented
+        }
+        let alert = try XCTUnwrap((controller.presentedViewController ?? navigation.presentedViewController) as? UIAlertController)
+        XCTAssertEqual(alert.title, Strings.passwordDoesNotMatch)
+        XCTAssertTrue(controller.passwordTextField.text?.isEmpty ?? true)
+        XCTAssertTrue(controller.passwordTextField.isEnabled)
+        XCTAssertTrue(controller.okButton.isEnabled)
+        XCTAssertTrue(navigation.view.isUserInteractionEnabled)
+        XCTAssertFalse(navigation.isNavigationBarHidden)
+        XCTAssertTrue(controller.initialOverlayView.isHidden)
+        XCTAssertTrue(fixture.access.isLocked)
+        XCTAssertNil(fixture.access.session)
     }
 
     func testReplacingAuthenticationLeavesTheOtherSceneUsableWithoutAnotherPrompt() throws {
@@ -482,7 +539,7 @@ final class MobileWalletAccessTests: XCTestCase {
 
     func testProtectedDataLossKeepsPrivacyCoverThroughLateActivation() throws {
         try withRegistryWindow { fixture, center, _, scene, root, cover, availability in
-            let pending = fixture.access.beginAuthentication(cancel: {})
+            let pending = fixture.access.beginAuthentication(onCancelled: { _ in })
             let lateSession = try fixture.makeSession()
             availability.value = false
             center.post(name: UIApplication.protectedDataWillBecomeUnavailableNotification, object: nil)
@@ -492,7 +549,7 @@ final class MobileWalletAccessTests: XCTestCase {
 
             center.post(name: UIScene.didActivateNotification, object: scene)
             XCTAssertFalse(cover.isHidden)
-            XCTAssertFalse(fixture.access.completeAuthentication(lateSession, generation: pending))
+            XCTAssertFalse(pending.complete(lateSession))
             XCTAssertTrue(fixture.access.isLocked)
 
             availability.value = true

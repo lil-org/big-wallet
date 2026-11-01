@@ -14,6 +14,20 @@ function passedGates() {
     return {tree, summary: {totalTestCount: 5, passedTests: 5, failedTests: 0, skippedTests: 0}};
 }
 
+test("app result summaries cannot hide a failed or unknown individual test outcome", () => {
+    const tree = {testNodes: [{nodeType: "Test Case", nodeIdentifier: "AccessTests/testLateResult()", result: "Failed"}]};
+    const passedSummary = {totalTestCount: 1, passedTests: 1, failedTests: 0, skippedTests: 0};
+    const policy = {configuration: "Debug", kind: "full", platform: "macos"};
+    const audit = auditNativeResult(passedSummary, tree, policy);
+    assert.equal(audit.ok, false);
+    assert.ok(audit.issues.includes("Failed-test inventory does not match XCTest summary"));
+    assert.ok(audit.issues.includes("XCTest failed: AccessTests/testLateResult()"));
+    tree.testNodes[0].result = "Unknown";
+    assert.equal(auditNativeResult(passedSummary, tree, policy).ok, false);
+    tree.testNodes[0].result = "Passed";
+    assert.equal(auditNativeResult(passedSummary, tree, policy).ok, true);
+});
+
 test("captured XCTest27 cases retain skip-message children without counting them as tests", () => {
     const cases = testCases(captured.tree);
     assert.equal(cases.length, 7);

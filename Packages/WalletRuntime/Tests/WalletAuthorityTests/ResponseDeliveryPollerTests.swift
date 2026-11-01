@@ -360,7 +360,9 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         let original = NativeRequestContext.ResponseAccess.document(document)
         let foreign = NativeRequestContext.ResponseAccess.document(.init(tabID: document.tabID, frameID: 0,
             documentID: document.documentID, documentSession: String(repeating: "f", count: 32)))
-        XCTAssertEqual(restarted.authorizeResponseAccess(handle: handle, configurationKey: configurationKey, access: foreign), .missing)
+        guard restarted.authorizeResponseAccess(handle: handle, configurationKey: configurationKey, access: foreign) == .missing else {
+            return XCTFail("SECURITY-MUTATION[response.document-owner]")
+        }
         assertResult(restarted.prepareResponseDelivery(handle: handle, configurationKey: configurationKey, access: foreign), equals: .missing)
         XCTAssertEqual(restarted.acknowledgeResponse(handle: handle, configurationKey: configurationKey, access: foreign), .ownershipLost)
         XCTAssertEqual(try Data(contentsOf: profileURL), damaged)

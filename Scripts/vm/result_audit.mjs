@@ -8,6 +8,11 @@ const finiteCount = value => Number.isSafeInteger(value) && value >= 0;
 const count = (summary, name) => finiteCount(summary[name]) ? summary[name] : undefined;
 const bundleMetadata = value => typeof value === "string" && value.trim().length > 0 && value.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value);
 
+function appTestIdentifier(test, target) {
+    const identifier = test.identifier.replace(/\(\)$/, "");
+    return identifier.split("/").length === 2 && (!test.target || test.target === target) ? `${target}/${identifier}` : identifier;
+}
+
 export function testCases(tree) {
     const cases = [];
     const visit = (value, target) => {
@@ -75,6 +80,10 @@ export function auditNativeResult(summary, tree, policy) {
     }
     const cases = testCases(tree);
     if (counts.total !== cases.length) { issues.push("Test-case inventory does not match XCTest summary"); }
+    const failed = cases.filter(test => test.result === "failed");
+    if (counts.failed !== failed.length) { issues.push("Failed-test inventory does not match XCTest summary"); }
+    if (counts.passed !== cases.filter(test => test.result === "passed").length) { issues.push("Passed-test inventory does not match XCTest summary"); }
+    for (const test of failed.slice(0, 10)) { issues.push(`XCTest failed: ${test.identifier.slice(0, 1024)}`); }
     const skipped = cases.filter(test => test.result === "skipped");
     if (counts.skipped !== skipped.length) { issues.push("Skipped-test inventory does not match XCTest summary"); }
     const expectedSkips = [];
@@ -120,6 +129,64 @@ export function auditNativeResult(summary, tree, policy) {
             }
             for (const identifier of expected) {
                 if (inventory.get(identifier) !== 1) { issues.push(`${label} test must execute exactly once: ${identifier}`); }
+            }
+        }
+    }
+    if (policy.requiredAppTests !== undefined || policy.exactAppInventory !== undefined) {
+        const target = {macos: "Tests macOS", ios: "Tests iOS", visionos: "Tests visionOS"}[policy.platform];
+        const expected = policy.requiredAppTests;
+        if (policy.kind !== "full" || policy.runtime === true || !target || typeof policy.exactAppInventory !== "boolean" ||
+            !Array.isArray(expected) || !expected.length || new Set(expected).size !== expected.length ||
+            expected.some(name => typeof name !== "string" || !name.startsWith(`${target}/`) ||
+                !/^[^/]+\/[A-Za-z_][A-Za-z0-9_]*\/[A-Za-z_][A-Za-z0-9_]*$/.test(name))) {
+            issues.push("App audit requires a nonempty, unique platform-specific expected-test inventory");
+        } else {
+            const inventory = new Map();
+            const trackedClasses = new Set(expected.map(name => name.split("/").slice(0, 2).join("/")));
+            for (const test of cases) {
+                const identifier = appTestIdentifier(test, target);
+                if (test.target && test.target !== target || !identifier.startsWith(`${target}/`)) {
+                    issues.push(`App test bundle does not match its platform: ${test.identifier}`);
+                }
+                inventory.set(identifier, (inventory.get(identifier) ?? 0) + 1);
+                if (!expected.includes(identifier) && (policy.exactAppInventory || trackedClasses.has(identifier.split("/").slice(0, 2).join("/")))) {
+                    issues.push(`Unexpected app test: ${test.identifier}`);
+                }
+            }
+            for (const identifier of expected) {
+                if (inventory.get(identifier) !== 1) { issues.push(`App test must execute exactly once: ${identifier}`); }
+            }
+            for (const [identifier, count] of inventory) {
+                if (count !== 1 && !expected.includes(identifier)) { issues.push(`Duplicate app test: ${identifier}`); }
+            }
+        }
+    }
+    if (policy.appSelectors !== undefined) {
+        const target = {macos: "Tests macOS", ios: "Tests iOS", visionos: "Tests visionOS"}[policy.platform];
+        const selectors = policy.appSelectors;
+        if (policy.kind !== "full" || policy.runtime === true || !target || !Array.isArray(selectors) || !selectors.length ||
+            new Set(selectors).size !== selectors.length || selectors.some(selector => typeof selector !== "string" ||
+                selector !== target && (!selector.startsWith(`${target}/`) || !/^[^/]+\/[A-Za-z_][A-Za-z0-9_]*(?:\/[A-Za-z_][A-Za-z0-9_]*)?$/.test(selector)))) {
+            issues.push("App audit requires unique platform-specific requested selectors");
+        } else {
+            const identifiers = cases.map(test => appTestIdentifier(test, target));
+            for (const selector of selectors) {
+                if (!identifiers.some(identifier => identifier === selector || identifier.startsWith(`${selector}/`))) {
+                    issues.push(`Requested app selector did not execute: ${selector}`);
+                }
+            }
+            for (const identifier of identifiers) {
+                if (!selectors.some(selector => identifier === selector || identifier.startsWith(`${selector}/`))) {
+                    issues.push(`App test was outside the requested selection: ${identifier}`);
+                }
+            }
+            if (policy.requiredAppTests === undefined) {
+                if (new Set(identifiers).size !== identifiers.length) { issues.push("App result contains duplicate test identifiers"); }
+                for (const [index, test] of cases.entries()) {
+                    if (test.target && test.target !== target || !identifiers[index].startsWith(`${target}/`)) {
+                        issues.push(`App test bundle does not match its platform: ${test.identifier}`);
+                    }
+                }
             }
         }
     }
@@ -409,6 +476,10 @@ export function auditResults(stages) {
     }
     for (const stage of stages) {
         if (stage.status === "passed") {
+            if ((stage.nativeAudit?.requiredAppTests !== undefined || stage.nativeAudit?.exactAppInventory !== undefined ||
+                stage.nativeAudit?.appSelectors !== undefined) && stage.audit?.ok !== true) {
+                issues.push(`${stage.id} has no passing app XCTest inventory audit`);
+            }
             if (stage.nativeAudit?.runtime === true && stage.audit?.ok !== true) {
                 issues.push(`${stage.id} has no passing runtime XCTest audit`);
             }
@@ -423,6 +494,12 @@ export function auditResults(stages) {
             }
             if (stage.upgradeAudit && stage.audit?.ok !== true) {
                 issues.push(`${stage.id} has no passing shipped-main upgrade and recovery audit`);
+            }
+            if (stage.parserFuzzAudit && stage.audit?.ok !== true) {
+                issues.push(`${stage.id} has no passing native parser fuzz audit`);
+            }
+            if (stage.mutationAudit && stage.audit?.ok !== true) {
+                issues.push(`${stage.id} has no passing security mutation audit`);
             }
             if (stage.preparationResult && stage.audit?.ok !== true) {
                 issues.push(`${stage.id} has no passing Safari preparation audit`);

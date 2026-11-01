@@ -272,11 +272,21 @@ final class HarnessRuntime {
             WalletSigningPreparation.fromSource(scope: authorization, walletsManager: wallets, clock: clock.now)
         }, networkResolver: networks.approval, customDefinitionResult: networks.matches)
 
-    private lazy var admission = DappRequestAdmission(store: store, requestProcessor: processor,
-        reviewCatalog: options.mode == "popup" ? { [weak self] in
-            guard let vault = self?.vault else { return nil }
-            return await awaitBackgroundOperation { vault.reviewCatalog() } ?? nil
-        } : nil)
+    private lazy var admission = makeAdmission()
+
+    private func makeAdmission() -> DappRequestAdmission {
+        let reviewCatalog: (() async -> WalletReviewCatalog?)?
+        if options.mode == "popup" {
+            reviewCatalog = { @MainActor [weak self] in
+                guard let vault = self?.vault else { return nil }
+                return await awaitBackgroundOperation { vault.reviewCatalog() } ?? nil
+            }
+        } else {
+            reviewCatalog = nil
+        }
+        return DappRequestAdmission(store: store, requestProcessor: processor,
+            reviewCatalog: reviewCatalog, messages: .testingEnglish)
+    }
 
     private lazy var popupSessions = makePopupSessions()
 

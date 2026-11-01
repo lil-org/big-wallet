@@ -1011,9 +1011,10 @@ final class WalletRemovalIntegrationTests: XCTestCase {
 
             do {
                 _ = try await manager.repository.delete(prepared, willMutateSource: {
-                    XCTFail("Stale deletion must fail before mutation")
+                    XCTFail("SECURITY-MUTATION[source.bytes]: Stale deletion must fail before mutation")
+                    throw WalletsManager.Error.keychainAccessFailure
                 })
-                XCTFail("Stale deletion was committed")
+                XCTFail("SECURITY-MUTATION[source.bytes]: Stale deletion was committed")
             } catch WalletsManager.Error.keychainAccessFailure {
             }
 

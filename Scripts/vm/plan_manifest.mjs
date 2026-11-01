@@ -11,5 +11,7 @@ const stages = createManifest(job).map(stage => ({id: stage.id, group: stage.gro
     ...(stage.nativeAudit ? {nativeAudit: stage.nativeAudit} : {}),
     ...(stage.approvalAudit ? {approvalAudit: stage.approvalAudit} : {}),
     ...(stage.upgradeAudit ? {upgradeAudit: stage.upgradeAudit} : {}),
+    ...(stage.parserFuzzAudit ? {parserFuzzAudit: stage.parserFuzzAudit} : {}),
+    ...(stage.mutationAudit ? {mutationAudit: stage.mutationAudit} : {}),
     ...(stage.preparationResult ? {preparationResult: true} : {})}));
 process.stdout.write(JSON.stringify(stages) + "\n");

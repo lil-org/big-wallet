@@ -21,7 +21,7 @@ final class WalletAuthenticationTests: XCTestCase {
             for await result in group where result { accepted += 1 }
             return accepted
         }
-        XCTAssertEqual(accepted, 1)
+        XCTAssertEqual(accepted, 1, "SECURITY-MUTATION[grant.single-use]")
     }
 
     func testWrongSystemRetiresTheGrant() throws {
@@ -29,7 +29,7 @@ final class WalletAuthenticationTests: XCTestCase {
         let purpose = WalletAuthenticationChallenge.Purpose.message(review: UUID(), cluster: .devnet)
         let challenge = makeChallenge(authorityID: authorityID, purpose: purpose)
         let grant = try XCTUnwrap(challenge.issueGrant(for: authorityID, credentialIdentity: .init(status: { .current })))
-        XCTAssertFalse(grant.consume(authorityID: UUID(), purpose: purpose))
+        XCTAssertFalse(grant.consume(authorityID: UUID(), purpose: purpose), "SECURITY-MUTATION[grant.authority]")
         XCTAssertFalse(grant.consume(authorityID: authorityID, purpose: purpose))
     }
 
@@ -39,7 +39,7 @@ final class WalletAuthenticationTests: XCTestCase {
         let purpose = WalletAuthenticationChallenge.Purpose.message(review: review, cluster: .devnet)
         let challenge = makeChallenge(authorityID: authorityID, purpose: purpose)
         let grant = try XCTUnwrap(challenge.issueGrant(for: authorityID, credentialIdentity: .init(status: { .current })))
-        XCTAssertFalse(grant.consume(authorityID: authorityID, purpose: .message(review: review, cluster: .mainnetBeta)))
+        XCTAssertFalse(grant.consume(authorityID: authorityID, purpose: .message(review: review, cluster: .mainnetBeta)), "SECURITY-MUTATION[grant.purpose]")
         XCTAssertFalse(grant.consume(authorityID: authorityID, purpose: purpose))
     }
 
@@ -63,7 +63,7 @@ final class WalletAuthenticationTests: XCTestCase {
         let challenge = makeChallenge(authorityID: authorityID, purpose: purpose)
         let grant = try XCTUnwrap(challenge.issueGrant(for: authorityID, credentialIdentity: .init(status: { current.withLock { $0 } ? .current : .changed })))
         current.withLock { $0 = false }
-        XCTAssertFalse(grant.consume(authorityID: authorityID, purpose: purpose))
+        XCTAssertFalse(grant.consume(authorityID: authorityID, purpose: purpose), "SECURITY-MUTATION[grant.credentials]")
         current.withLock { $0 = true }
         XCTAssertFalse(grant.consume(authorityID: authorityID, purpose: purpose))
     }
@@ -376,7 +376,13 @@ final class WalletAuthenticationTests: XCTestCase {
         let challenge = makeChallenge(authorityID: authorityID, purpose: .secretExport(binding))
         let grant = try XCTUnwrap(challenge.issueGrant(for: authorityID, credentialIdentity: .init(status: { .current })))
         XCTAssertNil(grant.consumeExport(authorityID: authorityID, walletID: "other", account: account, kind: .privateKey))
-        XCTAssertNil(grant.consumeExport(authorityID: authorityID, walletID: "wallet", account: nil, kind: .mnemonic))
+        XCTAssertNil(grant.consumeExport(authorityID: authorityID, walletID: "wallet", account: nil, kind: .privateKey))
+        let kindChallenge = makeChallenge(authorityID: authorityID, purpose: .secretExport(binding))
+        let kindGrant = try XCTUnwrap(kindChallenge.issueGrant(for: authorityID, credentialIdentity: .init(status: { .current })))
+        guard kindGrant.consumeExport(authorityID: authorityID, walletID: "wallet", account: account, kind: .mnemonic) == nil else {
+            return XCTFail("SECURITY-MUTATION[export.kind]")
+        }
+        XCTAssertEqual(kindGrant.consumeExport(authorityID: authorityID, walletID: "wallet", account: account, kind: .privateKey), binding)
         XCTAssertEqual(grant.consumeExport(authorityID: authorityID, walletID: "wallet", account: account, kind: .privateKey), binding)
         XCTAssertNil(grant.consumeExport(authorityID: authorityID, walletID: "wallet", account: account, kind: .privateKey))
     }
@@ -394,7 +400,9 @@ final class WalletAuthenticationTests: XCTestCase {
         let retainedGrant = grant
 
         clock.withLock { $0 = deadline }
-        XCTAssertNil(pending.issueGrant(for: authorityID, credentialIdentity: .init(status: { .current })))
+        guard pending.issueGrant(for: authorityID, credentialIdentity: .init(status: { .current })) == nil else {
+            return XCTFail("SECURITY-MUTATION[grant.exact-expiry]")
+        }
         XCTAssertFalse(grant.consume(authorityID: authorityID, purpose: purpose))
 
         clock.withLock { $0 = deadline - .seconds(1) }

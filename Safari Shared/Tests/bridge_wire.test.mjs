@@ -435,7 +435,7 @@ test("runtime sender policy permits only the complete sender receiver subject ma
             for (const subject of subjects) {
                 const key = `${kind}:${receiver}:${subject}`;
                 const result = wire.authorizeRuntimeMessage(receiver, {subject}, sender, runtime);
-                assert.equal(result !== null, allowed.has(key), key);
+                assert.equal(result !== null, allowed.has(key), `SECURITY-MUTATION[bridge.subject-role]: ${key}`);
                 if (result) { assert.equal(result.kind, kind, key); }
             }
         }
@@ -563,7 +563,7 @@ test("runtime authorization rejects missing foreign or malformed sender metadata
         Object.assign(Object.create({tab: valid.tab}), {id: valid.id, url: valid.url, frameId: 0}),
         {...valid, tab: Object.create({id: 4})},
     ]) {
-        assert.equal(wire.authorizeRuntimeMessage("worker", {subject: "getResponse"}, sender, runtime), null);
+        assert.equal(wire.authorizeRuntimeMessage("worker", {subject: "getResponse"}, sender, runtime), null, "SECURITY-MUTATION[bridge.extension-sender]");
     }
     for (const kind of ["popup", "worker"]) {
         const receiver = kind === "popup" ? "worker" : "popup";

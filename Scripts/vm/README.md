@@ -22,6 +22,10 @@ Scripts/test_vm.sh run all --stage safari
 Scripts/test_vm.sh run all --stage upgrade
 Scripts/test_vm.sh run all --stage asan
 Scripts/test_vm.sh run all --stage asan --only-testing WalletAuthorityTests/SecretBytesTests
+Scripts/test_vm.sh run all --stage fuzz
+Scripts/test_vm.sh run all --stage parser-fuzz
+Scripts/test_vm.sh run extended --stage mutation
+Scripts/test_vm.sh run all --stage fuzz --parser-fuzz-replay /absolute/path/to/reproducer.json
 Scripts/test_vm.sh run all --stage safari --configuration Debug --interactive-safari \
   --only-testing 'Safari UI Tests macOS/SafariLifecycleTests/testInstallAndNativeRoundtrip'
 Scripts/test_vm.sh run extended --stage safari --configuration Release
@@ -77,7 +81,7 @@ Sanitizer disabled, using serial XCTest execution and the default DerivedData
 location. They always use macOS Debug, independently of `--configuration` and
 `--runtime-platform`, and use the run's existing signing mode.
 
-The current selection contains 172 runtime tests for secret buffers, Scrypt,
+The current selection contains 173 runtime tests for secret buffers, Scrypt,
 private keys, HD derivation, stored keys, signing lifetime, and private-key imports,
 plus 38 app tests for secret handling, lifetime, and alert presentation. The
 functional Scrypt vector test is included; timed performance gates are excluded.
@@ -524,6 +528,73 @@ Process kills do not simulate power loss; the persistence disk-model tests cover
 
 ## Suites and reports
 
+### Native parser fuzzing
+
+The `fuzz` group retains the JavaScript/Swift wire-codec checks and adds an isolated
+`WalletParserFuzzHarness` package. Its optimized macOS worker uses Address Sanitizer
+and validation-only testability without changing the runtime's public products.
+It calls native keystore, EIP-712, and Solana parser entry points without creating
+wallet repositories, live Keychain access, network clients, or authentication UI.
+This is deterministic, structure-aware input fuzzing, not coverage-guided fuzzing.
+Use `--stage parser-fuzz` to select only the native build, canary, parser, and
+decryption phases and their prerequisites; it retains the same profile workload.
+
+`all` runs the mandatory corpus, 2,000 generated inputs per parser with seed
+`0xc0ffee`, and 24 bounded fixture-decryption cases. `extended` runs 20,000 inputs
+per parser for seeds `0xc0ffee`, `42`, `20261013`, and `3735928559`, plus 96 bounded
+decryption cases. Ethereum checks use existing known-answer vectors and explicit
+properties. Canonical valid Solana messages are compared with the existing pinned
+SDK; its acceptance of malformed input is not a substitute for wallet policy.
+
+Arbitrary KDF mutations are admission-tested without deriving keys. Decryption
+uses synthetic fixtures with fixed, allowlisted computational parameters. Native
+parser operations have a five-second watchdog; decryption has thirty seconds.
+The supervisor monitors a 1 GiB resident-memory ceiling. This monitoring does not
+establish OS process containment. Aggregate execution budgets exclude compilation
+and are ten minutes for `all` and sixty minutes for `extended`.
+
+The build, canary, parser, and decryption stages retain separate audited reports.
+Missing cases, worker crashes, malformed replies, memory or time budget failures,
+and sanitizer diagnostics fail the stage. Reports retain source and binary
+identities, corpus hashes, seeds, case counts, oracle results, and resource data.
+Failures preserve the original input and a bounded minimization attempt; only
+reviewed synthetic regressions belong in the committed corpus.
+
+Use `--parser-fuzz-replay` with only `--stage fuzz` or `--stage parser-fuzz` to stage one JSON reproducer
+into the guest. A replay runs the native build and replay stages and establishes
+only selected coverage. The runner rejects oversized, malformed, or symlinked
+replay inputs before execution. It never interprets replay paths as shell code.
+Saved failure artifacts include a host replay command pointing at their exported
+run directory. That command uses the default VM state directory or
+`BW_TEST_VM_STATE_DIR`; set the variable if the original run used `--state-dir`.
+
+### Security mutation checks
+
+The `mutation` group runs six declared security mutants in `all` and nineteen in
+`extended`. It first runs an unmodified baseline, applies one source mutation at
+a time to a dedicated guest working copy, rebuilds incrementally, and executes
+the declared witness tests. It restores and verifies original source bytes after
+every mutation and finishes with a restored baseline. Xcode uses its default
+DerivedData location. No production bypass flags or weakened release settings
+are introduced. An explicit `--stage mutation` does not accept `--only-testing`;
+the mutation manifest owns its complete witness inventory.
+
+A mutant is detected only when it builds successfully, the selected tests execute
+exactly once, and a designated semantic assertion fails. Compilation failures,
+crashes, timeouts, skipped or missing tests, unrelated assertion failures, and
+missing audit evidence are inconclusive and cannot establish a passing stage.
+Every selected mutant must be detected and both pristine baselines must pass.
+Reports retain source/test/binary identities, exact patches, commands, logs,
+result bundles, assertion evidence, and verified restoration.
+
+Core mutation execution uses macOS Debug. The extended tier also tests one
+retired-form mutation on iOS Simulator and browser sender-policy mutations in
+Node. This evidence is separate from the normal cross-platform Debug/Release
+matrix. Local and Apple signing modes retain the same mutation workload; Apple
+app builds additionally require the provisioned signing and proof-resource inputs.
+
+### Acceptance matrix
+
 Native builds use Xcode's default DerivedData inside the guest and disable coverage
 collection. Simulator destinations come from the pinned guest runtimes. Validating
 the oldest supported OS versions requires those runtimes or devices separately.
@@ -531,14 +602,25 @@ the oldest supported OS versions requires those runtimes or devices separately.
 `all` covers Debug/Release builds and full tests on all three platforms, Safari
 JavaScript and real Safari UI lifecycle tests on macOS and iOS Simulator, generated protocol/bundle checks, all script regressions, the
 runner's own tests, Worker tests/type checks/offline validation, Release crypto
-performance gates, focused TSan, protocol fuzzing, and Debug/Release approval
-lifecycle runs. `extended` adds broader TSan, three fixed 20,000-case fuzz seeds,
+performance gates, focused TSan and ASan, wire and native parser fuzzing, six
+security mutation checks, and Debug/Release approval lifecycle runs. `extended`
+adds broader TSan, the deeper native parser and nineteen-mutant tiers, three fixed 20,000-case wire fuzz seeds,
 Debug/Release lifecycle soaks of 1,000 sequences × 200 actions, and ten iterations
 of every selected Safari lifecycle scenario in Release on both browser platforms.
 
 `--only-testing` narrows TSan to matching tests in the selected profile. An explicit
 `--stage tsan` selection with no matching tests fails before execution. App methods
 must exist in the macOS Debug inventory, and every selected test must run exactly once.
+
+Ordinary app XCTest runs also require every registered critical app test selected
+for their platform and configuration. A focused selection made entirely from
+registered classes or methods requires that exact inventory; full app runs allow
+other classes while still requiring all registered tests. The inventory includes
+wallet access, onboarding, mobile access, and window authentication. Missing,
+duplicated, skipped, wrong-bundle, or unexpected focused tests cannot establish a
+passing run. Known app classes route only to platforms that contain their tests.
+Mixed selections may include unregistered classes, but each explicitly requested
+selector must execute at least one test and no test may fall outside that selection.
 
 Both signing modes run the same selected tests, performance thresholds, crash
 scenarios, and result audits. Local native unit-test verification removes production

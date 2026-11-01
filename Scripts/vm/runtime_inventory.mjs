@@ -9,6 +9,10 @@ const APP_TEST_TARGETS = {macos: "Tests macOS", ios: "Tests iOS", visionos: "Tes
 export const APP_TEST_CLASS_PLATFORMS = {
     AccountPreviewStateTests: ["macos"],
     AccountsListViewControllerTests: ["macos"],
+    WalletAccessControllerTests: PLATFORMS,
+    OnboardingCancellationTests: ["macos"],
+    WindowAuthenticationSessionTests: ["macos"],
+    MobileWalletAccessTests: ["ios", "visionos"],
     NativeApprovalCoordinatorTests: ["macos"],
     NativeAccountSelectionViewControllerTests: ["macos"],
     PopupRequestSessionsTests: ["macos"],

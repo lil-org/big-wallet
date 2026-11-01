@@ -146,6 +146,16 @@ boundary. Preview lifetime binds to access and encrypted secret identity while
 allowing names and enabled-account metadata to refresh. Initial password setup
 remains an atomic preauthentication operation.
 
+App-level unlocks share one `@MainActor` authentication-attempt owner. Each attempt
+owns at most one replaceable operation and its challenge and task. Retiring an
+attempt invalidates its challenge before cancelling work and notifying its UI;
+successful completion detaches work without cancelling the completing task.
+Retained attempts and operations reject late grants and sessions after replacement,
+lock, or owner deallocation. Presentation generations remain separate so an old
+screen transition cannot install content or retire a newer screen. Credential and
+grant validation stays inside Authority; the app ownership layer does not issue
+authorization or unify unlock grants with signing or export grants.
+
 ### Account editing
 
 The account editor merges external account changes into its open draft. Local additions and removals are reapplied to the latest wallet; untouched accounts follow that wallet's current state. An edit already satisfied externally becomes clean, so later external changes apply normally. Existing preview pages remain available, and only removal or replacement of the wallet closes the editor. Saving still merges against current storage and cannot remove the final account.
@@ -243,6 +253,21 @@ Run native validation only through `Scripts/test_vm.sh`; see
 available through `--stage runtime`; executing XCTest requires `--stage test`.
 The complete acceptance run includes builds, tests, thread and address sanitizers, lifecycle
 exploration, wire fuzzing, and Safari integration in the VM.
+
+The separate `WalletParserFuzzHarness` package exercises native keystore, EIP-712,
+and Solana parsing with seeded inputs and Address Sanitizer. It has no shipping
+product membership and uses only validation-time access to internal parsers.
+Keystore decryption is restricted to bounded synthetic fixtures. Independent
+known-answer vectors and the existing Solana SDK supplement parser invariants;
+this harness does not claim coverage-guided fuzzing or an independent Ethereum
+implementation.
+
+The VM `mutation` stage verifies selected security assertions by temporarily
+introducing one declared regression in a disposable guest source copy. A build
+failure, crash, skipped test, or unrelated assertion is inconclusive. The auditor
+requires the designated invariant to fail, complete test inventories, and passing
+baselines before mutation and after verified source restoration. No mutation
+switches are compiled into production. See the VM guide for tiers and replay.
 
 ## Deterministic race coverage
 

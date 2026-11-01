@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 TOOLS = Path(__file__).resolve().parent
 DEFAULT_VM = Path.home() / 'Library/Application Support/VirtualBuddy/tests machine.vbvm'
 DEFAULT_STATE = Path.home() / 'Library/Application Support/Big Wallet Test VM'
-STAGES = ('build', 'test', 'performance', 'tsan', 'asan', 'fuzz', 'approval', 'upgrade', 'safari', 'repository', 'worker', 'runtime')
+STAGES = ('build', 'test', 'performance', 'tsan', 'asan', 'fuzz', 'parser-fuzz', 'mutation', 'approval', 'upgrade', 'safari', 'repository', 'worker', 'runtime')
 EXCLUDED_PARTS = {'.git', '.asc-runtime', 'node_modules', 'DerivedData', 'build', '.build',
                   '.cache', '.vm-testing', '__pycache__', '.venv', 'venv'}
 SECRET_SUFFIXES = {'.p12', '.p8', '.pem', '.key', '.mobileprovision', '.provisionprofile'}
@@ -88,8 +88,8 @@ def matches_source_vm(record, requested):
 
 
 @contextlib.contextmanager
-def open_regular(path):
-    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+def open_regular(path, *, nonblocking=False):
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | (os.O_NONBLOCK if nonblocking else 0))
     if not stat.S_ISREG(os.fstat(descriptor).st_mode):
         os.close(descriptor)
         raise RunnerError(f'Expected a regular file: {path}')
@@ -631,7 +631,7 @@ def stage_planned_result(exchange, job):
 def job_selection(job):
     payload = job['payload']
     return {'signing': payload.get('signing', 'local'),
-            **{key: payload[key] for key in ('stages', 'onlyTesting', 'configuration', 'approvalArgs', 'runtimePlatforms',
+            **{key: payload[key] for key in ('stages', 'onlyTesting', 'configuration', 'approvalArgs', 'parserFuzzReplay', 'runtimePlatforms',
                                             'interactiveSafari', 'prepareSafari', 'preparedSafari') if key in payload}}
 
 
@@ -1318,6 +1318,32 @@ def stage_approval_arguments(arguments, exchange):
         destination.write_bytes(contents)
         arguments[index + 1] = '/Volumes/BigWalletBuild/Exchange/inputs/approval-replay.json'
     return arguments
+
+
+def stage_parser_fuzz_replay(path, exchange):
+    with open_regular(Path(path).expanduser(), nonblocking=True) as file:
+        contents = file.read(16 * 1024 * 1024 + 1)
+    if len(contents) > 16 * 1024 * 1024:
+        raise RunnerError('Native parser replay JSON exceeds 16 MiB')
+    def bounded_number(conversion):
+        def parse(value):
+            if len(value) > 128:
+                raise ValueError('Replay metadata number exceeds its bound')
+            return conversion(value)
+        return parse
+    def reject_constant(_):
+        raise ValueError('Replay metadata must use JSON number syntax')
+    try:
+        artifact = json.loads(contents.decode('utf-8'), parse_int=bounded_number(int),
+                              parse_float=bounded_number(float), parse_constant=reject_constant)
+    except (ValueError, RecursionError) as error:
+        raise RunnerError('Native parser replay must contain valid UTF-8 JSON within decoder limits') from error
+    if not isinstance(artifact, dict):
+        raise RunnerError('Native parser replay must contain one JSON artifact')
+    destination = private_directory(exchange / 'inputs') / 'parser-fuzz-replay.json'
+    destination.write_bytes(contents)
+    return {'path': '/Volumes/BigWalletBuild/Exchange/inputs/parser-fuzz-replay.json',
+            'sha256': hashlib.sha256(contents).hexdigest()}
 
 
 def reconcile_interrupted_operation(state):
@@ -2365,6 +2391,8 @@ def run_tests(args, state, environment, *, result_callback=None):
                     job['payload']['interactiveSafari'] = True
                 if args.approval_arg:
                     job['payload']['approvalArgs'] = stage_approval_arguments(args.approval_arg, exchange)
+                if getattr(args, 'parser_fuzz_replay', None):
+                    job['payload']['parserFuzzReplay'] = stage_parser_fuzz_replay(args.parser_fuzz_replay, exchange)
                 atomic_json(exchange / 'job.json', job)
                 plan = stage_planned_result(exchange, job)
                 preparation = prepared_safari_for_job(record, job, plan)
@@ -2462,6 +2490,8 @@ def parser():
                             help='Limit package XCTest destinations; repeat to select multiple platforms (default: all three)')
     run_parser.add_argument('--configuration', choices=('Debug', 'Release'))
     run_parser.add_argument('--approval-arg', action='append', default=[])
+    run_parser.add_argument('--parser-fuzz-replay', type=Path,
+                            help='Replay one native parser fuzz artifact with --stage fuzz inside the VM')
     run_parser.add_argument('--timeout', type=int)
     return parser
 

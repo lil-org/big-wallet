@@ -278,6 +278,72 @@ final class OnboardingCancellationTests: XCTestCase {
         XCTAssertNil(fixture.credentials.accessSession(authorization: grant))
     }
 
+    func testLockDuringExplicitReauthenticationRetiresOwnedWorkImmediately() async throws {
+        let fixture = WalletAccessTestFixture()
+        fixture.access.lock(reason: .idle)
+        let gate = AuthenticationGate()
+        let cancelled = expectation(description: "Explicit reauthentication was cancelled")
+        var returnedGrant: WalletAuthenticationGrant?
+        var events = [StartupCredentialCoordinator.Event]()
+        let flow = StartupCredentialCoordinator(dependencies: .init(
+            credentials: fixture.credentials,
+            attemptBiometrics: { _, challenge in
+                guard let grant = try? fixture.credentials.verify(password: "password", challenge: challenge) else { return .failed }
+                returnedGrant = grant
+                return await withTaskCancellationHandler {
+                    _ = await gate.attempt()
+                    return .granted(grant)
+                } onCancel: { cancelled.fulfill() }
+            },
+            access: fixture.access
+        )) { events.append($0) }
+        defer { flow.windowController?.close(); gate.completeAll() }
+        flow.requestAccess()
+        await gate.waitForAttempt(1)
+        XCTAssertTrue(fixture.access.isLocked)
+        XCTAssertTrue(fixture.access.hasLocked)
+
+        flow.lock()
+
+        await fulfillment(of: [cancelled], timeout: 2)
+        let grant = try XCTUnwrap(returnedGrant)
+        XCTAssertNil(fixture.credentials.accessSession(authorization: grant))
+        gate.complete(1, outcome: .succeeded)
+        await gate.waitForReturn(1)
+        await Task.yield()
+        flow.refresh()
+        XCTAssertEqual(gate.cancelledAtReturn[1], true)
+        XCTAssertEqual(gate.count, 1)
+        XCTAssertTrue(events.isEmpty)
+        XCTAssertTrue(fixture.access.isLocked)
+        XCTAssertNil(flow.accessSession)
+        XCTAssertNil(flow.windowController)
+    }
+
+    func testRetirementReentryCannotInstallAnOldFailureOverReplacementOnboarding() throws {
+        let fixture = OnboardingKeychainFixture()
+        let flow = makeFlow(fixture)
+        defer { flow.cancel(); flow.windowController?.close() }
+        flow.requestAccess()
+        let originalWindow = try XCTUnwrap(flow.windowController)
+        let retiring = ReentrantWaitingViewController()
+        originalWindow.contentViewController = retiring
+        retiring.onRetire = {
+            fixture.readStatus = nil
+            flow.cancel()
+            flow.requestAccess()
+        }
+        fixture.readStatus = errSecInteractionNotAllowed
+
+        flow.refresh()
+
+        let replacement = try XCTUnwrap(flow.windowController)
+        XCTAssertFalse(replacement === originalWindow)
+        XCTAssertTrue(replacement.contentViewController is WelcomeViewController)
+        XCTAssertTrue(replacement.window?.isVisible == true)
+        XCTAssertEqual(fixture.addCount, 0)
+    }
+
     func testClosingEachOnboardingScreenDoesNotReopenOnActivation() async throws {
         for stage in [Stage.welcome, .create, .repeatPassword, .returnedWelcome] {
             let fixture = OnboardingKeychainFixture()
@@ -680,6 +746,19 @@ final class OnboardingCancellationTests: XCTestCase {
         let current = try XCTUnwrap(flow.accessSession)
         XCTAssertFalse(current === previous)
         XCTAssertTrue(fixture.credentials.validateAccess(current))
+    }
+
+    private final class ReentrantWaitingViewController: WaitingViewController {
+        var onRetire: (() -> Void)?
+
+        override func loadView() { view = NSView() }
+        override func viewDidLoad() {}
+
+        override func retire() {
+            let action = onRetire
+            onRetire = nil
+            action?()
+        }
     }
 
     private enum Stage { case welcome, create, repeatPassword, returnedWelcome }

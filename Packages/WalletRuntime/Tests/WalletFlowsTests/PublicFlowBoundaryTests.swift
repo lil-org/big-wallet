@@ -12,7 +12,7 @@ final class PublicFlowBoundaryTests: XCTestCase {
         let site = try transport(subject: "openApp", source: "site")
         do {
             _ = try await dispatcher.dispatch(message: site.message, context: site.context)
-            XCTFail("Site transport must not open the native wallet")
+            return XCTFail("SECURITY-MUTATION[native.source-role]: Site transport must not open the native wallet")
         } catch {
             XCTAssertEqual(error as? NativeMessageDispatcher.Error, .invalidMessage)
         }

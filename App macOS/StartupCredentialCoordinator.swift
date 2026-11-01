@@ -31,11 +31,9 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
     private let access: WalletAccessController
     private let onEvent: (Event) -> Void
     private var state = State.idle
-    private var generation: UInt64 = 0
-    private var task: Task<Void, Never>?
-    private var authenticationChallenge: WalletAuthenticationChallenge?
-    private var authenticationGeneration: UInt64?
-    private var authenticationAttempt: UUID?
+    private var presentationGeneration: UInt64 = 0
+    private var handoffTask: Task<Void, Never>?
+    private var authenticationAttempt: WalletAccessController.AuthenticationAttempt?
     var accessSession: WalletAccessSession? { access.session }
     private var closeObserver: NativeApprovalWindowCloseObserver?
     private(set) var windowController: WalletWindowController?
@@ -52,10 +50,9 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
     }
 
     isolated deinit {
-        task?.cancel()
-        authenticationChallenge?.invalidate()
+        handoffTask?.cancel()
         access.removeObserver(self)
-        if let authenticationGeneration { access.cancelAuthentication(generation: authenticationGeneration) }
+        authenticationAttempt?.cancel()
         closeObserver?.disable()
         retirePresentation()
         NotificationCenter.default.removeObserver(self)
@@ -76,7 +73,8 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
             }
             if openWallet { onEvent(.unlockRequested) }
         }
-        if authenticationGeneration == nil { beginAccessAuthentication() }
+        if authenticationAttempt?.isCurrent != true { beginAccessAuthentication() }
+        guard authenticationAttempt?.isCurrent == true else { return }
         if case .locked = state { transition(to: .idle) }
         switch state {
         case .unavailable, .saving: break
@@ -112,8 +110,9 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
     }
 
     func walletAccessDidLock() {
-        authenticationGeneration = nil
+        let previous = authenticationAttempt
         authenticationAttempt = nil
+        previous?.cancel()
         transition(to: .locked)
         windowController?.bindAccess(access) { [weak self] in self?.unlock() }
         windowController?.walletAccessDidLock()
@@ -126,21 +125,18 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
     }
 
     private func beginAccessAuthentication() {
-        let attempt = UUID()
-        authenticationAttempt = attempt
-        authenticationGeneration = access.beginAuthentication { [weak self] in
-            guard let self, authenticationAttempt == attempt else { return }
-            authenticationGeneration = nil
+        let attempt = access.beginAuthentication { [weak self] cancelled in
+            guard let self, authenticationAttempt === cancelled else { return }
             authenticationAttempt = nil
             transition(to: .locked)
         }
+        if attempt.isCurrent { authenticationAttempt = attempt }
     }
 
     private func cancelAccessAuthentication() {
-        let pending = authenticationGeneration
-        authenticationGeneration = nil
+        let pending = authenticationAttempt
         authenticationAttempt = nil
-        if let pending { access.cancelAuthentication(generation: pending) }
+        pending?.cancel()
     }
 
     @objc private func walletsChanged() {
@@ -180,19 +176,20 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
 
     @discardableResult
     private func transition(to state: State) -> UInt64 {
-        generation &+= 1
-        authenticationChallenge?.invalidate()
-        authenticationChallenge = nil
+        presentationGeneration &+= 1
+        let generation = presentationGeneration
         self.state = state
-        let previousTask = task
-        task = nil
+        let previousTask = handoffTask
+        handoffTask = nil
+        authenticationAttempt?.cancelOperation()
         previousTask?.cancel()
+        guard presentationGeneration == generation else { return generation }
         retirePresentation()
         return generation
     }
 
     private func accepts(_ generation: UInt64) -> Bool {
-        self.generation == generation && authenticationGeneration.map { access.generation == $0 } != false
+        presentationGeneration == generation && authenticationAttempt.map(\.isCurrent) != false
     }
 
     private func retirePresentation() {
@@ -284,12 +281,13 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
                 guard password == draft, password.isOkAsPassword else { return }
                 savePassword(password)
             case .enteringPassword:
-                authenticationChallenge?.invalidate()
+                guard let attempt = authenticationAttempt, attempt.isCurrent else { return }
                 let challenge = dependencies.credentials.makeWalletAccessChallenge()
-                authenticationChallenge = challenge
+                defer { challenge.invalidate() }
+                let operation = attempt.replaceOperation(challenge: challenge)
                 do {
                     if let grant = try dependencies.credentials.verify(password: password, challenge: challenge) {
-                        completeAuthentication(grant)
+                        completeAuthentication(grant, operation: operation)
                     }
                 } catch WalletCredentialError.authorizationUnavailable {
                     cancel()
@@ -304,25 +302,26 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
 
     private func beginAuthentication() {
         let generation = transition(to: .authenticating)
+        guard let authenticationAttempt, authenticationAttempt.isCurrent else { return }
         let challenge = dependencies.credentials.makeWalletAccessChallenge()
-        authenticationChallenge = challenge
         if windowController != nil {
             present(WaitingViewController.with(reason: Strings.loading), generation: generation)
         }
+        guard accepts(generation) else { challenge.invalidate(); return }
         let attempt = dependencies.attemptBiometrics
-        task = Task { [weak self] in
+        authenticationAttempt.replaceOperation(challenge: challenge) { [weak self] operation in
             let outcome = await attempt(AuthenticationReason.start.title, challenge)
-            guard let self, !Task.isCancelled, accepts(generation) else {
+            guard let self, !Task.isCancelled, operation.isCurrent, accepts(generation) else {
                 if case .granted(let grant)? = outcome { grant.invalidate() }
                 return
             }
-            task = nil
+            defer { if case .granted(let grant)? = outcome { grant.invalidate() } }
             do {
                 guard try dependencies.credentials.passwordState() == .present else {
                     reconcile()
                     return
                 }
-                if case .granted(let grant)? = outcome { completeAuthentication(grant) }
+                if case .granted(let grant)? = outcome { completeAuthentication(grant, operation: operation) }
                 else { showPassword(mode: .enter) }
             } catch {
                 showUnavailable()
@@ -330,30 +329,42 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
         }
     }
 
-    private func completeAuthentication(_ grant: WalletAuthenticationGrant) {
+    private func completeAuthentication(_ grant: WalletAuthenticationGrant, operation: WalletAccessController.AuthenticationAttempt.Operation) {
         defer { grant.invalidate() }
+        guard operation.isCurrent else { return }
+        let generation = presentationGeneration
         do {
             guard try dependencies.credentials.passwordState() == .present else {
-                reconcile()
+                if operation.isCurrent { reconcile() }
                 return
             }
         } catch {
-            showUnavailable()
+            if operation.isCurrent { showUnavailable() }
             return
         }
-        guard let authenticationGeneration,
-              let session = dependencies.credentials.accessSession(authorization: grant),
-              dependencies.credentials.validateAccess(session) else {
-            cancel()
+        guard operation.isCurrent, let attempt = authenticationAttempt,
+              let session = dependencies.credentials.accessSession(authorization: grant) else {
+            if operation.isCurrent { cancel() }
             return
         }
-        transition(to: .authenticated)
-        guard access.completeAuthentication(session, generation: authenticationGeneration) else {
-            walletAccessDidLock()
+        guard dependencies.credentials.validateAccess(session) else {
+            session.invalidate()
+            if operation.isCurrent { cancel() }
             return
         }
-        self.authenticationGeneration = nil
+        guard operation.complete(session) else {
+            if authenticationAttempt === attempt {
+                cancelAccessAuthentication()
+                walletAccessDidLock()
+            }
+            return
+        }
+        guard presentationGeneration == generation, authenticationAttempt === attempt else {
+            if authenticationAttempt === attempt { authenticationAttempt = nil }
+            return
+        }
         authenticationAttempt = nil
+        transition(to: .authenticated)
         closeWindow()
         onEvent(.authenticated)
     }
@@ -363,22 +374,23 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
         let controller = windowController?.contentViewController as? PasswordViewController
         let generation = transition(to: .saving)
         controller?.render(.init(mode: .repeatAfterCreate, availability: .saving))
+        guard accepts(generation), let authenticationAttempt, authenticationAttempt.isCurrent else { return }
         let credentials = dependencies.credentials
-        task = Task { [weak self] in
+        authenticationAttempt.replaceOperation { [weak self, credentials] operation in
             let result: Result<WalletPasswordCreationResult, Error>
             do { result = .success(try await credentials.createPasswordIfMissing(password)) }
             catch { result = .failure(error) }
-            guard let self, !Task.isCancelled, accepts(generation) else { return }
-            task = nil
+            guard let self, !Task.isCancelled, operation.isCurrent, accepts(generation) else { return }
             switch result {
             case .success(.created):
                 do {
                     let challenge = credentials.makeWalletAccessChallenge()
+                    guard operation.attachChallenge(challenge) else { return }
                     guard let grant = try credentials.verify(password: password, challenge: challenge) else {
                         reconcile()
                         return
                     }
-                    completeAuthentication(grant)
+                    completeAuthentication(grant, operation: operation)
                 } catch {
                     showUnavailable()
                 }
@@ -413,10 +425,10 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
             present(WaitingViewController.with(reason: Strings.loading), generation: generation)
         }
         let openDock = dependencies.openDock
-        task = Task { [weak self] in
+        handoffTask = Task { [weak self] in
             let succeeded = await openDock()
             guard let self, !Task.isCancelled, accepts(generation) else { return }
-            task = nil
+            handoffTask = nil
             guard succeeded else {
                 showUnavailable(reason: Strings.somethingWentWrong)
                 return

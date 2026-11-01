@@ -27,7 +27,7 @@ test("both acceptance profiles include the same focused runtime and app ASan inv
         assert.ok(stage.dependencies.includes("runtime.inventory"));
         assert.deepEqual(stage.args.filter(argument => argument.startsWith("-only-testing:")), expected.map(id => `-only-testing:${id}`));
     }
-    assert.equal(baseline[0].nativeAudit.requiredTests.length, 172);
+    assert.equal(baseline[0].nativeAudit.requiredTests.length, 173);
     assert.equal(baseline[1].nativeAudit.requiredTests.length, 38);
     assert.ok(tests(baseline).includes("WalletAuthorityTests/WalletCoreProxyPerformanceGateTests/testScryptDefaultParametersAndSequentialDerivationVectors"));
     assert.ok(tests(baseline).every(id => !PERFORMANCE_TESTS.some(name => id.endsWith(`/${name}`))));
@@ -83,7 +83,7 @@ test("ASan selectors narrow its inventory and omit unrelated invocations", () =>
     const mixed = asan({stages: ["asan"], onlyTesting: [`WalletAuthorityTests/${method}`, appMethod]});
     assert.equal(mixed.length, 2);
     assert.deepEqual(tests(mixed), [`WalletAuthorityTests/${method}`, appMethod]);
-    assert.equal(tests(asan({stages: ["asan"], onlyTesting: ["WalletAuthorityTests"]})).length, 172);
+    assert.equal(tests(asan({stages: ["asan"], onlyTesting: ["WalletAuthorityTests"]})).length, 173);
 });
 
 test("explicit empty ASan selections fail while unrelated focused runs stay unchanged", () => {

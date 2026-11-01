@@ -289,7 +289,12 @@ final class SafariRPCRequestTests: XCTestCase {
         let first = budget.acquire()
         let second = budget.acquire()
         try first.reserve(6)
-        XCTAssertThrowsError(try second.reserve(8)) { XCTAssertEqual($0 as? SafariRPCFailure, .busy) }
+        do {
+            try second.reserve(8)
+            return XCTFail("SECURITY-MUTATION[rpc.aggregate-response-budget]")
+        } catch {
+            XCTAssertEqual(error as? SafariRPCFailure, .busy)
+        }
         try second.reserve(4)
         XCTAssertEqual(budget.bufferedBytes, 10)
         XCTAssertThrowsError(try first.reserve(1)) { XCTAssertEqual($0 as? SafariRPCFailure, .busy) }

@@ -19573,6 +19573,139 @@
   ],
   "appTests": [
     {
+      "id": "Tests iOS/MobileWalletAccessTests/testAccessibilityScrollRenewsBothAccountTablesButProgrammaticScrollingDoesNot",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testAllRootsLockWithoutStartingAuthenticationUntilUnlockIsSelected",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testBackgroundLocksOnlyAfterTheLastForegroundSceneLeaves",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testDisconnectingTheLastForegroundSceneLocksOnce",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testEachVisibleLockedRootCanReplaceAnotherRootsAuthentication",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testFailedSharedReloadOrLockCancelsAuthenticationBeforeExportOrDelete",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testLockClearsImportDraftAndRejectsRetainedSubmission",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testLockWhileLoadingAccountsCannotInstallItsViewAboveTheLockedScreen",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testLockedWalletListIgnoresRetainedRetryActions",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testPasswordEntryPublishesSessionAndRetiresItsOldCallbacks",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testPendingAuthenticationSurvivesSharedWalletReload",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testProtectedDataLossKeepsPrivacyCoverThroughLateActivation",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testReplacingAuthenticationLeavesTheOtherSceneUsableWithoutAnotherPrompt",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testRetainedManagementControllerCannotActAfterRelockingAndUnlocking",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testSceneNotificationsCoverTransientInactivityAndLockOnBackground",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testSuccessfulAuthenticationWaitsForSharedReloadBeforeExportOrDelete",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testWalletListFailedRefreshKeepsPublicRowsAndFencesEditing",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testWalletListInitialFailureStaysDistinctFromAnEmptyWallet",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/MobileWalletAccessTests/testWrongPasswordCancellationClearsTheDraftAndRestoresTheForm",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
       "id": "Tests iOS/PasswordStorageTests/testPasswordAlertClearsInputAndWaitsForDismissalBeforeResolving",
       "variants": [
         "ios.debug",
@@ -19623,6 +19756,160 @@
     },
     {
       "id": "Tests iOS/PasswordStorageTests/testUIKitTransientPasswordDisappearancePreservesTheEditableForm",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testCancellationRetiresChallengeBeforeTaskAndOwnerCallbacks",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testContinuousInputCoalescesRenewalsWithoutChangingActionExpiryChecks",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testCredentialChangeDuringSchedulingCannotPublishAnUnlock",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testDeallocationCancelsPendingAuthentication",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testDeallocationInvalidatesAccessAndCancelsRetainedTimer",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testEarlyTimerDeliveryReschedulesOnlyRemainingTime",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testExpiryIsEnforcedBeforeAnActionWithoutTimerDelivery",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testLockDuringUnlockNotificationCannotPublishLaterUnlockCallbacks",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testLockInvalidatesAccessBeforeCancellingAuthenticationAndNotifying",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testLockObserverCannotReentrantlyUnlockOrPreventOtherTeardown",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testOldAuthenticationCannotReplaceNewAuthenticationOrUnlockAfterLock",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testOldTimersCannotLockARenewedOrReplacementSession",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testPendingAuthenticationIdentityDoesNotReadCredentialsOrProtectedData",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testProtectedDataLossRejectsAuthenticationBeforeAnEventIsDelivered",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testReentrantCancellationCannotOverwriteOrCancelTheReplacementAttempt",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testReplacingAnOperationRejectsItsLateGrantAndSession",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testRetainedAuthenticationWorkIsInvalidatedWhenItsControllerDeallocates",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testSensitiveOperationDetectsReplacementAndRetiresTheSessionPermanently",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testSensitiveOperationFailsDuringKeychainOutageWithoutRevokingTheLease",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testSuccessfulOperationDetachesBeforeObserversWithoutCancellingItself",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testSynchronousSchedulerLockCannotReportSuccessfulInteraction",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/WalletAccessControllerTests/testUIActivityAndTimersDoNotReadCredentials",
       "variants": [
         "ios.debug",
         "ios.release"
@@ -20470,6 +20757,181 @@
     },
     {
       "id": "Tests macOS/NativeSecretAlertPresentationTests/testRevocationPreventsLateCopyCallback",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testClosingEachOnboardingScreenDoesNotReopenOnActivation",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testClosingPasswordFailureRetiresSetupAndRetryCallbacks",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testCommittedPasswordCreationNotifiesAfterItsFlowCloses",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testCredentialReauthenticationStopsAfterCancellationOrAnotherLock",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testDockHandoffDeduplicatesAndIgnoresRetiredSuccess",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testExplicitOpenSurvivesCredentialReplacementOrRemoval",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testExplicitOpenUpdatesAnExistingCredentialRetry",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testExplicitStartupUnlockOpensAccountsAfterTheOriginalOpenWasCanceledByLock",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testExternalCredentialRequiresAuthenticationAndRetiresSetupCallbacks",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testLockClearsStartupPasswordAndRequiresExplicitUnlock",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testLockDiscardsSuccessfulStartupBiometricsThatReturnLate",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testLockDuringExplicitReauthenticationRetiresOwnedWorkImmediately",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testOldSuccessfulAuthenticationCannotFinishReplacementFlow",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testPasswordDisappearingDuringAuthenticationRetiresItsResult",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testRepeatedOpenDeduplicatesSetupAndAuthentication",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testReplacingAnExistingCredentialRequiresAFreshStartupSession",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testRetiredBiometricFailureCannotReplaceExplicitRetryScreen",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testRetiredFormAndWindowCannotCancelReplacementOnboarding",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testRetirementReentryCannotInstallAnOldFailureOverReplacementOnboarding",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testRetryRechecksUnavailableAndNewlyCreatedCredentials",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testReturningToWelcomeRetiresOldActionsAndKeepsWindowCancellation",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testStartupAuthenticationIsRememberedOnlyUntilCredentialStateChanges",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testStartupPasswordFailureUsesSameWindowAndRetiresForm",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testStorageFailureReplacesEverySetupStageAndRequiresExplicitRetry",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/OnboardingCancellationTests/testTemporaryKeychainFailureShowsRetryWithoutDiscardingTheAccessSession",
       "variants": [
         "macos.debug",
         "macos.release"
@@ -21904,6 +22366,510 @@
       ]
     },
     {
+      "id": "Tests macOS/WalletAccessControllerTests/testCancellationRetiresChallengeBeforeTaskAndOwnerCallbacks",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testContinuousInputCoalescesRenewalsWithoutChangingActionExpiryChecks",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testCredentialChangeDuringSchedulingCannotPublishAnUnlock",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testDeallocationCancelsPendingAuthentication",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testDeallocationInvalidatesAccessAndCancelsRetainedTimer",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testEarlyTimerDeliveryReschedulesOnlyRemainingTime",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testExpiryIsEnforcedBeforeAnActionWithoutTimerDelivery",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testInactivityTimerExpiresInsideAnAppKitModalLoop",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testLockDuringUnlockNotificationCannotPublishLaterUnlockCallbacks",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testLockInvalidatesAccessBeforeCancellingAuthenticationAndNotifying",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testLockObserverCannotReentrantlyUnlockOrPreventOtherTeardown",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testOldAuthenticationCannotReplaceNewAuthenticationOrUnlockAfterLock",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testOldTimersCannotLockARenewedOrReplacementSession",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testPendingAuthenticationIdentityDoesNotReadCredentialsOrProtectedData",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testProtectedDataLossRejectsAuthenticationBeforeAnEventIsDelivered",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testReentrantCancellationCannotOverwriteOrCancelTheReplacementAttempt",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testReplacingAnOperationRejectsItsLateGrantAndSession",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testRetainedAuthenticationWorkIsInvalidatedWhenItsControllerDeallocates",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testSensitiveOperationDetectsReplacementAndRetiresTheSessionPermanently",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testSensitiveOperationFailsDuringKeychainOutageWithoutRevokingTheLease",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testSuccessfulOperationDetachesBeforeObserversWithoutCancellingItself",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testSynchronousSchedulerLockCannotReportSuccessfulInteraction",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WalletAccessControllerTests/testUIActivityAndTimersDoNotReadCredentials",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testAbsentClosedOrRetiredOwnerNeverStartsAuthentication",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testAccessibilityScrollerRejectsExpiredAndReplacedAccess",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testAccessibilityScrollerRenewsExplicitActionsButNotProgrammaticScrolling",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testAccountPreviewRenderingDoesNotRetireItsModelMidUpdate",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testAccountSelectionRefreshChecksAccessOnlyBeforeRendering",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testActionBiometricsNeverFallBackAfterFailedAvailableAttempt",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testAllProtectedResourceScrollersUseTheActivitySubclass",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testCancellationInvalidatesTheChallengeBeforeAuthenticationReturns",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testCancellingDuringSuccessfulSheetDismissalCannotAuthenticate",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testClosingOwnerCancelsQueuedSheetAndRetiresItsForm",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testDeferredApprovalWindowsCascadeAfterContentInstallationOnlyOnce",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testExpiredAccessBlocksAuthenticationBeforeOpeningASheet",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testExternalSheetDismissalClearsDraftAndFencesRetainedActions",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testLateBiometricSuccessCannotSurviveOwnerCloseOrReviewInvalidation",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testMacActivationChecksProtectedAvailabilityAndExpiryWithoutRenewing",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testMacLifecycleLocksForProtectedDataSleepAndSessionChangesOnly",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testMacLifecycleRemovesInjectedNotificationObserversOnRelease",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testManagementRowRenderingCannotReentrantlyLockAndReloadTheTable",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testManagementScrollerRetainsItsOriginatingAccessGeneration",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testMissingPasswordNeverOffersCreationFromActionSheet",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testPasswordAuthenticationRestoresSecretOwnerEligibilityBeforeReturning",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testPasswordCompletionPreservesUnrelatedFocusAndLeavesSecretOwnerIneligible",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testPasswordSheetPreservesOwnerAndCompletesOnlyAfterDismissal",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testProtectedContentInstallationPreservesTheLockedViewDuringReentry",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testQueuedAuthenticationCancellationPreservesExistingEditorSheet",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testReviewInvalidationDismissesOnlyItsAuthenticationSheet",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testSameWindowDuplicateFailsWithoutChangingOriginalSession",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testSeparateWindowsAuthenticateIndependently",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testUnavailablePasswordStaysAnEntryFormAndRetryUsesCurrentStorage",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testWalletLockCancelsActionAuthenticationAndKeepsTheLockedSurface",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testAccessibilityScrollRenewsBothAccountTablesButProgrammaticScrollingDoesNot",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testAllRootsLockWithoutStartingAuthenticationUntilUnlockIsSelected",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testBackgroundLocksOnlyAfterTheLastForegroundSceneLeaves",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testDisconnectingTheLastForegroundSceneLocksOnce",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testEachVisibleLockedRootCanReplaceAnotherRootsAuthentication",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testFailedSharedReloadOrLockCancelsAuthenticationBeforeExportOrDelete",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testLockClearsImportDraftAndRejectsRetainedSubmission",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testLockWhileLoadingAccountsCannotInstallItsViewAboveTheLockedScreen",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testLockedWalletListIgnoresRetainedRetryActions",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testPasswordEntryPublishesSessionAndRetiresItsOldCallbacks",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testPendingAuthenticationSurvivesSharedWalletReload",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testProtectedDataLossKeepsPrivacyCoverThroughLateActivation",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testReplacingAuthenticationLeavesTheOtherSceneUsableWithoutAnotherPrompt",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testRetainedManagementControllerCannotActAfterRelockingAndUnlocking",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testSceneNotificationsCoverTransientInactivityAndLockOnBackground",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testSuccessfulAuthenticationWaitsForSharedReloadBeforeExportOrDelete",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testWalletListFailedRefreshKeepsPublicRowsAndFencesEditing",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testWalletListInitialFailureStaysDistinctFromAnEmptyWallet",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/MobileWalletAccessTests/testWrongPasswordCancellationClearsTheDraftAndRestoresTheForm",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "Tests visionOS/PasswordStorageTests/testPasswordAlertClearsInputAndWaitsForDismissalBeforeResolving",
       "variants": [
         "visionos.debug",
@@ -21954,6 +22920,160 @@
     },
     {
       "id": "Tests visionOS/PasswordStorageTests/testUIKitTransientPasswordDisappearancePreservesTheEditableForm",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testCancellationRetiresChallengeBeforeTaskAndOwnerCallbacks",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testContinuousInputCoalescesRenewalsWithoutChangingActionExpiryChecks",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testCredentialChangeDuringSchedulingCannotPublishAnUnlock",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testDeallocationCancelsPendingAuthentication",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testDeallocationInvalidatesAccessAndCancelsRetainedTimer",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testEarlyTimerDeliveryReschedulesOnlyRemainingTime",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testExpiryIsEnforcedBeforeAnActionWithoutTimerDelivery",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testLockDuringUnlockNotificationCannotPublishLaterUnlockCallbacks",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testLockInvalidatesAccessBeforeCancellingAuthenticationAndNotifying",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testLockObserverCannotReentrantlyUnlockOrPreventOtherTeardown",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testOldAuthenticationCannotReplaceNewAuthenticationOrUnlockAfterLock",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testOldTimersCannotLockARenewedOrReplacementSession",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testPendingAuthenticationIdentityDoesNotReadCredentialsOrProtectedData",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testProtectedDataLossRejectsAuthenticationBeforeAnEventIsDelivered",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testReentrantCancellationCannotOverwriteOrCancelTheReplacementAttempt",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testReplacingAnOperationRejectsItsLateGrantAndSession",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testRetainedAuthenticationWorkIsInvalidatedWhenItsControllerDeallocates",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testSensitiveOperationDetectsReplacementAndRetiresTheSessionPermanently",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testSensitiveOperationFailsDuringKeychainOutageWithoutRevokingTheLease",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testSuccessfulOperationDetachesBeforeObserversWithoutCancellingItself",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testSynchronousSchedulerLockCannotReportSuccessfulInteraction",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/WalletAccessControllerTests/testUIActivityAndTimersDoNotReadCredentials",
       "variants": [
         "visionos.debug",
         "visionos.release"

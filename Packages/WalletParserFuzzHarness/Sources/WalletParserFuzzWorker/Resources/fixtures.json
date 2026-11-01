@@ -1,0 +1,352 @@
+{
+  "version": 1,
+  "provenance": {
+    "source": "Packages/WalletRuntime/Tests/WalletAuthorityTests/WalletCoreProxyTestVectors.swift",
+    "sha256": "2d81e05a99cb0b9c47ab2c32738d28bd3d7424c0aad528d218ab445546df75ec",
+    "synthetic": true,
+    "ethereumPBKDF2": "https://ethereum.org/developers/docs/data-structures-and-encoding/web3-secret-storage/#pbkdf2-sha-256"
+  },
+  "keystores": [
+    {
+      "id": "ethereum-pbkdf2",
+      "document": {
+        "crypto": {
+          "cipher": "aes-128-ctr",
+          "cipherparams": {
+            "iv": "6087dab2f9fdbbfaddc31a909735c1e6"
+          },
+          "ciphertext": "5318b4d5bcd28de64ee5559e671353e16f075ecae9f99c7a79a38af5f869aa46",
+          "kdf": "pbkdf2",
+          "kdfparams": {
+            "c": 262144,
+            "dklen": 32,
+            "prf": "hmac-sha256",
+            "salt": "ae3cd4e7013836a3df6bd7241b12db061dbe2c6785853cce422d148a624ce0bd"
+          },
+          "mac": "517ead924a9d0dc3124507e3393d175ce3ff7c1e96529c6c555ce9e51205e9b2"
+        },
+        "id": "3198bc9c-6672-5ab3-d995-4942343ae5b6",
+        "version": 3
+      },
+      "password": "testpassword",
+      "plaintextHex": "7a28b5ba57c53603b0b07b56bba752f7784bf506fa95edc395f5cf6c7514fe9d",
+      "sourceSymbol": "ethereumWeb3PBKDF2Fixture"
+    },
+    {
+      "id": "walletcore-mnemonic",
+      "document": {
+        "version": 3,
+        "id": "e0fe53d0-7a3d-4f65-88b1-9bb4e245a169",
+        "crypto": {
+          "ciphertext": "3f6401e478074fc9c50a69dd88ea21baca70dd8064d8590b64f64b64d493e6e50bb6ff5ffc6aabcaac18c4aad25f29c53fe1029f8d6fa4ed24fc99938f27e38bea0b0cd7f8215f38d2526c655bff0b8f1638e948d8c1b9bdaa95ab0b",
+          "cipherparams": {
+            "iv": "09246e7f7af92374eda0237da20c6696"
+          },
+          "kdf": "scrypt",
+          "kdfparams": {
+            "r": 8,
+            "p": 6,
+            "n": 4096,
+            "dklen": 32,
+            "salt": "9cf4521a3543f0e116a86f188572f295a99081fd2e4143129cb5ee8760bec367"
+          },
+          "mac": "67a8bf187bdeec076ac1e3647914e20b1dcbb15a5cb4643e6047fc2a07694055",
+          "cipher": "aes-128-ctr"
+        },
+        "type": "mnemonic",
+        "coin": 60,
+        "address": "32dd55E0BCF509a35A3F5eEb8593fbEb244796b1"
+      },
+      "password": "password",
+      "plaintextHex": "726970706c652073636973736f7273206b69636b206d616d6d616c206869726520636f6c756d6e206f616b20616761696e2073756e206f66666572207765616c746820746f6d6f72726f77207761676f6e207475726e20666174616c",
+      "sourceSymbol": "walletCoreJSONMnemonicFixture"
+    },
+    {
+      "id": "walletcore-aes256",
+      "document": {
+        "crypto": {
+          "cipher": "aes-256-ctr",
+          "cipherparams": {
+            "iv": "1f1e1d1c1b1a19181716151413121110"
+          },
+          "ciphertext": "59534779fa36ff0613646b52eb477af86bf94c877f97b6ab7f6c63e02d298152",
+          "kdf": "pbkdf2",
+          "kdfparams": {
+            "c": 1024,
+            "dklen": 32,
+            "prf": "hmac-sha256",
+            "salt": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+          },
+          "mac": "f1f9dc0124067b87ecbc44a199312e8c7311492e54dbf8737dcd59f4d0fa1a0c"
+        },
+        "address": "0xAc1ec44E4f0ca7D172B7803f6836De87Fb72b309",
+        "id": "a9e74f13-0a38-4d1b-a882-8f4b8cf7945f",
+        "coin": 60,
+        "version": 3
+      },
+      "password": "variant-password",
+      "plaintextHex": "afeefca74d9a325cf1d6b6911d61a65c32afa8e02bd5e78e2e4ac2910bab45f5",
+      "sourceSymbol": "walletCoreJSONPBKDF2AES256PrivateKeyFixture"
+    }
+  ],
+  "typedData": [
+    {
+      "id": "typedDataJSON",
+      "document": {
+        "types": {
+          "EIP712Domain": [
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "version",
+              "type": "string"
+            },
+            {
+              "name": "chainId",
+              "type": "uint256"
+            },
+            {
+              "name": "verifyingContract",
+              "type": "address"
+            }
+          ],
+          "Person": [
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "wallets",
+              "type": "address[]"
+            }
+          ],
+          "Mail": [
+            {
+              "name": "from",
+              "type": "Person"
+            },
+            {
+              "name": "to",
+              "type": "Person[]"
+            },
+            {
+              "name": "contents",
+              "type": "string"
+            }
+          ]
+        },
+        "primaryType": "Mail",
+        "domain": {
+          "name": "Ether Mail",
+          "version": "1",
+          "chainId": 1,
+          "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
+        },
+        "message": {
+          "from": {
+            "name": "Cow",
+            "wallets": [
+              "CD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826",
+              "DeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF"
+            ]
+          },
+          "to": [
+            {
+              "name": "Bob",
+              "wallets": [
+                "bBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+                "B0BdaBea57B0BDABeA57b0bdABEA57b0BDabEa57",
+                "B0B0b0b0b0b0B000000000000000000000000000"
+              ]
+            }
+          ],
+          "contents": "Hello, Bob!"
+        }
+      },
+      "digest": "a85c2e2b118698e88db68a8105b794a8cc7cec074e89ef991cb4f5f533819cc2",
+      "sourceSymbol": "typedDataJSON"
+    },
+    {
+      "id": "permitTypedDataJSON",
+      "document": {
+        "types": {
+          "EIP712Domain": [
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "version",
+              "type": "string"
+            },
+            {
+              "name": "chainId",
+              "type": "uint256"
+            },
+            {
+              "name": "verifyingContract",
+              "type": "address"
+            }
+          ],
+          "Permit": [
+            {
+              "name": "owner",
+              "type": "address"
+            },
+            {
+              "name": "spender",
+              "type": "address"
+            },
+            {
+              "name": "value",
+              "type": "uint256"
+            },
+            {
+              "name": "nonce",
+              "type": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            }
+          ]
+        },
+        "primaryType": "Permit",
+        "domain": {
+          "name": "Big Wallet",
+          "version": "1",
+          "chainId": 1,
+          "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
+        },
+        "message": {
+          "owner": "0xd0972E2312518Ca15A2304D56ff9cc0b7ea0Ea37",
+          "spender": "0x000000000000000000000000000000000000dEaD",
+          "value": 123456789,
+          "nonce": 7,
+          "deadline": 1700000000
+        }
+      },
+      "digest": "8e234d3348fdfb087478de9d65c030e111fafc3abc824ee2ee1a2fe9e938b592",
+      "sourceSymbol": "permitTypedDataJSON"
+    },
+    {
+      "id": "complexTypedDataJSON",
+      "document": {
+        "types": {
+          "EIP712Domain": [
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "version",
+              "type": "string"
+            },
+            {
+              "name": "chainId",
+              "type": "uint256"
+            },
+            {
+              "name": "verifyingContract",
+              "type": "address"
+            }
+          ],
+          "Attachment": [
+            {
+              "name": "kind",
+              "type": "bytes4"
+            },
+            {
+              "name": "digest",
+              "type": "bytes32"
+            },
+            {
+              "name": "payload",
+              "type": "bytes"
+            },
+            {
+              "name": "weights",
+              "type": "uint16[]"
+            }
+          ],
+          "Order": [
+            {
+              "name": "maker",
+              "type": "address"
+            },
+            {
+              "name": "active",
+              "type": "bool"
+            },
+            {
+              "name": "side",
+              "type": "int8"
+            },
+            {
+              "name": "quantity",
+              "type": "uint16"
+            },
+            {
+              "name": "price",
+              "type": "uint64"
+            },
+            {
+              "name": "netAmount",
+              "type": "int256"
+            },
+            {
+              "name": "tags",
+              "type": "bytes32[2]"
+            },
+            {
+              "name": "fills",
+              "type": "uint8[]"
+            },
+            {
+              "name": "attachment",
+              "type": "Attachment"
+            }
+          ]
+        },
+        "primaryType": "Order",
+        "domain": {
+          "name": "Big Wallet Typed Data Coverage",
+          "version": "2",
+          "chainId": 11155111,
+          "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
+        },
+        "message": {
+          "maker": "0xd0972E2312518Ca15A2304D56ff9cc0b7ea0Ea37",
+          "active": true,
+          "side": -1,
+          "quantity": 65535,
+          "price": 1234567890,
+          "netAmount": -42,
+          "tags": [
+            "0x1111111111111111111111111111111111111111111111111111111111111111",
+            "0x2222222222222222222222222222222222222222222222222222222222222222"
+          ],
+          "fills": [
+            1,
+            2,
+            255
+          ],
+          "attachment": {
+            "kind": "0xdeadbeef",
+            "digest": "0x3333333333333333333333333333333333333333333333333333333333333333",
+            "payload": "0x000102ff",
+            "weights": [
+              0,
+              17,
+              65535
+            ]
+          }
+        }
+      },
+      "digest": "aea54d086891128eb6108615e38873a455602a1f39ac88292408c0a311485ec8",
+      "sourceSymbol": "complexTypedDataJSON"
+    }
+  ]
+}

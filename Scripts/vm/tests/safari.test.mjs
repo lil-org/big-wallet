@@ -369,7 +369,7 @@ test("Safari XCTest audits reject omitted, repeated, skipped, unexpected, and in
     assert.equal(auditNativeResult(native.summary, native.tree, {...stage.nativeAudit, requiredTests: []}).ok, false);
 });
 
-test("Safari audits surface bounded XCTest startup and UI failure details without changing ordinary audits", () => {
+test("Safari audits retain detailed failure messages while ordinary audits identify failed tests", () => {
     const stage = fixtureStage();
     const detail = "Safari UI Tests macOS-Runner encountered an error: Failed to enable UI automation mode";
     const summary = {totalTestCount: 1, passedTests: 0, failedTests: 1, skippedTests: 0,
@@ -381,7 +381,7 @@ test("Safari audits surface bounded XCTest startup and UI failure details withou
     assert.ok(safari.issues.includes(`Safari XCTest failure: ${detail}`));
     assert.ok(safari.issues.some(issue => issue.startsWith("Safari test must execute exactly once:")));
     const ordinary = auditNativeResult(summary, tree, {configuration: "Debug", kind: "full", platform: "macos"});
-    assert.deepEqual(ordinary.issues, ["1 XCTest failures"]);
+    assert.deepEqual(ordinary.issues, ["1 XCTest failures", "XCTest failed: Safari UI Tests macOS-Runner encountered an error"]);
     const bounded = auditNativeResult({...summary,
         testFailures: Array.from({length: 12}, (_, index) => ({failureText: `${index}:` + "x".repeat(3000)}))}, tree, stage.nativeAudit);
     const details = bounded.issues.filter(issue => issue.startsWith("Safari XCTest failure:"));

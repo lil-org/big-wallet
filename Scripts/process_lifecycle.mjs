@@ -5,6 +5,7 @@ export function observeProcess(child, {
     onStop,
     onFailure,
     onExit,
+    allowStopAfterExit = false,
 }) {
     const safari = policy === "safari-command";
     const finalizer = policy === "vm-finalizer";
@@ -60,7 +61,7 @@ export function observeProcess(child, {
         }
     };
     const stop = reason => {
-        if (stopping || exited && !safari) { return false; }
+        if (stopping || exited && !safari && !allowStopAfterExit) { return false; }
         stopping = true;
         onStop(reason);
         signal("SIGTERM");

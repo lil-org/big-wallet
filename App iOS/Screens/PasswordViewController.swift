@@ -15,13 +15,11 @@ class PasswordViewController: UIViewController, DataStateContainer, WalletAccess
     var access = ApplicationServices.shared.access
     private var mode = Mode.unavailable
     private var isSaving = false
-    private var authenticationTask: Task<Void, Never>?
-    private var saveTask: Task<Void, Never>?
+    private var authenticationAttempt: WalletAccessController.AuthenticationAttempt?
     private var navigationTask: Task<Void, Never>?
     private var shouldDiscardCreationStack = false
     private var isVisible = false
     private var isRetired = false
-    private var authenticationGeneration: UInt64?
     var passwordToRepeat: String?
     
     @IBOutlet weak var passwordTextField: UITextField! {
@@ -51,8 +49,7 @@ class PasswordViewController: UIViewController, DataStateContainer, WalletAccess
     }
     
     isolated deinit {
-        saveTask?.cancel()
-        authenticationTask?.cancel()
+        authenticationAttempt?.cancel()
         navigationTask?.cancel()
         access.removeObserver(self)
         NotificationCenter.default.removeObserver(self)
@@ -215,22 +212,24 @@ class PasswordViewController: UIViewController, DataStateContainer, WalletAccess
     
     private func askForLocalAuthentication() {
         guard !isRetired else { return }
-        let generation = beginAuthentication()
-        authenticationTask = Task { [weak self, credentials] in
+        let attempt = beginAuthentication()
+        attempt.replaceOperation { [weak self, credentials] operation in
             do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
-            guard self?.canStartAuthentication(generation) == true else { return }
-            let session = await LocalAuthentication.accessSession(reason: Strings.enterWallet,
-                presentPasswordAlertFrom: { nil }, passwordReason: nil, credentials: credentials)
-            guard let self, !Task.isCancelled, isCurrentAuthentication(generation),
+            guard self?.canStartAuthentication(operation) == true else { return }
+            let challenge = credentials.makeWalletAccessChallenge()
+            guard operation.attachChallenge(challenge) else { return }
+            let grant = await LocalAuthentication.authorize(reason: Strings.enterWallet,
+                presentPasswordAlertFrom: { nil }, passwordReason: nil, challenge: challenge, credentials: credentials)
+            guard let self, !Task.isCancelled, !isRetired, operation.isCurrent,
                   viewIfLoaded?.window != nil else {
-                session?.invalidate()
+                grant?.invalidate()
                 return
             }
-            if let session {
-                guard refreshPasswordState(), mode == .enter else { session.invalidate(); return }
-                finishAuthentication(session, generation: generation)
+            if let grant {
+                guard refreshPasswordState(), mode == .enter else { grant.invalidate(); return }
+                finishAuthentication(grant, operation: operation)
             } else {
-                cancelAuthentication()
+                cancelAuthentication(attempt)
                 guard refreshPasswordState(), mode == .enter else { return }
                 didFailLocalAuthentication()
             }
@@ -271,36 +270,37 @@ class PasswordViewController: UIViewController, DataStateContainer, WalletAccess
         case .repeatAfterCreate:
             if let password = passwordTextField.text, !password.isEmpty, password == passwordToRepeat {
                 clearPasswordDrafts()
-                let generation = beginAuthentication()
+                let attempt = beginAuthentication()
+                guard attempt.isCurrent else { return }
                 isSaving = true
                 okButton.isEnabled = false
                 navigationController?.view.isUserInteractionEnabled = false
-                saveTask = Task { [weak self, credentials] in
+                attempt.replaceOperation { [weak self, credentials] operation in
                     let result: Result<WalletPasswordCreationResult, Error>
                     do { result = .success(try await credentials.createPasswordIfMissing(password)) }
                     catch { result = .failure(error) }
-                    guard let self, !Task.isCancelled, isCurrentAuthentication(generation) else { return }
+                    guard let self, !Task.isCancelled, !isRetired, operation.isCurrent else { return }
                     isSaving = false
                     okButton.isEnabled = true
                     navigationController?.view.isUserInteractionEnabled = true
                     switch result {
                     case .success(.created):
                         let challenge = credentials.makeWalletAccessChallenge()
-                        if let grant = try? credentials.verify(password: password, challenge: challenge),
-                           let session = credentials.accessSession(authorization: grant) {
-                            finishAuthentication(session, generation: generation)
+                        guard operation.attachChallenge(challenge) else { return }
+                        if let grant = try? credentials.verify(password: password, challenge: challenge) {
+                            finishAuthentication(grant, operation: operation)
                         } else {
-                            cancelAuthentication()
+                            cancelAuthentication(attempt)
                             showPasswordUnavailable()
                         }
                     case .success(.alreadyExists):
-                        cancelAuthentication()
+                        cancelAuthentication(attempt)
                         clearPasswordDrafts()
                         shouldDiscardCreationStack = true
                         switchToMode(.unavailable)
                         if !refreshPasswordState() || mode != .enter { showPasswordUnavailable() }
                     case .failure:
-                        cancelAuthentication()
+                        cancelAuthentication(attempt)
                         showPasswordUnavailable()
                     }
                 }
@@ -309,18 +309,20 @@ class PasswordViewController: UIViewController, DataStateContainer, WalletAccess
             }
         case .enter:
             let password = passwordTextField.text ?? ""
-            let generation = beginAuthentication()
+            let attempt = beginAuthentication()
+            guard attempt.isCurrent else { return }
+            let challenge = credentials.makeWalletAccessChallenge()
+            defer { challenge.invalidate() }
+            let operation = attempt.replaceOperation(challenge: challenge)
             do {
-                let challenge = credentials.makeWalletAccessChallenge()
-                if let authorization = try credentials.verify(password: password, challenge: challenge),
-                   let session = credentials.accessSession(authorization: authorization) {
-                    finishAuthentication(session, generation: generation)
+                if let authorization = try credentials.verify(password: password, challenge: challenge) {
+                    finishAuthentication(authorization, operation: operation)
                 } else {
-                    cancelAuthentication()
+                    cancelAuthentication(attempt)
                     showMessageAlert(text: Strings.passwordDoesNotMatch)
                 }
             } catch {
-                cancelAuthentication()
+                cancelAuthentication(attempt)
                 showPasswordUnavailable()
             }
         case .unavailable:
@@ -328,42 +330,34 @@ class PasswordViewController: UIViewController, DataStateContainer, WalletAccess
         }
     }
     
-    private func beginAuthentication() -> UInt64 {
+    private func beginAuthentication() -> WalletAccessController.AuthenticationAttempt {
         cancelAuthentication()
-        let generation = access.beginAuthentication { [weak self] in self?.authenticationWasCancelled() }
-        authenticationGeneration = generation
-        return generation
+        let attempt = access.beginAuthentication { [weak self] cancelled in
+            guard let self, authenticationAttempt === cancelled else { return }
+            authenticationAttempt = nil
+            authenticationWasCancelled()
+        }
+        if !isRetired, attempt.isCurrent { authenticationAttempt = attempt }
+        else { attempt.cancel() }
+        return attempt
     }
 
-    private func isCurrentAuthentication(_ generation: UInt64) -> Bool {
-        !isRetired && authenticationGeneration == generation && access.generation == generation
+    private func canStartAuthentication(_ operation: WalletAccessController.AuthenticationAttempt.Operation) -> Bool {
+        !isRetired && operation.isCurrent && isVisible && viewIfLoaded?.window != nil
     }
 
-    private func canStartAuthentication(_ generation: UInt64) -> Bool {
-        isCurrentAuthentication(generation) && isVisible && viewIfLoaded?.window != nil
-    }
-
-    private func finishAuthentication(_ session: WalletAccessSession, generation: UInt64) {
-        guard isCurrentAuthentication(generation) else { session.invalidate(); return }
+    private func finishAuthentication(_ grant: WalletAuthenticationGrant, operation: WalletAccessController.AuthenticationAttempt.Operation) {
+        guard !isRetired, operation.isCurrent, let attempt = authenticationAttempt else { grant.invalidate(); return }
         clearPasswordDrafts()
-        if access.completeAuthentication(session, generation: generation) {
-            authenticationGeneration = nil
+        if operation.complete(grant) {
+            if authenticationAttempt === attempt { authenticationAttempt = nil }
         } else {
-            cancelAuthentication()
+            cancelAuthentication(attempt)
             if !isRetired, refreshPasswordState() { didFailLocalAuthentication() }
         }
     }
 
-    private func cancelAuthenticationWork() {
-        authenticationGeneration = nil
-        authenticationTask?.cancel()
-        authenticationTask = nil
-        saveTask?.cancel()
-        saveTask = nil
-    }
-
     private func authenticationWasCancelled() {
-        cancelAuthenticationWork()
         clearPasswordDrafts()
         guard isViewLoaded, !isRetired else { return }
         isSaving = false
@@ -377,9 +371,13 @@ class PasswordViewController: UIViewController, DataStateContainer, WalletAccess
     }
 
     private func cancelAuthentication() {
-        let generation = authenticationGeneration
-        cancelAuthenticationWork()
-        if let generation { access.cancelAuthentication(generation: generation) }
+        guard let attempt = authenticationAttempt else { return }
+        cancelAuthentication(attempt)
+    }
+
+    private func cancelAuthentication(_ attempt: WalletAccessController.AuthenticationAttempt) {
+        attempt.cancel()
+        if authenticationAttempt === attempt { authenticationAttempt = nil }
     }
 
     func walletAccessDidLock() {

@@ -11,10 +11,13 @@ import {pathToFileURL} from "node:url";
 import {createManifest, validateJob, commandForStage} from "./test_manifest.mjs";
 import {asanDiagnostics, auditApprovalResult, auditNativeResult, auditResults, auditSafariPreparation, auditSafariResult} from "./result_audit.mjs";
 import {auditUpgradeResult} from "../wallet_upgrade/audit.mjs";
+import {auditParserFuzzEvidence} from "../native_parser_fuzz/audit.mjs";
+import {auditMutationEvidence} from "../security_mutations/audit.mjs";
 
 const EXCHANGE_PATH = "/Volumes/BigWalletBuild/Exchange";
 const MAX_JSON_BYTES = 16 * 1024 * 1024;
 export const SAFARI_TERMINATION_GRACE_MILLISECONDS = 300_000;
+export const HARDENING_TERMINATION_GRACE_MILLISECONDS = 60_000;
 const timestamp = () => new Date().toISOString();
 const sha256 = value => createHash("sha256").update(value).digest("hex");
 const inside = (parent, child) => child === parent || child.startsWith(`${parent}${sep}`);
@@ -272,7 +275,7 @@ function credentialCoverage(job, stages, preflight) {
 
 export function coverageReport(job, stages, preflight) {
     const options = job.payload;
-    const selected = options.stages.length > 0 || options.onlyTesting.length > 0 || Boolean(options.configuration) || Boolean(options.approvalArgs?.length) || Boolean(options.runtimePlatforms?.length);
+    const selected = options.stages.length > 0 || options.onlyTesting.length > 0 || Boolean(options.configuration) || Boolean(options.approvalArgs?.length) || Boolean(options.parserFuzzReplay) || Boolean(options.runtimePlatforms?.length);
     const missingPrerequisites = requiredPrerequisites(job).filter(name => preflight?.checks?.[name] !== true);
     const signingMode = options.signing ?? "local";
     const credentials = credentialCoverage(job, stages, preflight);
@@ -471,6 +474,8 @@ export function pendingStageResults(manifest) {
         ...(stage.nativeAudit ? {nativeAudit: stage.nativeAudit} : {}),
         ...(stage.approvalAudit ? {approvalAudit: stage.approvalAudit} : {}),
         ...(stage.upgradeAudit ? {upgradeAudit: stage.upgradeAudit} : {}),
+        ...(stage.parserFuzzAudit ? {parserFuzzAudit: stage.parserFuzzAudit} : {}),
+        ...(stage.mutationAudit ? {mutationAudit: stage.mutationAudit} : {}),
         ...(stage.preparationResult ? {preparationResult: true} : {})}));
 }
 
@@ -508,7 +513,8 @@ async function preserveGeneratedArtifact(workspace, artifacts, stageId, path, pr
 }
 
 export async function executeStages(manifest, {workspace, artifacts, preflight: checked, proofKey, execute = runProcess,
-    stopRequested = async () => false, publish = async () => {}, runId, exchange, unlockSigning, writeJSON, hashFile, measureResources = resourceSnapshot}) {
+    stopRequested = async () => false, publish = async () => {}, runId, exchange, unlockSigning, writeJSON, hashFile, measureResources = resourceSnapshot,
+    auditParserFuzz = auditParserFuzzEvidence, auditMutation = auditMutationEvidence}) {
     const results = pendingStageResults(manifest);
     const byID = new Map(results.map(result => [result.id, result]));
     await publish(results);
@@ -562,14 +568,23 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
             const outcome = await execute(command, args, {
                 cwd: join(workspace, stage.cwd), env: {...cleanEnvironment(), ...(stage.env ?? {}),
                     ...(runId && exchange ? {BW_TEST_VM_RUN_ID: runId, BW_TEST_VM_EXCHANGE: exchange} : {}),
+                    ...(stage.parserFuzzAudit || stage.mutationAudit ? {
+                        BW_TEST_VM_SOURCE_SHA256: (stage.parserFuzzAudit ?? stage.mutationAudit).sourceSHA256,
+                    } : {}),
                     ...(stage.proofKey ? {ALCHEMY_JWT_REQUEST_PROOF_KEY: proofKey} : {})},
                 logPath: join(artifacts, result.log), timeoutSeconds: stage.timeoutSeconds, stopRequested,
-                ...(stage.nativeAudit?.kind === "safari" || stage.preparationResult ? {terminationGraceMilliseconds: SAFARI_TERMINATION_GRACE_MILLISECONDS} : {}),
+                ...(stage.nativeAudit?.kind === "safari" || stage.preparationResult
+                    ? {terminationGraceMilliseconds: SAFARI_TERMINATION_GRACE_MILLISECONDS}
+                    : stage.parserFuzzAudit || stage.mutationAudit ? {terminationGraceMilliseconds: HARDENING_TERMINATION_GRACE_MILLISECONDS} : {}),
             });
             result.exitCode = outcome.code;
             result.signal = outcome.signal;
             if (outcome.outputDrainTimedOut) { result.outputDrainTimedOut = true; }
             result.status = outcome.cancelled ? "cancelled" : outcome.timedOut || outcome.error || outcome.code !== 0 ? "failed" : "passed";
+            if ((stage.parserFuzzAudit || stage.mutationAudit) && outcome.outputDrainTimedOut) {
+                result.status = "failed";
+                result.reason = "Hardening stage output did not finish draining";
+            }
             if (stage.runtimeTestability && result.status === "passed") {
                 result.testability = {modules: stage.runtimeTestability, evidence: "compiled-testable-imports"};
             }
@@ -584,6 +599,16 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
                 result.upgradeEvidence = join("failures", stage.id, "upgrade-report.json");
                 result.audit = auditUpgradeResult(await readSafariEvidence(join(artifacts, result.upgradeEvidence)), stage.upgradeAudit,
                     {runId, sourceSHA256: stage.upgradeAudit.sourceSHA256});
+                if (!result.audit.ok) { result.status = "failed"; result.reason = result.audit.issues; }
+            }
+            if (stage.parserFuzzAudit && !outcome.cancelled && !outcome.timedOut) {
+                result.parserFuzzEvidence = join("failures", stage.id, "parser-fuzz-report.json");
+                result.audit = await auditParserFuzz(join(artifacts, result.parserFuzzEvidence), {...stage.parserFuzzAudit, runId});
+                if (!result.audit.ok) { result.status = "failed"; result.reason = result.audit.issues; }
+            }
+            if (stage.mutationAudit && !outcome.cancelled && !outcome.timedOut) {
+                result.mutationEvidence = join("failures", stage.id, "mutation-report.json");
+                result.audit = await auditMutation(join(artifacts, result.mutationEvidence), {...stage.mutationAudit, runId});
                 if (!result.audit.ok) { result.status = "failed"; result.reason = result.audit.issues; }
             }
             if (stage.preparationResult && !outcome.cancelled && !outcome.timedOut) {

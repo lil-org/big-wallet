@@ -29,9 +29,150 @@ final class WalletAccessController {
         weak var value: (any WalletAccessObserver)?
     }
 
-    private struct Authentication {
-        let generation: UInt64
-        let cancel: @MainActor () -> Void
+    @MainActor
+    final class AuthenticationAttempt {
+        private enum State {
+            case active, completed, cancelled
+        }
+
+        @MainActor
+        final class Operation {
+            private weak var attempt: AuthenticationAttempt?
+            private var challenge: WalletAuthenticationChallenge?
+            private var task: Task<Void, Never>?
+            private var isRetired = false
+
+            fileprivate init(attempt: AuthenticationAttempt, challenge: WalletAuthenticationChallenge?) {
+                self.attempt = attempt
+                self.challenge = challenge
+            }
+
+            isolated deinit {
+                challenge?.invalidate()
+                task?.cancel()
+            }
+
+            var isCurrent: Bool {
+                !isRetired && attempt?.isCurrent == true && attempt?.operation === self
+            }
+
+            @discardableResult
+            func attachChallenge(_ challenge: WalletAuthenticationChallenge) -> Bool {
+                guard isCurrent else {
+                    challenge.invalidate()
+                    return false
+                }
+                if self.challenge !== challenge {
+                    let previous = self.challenge
+                    self.challenge = challenge
+                    previous?.invalidate()
+                }
+                return isCurrent
+            }
+
+            @discardableResult
+            func complete(_ grant: WalletAuthenticationGrant) -> Bool {
+                defer { grant.invalidate() }
+                guard isCurrent, let owner = attempt?.owner,
+                      let session = owner.credentials.accessSession(authorization: grant) else { return false }
+                return complete(session)
+            }
+
+            @discardableResult
+            func complete(_ session: WalletAccessSession) -> Bool {
+                guard isCurrent, let attempt else {
+                    session.invalidate()
+                    return false
+                }
+                return attempt.complete(session)
+            }
+
+            fileprivate func start(_ run: @escaping @MainActor (Operation) async -> Void) {
+                guard isCurrent else { return }
+                task = Task { [self] in
+                    defer { retire(cancellingTask: false) }
+                    guard isCurrent, !Task.isCancelled else { return }
+                    await run(self)
+                }
+            }
+
+            fileprivate func retire(cancellingTask: Bool) {
+                guard !isRetired else { return }
+                isRetired = true
+                let previousChallenge = challenge
+                let previousTask = task
+                challenge = nil
+                task = nil
+                if attempt?.operation === self { attempt?.operation = nil }
+                previousChallenge?.invalidate()
+                if cancellingTask { previousTask?.cancel() }
+            }
+        }
+
+        private weak var owner: WalletAccessController?
+        private var state = State.active
+        private var operation: Operation?
+        private var onCancelled: (@MainActor (AuthenticationAttempt) -> Void)?
+
+        fileprivate init(owner: WalletAccessController, onCancelled: @escaping @MainActor (AuthenticationAttempt) -> Void) {
+            self.owner = owner
+            self.onCancelled = onCancelled
+        }
+
+        isolated deinit { operation?.retire(cancellingTask: true) }
+
+        var isCurrent: Bool {
+            state == .active && owner?.authentication === self && owner?.isLockTransitioning == false
+        }
+
+        @discardableResult
+        func replaceOperation(
+            challenge: WalletAuthenticationChallenge? = nil,
+            run: (@MainActor (Operation) async -> Void)? = nil
+        ) -> Operation {
+            let next = Operation(attempt: self, challenge: challenge)
+            guard isCurrent else {
+                next.retire(cancellingTask: true)
+                return next
+            }
+            let previous = operation
+            operation = next
+            previous?.retire(cancellingTask: true)
+            if let run { next.start(run) }
+            return next
+        }
+
+        func cancelOperation() {
+            let previous = operation
+            operation = nil
+            previous?.retire(cancellingTask: true)
+        }
+
+        @discardableResult
+        func complete(_ session: WalletAccessSession) -> Bool {
+            guard let owner else {
+                session.invalidate()
+                retire(cancelled: true)
+                return false
+            }
+            return owner.completeAuthentication(session, attempt: self)
+        }
+
+        func cancel() {
+            if let owner { owner.cancelAuthentication(self) }
+            else { retire(cancelled: true) }
+        }
+
+        fileprivate func retire(cancelled: Bool) {
+            guard state == .active else { return }
+            state = cancelled ? .cancelled : .completed
+            let previous = operation
+            let callback = onCancelled
+            operation = nil
+            onCancelled = nil
+            previous?.retire(cancellingTask: cancelled)
+            if cancelled { callback?(self) }
+        }
     }
 
     @MainActor
@@ -58,7 +199,7 @@ final class WalletAccessController {
     private let schedule: Schedule
     private let activityClock: @MainActor () -> ContinuousClock.Instant
     @ObservationIgnored private var observers = [ObjectIdentifier: Observer]()
-    @ObservationIgnored private var authentication: Authentication?
+    @ObservationIgnored private var authentication: AuthenticationAttempt?
     @ObservationIgnored private var cancelTimer: (@MainActor () -> Void)?
     @ObservationIgnored private var timerGeneration: UInt64 = 0
     @ObservationIgnored private var isLockTransitioning = false
@@ -77,7 +218,7 @@ final class WalletAccessController {
     isolated deinit {
         session?.invalidate()
         cancelTimer?()
-        authentication?.cancel()
+        authentication?.retire(cancelled: true)
     }
 
     func addObserver(_ observer: any WalletAccessObserver) {
@@ -90,25 +231,24 @@ final class WalletAccessController {
     }
 
     @discardableResult
-    func beginAuthentication(cancel: @escaping @MainActor () -> Void) -> UInt64 {
+    func beginAuthentication(onCancelled: @escaping @MainActor (AuthenticationAttempt) -> Void) -> AuthenticationAttempt {
+        let attempt = AuthenticationAttempt(owner: self, onCancelled: onCancelled)
         guard !isLockTransitioning else {
-            cancel()
-            return generation
+            attempt.retire(cancelled: true)
+            return attempt
         }
         if !isLocked { lock(reason: .idle) }
         let previous = authentication
         generation &+= 1
-        let current = generation
-        authentication = Authentication(generation: current, cancel: cancel)
-        previous?.cancel()
-        return current
+        authentication = attempt
+        previous?.retire(cancelled: true)
+        return attempt
     }
 
     @discardableResult
-    func completeAuthentication(_ session: WalletAccessSession, generation: UInt64) -> Bool {
-        guard !isLockTransitioning, self.generation == generation,
-              authentication?.generation == generation,
-              credentials.validateAccess(session) else {
+    private func completeAuthentication(_ session: WalletAccessSession, attempt: AuthenticationAttempt) -> Bool {
+        guard attempt.isCurrent, authentication === attempt,
+              credentials.validateAccess(session), attempt.isCurrent else {
             session.invalidate()
             return false
         }
@@ -117,7 +257,10 @@ final class WalletAccessController {
             lock(reason: .protectedDataUnavailable)
             return false
         }
+        guard attempt.isCurrent else { session.invalidate(); return false }
+        let generation = generation
         authentication = nil
+        attempt.retire(cancelled: false)
         self.session?.invalidate()
         self.session = session
         isLocked = false
@@ -139,12 +282,12 @@ final class WalletAccessController {
         return self.generation == generation && !isLocked
     }
 
-    func cancelAuthentication(generation: UInt64) {
-        guard authentication?.generation == generation else { return }
-        let previous = authentication
-        authentication = nil
-        self.generation &+= 1
-        previous?.cancel()
+    private func cancelAuthentication(_ attempt: AuthenticationAttempt) {
+        if authentication === attempt {
+            authentication = nil
+            generation &+= 1
+        }
+        attempt.retire(cancelled: true)
     }
 
     @discardableResult
@@ -219,7 +362,7 @@ final class WalletAccessController {
         cancelScheduledTimer()
         let previousAuthentication = authentication
         authentication = nil
-        previousAuthentication?.cancel()
+        previousAuthentication?.retire(cancelled: true)
         let currentObservers = liveObservers()
         for observer in currentObservers {
             guard generation == current, isLocked else { break }

@@ -27,10 +27,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 fixture.store.onWrite = { writes += 1 }
                 let credentials = authenticationCredentials()
                 let access = WalletAccessController(credentials: credentials)
-                let generation = access.beginAuthentication(cancel: {})
+                let attempt = access.beginAuthentication(onCancelled: { _ in })
                 let grant = try XCTUnwrap(credentials.verify(password: "test-password", challenge: credentials.makeWalletAccessChallenge()))
                 let session = try XCTUnwrap(credentials.accessSession(authorization: grant))
-                XCTAssertTrue(access.completeAuthentication(session, generation: generation))
+                XCTAssertTrue(attempt.complete(session))
                 if locked { access.lock(reason: .idle) }
                 var authenticationAttempts = 0
                 let agent = Agent(approvalInbox: ApprovalInbox(), credentialDependencies: .init(
@@ -73,10 +73,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let nextFixture = try makeFixture(key: approvalKey(id: 101))
         let credentials = authenticationCredentials()
         let access = WalletAccessController(credentials: credentials)
-        let generation = access.beginAuthentication(cancel: {})
+        let attempt = access.beginAuthentication(onCancelled: { _ in })
         let grant = try XCTUnwrap(credentials.verify(password: "test-password", challenge: credentials.makeWalletAccessChallenge()))
         let session = try XCTUnwrap(credentials.accessSession(authorization: grant))
-        XCTAssertTrue(access.completeAuthentication(session, generation: generation))
+        XCTAssertTrue(attempt.complete(session))
         access.lock(reason: .idle)
         var authenticationAttempts = 0
         var rejections = 0
@@ -144,10 +144,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let fixture = try makeFixture()
         let credentials = authenticationCredentials()
         let access = WalletAccessController(credentials: credentials)
-        let generation = access.beginAuthentication(cancel: {})
+        let attempt = access.beginAuthentication(onCancelled: { _ in })
         let grant = try XCTUnwrap(credentials.verify(password: "test-password", challenge: credentials.makeWalletAccessChallenge()))
         let session = try XCTUnwrap(credentials.accessSession(authorization: grant))
-        XCTAssertTrue(access.completeAuthentication(session, generation: generation))
+        XCTAssertTrue(attempt.complete(session))
         var authenticationAttempts = 0
         let agent = Agent(approvalInbox: ApprovalInbox(), credentialDependencies: .init(
             credentials: credentials,
@@ -347,10 +347,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             })
             let credentials = authenticationCredentials()
             let access = WalletAccessController(credentials: credentials)
-            let generation = access.beginAuthentication(cancel: {})
+            let attempt = access.beginAuthentication(onCancelled: { _ in })
             let grant = try XCTUnwrap(credentials.verify(password: "test-password", challenge: credentials.makeWalletAccessChallenge()))
             let session = try XCTUnwrap(credentials.accessSession(authorization: grant))
-            XCTAssertTrue(access.completeAuthentication(session, generation: generation))
+            XCTAssertTrue(attempt.complete(session))
             start(fixture)
             await waitForState(fixture.coordinator, .awaitingAuthentication)
             let (agent, approval, window) = try attachApprovalWindow(to: fixture, access: access, credentials: credentials)
@@ -1265,10 +1265,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let scheduler = WalletAccessTestFixture.Scheduler()
         let access = WalletAccessController(credentials: credentials, schedule: scheduler.schedule,
             activityClock: { accessClock.instant })
-        let generation = access.beginAuthentication(cancel: {})
+        let attempt = access.beginAuthentication(onCancelled: { _ in })
         let grant = try XCTUnwrap(credentials.verify(password: "test-password", challenge: credentials.makeWalletAccessChallenge()))
         let session = try XCTUnwrap(credentials.accessSession(authorization: grant))
-        XCTAssertTrue(access.completeAuthentication(session, generation: generation))
+        XCTAssertTrue(attempt.complete(session))
         let originalExpiration = try XCTUnwrap(scheduler.expirations.last)
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
@@ -1314,10 +1314,10 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(scheduler.expirations.count, afterLock)
         XCTAssertTrue(access.isLocked)
 
-        let replacementGeneration = access.beginAuthentication(cancel: {})
+        let replacementAttempt = access.beginAuthentication(onCancelled: { _ in })
         let replacementGrant = try XCTUnwrap(credentials.verify(password: "test-password", challenge: credentials.makeWalletAccessChallenge()))
         let replacement = try XCTUnwrap(credentials.accessSession(authorization: replacementGrant))
-        XCTAssertTrue(access.completeAuthentication(replacement, generation: replacementGeneration))
+        XCTAssertTrue(replacementAttempt.complete(replacement))
         let afterUnlock = scheduler.expirations.count
         recovery.actionButtonTapped(self)
         XCTAssertEqual(scheduler.expirations.count, afterUnlock)

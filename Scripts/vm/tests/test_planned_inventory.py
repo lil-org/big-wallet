@@ -217,13 +217,43 @@ class RunSnapshotBindingTests(unittest.TestCase):
         self.assertIn('worker.current-check', [stage['id'] for stage in plan['stages']])
         self.assertNotIn('worker.check', [stage['id'] for stage in plan['stages']])
 
+    def test_malformed_parser_replay_finalizes_without_starting_or_retaining_an_operation(self):
+        replay = self.root / 'bad-replay.json'
+        replay.write_text('{not json')
+        self.args.stage = ['parser-fuzz']
+        self.args.parser_fuzz_replay = replay
+        self.assertEqual(host.run_tests(self.args, self.state, self.environment), 1)
+        self.clone_vm.assert_not_called()
+        self.monitor_vm.assert_not_called()
+        self.assertFalse((self.state / 'active.json').exists())
+        results = list((self.state / 'results').glob('*/artifacts/result.json'))
+        self.assertEqual(len(results), 1)
+        report = host.read_json(results[0])
+        self.assertEqual(report['reason'], 'host_preparation_failed')
+        self.assertIn('valid UTF-8 JSON', report['hostTermination']['error'])
+
+    def test_overdeep_parser_replay_finalizes_without_retaining_an_operation(self):
+        replay = self.root / 'deep-replay.json'
+        replay.write_text('{"nested":' + '[' * 2000 + '0' + ']' * 2000 + '}')
+        self.args.stage = ['parser-fuzz']
+        self.args.parser_fuzz_replay = replay
+        self.assertEqual(host.run_tests(self.args, self.state, self.environment), 1)
+        self.clone_vm.assert_not_called()
+        self.monitor_vm.assert_not_called()
+        self.assertFalse((self.state / 'active.json').exists())
+        results = list((self.state / 'results').glob('*/artifacts/result.json'))
+        self.assertEqual(len(results), 1)
+        report = host.read_json(results[0])
+        self.assertEqual(report['reason'], 'host_preparation_failed')
+        self.assertIn('decoder limits', report['hostTermination']['error'])
+
     def test_new_snapshot_option_changes_the_plan_without_reprovisioning(self):
         baseline = host.read_json(self.state / 'baseline.json')
         path = self.tools / 'test_manifest.mjs'
         original = path.read_text()
         changed = original.replace(
-            'new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "signing", "interactiveSafari", "prepareSafari", "preparedSafari", "runtimePlatforms"])',
-            'new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "signing", "interactiveSafari", "prepareSafari", "preparedSafari", "runtimePlatforms", "fixtureOption"])'
+            'const optionNames = new Set([',
+            'const optionNames = new Set(["fixtureOption", '
         ).replace('["check", "check", []]', '[options.fixtureOption ? "option-check" : "check", "check", []]')
         self.assertNotEqual(changed, original)
         path.write_text(changed)
@@ -365,7 +395,7 @@ class PlannedInventoryTests(unittest.TestCase):
             {'payload': {'stages': ['safari'], 'configuration': 'Release', 'onlyTesting': ['Safari UI Tests iOS'], 'signing': 'apple'}},
             {'payload': {'stages': ['repository', 'worker'], 'onlyTesting': []}},
             {'payload': {'stages': ['test'], 'configuration': 'Debug', 'onlyTesting': ['Tests visionOS']}},
-            {'payload': {'stages': ['test'], 'configuration': 'Debug', 'onlyTesting': ['Tests iOS/SecretHandlingTests/testSecretBufferIsZeroed']}},
+            {'payload': {'stages': ['test'], 'configuration': 'Debug', 'onlyTesting': ['Tests iOS/MobileWalletAccessTests/testLockClearsImportDraftAndRejectsRetainedSubmission']}},
             {'profile': 'extended', 'payload': {'stages': ['approval'], 'onlyTesting': [], 'configuration': 'Release', 'approvalArgs': ['--soak', '--seed', '42']}},
         ]
         for overrides in cases:

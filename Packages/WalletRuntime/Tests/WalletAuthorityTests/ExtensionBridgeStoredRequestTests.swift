@@ -1803,7 +1803,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             writes.withValue { $0 += 1 }
         }))
         XCTAssertEqual(preparations.value, 1)
-        XCTAssertEqual(writes.value, 0)
+        XCTAssertEqual(writes.value, 0, "SECURITY-MUTATION[revocation.before-source-write]")
         let after = try await removalSnapshot()
         XCTAssertEqual(after.ethereumAccount, account)
         let result = try removalStore().perform(

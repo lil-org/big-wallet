@@ -1,14 +1,14 @@
 import {isAbsolute, join, resolve, sep} from "node:path";
 import {SAFARI_SCENARIOS, SAFARI_TEST_CLASS} from "../safari/scenarios.mjs";
 import {expectedSynchronizationPolicy} from "../safari/synchronization.mjs";
-import {RUNTIME_TEST_TARGETS, loadRuntimeInventory} from "./runtime_inventory.mjs";
+import {APP_TEST_CLASS_PLATFORMS, RUNTIME_TEST_TARGETS, loadRuntimeInventory} from "./runtime_inventory.mjs";
 import {BASELINE as UPGRADE_BASELINE} from "../wallet_upgrade/contract.mjs";
 
 export {RUNTIME_TEST_TARGETS};
 export const RUNTIME_MODULES = ["WalletDomain", "WalletNetworking", "WalletAuthority", "WalletFlows"];
 const runtimeInventory = loadRuntimeInventory(new URL("./runtime-test-inventory.json", import.meta.url));
 
-export const SELECTORS = ["build", "test", "performance", "tsan", "asan", "fuzz", "approval", "upgrade", "safari", "repository", "worker", "runtime"];
+export const SELECTORS = ["build", "test", "performance", "tsan", "asan", "fuzz", "parser-fuzz", "mutation", "approval", "upgrade", "safari", "repository", "worker", "runtime"];
 export const BOOTSTRAP_TOOL_NAMES = ["VMGuestAgent", "guest_runner", "guest_bootstrap.mjs"];
 const LOCAL_SIGNING_SETTINGS = [
     "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "PROVISIONING_PROFILE=",
@@ -74,7 +74,7 @@ export function validateJob(value) {
     if (typeof value.vmId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/.test(value.vmId)) { throw new Error("Invalid VM identifier"); }
     if (!["run", "doctor"].includes(value.kind) || !["all", "extended"].includes(value.profile)) { throw new Error("Invalid job kind or profile"); }
     const options = value.payload;
-    const optionNames = new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "signing", "interactiveSafari", "prepareSafari", "preparedSafari", "runtimePlatforms"]);
+    const optionNames = new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "parserFuzzReplay", "signing", "interactiveSafari", "prepareSafari", "preparedSafari", "runtimePlatforms"]);
     if (!options || typeof options !== "object" || Array.isArray(options) || Object.keys(options).some(key => !optionNames.has(key))) {
         throw new Error("Unsupported job payload");
     }
@@ -97,6 +97,20 @@ export function validateJob(value) {
         throw new Error("Safari XCTest selectors require --stage safari or --stage build");
     }
     if (options.configuration !== undefined && !["Debug", "Release"].includes(options.configuration)) { throw new Error("Invalid configuration"); }
+    if (options.parserFuzzReplay !== undefined && (value.kind !== "run" ||
+        options.parserFuzzReplay === null || typeof options.parserFuzzReplay !== "object" ||
+        Object.keys(options.parserFuzzReplay).sort().join(",") !== "path,sha256" ||
+        options.parserFuzzReplay.path !== "/Volumes/BigWalletBuild/Exchange/inputs/parser-fuzz-replay.json" ||
+        typeof options.parserFuzzReplay.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(options.parserFuzzReplay.sha256) ||
+        options.stages.length !== 1 || !["fuzz", "parser-fuzz"].includes(options.stages[0]) || options.onlyTesting.length)) {
+        throw new Error("Native parser replay requires only --stage fuzz or --stage parser-fuzz and a staged replay artifact");
+    }
+    if (options.stages.includes("mutation") && options.onlyTesting.length) {
+        throw new Error("Mutation verification uses its declared witness inventory and does not accept --only-testing");
+    }
+    if (options.stages.includes("parser-fuzz") && options.onlyTesting.length) {
+        throw new Error("Native parser fuzzing uses its declared case inventory and does not accept --only-testing");
+    }
     if (options.runtimePlatforms !== undefined && (!Array.isArray(options.runtimePlatforms) ||
         new Set(options.runtimePlatforms).size !== options.runtimePlatforms.length ||
         options.runtimePlatforms.some(platform => !["macos", "ios", "visionos"].includes(platform)))) {
@@ -197,7 +211,7 @@ export function testingForPlatform(selectors, platform, configuration) {
             return selector === platform.target || selector.startsWith(`${platform.target}/`) ? [selector] : [];
         }
         const normalized = selector.replace(/\(\)$/, "");
-        if (["NativeApprovalCoordinatorTests", "TransactionApprovalCoordinatorTests", "PasswordStorageTests"].some(name => normalized === name || normalized.startsWith(`${name}/`))) {
+        if (Object.hasOwn(APP_TEST_CLASS_PLATFORMS, normalized.split("/")[0])) {
             return runtimeInventory.appTests.some(test => test.id.startsWith(`${platform.target}/`) &&
                 (!configuration || test.variants.includes(`${platform.id}.${configuration.toLowerCase()}`)) &&
                 (test.id === `${platform.target}/${normalized}` || test.id.startsWith(`${platform.target}/${normalized}/`)))
@@ -219,6 +233,34 @@ export function runtimeTestsForPlatform(selectors, platform, configuration) {
         const name = test.id.split("/").slice(1).join("/");
         return test.id === selector || test.id.startsWith(`${selector}/`) || name === selector || name.startsWith(`${selector}/`);
     }))).map(test => test.id);
+}
+
+export function appTestPolicy(selected, platform, configuration) {
+    const appSelectors = [...new Set(selected.map(selector => selector.replace(/\(\)$/, "")))];
+    const selection = appSelectors.length ? {appSelectors} : {};
+    const available = runtimeInventory.appTests.filter(test => test.id.startsWith(`${platform.target}/`) &&
+        test.variants.includes(`${platform.id}.${configuration.toLowerCase()}`)).map(test => test.id);
+    const requiredAppTests = available.filter(test => !selected.length || selected.some(selector => matchesTestSelector(test, selector)));
+    if (!requiredAppTests.length) { return selection; }
+    const exactAppInventory = selected.length > 0 && selected.every(selector => selector !== platform.target &&
+        available.some(test => matchesTestSelector(test, selector)));
+    return {requiredAppTests, exactAppInventory, ...selection};
+}
+
+function validateKnownAppSelections(options, configurations) {
+    if (options.stages.length && !options.stages.includes("test")) { return; }
+    for (const raw of options.onlyTesting) {
+        const selector = raw.replace(/\(\)$/, "");
+        const qualified = PLATFORMS.some(platform => selector.startsWith(`${platform.target}/`));
+        const name = selector.split("/")[qualified ? 1 : 0];
+        if (!Object.hasOwn(APP_TEST_CLASS_PLATFORMS, name)) { continue; }
+        const appMatches = runtimeInventory.appTests.some(test => matchesTestSelector(test.id, selector) &&
+            configurations.some(configuration => test.variants.some(variant => variant.endsWith(`.${configuration.toLowerCase()}`))));
+        const runtimeMatches = !qualified && PLATFORMS.filter(platform => !options.runtimePlatforms?.length || options.runtimePlatforms.includes(platform.id))
+            .some(platform => configurations.some(configuration =>
+            runtimeTestsForPlatform([selector], platform.id, configuration).length));
+        if (!appMatches && !runtimeMatches) { throw new Error(`App test selection did not match the declared inventory: ${raw}`); }
+    }
 }
 
 function matchesTestSelector(identifier, rawSelector) {
@@ -273,6 +315,9 @@ export function createManifest(job) {
     add("metadata.localizations", "repository", "/bin/bash", ["Scripts/asc/validate_localizations.sh"], {requirements: ["jq"]});
     add("scripts.approval-worker-target", "repository", "node", ["--test", "Scripts/tests/approval_worker_target.test.mjs"]);
     add("scripts.upgrade-consumer-target", "repository", "node", ["--test", "Scripts/tests/upgrade_consumer_target.test.mjs"]);
+    add("scripts.parser-fuzz-target", "repository", "node", ["--test", "Scripts/tests/parser_fuzz_target.test.mjs"]);
+    add("scripts.native-parser-fuzz", "repository", "node", ["--test", "Scripts/native_parser_fuzz/*.test.mjs"], {dependencies: ["provider.install"]});
+    add("scripts.security-mutations", "repository", "node", ["--test", "Scripts/security_mutations/*.test.mjs"]);
     add("upgrade.archive", "repository", "python3", ["Scripts/wallet_upgrade/archive.py", "--verify"], {requirements: ["python"]});
     add("runner.node-tests", "repository", "node", ["--test", "Scripts/vm/tests/*.test.mjs"], {requirements: ["node", "xcode"]});
     add("runner.python-tests", "repository", "python3", ["-m", "unittest", "discover", "-s", "Scripts/vm/tests", "-p", "test_*.py"], {requirements: ["python", "node"]});
@@ -284,6 +329,7 @@ export function createManifest(job) {
     ]) { add(`worker.${id}`, "worker", "npm", ["run", script, ...suffix], {cwd: worker, dependencies: ["worker.install"]}); }
 
     const configurations = options.configuration ? [options.configuration] : ["Debug", "Release"];
+    validateKnownAppSelections(options, configurations);
     const asanRuntimeTests = focusedTests(runtimeInventory.tests, ASAN_RUNTIME_TESTS, options.onlyTesting, "ASan");
     const asanAppTests = focusedTests(runtimeInventory.appTests, ASAN_APP_TESTS, options.onlyTesting, "ASan");
     if (options.stages.includes("asan") && !asanRuntimeTests.length && !asanAppTests.length) {
@@ -365,8 +411,9 @@ export function createManifest(job) {
             if (options.onlyTesting.length && !selectedTests.length) { continue; }
             add(`test.${slug}`, "test", "xcodebuild", ["test-without-building", ...base, "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never",
                 ...selectedTests.map(test => `-only-testing:${test}`)], {
-                dependencies: [`build-tests.${slug}`], requirements: ["xcode", platform.requirement], timeoutSeconds: 7200,
-                nativeAudit: {configuration, platform: platform.id, kind: "full", filtered: selectedTests.length > 0 && !selectedTests.includes(platform.target)},
+                dependencies: [`build-tests.${slug}`, "runtime.inventory"], requirements: ["xcode", platform.requirement], timeoutSeconds: 7200,
+                nativeAudit: {configuration, platform: platform.id, kind: "full", filtered: selectedTests.length > 0 && !selectedTests.includes(platform.target),
+                    ...appTestPolicy(selectedTests, platform, configuration)},
                 env: configuration === "Release" ? PERFORMANCE_ENV : {}, resultBundle: true,
             });
         }
@@ -446,16 +493,43 @@ export function createManifest(job) {
                 filtered: options.onlyTesting.length > 0}, resultBundle: true,
         });
     }
-    add("fuzz.default", "fuzz", "node", ["Scripts/fuzz_wire_protocol.mjs"], {dependencies: ["protocol.check"], requirements: ["node", "xcode"], timeoutSeconds: 3600, failureDirectory: true});
-    add("fuzz.regressions", "fuzz", "node", ["Scripts/fuzz_wire_protocol.mjs", "--replay", "Safari Shared/Tests/fixtures/protocol_fuzz_regressions.json"], {
-        dependencies: ["protocol.check"], requirements: ["node", "xcode"], timeoutSeconds: 1800, failureDirectory: true,
-    });
-    if (job.profile === "extended") {
-        for (const seed of [42, 20261013, 3735928559]) {
-            add(`fuzz.seed-${seed}`, "fuzz", "node", ["Scripts/fuzz_wire_protocol.mjs", "--seed", String(seed), "--iterations", "20000"], {
-                dependencies: ["protocol.check"], requirements: ["node", "xcode"], timeoutSeconds: 7200, failureDirectory: true,
-            });
+    if (!options.parserFuzzReplay) {
+        add("fuzz.default", "fuzz", "node", ["Scripts/fuzz_wire_protocol.mjs"], {dependencies: ["protocol.check"], requirements: ["node", "xcode"], timeoutSeconds: 3600, failureDirectory: true});
+        add("fuzz.regressions", "fuzz", "node", ["Scripts/fuzz_wire_protocol.mjs", "--replay", "Safari Shared/Tests/fixtures/protocol_fuzz_regressions.json"], {
+            dependencies: ["protocol.check"], requirements: ["node", "xcode"], timeoutSeconds: 1800, failureDirectory: true,
+        });
+        if (job.profile === "extended") {
+            for (const seed of [42, 20261013, 3735928559]) {
+                add(`fuzz.seed-${seed}`, "fuzz", "node", ["Scripts/fuzz_wire_protocol.mjs", "--seed", String(seed), "--iterations", "20000"], {
+                    dependencies: ["protocol.check"], requirements: ["node", "xcode"], timeoutSeconds: 7200, failureDirectory: true,
+                });
+            }
         }
+    }
+    const nativeFuzzPhases = options.parserFuzzReplay ? ["build", "replay"] : ["build", "canaries", "parsers", "decrypt"];
+    for (const [index, phase] of nativeFuzzPhases.entries()) {
+        add(`fuzz.native.${phase}`, "fuzz", "node", ["Scripts/native_parser_fuzz/run.mjs", "--phase", phase, "--profile", job.profile,
+            ...(phase === "replay" ? ["--replay", options.parserFuzzReplay.path] : [])], {
+            dependencies: index === 0 ? ["runtime.boundaries", "scripts.parser-fuzz-target", "scripts.native-parser-fuzz"]
+                : [`fuzz.native.${nativeFuzzPhases[index - 1]}`, "provider.install"],
+            requirements: ["node", "xcode", "macos"], failureDirectory: true,
+            timeoutSeconds: phase === "build" ? 1800 : job.profile === "extended" ? 3720 : 720,
+            parserFuzzAudit: {phase, profile: job.profile, sourceSHA256: job.source.sha256,
+                ...(phase === "replay" ? {replaySHA256: options.parserFuzzReplay.sha256} : {})},
+        });
+    }
+    if (!options.onlyTesting.length) {
+        const tier = job.profile === "extended" ? "extended" : "core";
+        const apple = options.signing === "apple";
+        add("mutation.security", "mutation", "node", ["Scripts/security_mutations/run.mjs", "--tier", tier,
+            "--destination-macos", "$destination:macos", ...(tier === "extended" ? ["--destination-ios", "$destination:ios"] : []),
+            "--signing", options.signing ?? "local"], {
+            dependencies: ["runtime.inventory", "runtime.boundaries", "provider.install", "protocol.check", "scripts.security-mutations"],
+            requirements: ["node", "xcode", "macos", ...(tier === "extended" ? ["ios"] : []), ...(apple ? ["signing", "proofKey"] : [])],
+            ...(apple ? {proofKey: true} : {}), failureDirectory: true, scratchDirectory: true,
+            timeoutSeconds: (tier === "extended" ? 7200 : 3600) + 120,
+            mutationAudit: {tier, signing: options.signing ?? "local", sourceSHA256: job.source.sha256},
+        });
     }
     for (const configuration of configurations) {
         const slug = configuration.toLowerCase();
@@ -532,7 +606,8 @@ export function createManifest(job) {
     if (options.stages.includes("safari") && !stages.some(stage => stage.group === "safari")) {
         throw new Error("Safari selection did not match any known tests");
     }
-    const selected = new Set(stages.filter(stage => !options.stages.length || options.stages.includes(stage.group)).map(stage => stage.id));
+    const selected = new Set(stages.filter(stage => !options.stages.length || options.stages.includes(stage.group) ||
+        options.stages.includes("parser-fuzz") && stage.parserFuzzAudit).map(stage => stage.id));
     for (const stage of stages) {
         if (selected.has(stage.id) && stage.nativeAudit?.runtime === true && stage.nativeAudit.configuration === "Debug" && stage.nativeAudit.kind === "full" &&
             (!stage.nativeAudit.filtered || debugPerformancePlatforms.has(stage.nativeAudit.platform))) {
@@ -569,6 +644,7 @@ export function commandForStage(stage, {destinations, artifacts, scratch}) {
     if (stage.resultBundle) { args.push("-resultBundlePath", join(artifacts, `${stage.id}.xcresult`)); }
     if (stage.preparationResult) { args.push("--preparation-result", join(artifacts, `${stage.id}.safari-preparation.json`)); }
     if (stage.failureDirectory) { args.push("--failure-dir", join(artifacts, "failures", stage.id)); }
+    if (stage.parserFuzzAudit) { args.push("--report", join(artifacts, "failures", stage.id, "parser-fuzz-report.json")); }
     if (stage.scratchDirectory) {
         if (typeof scratch !== "string" || !isAbsolute(scratch) || resolve(scratch) !== scratch ||
             scratch === artifacts || scratch.startsWith(`${artifacts}${sep}`)) {

@@ -1,0 +1,328 @@
+{
+  "version": 1,
+  "mutants": [
+    {
+      "id": "grant.single-use",
+      "tier": "core",
+      "family": "runtime",
+      "source": "Packages/WalletRuntime/Sources/WalletAuthority/WalletAuthentication.swift",
+      "edits": [
+        {
+          "find": "            state = .consumed\n            return true",
+          "replace": "            return true"
+        }
+      ],
+      "witness": {
+        "selector": "WalletAuthorityTests/WalletAuthenticationTests/testConcurrentCopiesShareOneAuthorizationUse",
+        "file": "Packages/WalletRuntime/Tests/WalletAuthorityTests/WalletAuthenticationTests.swift",
+        "marker": "SECURITY-MUTATION[grant.single-use]"
+      }
+    },
+    {
+      "id": "access.stale-authentication",
+      "tier": "core",
+      "family": "macos-app",
+      "source": "Shared/Services/WalletAccessController.swift",
+      "edits": [
+        {
+          "find": "private func completeAuthentication(_ session: WalletAccessSession, attempt: AuthenticationAttempt) -> Bool {",
+          "replace": "private func completeAuthentication(_ session: WalletAccessSession, attempt originalAttempt: AuthenticationAttempt) -> Bool {\n        let attempt = authentication ?? originalAttempt"
+        }
+      ],
+      "witness": {
+        "selector": "Tests macOS/WalletAccessControllerTests/testOldAuthenticationCannotReplaceNewAuthenticationOrUnlockAfterLock",
+        "file": "Tests/WalletAccessControllerTests.swift",
+        "marker": "SECURITY-MUTATION[access.stale-authentication]"
+      }
+    },
+    {
+      "id": "signing.source-recheck",
+      "tier": "core",
+      "family": "runtime",
+      "source": "Packages/WalletRuntime/Sources/WalletAuthority/WalletAccess.swift",
+      "edits": [
+        {
+          "find": "operation.sign(with: privateKey, validatingSource: { source.isCurrent() })",
+          "replace": "operation.sign(with: privateKey, validatingSource: { true })"
+        }
+      ],
+      "witness": {
+        "selector": "WalletAuthorityTests/UnlockedAccountSignerTests/testSourceIsRevalidatedOnTheWorkerImmediatelyBeforeKeyUse",
+        "file": "Packages/WalletRuntime/Tests/WalletAuthorityTests/WalletSigningSessionTests.swift",
+        "marker": "SECURITY-MUTATION[signing.source-recheck]"
+      }
+    },
+    {
+      "id": "response.document-owner",
+      "tier": "core",
+      "family": "runtime",
+      "source": "Packages/WalletRuntime/Sources/WalletAuthority/NativeRequestContext.swift",
+      "edits": [
+        {
+          "find": "case .document(let document): return document.isValid && owner == .document(document)",
+          "replace": "case .document(let document): return document.isValid"
+        }
+      ],
+      "witness": {
+        "selector": "WalletAuthorityTests/ResponseDeliveryPollerTests/testCompletedDocumentOwnerSurvivesRestartAcknowledgementAndPermissionRepair",
+        "file": "Packages/WalletRuntime/Tests/WalletAuthorityTests/ResponseDeliveryPollerTests.swift",
+        "marker": "SECURITY-MUTATION[response.document-owner]"
+      }
+    },
+    {
+      "id": "revocation.before-source-write",
+      "tier": "core",
+      "family": "runtime",
+      "source": "Packages/WalletRuntime/Sources/WalletAuthority/ExtensionRequestFileStore.swift",
+      "edits": [
+        {
+          "find": "            if let revocations, !files.publishRevocationLedgerDataLocked(revocations) {\n                throw WalletAuthorityRemovalError.unavailable\n            }\n            return try commit(prepared.payload)",
+          "replace": "            let result = try commit(prepared.payload)\n            if let revocations, !files.publishRevocationLedgerDataLocked(revocations) {\n                throw WalletAuthorityRemovalError.unavailable\n            }\n            return result"
+        }
+      ],
+      "witness": {
+        "selector": "WalletAuthorityTests/ExtensionBridgeStoredRequestTests/testScopedRevocationFailurePreventsSourceWriteAndReleasesTransactionLock",
+        "file": "Packages/WalletRuntime/Tests/WalletAuthorityTests/ExtensionBridgeStoredRequestTests.swift",
+        "marker": "SECURITY-MUTATION[revocation.before-source-write]"
+      }
+    },
+    {
+      "id": "rpc.normalized-byte-budget",
+      "tier": "core",
+      "family": "runtime",
+      "source": "Packages/WalletRuntime/Sources/WalletNetworking/HTTPJSONBudget.swift",
+      "edits": [
+        {
+          "find": "guard string.utf8.count <= limits.maximumResponseBytes else {",
+          "replace": "guard data.count <= limits.maximumResponseBytes else {"
+        }
+      ],
+      "witness": {
+        "selector": "WalletNetworkingTests/NativeRPCResponseDecoderTests/testResponseByteLimitAlsoBoundsNormalizedUTF8",
+        "file": "Packages/WalletRuntime/Tests/WalletNetworkingTests/NativeRPCResponseDecoderTests.swift",
+        "marker": "SECURITY-MUTATION[rpc.normalized-byte-budget]"
+      }
+    },
+    {
+      "id": "grant.authority",
+      "tier": "extended",
+      "family": "runtime",
+      "source": "Packages/WalletRuntime/Sources/WalletAuthority/WalletAuthentication.swift",
+      "edits": [
+        {
+          "find": "guard challenge.authorityID == authorityID,\n              challenge.purpose == purpose,",
+          "replace": "guard challenge.purpose == purpose,"
+        }
+      ],
+      "witness": {
+        "selector": "WalletAuthorityTests/WalletAuthenticationTests/testWrongSystemRetiresTheGrant",
+        "file": "Packages/WalletRuntime/Tests/WalletAuthorityTests/WalletAuthenticationTests.swift",
+        "marker": "SECURITY-MUTATION[grant.authority]"
+      }
+    },
+    {
+      "id": "grant.purpose",
+      "tier": "extended",
+      "family": "runtime",
+      "source": "Packages/WalletRuntime/Sources/WalletAuthority/WalletAuthentication.swift",
+      "edits": [
+        {
+          "find": "              challenge.purpose == purpose,\n              credentialIdentity.status() == .current else {",
+          "replace": "              credentialIdentity.status() == .current else {"
+        }
+      ],
+      "witness": {
+        "selector": "WalletAuthorityTests/WalletAuthenticationTests/testGrantCannotChangeItsReviewOrSelectedCluster",
+        "file": "Packages/WalletRuntime/Tests/WalletAuthorityTests/WalletAuthenticationTests.swift",
+        "marker": "SECURITY-MUTATION[grant.purpose]"
+      }
+    },
+    {
+      "id": "grant.credentials",
+      "tier": "extended",
+      "family": "runtime",
+      "source": "Packages/WalletRuntime/Sources/WalletAuthority/WalletAuthentication.swift",
+      "edits": [
+        {
+          "find": "              challenge.purpose == purpose,\n              credentialIdentity.status() == .current else {",
+          "replace": "              challenge.purpose == purpose else {"
+        }
+      ],
+      "witness": {
+        "selector": "WalletAuthorityTests/WalletAuthenticationTests/testCredentialReplacementInvalidatesPendingAuthorization",
+        "file": "Packages/WalletRuntime/Tests/WalletAuthorityTests/WalletAuthenticationTests.swift",
+        "marker": "SECURITY-MUTATION[grant.credentials]"
+      }
+    },
+    {
+      "id": "grant.exact-expiry",
+      "tier": "extended",
+      "family": "runtime",
+      "source": "Packages/WalletRuntime/Sources/WalletAuthority/WalletAuthentication.swift",
+      "edits": [
+        {
+          "find": "guard clock() < deadline,",
+          "replace": "guard clock() <= deadline,"
+        }
+      ],
+      "witness": {
+        "selector": "WalletAuthorityTests/WalletAuthenticationTests/testExpiredChallengeNeverIssuesOrConsumesAuthorization",
+        "file": "Packages/WalletRuntime/Tests/WalletAuthorityTests/WalletAuthenticationTests.swift",
+        "marker": "SECURITY-MUTATION[grant.exact-expiry]"
+      }
+    },
+    {
+      "id": "export.kind",
+      "tier": "extended",
+      "family": "runtime",
+      "source": "Packages/WalletRuntime/Sources/WalletAuthority/WalletAuthentication.swift",
+      "edits": [
+        {
+          "find": "binding.walletID == walletID, binding.account == account, binding.kind == kind,",
+          "replace": "binding.walletID == walletID, binding.account == account,"
+        }
+      ],
+      "witness": {
+        "selector": "WalletAuthorityTests/WalletAuthenticationTests/testExportAuthorizationMatchesWalletAccountAndKind",
+        "file": "Packages/WalletRuntime/Tests/WalletAuthorityTests/WalletAuthenticationTests.swift",
+        "marker": "SECURITY-MUTATION[export.kind]"
+      }
+    },
+    {
+      "id": "source.bytes",
+      "tier": "extended",
+      "family": "runtime",
+      "source": "Packages/WalletRuntime/Sources/WalletAuthority/WalletsManager.swift",
+      "edits": [
+        {
+          "find": "        guard let data = try keychain.readWalletData(id: identity.walletID),\n              Data(SHA256.hash(data: data)) == identity.sourceDigest else { return false }",
+          "replace": "        guard try keychain.readWalletData(id: identity.walletID) != nil else { return false }"
+        }
+      ],
+      "witness": {
+        "selector": "WalletAuthorityTests/WalletRemovalIntegrationTests/testPreparedDeletionRejectsChangedWalletOrCredentialBeforeMutation",
+        "file": "Packages/WalletRuntime/Tests/WalletAuthorityTests/WalletsManagerPrivateKeyImportTests.swift",
+        "marker": "SECURITY-MUTATION[source.bytes]"
+      }
+    },
+    {
+      "id": "native.source-role",
+      "tier": "extended",
+      "family": "runtime",
+      "source": "Packages/WalletRuntime/Sources/WalletAuthority/NativeRequestContext.swift",
+      "edits": [
+        {
+          "find": "        case .openApp:\n            return source == .worker",
+          "replace": "        case .openApp:\n            return true"
+        }
+      ],
+      "witness": {
+        "selector": "WalletFlowsTests/PublicFlowBoundaryTests/testWorkerCanOpenWalletButSiteCannotUseThatRoute",
+        "file": "Packages/WalletRuntime/Tests/WalletFlowsTests/PublicFlowBoundaryTests.swift",
+        "marker": "SECURITY-MUTATION[native.source-role]"
+      }
+    },
+    {
+      "id": "rpc.exact-numeric-id",
+      "tier": "extended",
+      "family": "runtime",
+      "source": "Packages/WalletRuntime/Sources/WalletNetworking/NativeRPCResponseDecoder.swift",
+      "edits": [
+        {
+          "find": "              isExactInteger(tokens.id, equalTo: expectedID) else { return nil }",
+          "replace": "              true else { return nil }"
+        }
+      ],
+      "witness": {
+        "selector": "WalletNetworkingTests/NativeRPCResponseDecoderTests/testRejectsMissingOrInvalidVersionsAndIDs",
+        "file": "Packages/WalletRuntime/Tests/WalletNetworkingTests/NativeRPCResponseDecoderTests.swift",
+        "marker": "SECURITY-MUTATION[rpc.exact-numeric-id]"
+      }
+    },
+    {
+      "id": "rpc.json-token-budget",
+      "tier": "extended",
+      "family": "runtime",
+      "source": "Packages/WalletRuntime/Sources/WalletNetworking/HTTPJSONBudget.swift",
+      "edits": [
+        {
+          "find": "            guard tokens <= limits.maximumJSONTokens else {",
+          "replace": "            guard true else {"
+        }
+      ],
+      "witness": {
+        "selector": "WalletNetworkingTests/NativeRPCResponseDecoderTests/testJSONTokenLimitCountsKeysAndValuesButNotStringContents",
+        "file": "Packages/WalletRuntime/Tests/WalletNetworkingTests/NativeRPCResponseDecoderTests.swift",
+        "marker": "SECURITY-MUTATION[rpc.json-token-budget]"
+      }
+    },
+    {
+      "id": "rpc.aggregate-response-budget",
+      "tier": "extended",
+      "family": "runtime",
+      "source": "Packages/WalletRuntime/Sources/WalletNetworking/SafariRPCRequest.swift",
+      "edits": [
+        {
+          "find": "guard count <= maximumBytes - retained else { throw SafariRPCFailure.busy }",
+          "replace": "guard count <= maximumBytes else { throw SafariRPCFailure.busy }"
+        }
+      ],
+      "witness": {
+        "selector": "WalletNetworkingTests/SafariRPCRequestTests/testResponseBudgetDoesNotOvercommitOrReleaseTwice",
+        "file": "Packages/WalletRuntime/Tests/WalletNetworkingTests/SafariRPCRequestTests.swift",
+        "marker": "SECURITY-MUTATION[rpc.aggregate-response-budget]"
+      }
+    },
+    {
+      "id": "bridge.extension-sender",
+      "tier": "extended",
+      "family": "javascript",
+      "source": "Safari Shared/Resources/bridge_wire.js",
+      "edits": [
+        {
+          "find": "                pageValue(sender, \"id\") !== extensionId || typeof subject !== \"string\" ||",
+          "replace": "                typeof subject !== \"string\" ||"
+        }
+      ],
+      "witness": {
+        "selector": "runtime authorization rejects missing foreign or malformed sender metadata",
+        "file": "Safari Shared/Tests/bridge_wire.test.mjs",
+        "marker": "SECURITY-MUTATION[bridge.extension-sender]"
+      }
+    },
+    {
+      "id": "bridge.subject-role",
+      "tier": "extended",
+      "family": "javascript",
+      "source": "Safari Shared/Resources/bridge_wire.js",
+      "edits": [
+        {
+          "find": "            if (!RUNTIME_MESSAGE_SUBJECTS[receiver]?.[kind]?.includes(subject)) { return null; }",
+          "replace": "            if (false) { return null; }"
+        }
+      ],
+      "witness": {
+        "selector": "runtime sender policy permits only the complete sender receiver subject matrix",
+        "file": "Safari Shared/Tests/bridge_wire.test.mjs",
+        "marker": "SECURITY-MUTATION[bridge.subject-role]"
+      }
+    },
+    {
+      "id": "mobile.retired-form",
+      "tier": "extended",
+      "family": "ios-app",
+      "source": "App iOS/Screens/PasswordViewController.swift",
+      "edits": [
+        {
+          "find": "    private func retirePasswordForm() {\n        guard !isRetired else { return }\n        isRetired = true",
+          "replace": "    private func retirePasswordForm() {\n        guard !isRetired else { return }"
+        }
+      ],
+      "witness": {
+        "selector": "Tests iOS/MobileWalletAccessTests/testPasswordEntryPublishesSessionAndRetiresItsOldCallbacks",
+        "file": "Tests/MobileWalletAccessTests.swift",
+        "marker": "SECURITY-MUTATION[mobile.retired-form]"
+      }
+    }
+  ]
+}

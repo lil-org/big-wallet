@@ -76,9 +76,9 @@ final class WalletAccessTestFixture {
 
     @discardableResult
     func unlock() throws -> WalletAccessSession {
-        let generation = access.beginAuthentication(cancel: {})
+        let attempt = access.beginAuthentication(onCancelled: { _ in })
         let session = try makeSession()
-        XCTAssertTrue(access.completeAuthentication(session, generation: generation))
+        XCTAssertTrue(attempt.complete(session))
         return session
     }
 }
@@ -161,33 +161,224 @@ final class WalletAccessControllerTests: XCTestCase {
             notifiedWhileLocked = fixture.access.isLocked && !fixture.credentials.validateAccess(session)
         }
         fixture.access.addObserver(observer)
-        let attempt = fixture.access.beginAuthentication {
+        let attempt = fixture.access.beginAuthentication { _ in
             cancelledWhileLocked = fixture.access.isLocked && !fixture.credentials.validateAccess(session)
         }
         fixture.access.lock(reason: .systemSleep)
         XCTAssertTrue(cancelledWhileLocked)
         XCTAssertTrue(notifiedWhileLocked)
         let late = try fixture.makeSession()
-        XCTAssertFalse(fixture.access.completeAuthentication(late, generation: attempt))
+        XCTAssertFalse(attempt.complete(late))
         XCTAssertFalse(fixture.credentials.validateAccess(late))
     }
 
     func testOldAuthenticationCannotReplaceNewAuthenticationOrUnlockAfterLock() throws {
         let fixture = WalletAccessTestFixture()
         var oldCancelled = 0
-        let first = fixture.access.beginAuthentication { oldCancelled += 1 }
+        let first = fixture.access.beginAuthentication { _ in oldCancelled += 1 }
         let oldSession = try fixture.makeSession()
-        let second = fixture.access.beginAuthentication(cancel: {})
+        let second = fixture.access.beginAuthentication(onCancelled: { _ in })
         XCTAssertEqual(oldCancelled, 1)
-        XCTAssertFalse(fixture.access.completeAuthentication(oldSession, generation: first))
+        guard !first.complete(oldSession) else {
+            return XCTFail("SECURITY-MUTATION[access.stale-authentication]")
+        }
         let replacement = try fixture.makeSession()
-        XCTAssertTrue(fixture.access.completeAuthentication(replacement, generation: second))
-        fixture.access.cancelAuthentication(generation: first)
+        XCTAssertTrue(second.complete(replacement))
+        first.cancel()
         XCTAssertTrue(fixture.access.checkAccess())
 
         fixture.access.lock(reason: .sessionInactive)
-        XCTAssertFalse(fixture.access.completeAuthentication(oldSession, generation: first))
+        XCTAssertFalse(first.complete(oldSession), "SECURITY-MUTATION[access.stale-authentication]")
         XCTAssertTrue(fixture.access.isLocked)
+    }
+
+    func testPendingAuthenticationIdentityDoesNotReadCredentialsOrProtectedData() {
+        let fixture = WalletAccessTestFixture()
+        let attempt = fixture.access.beginAuthentication(onCancelled: { _ in })
+        let operation = attempt.replaceOperation()
+        let reads = fixture.keychain.passwordReadCount
+        fixture.access.isProtectedDataAvailable = {
+            XCTFail("Pending authentication identity must not inspect protected data")
+            return false
+        }
+        fixture.keychain.readStatus = errSecInteractionNotAllowed
+
+        for _ in 0..<100 {
+            XCTAssertTrue(attempt.isCurrent)
+            XCTAssertTrue(operation.isCurrent)
+        }
+
+        XCTAssertEqual(fixture.keychain.passwordReadCount, reads)
+        attempt.cancel()
+        XCTAssertFalse(attempt.isCurrent)
+        XCTAssertFalse(operation.isCurrent)
+    }
+
+    func testReplacingAnOperationRejectsItsLateGrantAndSession() throws {
+        let fixture = WalletAccessTestFixture()
+        let attempt = fixture.access.beginAuthentication(onCancelled: { _ in })
+        let firstChallenge = fixture.credentials.makeWalletAccessChallenge()
+        let grant = try XCTUnwrap(fixture.credentials.verify(password: "password", challenge: firstChallenge))
+        let first = attempt.replaceOperation(challenge: firstChallenge)
+        let secondChallenge = fixture.credentials.makeWalletAccessChallenge()
+        let second = attempt.replaceOperation(challenge: secondChallenge)
+
+        XCTAssertTrue(attempt.isCurrent)
+        XCTAssertFalse(first.isCurrent)
+        XCTAssertTrue(second.isCurrent)
+        XCTAssertFalse(first.complete(grant))
+        XCTAssertNil(fixture.credentials.accessSession(authorization: grant))
+        let staleSession = try fixture.makeSession()
+        XCTAssertFalse(first.complete(staleSession))
+        XCTAssertFalse(fixture.credentials.validateAccess(staleSession))
+
+        let replacement = try XCTUnwrap(fixture.credentials.verify(password: "password", challenge: secondChallenge))
+        XCTAssertTrue(second.complete(replacement))
+        XCTAssertFalse(attempt.isCurrent)
+        XCTAssertFalse(second.isCurrent)
+        XCTAssertTrue(fixture.access.checkAccess())
+    }
+
+    func testCancellationRetiresChallengeBeforeTaskAndOwnerCallbacks() async throws {
+        let fixture = WalletAccessTestFixture()
+        let credentials = fixture.credentials
+        let authorityID = fixture.authorityID
+        let challenge = credentials.makeWalletAccessChallenge()
+        let entered = expectation(description: "Authentication work started")
+        let cancelled = expectation(description: "Authentication work was cancelled")
+        let finished = expectation(description: "Authentication work returned")
+        let release = TestGate<Void>()
+        defer { release.resolve(()) }
+        let taskSawInvalidChallenge = Mutex(false)
+        var callbackSawInvalidChallenge = false
+        let attempt = fixture.access.beginAuthentication { retired in
+            XCTAssertFalse(retired.isCurrent)
+            callbackSawInvalidChallenge = !challenge.isPending(for: authorityID)
+        }
+        let operation = attempt.replaceOperation(challenge: challenge) { _ in
+            await withTaskCancellationHandler {
+                entered.fulfill()
+                await release.wait()
+            } onCancel: {
+                taskSawInvalidChallenge.withLock { $0 = !challenge.isPending(for: authorityID) }
+                cancelled.fulfill()
+            }
+            finished.fulfill()
+        }
+        await fulfillment(of: [entered], timeout: 2)
+
+        attempt.cancel()
+
+        await fulfillment(of: [cancelled], timeout: 2)
+        XCTAssertFalse(operation.isCurrent)
+        XCTAssertTrue(callbackSawInvalidChallenge)
+        XCTAssertTrue(taskSawInvalidChallenge.withLock { $0 })
+        release.resolve(())
+        await fulfillment(of: [finished], timeout: 2)
+    }
+
+    func testReentrantCancellationCannotOverwriteOrCancelTheReplacementAttempt() throws {
+        let fixture = WalletAccessTestFixture()
+        var replacement: WalletAccessController.AuthenticationAttempt?
+        var interveningCancellations = 0
+        let first = fixture.access.beginAuthentication { retired in
+            XCTAssertFalse(retired.isCurrent)
+            replacement = fixture.access.beginAuthentication(onCancelled: { _ in })
+        }
+
+        let intervening = fixture.access.beginAuthentication { retired in
+            XCTAssertFalse(retired.isCurrent)
+            interveningCancellations += 1
+        }
+
+        let current = try XCTUnwrap(replacement)
+        XCTAssertFalse(first.isCurrent)
+        XCTAssertFalse(intervening.isCurrent)
+        XCTAssertTrue(current.isCurrent)
+        XCTAssertEqual(interveningCancellations, 1)
+        let generation = fixture.access.generation
+        intervening.cancel()
+        XCTAssertEqual(fixture.access.generation, generation)
+        let staleSession = try fixture.makeSession()
+        XCTAssertFalse(intervening.complete(staleSession))
+        XCTAssertFalse(fixture.credentials.validateAccess(staleSession))
+        XCTAssertTrue(current.complete(try fixture.makeSession()))
+    }
+
+    func testSuccessfulOperationDetachesBeforeObserversWithoutCancellingItself() async throws {
+        let fixture = WalletAccessTestFixture()
+        var cancellations = 0
+        let attempt = fixture.access.beginAuthentication { _ in cancellations += 1 }
+        let observer = Observer()
+        observer.onUnlock = {
+            XCTAssertFalse(attempt.isCurrent)
+            attempt.cancel()
+            XCTAssertFalse(fixture.access.isLocked)
+        }
+        fixture.access.addObserver(observer)
+        let session = try fixture.makeSession()
+        let completed = expectation(description: "Authentication completion returned")
+        let generation = fixture.access.generation
+        let operation = attempt.replaceOperation { operation in
+            XCTAssertTrue(operation.complete(session))
+            XCTAssertFalse(operation.isCurrent)
+            XCTAssertFalse(Task.isCancelled)
+            completed.fulfill()
+        }
+
+        await fulfillment(of: [completed], timeout: 2)
+
+        XCTAssertFalse(operation.isCurrent)
+        XCTAssertEqual(cancellations, 0)
+        XCTAssertEqual(fixture.access.generation, generation)
+        XCTAssertTrue(fixture.credentials.validateAccess(session))
+        XCTAssertTrue(fixture.access.session === session)
+    }
+
+    func testRetainedAuthenticationWorkIsInvalidatedWhenItsControllerDeallocates() async throws {
+        let fixture = WalletAccessTestFixture()
+        let credentials = fixture.credentials
+        var access: WalletAccessController? = WalletAccessController(credentials: credentials)
+        weak var retained = access
+        var cancellations = 0
+        let attempt = try XCTUnwrap(access?.beginAuthentication { _ in cancellations += 1 })
+        let challenge = credentials.makeWalletAccessChallenge()
+        let entered = expectation(description: "Owned work started")
+        let cancelled = expectation(description: "Owner release cancelled work")
+        let finished = expectation(description: "Retired work returned")
+        let release = TestGate<Void>()
+        defer { release.resolve(()) }
+        let operation = attempt.replaceOperation(challenge: challenge) { _ in
+            await withTaskCancellationHandler {
+                entered.fulfill()
+                await release.wait()
+            } onCancel: { cancelled.fulfill() }
+            finished.fulfill()
+        }
+        await fulfillment(of: [entered], timeout: 2)
+
+        access = nil
+
+        XCTAssertNil(retained)
+        XCTAssertEqual(cancellations, 1)
+        XCTAssertFalse(attempt.isCurrent)
+        XCTAssertFalse(operation.isCurrent)
+        XCTAssertFalse(challenge.isPending(for: fixture.authorityID))
+        let lateChallenge = credentials.makeWalletAccessChallenge()
+        XCTAssertFalse(operation.attachChallenge(lateChallenge))
+        XCTAssertFalse(lateChallenge.isPending(for: fixture.authorityID))
+        let unrelatedChallenge = credentials.makeWalletAccessChallenge()
+        let lateGrant = try XCTUnwrap(credentials.verify(password: "password", challenge: unrelatedChallenge))
+        XCTAssertFalse(operation.complete(lateGrant))
+        XCTAssertNil(credentials.accessSession(authorization: lateGrant))
+        let lateSession = try fixture.makeSession()
+        XCTAssertFalse(attempt.complete(lateSession))
+        XCTAssertFalse(credentials.validateAccess(lateSession))
+        attempt.cancel()
+        XCTAssertEqual(cancellations, 1)
+        await fulfillment(of: [cancelled], timeout: 2)
+        release.resolve(())
+        await fulfillment(of: [finished], timeout: 2)
     }
 
     func testUIActivityAndTimersDoNotReadCredentials() throws {
@@ -246,10 +437,10 @@ final class WalletAccessControllerTests: XCTestCase {
 
     func testProtectedDataLossRejectsAuthenticationBeforeAnEventIsDelivered() throws {
         let fixture = WalletAccessTestFixture()
-        let attempt = fixture.access.beginAuthentication(cancel: {})
+        let attempt = fixture.access.beginAuthentication(onCancelled: { _ in })
         let session = try fixture.makeSession()
         fixture.access.isProtectedDataAvailable = { false }
-        XCTAssertFalse(fixture.access.completeAuthentication(session, generation: attempt))
+        XCTAssertFalse(attempt.complete(session))
         XCTAssertEqual(fixture.access.lockReason, .protectedDataUnavailable)
         XCTAssertFalse(fixture.credentials.validateAccess(session))
 
@@ -270,8 +461,8 @@ final class WalletAccessControllerTests: XCTestCase {
         for observer in [first, second] {
             observer.onLock = {
                 teardownCount += 1
-                let attempt = fixture.access.beginAuthentication(cancel: {})
-                XCTAssertFalse(fixture.access.completeAuthentication(reentrantSession, generation: attempt))
+                let attempt = fixture.access.beginAuthentication(onCancelled: { _ in })
+                XCTAssertFalse(attempt.complete(reentrantSession))
                 fixture.access.lock(reason: .idle)
             }
             fixture.access.addObserver(observer)
@@ -286,9 +477,9 @@ final class WalletAccessControllerTests: XCTestCase {
         let observer = Observer()
         observer.onUnlock = { fixture.access.lock(reason: .systemSleep) }
         fixture.access.addObserver(observer)
-        let attempt = fixture.access.beginAuthentication(cancel: {})
+        let attempt = fixture.access.beginAuthentication(onCancelled: { _ in })
         let session = try fixture.makeSession()
-        XCTAssertFalse(fixture.access.completeAuthentication(session, generation: attempt))
+        XCTAssertFalse(attempt.complete(session))
         XCTAssertTrue(fixture.access.isLocked)
         XCTAssertFalse(fixture.credentials.validateAccess(session))
     }
@@ -303,8 +494,8 @@ final class WalletAccessControllerTests: XCTestCase {
         var unlocked = false
         observer.onUnlock = { unlocked = true }
         access.addObserver(observer)
-        let attempt = access.beginAuthentication(cancel: {})
-        XCTAssertFalse(access.completeAuthentication(try fixture.makeSession(), generation: attempt))
+        let attempt = access.beginAuthentication(onCancelled: { _ in })
+        XCTAssertFalse(attempt.complete(try fixture.makeSession()))
         XCTAssertFalse(unlocked)
         XCTAssertTrue(access.isLocked)
     }
@@ -314,8 +505,8 @@ final class WalletAccessControllerTests: XCTestCase {
         let scheduling = ReentrantScheduler()
         let access = WalletAccessController(credentials: fixture.credentials, schedule: scheduling.schedule)
         scheduling.access = access
-        let attempt = access.beginAuthentication(cancel: {})
-        XCTAssertTrue(access.completeAuthentication(try fixture.makeSession(), generation: attempt))
+        let attempt = access.beginAuthentication(onCancelled: { _ in })
+        XCTAssertTrue(attempt.complete(try fixture.makeSession()))
         scheduling.shouldLock = true
         XCTAssertFalse(access.recordInteraction())
         XCTAssertTrue(access.isLocked)
@@ -324,9 +515,9 @@ final class WalletAccessControllerTests: XCTestCase {
     func testDeallocationInvalidatesAccessAndCancelsRetainedTimer() throws {
         let fixture = WalletAccessTestFixture()
         var access: WalletAccessController? = WalletAccessController(credentials: fixture.credentials, schedule: fixture.scheduler.schedule)
-        let attempt = try XCTUnwrap(access?.beginAuthentication(cancel: {}))
+        let attempt = try XCTUnwrap(access?.beginAuthentication(onCancelled: { _ in }))
         let session = try fixture.makeSession()
-        XCTAssertTrue(try XCTUnwrap(access?.completeAuthentication(session, generation: attempt)))
+        XCTAssertTrue(attempt.complete(session))
         let timer = try XCTUnwrap(fixture.scheduler.expirations.last)
         weak let retained = access
         access = nil
@@ -341,7 +532,7 @@ final class WalletAccessControllerTests: XCTestCase {
         let fixture = WalletAccessTestFixture()
         var cancelled = false
         var access: WalletAccessController? = WalletAccessController(credentials: fixture.credentials)
-        access?.beginAuthentication { cancelled = true }
+        access?.beginAuthentication { _ in cancelled = true }
         access = nil
         XCTAssertTrue(cancelled)
     }
@@ -351,10 +542,10 @@ final class WalletAccessControllerTests: XCTestCase {
         try await Task { @MainActor in
             let fixture = WalletAccessTestFixture()
             let access = WalletAccessController(credentials: fixture.credentials)
-            let attempt = access.beginAuthentication(cancel: {})
+            let attempt = access.beginAuthentication(onCancelled: { _ in })
             let session = try fixture.makeSession()
             fixture.advance(by: .milliseconds(899_900))
-            XCTAssertTrue(access.completeAuthentication(session, generation: attempt))
+            XCTAssertTrue(attempt.complete(session))
             fixture.advance(by: .seconds(1))
             let alert = NSAlert()
             alert.messageText = "Disposable wallet lock test"

@@ -857,23 +857,32 @@ final class UnlockedAccountSignerTests: XCTestCase {
         let approved = descriptor(coin: .ethereum, key: key)
         let sourceChecks = Mutex([Bool]())
         let signingStarted = Mutex(false)
+        let cryptographicUses = Mutex(0)
         let signer = try XCTUnwrap(UnlockedAccountSigner(
             approvedAccount: approved, taking: key
         ))
         let permit = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
 
-        let result = await signingAttempt(
-            permit,
-            isCurrent: {
-                guard signingStarted.withLock({ $0 }) else { return true }
-                sourceChecks.withLock { $0.append(Thread.isMainThread) }
-                return false
+        let hooks = AuthorityExecutionHooks(checkpoint: { _, _ in }, event: { event in
+            if event.kind == .signingStarted { cryptographicUses.withLock { $0 += 1 } }
+        })
+        let result = await AuthorityExecutionHooks.$current.withValue(hooks) {
+            await signingAttempt(
+                permit,
+                isCurrent: {
+                    guard signingStarted.withLock({ $0 }) else { return true }
+                    sourceChecks.withLock { $0.append(Thread.isMainThread) }
+                    return false
+                }
+            ) { operation, source in
+                signingStarted.withLock { $0 = true }
+                return await signer.sign(operation, validating: source)
             }
-        ) { operation, source in
-            signingStarted.withLock { $0 = true }
-            return await signer.sign(operation, validating: source)
         }
-        assertUnavailable(result)
+        XCTAssertEqual(cryptographicUses.withLock { $0 }, 0, "SECURITY-MUTATION[signing.source-recheck]")
+        guard case .failure(.authorizationUnavailable) = result else {
+            return XCTFail("SECURITY-MUTATION[signing.source-recheck]")
+        }
         XCTAssertEqual(sourceChecks.withLock { $0 }, [false])
         let retry = try approvedWalletSigningPermitForTesting(approvedAccount: approved)
         assertUnavailable(await sign(retry, using: signer))

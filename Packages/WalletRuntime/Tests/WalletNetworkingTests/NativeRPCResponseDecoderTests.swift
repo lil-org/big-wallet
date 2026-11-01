@@ -45,13 +45,15 @@ final class NativeRPCResponseDecoderTests: XCTestCase {
             #"{"jsonrpc":"2.0","id":[],"result":"accepted"}"#,
             #"{"jsonrpc":"2.0","id":{},"result":"accepted"}"#,
         ]
-        for body in bodies { XCTAssertNil(try decode(body), body) }
+        for body in bodies { XCTAssertNil(try decode(body), "SECURITY-MUTATION[rpc.exact-numeric-id]: \(body)") }
         for id in [
             "1.0000000000000001", "0.99999999999999999", "10000000000000001e-16",
             "1." + String(repeating: "0", count: 80) + "1", "1e-999999999999999999999999",
         ] {
             let body = "{\"jsonrpc\":\"2.0\",\"id\":\(id),\"result\":\"accepted\"}"
-            XCTAssertNil(try decode(body), body)
+            guard try decode(body) == nil else {
+                return XCTFail("SECURITY-MUTATION[rpc.exact-numeric-id]: \(body)")
+            }
         }
         XCTAssertNil(try decode(#"{"jsonrpc":"2.0","\u0069d":1.0000000000000001,"result":"accepted"}"#))
         for (encoding, bom) in Self.jsonEncodings {
@@ -180,7 +182,7 @@ final class NativeRPCResponseDecoderTests: XCTestCase {
             XCTAssertThrowsError(try NativeRPCResponseDecoder.decode(
                 Response.self, from: data, expectedID: 1,
                 limits: .init(maximumResponseBytes: body.utf8.count - 1)
-            )) { error in
+            ), "SECURITY-MUTATION[rpc.normalized-byte-budget]") { error in
                 XCTAssertEqual(error as? HTTPResponsePolicyError, .responseTooLarge)
             }
         }
@@ -228,7 +230,7 @@ final class NativeRPCResponseDecoderTests: XCTestCase {
                 XCTAssertThrowsError(try NativeRPCResponseDecoder.decode(
                     Response.self, from: data, expectedID: 1,
                     limits: .init(maximumJSONTokens: 14)
-                )) { error in
+                ), "SECURITY-MUTATION[rpc.json-token-budget]") { error in
                     XCTAssertEqual(error as? HTTPResponsePolicyError, .tooManyJSONTokens)
                 }
             }

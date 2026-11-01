@@ -56,7 +56,9 @@ const passedManifest = manifest => manifest.map(stage => ({id: stage.id, status:
     ...(stage.nativeAudit ? {nativeAudit: stage.nativeAudit} : {}),
     ...(stage.approvalAudit ? {approvalAudit: stage.approvalAudit} : {}),
     ...(stage.upgradeAudit ? {upgradeAudit: stage.upgradeAudit} : {}),
-    ...(stage.nativeAudit?.runtime || stage.nativeAudit?.kind === "tsan" || stage.approvalAudit || stage.upgradeAudit ? {audit: {ok: true}} : {}),
+    ...(stage.parserFuzzAudit ? {parserFuzzAudit: stage.parserFuzzAudit} : {}),
+    ...(stage.mutationAudit ? {mutationAudit: stage.mutationAudit} : {}),
+    ...(stage.nativeAudit?.runtime || stage.nativeAudit?.requiredAppTests || stage.nativeAudit?.appSelectors || stage.nativeAudit?.kind === "tsan" || stage.approvalAudit || stage.upgradeAudit || stage.parserFuzzAudit || stage.mutationAudit ? {audit: {ok: true}} : {}),
     ...(stage.nativeAudit?.kind === "safari" ? {audit: {ok: true, safari: {ok: true}, safariLog: {ok: true}}} : {}),
     ...(stage.nativeAudit?.kind === "asan" ? {audit: {ok: true, asanLog: {ok: true}}} : {})}));
 
@@ -189,6 +191,16 @@ test("local and Apple modes retain the complete same test workload with explicit
                     assert.equal(stage.nativeAudit?.iterations, signed.nativeAudit?.iterations);
                     assert.equal(stage.timeoutSeconds, signed.timeoutSeconds);
                     assert.ok(!stage.requirements.includes("signing") && !stage.requirements.includes("proofKey"));
+                    continue;
+                }
+                if (stage.mutationAudit) {
+                    assert.deepEqual({...stage.mutationAudit, signing: "apple"}, signed.mutationAudit);
+                    assert.deepEqual(stage.args.map((value, index) => stage.args[index - 1] === "--signing" ? "apple" : value), signed.args);
+                    assert.deepEqual(stage.dependencies, signed.dependencies);
+                    assert.equal(stage.timeoutSeconds, signed.timeoutSeconds);
+                    assert.equal(stage.proofKey, undefined);
+                    assert.equal(signed.proofKey, true);
+                    assert.deepEqual(stage.requirements, signed.requirements.filter(value => !["signing", "proofKey"].includes(value)));
                     continue;
                 }
                 assert.deepEqual(stage.nativeAudit, signed.nativeAudit);
@@ -398,7 +410,7 @@ test("TSan rejects nonexistent app methods even beside valid methods or class se
             }
         }
     }
-    assert.doesNotThrow(() => createManifest(job({payload: {stages: ["test"], onlyTesting: ["AccountPreviewStateTests/thisDoesNotExist"]}})));
+    assert.throws(() => createManifest(job({payload: {stages: ["test"], onlyTesting: ["AccountPreviewStateTests/thisDoesNotExist"]}})), /App test selection did not match/);
 });
 
 test("explicit empty TSan selections fail without changing unrelated filtered runs", () => {
