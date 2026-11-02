@@ -226,6 +226,52 @@ test("package selectors produce simulator and Release stages with explicit testa
     }
 });
 
+test("runtime selections reject every selector excluded by platform or configuration", () => {
+    const method = "AuthorityMessageIsolationTests/testRuntimeSharesNativeReviewAuthorityOnlyWithinItsExactRoute";
+    const debugOnly = "WalletCoreProxyStoredKeyTests/testSupportedCoinUnknownDerivationMapsToCustom";
+    const valid = "WalletNetworkingTests/SafariRPCServiceTests";
+    for (const suffix of ["", "()"]) {
+        for (const selector of [`${method}${suffix}`, `WalletAuthorityTests/${method}${suffix}`]) {
+            for (const onlyTesting of [[selector], [valid, selector]]) {
+                assert.throws(() => createManifest(job({stages: ["test"], configuration: "Debug", runtimePlatforms: ["ios"], onlyTesting})),
+                    /Runtime selection did not match any tests/, onlyTesting.join(", "));
+            }
+        }
+        for (const selector of [`${debugOnly}${suffix}`, `WalletAuthorityTests/${debugOnly}${suffix}`]) {
+            assert.throws(() => createManifest(job({stages: ["test"], configuration: "Release", onlyTesting: [selector]})),
+                /Runtime selection did not match any tests/);
+        }
+        const stages = createManifest(job({stages: ["test"], configuration: "Debug", runtimePlatforms: ["macos"], onlyTesting: [`${method}${suffix}`]}));
+        assert.deepEqual(stages.find(stage => stage.id === "test-runtime.macos.debug").nativeAudit.requiredTests,
+            [`WalletAuthorityTests/${method}`]);
+    }
+    assert.throws(() => createManifest(job({configuration: "Debug", runtimePlatforms: ["ios"], onlyTesting: [method]})),
+        /Runtime selection did not match any tests/);
+});
+
+test("unqualified runtime selections retain matching app and fixed sanitizer variants", () => {
+    const shared = "NativeApprovalCoordinatorTests";
+    const apps = createManifest(job({stages: ["test"], configuration: "Debug", runtimePlatforms: ["ios"], onlyTesting: [shared]}));
+    assert.ok(apps.some(stage => stage.nativeAudit?.requiredAppTests?.some(identifier => identifier.startsWith(`Tests macOS/${shared}/`))));
+    const mixedClass = "AuthorityMessageIsolationTests";
+    const ios = createManifest(job({stages: ["test"], configuration: "Debug", runtimePlatforms: ["ios"], onlyTesting: [mixedClass]}));
+    const iosTests = ios.find(stage => stage.id === "test-runtime.ios.debug").nativeAudit.requiredTests;
+    assert.deepEqual(iosTests, runtimeTestsForPlatform([mixedClass], "ios", "Debug"));
+    assert.ok(iosTests.length > 0);
+    const debugOnly = "WalletCoreProxyStoredKeyTests/testSupportedCoinUnknownDerivationMapsToCustom";
+    for (const stages of [[], ["asan"], ["test", "asan"]]) {
+        const manifest = createManifest(job({stages, configuration: "Release", onlyTesting: [debugOnly]}));
+        assert.ok(manifest.some(stage => stage.group === "asan" &&
+            stage.nativeAudit?.requiredTests?.includes(`WalletAuthorityTests/${debugOnly}`)));
+    }
+    const macOnly = "ExtensionBridgeStoredRequestTests/testMaintenanceStopsAtStoreLockContention";
+    for (const stages of [[], ["tsan"], ["test", "tsan"]]) {
+        const manifest = createManifest({...job({stages, configuration: "Release", runtimePlatforms: ["ios"], onlyTesting: [macOnly]}), profile: "extended"});
+        assert.ok(manifest.some(stage => stage.group === "tsan" &&
+            stage.nativeAudit?.requiredTests?.includes(`WalletAuthorityTests/${macOnly}`)));
+    }
+});
+
 test("runtime audit rejects omitted, duplicate, extra, skipped, and zero tests", () => {
     const requiredTests = ["WalletDomainTests/DomainTests/testOne", "WalletDomainTests/DomainTests/testTwo"];
     const policy = {runtime: true, kind: "full", configuration: "Release", platform: "macos", requiredTests};

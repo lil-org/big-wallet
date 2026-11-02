@@ -316,7 +316,7 @@ private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
             stopReason = "stop-file"
             return true
         }
-        if kill(options.ownerPID, 0) != 0 && errno == ESRCH {
+        if getppid() != options.ownerPID || (kill(options.ownerPID, 0) != 0 && errno == ESRCH) {
             stopReason = "owner-exited"
             return true
         }

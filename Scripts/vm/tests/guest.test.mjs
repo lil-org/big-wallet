@@ -312,7 +312,7 @@ test("all matrix never invokes live deployment, account mutation, or custom Deri
 
 test("runner fixtures declare their helper compiler and manifest interpreter", () => {
     const stages = createManifest(job({payload: {stages: ["repository"]}}));
-    assert.deepEqual(stages.find(stage => stage.id === "runner.node-tests").requirements, ["bootstrap", "node", "xcode"]);
+    assert.deepEqual(stages.find(stage => stage.id === "runner.node-tests").requirements, ["bootstrap", "node", "xcode", "python"]);
     assert.deepEqual(stages.find(stage => stage.id === "runner.python-tests").requirements, ["bootstrap", "python", "node"]);
     assert.deepEqual(stages.find(stage => stage.id === "safari.runner-tests").args, ["--test", "Scripts/safari/tests/*.test.mjs"]);
     assert.deepEqual(stages.find(stage => stage.id === "safari.runner-tests").dependencies, ["provider.install"]);

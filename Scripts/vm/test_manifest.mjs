@@ -319,7 +319,7 @@ export function createManifest(job) {
     add("scripts.native-parser-fuzz", "repository", "node", ["--test", "Scripts/native_parser_fuzz/*.test.mjs"], {dependencies: ["provider.install"]});
     add("scripts.security-mutations", "repository", "node", ["--test", "Scripts/security_mutations/*.test.mjs"]);
     add("upgrade.archive", "repository", "python3", ["Scripts/wallet_upgrade/archive.py", "--verify"], {requirements: ["python"]});
-    add("runner.node-tests", "repository", "node", ["--test", "Scripts/vm/tests/*.test.mjs"], {requirements: ["node", "xcode"]});
+    add("runner.node-tests", "repository", "node", ["--test", "Scripts/vm/tests/*.test.mjs"], {requirements: ["node", "xcode", "python"]});
     add("runner.python-tests", "repository", "python3", ["-m", "unittest", "discover", "-s", "Scripts/vm/tests", "-p", "test_*.py"], {requirements: ["python", "node"]});
     add("safari.runner-tests", "repository", "node", ["--test", "Scripts/safari/tests/*.test.mjs"], {dependencies: ["provider.install"]});
     add("worker.install", "worker", "npm", ["ci", "--no-audit"], {cwd: worker});
@@ -624,6 +624,17 @@ export function createManifest(job) {
     const byID = new Map(stages.map(stage => [stage.id, stage]));
     const include = id => { for (const dependency of byID.get(id).dependencies) { if (!selected.has(dependency)) { selected.add(dependency); include(dependency); } } };
     for (const id of selected) { include(id); }
+    if (!options.stages.length || options.stages.includes("test")) {
+        const plannedTests = stages.filter(stage => selected.has(stage.id)).flatMap(stage => [
+            ...(stage.nativeAudit?.requiredTests ?? []), ...(stage.nativeAudit?.requiredAppTests ?? []),
+        ]);
+        for (const selector of options.onlyTesting) {
+            if (runtimeInventory.tests.some(test => matchesTestSelector(test.id, selector)) &&
+                !plannedTests.some(identifier => matchesTestSelector(identifier, selector))) {
+                throw new Error(`Runtime selection did not match any tests on the selected platforms or configurations: ${selector}`);
+            }
+        }
+    }
     return stages.filter(stage => selected.has(stage.id)).map(stage => {
         if ((options.signing ?? "local") === "local" && stage.command === "xcodebuild") {
             const {proofKey, ...local} = stage;
