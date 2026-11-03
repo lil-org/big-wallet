@@ -256,25 +256,48 @@ function selectedUserSessionReady() {
     return locked.status === 0 && locked.stdout.trim() === 'false';
 }
 function automaticLoginEnabled() {
-    const result = spawnSync('/usr/sbin/sysadminctl', ['-autologin', 'status'], {encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL'});
+    const result = spawnSync('/usr/sbin/sysadminctl', ['-autologin', 'status'],
+        {encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL', maxBuffer: 16 * 1024});
     const message = `${result.stdout}${result.stderr}`;
     const account = new RegExp(`(^|[^A-Za-z0-9_-])${config.consoleUser}($|[^A-Za-z0-9_-])`);
     return result.status === 0 && account.test(message) && !/\b(off|disabled|failed|error)\b/i.test(message);
 }
+function automaticLoginCommandDiagnostic(result, password) {
+    const output = value => result.error || result.signal ? '[output omitted: capture incomplete]' :
+        String(value ?? '').split(password).join('[REDACTED]').slice(0, 4096);
+    return {status: result.status ?? null, error: result.error?.code ?? null, signal: result.signal ?? null,
+        stdout: output(result.stdout), stderr: output(result.stderr)};
+}
 function ensureAutomaticLogin() {
     const enabled = automaticLoginEnabled();
     const requiresRestart = !enabled && !selectedUserSessionReady();
+    let result, password;
     if (!enabled) {
         check(config.autologin && Object.hasOwn(config.autologin, 'passwordFile'),
             'Automatic login is disabled. Supply the existing guest account password in autologin.passwordFile; no password will be reset.');
         check(run('Read selected account groups', '/usr/bin/id', ['-Gn', config.consoleUser]).split(/\s+/).includes('admin'),
             'Automatic login setup requires the selected guest account to be an administrator.');
-        const password = secret(config.autologin.passwordFile, 'autologin.passwordFile');
-        run('Enable automatic login for the selected guest account', '/usr/sbin/sysadminctl',
-            ['-autologin', 'set', '-userName', config.consoleUser, '-password', password,
-                '-adminUser', config.consoleUser, '-adminPassword', password], {secret: true, timeout: 60000, killSignal: 'SIGKILL'});
+        if (config.interactiveSetup === true && requiresRestart) {
+            waitForSelectedSession({timeoutMilliseconds: 300000});
+        }
+        password = secret(config.autologin.passwordFile, 'autologin.passwordFile');
+        const args = ['-autologin', 'set', '-userName', config.consoleUser, '-password', password,
+            '-adminUser', config.consoleUser, '-adminPassword', password];
+        const invocation = selectedUserSessionReady() ? ['/bin/launchctl', ['asuser', uidText, '/usr/sbin/sysadminctl', ...args]] :
+            ['/usr/sbin/sysadminctl', args];
+        result = spawnSync(invocation[0], invocation[1], {
+            encoding: 'utf8', env: environment, timeout: 60000, killSignal: 'SIGKILL', maxBuffer: 16 * 1024,
+        });
     }
-    check(automaticLoginEnabled(), 'Automatic login for the selected guest account is unavailable. Check the existing password and guest FileVault/login policy; no password was reset.');
+    const verified = automaticLoginEnabled();
+    if (!verified && result) {
+        process.stderr.write(`Automatic login command diagnostics: ${JSON.stringify(automaticLoginCommandDiagnostic(result, password))}\n`);
+    }
+    if (result && result.status !== 0) {
+        fail(`Enable automatic login for the selected guest account failed${result.error ?
+            ` (${result.error.code || 'process error'})` : ` (exit ${result.status})`}.`);
+    }
+    check(verified, 'Automatic login for the selected guest account is unavailable. Check the existing password and guest FileVault/login policy; no password was reset.');
     return requiresRestart;
 }
 function waitForSelectedSession({ready = selectedUserSessionReady, now = () => performance.now(), timeoutMilliseconds = 120000,
@@ -285,7 +308,7 @@ function waitForSelectedSession({ready = selectedUserSessionReady, now = () => p
     const deadline = now() + timeoutMilliseconds;
     while (!ready()) {
         const remaining = deadline - now();
-        check(remaining > 0, 'The selected guest account did not reach an unlocked Aqua session within 120 seconds. Check guest automatic login and lock policy.');
+        check(remaining > 0, `The selected guest account did not reach an unlocked Aqua session within ${timeoutMilliseconds / 1000} seconds. Check guest automatic login and lock policy.`);
         wait(Math.min(1000, remaining));
     }
 }

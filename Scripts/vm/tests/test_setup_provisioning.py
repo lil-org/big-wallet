@@ -132,6 +132,48 @@ class ProvisioningPackageTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(second['autologin-passwordFile'], b'fixture password')
 
+    def test_interactive_setup_requires_the_current_cli_option(self):
+        for interactive in (False, True):
+            with self.subTest(interactive=interactive):
+                supplied = {'interactiveSetup': not interactive}
+                host.atomic_json(self.input_config, supplied)
+                options = ['--interactive'] if interactive else []
+                exchange, configuration = self.stage(self.args('--provision-config', self.input_config, *options),
+                                                     'setup-interactive-' + str(interactive))
+                self.assertIs(configuration['interactiveSetup'], interactive)
+                self.assertEqual(host.read_json(exchange / 'provision/config.json'), configuration)
+                self.assertEqual(host.read_json(self.input_config), supplied)
+
+    def test_pending_retry_updates_interactive_mode_without_changing_retained_inputs(self):
+        original, requested = self.explicit_package()
+        original_files = {file.name: file.read_bytes() for file in (original / 'provision').iterdir()}
+        interactive, enabled = self.stage(self.args('--interactive'), 'setup-interactive-retry')
+        self.assertEqual(enabled, {**requested, 'interactiveSetup': True})
+        interactive_files = {file.name: file.read_bytes() for file in (interactive / 'provision').iterdir()}
+        self.assertEqual({key: value for key, value in interactive_files.items() if key != 'config.json'},
+                         {key: value for key, value in original_files.items() if key != 'config.json'})
+        self.record['pendingProvisioning']['path'] = str(interactive / 'provision')
+        headless, disabled = self.stage(self.args(), 'setup-headless-retry')
+        self.assertEqual(disabled, requested)
+        self.assertEqual({file.name: file.read_bytes() for file in (headless / 'provision').iterdir()}, original_files)
+        self.assertEqual({file.name: file.read_bytes() for file in (original / 'provision').iterdir()}, original_files)
+        self.assertEqual({file.name: file.read_bytes() for file in (interactive / 'provision').iterdir()}, interactive_files)
+
+    def test_stale_pending_refresh_uses_current_interactive_mode(self):
+        original, requested = self.explicit_package()
+        (original / 'provision/guest_bootstrap.mjs').write_text('stale guest tool')
+        for interactive in (False, True):
+            with self.subTest(interactive=interactive):
+                retained = {**requested, 'interactiveSetup': not interactive}
+                host.atomic_json(original / 'provision/config.json', retained)
+                preserved = {file.name: file.read_bytes() for file in (original / 'provision').iterdir()}
+                options = ['--interactive'] if interactive else []
+                exchange, refreshed = self.stage(self.args(*options), 'setup-interactive-refresh-' + str(interactive))
+                self.assertIs(refreshed['interactiveSetup'], interactive)
+                self.assertNotEqual(refreshed['provisioningRequestID'], requested['provisioningRequestID'])
+                self.assertEqual((exchange / 'provision/autologin-passwordFile').read_bytes(), b'fixture password')
+                self.assertEqual({file.name: file.read_bytes() for file in (original / 'provision').iterdir()}, preserved)
+
     def test_explicit_proof_input_supersedes_pending_without_mutating_the_old_package(self):
         original, requested = self.explicit_package()
         bundle = self.state / 'Fixture.app/Contents/Resources'

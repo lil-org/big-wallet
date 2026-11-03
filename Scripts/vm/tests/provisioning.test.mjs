@@ -216,17 +216,20 @@ test('autologin preparation uses only the supplied existing password and request
     for (const [enabled, ready] of [[true, false], [false, false], [false, true]]) {
         const calls = [];
         let configured = enabled;
-        const ensure = pureFunction('ensureAutomaticLogin', {check, config: {consoleUser: 'tester', autologin: {passwordFile: 'password'}},
+        const ensure = pureFunction('ensureAutomaticLogin', {check, config: {consoleUser: 'tester', autologin: {passwordFile: 'password'}}, environment: {}, uidText: '501',
             automaticLoginEnabled: () => configured, selectedUserSessionReady: () => ready,
             secret() { calls.push('password'); return 'existing-password'; },
-            run(_label, command, args, options) {
-                if (command.endsWith('/id')) return 'staff admin';
-                assert.equal(options.secret, true);
+            run(_label, command) { assert.ok(command.endsWith('/id')); return 'staff admin'; },
+            spawnSync(command, args, options) {
+                assert.equal(command, ready ? '/bin/launchctl' : '/usr/sbin/sysadminctl');
+                if (ready) assert.deepEqual(Array.from(args).slice(0, 3), ['asuser', '501', '/usr/sbin/sysadminctl']);
+                assert.ok(!args.includes('/usr/bin/sudo'));
                 assert.equal(options.timeout, 60000);
+                assert.equal(options.maxBuffer, 16 * 1024);
                 assert.ok(args.includes('existing-password'));
                 calls.push('enable');
                 configured = true;
-                return '';
+                return {status: 0, stdout: '', stderr: ''};
             }});
         assert.equal(ensure(), !enabled && !ready);
         assert.deepEqual(calls, enabled ? [] : ['password', 'enable']);
@@ -243,6 +246,99 @@ test('autologin status matches the exact selected account name', () => {
             spawnSync() { return {status: 0, stdout: '', stderr: message}; }});
         assert.equal(enabled(), expected);
     }
+});
+
+test('interactive autologin preparation waits for existing guest login and still requires a cold restart', () => {
+    const events = [];
+    let ready = false, enabled = false;
+    const ensure = pureFunction('ensureAutomaticLogin', {check,
+        config: {consoleUser: 'tester', autologin: {passwordFile: 'password'}, interactiveSetup: true}, environment: {}, uidText: '501',
+        automaticLoginEnabled: () => enabled, selectedUserSessionReady: () => ready,
+        run: () => 'staff admin',
+        waitForSelectedSession(options) {
+            assert.equal(options.timeoutMilliseconds, 300000);
+            events.push('login');
+            ready = true;
+        }, secret() { events.push('password'); return 'existing-password'; },
+        spawnSync(command, args) {
+            assert.equal(command, '/bin/launchctl');
+            assert.deepEqual(Array.from(args).slice(0, 3), ['asuser', '501', '/usr/sbin/sysadminctl']);
+            assert.ok(!args.includes('/usr/bin/sudo'));
+            events.push('configure'); enabled = true;
+            return {status: 0, stdout: '', stderr: ''};
+        }});
+    assert.equal(ensure(), true);
+    assert.deepEqual(events, ['login', 'password', 'configure']);
+});
+
+test('interactive guest login timeout stops before reading credentials or setting automatic login', () => {
+    const ensure = pureFunction('ensureAutomaticLogin', {check,
+        config: {consoleUser: 'tester', autologin: {passwordFile: 'password'}, interactiveSetup: true},
+        automaticLoginEnabled: () => false, selectedUserSessionReady: () => false, run: () => 'staff admin',
+        waitForSelectedSession() { throw new Error('fixture guest login timeout'); },
+        secret() { assert.fail('Credentials must remain unread'); }, spawnSync() { assert.fail('No autologin command'); }});
+    assert.throws(ensure, /guest login timeout/);
+});
+
+test('interactive setup does not wait when the selected guest session is already unlocked', () => {
+    let enabled = false;
+    const ensure = pureFunction('ensureAutomaticLogin', {check,
+        config: {consoleUser: 'tester', autologin: {passwordFile: 'password'}, interactiveSetup: true}, environment: {}, uidText: '501',
+        automaticLoginEnabled: () => enabled, selectedUserSessionReady: () => true, run: () => 'staff admin',
+        waitForSelectedSession() { assert.fail('The guest session is already ready'); }, secret: () => 'existing-password',
+        spawnSync(command, args) {
+            assert.equal(command, '/bin/launchctl');
+            assert.deepEqual(Array.from(args).slice(0, 3), ['asuser', '501', '/usr/sbin/sysadminctl']);
+            assert.ok(!args.includes('/usr/bin/sudo'));
+            enabled = true;
+            return {status: 0, stdout: '', stderr: ''};
+        }});
+    assert.equal(ensure(), false);
+});
+
+test('failed autologin verification reports bounded redacted command output', () => {
+    for (const status of [0, 1]) {
+        let diagnostics = '';
+        const ensure = pureFunction('ensureAutomaticLogin', {check,
+            config: {consoleUser: 'tester', autologin: {passwordFile: 'password'}}, environment: {},
+            fail: message => { throw new Error(message); }, automaticLoginEnabled: () => false, selectedUserSessionReady: () => false,
+            secret: () => 'fixture-secret-password', process: {stderr: {write: value => { diagnostics += value; }}},
+            run(_label, command) { assert.equal(command, '/usr/bin/id'); return 'staff admin'; },
+            automaticLoginCommandDiagnostic: pureFunction('automaticLoginCommandDiagnostic'),
+            spawnSync(command, args, options) {
+                assert.equal(command, '/usr/sbin/sysadminctl');
+                assert.equal(args[1], 'set');
+                assert.equal(options.maxBuffer, 16 * 1024);
+                return {status, stdout: 'fixture-secret-password', stderr: 'Rejected fixture-secret-password twice fixture-secret-password'};
+            }});
+        assert.throws(ensure, status === 0 ? /Automatic login.*unavailable/ : /Enable automatic login.*failed/);
+        assert.ok(!diagnostics.includes('fixture-secret-password'));
+        const report = JSON.parse(diagnostics.slice('Automatic login command diagnostics: '.length));
+        assert.deepEqual(report, {status, error: null, signal: null, stdout: '[REDACTED]', stderr: 'Rejected [REDACTED] twice [REDACTED]'});
+    }
+});
+
+test('autologin diagnostics redact before truncation and suppress incomplete captures', () => {
+    const diagnostic = pureFunction('automaticLoginCommandDiagnostic');
+    const password = 'boundary-secret-password';
+    const report = diagnostic({status: 0, stdout: 'x'.repeat(4090) + password, stderr: password.repeat(400)}, password);
+    assert.equal(report.stdout, 'x'.repeat(4090) + '[REDAC');
+    assert.equal(report.stderr, '[REDACTED]'.repeat(400));
+    for (const failure of [{error: {code: 'ENOBUFS'}}, {error: {code: 'ETIMEDOUT'}}, {signal: 'SIGTERM'}]) {
+        const report = diagnostic({status: null, stdout: password.slice(0, 12), stderr: password.slice(12), ...failure}, password);
+        assert.equal(report.stdout, '[output omitted: capture incomplete]');
+        assert.equal(report.stderr, '[output omitted: capture incomplete]');
+    }
+});
+
+test('nonzero autologin set still fails even when subsequent verification matches', () => {
+    const enabled = [false, true];
+    const ensure = pureFunction('ensureAutomaticLogin', {check, config: {consoleUser: 'tester', autologin: {passwordFile: 'password'}},
+        environment: {}, fail: message => { throw new Error(message); }, automaticLoginEnabled: () => enabled.shift(),
+        selectedUserSessionReady: () => false, secret: () => 'fixture-secret-password', run: () => 'staff admin',
+        spawnSync: () => ({status: 1, stdout: 'fixture-secret-password', stderr: ''}),
+        process: {stderr: {write() { assert.fail('Successful verification must not emit captured output'); }}}});
+    assert.throws(ensure, /Enable automatic login.*failed/);
 });
 
 test('storage preparation emits one marker before full setup or receipt publication', () => {

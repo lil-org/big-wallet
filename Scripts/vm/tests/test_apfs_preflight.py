@@ -256,6 +256,42 @@ class APFSPreflightTests(unittest.TestCase):
                     container.put(9, omap_leaf(9, 10, mappings))
                 self.check_image(gpt_image(container), rejected='encrypted APFS')
 
+    def test_completed_volume_revert_can_remain_in_older_checkpoints(self):
+        for flags in (0, 0x10):
+            with self.subTest(flags=flags):
+                container = ContainerFixture()
+                container.edit(64, 32, '<I', flags)
+                container.edit(64, 72, '<QQ', 2, 10)
+                container.add_checkpoint(20, (1,), descriptor=4, omap=12)
+                self.check_image(gpt_image(container))
+
+    def test_historical_volume_revert_cannot_hide_encrypted_siblings(self):
+        for volumes in ((1, 0), (0, 1)):
+            with self.subTest(volumes=volumes):
+                container = ContainerFixture(volumes)
+                container.edit(64, 72, '<QQ', 2, 10)
+                container.add_checkpoint(20, (1, 1), descriptor=4, omap=12)
+                self.check_image(gpt_image(container), rejected='encrypted APFS')
+
+    def test_current_or_malformed_volume_reverts_reject(self):
+        for older, minimum, maximum in ((False, 2, 10), (True, 0, 10), (True, 2, 0),
+                                         (True, 10, 2), (True, 2, 11)):
+            with self.subTest(older=older, minimum=minimum, maximum=maximum):
+                container = ContainerFixture()
+                container.edit(64, 72, '<QQ', minimum, maximum)
+                if older:
+                    container.add_checkpoint(20, (1,), descriptor=4, omap=12)
+                self.check_image(gpt_image(container), rejected=True)
+
+    def test_historical_volume_revert_cannot_hide_unsupported_omap_flags(self):
+        for flags in (1, 2, 4, 8, 0x20):
+            with self.subTest(flags=flags):
+                container = ContainerFixture()
+                container.edit(64, 32, '<I', flags)
+                container.edit(64, 72, '<QQ', 2, 10)
+                container.add_checkpoint(20, (1,), descriptor=4, omap=12)
+                self.check_image(gpt_image(container), rejected=True)
+
     def test_invalid_old_tree_branch_cannot_hide_a_valid_encrypted_sibling_branch(self):
         container = ContainerFixture((1, 0))
         container.put(9, omap_index(9, 10, [(100, 10, 20), (101, 10, 21)]))

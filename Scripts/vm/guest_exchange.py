@@ -134,7 +134,8 @@ def safari_credential_job_digest(job, exchange):
                 payload.get('configuration') != 'Debug' or payload.get('signing') != 'local' or
                 payload.get('interactiveSafari') or 'preparedSafari' in payload or payload.get('approvalArgs')):
             raise GuestExchangeError('Safari guest credential preparation is not an explicit local Debug setup')
-        expected = ['provider.install', 'protocol.check', 'build-safari.macos.debug', 'prepare-safari.macos.debug']
+        expected = ['provider.install', 'protocol.check', 'pins.check',
+                    'build-safari.macos.debug', 'prepare-safari.macos.debug']
         if [stage.get('id') if isinstance(stage, dict) else None for stage in plan['stages']] != expected:
             raise GuestExchangeError('Safari guest credential preparation does not match the captured preparation stages')
     for stage in plan['stages']:
@@ -391,7 +392,8 @@ const processStart = pid => {
     if (!validPID(pid)) fail('Invalid guest supervisor identity');
     const result = cp.spawnSync('/usr/local/libexec/big-wallet-vm/VMGuestAgent', ['--process-identity', String(pid)],
         {encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL'});
-    if (result.status !== 0) fail('Cannot inspect guest process identity');
+    if (result.status !== 0) fail('Cannot inspect guest process identity: ' + JSON.stringify({pid,
+        status: result.status, signal: result.signal ?? null, errorCode: result.error?.code ?? null}));
     const value = JSON.parse(result.stdout);
     if (value !== null && !validStart(value)) fail('Invalid guest process start identity');
     return value;

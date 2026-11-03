@@ -230,7 +230,10 @@ class _Container:
                 if older:
                     continue
                 raise
-            _require(_u32(volume_omap, 32) & ~0x10 == 0 and not any(volume_omap[72:88]))
+            _require(_u32(volume_omap, 32) & ~0x10 == 0)
+            revert_min, revert_max = struct.unpack_from('<QQ', volume_omap, 72)
+            _require(revert_min == revert_max == 0 or
+                     older and 0 < revert_min <= revert_max <= _u64(volume_omap, 16))
             volumes += 1
         return volumes
 

@@ -105,6 +105,10 @@ cpFixture.spawnSync = (file, args, options) => {
     }
     if (file === '/usr/local/libexec/big-wallet-vm/VMGuestAgent') {
         if (args[0] !== '--process-identity') throw Error('Unexpected supervisor invocation');
+        if (fsFixture.existsSync(rootFixture + '/identity-failure.json')) {
+            const failure = JSON.parse(fsFixture.readFileSync(rootFixture + '/identity-failure.json', 'utf8'));
+            if (Number(args[1]) === failure.pid) return failure.result;
+        }
         if (fsFixture.existsSync(rootFixture + '/identity-unavailable')) return {status: 2, stdout: ''};
         return {status: 0, stdout: JSON.stringify([1, Number(args[1])])};
     }
@@ -565,21 +569,28 @@ os.execv(sys.argv[2], [sys.argv[2], '-e', shim + script, *arguments[3:]])
     def test_safari_credential_accepts_only_the_exact_explicit_preparation_plan(self):
         plan = self.safari_plan()
         self.job['payload'].update({'prepareSafari': True, 'configuration': 'Debug', 'onlyTesting': ['Safari UI Tests macOS']})
+        self.job['bootstrapTools'] = {name: 'b' * 64 for name in ('VMGuestAgent', 'guest_runner', 'guest_bootstrap.mjs')}
         job_data = json.dumps(self.job).encode()
         (self.exchange / 'job.json').write_bytes(job_data)
         plan['jobSHA256'] = hashlib.sha256(job_data).hexdigest()
-        plan['stages'] = [{'id': identifier, 'group': group, 'status': 'pending',
-                           **({'preparationResult': True} if identifier.startswith('prepare-safari.') else {})}
-                          for identifier, group in [('provider.install', 'repository'), ('protocol.check', 'repository'),
-                                                    ('build-safari.macos.debug', 'build'), ('prepare-safari.macos.debug', 'safari')]]
+        tools = Path(__file__).resolve().parents[1]
+        produced = subprocess.run([self.node, str(tools / 'plan_manifest.mjs'), str(tools / 'test_manifest.mjs')],
+                                  input=job_data, capture_output=True, check=True, timeout=30)
+        plan['stages'] = json.loads(produced.stdout)
         (self.exchange / 'artifacts/planned-result.json').write_text(json.dumps(plan))
         self.assertEqual(exchange_module.safari_credential_job_digest(self.job, self.exchange), plan['jobSHA256'])
-        for change in ('missing-marker', 'native-audit', 'extra-stage'):
+        for change in ('missing-marker', 'native-audit', 'extra-stage', 'missing-pins', 'duplicate-pins', 'reordered-pins'):
             changed = json.loads(json.dumps(plan))
             if change == 'missing-marker':
                 changed['stages'][-1].pop('preparationResult')
             elif change == 'native-audit':
                 changed['stages'][-1]['nativeAudit'] = {'kind': 'safari', 'platform': 'macos'}
+            elif change == 'missing-pins':
+                changed['stages'] = [stage for stage in changed['stages'] if stage['id'] != 'pins.check']
+            elif change == 'duplicate-pins':
+                changed['stages'].insert(2, dict(changed['stages'][2]))
+            elif change == 'reordered-pins':
+                changed['stages'][1:3] = reversed(changed['stages'][1:3])
             else:
                 changed['stages'].append({'id': 'another', 'group': 'safari', 'status': 'pending'})
             (self.exchange / 'artifacts/planned-result.json').write_text(json.dumps(changed))
@@ -1269,6 +1280,32 @@ errorFS.unlinkSync = filename => {{
         self.start()
         self.uploaded()
         self.assertEqual(json.loads((receipts / 'old.json').read_text()), previous)
+
+    def test_process_identity_failure_reports_status_and_preserves_previous_job(self):
+        receipts = self.guest / '.agent-runs'
+        receipts.mkdir(mode=0o700)
+        runner_pid = os.getpid() + 1
+        previous = self.receipt(state='running', runnerPID=runner_pid, runnerStart=[2, runner_pid])
+        previous.update(runId='old', agentStart=[2, os.getpid()])
+        (receipts / 'old.json').write_text(json.dumps(previous))
+        (self.guest / 'job.json').write_text('preserved job')
+        for probe in ({'status': 2},
+                      {'status': None, 'signal': 'SIGKILL', 'error': {'code': 'ETIMEDOUT'}},
+                      {'status': None, 'error': {'code': 'ENOENT'}}):
+            with self.subTest(probe=probe['status'], error=probe.get('error')):
+                (self.guest_root / 'identity-failure.json').write_text(json.dumps({'pid': runner_pid, 'result': probe}))
+                self.start()
+                outcome = self.drive(lambda value: value is not None)
+                self.assertEqual((outcome['status'], outcome['phase']), ('failed', 'upload'))
+                expected = {'pid': runner_pid, 'status': probe['status'], 'signal': probe.get('signal'),
+                            'errorCode': probe.get('error', {}).get('code')}
+                diagnostic = json.dumps(expected, separators=(',', ':'))
+                self.assertIn('Cannot inspect guest process identity: ' + diagnostic, outcome['error'])
+                self.assertEqual((self.guest / 'job.json').read_text(), 'preserved job')
+                self.assertEqual(json.loads((receipts / 'old.json').read_text()), previous)
+                self.assertFalse(list(self.guest.glob('.upload-*')))
+                self.assertFalse((self.guest_root / 'launchctl-calls').exists())
+                self.close_transport()
 
     def test_final_export_is_not_interrupted_by_terminal_report_grace(self):
         transport = self.start()

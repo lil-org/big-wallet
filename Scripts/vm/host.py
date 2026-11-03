@@ -776,6 +776,8 @@ def stage_provisioning(args, state, exchange, environment, record, binaries):
             with open_regular(item):
                 pass
             checked(['/bin/cp', '-c', item, destination / item.name])
+        configuration['interactiveSetup'] = bool(getattr(args, 'interactive', False))
+        atomic_json(destination / 'config.json', configuration)
         return configuration
     configuration = json.loads(json.dumps(environment))
     supplied = read_json(args.provision_config) if args.provision_config else {}
@@ -783,6 +785,7 @@ def stage_provisioning(args, state, exchange, environment, record, binaries):
         raise RunnerError('provisionNewAccount must be a boolean')
     configuration.update({'vmId': record['vmId'], 'consoleUser': selected_console_user(args, record, supplied),
                           'provisionNewAccount': bool(getattr(args, 'provision_new_account', False) or supplied.get('provisionNewAccount', False)),
+                          'interactiveSetup': bool(getattr(args, 'interactive', False)),
                           'initializeBuildData': record.get('buildDataInitializationAllowed', False)})
     validate_guest_password_options(configuration['provisionNewAccount'], supplied.get('autologin'))
     if provisioning_inputs_requested(args, record):
@@ -1770,6 +1773,9 @@ def run_setup_doctor(args, state, candidate, environment, operation, record, con
                'payload': {'stages': [], 'onlyTesting': [], 'signing': 'local'}, 'source': source, 'bootstrapTools': bootstrap_tools}
         if needs_install:
             print('Applying guest provisioning over pinned SSH with the existing guest account.', flush=True)
+            if getattr(args, 'interactive', False):
+                print('If the guest shows a login screen, sign in to the selected account in the Big Wallet Test VM — Setup window. '
+                      'Setup waits up to five minutes for an unlocked session.', flush=True)
         hook = GuestSetupHook(module, access, configuration['consoleUser'], password, directory, exchange, job,
                               install=needs_install)
         operation['monitorCalled'] = True

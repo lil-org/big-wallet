@@ -148,6 +148,15 @@ The explicit `setup --interactive` option opens one owned window titled
 Interactive setup uses a small cached `.app` wrapper so macOS can identify its
 window; it does not replace or modify the normal command-line launcher.
 
+When automatic login is disabled and the selected guest account has no unlocked
+session, interactive setup waits up to five minutes for you to sign in inside
+that window before configuring automatic login with the existing password.
+Setup still requests a restart when the session was initially unavailable.
+This wait applies only to the current `--interactive` invocation; retained
+provisioning inputs cannot enable it for a later headless run. A successful
+interactive setup must still be followed by normal headless tests to verify
+automatic login in a cold disposable clone.
+
 `setup --interactive --safari-activation` prepares Safari consent in a candidate
 cloned from a current verified baseline. It requires that baseline's pinned
 environment, guest account, and bootstrap tools; finish ordinary setup first if

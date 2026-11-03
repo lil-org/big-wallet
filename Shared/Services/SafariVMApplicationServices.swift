@@ -50,7 +50,8 @@ struct SafariVMApplicationServices {
 #else
         management.makeVault = { _, _ in environment.vault() }
         management.makeIntegrityKeyStore = {
-            fixtures.isLocal ? SafariVMApprovalKeyStore() : SafariApprovalIntegrityKeychainStore()
+            if fixtures.isLocal { return SafariVMApprovalKeyStore() }
+            return SafariApprovalIntegrityKeychainStore()
         }
         management.vaultHostDefaults = fixtures.isLocal ? environment.preferences : UserDefaultsPreferenceStorage.standard
         let runtime = AuthorityRuntime(composition: environment.composition, management: management)
