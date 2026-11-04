@@ -3,8 +3,22 @@ private extension Host {
         [
             "ownerExists": kill(options.ownerPID, 0) == 0,
             "parentMatches": getppid() == options.ownerPID,
-            "stopRequested": stopRequested(),
+            "stopRequested": stopRequestReason() != nil,
         ]
+    }
+
+    func installationResult() -> [String: Bool] {
+        if installationIsProtected {
+            beginShutdown(reason: "owner-exited")
+            precondition(applicationShouldTerminate(.shared) == .terminateCancel)
+            beginShutdown(reason: "owner-exited")
+            precondition(deferredShutdownReason == "upgrade-quit-requested")
+            precondition(stopReason == deferredShutdownReason)
+            forceStop()
+        }
+        return ["protected": installationIsProtected, "deferred": deferredShutdownReason != nil,
+                "shutdownStarted": shutdownStarted != nil, "forceStopRequested": forceStopRequested,
+                "windowRequested": upgradeWindowRequested]
     }
 }
 
@@ -20,7 +34,8 @@ private struct HostFixture {
             }
             precondition(getppid() != options.ownerPID)
         }
-        let result = Host(options: options).watchdogResult()
+        let host = Host(options: options)
+        let result = CommandLine.arguments[1] == "protection" ? host.installationResult() : host.watchdogResult()
         let data = try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
         print(String(decoding: data, as: UTF8.self))
     }

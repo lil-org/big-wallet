@@ -480,9 +480,12 @@ final class NativeAccountSelectionViewControllerTests: XCTestCase {
             try clickAccountRow(2, in: controller.tableView, window: window)
             XCTAssertEqual(controller.accountSelection.selectedAccounts, [accounts[1], accounts[2]])
 
+            // Keep synthesized single clicks outside AppKit's multi-click interval.
+            try await Task.sleep(for: .seconds(NSEvent.doubleClickInterval + 0.1))
             try clickAccountRow(2, in: controller.tableView, window: window)
             XCTAssertEqual(controller.accountSelection.selectedAccounts, [accounts[2]])
 
+            try await Task.sleep(for: .seconds(NSEvent.doubleClickInterval + 0.1))
             try clickAccountRow(1, in: controller.tableView, window: window)
             XCTAssertEqual(controller.accountSelection.selectedAccounts, [accounts[0], accounts[2]])
             XCTAssertTrue(controller.primaryButton.isEnabled)

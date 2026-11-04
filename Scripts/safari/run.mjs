@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import {spawn} from "node:child_process";
+import {performance} from "node:perf_hooks";
 import {observeProcess} from "../process_lifecycle.mjs";
 import {createHash, randomUUID} from "node:crypto";
 import {constants} from "node:fs";
@@ -85,6 +86,10 @@ export async function execute(command, args, {capture = false, captureStderr = f
         !Number.isFinite(outputDrainMilliseconds) || outputDrainMilliseconds < 0 || outputDrainMilliseconds > 1000) {
         throw new Error("Invalid Safari command execution limits");
     }
+    const operation = basename(command) === "xcrun" && args[0] === "simctl" &&
+        ["uninstall", "install", "get_app_container"].includes(args[1]) ? `xcrun simctl ${args[1]}` : undefined;
+    const label = operation ?? basename(command);
+    const startedAt = performance.now();
     const chunks = [];
     const pendingDrains = new Set();
     let tail = Buffer.alloc(0);
@@ -101,8 +106,8 @@ export async function execute(command, args, {capture = false, captureStderr = f
         onExit: () => { clearTimeout(deadline); },
     });
     const stop = error => lifecycle.stop(error);
-    const terminate = () => stop(Object.assign(new Error(`${basename(command)} was cancelled`), {cancelled: true}));
-    const outputFailed = error => stop(new Error(`${basename(command)} log output failed: ${error.message}`));
+    const terminate = () => stop(Object.assign(new Error(`${label} was cancelled`), {cancelled: true}));
+    const outputFailed = error => stop(new Error(`${label} log output failed: ${error.message}`));
     const destinations = new Set([["stdout", capture], ["stderr", captureStderr]].filter(([, retained]) => !retained).map(([name]) => outputStreams[name]));
     for (const destination of destinations) { destination.on("error", outputFailed); }
     const collect = value => {
@@ -110,7 +115,7 @@ export async function execute(command, args, {capture = false, captureStderr = f
         const retained = Math.min(bytes.length, maximumBytes - length);
         if (retained > 0) { chunks.push(Buffer.from(bytes.subarray(0, retained))); length += retained; }
         if (retained < bytes.length) {
-            stop(Object.assign(new Error(`${basename(command)} output exceeded ${maximumBytes} bytes`), {truncated: true}));
+            stop(Object.assign(new Error(`${label} output exceeded ${maximumBytes} bytes`), {truncated: true}));
         }
     };
     for (const [name, retained] of [["stdout", capture], ["stderr", captureStderr]]) {
@@ -135,19 +140,31 @@ export async function execute(command, args, {capture = false, captureStderr = f
     }
     process.once("SIGTERM", terminate);
     process.once("SIGINT", terminate);
-    deadline = setTimeout(() => stop(Object.assign(new Error(`${basename(command)} timed out after ${timeoutSeconds}s`), {timedOut: true})), timeoutSeconds * 1000);
+    deadline = setTimeout(() => stop(Object.assign(new Error(`${label} timed out after ${timeoutSeconds}s`), {timedOut: true})), timeoutSeconds * 1000);
     try {
         const outcome = await lifecycle.exit;
         await lifecycle.waitForEscalation();
         await lifecycle.drainOutput(outputDrainMilliseconds);
         const output = Buffer.concat(chunks, length).toString("utf8");
-        if (!failure && outcome.code !== 0) { failure = new Error(`${basename(command)} failed with ${outcome.signal ? `signal ${outcome.signal}` : `exit code ${outcome.code}`}`); }
+        if (!failure && outcome.code !== 0) { failure = new Error(`${label} failed with ${outcome.signal ? `signal ${outcome.signal}` : `exit code ${outcome.code}`}`); }
         if (failure) {
+            const commandDiagnostics = operation && {
+                operation,
+                elapsedMilliseconds: Math.max(0, Math.round(performance.now() - startedAt)),
+                status: failure.timedOut ? "timed-out" : failure.cancelled ? "cancelled" : failure.truncated ? "output-limit" : "failed",
+                exitCode: Number.isInteger(outcome.code) ? outcome.code : null,
+                signal: typeof outcome.signal === "string" && /^SIG[A-Z0-9]{1,16}$/.test(outcome.signal) ? outcome.signal : null,
+            };
+            if (commandDiagnostics) {
+                if (!failure.message.startsWith(operation)) { failure.message = `${operation}: ${failure.message}`; }
+                failure.message += ` [elapsed=${commandDiagnostics.elapsedMilliseconds}ms; status=${commandDiagnostics.status}; exitCode=${commandDiagnostics.exitCode}; signal=${commandDiagnostics.signal}]`;
+            }
             const details = redactSafariDiagnostics(tail.toString("utf8"), [env.ALCHEMY_JWT_REQUEST_PROOF_KEY])
                 .split(/\r?\n/).filter(line => /error:|failed|timed out|automation|encountered an error|denied|not authorized/i.test(line))
                 .slice(-12).map(line => line.slice(0, 1500)).join("\n");
             if (details) { failure.message += `\n${details}`; }
-            throw Object.assign(failure, {output, exitCode: outcome.code, signal: outcome.signal, ...(details ? {details} : {})});
+            throw Object.assign(failure, {output, exitCode: outcome.code, signal: outcome.signal,
+                ...(commandDiagnostics ? {commandDiagnostics} : {}), ...(details ? {details} : {})});
         }
         return output;
     } finally {

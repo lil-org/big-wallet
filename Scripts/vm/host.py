@@ -63,6 +63,13 @@ def xcode_upgrade_module():
     return module
 
 
+def macos_upgrade_module():
+    spec = importlib.util.spec_from_file_location('vm_macos_upgrade', TOOLS / 'macos_upgrade.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def recovery_module():
     spec = importlib.util.spec_from_file_location('vm_artifact_recovery', TOOLS / 'recovery.py')
     module = importlib.util.module_from_spec(spec)
@@ -108,12 +115,13 @@ def atomic_json(path, value):
     os.replace(temporary, path)
 
 
-def atomic_plist(path, value):
+@contextlib.contextmanager
+def atomic_output(path):
     path = Path(path)
     temporary = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
     try:
         with open(temporary, 'xb') as file:
-            plistlib.dump(value, file)
+            yield file
             file.flush()
             os.fsync(file.fileno())
         os.replace(temporary, path)
@@ -126,13 +134,24 @@ def atomic_plist(path, value):
         temporary.unlink(missing_ok=True)
 
 
+def atomic_plist(path, value):
+    with atomic_output(path) as file:
+        plistlib.dump(value, file)
+
+
+def check_owned_directory(path):
+    info = path.lstat()
+    if stat.S_ISLNK(info.st_mode):
+        raise RunnerError(f'Refusing a symlink for runner state: {path}')
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+        raise RunnerError(f'Runner state must be a directory owned by the current user: {path}')
+
+
 def private_directory(path):
     path = Path(path)
-    if path.is_symlink():
-        raise RunnerError(f'Refusing a symlink for runner state: {path}')
-    path.mkdir(parents=True, exist_ok=True, mode=0o700)
-    if path.stat().st_uid != os.getuid():
-        raise RunnerError(f'Runner state must be owned by the current user: {path}')
+    if not os.path.lexists(path):
+        path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    check_owned_directory(path)
     path.chmod(0o700)
     return path
 
@@ -257,12 +276,24 @@ def ensure_disk_idle(vm):
         raise RunnerError('Could not establish exclusive access to the VM disk')
 
 
-def clone_vm(source, destination):
+def clone_cow(source, destination):
+    clonefile = ctypes.CDLL('/usr/lib/libSystem.B.dylib', use_errno=True).clonefile
+    clonefile.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int]
+    clonefile.restype = ctypes.c_int
+    clone_acl, clone_nofollow_any = 0x0004, 0x0008
+    if clonefile(os.fsencode(source), os.fsencode(destination), clone_acl | clone_nofollow_any) != 0:
+        raise RunnerError(f'{source.name} requires a copy-on-write clone: {os.strerror(ctypes.get_errno())}')
+
+
+def clone_vm(source, destination, *, clone_only=False):
     validate_vm(source)
     ensure_disk_idle(source)
     if destination.exists():
         raise RunnerError(f'Clone destination already exists: {destination}')
-    checked(['/bin/cp', '-cR', source, destination])
+    if clone_only:
+        clone_cow(source, destination)
+    else:
+        checked(['/bin/cp', '-cR', source, destination])
     validate_vm(destination)
 
 
@@ -665,7 +696,7 @@ def host_doctor(args, state, environment):
         if not matches_source_vm(record, args.vm):
             raise RunnerError('Prepared baseline belongs to another source VM')
         return {'verifiedAt': record.get('verifiedAt'), 'vmId': record['vmId'],
-                'verificationSigningMode': record.get('verificationSigningMode')}
+                'verificationSigningMode': record.get('verificationSigningMode'), 'macos': macos_identity(record.get('macos'))}
     check('baseline', baseline)
     return {'version': 1, 'status': 'passed' if all(c['status'] == 'passed' for c in checks) else 'blocked',
             'scope': 'host prerequisites; guest readiness is verified during setup and each run',
@@ -1088,7 +1119,7 @@ def finalize_owned_interruption(state, exchange, run_id, reason, guest_failure=N
 
 
 def monitor_vm(args, state, vm, exchange, run_id, binaries, environment, timeout, provision_password=None,
-               *, keep_operation=False, previous_stops=(), setup_hook=None):
+               *, keep_operation=False, previous_stops=(), setup_hook=None, expected_macos=None):
     result = monitor_owned_vm(args, state, vm, exchange, run_id, binaries, environment, timeout,
                               provision_password, previous_stops=previous_stops, setup_hook=setup_hook)
     path = state / 'active.json'
@@ -1099,6 +1130,10 @@ def monitor_vm(args, state, vm, exchange, run_id, binaries, environment, timeout
     result_path = exchange / 'artifacts/result.json'
     if read_json(result_path) != result:
         raise RunnerError('The completed report changed before the host could accept it')
+    if (expected_macos is not None and result.get('status') == 'passed' and
+            not macos_attested(result.get('preflight', {}), expected_macos)):
+        result = finalize_owned_interruption(state, exchange, run_id, 'guest_macos_does_not_match_verified_baseline')
+        active = read_json(path)
     active['acceptedResultSHA256'] = hash_regular_file(result_path)
     if active.get('phase') == 'preparing' or setup_hook is not None and setup_hook.exchange_complete is True:
         active['artifactsExported'] = True
@@ -1406,7 +1441,29 @@ def reconcile_interrupted_operation(state):
     path.unlink()
 
 
-def environment_attested(preflight, environment):
+def macos_identity(value):
+    if (not isinstance(value, dict) or set(value) != {'version', 'buildVersion'} or
+            not isinstance(value['version'], str) or re.fullmatch(r'[0-9]+(?:\.[0-9]+){1,2}', value['version']) is None or
+            not isinstance(value['buildVersion'], str) or re.fullmatch(r'[0-9]+[A-Z][0-9]+[a-z]?', value['buildVersion']) is None):
+        raise RunnerError('Verified macOS version/build is missing or invalid; run setup to verify the guest')
+    return dict(value)
+
+
+def macos_attested(preflight, expected=None):
+    evidence = preflight.get('macos', {})
+    try:
+        actual = macos_identity(evidence.get('actual'))
+        if expected is not None:
+            expected = macos_identity(expected)
+    except (RunnerError, AttributeError):
+        return False
+    return (evidence.get('available') is True and evidence.get('expected') == expected and
+            (expected is None or actual == expected))
+
+
+def environment_attested(preflight, environment, expected_macos=None):
+    if expected_macos is not None and not macos_attested(preflight, expected_macos):
+        return False
     versions = preflight.get('versions', {})
     if (versions.get('node', '').strip() != 'v' + environment['node']['version'] or
             versions.get('npm', '').strip() != environment['node']['npmVersion'] or
@@ -1437,16 +1494,20 @@ def preserve_previous_baseline_record(state, record, promoted, backup):
         if promoted == state / 'candidate.vbvm' and (baseline.exists() or baseline.is_symlink()):
             validate_vm(baseline)
             ensure_disk_idle(baseline)
-            previous = read_json(state / 'baseline.json')
+            with open_regular(state / 'baseline.json') as file:
+                original = file.read()
+            previous = json.loads(original)
+            original_hash = hashlib.sha256(original).hexdigest()
             if not isinstance(previous, dict) or previous.get('promotionPending'):
                 raise RunnerError('The previous baseline record is invalid; preserving both baselines')
             if backup_record.exists() or backup_record.is_symlink():
-                if read_json(backup_record) != previous:
+                if hash_regular_file(backup_record) != original_hash:
                     raise RunnerError('The previous baseline metadata backup already contains another record')
             else:
-                atomic_json(backup_record, previous)
+                with atomic_output(backup_record) as file:
+                    file.write(original)
             metadata = baseline.lstat()
-            pending.update({'backupRecordSHA256': hash_regular_file(backup_record),
+            pending.update({'backupRecordSHA256': original_hash,
                             'backupFileID': [metadata.st_dev, metadata.st_ino]})
             atomic_json(state / 'candidate.json', record)
         elif backup_record.exists() or backup_record.is_symlink():
@@ -1461,13 +1522,26 @@ def preserve_previous_baseline_record(state, record, promoted, backup):
             hash_regular_file(backup_record) != expected_hash):
         raise RunnerError('The previous baseline metadata backup changed; preserving all VM bundles')
     previous_vm = backup if backup.exists() or backup.is_symlink() else baseline
+    if previous_vm == baseline and hash_regular_file(state / 'baseline.json') != expected_hash:
+        raise RunnerError('The previous baseline metadata changed before promotion')
     validate_vm(previous_vm)
     metadata = previous_vm.lstat()
     if [metadata.st_dev, metadata.st_ino] != expected_identity:
         raise RunnerError('The previous baseline backup no longer matches its metadata; preserving all VM bundles')
 
 
-def finish_baseline_promotion(state, record):
+def completed_baseline_record(record):
+    pending = record['promotionPending']
+    completed = dict(record)
+    completed.pop('promotionPending')
+    if completed.get('macosUpgradeID'):
+        completed['macosUpgradePromotion'] = {'sourceFileID': pending.get('backupFileID'),
+            'candidateFileID': pending['candidateFileID'], 'sourceRecordSHA256': pending.get('backupRecordSHA256')}
+    completed.pop('pendingProvisioning', None)
+    return completed
+
+
+def finish_baseline_promotion(state, record, *, before_swap=None):
     pending = record['promotionPending']
     backup_name = pending.get('backup')
     if not isinstance(backup_name, str) or re.fullmatch(r'previous-baseline-[0-9a-f]{32}\.vbvm', backup_name) is None:
@@ -1488,16 +1562,16 @@ def finish_baseline_promotion(state, record):
                 raise RunnerError('Pending promotion backup already exists; preserving both baselines')
             validate_vm(baseline)
             ensure_disk_idle(baseline)
+            if before_swap is not None:
+                before_swap()
             baseline.rename(backup)
         candidate.rename(baseline)
     configuration = validate_vm(baseline)
-    configuration['sharedFolders'] = []
-    atomic_plist(baseline / '.vbdata/Config.plist', configuration)
-    completed = dict(record)
-    completed.pop('promotionPending')
-    request_id = completed.pop('pendingProvisioning', {}).get('id')
-    atomic_json(state / 'baseline.json', completed)
-    clear_applied_provisioning_packages(state, record['vmId'], request_id)
+    if configuration.get('sharedFolders') != []:
+        configuration['sharedFolders'] = []
+        atomic_plist(baseline / '.vbdata/Config.plist', configuration)
+    atomic_json(state / 'baseline.json', completed_baseline_record(record))
+    clear_applied_provisioning_packages(state, record['vmId'], record.get('pendingProvisioning', {}).get('id'))
     (state / 'candidate.json').unlink()
 
 
@@ -1729,7 +1803,7 @@ def next_setup_exchange(state, candidate, operation, record):
     handoff_setup_operation(state, candidate, operation, run_id, exchange)
     for name in ('provision', 'source', 'snapshot-manifest.json'):
         checked(['/bin/cp', '-cR', previous / name, exchange / name])
-    configure_guest_hardware(candidate, record['vmId'])
+    configure_guest_hardware(candidate, record.get('macosUpgradeID') or record['vmId'])
     check_setup_stop(operation)
     return run_id, exchange
 
@@ -1737,7 +1811,7 @@ def next_setup_exchange(state, candidate, operation, record):
 def run_setup_doctor(args, state, candidate, environment, operation, record, configuration,
                      binaries, bootstrap_tools, source, initial_password, source_digest):
     run_id, exchange = operation['runId'], operation['exchange']
-    needs_install = (configuration.get('provisioningRequestID') is not None or
+    needs_install = (operation.get('forceVerification', False) or configuration.get('provisioningRequestID') is not None or
                      record.get('bootstrapTools') != bootstrap_tools or
                      record.get('bootstrapSourceDigest') != source_digest or
                      not record.get('baseVerifiedAt'))
@@ -1771,6 +1845,8 @@ def run_setup_doctor(args, state, candidate, environment, operation, record, con
     for attempt in range(2):
         job = {'version': 1, 'runId': run_id, 'vmId': record['vmId'], 'kind': 'doctor', 'profile': 'all',
                'payload': {'stages': [], 'onlyTesting': [], 'signing': 'local'}, 'source': source, 'bootstrapTools': bootstrap_tools}
+        if record.get('macos') is not None:
+            job['payload']['expectedMacOS'] = macos_identity(record['macos'])
         if needs_install:
             print('Applying guest provisioning over pinned SSH with the existing guest account.', flush=True)
             if getattr(args, 'interactive', False):
@@ -1793,12 +1869,13 @@ def run_setup_doctor(args, state, candidate, environment, operation, record, con
         run_id, exchange = next_setup_exchange(state, candidate, operation, record)
 
 
-def setup(args, state, environment, *, result_callback=None):
+def setup(args, state, environment, *, result_callback=None, force_verification=False):
     if getattr(args, 'safari_activation', False) and not args.interactive:
         raise RunnerError('Safari activation setup requires --interactive for the genuine user activation step')
     validate_vm(args.vm)
     run_id, exchange = new_exchange(state, 'setup')
-    operation = {'runId': run_id, 'exchange': exchange, 'previousStops': [], 'monitorCalled': False}
+    operation = {'runId': run_id, 'exchange': exchange, 'previousStops': [], 'monitorCalled': False,
+                 'forceVerification': force_verification}
     candidate = state / 'candidate.vbvm'
     register_operation(state, candidate, exchange, run_id, 'preparing')
     completed = False
@@ -1806,7 +1883,9 @@ def setup(args, state, environment, *, result_callback=None):
     result = None
     try:
         with clone_cancellation_signals():
-            result = prepare_setup(args, state, environment, operation)
+            if getattr(args, 'cancellation_requested', lambda: False)():
+                raise KeyboardInterrupt
+            result = prepare_setup(args, state, environment, operation, force_verification=force_verification)
         completed = True
         return result
     except KeyboardInterrupt:
@@ -1969,6 +2048,7 @@ def prepare_safari_activation(args, state, environment, operation):
     if not baseline_path.exists():
         raise RunnerError('Safari activation requires a verified baseline; run ordinary setup first')
     existing = read_json(baseline_path)
+    macos_identity(existing.get('macos'))
     source_digest = bootstrap_source_digest()
     if (not matches_source_vm(existing, args.vm) or existing.get('environment') != environment or
             existing.get('bootstrapSourceDigest') != source_digest or existing.get('verificationSigningMode') != 'local' or
@@ -2047,6 +2127,7 @@ def prepare_safari_activation(args, state, environment, operation):
         verify_setup_sources(exchange, source_digest, environment)
         job = {'version': 1, 'runId': run_id, 'vmId': record['vmId'], 'kind': 'run', 'profile': 'all',
                'payload': payload, 'source': source, 'bootstrapTools': bootstrap_tools}
+        job['payload']['expectedMacOS'] = macos_identity(record.get('macos'))
         atomic_json(exchange / 'job.json', job)
         plan = stage_planned_result(exchange, job)
         check_setup_stop(operation)
@@ -2076,7 +2157,7 @@ def prepare_safari_activation(args, state, environment, operation):
         if (result.get('runId') != run_id or result.get('vmId') != record['vmId'] or not source_matches or
                 setup_provisioning_issue(result, record['vmId'], args.guest_user) or
                 preflight.get('bootstrap', {}).get('available') is not True or
-                preflight.get('bootstrap', {}).get('hashes') != bootstrap_tools or not environment_attested(preflight, environment) or
+                preflight.get('bootstrap', {}).get('hashes') != bootstrap_tools or not environment_attested(preflight, environment, record['macos']) or
                 not isinstance(actual_stages, list) or
                 any(not isinstance(stage, dict) for stage in actual_stages) or
                 [stage.get('id') for stage in actual_stages] != [stage['id'] for stage in plan['stages']] or
@@ -2145,7 +2226,7 @@ def inherited_safari_preparation(state, record, console_user):
     return {'safariPreparation': reference, 'safariPreparationResult': str(archived)}
 
 
-def prepare_setup(args, state, environment, operation):
+def prepare_setup(args, state, environment, operation, *, force_verification=False):
     if getattr(args, 'safari_activation', False):
         return prepare_safari_activation(args, state, environment, operation)
     run_id, exchange = operation['runId'], operation['exchange']
@@ -2165,13 +2246,14 @@ def prepare_setup(args, state, environment, operation):
     require_current_bootstrap_sources(source_digest)
     check_setup_stop(operation)
     candidate = state / 'candidate.vbvm'
-    if ((state / 'baseline.json').exists() and not record_path.exists() and not candidate.exists() and not args.provision_config and
+    if (not force_verification and (state / 'baseline.json').exists() and not record_path.exists() and not candidate.exists() and not args.provision_config and
             not args.proof_key_bundle and not args.provision_new_account and not args.interactive):
         existing = read_json(state / 'baseline.json')
         if (matches_source_vm(existing, args.vm) and existing.get('environment') == environment and
                 existing.get('bootstrapTools') == bootstrap_tools and existing.get('bootstrapSourceDigest') == source_digest and
                 existing.get('consoleUser') == selected_console_user(args, existing) and
-                existing.get('verificationSigningMode') == 'local'):
+                existing.get('verificationSigningMode') == 'local' and existing.get('macos') is not None):
+            macos_identity(existing['macos'])
             validate_vm(state / 'baseline.vbvm')
             inherited_safari_preparation(state, existing, selected_console_user(args, existing))
             print('The prepared baseline already passed local verification with the pinned environment and guest bootstrap.')
@@ -2223,6 +2305,13 @@ def prepare_setup(args, state, environment, operation):
             record['consoleUser'] = existing_record['consoleUser']
         if existing_record.get('guestAccessID'):
             record['guestAccessID'] = existing_record['guestAccessID']
+        if existing_record.get('macos') is not None:
+            record['macos'] = macos_identity(existing_record['macos'])
+        upgrade_id = existing_record.get('macosUpgradeID')
+        if upgrade_id is not None:
+            if not isinstance(upgrade_id, str) or re.fullmatch(r'macos-upgrade-\d{8}T\d{6}Z-[0-9a-f]{8}', upgrade_id) is None:
+                raise RunnerError('The baseline macOS upgrade identity is invalid; preserve it before continuing')
+            record['macosUpgradeID'] = upgrade_id
         record.update(inherited_preparation)
         atomic_json(record_path, record)
     if record.get('constructionPending'):
@@ -2254,7 +2343,7 @@ def prepare_setup(args, state, environment, operation):
     args.guest_user = configuration['consoleUser']
     console_user = configuration['consoleUser']
     ensure_disk_idle(candidate)
-    configure_guest_hardware(candidate, record['vmId'])
+    configure_guest_hardware(candidate, record.get('macosUpgradeID') or record['vmId'])
     source = snapshot_source(ROOT, exchange)
     verify_setup_sources(exchange, source_digest, environment, configuration, bootstrap_tools)
     check_setup_stop(operation)
@@ -2277,7 +2366,9 @@ def prepare_setup(args, state, environment, operation):
     if result['status'] == 'passed':
         check_setup_stop(operation)
     reported_tools = result.get('preflight', {}).get('bootstrap', {})
-    pinned_environment_matches = environment_attested(result.get('preflight', {}), environment)
+    preflight = result.get('preflight', {})
+    pinned_environment_matches = (environment_attested(preflight, environment, record.get('macos')) and
+                                  macos_attested(preflight, record.get('macos')))
     provisioning_issue = setup_provisioning_issue(result, record['vmId'], console_user, request_id)
     if provisioning_issue and (result.get('identity') or result['status'] == 'passed'):
         result.update({'status': 'blocked', 'reason': provisioning_issue})
@@ -2291,6 +2382,7 @@ def prepare_setup(args, state, environment, operation):
         if all(base_checks.get(name) is True for name in required_base):
             record.update({'baseVerifiedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                            'consoleUser': console_user,
+                           'macos': macos_identity(preflight['macos']['actual']),
                            'bootstrapTools': bootstrap_tools, 'bootstrapSourceDigest': source_digest})
             atomic_json(record_path, record)
     if result['status'] == 'passed' and not pinned_environment_matches:
@@ -2308,6 +2400,7 @@ def prepare_setup(args, state, environment, operation):
                     'payload': {'stages': ['test'], 'configuration': 'Debug', 'signing': 'local', 'runtimePlatforms': ['macos'],
                                 'onlyTesting': ['WindowAuthenticationSessionTests', 'PasswordStorageTests', 'SecretHandlingTests']},
                     'source': source, 'bootstrapTools': bootstrap_tools}
+        verification_job['payload']['expectedMacOS'] = macos_identity(record.get('macos'))
         atomic_json(verification_exchange / 'job.json', verification_job)
         stage_planned_result(verification_exchange, verification_job)
         check_setup_stop(operation)
@@ -2325,7 +2418,7 @@ def prepare_setup(args, state, environment, operation):
             atomic_json(exchange / 'artifacts/result.json', result)
             record.pop('baseVerifiedAt', None)
             atomic_json(record_path, record)
-        if result['status'] == 'passed' and not environment_attested(result.get('preflight', {}), environment):
+        if result['status'] == 'passed' and not environment_attested(result.get('preflight', {}), environment, record['macos']):
             result.update({'status': 'blocked', 'reason': 'guest_environment_changed_during_validation'})
             atomic_json(exchange / 'artifacts/result.json', result)
         if result['status'] == 'passed':
@@ -2363,6 +2456,7 @@ def run_tests(args, state, environment, *, result_callback=None):
         raise RunnerError('Prepared VM belongs to another source VM; use the matching --vm and --state-dir')
     if args.candidate and not record.get('baseVerifiedAt'):
         raise RunnerError('Candidate base setup has not been verified. Run setup first; no host tests were started.')
+    expected_macos = macos_identity(record.get('macos'))
     if record.get('environment') != environment:
         raise RunnerError('Pinned environment changed. Re-run setup to validate a new baseline.')
     if record.get('bootstrapSourceDigest') != bootstrap_source_digest():
@@ -2378,6 +2472,8 @@ def run_tests(args, state, environment, *, result_callback=None):
     try:
         try:
             with clone_cancellation_signals():
+                if getattr(args, 'cancellation_requested', lambda: False)():
+                    raise KeyboardInterrupt
                 binaries = build_tools(state, args.xcode)
                 bootstrap_tools = bootstrap_tool_hashes(binaries)
                 if record.get('bootstrapTools') != bootstrap_tools:
@@ -2389,6 +2485,7 @@ def run_tests(args, state, environment, *, result_callback=None):
                        'profile': args.profile, 'payload': {'stages': args.stage, 'onlyTesting': args.only_testing,
                                                           'signing': args.signing}, 'source': source,
                        'bootstrapTools': bootstrap_tools}
+                job['payload']['expectedMacOS'] = expected_macos
                 if args.configuration:
                     job['payload']['configuration'] = args.configuration
                 if getattr(args, 'runtime_platform', None):
@@ -2429,7 +2526,7 @@ def run_tests(args, state, environment, *, result_callback=None):
         else:
             result = monitor_vm(args, state, clone, exchange, run_id, binaries, environment,
                                 args.timeout or (48 * 3600 if args.profile == 'extended' else 24 * 3600),
-                                keep_operation=True, setup_hook=hook)
+                                keep_operation=True, setup_hook=hook, expected_macos=expected_macos)
     finally:
         try:
             result_path = exchange / 'artifacts/result.json'
@@ -2462,7 +2559,8 @@ def parser():
     parser.add_argument('--xcode', type=Path, default=Path('/Applications/Xcode.app'))
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('doctor')
-    commands.add_parser('status')
+    status_parser = commands.add_parser('status')
+    status_parser.add_argument('--diagnose', action='store_true', help='Collect read-only installer evidence from the active macOS upgrade guest')
     commands.add_parser('stop')
     recovery_parser = commands.add_parser('recover-artifacts', allow_abbrev=False,
                                          help='Collect existing diagnostics from a stopped retained VM without rerunning its job')
@@ -2472,6 +2570,16 @@ def parser():
                                         help='Adopt installed Xcode, prepare the VM, and verify the full local suite')
     upgrade_parser.add_argument('--check', action='store_true', help='Preview pins and prerequisites without writing files or starting a VM')
     upgrade_parser.add_argument('--timeout', type=int, help='Per-setup/run timeout in seconds')
+    macos_parser = commands.add_parser('upgrade-macos', allow_abbrev=False,
+                                      help='Upgrade an isolated VM and promote it after full local verification')
+    macos_parser.add_argument('--version', help='Exact target macOS version')
+    macos_parser.add_argument('--build', help='Exact target macOS build')
+    macos_parser.add_argument('--check', action='store_true', help='Preview prerequisites without writing files or starting a VM')
+    macos_parser.add_argument('--resume', metavar='ID', help='Resume the recorded macOS upgrade')
+    macos_parser.add_argument('--system-disk-gib', type=int, help='Grow only the isolated system disk to this size before installation')
+    macos_parser.add_argument('--abandon', action='store_true', help='Preserve and gracefully stop a proven storage-rejected upgrade; requires --resume')
+    macos_parser.add_argument('--interactive', action='store_true', help='Allow the owned upgrade VM window for required guest consent')
+    macos_parser.add_argument('--timeout', type=int, help='Per-upgrade/setup/run timeout in seconds')
     setup_parser = commands.add_parser('setup')
     setup_parser.add_argument('--guest-user')
     setup_parser.add_argument('--provision-config', type=Path)
@@ -2512,16 +2620,27 @@ def main(argv=None):
         args.xcode = args.xcode.expanduser().resolve()
         if getattr(args, 'timeout', None) is not None and args.timeout <= 0:
             raise RunnerError('Timeout must be positive')
-        if args.command == 'upgrade-xcode' and args.check:
-            state = args.state_dir.expanduser().absolute().resolve()
-            return xcode_upgrade_module().upgrade(SimpleNamespace(**globals()), args, state)
-        state = private_directory(args.state_dir.expanduser().absolute()).resolve()
+        path = args.state_dir.expanduser().absolute()
+        if args.command in ('upgrade-xcode', 'upgrade-macos') and args.check:
+            if os.path.lexists(path):
+                check_owned_directory(path)
+            upgrade = macos_upgrade_module() if args.command == 'upgrade-macos' else xcode_upgrade_module()
+            return upgrade.upgrade(SimpleNamespace(**globals()), args, path.resolve())
+        state = private_directory(path).resolve()
+        if args.command == 'upgrade-macos':
+            return macos_upgrade_module().upgrade(SimpleNamespace(**globals()), args, state)
         environment = read_json(TOOLS / 'environment.json')
         if args.command == 'doctor':
             report = host_doctor(args, state, environment)
             print(json.dumps(report, indent=2))
             return 0 if report['status'] == 'passed' else 2
         if args.command in ('status', 'stop'):
+            if (state / 'macos-upgrade-active.json').exists():
+                controlled = macos_upgrade_module().control(SimpleNamespace(**globals()), args, state)
+                if controlled is not None:
+                    return controlled
+            if getattr(args, 'diagnose', False):
+                raise RunnerError('Installer diagnostics require an existing macOS upgrade transaction')
             if not (state / 'active.json').exists():
                 print('No VM operation is active.')
                 return 0
@@ -2539,6 +2658,8 @@ def main(argv=None):
                 print(json.dumps(active, indent=2))
             return 0
         with execution_lock(state):
+            if (state / 'macos-upgrade-active.json').exists():
+                macos_upgrade_module().ensure_no_supervisor(SimpleNamespace(**globals()), state)
             if args.command == 'recover-artifacts':
                 active = read_json(state / 'active.json') if (state / 'active.json').exists() else {}
                 if is_recovery_operation(state, active):

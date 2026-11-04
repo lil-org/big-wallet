@@ -17,24 +17,33 @@ private struct Options {
     let provisionPasswordFile: URL?
     let setupWindow: Bool
     let safariWindow: Bool
+    let upgradeWindow: Bool
+    let upgradeControl: URL?
 
     init(arguments: [String]) throws {
-        let allowed: Set<String> = ["--vm", "--status", "--stop-file", "--owner-pid", "--provision-user", "--provision-password-file"]
+        let allowed: Set<String> = ["--vm", "--status", "--stop-file", "--owner-pid", "--provision-user", "--provision-password-file", "--upgrade-control"]
         var values: [String: String] = [:]
         var setupWindow = false
         var safariWindow = false
+        var upgradeWindow = false
         var index = 0
         while index < arguments.count {
             let key = arguments[index]
             if key == "--setup-window" {
-                guard !setupWindow && !safariWindow else { throw RunnerFailure("Duplicate interactive window option") }
+                guard !setupWindow && !safariWindow && !upgradeWindow else { throw RunnerFailure("Duplicate interactive window option") }
                 setupWindow = true
                 index += 1
                 continue
             }
             if key == "--safari-window" {
-                guard !setupWindow && !safariWindow else { throw RunnerFailure("Duplicate interactive window option") }
+                guard !setupWindow && !safariWindow && !upgradeWindow else { throw RunnerFailure("Duplicate interactive window option") }
                 safariWindow = true
+                index += 1
+                continue
+            }
+            if key == "--upgrade-window" {
+                guard !setupWindow && !safariWindow && !upgradeWindow else { throw RunnerFailure("Duplicate interactive window option") }
+                upgradeWindow = true
                 index += 1
                 continue
             }
@@ -64,6 +73,9 @@ private struct Options {
         provisionPasswordFile = try values["--provision-password-file"].map { _ in try path("--provision-password-file") }
         self.setupWindow = setupWindow
         self.safariWindow = safariWindow
+        self.upgradeWindow = upgradeWindow
+        upgradeControl = try values["--upgrade-control"].map { _ in try path("--upgrade-control") }
+        guard !upgradeWindow || upgradeControl != nil else { throw RunnerFailure("Upgrade viewer requires an installation control file") }
         guard (provisionUser == nil) == (provisionPasswordFile == nil) else {
             throw RunnerFailure("Provisioning requires both a username and a password file")
         }
@@ -108,7 +120,7 @@ private func within(_ child: URL, _ parent: URL) -> Bool {
 private func timestamp() -> String { ISO8601DateFormatter().string(from: Date()) }
 
 @MainActor
-private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
+private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate, NSApplicationDelegate {
     private let options: Options
     private var machine: VZVirtualMachine?
     private var setupWindow: NSWindow?
@@ -117,10 +129,12 @@ private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
     private var timer: DispatchSourceTimer?
     private var signals: [DispatchSourceSignal] = []
     private var state = "starting"
+    private var guestStarted = false
     private var shutdownStarted: Date?
     private var stopReason: String?
     private var failure: String?
     private var forceStopRequested = false
+    private var deferredShutdownReason: String?
     private let startedAt = timestamp()
     private let sessionID = UUID().uuidString
 
@@ -130,7 +144,11 @@ private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
         try validatePaths()
         try acquireLock()
         try writeStatus()
-        if stopRequested() { finish(code: 0); return }
+        if let reason = stopRequestReason() {
+            stopReason = reason
+            finish(code: 0)
+            return
+        }
         let configuration = try makeConfiguration()
         try configuration.validate()
         let machine = VZVirtualMachine(configuration: configuration, queue: .main)
@@ -144,6 +162,7 @@ private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
                 if let error {
                     self.fail("VM start failed (\((error as NSError).domain):\((error as NSError).code))")
                 } else {
+                    self.guestStarted = true
                     if self.shutdownStarted != nil {
                         self.requestShutdown()
                     } else {
@@ -165,6 +184,13 @@ private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
               !within(options.status, options.vm), !within(options.stopFile, options.vm) else {
             throw RunnerFailure("Control paths must be distinct and outside the VM bundle")
         }
+        if let control = options.upgradeControl {
+            try checkedPath(control, directory: false)
+            guard control != options.status, control != options.stopFile, !within(control, options.vm) else {
+                throw RunnerFailure("Installation control must be distinct and outside the VM bundle")
+            }
+            _ = try installationProtection()
+        }
         for filename in ["Disk.img", "AuxiliaryStorage", "HardwareModel", "MachineIdentifier", ".vbdata/Config.plist"] {
             try checkedPath(options.vm.appendingPathComponent(filename), directory: false)
         }
@@ -172,7 +198,10 @@ private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
     }
 
     private func showSetupWindowIfRequested() {
-        guard options.setupWindow || options.safariWindow, setupWindow == nil, let machine else { return }
+        guard options.setupWindow || options.safariWindow || upgradeWindowRequested, setupWindow == nil, let machine else { return }
+        if NSApplication.shared.activationPolicy() != .regular {
+            _ = NSApplication.shared.setActivationPolicy(.regular)
+        }
         let frame = NSRect(x: 0, y: 0, width: 1120, height: 700)
         let view = VZVirtualMachineView(frame: frame)
         view.capturesSystemKeys = false
@@ -180,7 +209,8 @@ private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
         view.virtualMachine = machine
         let window = NSWindow(contentRect: frame, styleMask: [.titled, .closable, .miniaturizable, .resizable],
                               backing: .buffered, defer: false)
-        window.title = options.safariWindow ? "Big Wallet Test VM — Safari Activation" : "Big Wallet Test VM — Setup"
+        window.title = options.upgradeControl != nil ? "Big Wallet Test VM — macOS Upgrade" :
+            options.safariWindow ? "Big Wallet Test VM — Safari Activation" : "Big Wallet Test VM — Setup"
         window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(width: 640, height: 400)
         window.contentView = view
@@ -195,7 +225,10 @@ private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard sender === setupWindow else { return true }
-        if options.safariWindow {
+        if options.upgradeControl != nil {
+            beginShutdown(reason: "upgrade-window-closed")
+            return !installationIsProtected
+        } else if options.safariWindow {
             if getppid() != options.ownerPID {
                 beginShutdown(reason: "owner-exited")
             } else if kill(options.ownerPID, SIGINT) != 0 {
@@ -205,6 +238,12 @@ private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
             beginShutdown(reason: "setup-window-closed")
         }
         return true
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard options.upgradeControl != nil else { return .terminateNow }
+        beginShutdown(reason: "upgrade-quit-requested")
+        return .terminateCancel
     }
 
     private func acquireLock() throws {
@@ -311,20 +350,54 @@ private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
         }
     }
 
-    private func stopRequested() -> Bool {
+    private func stopRequestReason() -> String? {
         if FileManager.default.fileExists(atPath: options.stopFile.path) {
-            stopReason = "stop-file"
-            return true
+            return "stop-file"
         }
         if getppid() != options.ownerPID || (kill(options.ownerPID, 0) != 0 && errno == ESRCH) {
-            stopReason = "owner-exited"
-            return true
+            return "owner-exited"
         }
-        return false
+        return nil
+    }
+
+    private func installationControl() throws -> [String: Any] {
+        guard let control = options.upgradeControl else { return [:] }
+        let data = try boundedData(control, maximum: 16384)
+        let attributes = try FileManager.default.attributesOfItem(atPath: control.path)
+        guard let owner = attributes[.ownerAccountID] as? NSNumber, owner.uint32Value == getuid(),
+              let mode = attributes[.posixPermissions] as? NSNumber, mode.intValue & 0o077 == 0,
+              let value = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              value["version"] as? Int == 1, value["vmPath"] as? String == options.vm.path,
+              value["protectInstallation"] as? Bool != nil else {
+            throw RunnerFailure("Invalid installation protection record")
+        }
+        return value
+    }
+
+    private func installationProtection() throws -> Bool {
+        try installationControl()["protectInstallation"] as? Bool ?? false
+    }
+
+    private var upgradeWindowRequested: Bool {
+        options.upgradeWindow || ((try? installationControl()["showWindow"] as? Bool) ?? false)
+    }
+
+    private var installationIsProtected: Bool {
+        guard options.upgradeControl != nil else { return false }
+        return (try? installationProtection()) ?? true
     }
 
     private func tick() {
-        if shutdownStarted == nil && stopRequested() { beginShutdown(reason: stopReason ?? "requested") }
+        showSetupWindowIfRequested()
+        if shutdownStarted != nil && installationIsProtected {
+            deferredShutdownReason = stopReason ?? "requested"
+            shutdownStarted = nil
+        }
+        if let reason = deferredShutdownReason, !installationIsProtected {
+            deferredShutdownReason = nil
+            beginShutdown(reason: reason)
+        }
+        if shutdownStarted == nil, let reason = stopRequestReason() { beginShutdown(reason: reason) }
         if let since = shutdownStarted {
             if Date().timeIntervalSince(since) >= 15 && !forceStopRequested { forceStop() }
             if Date().timeIntervalSince(since) >= 25 { finish(code: failure == nil ? 0 : 1) }
@@ -334,6 +407,12 @@ private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
 
     private func beginShutdown(reason: String) {
         guard shutdownStarted == nil else { return }
+        if installationIsProtected {
+            if reason == "owner-exited" && deferredShutdownReason != nil { return }
+            deferredShutdownReason = reason
+            stopReason = reason
+            return
+        }
         shutdownStarted = Date()
         stopReason = reason
         state = "stopping"
@@ -349,6 +428,10 @@ private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
     }
 
     private func forceStop() {
+        if installationIsProtected {
+            deferredShutdownReason = stopReason ?? "requested"
+            return
+        }
         guard !forceStopRequested, let machine else { return }
         forceStopRequested = true
         machine.stop { [weak self] error in
@@ -386,6 +469,11 @@ private final class Host: NSObject, VZVirtualMachineDelegate, NSWindowDelegate {
             "vmPath": options.vm.path, "sessionId": sessionID, "startedAt": startedAt, "updatedAt": timestamp(),
         ]
         if let stopReason { status["stopReason"] = stopReason }
+        if options.upgradeControl != nil {
+            status["guestStarted"] = guestStarted
+            status["installationProtected"] = installationIsProtected
+            status["shutdownDeferred"] = deferredShutdownReason != nil
+        }
         if let failure { status["error"] = failure }
         try checkedPath(options.status, directory: false, mayBeMissing: true)
         try JSONSerialization.data(withJSONObject: status, options: [.sortedKeys]).write(to: options.status, options: .atomic)
@@ -417,8 +505,11 @@ private struct VMHostProgram {
     static func main() {
         do {
             let options = try Options(arguments: Array(CommandLine.arguments.dropFirst()))
+            if options.upgradeControl != nil {
+                guard try FileHandle.standardInput.read(upToCount: 1) == Data("G".utf8) else { return }
+            }
             let application = NSApplication.shared
-            let policy: NSApplication.ActivationPolicy = options.setupWindow || options.safariWindow ? .regular : .prohibited
+            let policy: NSApplication.ActivationPolicy = options.setupWindow || options.safariWindow || options.upgradeWindow ? .regular : .prohibited
             if application.activationPolicy() != policy {
                 _ = application.setActivationPolicy(policy)
             }
@@ -426,6 +517,7 @@ private struct VMHostProgram {
                 throw RunnerFailure("VM host could not apply the requested application activation policy")
             }
             let host = Host(options: options)
+            application.delegate = host
             do { try host.start() } catch { host.startupFailed(error) }
             withExtendedLifetime(host) { application.run() }
         } catch {

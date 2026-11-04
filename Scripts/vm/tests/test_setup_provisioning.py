@@ -369,6 +369,7 @@ class SetupReceiptTests(unittest.TestCase):
     def result(self, status='passed', user='selected-user', receipt=None):
         return {'status': status, 'identity': {'vmId': 'fixture-vm', 'consoleUser': user}, 'preflight': {
             'bootstrap': {'available': True, 'hashes': self.tools},
+            'macos': {'expected': None, 'actual': {'version': '27.0.1', 'buildVersion': '26A434'}, 'available': True},
             'checks': {name: True for name in ('bootstrap', 'node', 'python', 'jq', 'xcode', 'macos', 'ios', 'visionos')},
             'provisioning': {'vmId': 'fixture-vm', 'consoleUser': user, 'appliedRequestID': receipt},
         }}
@@ -388,14 +389,19 @@ class SetupReceiptTests(unittest.TestCase):
             self.exchanges.append(exchange)
             return configuration
         def monitor(args, state, vm, exchange, run_id, binaries, environment, timeout, password=None, **options):
-            self.calls.append(host.read_json(exchange / 'job.json')['kind'])
+            job = host.read_json(exchange / 'job.json')
+            self.calls.append(job['kind'])
             self.passwords.append(password)
-            return results[len(self.calls) - 1]
+            result = results[len(self.calls) - 1]
+            if result.get('preflight', {}).get('macos'):
+                result['preflight']['macos']['expected'] = job['payload'].get('expectedMacOS')
+            return result
         def doctor(args, state, candidate, environment, operation, record, configuration,
                    binaries, bootstrap_tools, source, password, source_digest):
             run_id, exchange = operation['runId'], operation['exchange']
             host.atomic_json(exchange / 'job.json', {'version': 1, 'runId': run_id, 'vmId': record['vmId'],
-                'kind': 'doctor', 'profile': 'all', 'payload': {'stages': [], 'onlyTesting': []}, 'source': source,
+                'kind': 'doctor', 'profile': 'all', 'payload': {'stages': [], 'onlyTesting': [],
+                    **({'expectedMacOS': record['macos']} if record.get('macos') else {})}, 'source': source,
                 'bootstrapTools': bootstrap_tools})
             operation['monitorCalled'] = True
             return host.monitor_vm(args, state, candidate, exchange, run_id, binaries, environment,
@@ -510,7 +516,7 @@ class SetupReceiptTests(unittest.TestCase):
         (self.state / 'candidate.json').unlink()
         (self.state / 'baseline.vbvm').mkdir()
         host.atomic_json(self.state / 'baseline.json', {**self.record, 'bootstrapTools': self.tools,
-                        'bootstrapSourceDigest': host.bootstrap_source_digest(), 'verificationSigningMode': 'local'})
+                        'bootstrapSourceDigest': host.bootstrap_source_digest(), 'verificationSigningMode': 'local', 'macos': {'version': '27.0.1', 'buildVersion': '26A434'}})
         with patch.object(host, 'validate_vm', return_value={}), patch.object(host, 'check_capacity'), \
                 patch.object(host, 'build_tools', return_value=self.state / 'tools'), \
                 patch.object(host, 'bootstrap_tool_hashes', return_value=self.tools), \

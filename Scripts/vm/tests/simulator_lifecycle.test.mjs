@@ -118,6 +118,7 @@ test("build stages stay untouched and successful simulator preparation runs imme
     const build = {...nativeStage, id: "build-tests.visionos.debug", group: "build", args: ["build-for-testing"], nativeAudit: undefined, resultBundle: false};
     const calls = [];
     const results = await executeStages([build, nativeStage], {writeJSON: atomicJSON, hashFile, workspace: root, artifacts: root, preflight: {checks: {}, destinations},
+        inspectResultBundle: async () => "a".repeat(64),
         execute: async (command, args) => {
             calls.push([command, ...args]);
             if (args[0] === "simctl") { return success(args[1] === "list" ? inventory("Shutdown", "Booted") : ""); }

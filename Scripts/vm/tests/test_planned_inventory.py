@@ -52,7 +52,7 @@ class RunSnapshotBindingTests(unittest.TestCase):
             patcher = patch.object(host, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
-        host.atomic_json(self.state / 'baseline.json', {'vmId': 'fixture-vm', 'sourceVM': str(self.args.vm),
+        host.atomic_json(self.state / 'baseline.json', {'vmId': 'fixture-vm', 'sourceVM': str(self.args.vm), 'macos': {'version': '27.0.1', 'buildVersion': '26A434'},
             'environment': self.environment, 'bootstrapSourceDigest': host.bootstrap_source_digest(),
             'bootstrapTools': host.bootstrap_tool_hashes(binaries)})
         for name, options in (
@@ -68,7 +68,8 @@ class RunSnapshotBindingTests(unittest.TestCase):
         self.addCleanup(output.stop)
 
     def complete_run(self, args, state, vm, exchange, run_id, *rest, **options):
-        result = {'runId': run_id, 'status': 'passed', 'finishedAt': 'fixture completion'}
+        result = {'runId': run_id, 'status': 'passed', 'finishedAt': 'fixture completion',
+                  'preflight': {'macos': {'expected': {'version': '27.0.1', 'buildVersion': '26A434'}, 'actual': {'version': '27.0.1', 'buildVersion': '26A434'}, 'available': True}}}
         host.atomic_json(exchange / 'artifacts/result.json', result)
         host.register_operation(state, vm, exchange, run_id, 'starting')
         active = host.read_json(state / 'active.json')
@@ -368,7 +369,7 @@ class PlannedInventoryTests(unittest.TestCase):
         args = host.parser().parse_args(['run', 'all', '--stage', 'test', '--configuration', 'Debug',
                                          '--only-testing', 'Tests visionOS'])
         host.atomic_json(self.root / 'baseline.json', {'vmId': self.job['vmId'], 'environment': self.environment,
-                         'sourceVM': str(args.vm), 'bootstrapSourceDigest': 'digest', 'bootstrapTools': self.job['bootstrapTools']})
+                         'sourceVM': str(args.vm), 'macos': {'version': '27.0.1', 'buildVersion': '26A434'}, 'bootstrapSourceDigest': 'digest', 'bootstrapTools': self.job['bootstrapTools']})
         with patch.object(host, 'bootstrap_source_digest', return_value='digest'), \
                 patch.object(host, 'check_capacity'), patch.object(host, 'build_tools', return_value=self.root / 'tools'), \
                 patch.object(host, 'bootstrap_tool_hashes', return_value=self.job['bootstrapTools']), \
@@ -535,7 +536,7 @@ class PlannedInventoryTests(unittest.TestCase):
         args = host.parser().parse_args(['run', 'all', '--stage', 'test', '--configuration', 'Debug',
                                          '--only-testing', 'Tests visionOS'])
         host.atomic_json(self.root / 'baseline.json', {'vmId': self.job['vmId'], 'environment': self.environment,
-                         'sourceVM': str(args.vm), 'bootstrapSourceDigest': 'digest', 'bootstrapTools': self.job['bootstrapTools']})
+                         'sourceVM': str(args.vm), 'macos': {'version': '27.0.1', 'buildVersion': '26A434'}, 'bootstrapSourceDigest': 'digest', 'bootstrapTools': self.job['bootstrapTools']})
         events = []
         def clone(source, destination):
             self.assertTrue((self.exchange / 'artifacts/planned-result.json').exists())
@@ -574,7 +575,8 @@ class PlannedInventoryTests(unittest.TestCase):
         def launch(command, *args, **options):
             if Path(str(command[0])).name == 'VMHost':
                 host.atomic_json(self.exchange / 'artifacts/result.json', {'runId': self.job['runId'],
-                    'status': 'passed', 'finishedAt': 'fixture', 'source': self.job['source']})
+                    'status': 'passed', 'finishedAt': 'fixture', 'source': self.job['source'],
+                    'preflight': {'macos': {'expected': {'version': '27.0.1', 'buildVersion': '26A434'}, 'actual': {'version': '27.0.1', 'buildVersion': '26A434'}, 'available': True}}})
                 return Child()
             self.assertEqual(Path(str(command[0])).name, 'node')
             return original_popen(command, *args, **options)
@@ -727,6 +729,7 @@ class PlannedInventoryTests(unittest.TestCase):
 
     def test_failed_intent_final_report_or_acceptance_write_cannot_recover_a_guest_pass(self):
         read, write = host.read_json, host.atomic_json
+        macos = {'version': '27.0.1', 'buildVersion': '26A434'}
         for phase in ('intent', 'report', 'acceptance'):
             with self.subTest(phase=phase):
                 failed_read = False
@@ -742,7 +745,8 @@ class PlannedInventoryTests(unittest.TestCase):
                             (phase == 'acceptance' and Path(path).name == 'active.json' and value.get('acceptedResultSHA256'))):
                         raise OSError('fixture durable report write failed')
                     return write(path, value)
-                initial = {'runId': self.job['runId'], 'status': 'passed', 'finishedAt': 'guest-result'} if phase == 'acceptance' else None
+                initial = {'runId': self.job['runId'], 'status': 'passed', 'finishedAt': 'guest-result',
+                           'preflight': {'macos': {'expected': macos, 'actual': macos, 'available': True}}} if phase == 'acceptance' else None
                 with self.running_monitor_fixture(report=initial, late_success=phase != 'acceptance') as (args, child, _, remove), \
                         patch.object(host, 'read_json', side_effect=transient), \
                         patch.object(host, 'atomic_json', side_effect=failing_write):

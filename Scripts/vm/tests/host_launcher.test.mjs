@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -12,8 +12,8 @@ test('VM lifecycle host typechecks without starting a virtual machine', () => {
     {timeout: 120_000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']});
 });
 
-test('VM watchdog stops for an exited owner even while its PID remains unreaped', () => {
-    const root = mkdtempSync(join(tmpdir(), 'big-wallet-host-fixture-'));
+test('VM watchdog detects exited owners and preserves committed macOS installations', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'big-wallet-host-fixture-')));
     try {
         const source = readFileSync(new URL('../VMHost.swift', import.meta.url), 'utf8');
         const entry = source.indexOf('@main\n@MainActor\nprivate struct VMHostProgram');
@@ -46,6 +46,22 @@ finally:
         const orphan = JSON.parse(execFileSync('python3', ['-c', supervisor, executable, 'orphan', ...args],
             {timeout: 10_000, encoding: 'utf8'}));
         assert.deepEqual(orphan, {ownerExists: true, parentMatches: false, stopRequested: true});
+        const control = join(root, 'upgrade-control.json');
+        const protect = () => JSON.parse(execFileSync(executable, ['protection', ...args,
+            '--owner-pid', String(process.pid), '--upgrade-control', control],
+        {timeout: 10_000, encoding: 'utf8'}));
+        const record = (protectedInstallation, showWindow = false) => JSON.stringify({version: 1,
+            vmPath: join(root, 'fixture.vbvm'), protectInstallation: protectedInstallation, showWindow});
+        writeFileSync(control, record(true), {mode: 0o600});
+        assert.deepEqual(protect(), {protected: true, deferred: true, shutdownStarted: false, forceStopRequested: false, windowRequested: false});
+        writeFileSync(control, record(true, true));
+        assert.deepEqual(protect(), {protected: true, deferred: true, shutdownStarted: false, forceStopRequested: false, windowRequested: true});
+        writeFileSync(control, record(false));
+        assert.deepEqual(protect(), {protected: false, deferred: false, shutdownStarted: false, forceStopRequested: false, windowRequested: false});
+        writeFileSync(control, '{');
+        assert.deepEqual(protect(), {protected: true, deferred: true, shutdownStarted: false, forceStopRequested: false, windowRequested: false});
+        rmSync(control);
+        assert.deepEqual(protect(), {protected: true, deferred: true, shutdownStarted: false, forceStopRequested: false, windowRequested: false});
     } finally {
         rmSync(root, {recursive: true, force: true});
     }

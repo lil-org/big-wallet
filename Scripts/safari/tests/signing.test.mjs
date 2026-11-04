@@ -723,6 +723,9 @@ test("Subprocess deadlines distinguish builds, settings probes, and tests", () =
     assert.equal(commandTimeoutSeconds("xcodebuild", ["-showBuildSettings", "-json"]), 120);
     assert.equal(commandTimeoutSeconds("xcodebuild", ["build-for-testing"]), 3600);
     assert.equal(commandTimeoutSeconds("/usr/bin/xcodebuild", ["test-without-building"]), 7200);
+    for (const operation of ["uninstall", "install", "get_app_container"]) {
+        assert.equal(commandTimeoutSeconds("xcrun", ["simctl", operation, "fixture-device", "fixture-application"]), 60);
+    }
 });
 
 test("Safari test default and maximum allowances scale together within unchanged stage deadlines", () => {
@@ -825,6 +828,66 @@ test("A hung command cannot survive its deadline by ignoring termination or reta
     await assert.rejects(execute("fixture-command", [], {...fixture.options, timeoutSeconds: 0.005}), error => error.timedOut === true);
     assert.deepEqual(fixture.signals, ["SIGTERM", "SIGKILL"]);
     assert.equal(fixture.child.stdout.destroyed, true);
+});
+
+test("Simulator preparation timeouts identify only the safe operation and bounded execution status", async () => {
+    for (const operation of ["uninstall", "install", "get_app_container"]) {
+        const fixture = processFixture();
+        const device = "private-device-identifier", app = "/private/user/path/Wallet.app", credential = "private-argument-secret";
+        await assert.rejects(execute("/usr/bin/xcrun", ["simctl", operation, device, app, credential],
+            {...fixture.options, timeoutSeconds: 0.005}), error => {
+            assert.equal(error.timedOut, true);
+            assert.match(error.message, new RegExp(`^xcrun simctl ${operation} timed out after 0\\.005s`));
+            assert.match(error.message, /\[elapsed=\d+ms; status=timed-out; exitCode=null; signal=SIGKILL\]/);
+            assert.equal(error.commandDiagnostics.operation, `xcrun simctl ${operation}`);
+            assert.equal(error.commandDiagnostics.status, "timed-out");
+            assert.equal(error.commandDiagnostics.exitCode, null);
+            assert.equal(error.commandDiagnostics.signal, "SIGKILL");
+            assert.ok(Number.isSafeInteger(error.commandDiagnostics.elapsedMilliseconds));
+            assert.ok(error.commandDiagnostics.elapsedMilliseconds >= 0);
+            for (const value of [device, app, credential]) {
+                assert.equal(error.message.includes(value), false);
+                assert.equal(JSON.stringify(error.commandDiagnostics).includes(value), false);
+            }
+            return true;
+        });
+        assert.deepEqual(fixture.signals, ["SIGTERM", "SIGKILL"]);
+        assert.equal(fixture.child.stdout.destroyed, true);
+        assert.equal(fixture.child.stderr.destroyed, true);
+    }
+});
+
+test("Simulator preparation failures retain exit status and redact output credentials without logging arguments", async () => {
+    const secret = "private-proof-key", app = "/private/user/path/Wallet.app";
+    const fixture = processFixture(child => {
+        child.stderr.write(`error: simulator operation failed; ${secret}\n`);
+        child.emit("exit", 22, null);
+        child.emit("close", 22, null);
+    });
+    await assert.rejects(execute("xcrun", ["simctl", "install", "private-device", app],
+        {...fixture.options, env: {ALCHEMY_JWT_REQUEST_PROOF_KEY: secret}}), error => {
+        assert.match(error.message, /^xcrun simctl install failed with exit code 22/);
+        assert.match(error.message, /status=failed; exitCode=22; signal=null/);
+        assert.match(error.message, /simulator operation failed; \[REDACTED\]/);
+        assert.equal(error.commandDiagnostics.operation, "xcrun simctl install");
+        assert.equal(error.commandDiagnostics.exitCode, 22);
+        assert.equal(error.commandDiagnostics.status, "failed");
+        for (const value of [secret, app, "private-device"]) { assert.equal(error.message.includes(value), false); }
+        return true;
+    });
+    assert.deepEqual(fixture.signals, []);
+});
+
+test("Other xcrun operations do not echo unrecognized argument labels", async () => {
+    const fixture = processFixture(child => {
+        child.emit("exit", 1, null);
+        child.emit("close", 1, null);
+    });
+    await assert.rejects(execute("xcrun", ["simctl", "private-unrecognized-operation", "/private/user/path"], fixture.options), error => {
+        assert.equal(error.message, "xcrun failed with exit code 1");
+        assert.equal(error.commandDiagnostics, undefined);
+        return true;
+    });
 });
 
 test("Subprocess failure preserves actual automation errors while redacting credential text", async () => {

@@ -5,7 +5,7 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import test from "node:test";
 import {auditNativeResult, auditResults, performanceTestName} from "../result_audit.mjs";
-import {chooseDestinations, cleanEnvironment, coverageReport, executeStages, pendingStageResults, pinnedEnvironmentEvidence, prepareStageScratch, resourceSnapshot} from "../guest.mjs";
+import {chooseDestinations, cleanEnvironment, coverageReport, executeStages, pendingStageResults, pinnedEnvironmentEvidence, prepareStageScratch, resourceSnapshot, resultBundleInventory, runJob} from "../guest.mjs";
 import {atomicJSON, hashFile, BUILD_VOLUME, EXCHANGE_PATH, materializeSource, provisioningEvidence, readGuestProvision, bootstrapToolsEvidence, validateGuestEvidence, validateSnapshotManifest, verifyBuildVolume, verifyExchangeDirectory} from "../guest_bootstrap.mjs";
 import {approvalArguments, commandForStage, createManifest, PERFORMANCE_ENV, PERFORMANCE_TESTS, PLATFORMS, SHELL_TESTS, TSAN_TESTS, EXTENDED_TSAN_TESTS, BOOTSTRAP_TOOL_NAMES, validateJob} from "../test_manifest.mjs";
 
@@ -71,6 +71,8 @@ test("job validation admits the host snapshot contract and rejects execution inj
         {payload: {onlyTesting: ["Class/test;rm"]}}, {payload: {onlyTesting: ["-skip-testing:Class"]}}, {source: {sha256: "a", commit: "b"}},
         {payload: {approvalArgs: ["--worker", "/bin/sh"]}}, {payload: {approvalArgs: ["--failure-dir", "/tmp/elsewhere"]}}, {payload: {approvalArgs: ["--seed", "no"]}},
         {payload: {unknown: true}}, {payload: {signing: "automatic"}}, {payload: {signing: null}},
+        ...[null, {}, {version: "latest", buildVersion: "26B123"}, {version: "27.2", buildVersion: ""},
+            {version: "27.2", buildVersion: "26B123", source: "image"}].map(expectedMacOS => ({payload: {expectedMacOS}})),
     ]) { assert.throws(() => validateJob(job(invalid)), JSON.stringify(invalid)); }
     for (const payload of [undefined, null, [], 1, "options", {}]) {
         assert.throws(() => validateJob({...job(), payload}));
@@ -78,6 +80,8 @@ test("job validation admits the host snapshot contract and rejects execution inj
     assert.doesNotThrow(() => validateJob(job({payload: {approvalArgs: ["--soak", "--seed", "42", "--mode", "popup"]}})));
     assert.doesNotThrow(() => validateJob(job({payload: {onlyTesting: ["Tests macOS/PasswordStorageTests/testSetup()", "SecretHandlingTests"]}})));
     for (const signing of ["local", "apple"]) { assert.equal(validateJob(job({payload: {signing}})).payload.signing, signing); }
+    const expectedMacOS = {version: "27.2", buildVersion: "26B123"};
+    assert.deepEqual(validateJob(job({payload: {expectedMacOS}})).payload.expectedMacOS, expectedMacOS);
 });
 
 test("hardware guard cannot be enabled with environment variables or a physical hypervisor", () => {
@@ -88,6 +92,25 @@ test("hardware guard cannot be enabled with environment variables or a physical 
         {aqua: false}, {platform: "linux"}, {username: "other"}, {identity: {version: 1, vmId: "another", consoleUser: "tester"}}]) {
         assert.throws(() => validateGuestEvidence({...evidence, ...change}, "fixture-vm"));
     }
+});
+
+test("wrong guest macOS blocks every stage before native or repository work starts", async () => {
+    const expectedMacOS = {version: "27.2", buildVersion: "26B123"};
+    const reports = [];
+    const result = await runJob({job: job({payload: {stages: ["test"], expectedMacOS}}),
+        workspace: "/fixture/workspace", artifacts: "/fixture/artifacts", exchange: "/fixture/exchange",
+        stopRequested: async () => false, writeJSON: async (path, report) => { reports.push(structuredClone(report)); },
+        inspectPreflight: async options => {
+            assert.deepEqual(options.expectedMacOS, expectedMacOS);
+            return {report: {checks: {macos: false}, macos: {expected: expectedMacOS,
+                actual: {version: "27.0.1", buildVersion: "26A434"}, available: false}}};
+        }});
+    assert.equal(result.status, "failed");
+    assert.match(result.error, /macOS does not match/);
+    assert.ok(result.stages.length > 0);
+    assert.ok(result.stages.every(stage => stage.status === "blocked" && stage.startedAt === undefined));
+    assert.equal(result.coverage.fullSuiteVerified, false);
+    assert.equal(reports.at(-1).status, "failed");
 });
 
 test("environment drops host credentials and proof material until a native stage explicitly requests it", () => {
@@ -781,6 +804,16 @@ test("a transport failure retains the complete planned inventory before any comm
     assert.ok(retained.every(stage => stage.status === "pending"));
     assert.deepEqual(retained.map(stage => stage.id), manifest.map(stage => stage.id));
     assert.equal(auditResults(retained).status, "failed");
+}));
+
+test("XCTest bundle inventory binds each exported file name and size to the audited bundle", async () => fixture(async root => {
+    await writeFile(join(root, "Info.plist"), "info");
+    await writeFile(join(root, "database.sqlite3"), "db");
+    await assert.rejects(resultBundleInventory(root), /Incomplete XCTest/);
+    await mkdir(join(root, "Data"));
+    await writeFile(join(root, "Data/data.object"), "fixture result object");
+    const entries = ["Data/data.object", "21", "Info.plist", "4", "database.sqlite3", "2", ""];
+    assert.equal(await resultBundleInventory(root), digest(entries.join("\0")));
 }));
 
 test("native result bundles are audited and totals retained even when a native command exits zero", async () => fixture(async root => {

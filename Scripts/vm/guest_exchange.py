@@ -388,8 +388,30 @@ const vmId = process.argv[2];
 const validPID = value => Number.isSafeInteger(value) && value > 1 && value <= 2147483647;
 const validStart = value => Array.isArray(value) && value.length === 2 &&
     value.every(Number.isSafeInteger) && value[0] > 0 && value[1] >= 0 && value[1] < 1000000;
+const processUID = pid => {
+    const result = cp.spawnSync('/bin/ps', ['-p', String(pid), '-o', 'uid='],
+        {encoding: 'utf8', timeout: 5000, maxBuffer: 4096, killSignal: 'SIGKILL'});
+    const rejected = operation => {
+        const status = Number.isInteger(result.status) ? String(result.status) : 'unavailable';
+        const signal = result.signal === null || result.signal === undefined ? 'none' :
+            /^SIG[A-Z0-9]{1,16}$/.test(result.signal) ? result.signal : 'invalid';
+        const error = result.error ? /^[A-Z0-9_]{1,32}$/.test(result.error.code || '') ? result.error.code : 'unavailable' : 'none';
+        fail(`Cannot inspect guest process identity: PID ${pid}; ${operation}; status ${status}; signal ${signal}; error ${error}`);
+    };
+    if (result.error || result.signal || ![0, 1].includes(result.status) ||
+        typeof result.stdout !== 'string' || typeof result.stderr !== 'string' || result.stderr.trim())
+        rejected('UID query');
+    if (result.status === 1 && result.stdout.trim() === '') return null;
+    const match = /^[ \t]*([0-9]+)[ \t]*(?:\r?\n)?$/.exec(result.stdout);
+    const owner = match ? Number(match[1]) : NaN;
+    if (result.status !== 0 || !Number.isSafeInteger(owner) || owner < 0 || owner > 4294967294 || String(owner) !== match?.[1])
+        rejected('UID response');
+    return owner;
+};
 const processStart = pid => {
     if (!validPID(pid)) fail('Invalid guest supervisor identity');
+    const owner = processUID(pid);
+    if (owner === null || owner !== uid) return null;
     const result = cp.spawnSync('/usr/local/libexec/big-wallet-vm/VMGuestAgent', ['--process-identity', String(pid)],
         {encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL'});
     if (result.status !== 0) fail('Cannot inspect guest process identity: ' + JSON.stringify({pid,

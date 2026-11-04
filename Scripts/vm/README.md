@@ -304,6 +304,59 @@ Unattended runs require automatic login to the guest test account and an
 unlocked graphical session. This is guest-only setup; no host login, screen
 locking, permissions, or Keychain settings are changed.
 
+## Upgrading macOS
+
+Choose the exact release and build. Use the same global `--vm`, `--state-dir`, and
+`--xcode` options before each command if you override the defaults.
+
+```sh
+Scripts/test_vm.sh upgrade-macos --version 27.2 --build 26B123 --check
+Scripts/test_vm.sh upgrade-macos --version 27.2 --build 26B123
+```
+
+The read-only preview checks host prerequisites. The upgrade clones the verified
+baseline, checks Apple's exact offer in the guest, and uses the guest volume-owner
+account for installation. If the system volume needs room, add `--system-disk-gib 96`
+to both commands for a new upgrade. The copy-on-write clone keeps the pinned toolchain.
+
+Promotion requires the guest to attest the target OS, pass fresh setup, complete
+macOS/iOS Safari roundtrips, and pass an unfiltered local `run all`. The default
+runner then boots the promoted VM and verifies its OS. Find `result.json` and
+`supervisor.log` under `<state-dir>/upgrades/<upgrade-id>/`.
+
+Ctrl-C detaches the client. Set `upgrade_id` to the printed ID to resume. Add
+`--interactive` for guest login or consent. If setup already started headlessly,
+stop that setup and resume with `--interactive`.
+
+```sh
+Scripts/test_vm.sh status
+Scripts/test_vm.sh status --diagnose
+Scripts/test_vm.sh stop
+Scripts/test_vm.sh upgrade-macos --resume "$upgrade_id"
+```
+
+A committed installation can reboot before cancellation completes. If you
+cancelled during an interactive resize or while awaiting manual authorization,
+inspect the saved state first because resuming can continue the upgrade. A
+failure before guest startup can also leave the runner busy. Preserve the state
+and inspect the report before starting another operation. For a confirmed
+installer storage rejection, `upgrade-macos --resume "$upgrade_id" --abandon`
+can preserve and shut down the guest before a new upgrade with a larger disk.
+
+**Rollback.** Stop all jobs and confirm the VMs are off. Under execution locks
+for both state directories, verify the saved `previous-baseline-<id>.vbvm` and
+matching `.json` against the promotion record. Clone the bundle as `baseline.vbvm`
+in a separate private state directory. Copy the record's guest-access scope and
+Safari preparation evidence using `copy_access` and `copy_safari_evidence` in
+`macos_upgrade.py`, and save the returned record as `baseline.json`. Release the
+locks, run fresh validation with the original source VM and Xcode, and switch
+`BW_TEST_VM_STATE_DIR` to the recovered state only after both commands pass.
+
+```sh
+Scripts/test_vm.sh --state-dir "$recovered_state" setup --interactive
+Scripts/test_vm.sh --state-dir "$recovered_state" run all
+```
+
 ## Upgrading the pinned Xcode
 
 After installing the intended Xcode on the host, use the upgrade command to
@@ -459,6 +512,14 @@ already-bundled request-proof resource after validating its checked-in SHA-256.
 It does not query the host Keychain. Exact simulator installer DMGs can be
 supplied with `runtimes` entries containing `platform` and `dmgPath`; otherwise
 the guest downloads the pinned versions from Apple and checks their build IDs.
+
+Setup imports Xcode's complete runtime export, verifies the pinned image and
+mounted profile, and prepares its shared cache. Repair of a signature-rejected
+runtime requires a preserved official export. Keep the guest's
+`/Library/Application Support/BigWalletTestVM/RuntimeRepairs` receipts and
+`/Volumes/BigWalletBuild/RuntimeRepairSources` images for retries.
+[Apple's import guidance](https://developer.apple.com/documentation/Xcode-Release-Notes/xcode-26_4-release-notes)
+and [cache guidance](https://developer.apple.com/documentation/xcode-release-notes/xcode-26_1-release-notes).
 
 ## Approval lifecycle and crash tests
 

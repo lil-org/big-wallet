@@ -563,6 +563,7 @@ test("Safari execution cannot pass from XCTest alone and retains separate browse
     const stage = {...fixtureStage(), dependencies: [], requirements: []};
     const native = nativeResult(stage.nativeAudit);
     const options = {workspace, artifacts, runId: job().runId, exchange: EXCHANGE_PATH,
+        inspectResultBundle: async () => "a".repeat(64),
         preflight: {checks: {}, destinations: {macos: "platform=macOS,arch=arm64"}}, writeJSON: atomicJSON, hashFile,
         execute: async (command, args, invocation) => {
             if (command === "node") { await writeFile(invocation.logPath, "Safari fixture passed\n"); return success(); }

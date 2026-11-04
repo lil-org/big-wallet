@@ -293,7 +293,7 @@ class XcodeUpgradeTests(unittest.TestCase):
         self.ready()
         archived = {}
         failure = OSError('fixture promotion cleanup failed')
-        def prepare(args, state, environment, operation):
+        def prepare(args, state, environment, operation, *, force_verification=False):
             path = operation['exchange'] / 'artifacts/result.json'
             result = {'runId': operation['runId'], 'status': 'passed', 'source': {'sha256': 'setup-source'},
                       'coverage': {'fullSuiteVerified': False}, 'preflight': {'versions': {'xcode': 'Xcode 27.1'}}}

@@ -90,6 +90,13 @@ const realUserInfo = osFixture.userInfo;
 osFixture.userInfo = () => ({...realUserInfo(), username: fsFixture.existsSync(rootFixture + '/wrong-credential-user') ? 'other-user' : 'guest'});
 const realSpawnSync = cpFixture.spawnSync;
 cpFixture.spawnSync = (file, args, options) => {
+    if (file === '/bin/ps') {
+        if (JSON.stringify(args) !== JSON.stringify(['-p', args[1], '-o', 'uid='])) throw Error('Unexpected process UID inspection');
+        fsFixture.appendFileSync(rootFixture + '/identity-uid-queries', args[1] + '\\n');
+        const filename = rootFixture + '/identity-uids.json';
+        const responses = fsFixture.existsSync(filename) ? JSON.parse(fsFixture.readFileSync(filename, 'utf8')) : {};
+        return responses[args[1]] ?? {status: 0, stdout: String(process.getuid()) + '\\n', stderr: ''};
+    }
     if (file === '/sbin/mount') {
         if (args.length) throw Error('Mount readiness must remain read-only');
         fsFixture.appendFileSync(rootFixture + '/readiness-mount-probes', 'probe\\n');
@@ -105,6 +112,7 @@ cpFixture.spawnSync = (file, args, options) => {
     }
     if (file === '/usr/local/libexec/big-wallet-vm/VMGuestAgent') {
         if (args[0] !== '--process-identity') throw Error('Unexpected supervisor invocation');
+        fsFixture.appendFileSync(rootFixture + '/identity-start-queries', args[1] + '\\n');
         if (fsFixture.existsSync(rootFixture + '/identity-failure.json')) {
             const failure = JSON.parse(fsFixture.readFileSync(rootFixture + '/identity-failure.json', 'utf8'));
             if (Number(args[1]) === failure.pid) return failure.result;
@@ -1305,6 +1313,72 @@ errorFS.unlinkSync = filename => {{
                 self.assertEqual(json.loads((receipts / 'old.json').read_text()), previous)
                 self.assertFalse(list(self.guest.glob('.upload-*')))
                 self.assertFalse((self.guest_root / 'launchctl-calls').exists())
+                self.close_transport()
+
+    def stale_running_receipt(self):
+        receipts = self.guest / '.agent-runs'
+        receipts.mkdir(mode=0o700)
+        previous = self.receipt(state='running', runnerPID=651, runnerStart=[1, 651])
+        previous.update(runId='old', agentPID=650, agentStart=[1, 650])
+        (receipts / 'old.json').write_text(json.dumps(previous))
+        return previous
+
+    def test_upload_accepts_reused_other_uid_pids_without_privileged_inspection(self):
+        previous = self.stale_running_receipt()
+        other_uid = 0 if os.getuid() else 1
+        (self.guest_root / 'identity-uids.json').write_text(json.dumps({
+            str(pid): {'status': 0, 'stdout': str(other_uid) + '\n', 'stderr': ''} for pid in (650, 651)}))
+        (self.guest_root / 'identity-failure.json').write_text(json.dumps({'pid': 650, 'result': {'status': 2}}))
+        self.start()
+        self.uploaded()
+        start_queries = self.guest_root / 'identity-start-queries'
+        inspected = start_queries.read_text().splitlines() if start_queries.exists() else []
+        self.assertNotIn('650', inspected)
+        self.assertNotIn('651', inspected)
+        self.assertTrue({'650', '651'} <= set((self.guest_root / 'identity-uid-queries').read_text().splitlines()))
+        self.assertEqual(json.loads((self.guest / '.agent-runs/old.json').read_text()), previous)
+
+    def test_upload_accepts_unambiguous_absent_pids_without_start_time_inspection(self):
+        previous = self.stale_running_receipt()
+        (self.guest_root / 'identity-uids.json').write_text(json.dumps({
+            str(pid): {'status': 1, 'stdout': '', 'stderr': ''} for pid in (650, 651)}))
+        (self.guest_root / 'identity-failure.json').write_text(json.dumps({'pid': 650, 'result': {'status': 2}}))
+        self.start()
+        self.uploaded()
+        start_queries = self.guest_root / 'identity-start-queries'
+        inspected = start_queries.read_text().splitlines() if start_queries.exists() else []
+        self.assertNotIn('650', inspected)
+        self.assertNotIn('651', inspected)
+        self.assertTrue({'650', '651'} <= set((self.guest_root / 'identity-uid-queries').read_text().splitlines()))
+        self.assertEqual(json.loads((self.guest / '.agent-runs/old.json').read_text()), previous)
+
+    def test_upload_uid_query_errors_preserve_existing_job_and_fail_closed(self):
+        previous = self.stale_running_receipt()
+        (self.guest / 'job.json').write_text('preserved job')
+        cases = [
+            {'status': 2, 'stdout': '', 'stderr': 'private fixture detail'},
+            {'status': None, 'signal': 'SIGKILL', 'stdout': '', 'stderr': ''},
+            {'status': None, 'error': {'code': 'ETIMEDOUT'}, 'stdout': '', 'stderr': ''},
+            {'status': 1, 'stdout': str(os.getuid()) + '\n', 'stderr': ''},
+            {'status': 0, 'stdout': '501\n502\n', 'stderr': ''},
+            {'status': 0, 'stdout': '', 'stderr': ''},
+            {'status': 0, 'stdout': '-1\n', 'stderr': ''},
+            {'status': 0, 'stdout': '0501\n', 'stderr': ''},
+            {'status': 0, 'stdout': str(os.getuid()) + '\n', 'stderr': 'private fixture detail'},
+        ]
+        for value in cases:
+            with self.subTest(value=value):
+                (self.guest_root / 'identity-uids.json').write_text(json.dumps({'650': value}))
+                self.start()
+                result = self.drive(lambda value: value is not None)
+                self.assertEqual((result['status'], result['phase']), ('failed', 'upload'))
+                self.assertIn('Cannot inspect guest process identity: PID 650; UID', result['error'])
+                self.assertNotIn('private fixture detail', result['error'])
+                self.assertEqual((self.guest / 'job.json').read_text(), 'preserved job')
+                self.assertEqual(json.loads((self.guest / '.agent-runs/old.json').read_text()), previous)
+                self.assertFalse((self.guest_root / 'identity-start-queries').exists())
+                self.assertFalse((self.guest_root / 'launchctl-calls').exists())
+                self.assertFalse(list(self.guest.glob('.upload-*')))
                 self.close_transport()
 
     def test_final_export_is_not_interrupted_by_terminal_report_grace(self):

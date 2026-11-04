@@ -71,6 +71,35 @@ class GuestAccessTests(unittest.TestCase):
         with self.assertRaisesRegex(access.GuestAccessError, 'one configured'):
             access.candidate_mac(self.candidate)
 
+    def test_offline_upgrade_enrollment_is_bound_to_the_current_identity_inode(self):
+        upgrade_id, nonce = 'macos-upgrade-fixture', 'a' * 64
+        candidate = self.root / upgrade_id / 'state/baseline.vbvm'
+        state = self.mount / 'Library/Application Support/BigWalletTestVM'
+        state.mkdir(parents=True)
+        identity = state / 'identity.json'
+        original = json.dumps({'version': 1, 'vmId': 'fixture', 'consoleUser': 'guest'}).encode()
+        identity.write_bytes(original)
+        marker = state / f'enrollment-{upgrade_id}-{nonce}'
+        with patch.object(access, 'attached_data', side_effect=lambda *_a, **_k: contextlib.nullcontext(self.mount)), \
+                patch.object(access, '_protected_root_directory'):
+            with self.assertRaisesRegex(access.GuestAccessError, 'does not match'):
+                access.bind_upgrade_candidate(candidate, upgrade_id, nonce, 'another-vm', 'guest')
+            self.assertFalse(marker.exists())
+            for _ in range(2):
+                access.bind_upgrade_candidate(candidate, upgrade_id, nonce, 'fixture', 'guest')
+                self.assertTrue(marker.samefile(identity))
+                self.assertEqual(identity.read_bytes(), original)
+            identity.unlink()
+            identity.write_bytes(original)
+            with self.assertRaisesRegex(access.GuestAccessError, 'different identity'):
+                access.bind_upgrade_candidate(candidate, upgrade_id, nonce, 'fixture', 'guest')
+
+    def test_offline_upgrade_enrollment_rejects_an_unscoped_bundle_before_attaching(self):
+        with patch.object(access, 'attached_data') as attach:
+            with self.assertRaisesRegex(access.GuestAccessError, 'Invalid offline'):
+                access.bind_upgrade_candidate(self.candidate, 'macos-upgrade-fixture', 'a' * 64, 'fixture', 'guest')
+        attach.assert_not_called()
+
     def test_lease_selection_normalizes_mac_and_discards_expired_addresses(self):
         text = lease(address='192.168.64.2', expiry='0x1') + lease(mac='2:0:0:0:0:1')
         self.assertEqual(access.parse_dhcp_leases(text, MAC, now=1000), '192.168.64.3')

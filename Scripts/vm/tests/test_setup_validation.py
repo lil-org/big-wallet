@@ -59,6 +59,7 @@ class SetupValidationInventoryTests(unittest.TestCase):
                 self.assertFalse((exchange / 'artifacts/planned-result.json').exists())
                 return {'status': 'passed', 'identity': {'vmId': 'fixture-vm', 'consoleUser': 'wallet-test'}, 'preflight': {
                     'bootstrap': {'available': True, 'hashes': self.bootstrap_tools},
+                    'macos': {'expected': None, 'actual': {'version': '27.0.1', 'buildVersion': '26A434'}, 'available': True},
                     'checks': {name: True for name in ('bootstrap', 'node', 'python', 'jq', 'xcode', 'macos', 'ios', 'visionos')},
                 }}
             self.assertEqual(job['kind'], 'run')

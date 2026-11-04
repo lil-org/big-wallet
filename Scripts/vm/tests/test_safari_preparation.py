@@ -52,7 +52,7 @@ class SafariPreparationTests(unittest.TestCase):
         self.environment = host.read_json(host.TOOLS / 'environment.json')
         self.tools = {name: 'a' * 64 for name in ('VMGuestAgent', 'guest_runner', 'guest_bootstrap.mjs')}
         self.baseline_record = {'version': 1, 'vmId': 'fixture-vm', 'sourceVM': str(self.original),
-            'environment': self.environment, 'consoleUser': 'wallet-test', 'verificationSigningMode': 'local',
+            'environment': self.environment, 'macos': {'version': '27.0.1', 'buildVersion': '26A434'}, 'consoleUser': 'wallet-test', 'verificationSigningMode': 'local',
             'verifiedAt': '2026-10-20T09:00:00Z', 'baseVerifiedAt': '2026-10-20T09:00:00Z',
             'bootstrapSourceDigest': host.bootstrap_source_digest(), 'bootstrapTools': self.tools}
         host.atomic_json(self.state / 'baseline.json', self.baseline_record)
@@ -98,7 +98,7 @@ class SafariPreparationTests(unittest.TestCase):
         preparation = job['payload'].get('prepareSafari', False)
         if preparation:
             self.assertEqual(job['payload'], {'stages': ['safari'], 'configuration': 'Debug', 'signing': 'local',
-                                              'onlyTesting': ['Safari UI Tests macOS'], 'prepareSafari': True})
+                                              'onlyTesting': ['Safari UI Tests macOS'], 'prepareSafari': True, 'expectedMacOS': self.baseline_record['macos']})
             self.assertEqual([stage['id'] for stage in plan['stages']], [
                 'provider.install', 'protocol.check', 'pins.check', 'build-safari.macos.debug', 'prepare-safari.macos.debug'])
             self.assertTrue(all('nativeAudit' not in stage for stage in plan['stages']))

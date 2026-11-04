@@ -74,9 +74,15 @@ export function validateJob(value) {
     if (typeof value.vmId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/.test(value.vmId)) { throw new Error("Invalid VM identifier"); }
     if (!["run", "doctor"].includes(value.kind) || !["all", "extended"].includes(value.profile)) { throw new Error("Invalid job kind or profile"); }
     const options = value.payload;
-    const optionNames = new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "parserFuzzReplay", "signing", "interactiveSafari", "prepareSafari", "preparedSafari", "runtimePlatforms"]);
+    const optionNames = new Set(["stages", "onlyTesting", "configuration", "approvalArgs", "parserFuzzReplay", "signing", "interactiveSafari", "prepareSafari", "preparedSafari", "runtimePlatforms", "expectedMacOS"]);
     if (!options || typeof options !== "object" || Array.isArray(options) || Object.keys(options).some(key => !optionNames.has(key))) {
         throw new Error("Unsupported job payload");
+    }
+    if (options.expectedMacOS !== undefined && (!options.expectedMacOS || typeof options.expectedMacOS !== "object" ||
+        Object.keys(options.expectedMacOS).sort().join(",") !== "buildVersion,version" ||
+        typeof options.expectedMacOS.version !== "string" || !/^[0-9]+(?:\.[0-9]+){1,2}$/.test(options.expectedMacOS.version) ||
+        typeof options.expectedMacOS.buildVersion !== "string" || !/^[0-9]+[A-Z][0-9]+[a-z]?$/.test(options.expectedMacOS.buildVersion))) {
+        throw new Error("Invalid expected macOS identity");
     }
     if (!Array.isArray(options.stages) || options.stages.some(stage => !SELECTORS.includes(stage)) || new Set(options.stages).size !== options.stages.length) {
         throw new Error("Invalid stage selection");

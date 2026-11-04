@@ -18,15 +18,18 @@ const runtimeID = platform => `com.apple.CoreSimulator.SimRuntime.${platform}-27
 const provision = () => ({vmId: "fixture-vm", consoleUser: "wallet-test", xcode: {version: "27.0", buildVersion: "27A266a"},
     runtimes: [{platform: "iOS", version: "27.0", buildVersion: "24A434"}, {platform: "visionOS", version: "27.0", buildVersion: "24M362"}]});
 
-function probe({signing, credentials = provision(), security = () => success("1 valid identities found"), proofDigest,
+function probe({signing, credentials = provision(), security = () => success("1 valid identities found"), proofDigest, expectedMacOS,
+    operatingSystem = args => success(args[0] === "-productVersion" ? "27.0.1" : "26A434"),
+    runtimeDiagnostics = () => success("{}"),
     automation = () => success("This device DOES NOT REQUIRE user authentication to enable Automation Mode.\n")} = {}) {
     const calls = [];
     let proofReads = 0;
-    return {calls, proofReads: () => proofReads, run: () => preflight({signing, workspace: "/fixture/workspace",
+    return {calls, proofReads: () => proofReads, run: () => preflight({signing, expectedMacOS, workspace: "/fixture/workspace",
         identity: {aqua: true}, bootstrapEvidence: {available: true}, provision: credentials,
         readSnapshotFile: async () => { proofReads += 1; return proofDigest ?? createHash("sha256").update(proof).digest("hex"); },
         execute: async (command, args, options) => {
             calls.push([command, ...args]);
+            if (command === "/usr/bin/sw_vers") { return operatingSystem(args); }
             if (command === "/usr/bin/automationmodetool") {
                 assert.deepEqual(args, []);
                 assert.equal(options.timeoutSeconds, 10);
@@ -39,6 +42,10 @@ function probe({signing, credentials = provision(), security = () => success("1 
             if (command === "/usr/local/bin/jq") { return success("jq-1.8.1"); }
             if (command === "xcodebuild") { assert.deepEqual(args, ["-version"]); return success("Xcode 27.0\nBuild version 27A266a"); }
             if (command === "xcrun" && args[0] === "swift") { return success("Apple Swift version 6.4"); }
+            if (command === "xcrun" && args[0] === "simctl" && args[1] === "runtime") {
+                assert.equal(options.timeoutSeconds, 20);
+                return runtimeDiagnostics(args);
+            }
             if (command === "xcrun" && args.includes("devices")) {
                 return success(JSON.stringify({devices: {
                     [runtimeID("iOS")]: [{name: "iPhone 18 Pro", udid: "fixture-ios", isAvailable: true}],
@@ -54,6 +61,42 @@ function probe({signing, credentials = provision(), security = () => success("1 
             throw new Error(`Unexpected fixture command: ${command}`);
         }})};
 }
+
+test("macOS readiness attests the live version and build and rejects either kind of drift", async () => {
+    const expectedMacOS = {version: "27.0.1", buildVersion: "26A434"};
+    const checked = await probe({expectedMacOS}).run();
+    assert.deepEqual(checked.report.macos, {expected: expectedMacOS, actual: expectedMacOS, available: true});
+    assert.equal(checked.report.checks.macos, true);
+    const observed = await probe().run();
+    assert.deepEqual(observed.report.macos, {expected: null, actual: expectedMacOS, available: true});
+    for (const expected of [{...expectedMacOS, version: "27.2"}, {...expectedMacOS, buildVersion: "26B123"}]) {
+        const drifted = await probe({expectedMacOS: expected}).run();
+        assert.equal(drifted.report.macos.available, false);
+        assert.equal(drifted.report.checks.macos, false);
+    }
+    for (const operatingSystem of [() => success(""), () => ({...success("27.0.1"), code: 1}),
+        () => ({...success("27.0.1"), timedOut: true}), () => { throw new Error("ENOENT"); }]) {
+        const unavailable = await probe({expectedMacOS, operatingSystem}).run();
+        assert.equal(unavailable.report.macos.available, false);
+        assert.equal(unavailable.report.checks.macos, false);
+    }
+});
+
+test("optional runtime registration diagnostics cannot change readiness or pinned versions", async () => {
+    const credentials = provision();
+    const original = structuredClone(credentials);
+    const healthy = await probe({credentials}).run();
+    for (const runtimeDiagnostics of [() => ({...success("{}"), code: 1}), () => success("malformed"),
+        () => ({...success("{}"), timedOut: true}), () => { throw new Error("unavailable"); }]) {
+        const result = await probe({credentials, runtimeDiagnostics}).run();
+        assert.deepEqual(result.report.checks, healthy.report.checks);
+        assert.deepEqual(result.report.pinnedEnvironment, healthy.report.pinnedEnvironment);
+        assert.deepEqual(result.report.destinations, healthy.report.destinations);
+        assert.equal(result.report.simulatorRuntimeDiagnostics.issues.length, 2);
+        assert.deepEqual(result.report.simulatorRuntimeDiagnostics.runtimes, healthy.report.simulatorRuntimeDiagnostics.runtimes);
+        assert.deepEqual(credentials, original);
+    }
+});
 
 test("default local preflight never reads credential fields, opens Keychain, or reads the production proof fingerprint", async () => {
     const credentials = provision();

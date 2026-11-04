@@ -43,7 +43,8 @@ class CloneRetentionTests(unittest.TestCase):
         return active
 
     def report(self, status='failed'):
-        result = {'version': 1, 'runId': self.run_id, 'status': status, 'finishedAt': 'fixture', 'stages': []}
+        result = {'version': 1, 'runId': self.run_id, 'status': status, 'finishedAt': 'fixture', 'stages': [],
+                  'preflight': {'macos': {'expected': {'version': '27.0.1', 'buildVersion': '26A434'}, 'actual': {'version': '27.0.1', 'buildVersion': '26A434'}, 'available': True}}}
         host.atomic_json(self.result_path, result)
         return result
 
@@ -120,7 +121,7 @@ class CloneRetentionTests(unittest.TestCase):
         args = host.parser().parse_args(['--vm', str(self.root / 'original.vbvm'), 'run', '--stage', 'worker'])
         environment = {'minimumHostFreeBytes': 1}
         host.atomic_json(self.root / 'baseline.json', {'vmId': 'fixture-vm', 'sourceVM': str(args.vm),
-            'environment': environment, 'bootstrapSourceDigest': 'fixture-digest', 'bootstrapTools': {}})
+            'macos': {'version': '27.0.1', 'buildVersion': '26A434'}, 'environment': environment, 'bootstrapSourceDigest': 'fixture-digest', 'bootstrapTools': {}})
         def clone(source, destination):
             self.assertEqual(destination, self.clone)
             self.make_clone()

@@ -147,7 +147,7 @@ const runStage = async ({target = runtimeTarget, log = "Test Suite passed\n", ou
         args: ["test", "-enableAddressSanitizer", "YES"], cwd: ".", dependencies: [], requirements: [], timeoutSeconds: 1,
         nativeAudit: policy(target), resultBundle: true};
     const calls = [];
-    const results = await executeStages([stage], {workspace: directory, artifacts: directory,
+    const results = await executeStages([stage], {workspace: directory, artifacts: directory, inspectResultBundle: async () => "a".repeat(64),
         preflight: {checks: {}, destinations: {macos: "platform=macOS,arch=arm64"}}, writeJSON: atomicJSON, hashFile,
         execute: async (command, args, options) => {
             calls.push([command, ...args]);

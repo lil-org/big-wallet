@@ -271,6 +271,24 @@ class SetupAccessTests(unittest.TestCase):
             password, self.keys, self.access['hostKeyAlias'], directory, self.exchange)
         self.assertFalse(self.calls[0][1].install)
 
+    def test_forced_verification_reprovisions_a_base_verified_candidate_with_unchanged_tools(self):
+        self.record.update({'bootstrapTools': self.tools, 'bootstrapSourceDigest': host.bootstrap_source_digest(),
+                            'baseVerifiedAt': 'verified-before-native-failure'})
+        directory, password = host.guest_setup_password(self.module, self.state, self.record,
+            self.config, self.exchange, None)
+        self.config.pop('autologin')
+        self.config.pop('provisioningRequestID')
+        self.operation['forceVerification'] = True
+        result, _ = self.run_doctor()
+        self.assertEqual(result['status'], 'passed')
+        self.module.GuestInstaller.assert_called_once()
+        self.assertTrue(self.calls[0][1].install)
+        self.module.prepare_guest_access.assert_called_once_with(self.vm, directory,
+            'fixture-vm', 'wallet-test', first_boot_ssh_requested=False)
+        self.exchange_module.GuestExchange.assert_called_once_with('192.168.64.2', 'wallet-test',
+            password, self.keys, self.access['hostKeyAlias'], directory, self.exchange)
+        self.assertEqual(self.record['bootstrapTools'], self.tools)
+
     def test_no_install_waits_for_banner_and_complete_export_before_readiness(self):
         transfer = Mock(poll=Mock(side_effect=[None, {'status': 'passed'}]))
         self.exchange_module.GuestExchange.side_effect = None

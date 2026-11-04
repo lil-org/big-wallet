@@ -1,5 +1,6 @@
 import importlib.util
 import contextlib
+import errno
 import io
 import json
 import os
@@ -10,7 +11,7 @@ import tempfile
 import unittest
 import itertools
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 spec = importlib.util.spec_from_file_location('vm_host', Path(__file__).resolve().parents[1] / 'host.py')
@@ -272,6 +273,18 @@ class LifecycleTests(unittest.TestCase):
         with self.assertRaisesRegex(host.RunnerError, 'symlink'):
             host.private_directory(link)
 
+    def test_upgrade_vm_clone_refuses_copy_fallback(self):
+        source = self.root / 'baseline.vbvm'
+        destination = self.root / 'handoff.vbvm'
+        native = Mock(return_value=-1)
+        with patch.object(host, 'validate_vm'), patch.object(host, 'ensure_disk_idle'), \
+                patch.object(host.ctypes, 'CDLL', return_value=SimpleNamespace(clonefile=native)), \
+                patch.object(host.ctypes, 'get_errno', return_value=errno.ENOTSUP), \
+                patch.object(host, 'checked', side_effect=AssertionError('Started a full copy')), \
+                self.assertRaisesRegex(host.RunnerError, 'requires a copy-on-write clone'):
+            host.clone_vm(source, destination, clone_only=True)
+        self.assertEqual(native.call_args.args[:2], (os.fsencode(source), os.fsencode(destination)))
+
     def test_vm_metadata_symlink_is_rejected_before_any_mutation(self):
         bundle = self.root / 'symlink.vbvm'
         bundle.mkdir()
@@ -284,6 +297,15 @@ class LifecycleTests(unittest.TestCase):
         with patch.object(host, 'checked', side_effect=AssertionError('host command started')):
             with self.assertRaisesRegex(host.RunnerError, 'No verified baseline'):
                 host.run_tests(args, self.root, {})
+
+    def test_unverified_macos_baseline_cannot_start_a_run(self):
+        args = host.parser().parse_args(['run', 'all'])
+        host.atomic_json(self.root / 'baseline.json', {'sourceVM': str(args.vm)})
+        with patch.object(host, 'new_exchange') as exchange, patch.object(host, 'check_capacity') as capacity:
+            with self.assertRaisesRegex(host.RunnerError, 'macOS version/build'):
+                host.run_tests(args, self.root, {})
+        exchange.assert_not_called()
+        capacity.assert_not_called()
 
     def test_run_defaults_to_local_signing_and_requires_explicit_apple_selection(self):
         self.assertEqual(host.parser().parse_args(['run', 'all']).signing, 'local')
@@ -318,7 +340,7 @@ class LifecycleTests(unittest.TestCase):
                 args = host.parser().parse_args(['--vm', os.path.relpath(source), 'run', 'all'] +
                                                (['--candidate'] if candidate else []))
                 host.atomic_json(self.root / ('candidate.json' if candidate else 'baseline.json'),
-                                 {'sourceVM': recorded, 'baseVerifiedAt': 'fixture', 'environment': environment,
+                                 {'sourceVM': recorded, 'baseVerifiedAt': 'fixture', 'environment': environment, 'macos': {'version': '27.0.1', 'buildVersion': '26A434'},
                                   'bootstrapSourceDigest': 'fixture'})
                 with patch.object(host, 'bootstrap_source_digest', return_value='fixture'), \
                         patch.object(host, 'check_capacity', side_effect=host.RunnerError('fixture preparation reached')) as capacity:
@@ -519,6 +541,26 @@ class LifecycleTests(unittest.TestCase):
                                      self.root / 'unused.vbvm', exchange, 'run-fixture', self.root, {}, 100)
         self.assertEqual(result, completed)
         self.assertFalse((exchange / 'stop.json').exists())
+
+    def test_macos_rejection_is_recorded_before_accepting_the_report(self):
+        run_id, exchange = host.new_exchange(self.root, 'run')
+        vm = self.root / 'unused.vbvm'
+        host.register_operation(self.root, vm, exchange, run_id, 'starting', clone_owned=True)
+        path = exchange / 'artifacts/result.json'
+        report = {'runId': run_id, 'finishedAt': 'fixture', 'status': 'passed',
+                  'summary': {'status': 'passed'}, 'coverage': {'status': 'full', 'fullSuiteVerified': True}}
+        host.atomic_json(path, report)
+        with patch.object(host, 'monitor_owned_vm', return_value=report):
+            result = host.monitor_vm(SimpleNamespace(command='run'), self.root, vm, exchange, run_id, self.root,
+                                     {}, 100, keep_operation=True, expected_macos={'version': '27.2', 'buildVersion': '26B123'})
+        self.assertEqual(result, host.read_json(path))
+        self.assertEqual(result['status'], 'blocked')
+        self.assertEqual(result['summary']['status'], 'blocked')
+        self.assertEqual(result['coverage']['status'], 'partial')
+        self.assertFalse(result['coverage']['fullSuiteVerified'])
+        active = host.read_json(self.root / 'active.json')
+        self.assertEqual(active['pendingTermination']['reason'], 'guest_macos_does_not_match_verified_baseline')
+        self.assertTrue(host.accepted_operation_result(active))
 
     def partial_report(self):
         return {'runId': 'run-fixture', 'status': 'running', 'source': {'sha256': 'snapshot-fixture'},
@@ -815,7 +857,7 @@ class LifecycleTests(unittest.TestCase):
                     returncode = None
                     def poll(self): return self.returncode
                     def wait(self, timeout=None): self.returncode = 0; return 0
-                def prepare(args, state, environment, operation):
+                def prepare(args, state, environment, operation, *, force_verification=False):
                     nonlocal prepared_exchange
                     exchange, run_id = operation['exchange'], operation['runId']
                     prepared_exchange = exchange
@@ -965,6 +1007,85 @@ class AttestationAndTerminalTests(unittest.TestCase):
         self.preflight['pinnedEnvironment']['runtimes']['ios']['available'] = False
         self.assertFalse(host.environment_attested(self.preflight, self.environment))
 
+    def test_macos_attestation_requires_exact_live_version_build_and_expected_identity(self):
+        expected = {'version': '27.2', 'buildVersion': '26B123'}
+        self.preflight['macos'] = {'expected': expected, 'actual': expected, 'available': True}
+        self.assertTrue(host.environment_attested(self.preflight, self.environment, expected))
+        for evidence in ({}, {'expected': expected, 'actual': expected, 'available': False},
+                         {'expected': None, 'actual': expected, 'available': True},
+                         {'expected': expected, 'actual': {**expected, 'version': '27.0.1'}, 'available': True},
+                         {'expected': expected, 'actual': {**expected, 'buildVersion': '26A434'}, 'available': True}):
+            with self.subTest(evidence=evidence):
+                self.preflight['macos'] = evidence
+                self.assertFalse(host.environment_attested(self.preflight, self.environment, expected))
+
+    def test_setup_can_observe_an_unpinned_os_but_cannot_accept_an_invalid_identity(self):
+        actual = {'version': '27.0.1', 'buildVersion': '26A434'}
+        self.assertTrue(host.macos_attested({'macos': {'expected': None, 'actual': actual, 'available': True}}))
+        for identity in (None, {}, {'version': 'latest', 'buildVersion': '26A434'},
+                         {'version': '27.2', 'buildVersion': 'not-a-build'}, {**actual, 'extra': True}):
+            with self.subTest(identity=identity), self.assertRaises(host.RunnerError):
+                host.macos_identity(identity)
+
+
+
+class MacOSUpgradeDispatchTests(unittest.TestCase):
+    def test_state_symlink_is_rejected_by_preview_upgrade_and_controls(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory).resolve() / 'alias'
+            state.symlink_to(directory, target_is_directory=True)
+            with patch.object(host.sys, 'platform', 'darwin'), patch.object(host.os, 'uname', return_value=SimpleNamespace(machine='arm64')), \
+                    patch.object(host, 'macos_upgrade_module', side_effect=AssertionError('Accepted state alias')):
+                for command in (['upgrade-macos', '--version', '27.2', '--build', '26B123', '--check'],
+                                ['upgrade-macos', '--version', '27.2', '--build', '26B123'], ['status'], ['stop']):
+                    with self.subTest(command=command), patch('sys.stderr', new_callable=io.StringIO) as error:
+                        self.assertEqual(host.main(['--state-dir', str(state), *command]), 2)
+                        self.assertIn('symlink', error.getvalue())
+
+    def test_preview_dispatch_does_not_create_state_or_acquire_the_generic_runner_lock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / 'uncreated-state'
+            upgrade = Mock(return_value=0)
+            with patch.object(host.sys, 'platform', 'darwin'), \
+                    patch.object(host.os, 'uname', return_value=SimpleNamespace(machine='arm64')), \
+                    patch.object(host, 'macos_upgrade_module', return_value=SimpleNamespace(upgrade=upgrade)), \
+                    patch.object(host, 'private_directory', side_effect=AssertionError('Preview created state')), \
+                    patch.object(host, 'execution_lock', side_effect=AssertionError('Generic lock was acquired')), \
+                    patch.object(host, 'reconcile_interrupted_operation', side_effect=AssertionError('Generic recovery ran')):
+                self.assertEqual(host.main(['--state-dir', str(state), 'upgrade-macos', '--version', '27.2',
+                                            '--build', '26B123', '--check']), 0)
+            self.assertFalse(state.exists())
+            arguments = upgrade.call_args.args
+            self.assertEqual(arguments[1].version, '27.2')
+            self.assertEqual(arguments[1].build, '26B123')
+            self.assertTrue(arguments[1].check)
+            self.assertEqual(arguments[2], state.resolve())
+
+    def test_upgrade_supervisor_handles_status_and_stop_before_generic_operation_control(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory).resolve()
+            host.atomic_json(state / 'macos-upgrade-active.json', {'version': 1})
+            control = Mock(return_value=0)
+            with patch.object(host.sys, 'platform', 'darwin'), \
+                    patch.object(host.os, 'uname', return_value=SimpleNamespace(machine='arm64')), \
+                    patch.object(host, 'macos_upgrade_module', return_value=SimpleNamespace(control=control)), \
+                    patch.object(host, 'publish_stop', side_effect=AssertionError('Generic stop ran')):
+                for command in ('status', 'stop'):
+                    self.assertEqual(host.main(['--state-dir', str(state), command]), 0)
+            self.assertEqual([call.args[1].command for call in control.call_args_list], ['status', 'stop'])
+
+    def test_generic_run_cannot_take_over_an_upgrade_during_supervisor_startup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory).resolve()
+            host.atomic_json(state / 'macos-upgrade-active.json', {'version': 1})
+            guard = Mock(side_effect=host.RunnerError('macOS upgrade supervisor is active'))
+            with patch.object(host.sys, 'platform', 'darwin'), \
+                    patch.object(host.os, 'uname', return_value=SimpleNamespace(machine='arm64')), \
+                    patch.object(host, 'macos_upgrade_module', return_value=SimpleNamespace(ensure_no_supervisor=guard)), \
+                    patch.object(host, 'reconcile_interrupted_operation', side_effect=AssertionError('Generic recovery ran')), \
+                    patch.object(host, 'run_tests', side_effect=AssertionError('Generic tests ran')), patch('sys.stderr', new=io.StringIO()):
+                self.assertEqual(host.main(['--state-dir', str(state), 'run', 'all']), 2)
+            guard.assert_called_once()
 
 
 class SetupViewerTests(unittest.TestCase):

@@ -1,6 +1,7 @@
 import contextlib
 import importlib.util
 import io
+import json
 from pathlib import Path
 import plistlib
 import shutil
@@ -109,7 +110,8 @@ class SetupFixture:
         if job['kind'] == 'run':
             self.test.assertEqual(job['payload'], {
                 'stages': ['test'], 'configuration': 'Debug', 'signing': 'local', 'runtimePlatforms': ['macos'],
-                'onlyTesting': ['WindowAuthenticationSessionTests', 'PasswordStorageTests', 'SecretHandlingTests']})
+                'onlyTesting': ['WindowAuthenticationSessionTests', 'PasswordStorageTests', 'SecretHandlingTests'],
+                'expectedMacOS': {'version': '27.0.1', 'buildVersion': '26A434'}})
         if job['kind'] == 'doctor':
             self.doctor_control = (exchange, job['runId'])
         elif self.stop_phase == 'late-prior-stop':
@@ -118,6 +120,7 @@ class SetupFixture:
         report = {'version': 1, 'runId': job['runId'], 'status': 'passed', 'finishedAt': 'fixture',
                   'identity': {'vmId': job['vmId'], 'consoleUser': 'wallet-test'}, 'source': job['source'],
                   'preflight': {'bootstrap': {'available': True, 'hashes': self.tools},
+                    'macos': {'expected': job['payload'].get('expectedMacOS'), 'actual': {'version': '27.0.1', 'buildVersion': '26A434'}, 'available': True},
                     'checks': {**{name: True for name in ('bootstrap', 'node', 'python', 'jq', 'xcode', 'macos', 'ios', 'visionos')},
                                'signing': False, 'proofKey': False}}}
         host.atomic_json(exchange / 'artifacts/result.json', report)
@@ -141,7 +144,8 @@ class SetupFixture:
                binaries, bootstrap_tools, source, password, source_digest):
         run_id, exchange = operation['runId'], operation['exchange']
         host.atomic_json(exchange / 'job.json', {'version': 1, 'runId': run_id, 'vmId': record['vmId'],
-            'kind': 'doctor', 'profile': 'all', 'payload': {'stages': [], 'onlyTesting': []}, 'source': source,
+            'kind': 'doctor', 'profile': 'all', 'payload': {'stages': [], 'onlyTesting': [],
+                **({'expectedMacOS': record['macos']} if record.get('macos') else {})}, 'source': source,
             'bootstrapTools': bootstrap_tools})
         operation['monitorCalled'] = True
         return host.monitor_vm(args, state, candidate, exchange, run_id, binaries, environment,
@@ -218,6 +222,56 @@ class SetupPreparationTests(unittest.TestCase):
             validation_path = Path(baseline['validationResult'])
             self.assertEqual(observed, [(validation_path, host.read_json(validation_path))] * 2)
 
+    def test_forced_setup_reverifies_an_unchanged_baseline_and_pins_every_job_to_its_os(self):
+        with SetupFixture(self) as fixture:
+            self.assertEqual(fixture.run(), 0)
+            original = host.read_json(fixture.state / 'baseline.json')
+            self.assertEqual(original['macos'], {'version': '27.0.1', 'buildVersion': '26A434'})
+            fixture.launches.clear()
+            self.assertEqual(host.setup(fixture.args, fixture.state, fixture.environment, force_verification=True), 0)
+            self.assertEqual(fixture.launches, ['doctor', 'run'])
+            baseline = host.read_json(fixture.state / 'baseline.json')
+            self.assertNotEqual(baseline['validationResult'], original['validationResult'])
+            self.assertEqual(baseline['macos'], original['macos'])
+
+    def test_setup_refuses_os_drift_before_smoke_tests_and_preserves_the_baseline(self):
+        with SetupFixture(self) as fixture:
+            self.assertEqual(fixture.run(), 0)
+            baseline = (fixture.state / 'baseline.json').read_bytes()
+            fixture.launches.clear()
+            def drift(command, **options):
+                child = fixture.launch(command, **options)
+                exchange = Path(command[command.index('--status') + 1]).parent
+                path = exchange / 'artifacts/result.json'
+                report = host.read_json(path)
+                report['preflight']['macos']['actual'] = {'version': '27.2', 'buildVersion': '26B123'}
+                host.atomic_json(path, report)
+                return child
+            with patch.object(host.subprocess, 'Popen', side_effect=drift):
+                self.assertEqual(host.setup(fixture.args, fixture.state, fixture.environment, force_verification=True), 2)
+            self.assertEqual(fixture.launches, ['doctor'])
+            self.assertEqual((fixture.state / 'baseline.json').read_bytes(), baseline)
+
+    def test_forced_setup_preserves_the_verified_macos_upgrade_lineage(self):
+        with SetupFixture(self) as fixture:
+            self.assertEqual(fixture.run(), 0)
+            path = fixture.state / 'baseline.json'
+            record = host.read_json(path)
+            record['macosUpgradeID'] = 'macos-upgrade-20261103T120000Z-0123abcd'
+            host.atomic_json(path, record)
+            source_info = (fixture.state / 'baseline.vbvm').stat()
+            source_hash = host.hash_regular_file(path)
+            self.assertEqual(host.setup(fixture.args, fixture.state, fixture.environment, force_verification=True), 0)
+            self.assertEqual(host.read_json(path)['macosUpgradeID'], record['macosUpgradeID'])
+            record = host.read_json(path)
+            candidate_info = (fixture.state / 'baseline.vbvm').stat()
+            self.assertEqual(record['macosUpgradePromotion'], {'sourceFileID': [source_info.st_dev, source_info.st_ino],
+                'candidateFileID': [candidate_info.st_dev, candidate_info.st_ino], 'sourceRecordSHA256': source_hash})
+            record['macosUpgradeID'] = '../another-upgrade'
+            host.atomic_json(path, record)
+            with self.assertRaisesRegex(host.RunnerError, 'upgrade identity is invalid'):
+                host.setup(fixture.args, fixture.state, fixture.environment, force_verification=True)
+
     def test_result_callback_failure_still_clears_owned_operation(self):
         with SetupFixture(self) as fixture:
             def report(path, result):
@@ -248,6 +302,36 @@ class SetupPreparationTests(unittest.TestCase):
             self.assertNotIn('verifiedAt', candidate)
             self.assertNotIn('verificationSigningMode', candidate)
             self.assertNotIn('promotionPending', candidate)
+
+    def test_forced_retry_refreshes_the_retained_candidate_after_native_runtime_failure(self):
+        with SetupFixture(self) as fixture:
+            launch = fixture.launch
+            def fail_runtime(command, **options):
+                child = launch(command, **options)
+                exchange = Path(command[command.index('--status') + 1]).parent
+                if host.read_json(exchange / 'job.json')['kind'] == 'run':
+                    report = host.read_json(exchange / 'artifacts/result.json')
+                    report.update(status='failed', stages=[{'id': 'build-tests.ios.debug', 'status': 'failed', 'exitCode': 70}])
+                    host.atomic_json(exchange / 'artifacts/result.json', report)
+                return child
+            with patch.object(host.subprocess, 'Popen', side_effect=fail_runtime):
+                self.assertEqual(fixture.run(), 2)
+            candidate_info = fixture.candidate.stat()
+            candidate = host.read_json(fixture.state / 'candidate.json')
+            self.assertIn('baseVerifiedAt', candidate)
+            fixture.launches.clear()
+            observed = []
+            def refresh(args, state, vm, environment, operation, record, *rest):
+                self.assertTrue(operation['forceVerification'])
+                self.assertEqual(record['baseVerifiedAt'], candidate['baseVerifiedAt'])
+                self.assertEqual((vm.stat().st_dev, vm.stat().st_ino), (candidate_info.st_dev, candidate_info.st_ino))
+                observed.append(record['vmId'])
+                return fixture.doctor(args, state, vm, environment, operation, record, *rest)
+            with patch.object(host, 'run_setup_doctor', side_effect=refresh), \
+                    patch.object(host, 'clone_vm', side_effect=AssertionError('Retained candidate was recloned')):
+                self.assertEqual(host.setup(fixture.args, fixture.state, fixture.environment, force_verification=True), 0)
+            self.assertEqual(observed, [candidate['vmId']])
+            self.assertEqual(fixture.launches, ['doctor', 'run'])
 
     def test_baseline_without_local_verification_requires_smoke_tests(self):
         with SetupFixture(self) as fixture:
@@ -482,10 +566,16 @@ class BaselinePromotionTests(unittest.TestCase):
         for phase in phases:
             with self.subTest(phase=phase), SetupFixture(self, baseline=True) as fixture:
                 previous_record = host.read_json(fixture.state / 'baseline.json')
+                previous_bytes = json.dumps(previous_record, indent=2).encode() + b'\n'
+                (fixture.state / 'baseline.json').write_bytes(previous_bytes)
                 rename = Path.rename
                 write = host.atomic_json
                 dump = host.plistlib.dump
                 def rename_then_fail(path, destination):
+                    if phase == 'config-write' and path == fixture.candidate:
+                        config = host.validate_vm(path)
+                        config['sharedFolders'] = [{'name': 'fixture-share'}]
+                        host.atomic_plist(path / '.vbdata/Config.plist', config)
                     result = rename(path, destination)
                     if phase == 'old-baseline-moved' and path == fixture.baseline or phase == 'candidate-moved' and path == fixture.candidate:
                         raise OSError('fixture: promotion interrupted')
@@ -493,10 +583,11 @@ class BaselinePromotionTests(unittest.TestCase):
                 def write_record(path, value):
                     if phase == 'baseline-record' and path == fixture.state / 'baseline.json':
                         raise OSError('fixture: promotion interrupted')
+                    backup_journal = path == fixture.state / 'candidate.json' and value.get('promotionPending', {}).get('backupRecordSHA256')
+                    if phase == 'backup-record' and backup_journal:
+                        raise OSError('fixture: promotion interrupted')
                     result = write(path, value)
-                    if (phase == 'backup-record' and path.name.startswith('previous-baseline-') or
-                            phase == 'backup-journal' and path == fixture.state / 'candidate.json' and
-                            value.get('promotionPending', {}).get('backupRecordSHA256')):
+                    if phase == 'backup-journal' and backup_journal:
                         raise OSError('fixture: promotion interrupted')
                     return result
                 def write_config(value, file, **kwargs):
@@ -517,7 +608,7 @@ class BaselinePromotionTests(unittest.TestCase):
                 self.assertEqual(fixture.run(), 0)
                 self.assertEqual(fixture.launches, ['doctor', 'run'])
                 self.assertEqual((backup / 'Disk.img').read_bytes(), b'old-baseline')
-                self.assertEqual(host.read_json(backup.with_suffix('.json')), previous_record)
+                self.assertEqual(backup.with_suffix('.json').read_bytes(), previous_bytes)
                 self.assertEqual((fixture.baseline / 'Disk.img').read_bytes(), b'verified-candidate')
                 self.assertEqual((fixture.original / 'Disk.img').read_bytes(), b'original')
                 self.assertFalse((fixture.state / 'candidate.json').exists())

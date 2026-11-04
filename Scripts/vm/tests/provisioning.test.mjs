@@ -1412,7 +1412,98 @@ test('runtime storage guards measure download headroom and a reserve beyond the 
     for (const size of [0, -1, 1.5, Number.MAX_SAFE_INTEGER, Infinity]) assert.throws(() => rootSpaceRequirement(size), /size is invalid/);
 });
 
-function runtimeProvisioningFixture({platform = 'iOS', reused = false, dmgPath, importedBuild} = {}) {
+function runtimeExportFixture() {
+    const directory = filesystem.realpathSync(mkdtempSync(path.join(tmpdir(), 'wallet-runtime-export-')));
+    const bytes = pureFunction('runtimeArtifactBytes', {fs: filesystem, path, check});
+    const select = pureFunction('exportedRuntimeImage', {fs: filesystem, path, check, runtimeArtifactBytes: bytes});
+    const bundle = (name = 'iOS.exportedBundle') => {
+        const artifact = path.join(directory, name);
+        mkdirSync(path.join(artifact, 'Restore'), {recursive: true});
+        writeFileSync(path.join(artifact, 'Restore/runtime.dmg'), Buffer.alloc(128, 1));
+        writeFileSync(path.join(artifact, 'Info.plist'), 'fixture secure export metadata');
+        return artifact;
+    };
+    return {directory, bytes, select: () => select(directory), bundle, close: () => rmSync(directory, {recursive: true, force: true})};
+}
+
+test('runtime export discovery preserves the complete Apple bundle and counts its metadata', () => {
+    for (const suffix of ['exportedBundle', 'exportBundle']) {
+        const fixture = runtimeExportFixture();
+        try {
+            const artifact = fixture.bundle(`iOS.${suffix}`);
+            const metadata = readFileSync(path.join(artifact, 'Info.plist'));
+            assert.equal(fixture.select(), artifact);
+            assert.equal(fixture.bytes(artifact), 128 + metadata.length);
+            assert.deepEqual(readFileSync(path.join(artifact, 'Info.plist')), metadata);
+        } finally { fixture.close(); }
+    }
+});
+
+test('runtime export discovery still selects a standalone external DMG', () => {
+    const fixture = runtimeExportFixture();
+    try {
+        const artifact = path.join(fixture.directory, 'iOS.dmg');
+        writeFileSync(artifact, Buffer.alloc(64, 1));
+        assert.equal(fixture.select(), artifact);
+        assert.equal(fixture.bytes(artifact), 64);
+    } finally { fixture.close(); }
+});
+
+test('runtime export discovery rejects multiple independent artifacts', () => {
+    const fixture = runtimeExportFixture();
+    try {
+        fixture.bundle();
+        writeFileSync(path.join(fixture.directory, 'another.dmg'), 'image');
+        assert.throws(fixture.select, /exactly one/);
+    } finally { fixture.close(); }
+});
+
+test('runtime artifact inspection rejects missing metadata, nested bundles, and symlinks', () => {
+    for (const kind of ['metadata', 'nested', 'symlink', 'image-directory']) {
+        const fixture = runtimeExportFixture();
+        try {
+            const artifact = fixture.bundle();
+            if (kind === 'metadata') filesystem.unlinkSync(path.join(artifact, 'Info.plist'));
+            if (kind === 'nested') mkdirSync(path.join(artifact, 'nested.exportedBundle'));
+            if (kind === 'symlink') symlinkSync(path.join(artifact, 'Info.plist'), path.join(artifact, 'metadata-link'));
+            if (kind === 'image-directory') {
+                filesystem.unlinkSync(path.join(artifact, 'Restore/runtime.dmg'));
+                mkdirSync(path.join(artifact, 'Restore/runtime.dmg'));
+            }
+            assert.throws(fixture.select, /incomplete|Nested|regular files/);
+        } finally { fixture.close(); }
+    }
+    const fixture = runtimeExportFixture();
+    try {
+        const artifact = fixture.bundle();
+        symlinkSync(artifact, path.join(fixture.directory, 'alias'));
+        assert.throws(fixture.select, /symlinks/);
+    } finally { fixture.close(); }
+});
+
+test('runtime artifact inspection is bounded and storage checks use all bundle file bytes', () => {
+    const fixture = runtimeExportFixture();
+    try {
+        const artifact = fixture.bundle();
+        const checkpoint = pureFunction('runtimeStorageCheckpoint', {path, check, runtimeArtifactBytes: fixture.bytes,
+            runtimeRootSpaceRequirement: rootSpaceRequirement, console: {log() {}}, fs: {statfsSync: () => ({
+                bavail: 8 * 1024 ** 3 + 128, bsize: 1, blocks: 64 * 1024 ** 3})}});
+        assert.throws(() => checkpoint('/guest/build', 'iOS', artifact), /Insufficient guest system-volume/);
+        const limited = pureFunction('runtimeArtifactBytes', {path, check, fs: {...filesystem,
+            lstatSync(filename) {
+                const metadata = filesystem.lstatSync(filename);
+                return filename.endsWith('.dmg') ? {...metadata, size: 129 * 1024 ** 3,
+                    isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false} : metadata;
+            }}});
+        assert.throws(() => limited(artifact), /bounded byte/);
+        let nested = artifact;
+        for (let depth = 0; depth < 17; depth += 1) nested = path.join(nested, 'nested');
+        mkdirSync(nested, {recursive: true});
+        assert.throws(fixture.select, /bounded inspection/);
+    } finally { fixture.close(); }
+});
+
+function runtimeProvisioningFixture({platform = 'iOS', reused = false, dmgPath, importedBuild, cacheError, cachedBuild, cacheUnavailable = false} = {}) {
     const wanted = {platform, version: '27.0', buildVersion: platform === 'iOS' ? '24A434' : '24M362', ...(dmgPath ? {dmgPath} : {})};
     const runtime = {identifier: `com.apple.CoreSimulator.SimRuntime.${platform === 'iOS' ? 'iOS' : 'xrOS'}-27-0`,
         version: wanted.version, buildversion: wanted.buildVersion, isAvailable: true};
@@ -1420,33 +1511,60 @@ function runtimeProvisioningFixture({platform = 'iOS', reused = false, dmgPath, 
     const buildRoot = '/guest/build';
     const staging = '/guest/provision';
     const commands = [];
+    const cacheCommands = [];
+    const events = [];
     const removed = [];
     let runtimes = reused ? [runtime] : [];
     const start = source.indexOf("    console.log('Verifying pinned guest simulator runtimes.');");
     const end = source.indexOf('    const launchDirectory =', start);
     assert.ok(start >= 0 && end > start);
-    const globals = {config: {vmId: 'fixture', runtimes: [wanted]}, path, buildRoot, staging, check,
+    const developer = '/Applications/Xcode.app/Contents/Developer';
+    const globals = {config: {vmId: 'fixture', runtimes: [wanted]}, path, buildRoot, staging, check, developer,
         matchesRuntime: pureFunction('matchesRuntime'), console: {log() {}},
         fs: {mkdirSync() {}, existsSync: () => true},
         staged: relative => path.join(staging, relative), runtimeStorageCheckpoint() {},
         exportedRuntimeImage: directory => path.join(directory, 'downloaded.dmg'),
         removeLocalProvisioningInput: filename => removed.push(filename),
-        run(_label, command, args) {
+        run(_label, command, args, options = {}) {
             if (command === '/usr/bin/xcodebuild') {
                 commands.push([command, ...args]);
                 if (args[0] === '-importPlatform') runtimes = [{...runtime, buildversion: importedBuild ?? wanted.buildVersion}];
                 else assert.equal(args[0], '-downloadPlatform');
                 return '';
             }
+            if (command === '/usr/bin/env') {
+                assert.equal(args[0], 'DEVELOPER_DIR=' + developer);
+                if (args[3] === 'runtime') cacheCommands.push({command, args: Array.from(args), options: {...options}});
+                command = args[1];
+                args = Array.from(args).slice(2);
+            }
             assert.equal(command, '/usr/bin/xcrun');
+            if (args[1] === 'runtime') {
+                assert.deepEqual(Array.from(args), ['simctl', 'runtime', 'dyld_shared_cache', 'update', runtime.identifier]);
+                events.push('cache');
+                if (cacheError) throw new Error(cacheError);
+                if (cachedBuild || cacheUnavailable) runtimes = [{...runtime, buildversion: cachedBuild ?? runtime.buildversion,
+                    isAvailable: !cacheUnavailable}];
+                return 'dyld shared cache is usable at path: fixture';
+            }
             assert.deepEqual(Array.from(args).slice(0, 2), ['simctl', 'list']);
+            events.push(args[2]);
             if (args[2] === 'runtimes') return JSON.stringify({runtimes});
             if (args[2] === 'devicetypes') return JSON.stringify({devicetypes: [{name, identifier: 'fixture-device'}]});
             assert.equal(args[2], 'devices');
             return JSON.stringify({devices: {[runtime.identifier]: [{name, isAvailable: true}]}});
         },
     };
-    return {wanted, commands, removed, run: () => vm.runInNewContext(source.slice(start, end), globals)};
+    globals.prepareRuntimeCache = pureFunction('prepareRuntimeCache', {check, developer,
+        matchesRuntime: globals.matchesRuntime, run: globals.run, console: globals.console});
+    globals.verifyOrRepairPinnedRuntime = (pin, _root, mode) => {
+        events.push(`verify:${mode ?? 'prepare'}`);
+        if (mode === 'existing' && runtimes.length === 0) return null;
+        const selected = runtimes.find(value => globals.matchesRuntime(value, pin));
+        check(selected, `${pin.platform} ${pin.version} (${pin.buildVersion}) is unavailable`);
+        return selected;
+    };
+    return {wanted, commands, cacheCommands, events, removed, run: () => vm.runInNewContext(source.slice(start, end), globals)};
 }
 
 test('runtime downloads select the pinned build ID when release and build differ', () => {
@@ -1480,6 +1598,796 @@ test('runtime provisioning imports an explicit DMG without downloading', () => {
     fixture.run();
     assert.deepEqual(fixture.commands, [['/usr/bin/xcodebuild', '-importPlatform', '/guest/provision/runtime.dmg']]);
     assert.deepEqual(fixture.removed, ['/guest/provision/runtime.dmg']);
+});
+
+test('runtime provisioning awaits the exact pinned cache and rechecks it before device readiness', () => {
+    for (const platform of ['iOS', 'visionOS']) {
+        const fixture = runtimeProvisioningFixture({platform, reused: true});
+        fixture.run();
+        assert.deepEqual(fixture.commands, []);
+        assert.equal(fixture.cacheCommands.length, 1);
+        const cached = fixture.cacheCommands[0];
+        assert.deepEqual(cached.args, ['DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer', '/usr/bin/xcrun',
+            'simctl', 'runtime', 'dyld_shared_cache', 'update',
+            `com.apple.CoreSimulator.SimRuntime.${platform === 'iOS' ? 'iOS' : 'xrOS'}-27-0`]);
+        assert.equal(cached.options.user, true);
+        assert.equal(cached.options.timeout, 1_800_000);
+        assert.equal(cached.options.maxBuffer, 64 * 1024);
+        assert.equal(cached.options.logStdout, true);
+        assert.equal(cached.args.includes('--force'), false);
+        assert.equal(cached.args.includes('--all'), false);
+        const position = fixture.events.indexOf('cache');
+        assert.equal(fixture.events[position + 1], 'runtimes');
+        assert.ok(fixture.events.indexOf('devicetypes') > position + 1);
+    }
+});
+
+test('cache preparation failures and post-cache runtime drift block setup before device readiness', () => {
+    for (const options of [{cacheError: 'fixture cache failed'}, {cachedBuild: '24A999'}, {cacheUnavailable: true}]) {
+        const fixture = runtimeProvisioningFixture({reused: true, ...options});
+        assert.throws(fixture.run, /fixture cache failed|changed or became unavailable/);
+        assert.equal(fixture.events.includes('devicetypes'), false);
+        assert.equal(fixture.events.includes('devices'), false);
+    }
+});
+
+test('cache command output is bounded and retained on failure without enabling secret logging', () => {
+    const written = [];
+    const calls = [];
+    let result = {status: 1, stdout: 'bounded cache failure details', stderr: ''};
+    const command = pureFunction('run', {check, fail: message => { throw new Error(message); },
+        uidText: '501', config: {consoleUser: 'wallet-test'},
+        environment: {DEVELOPER_DIR: '/Applications/Xcode.app/Contents/Developer'},
+        process: {stdout: {write: value => written.push(value)}, stderr: {write() {}}},
+        spawnSync(file, args, options) {
+            calls.push({file, args: Array.from(args), options});
+            return result;
+        }});
+    const options = {user: true, maxBuffer: 64 * 1024, timeout: 1_800_000, logStdout: true};
+    assert.throws(() => command('Cache preparation', '/usr/bin/env', ['DEVELOPER_DIR=pinned', '/usr/bin/xcrun'], options), /failed/);
+    assert.equal(calls[0].options.maxBuffer, 64 * 1024);
+    assert.equal(calls[0].file, '/bin/launchctl');
+    assert.deepEqual(written, ['bounded cache failure details']);
+    assert.throws(() => command('Secret command', '/usr/bin/fixture', [], {...options, secret: true}), /failed/);
+    assert.equal(written.length, 1);
+    assert.throws(() => command('Invalid buffer', '/usr/bin/fixture', [], {...options, maxBuffer: Infinity}), /output limit/);
+    for (const interruption of [{error: {code: 'ETIMEDOUT'}}, {error: {code: 'ENOBUFS'}}, {signal: 'SIGTERM'}]) {
+        result = {status: 0, stdout: '', stderr: '', ...interruption};
+        assert.throws(() => command('Cache preparation', '/usr/bin/env', [], options), /failed/);
+    }
+});
+
+function runtimeRepairFixture({platform = 'iOS', healthy = false, sibling = false, exportParents = []} = {}) {
+    const root = filesystem.realpathSync(mkdtempSync(path.join(tmpdir(), 'wallet-runtime-repair-')));
+    const buildRoot = path.join(root, 'build'), state = path.join(root, 'state');
+    const pin = {platform, version: '27.0', buildVersion: platform === 'iOS' ? '24A434' : '24M362'};
+    const key = `${pin.platform}-${pin.version}-${pin.buildVersion}`;
+    const asset = `com.apple.MobileAsset.${platform === 'iOS' ? 'iOS' : 'xrOS'}SimulatorRuntime`;
+    const runtimeIdentifier = `com.apple.CoreSimulator.SimRuntime.${platform === 'iOS' ? 'iOS' : 'xrOS'}-27-0`;
+    const exported = path.join(buildRoot, 'RuntimeDownloads', key, ...exportParents, 'runtime.exportedBundle');
+    mkdirSync(path.join(exported, 'Restore'), {recursive: true});
+    mkdirSync(state);
+    const original = path.join(exported, 'Restore', 'runtime.dmg');
+    writeFileSync(original, 'official runtime fixture bytes');
+    writeFileSync(path.join(exported, 'ExportedMetadata.plist'), JSON.stringify({CFBundleIdentifier: asset,
+        MobileAssetProperties: {Build: pin.buildVersion, SimulatorVersion: pin.version, Architectures: ['arm64']}}));
+    for (const name of ['BuildManifest.plist', 'Restore.plist']) writeFileSync(path.join(exported, 'Restore', name),
+        JSON.stringify({ProductVersion: pin.version, ProductBuildVersion: pin.buildVersion}));
+    const digest = pureFunction('runtimeFileDigest', {fs: filesystem, path, check, crypto: {createHash}, Buffer});
+    const source = digest(original);
+    const oldID = '11111111-1111-4111-8111-111111111111', probeID = '22222222-2222-4222-8222-222222222222';
+    const newID = '33333333-3333-4333-8333-333333333333', siblingID = '44444444-4444-4444-8444-444444444444';
+    const base = {version: pin.version, build: pin.buildVersion, platformIdentifier: `com.apple.platform.${platform === 'iOS' ? 'iphone' : 'xr'}simulator`,
+        runtimeIdentifier, sizeBytes: source.size, deletable: true, state: 'Ready', signatureState: 'Unknown'};
+    const mount = `/Library/Developer/CoreSimulator/Volumes/${platform === 'iOS' ? 'iOS' : 'xrOS'}_${pin.buildVersion}`;
+    const bundlePath = `${mount}/Library/Developer/CoreSimulator/Profiles/Runtimes/${platform === 'iOS' ? 'iOS' : 'xrOS'} 27.0.simruntime`;
+    const normal = id => ({...base, identifier: id, kind: 'Disk Image', signatureState: 'Verified',
+        path: `/Library/Developer/CoreSimulator/Images/${id}.dmg`, mountPath: mount, runtimeBundlePath: bundlePath});
+    const broken = {...base, identifier: oldID, kind: 'Patchable Cryptex Disk Image',
+        path: `/System/Library/AssetsV2/${asset.replaceAll('.', '_')}/${'a'.repeat(40)}.asset/AssetData`};
+    const inventory = new Map([[oldID, healthy ? normal(oldID) : broken]]);
+    if (sibling) inventory.set(siblingID, {...broken, identifier: siblingID, state: 'Unusable', unusableErrorMessage: 'Cryptex Mount Preferred'});
+    const calls = [], writes = [], checkpoints = [], logs = [], sleeps = [], queryTimeouts = [], behavior = {};
+    let clock = 0, runtimeQueries = 0;
+    const fs = {...filesystem,
+        lstatSync(filename) {
+            if (filename.startsWith('/Library/Developer/CoreSimulator/Images/')) return {isFile: () => true,
+                isSymbolicLink: () => false, size: source.size, dev: 2, ino: 100, mtimeMs: 1};
+            const item = filesystem.lstatSync(filename); return new Proxy(item, {get(target, key) {
+            if (key === 'uid') return behavior.sourceWrongOwner && filename.endsWith('/runtime.dmg') && filename.includes('/RuntimeRepairSources/') ? 501 : 0;
+            const value = Reflect.get(target, key); return typeof value === 'function' ? value.bind(target) : value;
+        }}); },
+        statSync(filename) { return filename === bundlePath ? {isDirectory: () => true, dev: 3, ino: 200} : filesystem.statSync(filename); },
+        chownSync() {},
+    };
+    const runtime = () => {
+        const selectedPath = behavior.preferredCryptex ? '/private/var/run/fixture-cryptex/iOS.simruntime' : bundlePath;
+        return {identifier: runtimeIdentifier, version: pin.version, buildversion: behavior.profileWrongPin ? '24A999' : pin.buildVersion,
+            isAvailable: !behavior.profileUnavailable && (!behavior.availableAfterQueries || runtimeQueries >= behavior.availableAfterQueries),
+            availabilityError: behavior.profileUnavailable ? 'fixture profile handoff unavailable' : undefined,
+            bundlePath: selectedPath, runtimeRoot: behavior.profileWrongRoot ? '/private/wrong-runtime-root' : `${selectedPath}/Contents/Resources/RuntimeRoot`};
+    };
+    const run = (label, file, args, options) => {
+        if (file === '/bin/sleep') { sleeps.push(options.timeout); clock += Number(args[0]) * 1000; return ''; }
+        if (file === '/usr/bin/plutil') {
+            const filename = args.at(-1);
+            assert.equal(args[0], '-extract', 'Complete manifests may contain plist Data that JSON conversion cannot represent');
+            const metadata = filename.startsWith(bundlePath) ? {ProductVersion: pin.version, ProductBuildVersion: pin.buildVersion}
+                : JSON.parse(readFileSync(filename, 'utf8'));
+            const value = args[1].split('.').reduce((current, key) => current[key], metadata);
+            assert.notEqual(value, undefined);
+            return args[2] === 'json' ? JSON.stringify(value) : String(value);
+        }
+        if (file === '/sbin/mount') return `/dev/disk7s1 on ${mount} (apfs, local, sealed, read-only)`;
+        assert.equal(file, '/usr/bin/env');
+        assert.deepEqual(Array.from(args).slice(0, 3), ['DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer', '/usr/bin/xcrun', 'simctl']);
+        assert.equal(options.user, true);
+        assert.equal(options.returnStatus, true);
+        const command = Array.from(args).slice(3);
+        calls.push(command);
+        const response = (stdout, status = 0) => ({status, stdout, stderr: ''});
+        if (command[0] === 'list') {
+            if (command[1] === 'runtimes') { runtimeQueries += 1; queryTimeouts.push(options.timeout); }
+            return response(JSON.stringify(command[1] === 'devices' ?
+                {devices: {[runtimeIdentifier]: [{state: behavior.booted ? 'Booted' : 'Shutdown'}]}} : {runtimes: [runtime()]}));
+        }
+        if (command[1] === 'list') return response(JSON.stringify(Object.fromEntries(inventory)));
+        if (command[1] === 'verify') {
+            const image = inventory.get(command[2]);
+            if (behavior.verifyTimeout) throw new Error('fixture native verify timeout');
+            if (behavior.verifyUnknown) return response('verification unavailable', 1);
+            if (image.kind === 'Patchable Cryptex Disk Image') {
+                if (behavior.anchorNowVerified) return response('Signature verified, signature is valid.');
+                if (behavior.recreatedVerify === 'verified' && image.identifier !== oldID) return response('Signature verified, signature is valid.');
+                if (behavior.recreatedVerify === 'unknown' && image.identifier !== oldID) return response('Native verification unavailable', 1);
+                if (behavior.afterFailedVerify) behavior.afterFailedVerify(inventory);
+                return response('Signature verification failed: (-67054 a sealed resource is missing or invalid', 1);
+            }
+            if (behavior.interruptReadyProof && command[2] === probeID) {
+                behavior.interruptReadyProof = false; throw new Error('fixture Ready source verification interrupted');
+            }
+            return response('Signature verified, signature is valid.');
+        }
+        if (command[1] === 'add') {
+            assert.equal(command.length, 3);
+            const hasBroken = [...inventory.values()].some(value => value.kind === 'Patchable Cryptex Disk Image');
+            if (hasBroken) {
+                const duplicate = [...inventory.values()].find(value => value.kind === 'Patchable Cryptex Disk Image' && value.state === 'Ready').identifier;
+                const addedProbeID = behavior.nextProbeID ?? probeID;
+                inventory.set(addedProbeID, {...normal(addedProbeID),
+                    path: behavior.readyAdd ? normal(addedProbeID).path : `/Library/Developer/CoreSimulator/Images/Inbox/${addedProbeID}.dmg`,
+                    state: behavior.readyAdd ? 'Ready' : 'Unusable',
+                    sizeBytes: behavior.probeSizeMismatch ? source.size + 1 : source.size,
+                    signatureState: behavior.probeUnverified ? 'Unknown' : 'Verified', unusableErrorMessage: `Duplicate of ${duplicate}`});
+                if (behavior.afterProbe) behavior.afterProbe(inventory);
+                if (behavior.mutateAfterProbe) behavior.mutateAfterProbe(inventory);
+                if (behavior.changeSourceAfterProbe) writeFileSync(command[2], 'changed source bytes');
+                if (behavior.interruptProbe) { behavior.interruptProbe = false; throw new Error('fixture probe interrupted after native completion'); }
+                return response(behavior.readyAdd ? addedProbeID : `D: ${behavior.reportedProbeID ?? addedProbeID} ${platform} (Unusable - Duplicate of ${duplicate})`, behavior.readyAdd ? 0 : 5);
+            }
+            if (behavior.failedAdd) return response('fixture add failed before registration', 1);
+            inventory.set(newID, normal(newID));
+            if (behavior.interruptAdd) { behavior.interruptAdd = false; throw new Error('fixture add interrupted after registration'); }
+            return response(newID);
+        }
+        assert.equal(command[1], 'delete');
+        assert.equal(command.length, 3);
+        const removed = command[2];
+        inventory.delete(removed);
+        if (behavior.retireSiblings && [oldID, siblingID].includes(removed)) {
+            inventory.delete(siblingID); inventory.delete(oldID);
+        }
+        if (behavior.interruptDelete === removed) { behavior.interruptDelete = undefined; throw new Error('fixture delete interrupted after removal'); }
+        return response('Deleted');
+    };
+    const artifactBytes = pureFunction('runtimeArtifactBytes', {fs, path, check});
+    const select = pureFunction('exportedRuntimeImage', {fs, path, check, runtimeArtifactBytes: artifactBytes});
+    const prepare = pureFunction('verifyOrRepairPinnedRuntime', {fs, path, check, fail: message => { throw new Error(message); },
+        state, config: {vmId: 'fixture-vm'}, performance: {now: () => clock},
+        developer: '/Applications/Xcode.app/Contents/Developer', matchesRuntime: pureFunction('matchesRuntime'), run,
+        runtimeMetadataField: pureFunction('runtimeMetadataField', {check, run}),
+        runtimeAdmissionDiagnostic: pureFunction('runtimeAdmissionDiagnostic', {Buffer}),
+        runtimeProfileDiagnostic: pureFunction('runtimeProfileDiagnostic', {Buffer}),
+        exportedRuntimeImage: select, runtimeFileDigest(filename) {
+            if (filename.startsWith('/Library/Developer/CoreSimulator/Images/Inbox/')) throw Object.assign(new Error('Discarded native Inbox file'), {code: 'ENOENT'});
+            if (filename.startsWith('/Library/Developer/CoreSimulator/Images/')) return behavior.normalHashMismatch ? {...source, sha256: 'f'.repeat(64)} : source;
+            return digest(filename);
+        }, runtimeStorageCheckpoint(...args) { checkpoints.push(args); if (behavior.noSpace) throw new Error('fixture storage reserve'); },
+        writeDurableJSON(filename, value) {
+            writes.push(JSON.parse(JSON.stringify(value))); writeFileSync(filename, JSON.stringify(value), {mode: 0o600});
+            if (value.phase === 'adding' && value.addAttempted && behavior.interruptAddIntent) {
+                behavior.interruptAddIntent = false; throw new Error('fixture stopped before add');
+            }
+        },
+        syncDirectory() {}, console: {log: value => logs.push(value)}});
+    const journalPath = path.join(state, 'RuntimeRepairs', `${key}.json`);
+    return {pin, buildRoot, exported, inventory, calls, writes, checkpoints, logs, sleeps, queryTimeouts,
+        elapsed: () => clock, behavior, oldID, probeID, newID, siblingID, journalPath,
+        prepare: mode => prepare(pin, buildRoot, mode), journal: () => JSON.parse(readFileSync(journalPath, 'utf8')),
+        close: () => rmSync(root, {recursive: true, force: true})};
+}
+
+test('exact runtime repair requires independent verified source then deletes only recorded UUIDs', () => {
+    for (const platform of ['iOS', 'visionOS']) {
+        const fixture = runtimeRepairFixture({platform});
+        try {
+            const runtime = fixture.prepare();
+            assert.equal(runtime.buildversion, fixture.pin.buildVersion);
+            assert.deepEqual(fixture.calls.filter(args => args[1] === 'delete').map(args => args[2]), [fixture.probeID, fixture.oldID]);
+            assert.equal(fixture.calls.filter(args => args[1] === 'add').length, 2);
+            assert.ok(fixture.calls.every(args => !args.some(value => ['--all', '--unusable', '--keep-asset', '--move', '--async', '--force'].includes(value))));
+            assert.equal(fixture.calls.some(args => args[1] === 'verify' && args[2] === fixture.probeID), false);
+            assert.ok(fixture.writes.some(value => value.phase === 'probe-verified' && value.probeCompletion?.exitCode === 5 &&
+                value.probe.identifier === fixture.probeID));
+            assert.equal(fixture.journal().probeCompletion.nativeVerification.signatureState, 'Verified');
+            assert.equal(fixture.journal().phase, 'complete');
+            assert.equal(fixture.journal().installed.identifier, fixture.newID);
+            assert.ok(filesystem.existsSync(fixture.journal().sourcePath));
+            assert.ok(fixture.checkpoints.length >= 3);
+        } finally { fixture.close(); }
+    }
+});
+
+test('a deleted runtime registration reappearing beside the verified replacement blocks completion', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        const original = fixture.inventory.get(fixture.oldID);
+        fixture.prepare();
+        fixture.inventory.set(fixture.oldID, {...original, path: '/another/asset'});
+        const calls = fixture.calls.length;
+        assert.throws(() => fixture.prepare('verify'), /only the verified replacement/);
+        assert.equal(fixture.calls.slice(calls).some(args => ['add', 'delete'].includes(args[1])), false);
+    } finally { fixture.close(); }
+});
+
+test('a fresh signed runtime waits for its exact profile without creating a repair receipt', () => {
+    const fixture = runtimeRepairFixture({healthy: true});
+    try {
+        fixture.behavior.availableAfterQueries = 2;
+        assert.equal(fixture.prepare().isAvailable, true);
+        assert.equal(fixture.sleeps.length, 1);
+        assert.equal(filesystem.existsSync(fixture.journalPath), false);
+        assert.equal(fixture.calls.some(args => ['add', 'delete'].includes(args[1])), false);
+    } finally { fixture.close(); }
+});
+
+test('completed Ready source import is fully verified and retained while only failed registrations are deleted', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        fixture.behavior.readyAdd = true;
+        fixture.prepare();
+        const record = fixture.journal();
+        assert.equal(record.probeCompletion.exitCode, 0);
+        assert.equal(record.probeCompletion.nativeVerification.state, 'Ready');
+        assert.equal(record.probeCompletion.nativeVerification.imageDigest.sha256, record.source.sha256);
+        assert.equal(record.keepReadyProbe, true);
+        assert.equal(record.installed.identifier, fixture.probeID);
+        assert.equal(fixture.calls.filter(args => args[1] === 'add').length, 1);
+        assert.deepEqual(fixture.calls.filter(args => args[1] === 'delete').map(args => args[2]), [fixture.oldID]);
+        assert.ok(fixture.calls.some(args => args[1] === 'verify' && args[2] === fixture.probeID));
+        assert.equal(record.phase, 'complete');
+    } finally { fixture.close(); }
+});
+
+test('cold Ready-probe resume reattests regenerated bad UUIDs without discarding independent source proof', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        fixture.behavior.readyAdd = true;
+        fixture.behavior.interruptReadyProof = true;
+        assert.throws(fixture.prepare, /Ready source verification interrupted/);
+        assert.equal(fixture.journal().phase, 'probe');
+        assert.equal(fixture.journal().probeCompletion.exitCode, 0);
+        const recreatedID = '55555555-5555-4555-8555-555555555555';
+        const original = fixture.inventory.get(fixture.oldID);
+        fixture.inventory.delete(fixture.oldID);
+        fixture.inventory.set(recreatedID, {...original, identifier: recreatedID});
+        fixture.prepare('existing');
+        const record = fixture.journal();
+        assert.equal(record.installed.identifier, fixture.probeID);
+        assert.equal(record.failed[0].identifier, recreatedID);
+        assert.equal(record.failed[0].proof.code, -67054);
+        assert.equal(record.probeCompletion.exitCode, 0);
+        assert.equal(record.bindingHistory[0].completion.nativeVerification.state, 'Ready');
+        assert.equal(fixture.calls.filter(args => args[1] === 'add').length, 1);
+        assert.deepEqual(fixture.calls.filter(args => args[1] === 'delete').map(args => args[2]), [recreatedID]);
+        assert.equal(record.phase, 'complete');
+    } finally { fixture.close(); }
+});
+
+test('Ready native completion observed after a lost response records no invented exit code', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        fixture.behavior.readyAdd = true;
+        fixture.behavior.interruptProbe = true;
+        assert.throws(fixture.prepare, /probe interrupted/);
+        assert.equal(fixture.journal().probeCompletion, undefined);
+        fixture.prepare('existing');
+        const proof = fixture.journal().probeCompletion;
+        assert.equal(proof.kind, 'observed-native-completion');
+        assert.equal(proof.exitCode, undefined);
+        assert.equal(proof.nativeVerification.state, 'Ready');
+        assert.equal(fixture.journal().installed.identifier, fixture.probeID);
+        assert.equal(fixture.calls.filter(args => args[1] === 'add').length, 1);
+    } finally { fixture.close(); }
+});
+
+test('Ready source imports require exact file content and reject unavailable profiles or multiple owned candidates', () => {
+    for (const failure of ['hash', 'profile', 'multiple']) {
+        const fixture = runtimeRepairFixture();
+        try {
+            fixture.behavior.readyAdd = true;
+            if (failure === 'hash') fixture.behavior.normalHashMismatch = true;
+            if (failure === 'profile') fixture.behavior.profileUnavailable = true;
+            if (failure === 'multiple') fixture.behavior.afterProbe = inventory => inventory.set(fixture.siblingID,
+                {...inventory.get(fixture.probeID), identifier: fixture.siblingID,
+                    path: `/Library/Developer/CoreSimulator/Images/${fixture.siblingID}.dmg`});
+            assert.throws(fixture.prepare, /Ready source|profile is not mounted|did not become available|probe is missing, unverified, or ambiguous/);
+            assert.equal(fixture.calls.some(args => args[1] === 'delete'), false);
+        } finally { fixture.close(); }
+    }
+});
+
+test('profile mismatch diagnostic separates native image mount from selected usable runtime without relaxing the guard', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        fixture.behavior.readyAdd = true;
+        fixture.behavior.preferredCryptex = true;
+        assert.throws(fixture.prepare, /profile is not mounted and available/);
+        const line = fixture.logs.find(value => value.startsWith('BIG_WALLET_RUNTIME_PROFILE_DIAGNOSTIC='));
+        const report = JSON.parse(line.slice(line.indexOf('=') + 1));
+        assert.equal(report.matchedProfiles, 0);
+        assert.equal(report.directory.exists, true);
+        assert.equal(report.directory.existsError, null);
+        assert.match(report.image.mountPath, /^\/Library\/Developer\/CoreSimulator\/Volumes\//);
+        assert.equal(report.runtimes.values[0].bundlePath, '/private/var/run/fixture-cryptex/iOS.simruntime');
+        assert.equal(report.runtimes.values[0].buildversion, fixture.pin.buildVersion);
+        assert.equal(fixture.calls.some(args => args[1] === 'delete'), false);
+    } finally { fixture.close(); }
+    const summarize = pureFunction('runtimeProfileDiagnostic', {Buffer});
+    const value = {identifier: 'fixture', bundlePath: 'x'.repeat(4000), runtimeRoot: 'y'.repeat(4000), privateField: 'secret-fixture'};
+    const report = summarize({platform: 'iOS'}, {...value, mountPath: 'z'.repeat(4000)}, Array(100).fill(value),
+        {exists: false, existsError: 'EACCES'}, 0);
+    assert.ok(Buffer.byteLength(JSON.stringify(report)) <= 16384);
+    assert.equal(report.runtimes.truncated, true);
+    assert.equal(report.directory.existsError, 'EACCES');
+    assert.doesNotMatch(JSON.stringify(report), /secret-fixture|privateField/);
+});
+
+test('exact owned Ready profile handoff waits only until true availability within a bounded deadline', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        fixture.behavior.readyAdd = true;
+        fixture.behavior.availableAfterQueries = 3;
+        fixture.prepare();
+        assert.equal(fixture.journal().phase, 'complete');
+        assert.equal(fixture.sleeps.length, 2);
+        assert.equal(fixture.elapsed(), 4000);
+        assert.ok(fixture.queryTimeouts.every(timeout => timeout > 0 && timeout <= 10000));
+        assert.ok(fixture.sleeps.every(timeout => timeout > 0 && timeout <= 3000));
+    } finally { fixture.close(); }
+});
+
+test('permanently unavailable exact Ready profile times out with bounded diagnostics before deletion', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        fixture.behavior.readyAdd = true;
+        fixture.behavior.profileUnavailable = true;
+        assert.throws(fixture.prepare, /within 90 seconds/);
+        assert.equal(fixture.elapsed(), 90000);
+        assert.equal(fixture.calls.some(args => args[1] === 'delete'), false);
+        assert.ok(fixture.queryTimeouts.every(timeout => timeout > 0 && timeout <= 10000));
+        const line = fixture.logs.find(value => value.startsWith('BIG_WALLET_RUNTIME_PROFILE_DIAGNOSTIC='));
+        const diagnostic = JSON.parse(line.slice(line.indexOf('=') + 1));
+        assert.equal(diagnostic.runtimes.values[0].isAvailable, false);
+        assert.equal(diagnostic.runtimes.values[0].availabilityError, 'fixture profile handoff unavailable');
+    } finally { fixture.close(); }
+});
+
+test('profile handoff never waits for a different pin bundle path or runtime root', () => {
+    for (const wrong of ['profileWrongPin', 'preferredCryptex', 'profileWrongRoot']) {
+        const fixture = runtimeRepairFixture();
+        try {
+            fixture.behavior.readyAdd = true;
+            fixture.behavior.profileUnavailable = true;
+            fixture.behavior[wrong] = true;
+            assert.throws(fixture.prepare, /profile is not mounted and available/);
+            assert.equal(fixture.sleeps.length, 0);
+            assert.equal(fixture.calls.some(args => args[1] === 'delete'), false);
+        } finally { fixture.close(); }
+    }
+});
+
+test('timeout unknown verification and unverified or changed probes never authorize deletion', () => {
+    for (const flag of ['verifyTimeout', 'verifyUnknown', 'probeUnverified', 'probeSizeMismatch', 'changeSourceAfterProbe', 'noSpace']) {
+        const fixture = runtimeRepairFixture();
+        try {
+            fixture.behavior[flag] = true;
+            assert.throws(fixture.prepare);
+            assert.equal(fixture.calls.some(args => args[1] === 'delete'), false);
+        } finally { fixture.close(); }
+    }
+});
+
+test('an unattributed Inbox duplicate after a lost completion cannot authorize either deletion', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        fixture.behavior.interruptProbe = true;
+        assert.throws(fixture.prepare, /probe interrupted/);
+        assert.equal(fixture.journal().phase, 'probe');
+        assert.equal(fixture.journal().probeAttempted, true);
+        assert.equal(fixture.journal().probeCompletion, undefined);
+        assert.throws(() => fixture.prepare('existing'), /no matching native add completion/);
+        assert.equal(fixture.calls.some(args => args[1] === 'delete'), false);
+        assert.equal(fixture.calls.filter(args => args[1] === 'add').length, 1);
+        assert.equal(fixture.journal().phase, 'probe');
+        assert.equal(fixture.journal().probeCompletion, undefined);
+    } finally { fixture.close(); }
+});
+
+test('the duplicate add and inventory must identify the same UUID before deletion', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        fixture.behavior.reportedProbeID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+        assert.throws(fixture.prepare, /no matching native add completion/);
+        assert.throws(() => fixture.prepare('existing'), /no matching native add completion/);
+        assert.equal(fixture.calls.some(args => args[1] === 'delete'), false);
+    } finally { fixture.close(); }
+});
+
+test('native duplicate self-cleanup permits a fresh verification add only with unchanged failed registrations', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        fixture.behavior.interruptProbe = true;
+        assert.throws(fixture.prepare, /probe interrupted/);
+        fixture.inventory.delete(fixture.probeID);
+        fixture.behavior.nextProbeID = fixture.siblingID;
+        fixture.prepare('existing');
+        assert.equal(fixture.journal().probe.identifier, fixture.siblingID);
+        assert.equal(fixture.journal().probeCompletion.kind, 'completed-native-add');
+        assert.equal(fixture.journal().probeCompletion.exitCode, 5);
+        assert.equal(fixture.journal().probeHistory[0].reason, 'registration-absent');
+        assert.equal(fixture.journal().probeHistory[0].completion, null);
+        assert.equal(fixture.calls.filter(args => args[1] === 'add').length, 3);
+        assert.equal(fixture.journal().phase, 'complete');
+    } finally { fixture.close(); }
+});
+
+test('pre-deletion native UUID regeneration requires a fresh exact rejection and a new source probe', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        fixture.behavior.interruptProbe = true;
+        assert.throws(fixture.prepare, /probe interrupted/);
+        const recreatedID = '55555555-5555-4555-8555-555555555555';
+        const original = fixture.inventory.get(fixture.oldID);
+        fixture.inventory.delete(fixture.oldID);
+        fixture.inventory.delete(fixture.probeID);
+        fixture.inventory.set(recreatedID, {...original, identifier: recreatedID});
+        fixture.prepare('existing');
+        const record = fixture.journal();
+        assert.equal(record.bindingHistory[0].failed[0].identifier, fixture.oldID);
+        assert.equal(record.failed[0].identifier, recreatedID);
+        assert.equal(record.failed[0].proof.code, -67054);
+        assert.equal(record.probeCompletion.kind, 'completed-native-add');
+        assert.equal(record.probeCompletion.nativeVerification.duplicateOf, recreatedID);
+        assert.equal(fixture.calls.filter(args => args[1] === 'add').length, 3);
+        assert.equal(fixture.calls.some(args => args[1] === 'delete' && args[2] === fixture.oldID), false);
+        const attest = fixture.calls.findIndex(args => args[1] === 'verify' && args[2] === recreatedID);
+        const remove = fixture.calls.findIndex(args => args[1] === 'delete' && args[2] === recreatedID);
+        assert.ok(attest >= 0 && remove > attest);
+        assert.equal(record.phase, 'complete');
+    } finally { fixture.close(); }
+});
+
+test('native UUID regeneration refuses changed assets sizes mixed IDs pending aliases and inconclusive signatures', () => {
+    for (const changed of ['asset', 'size', 'mixed', 'pending', 'verified', 'unknown', 'foreign-asset-reference']) {
+        const fixture = runtimeRepairFixture();
+        try {
+            fixture.behavior.interruptProbe = true;
+            assert.throws(fixture.prepare, /probe interrupted/);
+            const recreatedID = '55555555-5555-4555-8555-555555555555';
+            const original = fixture.inventory.get(fixture.oldID);
+            fixture.inventory.delete(fixture.probeID);
+            if (changed !== 'mixed') fixture.inventory.delete(fixture.oldID);
+            const recreated = {...original, identifier: recreatedID};
+            if (changed === 'asset') recreated.path = recreated.path.replace('a'.repeat(40), 'b'.repeat(40));
+            if (changed === 'size') recreated.sizeBytes += 1;
+            if (changed === 'pending') recreated.state = 'Copying';
+            if (changed === 'verified' || changed === 'unknown') fixture.behavior.recreatedVerify = changed;
+            fixture.inventory.set(recreatedID, recreated);
+            if (changed === 'foreign-asset-reference') {
+                const foreignID = '66666666-6666-4666-8666-666666666666';
+                fixture.inventory.set(foreignID, {...original, identifier: foreignID, build: '24M362',
+                    platformIdentifier: 'com.apple.platform.xrsimulator'});
+                const record = fixture.journal(); record.beforeProbe.push(foreignID);
+                writeFileSync(fixture.journalPath, JSON.stringify(record));
+            }
+            const additions = fixture.calls.filter(args => args[1] === 'add').length;
+            assert.throws(() => fixture.prepare('existing'), /registrations|signature|probe is missing, unverified, or ambiguous/);
+            assert.equal(fixture.calls.filter(args => args[1] === 'add').length, additions);
+            assert.equal(fixture.calls.some(args => args[1] === 'delete'), false);
+            assert.equal(fixture.journal().failed[0].identifier, fixture.oldID);
+        } finally { fixture.close(); }
+    }
+});
+
+test('absent-probe retry refuses missing changed or pending failed registrations and changed source', () => {
+    for (const changed of ['missing', 'identity', 'pending', 'new-alias', 'source']) {
+        const fixture = runtimeRepairFixture();
+        try {
+            fixture.behavior.interruptProbe = true;
+            assert.throws(fixture.prepare, /probe interrupted/);
+            fixture.inventory.delete(fixture.probeID);
+            if (changed === 'missing') fixture.inventory.delete(fixture.oldID);
+            if (changed === 'identity') fixture.inventory.get(fixture.oldID).path += '-changed';
+            if (changed === 'pending') fixture.inventory.get(fixture.oldID).state = 'Deleting';
+            if (changed === 'new-alias') fixture.inventory.set(fixture.siblingID,
+                {...fixture.inventory.get(fixture.oldID), identifier: fixture.siblingID});
+            if (changed === 'source') writeFileSync(fixture.journal().sourcePath, 'changed preserved input');
+            const additions = fixture.calls.filter(args => args[1] === 'add').length;
+            assert.throws(() => fixture.prepare('existing'), /registrations changed|source changed|probe is missing, unverified, or ambiguous/);
+            assert.equal(fixture.calls.filter(args => args[1] === 'add').length, additions);
+            assert.equal(fixture.calls.some(args => args[1] === 'delete'), false);
+        } finally { fixture.close(); }
+    }
+});
+
+test('absent-probe admission diagnostics include the exact recorded and current bound size without relaxing rejection', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        fixture.behavior.interruptProbe = true;
+        assert.throws(fixture.prepare, /probe interrupted/);
+        fixture.inventory.delete(fixture.probeID);
+        const recordedSize = fixture.inventory.get(fixture.oldID).sizeBytes;
+        fixture.inventory.get(fixture.oldID).sizeBytes += 1;
+        const additions = fixture.calls.filter(args => args[1] === 'add').length;
+        assert.throws(() => fixture.prepare('existing'), /registrations changed/);
+        const line = fixture.logs.find(value => value.startsWith('BIG_WALLET_RUNTIME_REPAIR_RETRY_ADMISSION='));
+        const report = JSON.parse(line.slice(line.indexOf('=') + 1));
+        assert.equal(report.beforeVerification.images[0].identifier, fixture.oldID);
+        assert.equal(report.beforeVerification.images[0].sizeBytes, recordedSize);
+        assert.equal(report.afterVerification.images[0].sizeBytes, recordedSize + 1);
+        assert.equal(fixture.calls.filter(args => args[1] === 'add').length, additions);
+        assert.equal(fixture.calls.some(args => args[1] === 'delete'), false);
+    } finally { fixture.close(); }
+    const summarize = pureFunction('runtimeAdmissionDiagnostic', {Buffer});
+    const report = summarize({platform: 'iOS'}, [{identifier: 'fixture', sizeBytes: Infinity}], null);
+    assert.equal(report.beforeVerification.images[0].sizeBytes, '<invalid-type>');
+});
+
+test('probe cleanup errors are not suppressed and cannot authorize failed-runtime deletion', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        fixture.behavior.interruptDelete = fixture.probeID;
+        assert.throws(fixture.prepare, /delete interrupted/);
+        assert.equal(fixture.calls.some(args => args[1] === 'delete' && args[2] === fixture.oldID), false);
+        assert.equal(fixture.journal().phase, 'probe-verified');
+    } finally { fixture.close(); }
+});
+
+test('duplicate probe cleanup refuses a registration whose state changed after verification', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        let probe;
+        fixture.behavior.afterProbe = inventory => { probe = {...inventory.get(fixture.probeID)}; };
+        fixture.behavior.interruptDelete = fixture.probeID;
+        assert.throws(fixture.prepare, /delete interrupted/);
+        fixture.inventory.set(fixture.probeID, {...probe, state: 'Ready'});
+        assert.throws(fixture.prepare, /duplicate probe changed/);
+        assert.deepEqual(fixture.calls.filter(args => args[1] === 'delete').map(args => args[2]), [fixture.probeID]);
+        assert.equal(fixture.journal().phase, 'probe-verified');
+    } finally { fixture.close(); }
+});
+
+test('runtime repair admission failure records bounded public before and after image evidence without changing its gate', () => {
+    const fixture = runtimeRepairFixture({sibling: true});
+    try {
+        fixture.inventory.get(fixture.siblingID).state = 'Copying';
+        fixture.behavior.afterFailedVerify = inventory => { inventory.get(fixture.siblingID).state = 'Deleting'; };
+        assert.throws(fixture.prepare, /limited to explicitly rejected/);
+        const line = fixture.logs.find(value => value.startsWith('BIG_WALLET_RUNTIME_REPAIR_ADMISSION='));
+        const report = JSON.parse(line.split('=').slice(1).join('='));
+        assert.equal(report.beforeVerification.images.find(value => value.identifier === fixture.siblingID).state, 'Copying');
+        assert.equal(report.afterVerification.images.find(value => value.identifier === fixture.siblingID).state, 'Deleting');
+        assert.equal(fixture.calls.some(args => ['add', 'delete'].includes(args[1])), false);
+        assert.equal(filesystem.existsSync(fixture.journalPath), false);
+    } finally { fixture.close(); }
+    const summarize = pureFunction('runtimeAdmissionDiagnostic', {Buffer});
+    const image = {identifier: 'id', path: 'x'.repeat(4000), kind: 'y'.repeat(4000), state: 'Copying',
+        unusableErrorMessage: 'z'.repeat(4000), privateField: 'private-fixture-secret'};
+    const report = summarize({platform: 'iOS', version: '27.0', buildVersion: '24A434'},
+        Array.from({length: 100}, (_, index) => ({...image, identifier: String(index)})),
+        Array.from({length: 100}, (_, index) => ({...image, identifier: String(index), state: 'Deleting'})));
+    assert.ok(Buffer.byteLength(JSON.stringify(report)) <= 16384);
+    assert.equal(report.beforeVerification.count, 100);
+    assert.equal(report.beforeVerification.truncated, true);
+    assert.doesNotMatch(JSON.stringify(report), /private-fixture-secret|privateField/);
+});
+
+test('wrong official export or BuildManifest pin blocks repair before native staging or deletion', () => {
+    for (const filename of ['ExportedMetadata.plist', 'Restore/BuildManifest.plist']) {
+        const fixture = runtimeRepairFixture();
+        try {
+            const destination = path.join(fixture.exported, filename);
+            const metadata = JSON.parse(readFileSync(destination, 'utf8'));
+            if (filename === 'ExportedMetadata.plist') metadata.MobileAssetProperties.Build = '24A999';
+            else metadata.ProductBuildVersion = '24A999';
+            writeFileSync(destination, JSON.stringify(metadata));
+            assert.throws(fixture.prepare, /metadata differs/);
+            assert.equal(fixture.calls.some(args => ['add', 'delete'].includes(args[1])), false);
+        } finally { fixture.close(); }
+    }
+});
+
+test('runtime repair accepts an official bundle at the maximum discovery depth', () => {
+    const fixture = runtimeRepairFixture({exportParents: ['Xcode', 'iOS', 'arm64']});
+    try {
+        fixture.prepare();
+        assert.equal(fixture.journal().original, path.join(fixture.exported, 'Restore', 'runtime.dmg'));
+        fixture.prepare('verify');
+        assert.equal(fixture.calls.filter(args => args[1] === 'add').length, 2);
+    } finally { fixture.close(); }
+});
+
+test('native plist extraction preserves required fields when the manifest contains binary Data', {skip: process.platform !== 'darwin'}, () => {
+    const root = filesystem.realpathSync(mkdtempSync(path.join(tmpdir(), 'wallet-runtime-plist-')));
+    try {
+        const filename = path.join(root, 'BuildManifest.plist');
+        writeFileSync(filename, '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict>' +
+            '<key>ProductVersion</key><string>27.0</string><key>ProductBuildVersion</key><string>24A434</string>' +
+            '<key>ManifestData</key><data>AQIDBA==</data><key>MobileAssetProperties</key><dict>' +
+            '<key>Architectures</key><array><string>arm64</string></array></dict></dict></plist>');
+        const conversion = spawnSync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', filename], {encoding: 'utf8'});
+        assert.notEqual(conversion.status, 0);
+        assert.match(conversion.stdout + conversion.stderr, /Invalid object.*JSON/i);
+        const commands = [];
+        const extract = pureFunction('runtimeMetadataField', {check, run(_label, file, args, options) {
+            commands.push(Array.from(args));
+            return execFileSync(file, Array.from(args), {encoding: 'utf8', timeout: options.timeout, maxBuffer: options.maxBuffer}).trim();
+        }});
+        assert.equal(extract(filename, 'ProductVersion'), '27.0');
+        assert.equal(extract(filename, 'ProductBuildVersion'), '24A434');
+        assert.deepEqual(Array.from(extract(filename, 'MobileAssetProperties.Architectures', 'json')), ['arm64']);
+        assert.ok(commands.every(args => args[0] === '-extract' && args.includes('-o') && args.includes('-')));
+    } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
+test('delete to import interruption resumes the exact empty inventory without redownload', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        fixture.behavior.interruptDelete = fixture.oldID;
+        assert.throws(fixture.prepare, /delete interrupted/);
+        assert.equal(fixture.inventory.size, 0);
+        const before = fixture.calls.filter(args => args[1] === 'add').length;
+        fixture.prepare('existing');
+        assert.equal(fixture.calls.filter(args => args[1] === 'add').length, before + 1);
+        assert.equal(fixture.journal().phase, 'complete');
+    } finally { fixture.close(); }
+});
+
+test('completed import is observed after interruption instead of being repeated', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        fixture.behavior.interruptAdd = true;
+        assert.throws(fixture.prepare, /add interrupted/);
+        const count = fixture.calls.filter(args => args[1] === 'add').length;
+        fixture.prepare('existing');
+        assert.equal(fixture.calls.filter(args => args[1] === 'add').length, count);
+        assert.equal(fixture.journal().phase, 'complete');
+    } finally { fixture.close(); }
+});
+
+test('an interrupted or failed final add can retry from the same empty inventory', () => {
+    for (const failure of ['interruptAddIntent', 'failedAdd']) {
+        const fixture = runtimeRepairFixture();
+        try {
+            fixture.behavior[failure] = true;
+            assert.throws(fixture.prepare, /stopped before add|operation failed/);
+            assert.equal(fixture.journal().addAttempted, true);
+            assert.equal(fixture.inventory.size, 0);
+            fixture.behavior[failure] = false;
+            fixture.prepare('existing');
+            assert.equal(fixture.journal().phase, 'complete');
+            assert.deepEqual(fixture.calls.filter(args => args[1] === 'delete').map(args => args[2]), [fixture.probeID, fixture.oldID]);
+        } finally { fixture.close(); }
+    }
+});
+
+test('an interrupted final add preserves a partial registration and does not import over it', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        fixture.behavior.interruptAdd = true;
+        assert.throws(fixture.prepare, /add interrupted/);
+        fixture.inventory.get(fixture.newID).state = 'Copying';
+        const start = fixture.calls.length;
+        assert.throws(() => fixture.prepare('existing'), /did not reach exact verified readiness/);
+        assert.equal(fixture.calls.slice(start).some(args => ['add', 'delete'].includes(args[1])), false);
+        assert.equal(fixture.journal().phase, 'adding');
+    } finally { fixture.close(); }
+});
+
+test('same-asset historical aliases are bound to the active rejection and may retire together', () => {
+    const fixture = runtimeRepairFixture({sibling: true});
+    try {
+        fixture.behavior.retireSiblings = true;
+        fixture.prepare();
+        assert.equal(fixture.calls.some(args => args[1] === 'verify' && args[2] === fixture.siblingID), false);
+        assert.deepEqual(fixture.calls.filter(args => args[1] === 'delete').map(args => args[2]), [fixture.probeID, fixture.siblingID]);
+        assert.deepEqual(fixture.journal().deleted, [fixture.siblingID, fixture.oldID]);
+    } finally { fixture.close(); }
+});
+
+test('resuming deletion requires a live verified Ready replacement and rejection before removing any alias', () => {
+    for (const changed of ['missing-probe', 'probe-hash', 'probe-profile', 'verified-anchor', 'missing-anchor', 'undeletable', 'foreign']) {
+        const fixture = runtimeRepairFixture({sibling: true});
+        try {
+            const anchor = fixture.inventory.get(fixture.oldID);
+            fixture.inventory.delete(fixture.oldID);
+            fixture.inventory.set(fixture.oldID, anchor);
+            fixture.behavior.readyAdd = true;
+            fixture.behavior.booted = true;
+            assert.throws(fixture.prepare, /must be shut down/);
+            assert.equal(fixture.journal().phase, 'deleting');
+            fixture.behavior.booted = false;
+            if (changed === 'missing-probe') fixture.inventory.delete(fixture.probeID);
+            if (changed === 'probe-hash') fixture.behavior.normalHashMismatch = true;
+            if (changed === 'probe-profile') fixture.behavior.profileWrongPin = true;
+            if (changed === 'verified-anchor') fixture.behavior.anchorNowVerified = true;
+            if (changed === 'missing-anchor') fixture.inventory.delete(fixture.oldID);
+            if (changed === 'undeletable') fixture.inventory.get(fixture.oldID).deletable = false;
+            if (changed === 'foreign') fixture.behavior.afterFailedVerify = inventory => inventory.set(fixture.newID,
+                {...inventory.get(fixture.oldID), identifier: fixture.newID, build: '24A999'});
+            assert.throws(fixture.prepare, /Ready source|not mounted|signature changed|registration changed|shares the rejected asset/);
+            assert.equal(fixture.calls.some(args => args[1] === 'delete'), false);
+            assert.equal(fixture.journal().phase, 'deleting');
+        } finally { fixture.close(); }
+    }
+});
+
+test('resuming deletion after native co-retirement reconciles absent registrations without a live anchor', () => {
+    const fixture = runtimeRepairFixture({sibling: true});
+    try {
+        fixture.behavior.readyAdd = true;
+        fixture.behavior.retireSiblings = true;
+        fixture.behavior.interruptDelete = fixture.siblingID;
+        assert.throws(fixture.prepare, /delete interrupted/);
+        assert.equal(fixture.journal().phase, 'deleting');
+        assert.deepEqual(fixture.journal().deleted, []);
+        fixture.prepare('existing');
+        assert.deepEqual(fixture.calls.filter(args => args[1] === 'delete').map(args => args[2]), [fixture.siblingID]);
+        assert.deepEqual(fixture.journal().deleted, [fixture.siblingID, fixture.oldID]);
+        assert.equal(fixture.journal().phase, 'complete');
+    } finally { fixture.close(); }
+});
+
+test('unexpected aliases and changed frozen image identities block broken-runtime deletion', () => {
+    for (const changed of ['new', 'path']) {
+        const fixture = runtimeRepairFixture();
+        try {
+            fixture.behavior.mutateAfterProbe = inventory => {
+                if (changed === 'new') inventory.set(fixture.siblingID, {...inventory.get(fixture.oldID), identifier: fixture.siblingID});
+                else inventory.get(fixture.oldID).path += '-changed';
+            };
+            assert.throws(fixture.prepare, /unrecorded runtime alias|identity changed|probe is missing, unverified, or ambiguous/);
+            assert.equal(fixture.calls.some(args => args[1] === 'delete' && args[2] === fixture.oldID), false);
+        } finally { fixture.close(); }
+    }
+});
+
+test('resume rejects foreign failed image entries and changed preserved-source ownership', () => {
+    for (const changed of ['pin', 'owner']) {
+        const fixture = runtimeRepairFixture();
+        try {
+            fixture.behavior.interruptDelete = fixture.probeID;
+            assert.throws(fixture.prepare, /delete interrupted/);
+            if (changed === 'pin') {
+                const record = fixture.journal(); record.failed[0].build = 'UNRELATED';
+                writeFileSync(fixture.journalPath, JSON.stringify(record));
+            } else fixture.behavior.sourceWrongOwner = true;
+            const count = fixture.calls.filter(args => args[1] === 'delete').length;
+            assert.throws(() => fixture.prepare('existing'), /ownership|source changed/);
+            assert.equal(fixture.calls.filter(args => args[1] === 'delete').length, count);
+        } finally { fixture.close(); }
+    }
 });
 
 test('Xcode provisioning requires a pinned archive rather than traversing a shared app bundle', () => {

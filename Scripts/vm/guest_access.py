@@ -331,6 +331,43 @@ def _replace_contents(path, expected, replacement, inode):
                 raise
 
 
+def bind_upgrade_candidate(candidate, upgrade_id, nonce, vm_id, console_user):
+    candidate = Path(candidate)
+    if (not re.fullmatch(r'macos-upgrade-[A-Za-z0-9_-]{1,100}', upgrade_id) or
+            not re.fullmatch(r'[0-9a-f]{64}', nonce) or candidate.name != 'baseline.vbvm' or
+            candidate.parent.name != 'state' or candidate.parent.parent.name != upgrade_id):
+        raise GuestAccessError('Invalid offline macOS upgrade enrollment')
+    relative = Path('Library/Application Support/BigWalletTestVM')
+    with attached_data(candidate, owners=True) as mount:
+        directory = mount / relative
+        if directory.resolve() != directory:
+            raise GuestAccessError('Guest enrollment directory must not traverse symlinks')
+        _protected_root_directory(directory)
+        inode = directory.stat().st_ino
+    with attached_data(candidate, owners=False) as mount:
+        directory = mount / relative
+        if directory.resolve() != directory or directory.stat().st_ino != inode:
+            raise GuestAccessError('Guest enrollment directory changed during offline access')
+        identity = directory / 'identity.json'
+        contents, metadata = _read(identity, maximum=16384)
+        registration = json.loads(contents)
+        if (not isinstance(registration, dict) or registration.get('version') != 1 or
+                registration.get('vmId') != vm_id or registration.get('consoleUser') != console_user):
+            raise GuestAccessError('Offline guest identity does not match the upgrade candidate')
+        marker = directory / f'enrollment-{upgrade_id}-{nonce}'
+        try:
+            os.link(identity, marker, follow_symlinks=False)
+        except FileExistsError:
+            pass
+        if not os.path.samestat(marker.lstat(), metadata):
+            raise GuestAccessError('Offline guest enrollment marker has a different identity')
+        descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+
 def prepare_guest_access(candidate, private_workdir, vm_id, console_user, first_boot_ssh_requested=False):
     if not isinstance(console_user, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', console_user):
         raise GuestAccessError('The selected guest console user is invalid')

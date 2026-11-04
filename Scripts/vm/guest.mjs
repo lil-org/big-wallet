@@ -4,9 +4,9 @@ import {spawn} from "node:child_process";
 import {observeProcess} from "../process_lifecycle.mjs";
 import {createHash} from "node:crypto";
 import {constants, createWriteStream} from "node:fs";
-import {lstat, mkdir, open, realpath, writeFile} from "node:fs/promises";
+import {lstat, mkdir, open, readdir, realpath, writeFile} from "node:fs/promises";
 import {availableParallelism, cpus, freemem, loadavg, totalmem, userInfo} from "node:os";
-import {dirname, isAbsolute, join, resolve, sep} from "node:path";
+import {dirname, isAbsolute, join, relative, resolve, sep} from "node:path";
 import {pathToFileURL} from "node:url";
 import {createManifest, validateJob, commandForStage} from "./test_manifest.mjs";
 import {asanDiagnostics, auditApprovalResult, auditNativeResult, auditResults, auditSafariPreparation, auditSafariResult} from "./result_audit.mjs";
@@ -145,7 +145,41 @@ export function pinnedEnvironmentEvidence(xcodeOutput, runtimeData, provisioning
     return {xcode: {available: xcodeMatches, expected: {version: expectedXcode?.version, buildVersion: expectedXcode?.buildVersion}, actual: liveXcode}, runtimes};
 }
 
-export async function preflight({workspace, identity, bootstrapEvidence, provision, readSnapshotFile, signing = "local", execute = runProcess, stopRequested = async () => false}) {
+export async function collectSimulatorRuntimeDiagnostics(runtimeResult, {execute = runProcess, stopRequested = async () => false} = {}) {
+    const diagnostics = {runtimes: null, images: null, matches: null, issues: []};
+    const retain = (name, result) => {
+        try {
+            if (result.code !== 0 || result.timedOut || result.cancelled || result.error) { throw new Error("command_failed"); }
+            const output = result.stdout ?? result.output;
+            if (typeof output !== "string" || Buffer.byteLength(output, "utf8") > 1024 * 1024) { throw new Error("output_exceeds_limit"); }
+            let value;
+            try { value = JSON.parse(output); } catch { throw new Error("invalid_json"); }
+            if (!value || typeof value !== "object") { throw new Error("invalid_json_container"); }
+            const pending = [[value, 0]];
+            let nodes = 0;
+            while (pending.length) {
+                const [item, depth] = pending.pop();
+                if (++nodes > 32768 || depth > 16) { throw new Error("json_structure_exceeds_limit"); }
+                if (item && typeof item === "object") {
+                    const children = Object.values(item);
+                    if (nodes + pending.length + children.length > 32768) { throw new Error("json_structure_exceeds_limit"); }
+                    for (const child of children) { pending.push([child, depth + 1]); }
+                }
+            }
+            diagnostics[name] = value;
+        } catch (error) { diagnostics.issues.push(`${name}: ${error.message}`); }
+    };
+    retain("runtimes", runtimeResult);
+    for (const [name, args] of [["images", ["simctl", "runtime", "list", "-j"]],
+        ["matches", ["simctl", "runtime", "match", "list", "-j"]]]) {
+        try { retain(name, await execute("xcrun", args, {timeoutSeconds: 20, stopRequested})); }
+        catch { diagnostics.issues.push(`${name}: probe_failed`); }
+    }
+    return diagnostics;
+}
+
+export async function preflight({workspace, identity, bootstrapEvidence, provision, readSnapshotFile, signing = "local", expectedMacOS,
+    execute = runProcess, stopRequested = async () => false}) {
     if (!["local", "apple"].includes(signing)) { throw new Error("Invalid signing mode"); }
     const checks = {};
     const versions = {};
@@ -155,6 +189,16 @@ export async function preflight({workspace, identity, bootstrapEvidence, provisi
         versions[name] = result.output.trim().slice(0, 2000);
         return result;
     };
+    let macos = {expected: expectedMacOS ?? null, actual: null, available: false};
+    try {
+        const version = await query("macosVersion", "/usr/bin/sw_vers", ["-productVersion"]);
+        const build = await query("macosBuild", "/usr/bin/sw_vers", ["-buildVersion"]);
+        const actual = {version: (version.stdout ?? version.output).trim(), buildVersion: (build.stdout ?? build.output).trim()};
+        const available = [version, build].every(result => result.code === 0 && !result.timedOut && !result.cancelled && !result.error) &&
+            /^[0-9]+(?:\.[0-9]+){1,2}$/.test(actual.version) && /^[0-9]+[A-Z][0-9]+[a-z]?$/.test(actual.buildVersion) &&
+            (expectedMacOS === undefined || actual.version === expectedMacOS.version && actual.buildVersion === expectedMacOS.buildVersion);
+        macos = {expected: expectedMacOS ?? null, actual, available};
+    } catch {}
     const node = await query("node", "node", ["--version"]);
     const npm = await query("npm", "npm", ["--version"]);
     checks.node = node.code === 0 && node.output.trim() === "v24.22.0" && npm.code === 0 && npm.output.trim() === "11.16.0";
@@ -189,7 +233,7 @@ export async function preflight({workspace, identity, bootstrapEvidence, provisi
     try { simulatorData = JSON.parse(simulatorResult.stdout ?? simulatorResult.output); } catch {}
     try { runtimeData = JSON.parse(runtimeResult.stdout ?? runtimeResult.output); } catch {}
     let {destinations, choices} = chooseDestinations(simulatorData);
-    checks.macos = checks.xcode && identity.aqua;
+    checks.macos = checks.xcode && identity.aqua && macos.available;
     checks.ios = simulatorResult.code === 0 && Boolean(destinations.ios);
     checks.visionos = simulatorResult.code === 0 && Boolean(destinations.visionos);
     let proofKey;
@@ -207,7 +251,7 @@ export async function preflight({workspace, identity, bootstrapEvidence, provisi
         checks.xcode = checks.xcode && pinnedEnvironment.xcode.available;
         const runtimeIDs = new Set(Object.values(pinnedEnvironment.runtimes).filter(runtime => runtime.available).map(runtime => runtime.identifier));
         ({destinations, choices} = chooseDestinations({devices: Object.fromEntries(Object.entries(simulatorData?.devices ?? {}).filter(([runtime]) => runtimeIDs.has(runtime)))}));
-        checks.macos = checks.xcode && identity.aqua;
+        checks.macos = checks.xcode && identity.aqua && macos.available;
         checks.ios = simulatorResult.code === 0 && runtimeResult.code === 0 && Boolean(destinations.ios);
         checks.visionos = simulatorResult.code === 0 && runtimeResult.code === 0 && Boolean(destinations.visionos);
     } catch (error) {
@@ -243,7 +287,9 @@ export async function preflight({workspace, identity, bootstrapEvidence, provisi
         capabilities.appleSigning = checks.signing ? "available" : "unavailable";
         capabilities.requestProofKey = checks.proofKey ? "available" : "unavailable";
     }
-    return {report: {checks, versions, destinations, simulators: choices, bootstrap: bootstrapEvidence, pinnedEnvironment, provisioning,
+    const simulatorRuntimeDiagnostics = await collectSimulatorRuntimeDiagnostics(runtimeResult, {execute, stopRequested});
+    return {report: {checks, versions, macos, destinations, simulators: choices, simulatorRuntimeDiagnostics,
+        bootstrap: bootstrapEvidence, pinnedEnvironment, provisioning,
         signingMode: signing, capabilities,
         ...(safariAutomationIssue ? {safariAutomationIssue} : {}),
         ...(provisioningIssue ? {provisioningIssue} : {}), ...(proofKeyIssue ? {proofKeyIssue} : {}),
@@ -514,7 +560,7 @@ async function preserveGeneratedArtifact(workspace, artifacts, stageId, path, pr
 
 export async function executeStages(manifest, {workspace, artifacts, preflight: checked, proofKey, execute = runProcess,
     stopRequested = async () => false, publish = async () => {}, runId, exchange, unlockSigning, writeJSON, hashFile, measureResources = resourceSnapshot,
-    auditParserFuzz = auditParserFuzzEvidence, auditMutation = auditMutationEvidence}) {
+    auditParserFuzz = auditParserFuzzEvidence, auditMutation = auditMutationEvidence, inspectResultBundle = resultBundleInventory}) {
     const results = pendingStageResults(manifest);
     const byID = new Map(results.map(result => [result.id, result]));
     await publish(results);
@@ -677,6 +723,7 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
                     result.audit.ok = result.audit.ok && result.audit.safari.ok && result.audit.safariLog.ok;
                 }
                 if (!result.audit.ok) { result.status = "failed"; result.reason = result.audit.issues; }
+                if (result.status === "passed") { result.resultBundleInventorySHA256 = await inspectResultBundle(bundle); }
             }
             for (const [path, hash] of Object.entries(before)) {
                 const generated = await preserveGeneratedArtifact(workspace, artifacts, stage.id, path, hash);
@@ -694,8 +741,24 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
     return results;
 }
 
+export async function resultBundleInventory(bundle) {
+    const files = new Map();
+    for (const entry of await readdir(bundle, {recursive: true, withFileTypes: true})) {
+        if (entry.isDirectory()) { continue; }
+        if (!entry.isFile()) { throw new Error("Unexpected file type in XCTest result bundle"); }
+        const path = join(entry.parentPath, entry.name);
+        files.set(relative(bundle, path), (await lstat(path)).size);
+    }
+    if (!files.get("Info.plist") || !files.get("database.sqlite3") ||
+        !Array.from(files).some(([path, size]) => path.startsWith("Data/data.") && size > 0)) {
+        throw new Error("Incomplete XCTest result bundle");
+    }
+    const entries = Array.from(files, ([path, size]) => Buffer.from(`${path}\0${size}\0`));
+    return sha256(Buffer.concat(entries.sort(Buffer.compare)));
+}
+
 export async function runJob({job: input, identity, provision, workspace, exchange, artifacts, source, buildVolume,
-    bootstrapEvidence, stopRequested, writeJSON, readSnapshotFile, hashFile}) {
+    bootstrapEvidence, stopRequested, writeJSON, readSnapshotFile, hashFile, inspectPreflight = preflight}) {
     const job = validateJob(input);
     const manifest = job.kind === "run" ? createManifest(job) : [];
     const reportPath = join(artifacts, "result.json");
@@ -704,10 +767,11 @@ export async function runJob({job: input, identity, provision, workspace, exchan
     try {
         await writeJSON(reportPath, report);
         if (await stopRequested()) { throw new Error("Run cancelled"); }
-        const checked = await preflight({workspace, identity, provision, bootstrapEvidence, readSnapshotFile,
-            signing: report.signingMode, stopRequested});
+        const checked = await inspectPreflight({workspace, identity, provision, bootstrapEvidence, readSnapshotFile,
+            signing: report.signingMode, expectedMacOS: job.payload.expectedMacOS, stopRequested});
         report.preflight = checked.report;
         await writeJSON(reportPath, report);
+        if (!checked.report.macos.available) { throw new Error("Guest macOS does not match the required version/build or could not be verified"); }
         if (await stopRequested()) { throw new Error("Run cancelled"); }
         if (job.kind === "doctor") {
             const missing = requiredPrerequisites(job).filter(name => checked.report.checks[name] !== true);
