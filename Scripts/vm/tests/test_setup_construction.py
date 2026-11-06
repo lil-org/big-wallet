@@ -129,6 +129,43 @@ class SetupConstructionTests(unittest.TestCase):
         self.clone.assert_not_called()
         self.idle.assert_not_called()
 
+    def test_changed_runtime_pins_block_candidate_reuse_and_promotion(self):
+        self.candidate.mkdir()
+        disk = self.candidate / 'Disk.img'
+        disk.write_bytes(b'preserve candidate')
+        pin = {'platform': 'iOS', 'version': '27.2', 'buildVersion': 'fixture-old'}
+        requested = {**self.environment, 'runtimes': [{**pin, 'buildVersion': 'fixture-new'}]}
+        for phase in ({}, {'constructionPending': True}, {'promotionPending': {'backup': 'fixture'}}):
+            with self.subTest(phase=phase):
+                record = {'vmId': 'fixture-vm', 'sourceVM': str(self.original),
+                          'environment': {**self.environment, 'runtimes': [pin]}, **phase}
+                host.atomic_json(self.record_path, record)
+                with patch.object(host, 'finish_baseline_promotion') as promote:
+                    with self.assertRaisesRegex(host.RunnerError, 'simulator runtime pins'):
+                        host.setup(self.args(), self.state, requested)
+                    promote.assert_not_called()
+                self.assertEqual(host.read_json(self.record_path), record)
+                self.assertEqual(disk.read_bytes(), b'preserve candidate')
+                self.clone.assert_not_called()
+                self.idle.assert_not_called()
+
+    def test_candidate_resumes_with_reordered_runtime_pins(self):
+        self.candidate.mkdir()
+        ios, vision = host.read_json(host.TOOLS / 'environment.json')['runtimes']
+        requested = {**self.environment, 'runtimes': [vision, ios]}
+        record = {'vmId': 'fixture-vm', 'sourceVM': str(self.original)}
+        for malformed in ([ios, ios], {'iOS': ios}, [vision, {}]):
+            with self.subTest(malformed=malformed):
+                host.atomic_json(self.record_path, {**record, 'environment': {'runtimes': malformed}})
+                with self.assertRaisesRegex(host.RunnerError, 'simulator runtime pins'):
+                    host.setup(self.args(), self.state, requested)
+                self.idle.assert_not_called()
+        host.atomic_json(self.record_path, {**record, 'environment': {**self.environment, 'runtimes': [ios, vision]}})
+        self.assertEqual(host.setup(self.args(), self.state, requested), 2)
+        self.clone.assert_not_called()
+        self.assertEqual(host.read_json(self.record_path)['environment'], requested)
+        self.assertEqual(self.selected_users, ['wallet-test'])
+
     def test_unrecorded_or_mismatched_baseline_is_preserved_before_construction_or_retry(self):
         baseline = self.state / 'baseline.vbvm'
         baseline.mkdir()

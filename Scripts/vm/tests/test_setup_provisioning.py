@@ -310,6 +310,34 @@ process.stdout.write(receipt(configuration, undefined, ['request-proof key']));
         self.assertNotEqual(repinned['provisioningRequestID'], requested['provisioningRequestID'])
         self.assertEqual(host.read_json(original / 'provision/config.json'), requested)
 
+    def test_reused_package_keeps_only_images_for_matching_runtime_pins(self):
+        ios, vision = self.environment['runtimes']
+        overrides = []
+        for pin, field in ((ios, 'version'), (vision, 'buildVersion')):
+            image = self.inputs / (pin['platform'] + '.dmg')
+            image.write_text(pin['platform'])
+            overrides.append({'platform': pin['platform'], field: pin[field], 'dmgPath': image.name})
+        (self.inputs / 'password.txt').write_text('fixture password')
+        host.atomic_json(self.input_config, {'runtimes': overrides, 'consoleUser': 'selected-user',
+            'autologin': {'passwordFile': 'password.txt'}})
+        original, requested = self.stage(self.args('--provision-config', self.input_config), 'setup-first')
+        self.record['pendingProvisioning'] = {'id': requested['provisioningRequestID'],
+            'path': str(original / 'provision'), 'consoleUser': requested['consoleUser']}
+        for mode, args in [('pending', self.args()), ('explicit', self.args('--provision-config', original / 'provision/config.json'))]:
+            for index, changed in enumerate(({**ios, 'version': 'different'}, {**ios, 'buildVersion': 'different'},
+                                             {**vision, 'platform': 'iOS'})):
+                with self.subTest(mode=mode, changed=changed):
+                    self.environment['runtimes'] = [vision, changed]
+                    exchange, refreshed = self.stage(args, f'setup-refresh-{mode}-{index}')
+                    self.assertNotEqual(refreshed['provisioningRequestID'], requested['provisioningRequestID'])
+                    self.assertEqual(refreshed['runtimes'], [{**vision, 'dmgPath': 'runtime-0.dmg'}, changed])
+                    self.assertEqual((exchange / 'provision/runtime-0.dmg').read_text(), 'visionOS')
+                    self.assertFalse((exchange / 'provision/runtime-1.dmg').exists())
+                    self.assertEqual(refreshed['consoleUser'], 'selected-user')
+                    self.assertEqual((exchange / 'provision' / refreshed['autologin']['passwordFile']).read_text(), 'fixture password')
+        self.assertEqual(host.read_json(original / 'provision/config.json'), requested)
+        self.assertEqual((original / 'provision/runtime-0.dmg').read_text(), 'iOS')
+
     def test_account_selection_rejects_conflicts_and_marks_actual_account_changes(self):
         self.assertEqual(host.selected_console_user(self.args(), {}), 'wallet-test')
         self.assertEqual(host.selected_console_user(self.args('--guest-user', 'TestUser'), self.record), 'TestUser')

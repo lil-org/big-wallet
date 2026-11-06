@@ -324,6 +324,140 @@ function matchesRuntime(runtime, wanted) {
     return runtime.version === wanted.version && runtime.buildversion === wanted.buildVersion &&
         runtime.identifier.includes(wanted.platform === 'visionOS' ? '.xrOS-' : '.iOS-') && runtime.isAvailable;
 }
+function matchesRuntimeImage(image, pin) {
+    const platformIdentifier = pin.platform === 'iOS' ? 'com.apple.platform.iphonesimulator' : 'com.apple.platform.xrsimulator';
+    return image.platformIdentifier === platformIdentifier && image.version === pin.version && image.build === pin.buildVersion;
+}
+function validateRetirementPins(pins) {
+    check(Array.isArray(pins) && pins.length > 0 && pins.length <= 2 &&
+        pins.every(pin => pin && ['iOS', 'visionOS'].includes(pin.platform) &&
+            typeof pin.version === 'string' && /^\d+(?:\.\d+){1,2}$/.test(pin.version) &&
+            typeof pin.buildVersion === 'string' && /^\d+[A-Z]\d+[a-z]?$/.test(pin.buildVersion)) &&
+        new Set(pins.map(pin => pin.platform)).size === pins.length, 'Invalid simulator runtime pins for retirement.');
+}
+function retireSupersededRuntimes(previous, wanted, buildRoot, verifyOnly = false) {
+    validateRetirementPins(previous);
+    validateRetirementPins(wanted);
+    const uuid = id => typeof id === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id);
+    const simctl = (...args) => run('Retire superseded simulator runtime', '/usr/bin/env',
+        ['DEVELOPER_DIR=' + developer, '/usr/bin/xcrun', 'simctl', ...args],
+        {user: true, timeout: 120000, maxBuffer: 4 * 1024 * 1024});
+    for (const pin of previous) {
+        const target = wanted.find(value => value.platform === pin.platform);
+        check(target, 'A replacement pin is required for runtime retirement.');
+        if (target.version === pin.version && target.buildVersion === pin.buildVersion) continue;
+        const key = `${pin.platform}-${pin.version}-${pin.buildVersion}`;
+        const runtimeID = `com.apple.CoreSimulator.SimRuntime.${pin.platform === 'iOS' ? 'iOS' : 'xrOS'}-${pin.version.replaceAll('.', '-')}`;
+        const oldImage = image => matchesRuntimeImage(image, pin);
+        const oldProfile = profile => profile.identifier === runtimeID && profile.version === pin.version && profile.buildversion === pin.buildVersion;
+        const inventory = () => {
+            const images = JSON.parse(simctl('runtime', 'list', '--json'));
+            const {runtimes} = JSON.parse(simctl('list', 'runtimes', '--json'));
+            const {devices} = JSON.parse(simctl('list', 'devices', '--json'));
+            check(images && !Array.isArray(images) && typeof images === 'object' && Object.keys(images).length <= 256 &&
+                Object.entries(images).every(([id, image]) => uuid(id) && image?.identifier === id) && Array.isArray(runtimes) &&
+                devices && typeof devices === 'object' && !Array.isArray(devices) && Object.values(devices).every(Array.isArray),
+                'Invalid simulator inventory during runtime retirement.');
+            const all = Object.values(images), selected = all.filter(oldImage);
+            check(selected.every(image => image.runtimeIdentifier === runtimeID && image.deletable === true &&
+                typeof image.path === 'string' && path.isAbsolute(image.path) &&
+                !all.some(other => !oldImage(other) && other.path === image.path)),
+                'A superseded image is non-deletable or shares an ambiguous runtime asset.');
+            const shared = target.version === pin.version || all.some(image => image.runtimeIdentifier === runtimeID && !oldImage(image)) ||
+                runtimes.some(profile => profile.identifier === runtimeID && !oldProfile(profile));
+            const affected = devices[runtimeID] ?? [];
+            const deviceIDs = affected.map(device => device.udid?.toLowerCase());
+            const otherIDs = new Set(Object.entries(devices).filter(([id]) => id !== runtimeID)
+                .flatMap(([, others]) => others.map(device => device.udid?.toLowerCase())));
+            check((!selected.length && shared || affected.every(device => device.state === 'Shutdown')) &&
+                new Set(deviceIDs).size === deviceIDs.length && deviceIDs.every(id => uuid(id) && !otherIDs.has(id)),
+                'Affected simulators must have unambiguous identifiers and be shut down for runtime retirement.');
+            return {images: selected, profiles: runtimes.filter(oldProfile), devices: shared ? [] : affected};
+        };
+        const downloads = path.join(buildRoot, 'RuntimeDownloads', key);
+        const sources = path.join(buildRoot, 'RuntimeRepairSources', key);
+        const receipt = path.join(state, 'RuntimeRepairs', key + '.json');
+        const ownedArtifact = filename => {
+            const parent = path.dirname(filename);
+            const directory = fs.lstatSync(parent, {throwIfNoEntry: false});
+            if (!directory) return null;
+            check(directory.isDirectory() && directory.uid === 0 && !(directory.mode & 0o022) &&
+                fs.realpathSync(parent) === parent && directory.dev === fs.statSync(path.dirname(parent)).dev,
+                'Superseded runtime artifacts must remain in a protected runner directory.');
+            const metadata = fs.lstatSync(filename, {throwIfNoEntry: false});
+            if (!metadata) return null;
+            let entries = 0;
+            function inspect(file, item, depth) {
+                const exportContent = filename === downloads && depth > 0;
+                check(depth <= 24 && ++entries <= 16384 && (exportContent || item.uid === 0 && !(item.mode & 0o022)) &&
+                    item.dev === directory.dev && (item.isFile() || item.isDirectory()),
+                    `Unsafe entry in superseded runtime artifact ${file} (uid ${item.uid}, mode ${item.mode.toString(8)}).`);
+                if (item.isDirectory()) for (const child of fs.readdirSync(file)) {
+                    const next = path.join(file, child);
+                    inspect(next, fs.lstatSync(next), depth + 1);
+                }
+            }
+            inspect(filename, metadata, 0);
+            check(filename === receipt ? metadata.isFile() && !(metadata.mode & 0o077) && metadata.size <= 128 * 1024 :
+                metadata.isDirectory(), 'Unexpected superseded runtime artifact type.');
+            return metadata;
+        };
+        const artifacts = new Map([downloads, sources, receipt].map(filename => [filename, ownedArtifact(filename)]));
+        check(!artifacts.get(sources) || artifacts.get(receipt), 'Superseded repair source lacks its ownership receipt.');
+        if (artifacts.get(receipt)) {
+            const saved = JSON.parse(fs.readFileSync(receipt, 'utf8'));
+            check(saved.version === 1 && saved.vmId === config.vmId && saved.phase === 'complete' &&
+                saved.pin?.platform === pin.platform && saved.pin.version === pin.version && saved.pin.buildVersion === pin.buildVersion &&
+                saved.sourcePath === path.join(sources, 'runtime.dmg'), 'Invalid or incomplete superseded runtime repair receipt.');
+        }
+        let current = inventory();
+        if (!verifyOnly) {
+            for (const device of current.devices) {
+                check(inventory().devices.some(candidate => candidate.udid === device.udid),
+                    'Simulator device ownership changed during retirement.');
+                simctl('delete', device.udid);
+            }
+            const initial = current.images;
+            for (const image of initial) {
+                current = inventory();
+                check(!current.devices.length && current.images.every(value => initial.some(entry =>
+                    entry.identifier === value.identifier && entry.path === value.path)), 'Runtime ownership changed during retirement.');
+                if (current.images.some(value => value.identifier === image.identifier)) simctl('runtime', 'delete', image.identifier);
+            }
+            current = inventory();
+        }
+        check(!current.images.length && !current.profiles.length && !current.devices.length,
+            `Superseded runtime ${key} is still registered in the guest.`);
+        for (const [filename, original] of artifacts) {
+            if (verifyOnly) {
+                check(!original, 'Superseded runtime artifacts are still present.');
+                continue;
+            }
+            const observed = ownedArtifact(filename);
+            check(original?.dev === observed?.dev && original?.ino === observed?.ino && original?.ctimeMs === observed?.ctimeMs,
+                'Superseded runtime artifact changed before removal.');
+            if (observed) {
+                if (filename === receipt) fs.unlinkSync(filename);
+                else {
+                    const cwd = process.cwd();
+                    try {
+                        process.chdir(filename);
+                        const bound = fs.statSync('.');
+                        check(bound.dev === original.dev && bound.ino === original.ino, 'Superseded runtime artifact was replaced.');
+                        run('Remove superseded runtime files', '/usr/bin/find', ['.', '-xdev', '-mindepth', '1', '-delete']);
+                    } finally { process.chdir(cwd); }
+                    const root = fs.lstatSync(filename);
+                    check(root.dev === original.dev && root.ino === original.ino, 'Superseded runtime artifact was replaced.');
+                    fs.rmdirSync(filename);
+                }
+                check(!fs.lstatSync(filename, {throwIfNoEntry: false}), 'Superseded runtime artifact removal did not complete.');
+            }
+            const parent = path.dirname(filename);
+            syncDirectory(fs.lstatSync(parent, {throwIfNoEntry: false}) ? parent : path.dirname(parent));
+        }
+        console.log(`Verified retirement of ${key}.`);
+    }
+}
 function prepareRuntimeCache(runtime, wanted) {
     check(runtime && matchesRuntime(runtime, wanted), 'Shared-cache preparation requires the exact available pinned runtime.');
     const command = ['DEVELOPER_DIR=' + developer, '/usr/bin/xcrun'];
@@ -401,12 +535,10 @@ function runtimeProfileDiagnostic(pin, image, runtimes, directory, matchedProfil
     }
     return result;
 }
-function verifyOrRepairPinnedRuntime(wanted, buildRoot, mode = 'prepare') {
+function verifyOrRepairPinnedRuntime(wanted, buildRoot, mode = 'prepare', retirement) {
     check(['prepare', 'existing', 'verify'].includes(mode), 'Invalid runtime verification mode.');
     check(['iOS', 'visionOS'].includes(wanted.platform) && /^\d+(?:\.\d+){1,2}$/.test(wanted.version) &&
         /^\d+[A-Z]\d+[a-z]?$/.test(wanted.buildVersion), 'Invalid pinned runtime repair identity.');
-    const platform = wanted.platform === 'iOS' ? 'iphone' : 'xr';
-    const platformIdentifier = `com.apple.platform.${platform}simulator`;
     const assetIdentifier = `com.apple.MobileAsset.${wanted.platform === 'iOS' ? 'iOS' : 'xrOS'}SimulatorRuntime`;
     const pin = {platform: wanted.platform, version: wanted.version, buildVersion: wanted.buildVersion};
     const key = `${wanted.platform}-${wanted.version}-${wanted.buildVersion}`;
@@ -440,7 +572,9 @@ function verifyOrRepairPinnedRuntime(wanted, buildRoot, mode = 'prepare') {
             return image;
         });
     };
-    const matches = image => image.platformIdentifier === platformIdentifier && image.version === wanted.version && image.build === wanted.buildVersion;
+    const matches = image => matchesRuntimeImage(image, wanted);
+    const trackedImages = (values = images()) => values.filter(image => !retirement?.pins.some(pin => matchesRuntimeImage(image, pin)));
+    const checkSpace = image => runtimeStorageCheckpoint(buildRoot, wanted.platform, image, retirement?.release);
     const bound = image => Object.fromEntries(['identifier', 'kind', 'path', 'platformIdentifier', 'runtimeIdentifier', 'version', 'build', 'sizeBytes']
         .map(name => [name, image[name]]));
     const verify = image => {
@@ -633,6 +767,7 @@ function verifyOrRepairPinnedRuntime(wanted, buildRoot, mode = 'prepare') {
     };
     if (journal.phase === 'source') {
         check(same(runtimeFileDigest(journal.original), journal.source), 'The original official runtime source changed.');
+        if (retirement?.release) checkSpace(journal.original);
         const incoming = sourcePath + '.incoming';
         if (fs.existsSync(incoming)) {
             const item = fs.lstatSync(incoming);
@@ -649,7 +784,7 @@ function verifyOrRepairPinnedRuntime(wanted, buildRoot, mode = 'prepare') {
             fs.renameSync(incoming, sourcePath);
             syncDirectory(sourceDirectory);
         }
-        journal.beforeProbe = images().map(value => value.identifier);
+        journal.beforeProbe = trackedImages().map(value => value.identifier);
         save('probe');
     }
     sourceValid();
@@ -671,7 +806,7 @@ function verifyOrRepairPinnedRuntime(wanted, buildRoot, mode = 'prepare') {
                 image.deletable === true && (image.identifier === anchors[0].identifier ||
                     image.state === 'Unusable' && image.unusableErrorMessage === 'Cryptex Mount Preferred')) &&
                 !inventory.some(image => !matches(image) && image.path === previousAnchor.path) &&
-                !inventory.some(image => !journal.beforeProbe.includes(image.identifier) && !matches(image)),
+                !trackedImages(inventory).some(image => !journal.beforeProbe.includes(image.identifier) && !matches(image)),
                 'Regenerated runtime registrations do not match the exact retained asset and pin.');
             sourceValid();
             const rejection = verify(anchors[0]);
@@ -682,7 +817,7 @@ function verifyOrRepairPinnedRuntime(wanted, buildRoot, mode = 'prepare') {
                 same(bound(image), bound(previous)) && image.state === previous.state && image.deletable === true &&
                 (image.identifier === anchors[0].identifier || image.unusableErrorMessage === 'Cryptex Mount Preferred'))) &&
                 !confirmed.some(image => previousIDs.has(image.identifier) || !matches(image) && image.path === previousAnchor.path) &&
-                !confirmed.some(image => !inventory.some(previous => previous.identifier === image.identifier)),
+                !trackedImages(confirmed).some(image => !inventory.some(previous => previous.identifier === image.identifier)),
                 'Runtime registrations changed during fresh signature verification.');
             sourceValid();
             check(journal.bindingHistory === undefined || Array.isArray(journal.bindingHistory), 'Invalid runtime binding history.');
@@ -691,7 +826,7 @@ function verifyOrRepairPinnedRuntime(wanted, buildRoot, mode = 'prepare') {
                 probe: journal.probe ?? null, completion: journal.probeCompletion ?? null}].slice(-4);
             journal.failed = confirmedPins.map(image => ({...bound(image), proof: image.identifier === anchors[0].identifier ? rejection :
                 {status: 'same-asset-alias', activeIdentifier: anchors[0].identifier}}));
-            journal.beforeProbe = confirmed.map(image => image.identifier);
+            journal.beforeProbe = trackedImages(confirmed).map(image => image.identifier);
             if (!journal.keepReadyProbe) {
                 journal.probeAttempted = false;
                 delete journal.probe;
@@ -700,7 +835,7 @@ function verifyOrRepairPinnedRuntime(wanted, buildRoot, mode = 'prepare') {
             save('probe');
             inventory = confirmed;
         }
-        let probes = inventory.filter(image => journal.keepReadyProbe && image.identifier === journal.probe.identifier ||
+        let probes = trackedImages(inventory).filter(image => journal.keepReadyProbe && image.identifier === journal.probe.identifier ||
             !journal.beforeProbe.includes(image.identifier));
         if (!probes.length) {
             check(!journal.keepReadyProbe, 'The recorded Ready source image disappeared.');
@@ -719,10 +854,10 @@ function verifyOrRepairPinnedRuntime(wanted, buildRoot, mode = 'prepare') {
                 check(journal.probeHistory === undefined || Array.isArray(journal.probeHistory), 'Invalid native probe history.');
                 journal.probeHistory = [...(journal.probeHistory ?? []), {reason: 'registration-absent',
                     beforeProbe: journal.beforeProbe, completion: journal.probeCompletion ?? null}].slice(-4);
-                journal.beforeProbe = inventory.map(image => image.identifier);
+                journal.beforeProbe = trackedImages(inventory).map(image => image.identifier);
                 delete journal.probeCompletion;
             }
-            runtimeStorageCheckpoint(buildRoot, wanted.platform, sourcePath);
+            checkSpace(sourcePath);
             const inputBefore = sourceValid();
             journal.probeAttempted = true; save('probe');
             const added = invoke(['runtime', 'add', sourcePath], [0, 5]);
@@ -735,7 +870,7 @@ function verifyOrRepairPinnedRuntime(wanted, buildRoot, mode = 'prepare') {
                 journal.probeCompletion.identifier = identifier.toUpperCase();
             }
             save('probe');
-            probes = images().filter(image => !journal.beforeProbe.includes(image.identifier));
+            probes = trackedImages().filter(image => !journal.beforeProbe.includes(image.identifier));
         }
         check(probes.length === 1, 'The independent native source probe is missing, unverified, or ambiguous.');
         if (probes[0].state === 'Ready' && ordinary(probes[0])) recordReadyProbe(probes[0]);
@@ -784,15 +919,18 @@ function verifyOrRepairPinnedRuntime(wanted, buildRoot, mode = 'prepare') {
     }
     if (journal.phase === 'deleting') {
         check(!readyProof || same(journal.installed, journal.probe), 'The retained Ready replacement identity changed.');
-        if (!readyProof) runtimeStorageCheckpoint(buildRoot, wanted.platform, sourcePath);
+        if (!readyProof) checkSpace(sourcePath);
         const anchor = journal.failed.find(entry => entry.proof.status === 'rejected');
         const validateDeletion = values => {
             check(!values.some(image => !matches(image) && image.path === anchor.path), 'Another runtime pin shares the rejected asset.');
             for (const entry of journal.failed) {
                 const image = current(entry, values);
                 if (!image) continue;
-                check(!journal.deleted.includes(entry.identifier) && image.deletable === true && (entry === anchor ?
-                    image.state === 'Ready' : image.state === 'Unusable' && image.unusableErrorMessage === 'Cryptex Mount Preferred'),
+                const displaced = image.state === 'Unusable' && image.unusableErrorMessage === 'Cryptex Mount Preferred';
+                const expectedState = entry === anchor
+                    ? image.state === 'Ready' || readyProof && displaced && image.signatureState === 'Unknown'
+                    : displaced;
+                check(!journal.deleted.includes(entry.identifier) && image.deletable === true && expectedState,
                     'A recorded failed runtime registration changed before deletion.');
             }
         };
@@ -828,18 +966,18 @@ function verifyOrRepairPinnedRuntime(wanted, buildRoot, mode = 'prepare') {
         }
         if (readyProof) {
             readySourceProof(current(journal.installed)); save('complete');
-        } else { journal.beforeAdd = images().map(value => value.identifier); save('adding'); }
+        } else { journal.beforeAdd = trackedImages().map(value => value.identifier); save('adding'); }
     }
     if (journal.phase === 'adding') {
-        inventory = images();
+        inventory = trackedImages();
         let added = inventory.filter(image => !journal.beforeAdd.includes(image.identifier));
         if (!added.length) {
             check(inventory.length === journal.beforeAdd.length && !inventory.some(matches),
                 'The runtime inventory changed before import; preserve it for inspection.');
-            runtimeStorageCheckpoint(buildRoot, wanted.platform, sourcePath);
+            checkSpace(sourcePath);
             sourceValid(); journal.addAttempted = true; save('adding');
             invoke(['runtime', 'add', sourcePath]);
-            added = images().filter(image => !journal.beforeAdd.includes(image.identifier));
+            added = trackedImages().filter(image => !journal.beforeAdd.includes(image.identifier));
         }
         check(journal.addAttempted === true && added.length === 1 && ordinary(added[0]) && added[0].state === 'Ready' &&
             added[0].signatureState === 'Verified' && same(runtimeFileDigest(added[0].path), journal.source) &&
@@ -1355,7 +1493,7 @@ function runtimeArtifactBytes(filename) {
     check(images > 0 && (!bundle || metadataBytes > 0), 'The exported runtime bundle is incomplete; retain its disk image and metadata together.');
     return bytes;
 }
-function runtimeStorageCheckpoint(buildRoot, platform, stagedRuntime) {
+function runtimeStorageCheckpoint(buildRoot, platform, stagedRuntime, releaseSpace) {
     const root = fs.statfsSync('/System/Volumes/Data');
     const build = fs.statfsSync(buildRoot);
     const available = root.bavail * root.bsize;
@@ -1364,8 +1502,21 @@ function runtimeStorageCheckpoint(buildRoot, platform, stagedRuntime) {
     check(Number.isSafeInteger(available) && Number.isSafeInteger(buildAvailable), 'Guest filesystem capacity could not be measured.');
     const gib = bytes => (bytes / 1024 ** 3).toFixed(1);
     console.log(`Guest storage before ${platform} ${stagedRuntime ? 'import' : 'download'}: system Data ${gib(available)} GiB free of ${gib(root.blocks * root.bsize)} GiB; build data ${gib(buildAvailable)} GiB free of ${gib(build.blocks * build.bsize)} GiB. Required system headroom: ${gib(required)} GiB.`);
+    if ((available < required || !stagedRuntime && buildAvailable < 16 * 1024 ** 3) && releaseSpace?.()) {
+        return runtimeStorageCheckpoint(buildRoot, platform, stagedRuntime, releaseSpace);
+    }
     check(available >= required, `Insufficient guest system-volume space for ${platform}: ${gib(available)} GiB free, ${gib(required)} GiB required. Preserve Apple's system runtime directories; free guest system space or supply a staged runtime image before retrying.`);
     if (!stagedRuntime) check(buildAvailable >= 16 * 1024 ** 3, 'The build-data volume needs at least 16 GiB free to stage a simulator runtime download.');
+}
+function reclaimRuntimePreparationSpace(directory, releaseSpace) {
+    if (!releaseSpace) return;
+    const {bavail, bsize} = fs.statfsSync(directory);
+    const available = bavail * bsize;
+    check(Number.isSafeInteger(available) && available >= 0, 'Guest filesystem capacity could not be measured.');
+    if (available < 8 * 1024 ** 3 && releaseSpace()) {
+        console.log(`Reclaimed a superseded runtime after measuring ${(available / 1024 ** 3).toFixed(1)} GiB free on ${directory}.`);
+        reclaimRuntimePreparationSpace(directory, releaseSpace);
+    }
 }
 function exportedRuntimeImage(directory) {
     check(path.isAbsolute(directory) && path.resolve(directory) === directory && fs.realpathSync(directory) === directory,
@@ -1502,32 +1653,79 @@ function provisionGuest() {
     run('Initialize guest Xcode', '/usr/bin/xcodebuild', ['-runFirstLaunch']);
     configureUIAutomation();
 
+    const keychainPath = path.join(userHome, 'Library/Keychains/big-wallet-vm.keychain-db');
+    const provisioningPath = path.join(state, 'provisioning.json');
+    let previous;
+    const metadata = fs.lstatSync(provisioningPath, {throwIfNoEntry: false});
+    if (metadata) {
+        check(metadata.isFile() && metadata.uid === 0 && (metadata.mode & 0o022) === 0 && metadata.size <= 1024 * 1024,
+            'Existing guest provisioning configuration is not a protected root-owned file.');
+        try { previous = JSON.parse(fs.readFileSync(provisioningPath, 'utf8')); }
+        catch { fail('Existing guest provisioning configuration could not be read.'); }
+        check(previous?.version === 1 && previous.vmId === config.vmId && previous.consoleUser === config.consoleUser &&
+            (previous.keychainPath === undefined || previous.keychainPath === keychainPath),
+            'Existing guest provisioning configuration belongs to a different VM or account.');
+        check(Array.isArray(previous.runtimes) && previous.runtimes.length === config.runtimes.length &&
+            config.runtimes.every(pin => previous.runtimes.some(old => old?.platform === pin.platform)),
+            'Existing guest provisioning is missing its simulator runtime pins.');
+        validateRetirementPins(previous.runtimes);
+    }
+
+    let priorRuntimes = previous?.runtimes;
+    const same = (a, b) => a.version === b.version && a.buildVersion === b.buildVersion;
+    if (config.supersededRuntimes !== undefined) {
+        check(previous, 'Source baseline runtime retirement requires a protected same-guest provisioning record.');
+        validateRetirementPins(config.supersededRuntimes);
+        check(config.supersededRuntimes.every(old => config.runtimes.some(pin => pin.platform === old.platform && !same(pin, old))),
+            'The source baseline must identify only superseded runtime pins.');
+        priorRuntimes = config.runtimes.map(pin => {
+            const recorded = previous.runtimes.find(value => value.platform === pin.platform);
+            const baseline = config.supersededRuntimes.find(old => old.platform === pin.platform) ?? pin;
+            check(same(recorded, baseline) || same(recorded, pin), 'Guest runtime pins differ from the source baseline and its requested replacement.');
+            return baseline;
+        });
+    }
+    validateRetirementPins(config.runtimes);
+    const superseded = (priorRuntimes ?? []).filter(old => config.runtimes.some(pin => pin.platform === old.platform && !same(pin, old)));
+    const pending = new Map(superseded.map(pin => [pin.platform, pin]));
+    function retire(platform) {
+        const old = pending.get(platform);
+        if (!old) return false;
+        const target = config.runtimes.find(pin => pin.platform === platform);
+        retireSupersededRuntimes([old], [target], buildRoot);
+        pending.delete(platform);
+        return true;
+    }
     console.log('Verifying pinned guest simulator runtimes.');
     function installedRuntimes() {
         return JSON.parse(run('List guest runtimes', '/usr/bin/xcrun', ['simctl', 'list', 'runtimes', '--json'], {user: true})).runtimes;
     }
     for (const wanted of config.runtimes) {
+        if (pending.get(wanted.platform)?.version === wanted.version) retire(wanted.platform);
+        const releaseSpace = pending.size ? () => retire(wanted.platform) || retire(pending.keys().next().value) : undefined;
+        const retirement = superseded.length ? {pins: superseded, release: releaseSpace} : undefined;
         const matches = runtime => matchesRuntime(runtime, wanted);
-        let runtime = verifyOrRepairPinnedRuntime(wanted, buildRoot, 'existing');
+        let runtime = verifyOrRepairPinnedRuntime(wanted, buildRoot, 'existing', retirement);
         if (!runtime) {
             if (wanted.dmgPath) {
                 const image = staged(wanted.dmgPath, 'runtime.dmgPath');
-                runtimeStorageCheckpoint(buildRoot, wanted.platform, image);
+                runtimeStorageCheckpoint(buildRoot, wanted.platform, image, releaseSpace);
                 run(`Import ${wanted.platform} runtime`, '/usr/bin/xcodebuild', ['-importPlatform', image]);
             } else {
-                runtimeStorageCheckpoint(buildRoot, wanted.platform);
+                runtimeStorageCheckpoint(buildRoot, wanted.platform, undefined, releaseSpace);
                 const downloads = path.join(buildRoot, 'RuntimeDownloads', `${wanted.platform}-${wanted.version}-${wanted.buildVersion}`);
                 fs.mkdirSync(downloads, {recursive: true, mode: 0o755});
                 run(`Download ${wanted.platform} ${wanted.version}`, '/usr/bin/xcodebuild',
                     ['-downloadPlatform', wanted.platform, '-exportPath', downloads, '-buildVersion', wanted.buildVersion, '-architectureVariant', 'arm64']);
                 if (!installedRuntimes().some(matches)) {
                     const image = exportedRuntimeImage(downloads);
-                    runtimeStorageCheckpoint(buildRoot, wanted.platform, image);
+                    runtimeStorageCheckpoint(buildRoot, wanted.platform, image, releaseSpace);
                     run(`Import ${wanted.platform} runtime`, '/usr/bin/xcodebuild', ['-importPlatform', image]);
                 }
             }
-            runtime = verifyOrRepairPinnedRuntime(wanted, buildRoot);
+            runtime = verifyOrRepairPinnedRuntime(wanted, buildRoot, 'prepare', retirement);
         }
+        reclaimRuntimePreparationSpace('/System/Volumes/Data', releaseSpace);
         prepareRuntimeCache(runtime, wanted);
         if (wanted.dmgPath && fs.existsSync(path.resolve(staging, wanted.dmgPath))) {
             removeLocalProvisioningInput(staged(wanted.dmgPath, 'runtime.dmgPath'), staging, config.vmId);
@@ -1538,11 +1736,14 @@ function provisionGuest() {
         check(type, `The pinned Xcode does not provide the ${name} simulator device type.`);
         const availableDevices = () => JSON.parse(run('List guest simulator devices', '/usr/bin/xcrun', ['simctl', 'list', 'devices', '--json'], {user: true})).devices[runtime.identifier] ?? [];
         if (!availableDevices().some(device => device.isAvailable && device.name === name)) {
+            reclaimRuntimePreparationSpace(buildRoot, releaseSpace);
             run(`Create ${name} for the pinned runtime`, '/usr/bin/xcrun', ['simctl', 'create', name, type.identifier, runtime.identifier], {user: true});
         }
         check(availableDevices().some(device => device.isAvailable && device.name === name), `No available ${name} simulator was created.`);
+        retire(wanted.platform);
     }
     for (const wanted of config.runtimes) verifyOrRepairPinnedRuntime(wanted, buildRoot, 'verify');
+    if (priorRuntimes) retireSupersededRuntimes(priorRuntimes, config.runtimes, buildRoot, true);
 
     const launchDirectory = path.join(userHome, 'Library/LaunchAgents');
     fs.mkdirSync(launchDirectory, {recursive: true, mode: 0o755});
@@ -1557,18 +1758,6 @@ function provisionGuest() {
         EnvironmentVariables: {PATH: environment.PATH, DEVELOPER_DIR: developer},
         StandardOutPath: path.join(logDirectory, 'agent.log'), StandardErrorPath: path.join(logDirectory, 'agent.log')};
     const signing = config.signing;
-    const keychainPath = path.join(userHome, 'Library/Keychains/big-wallet-vm.keychain-db');
-    const provisioningPath = path.join(state, 'provisioning.json');
-    let previous;
-    if (fs.existsSync(provisioningPath)) {
-        const metadata = fs.lstatSync(provisioningPath);
-        check(metadata.isFile() && !metadata.isSymbolicLink() && metadata.uid === 0 && (metadata.mode & 0o022) === 0,
-            'Existing guest signing configuration is not a protected root-owned file.');
-        previous = JSON.parse(fs.readFileSync(provisioningPath, 'utf8'));
-        check(previous.version === 1 && previous.vmId === config.vmId && previous.consoleUser === config.consoleUser &&
-            (previous.keychainPath === undefined || previous.keychainPath === keychainPath),
-            'Existing guest signing configuration belongs to a different VM or account.');
-    }
     check(signing === undefined || (signing && typeof signing === 'object' && !Array.isArray(signing)), 'Signing configuration must be an object.');
     const optional = optionalSigningConfiguration(() => {
         const proofKey = Object.hasOwn(signing ?? {}, 'proofKeyFile') ? secret(signing.proofKeyFile, 'signing.proofKeyFile') : previous?.proofKey;

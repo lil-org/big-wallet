@@ -30,6 +30,9 @@ class SetupFixture:
         self.environment = {'minimumHostFreeBytes': 1, 'buildData': {'bytes': 1024}}
         self.tools = {'guest_bootstrap.mjs': 'fixture-tools'}
         self.launches = []
+        self.doctor_outcome = {}
+        self.validation_inventory = None
+        self.validation_outcome = {}
         self.stop_exchange = None
         self.snapshot_count = 0
         if baseline:
@@ -87,6 +90,7 @@ class SetupFixture:
 
     def stage(self, args, state, exchange, environment, record, binaries):
         self.stop('archive')
+        (exchange / 'provision').mkdir(mode=0o700, exist_ok=True)
         return {'consoleUser': 'wallet-test'}
 
     def snapshot(self, repository, exchange):
@@ -123,6 +127,16 @@ class SetupFixture:
                     'macos': {'expected': job['payload'].get('expectedMacOS'), 'actual': {'version': '27.0.1', 'buildVersion': '26A434'}, 'available': True},
                     'checks': {**{name: True for name in ('bootstrap', 'node', 'python', 'jq', 'xcode', 'macos', 'ios', 'visionos')},
                                'signing': False, 'proofKey': False}}}
+        if job['kind'] == 'doctor':
+            report.update(self.doctor_outcome)
+        else:
+            report.update(self.validation_outcome)
+            if self.validation_inventory is not None:
+                report['preflight']['simulatorRuntimeDiagnostics'] = self.validation_inventory
+            if 'runtimes' in self.environment and 'preflight' not in self.validation_outcome:
+                report['preflight']['pinnedEnvironment'] = {'runtimes': {
+                    pin['platform'].lower(): {'available': True, 'expected': {k: pin[k] for k in ('version', 'buildVersion')}}
+                    for pin in self.environment['runtimes']}}
         host.atomic_json(exchange / 'artifacts/result.json', report)
         fixture = self
         class Child:
@@ -156,6 +170,110 @@ class SetupFixture:
 
 
 class SetupPreparationTests(unittest.TestCase):
+    def test_runtime_upgrade_requires_absence_on_the_validation_boot_before_promotion(self):
+        old = {'platform': 'iOS', 'version': '27.0', 'buildVersion': '24A434'}
+        new = {'platform': 'iOS', 'version': '27.2', 'buildVersion': '24B8117'}
+        def inventory(pin):
+            return ({'platformIdentifier': 'com.apple.platform.iphonesimulator', 'version': pin['version'], 'build': pin['buildVersion']},
+                    {'identifier': 'com.apple.CoreSimulator.SimRuntime.iOS-' + pin['version'].replace('.', '-'),
+                     'version': pin['version'], 'buildversion': pin['buildVersion']})
+        old_image, old_profile = inventory(old)
+        new_image, new_profile = inventory(new)
+        for label, bad in [
+            ('image returned', {'images': {'old': old_image, 'new': new_image}, 'runtimes': {'runtimes': [new_profile]}}),
+            ('profile returned', {'images': {'new': new_image}, 'runtimes': {'runtimes': [new_profile, old_profile]}}),
+            ('missing inventory', None),
+            ('empty inventory', {'images': {}, 'runtimes': {'runtimes': []}}),
+        ]:
+            with self.subTest(label=label), SetupFixture(self, baseline=True) as fixture:
+                baseline = host.read_json(fixture.state / 'baseline.json')
+                baseline['environment']['runtimes'] = [old]
+                host.atomic_json(fixture.state / 'baseline.json', baseline)
+                fixture.environment['runtimes'] = [new]
+                fixture.validation_inventory = bad
+                self.assertEqual(fixture.run(), 2)
+                candidate = host.read_json(fixture.state / 'candidate.json')
+                self.assertNotIn('baseVerifiedAt', candidate)
+                self.assertNotIn('promotionPending', candidate)
+                self.assertEqual(host.read_json(fixture.state / 'baseline.json'), baseline)
+                self.assertEqual((fixture.baseline / 'Disk.img').read_bytes(), b'old-baseline')
+                blocked = next((fixture.state / 'results').glob('setup-validation-*/artifacts/result.json'))
+                self.assertEqual(host.read_json(blocked)['reason'], 'simulator_runtime_retirement_unverified')
+                unrelated = {**old_image, 'build': '24A435'}
+                fixture.validation_inventory = {'images': {'new': new_image, 'unrelated': unrelated},
+                                                'runtimes': {'runtimes': [new_profile, {**old_profile, 'buildversion': '24A435'}]}}
+                self.assertEqual(fixture.run(), 0)
+                configs = list((fixture.state / 'setup').glob('*/provision/config.json'))
+                self.assertEqual(len(configs), 2)
+                for config in configs:
+                    self.assertEqual(host.read_json(config)['supersededRuntimes'], [old])
+                self.assertEqual((fixture.baseline / 'Disk.img').read_bytes(), b'verified-candidate')
+
+    def test_failed_setup_reprovisions_only_for_runtime_evidence(self):
+        old = {'platform': 'iOS', 'version': '27.0', 'buildVersion': '24A434'}
+        new = {'platform': 'iOS', 'version': '27.2', 'buildVersion': '24B8117'}
+        def inventory(pin):
+            return {'images': {'ios': {'platformIdentifier': 'com.apple.platform.iphonesimulator',
+                                       'version': pin['version'], 'build': pin['buildVersion']}},
+                    'runtimes': {'runtimes': [{'identifier': 'com.apple.CoreSimulator.SimRuntime.iOS-' + pin['version'].replace('.', '-'),
+                                              'version': pin['version'], 'buildversion': pin['buildVersion']}]}}
+        run_doctor = host.run_setup_doctor
+        for boot, baseline_pin, label, status, registered, available, should_install in [
+            ('doctor', old, 'target disappeared before validation', 'blocked', old, False, True),
+            ('doctor', new, 'unchanged pin disappeared before validation', 'blocked', old, False, True),
+            ('validation', old, 'target disappeared', 'blocked', old, False, True),
+            ('validation', old, 'stale inventory after native failure', 'failed', old, True, True),
+            ('validation', old, 'profile unavailable', 'passed', new, False, True),
+            ('validation', old, 'unrelated smoke failure', 'failed', new, True, False),
+            ('validation', old, 'launch failure before preflight', 'failed', None, None, False),
+        ]:
+            with self.subTest(label=label), SetupFixture(self, baseline=True) as fixture:
+                baseline = host.read_json(fixture.state / 'baseline.json')
+                baseline['environment']['runtimes'] = [baseline_pin]
+                host.atomic_json(fixture.state / 'baseline.json', baseline)
+                fixture.environment['runtimes'] = [new]
+                outcome = {'status': status, 'reason': label, 'preflight': {}}
+                if available is not None:
+                    outcome['preflight'] = {'checks': {'ios': available}, 'pinnedEnvironment': {'runtimes': {
+                        'ios': {'available': available, 'expected': {key: new[key] for key in ('version', 'buildVersion')}}}},
+                        'simulatorRuntimeDiagnostics': inventory(registered)}
+                if boot == 'doctor':
+                    fixture.validation_outcome = {'status': 'failed', 'reason': 'launch failure', 'preflight': {}}
+                    self.assertEqual(fixture.run(), 2)
+                    self.assertIn('baseVerifiedAt', host.read_json(fixture.state / 'candidate.json'))
+                    fixture.doctor_outcome = outcome
+                else:
+                    fixture.validation_outcome = outcome
+                host.environment_attested.side_effect = [True, False] if status == 'passed' else [True]
+                self.assertEqual(fixture.run(), 2)
+                path = (fixture.doctor_control[0] / 'artifacts/result.json' if boot == 'doctor' else
+                        next((fixture.state / 'results').glob('setup-validation-*/artifacts/result.json')))
+                report = host.read_json(path)
+                self.assertEqual(report['status'], 'blocked' if status == 'passed' else status)
+                self.assertEqual(report['reason'], 'guest_environment_changed_during_validation' if status == 'passed' else label)
+                candidate = host.read_json(fixture.state / 'candidate.json')
+                self.assertEqual('baseVerifiedAt' in candidate, not should_install)
+                self.assertNotIn('pendingProvisioning', candidate)
+                self.assertEqual(host.read_json(fixture.state / 'baseline.json'), baseline)
+
+                host.environment_attested.side_effect = None
+                fixture.doctor_outcome = {}
+                fixture.validation_outcome = {}
+                fixture.validation_inventory = inventory(new)
+                monitor = host.monitor_vm
+                installs = []
+                def monitor_retry(*args, setup_hook=None, **options):
+                    if setup_hook:
+                        installs.append(setup_hook.install)
+                        host.atomic_json(args[3] / 'job.json', setup_hook.job)
+                    return monitor(*args, **options)
+                access = SimpleNamespace(prepare_guest_access=lambda *args, **kwargs: {'knownHosts': True}, GuestAccessError=ValueError)
+                with patch.object(host, 'run_setup_doctor', run_doctor), patch.object(host, 'monitor_vm', side_effect=monitor_retry), \
+                        patch.object(host, 'guest_access_module', return_value=access), \
+                        patch.object(host, 'guest_setup_password', return_value=(fixture.state, None)):
+                    self.assertEqual(fixture.run(), 0)
+                self.assertEqual(installs, [should_install])
+
     def test_runner_source_edit_during_tool_preparation_blocks_before_candidate_creation(self):
         with SetupFixture(self) as fixture:
             sources = fixture.state / 'setup-sources'

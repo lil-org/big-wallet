@@ -22,13 +22,13 @@
   "runtimes": [
     {
       "platform": "iOS",
-      "version": "27.0",
-      "buildVersion": "24A434"
+      "version": "27.2",
+      "buildVersion": "24B8117"
     },
     {
       "platform": "visionOS",
-      "version": "27.0",
-      "buildVersion": "24M362"
+      "version": "27.2",
+      "buildVersion": "24N120"
     }
   ],
   "buildData": {

@@ -589,6 +589,24 @@ def require_current_bootstrap_sources(expected):
         raise RunnerError('Guest bootstrap sources changed during setup; rerun setup before verifying this candidate')
 
 
+def runtime_pin(runtime):
+    return {key: runtime.get(key) for key in ('platform', 'version', 'buildVersion')}
+
+
+def same_runtime_pins(recorded, requested):
+    if isinstance(recorded, list) and isinstance(requested, list):
+        return len(recorded) == len(requested) and all(recorded.count(pin) == requested.count(pin) for pin in requested)
+    return recorded == requested
+
+
+def require_candidate_runtime_pins(record, environment):
+    recorded_environment = record.get('environment', {})
+    if not isinstance(recorded_environment, dict) or not same_runtime_pins(
+            recorded_environment.get('runtimes'), environment.get('runtimes')):
+        raise RunnerError('Candidate simulator runtime pins differ from the request; preserve the candidate '
+                          'and resume it with its recorded pins or use another --state-dir')
+
+
 def verify_setup_sources(exchange, expected, environment, configuration=None, bootstrap_tools=None):
     snapshot = exchange / 'source/Scripts/vm'
     require_current_bootstrap_sources(expected)
@@ -599,8 +617,7 @@ def verify_setup_sources(exchange, expected, environment, configuration=None, bo
     provision = exchange / 'provision'
     staged = read_json(provision / 'config.json')
     staged_environment = {key: staged.get(key) for key in environment}
-    staged_environment['runtimes'] = [{key: runtime.get(key) for key in ('platform', 'version', 'buildVersion')}
-                                    for runtime in staged.get('runtimes', [])]
+    staged_environment['runtimes'] = [runtime_pin(runtime) for runtime in staged.get('runtimes', [])]
     if staged != configuration or staged_environment != environment:
         raise RunnerError('The staged setup configuration does not match the requested guest environment')
     for name in ('guest_runner', 'guest_bootstrap.mjs', 'provision_guest.sh'):
@@ -791,27 +808,26 @@ def pending_provisioning_package(state, record):
 def stage_provisioning(args, state, exchange, environment, record, binaries):
     destination = private_directory(exchange / 'provision')
     if record.get('pendingProvisioning') and not provisioning_inputs_requested(args, record):
-        source, configuration = pending_provisioning_package(state, record)
-        staged_environment = {key: configuration.get(key) for key in environment}
+        input_directory, supplied = pending_provisioning_package(state, record)
+        staged_environment = {key: supplied.get(key) for key in environment}
+        previous_runtimes = supplied.get('runtimes', [])
         if 'runtimes' in staged_environment:
-            staged_environment['runtimes'] = [{key: runtime.get(key) for key in ('platform', 'version', 'buildVersion')}
-                                               for runtime in configuration.get('runtimes', [])]
+            staged_environment['runtimes'] = [runtime_pin(runtime) for runtime in previous_runtimes]
         expected_tools = bootstrap_tool_hashes(binaries)
         expected_tools['provision_guest.sh'] = hash_regular_file(TOOLS / 'provision_guest.sh')
-        if (staged_environment != environment or any(not (source / name).is_file() or
-                hash_regular_file(source / name) != digest for name, digest in expected_tools.items())):
-            retained = argparse.Namespace(**vars(args))
-            retained.provision_config = source / 'config.json'
-            return stage_provisioning(retained, state, exchange, environment, record, binaries)
-        for item in source.iterdir():
-            with open_regular(item):
-                pass
-            checked(['/bin/cp', '-c', item, destination / item.name])
-        configuration['interactiveSetup'] = bool(getattr(args, 'interactive', False))
-        atomic_json(destination / 'config.json', configuration)
-        return configuration
+        if (staged_environment == environment and all((input_directory / name).is_file() and
+                hash_regular_file(input_directory / name) == digest for name, digest in expected_tools.items())):
+            for item in input_directory.iterdir():
+                with open_regular(item):
+                    pass
+                checked(['/bin/cp', '-c', item, destination / item.name])
+            supplied['interactiveSetup'] = bool(getattr(args, 'interactive', False))
+            atomic_json(destination / 'config.json', supplied)
+            return supplied
+    else:
+        input_directory = args.provision_config.parent if args.provision_config else None
+        supplied = read_json(args.provision_config) if args.provision_config else {}
     configuration = json.loads(json.dumps(environment))
-    supplied = read_json(args.provision_config) if args.provision_config else {}
     if not isinstance(supplied.get('provisionNewAccount', False), bool):
         raise RunnerError('provisionNewAccount must be a boolean')
     configuration.update({'vmId': record['vmId'], 'consoleUser': selected_console_user(args, record, supplied),
@@ -819,21 +835,27 @@ def stage_provisioning(args, state, exchange, environment, record, binaries):
                           'interactiveSetup': bool(getattr(args, 'interactive', False)),
                           'initializeBuildData': record.get('buildDataInitializationAllowed', False)})
     validate_guest_password_options(configuration['provisionNewAccount'], supplied.get('autologin'))
-    if provisioning_inputs_requested(args, record):
+    if input_directory or provisioning_inputs_requested(args, record):
         configuration['provisioningRequestID'] = str(uuid.uuid4())
     archive, archive_digest = cached_xcode_archive(state, args.xcode, environment)
     checked(['/bin/cp', '-c', archive, destination / 'Xcode.tar'])
     configuration['xcodeArchive'] = {'path': 'Xcode.tar', 'sha256': archive_digest}
-    if args.provision_config:
+    if input_directory:
         for key in ('signing', 'autologin'):
             if key in supplied:
                 configuration[key] = supplied[key]
-        for runtime, override in zip(configuration['runtimes'], supplied.get('runtimes', [])):
-            if runtime['platform'] != override['platform']:
-                raise RunnerError('Provisioning runtime order must match environment.json')
-            if 'dmgPath' in override:
+        requested_runtimes = {runtime['platform']: runtime for runtime in configuration['runtimes']}
+        for override in supplied.get('runtimes', []):
+            platform = override.get('platform') if isinstance(override, dict) else None
+            if not isinstance(platform, str) or platform not in requested_runtimes:
+                raise RunnerError('Provisioning runtime overrides must use distinct platforms from environment.json')
+            runtime = requested_runtimes.pop(platform)
+            fields = ('version', 'buildVersion')
+            if 'provisioningRequestID' not in supplied:
+                fields = [key for key in fields if key in override]
+            if 'dmgPath' in override and all(override.get(key) == runtime[key] for key in fields):
                 runtime['dmgPath'] = override['dmgPath']
-        copy_provision_input(configuration, args.provision_config.parent, destination)
+        copy_provision_input(configuration, input_directory, destination)
     if args.proof_key_bundle:
         proof_path = args.proof_key_bundle / 'Contents/Resources/AlchemyJWTRequestProofKey'
         with open_regular(proof_path) as file:
@@ -1473,12 +1495,42 @@ def environment_attested(preflight, environment, expected_macos=None):
     xcode = pinned.get('xcode', {})
     if xcode.get('available') is not True or xcode.get('actual') != environment['xcode']:
         return False
-    for expected in environment['runtimes']:
+    return runtime_pins_attested(pinned, environment['runtimes'])
+
+
+def runtime_pins_attested(pinned, requested):
+    for expected in requested:
         key = {'iOS': 'ios', 'visionOS': 'visionos'}.get(expected['platform'])
         reported = pinned.get('runtimes', {}).get(key, {})
         if (not key or reported.get('available') is not True or
                 reported.get('expected') != {name: expected[name] for name in ('version', 'buildVersion')}):
             return False
+    return True
+
+
+def setup_runtimes_attested(preflight, retired, requested):
+    try:
+        if (not runtime_pins_attested(preflight.get('pinnedEnvironment', {}), requested) or
+                not all(preflight['checks'].get(pin['platform'].lower()) is True for pin in requested)):
+            return False
+        if not retired:
+            return True
+        diagnostics = preflight['simulatorRuntimeDiagnostics']
+        images = {(item['platformIdentifier'], item['version'], item['build']) for item in diagnostics['images'].values()}
+        profiles = {(item['identifier'].removeprefix('com.apple.CoreSimulator.SimRuntime.').partition('-')[0],
+                     item['version'], item['buildversion']) for item in diagnostics['runtimes']['runtimes']}
+        if not all(isinstance(field, str) and field for entry in images | profiles for field in entry):
+            return False
+        for pins, present in ((retired, False), (requested, True)):
+            for pin in pins:
+                image_platform, profile_platform = {'iOS': ('com.apple.platform.iphonesimulator', 'iOS'),
+                                                    'visionOS': ('com.apple.platform.xrsimulator', 'xrOS')}[pin['platform']]
+                identity = (pin['version'], pin['buildVersion'])
+                if (((image_platform, *identity) in images) != present or
+                        ((profile_platform, *identity) in profiles) != present):
+                    return False
+    except (KeyError, AttributeError, TypeError):
+        return False
     return True
 
 
@@ -2234,6 +2286,7 @@ def prepare_setup(args, state, environment, operation, *, force_verification=Fal
     record_path = state / 'candidate.json'
     if record_path.exists():
         pending = read_json(record_path)
+        require_candidate_runtime_pins(pending, environment)
         if pending.get('promotionPending'):
             if not matches_source_vm(pending, args.vm):
                 raise RunnerError('Pending promotion belongs to another source VM')
@@ -2261,13 +2314,17 @@ def prepare_setup(args, state, environment, operation, *, force_verification=Fal
             return 0
     record = read_json(record_path) if record_path.exists() else None
     existing_baseline = state / 'baseline.vbvm'
+    existing_record = read_json(state / 'baseline.json') if (state / 'baseline.json').exists() else None
+    if existing_record is None and (existing_baseline.exists() or existing_baseline.is_symlink()):
+        raise RunnerError('Unrecorded baseline exists; preserve it and use another --state-dir')
+    if existing_record is not None and (not matches_source_vm(existing_record, args.vm) or
+            record is not None and record.get('vmId') != existing_record.get('vmId')):
+        raise RunnerError('Baseline belongs to another source VM; use a different --state-dir')
+    existing_record = existing_record or {}
+    requested = environment.get('runtimes', [])
+    retired = [old for old in map(runtime_pin, existing_record.get('environment', {}).get('runtimes', []))
+               if any(pin['platform'] == old['platform'] and runtime_pin(pin) != old for pin in requested)]
     if record is None or record.get('constructionPending'):
-        existing_record = read_json(state / 'baseline.json') if (state / 'baseline.json').exists() else None
-        if existing_record is None and (existing_baseline.exists() or existing_baseline.is_symlink()):
-            raise RunnerError('Unrecorded baseline exists; preserve it and use another --state-dir')
-        if existing_record is not None and not matches_source_vm(existing_record, args.vm):
-            raise RunnerError('Baseline belongs to another source VM; use a different --state-dir')
-        existing_record = existing_record or {}
         inheritance_user = selected_console_user(args, record or existing_record)
         if record and record.get('constructionPending') and args.guest_user is None and args.provision_config is None:
             inheritance_user = record['constructionConsoleUser']
@@ -2331,6 +2388,12 @@ def prepare_setup(args, state, environment, operation, *, force_verification=Fal
             atomic_json(record_path, record)
     check_setup_stop(operation)
     configuration = stage_provisioning(args, state, exchange, environment, record, binaries)
+    if retired or 'supersededRuntimes' in configuration:
+        if retired:
+            configuration['supersededRuntimes'] = retired
+        else:
+            configuration.pop('supersededRuntimes')
+        atomic_json(exchange / 'provision/config.json', configuration)
     request_id = configuration.get('provisioningRequestID')
     if request_id and request_id != record.get('pendingProvisioning', {}).get('id'):
         record['pendingProvisioning'] = {'id': request_id, 'path': str(exchange / 'provision'),
@@ -2388,6 +2451,7 @@ def prepare_setup(args, state, environment, operation, *, force_verification=Fal
     if result['status'] == 'passed' and not pinned_environment_matches:
         result.update({'status': 'blocked', 'reason': 'guest_environment_does_not_match_host_pins'})
         atomic_json(exchange / 'artifacts/result.json', result)
+    validation_passed = False
     if result['status'] == 'passed':
         if not reported_tools.get('available') or reported_tools.get('hashes') != bootstrap_tools:
             raise RunnerError('Guest did not attest the current installed bootstrap tools; rerun the guest installer')
@@ -2410,7 +2474,9 @@ def prepare_setup(args, state, environment, operation, *, force_verification=Fal
                             previous_stops=operation['previousStops'], setup_hook=hook)
         exchange = verification_exchange
         require_current_bootstrap_sources(source_digest)
-        if result['status'] == 'passed':
+        validation_passed = result['status'] == 'passed'
+        preflight = result.get('preflight', {})
+        if validation_passed:
             check_setup_stop(operation)
         provisioning_issue = setup_provisioning_issue(result, record['vmId'], console_user, request_id)
         if result['status'] == 'passed' and provisioning_issue:
@@ -2418,21 +2484,29 @@ def prepare_setup(args, state, environment, operation, *, force_verification=Fal
             atomic_json(exchange / 'artifacts/result.json', result)
             record.pop('baseVerifiedAt', None)
             atomic_json(record_path, record)
-        if result['status'] == 'passed' and not environment_attested(result.get('preflight', {}), environment, record['macos']):
+        if result['status'] == 'passed' and not environment_attested(preflight, environment, record['macos']):
             result.update({'status': 'blocked', 'reason': 'guest_environment_changed_during_validation'})
             atomic_json(exchange / 'artifacts/result.json', result)
+    observed_runtimes = 'simulatorRuntimeDiagnostics' in preflight or 'pinnedEnvironment' in preflight
+    if (validation_passed or observed_runtimes) and not setup_runtimes_attested(preflight, retired, requested):
         if result['status'] == 'passed':
-            metadata = candidate.lstat()
-            record.update({'verifiedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                           'verificationSigningMode': 'local',
-                           'buildDataInitializationAllowed': False,
-                           'bootstrapTools': bootstrap_tools,
-                           'bootstrapSourceDigest': source_digest,
-                           'validationResult': str(exchange / 'artifacts/result.json'),
-                           'promotionPending': {'backup': 'previous-baseline-' + uuid.uuid4().hex + '.vbvm',
-                                                'candidateFileID': [metadata.st_dev, metadata.st_ino]}})
-            atomic_json(record_path, record)
-            finish_baseline_promotion(state, record)
+            reason = 'simulator_runtime_retirement_unverified' if retired else 'simulator_runtime_unavailable'
+            result.update({'status': 'blocked', 'reason': reason, 'supersededRuntimes': retired})
+            atomic_json(exchange / 'artifacts/result.json', result)
+        record.pop('baseVerifiedAt', None)
+        atomic_json(record_path, record)
+    if result['status'] == 'passed':
+        metadata = candidate.lstat()
+        record.update({'verifiedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                       'verificationSigningMode': 'local',
+                       'buildDataInitializationAllowed': False,
+                       'bootstrapTools': bootstrap_tools,
+                       'bootstrapSourceDigest': source_digest,
+                       'validationResult': str(exchange / 'artifacts/result.json'),
+                       'promotionPending': {'backup': 'previous-baseline-' + uuid.uuid4().hex + '.vbvm',
+                                            'candidateFileID': [metadata.st_dev, metadata.st_ino]}})
+        atomic_json(record_path, record)
+        finish_baseline_promotion(state, record)
     print(f'Results: {exchange / "artifacts/result.json"}')
     if result['status'] != 'passed':
         print('Full setup validation is incomplete; see the report and provisioning log for missing prerequisites or failures.')

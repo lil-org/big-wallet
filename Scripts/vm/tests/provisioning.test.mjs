@@ -27,6 +27,8 @@ const blank = {DeviceIdentifier: 'disk1', Size: capacity};
 const details = {WholeDisk: true, TotalSize: capacity};
 const samples = () => [Buffer.alloc(1024 * 1024), Buffer.alloc(1024 * 1024)];
 const check = (condition, message) => { if (!condition) throw new Error(message); };
+const validateRetirementPins = pureFunction('validateRetirementPins', {check});
+const matchesRuntimeImage = pureFunction('matchesRuntimeImage');
 
 test('local preparation requests only missing pinned archive and runtime images', () => {
     const matchesRuntime = pureFunction('matchesRuntime');
@@ -1503,32 +1505,63 @@ test('runtime artifact inspection is bounded and storage checks use all bundle f
     } finally { fixture.close(); }
 });
 
-function runtimeProvisioningFixture({platform = 'iOS', reused = false, dmgPath, importedBuild, cacheError, cachedBuild, cacheUnavailable = false} = {}) {
+function runtimeProvisioningFixture({platform = 'iOS', reused = false, dmgPath, importedBuild, cacheError, cachedBuild,
+    cacheUnavailable = false, previous, freeBefore = 64 * 1024 ** 3, buildFreeBefore = freeBefore, freeAfter = 64 * 1024 ** 3,
+    deviceExists = true, additionalPins = [], supersededRuntimes, onRetirement} = {}) {
     const wanted = {platform, version: '27.0', buildVersion: platform === 'iOS' ? '24A434' : '24M362', ...(dmgPath ? {dmgPath} : {})};
-    const runtime = {identifier: `com.apple.CoreSimulator.SimRuntime.${platform === 'iOS' ? 'iOS' : 'xrOS'}-27-0`,
-        version: wanted.version, buildversion: wanted.buildVersion, isAvailable: true};
-    const name = platform === 'iOS' ? 'iPhone 18 Pro' : 'Apple Vision Pro';
+    const requested = [wanted, ...additionalPins];
+    const runtimeFor = pin => ({identifier: `com.apple.CoreSimulator.SimRuntime.${pin.platform === 'iOS' ? 'iOS' : 'xrOS'}-${pin.version.replaceAll('.', '-')}`,
+        version: pin.version, buildversion: pin.buildVersion, isAvailable: true});
+    let active = wanted;
     const buildRoot = '/guest/build';
     const staging = '/guest/provision';
     const commands = [];
     const cacheCommands = [];
     const events = [];
     const removed = [];
-    let runtimes = reused ? [runtime] : [];
-    const start = source.indexOf("    console.log('Verifying pinned guest simulator runtimes.');");
-    const end = source.indexOf('    const launchDirectory =', start);
+    let runtimes = reused ? requested.map(runtimeFor) : [];
+    const retired = [];
+    const start = source.indexOf('    const keychainPath = path.join(userHome,');
+    const end = source.indexOf('    fs.mkdirSync(launchDirectory,', start);
     assert.ok(start >= 0 && end > start);
     const developer = '/Applications/Xcode.app/Contents/Developer';
-    const globals = {config: {vmId: 'fixture', runtimes: [wanted]}, path, buildRoot, staging, check, developer,
+    const globals = {config: {vmId: 'fixture', consoleUser: 'tester', runtimes: requested, supersededRuntimes}, path, buildRoot, staging, check, developer,
+        validateRetirementPins,
+        state: '/guest/state', userHome: '/Users/tester',
         matchesRuntime: pureFunction('matchesRuntime'), console: {log() {}},
-        fs: {mkdirSync() {}, existsSync: () => true},
-        staged: relative => path.join(staging, relative), runtimeStorageCheckpoint() {},
+        fs: {mkdirSync() {}, existsSync: () => true, lstatSync(filename) {
+            assert.equal(filename, '/guest/state/provisioning.json');
+            return previous && {isFile: () => true, uid: 0, mode: 0o600, size: 256};
+        }, readFileSync: () => JSON.stringify(previous), statfsSync(filename) {
+            assert.ok([buildRoot, '/System/Volumes/Data'].includes(filename));
+            const available = filename === buildRoot ? buildFreeBefore : freeBefore;
+            const reclaimed = Array.isArray(freeAfter) ? freeAfter[retired.length - 1] : freeAfter;
+            return {bavail: retired.length ? reclaimed : available, bsize: 1, blocks: 96 * 1024 ** 3};
+        }},
+        retireSupersededRuntimes(prior, target, root, verifyOnly = false) {
+            const expected = Array.from(target, pin => supersededRuntimes?.find(old => old.platform === pin.platform) ??
+                previous.runtimes.find(old => old.platform === pin.platform));
+            assert.deepEqual(JSON.parse(JSON.stringify(prior)), expected);
+            assert.ok(Array.from(target).every(pin => requested.includes(pin)));
+            if (!verifyOnly) {
+                assert.equal(prior.length, 1);
+                assert.ok(!retired.includes(prior[0].platform));
+                retired.push(prior[0].platform);
+            }
+            assert.equal(root, buildRoot);
+            events.push(verifyOnly ? 'verify-retirement' : 'retire');
+            onRetirement?.(prior, target, verifyOnly);
+        },
+        staged: relative => path.join(staging, relative),
         exportedRuntimeImage: directory => path.join(directory, 'downloaded.dmg'),
         removeLocalProvisioningInput: filename => removed.push(filename),
         run(_label, command, args, options = {}) {
+            const runtime = runtimeFor(active);
+            const name = active.platform === 'iOS' ? 'iPhone 18 Pro' : 'Apple Vision Pro';
             if (command === '/usr/bin/xcodebuild') {
                 commands.push([command, ...args]);
-                if (args[0] === '-importPlatform') runtimes = [{...runtime, buildversion: importedBuild ?? wanted.buildVersion}];
+                events.push(args[0]);
+                if (args[0] === '-importPlatform') runtimes.push({...runtime, buildversion: importedBuild ?? active.buildVersion});
                 else assert.equal(args[0], '-downloadPlatform');
                 return '';
             }
@@ -1539,6 +1572,12 @@ function runtimeProvisioningFixture({platform = 'iOS', reused = false, dmgPath, 
                 args = Array.from(args).slice(2);
             }
             assert.equal(command, '/usr/bin/xcrun');
+            if (args[1] === 'create') {
+                assert.deepEqual(Array.from(args), ['simctl', 'create', name, 'fixture-device', runtime.identifier]);
+                deviceExists = true;
+                events.push('create');
+                return '';
+            }
             if (args[1] === 'runtime') {
                 assert.deepEqual(Array.from(args), ['simctl', 'runtime', 'dyld_shared_cache', 'update', runtime.identifier]);
                 events.push('cache');
@@ -1552,19 +1591,28 @@ function runtimeProvisioningFixture({platform = 'iOS', reused = false, dmgPath, 
             if (args[2] === 'runtimes') return JSON.stringify({runtimes});
             if (args[2] === 'devicetypes') return JSON.stringify({devicetypes: [{name, identifier: 'fixture-device'}]});
             assert.equal(args[2], 'devices');
-            return JSON.stringify({devices: {[runtime.identifier]: [{name, isAvailable: true}]}});
+            return JSON.stringify({devices: {[runtime.identifier]: deviceExists ? [{name, isAvailable: true}] : []}});
         },
     };
+    globals.runtimeStorageCheckpoint = pureFunction('runtimeStorageCheckpoint', {check, fs: globals.fs, console: globals.console,
+        runtimeRootSpaceRequirement: rootSpaceRequirement, runtimeArtifactBytes: () => 2 * 1024 ** 3});
+    globals.reclaimRuntimePreparationSpace = pureFunction('reclaimRuntimePreparationSpace', {check, fs: globals.fs, console: globals.console});
     globals.prepareRuntimeCache = pureFunction('prepareRuntimeCache', {check, developer,
         matchesRuntime: globals.matchesRuntime, run: globals.run, console: globals.console});
-    globals.verifyOrRepairPinnedRuntime = (pin, _root, mode) => {
+    globals.verifyOrRepairPinnedRuntime = (pin, _root, mode, retirement) => {
+        active = pin;
         events.push(`verify:${mode ?? 'prepare'}`);
-        if (mode === 'existing' && runtimes.length === 0) return null;
+        if (mode !== 'verify') {
+            const expected = (supersededRuntimes ?? previous?.runtimes ?? []).filter(old => requested.some(value =>
+                value.platform === old.platform && (value.version !== old.version || value.buildVersion !== old.buildVersion)));
+            assert.deepEqual(JSON.parse(JSON.stringify(retirement?.pins ?? [])), expected);
+        }
         const selected = runtimes.find(value => globals.matchesRuntime(value, pin));
+        if (mode === 'existing' && !selected) return null;
         check(selected, `${pin.platform} ${pin.version} (${pin.buildVersion}) is unavailable`);
         return selected;
     };
-    return {wanted, commands, cacheCommands, events, removed, run: () => vm.runInNewContext(source.slice(start, end), globals)};
+    return {wanted, commands, cacheCommands, events, removed, retired, run: () => vm.runInNewContext(source.slice(start, end), globals)};
 }
 
 test('runtime downloads select the pinned build ID when release and build differ', () => {
@@ -1576,6 +1624,92 @@ test('runtime downloads select the pinned build ID when release and build differ
         assert.notEqual(fixture.wanted.buildVersion, fixture.wanted.version);
         assert.equal(fixture.commands.filter(command => command[1] === '-importPlatform').length, 1);
     }
+});
+
+test('guest setup retires prior same-account pins after device readiness and checks absence after verification', () => {
+    const previous = {version: 1, vmId: 'fixture', consoleUser: 'tester',
+        runtimes: [{platform: 'iOS', version: '26.4', buildVersion: '23E222'}]};
+    const fixture = runtimeProvisioningFixture({previous});
+    fixture.run();
+    assert.ok(fixture.events.indexOf('devices') > fixture.events.indexOf('cache'));
+    assert.ok(fixture.events.indexOf('retire') > fixture.events.lastIndexOf('devices'));
+    assert.deepEqual(fixture.events.slice(-2), ['verify:verify', 'verify-retirement']);
+    assert.equal(fixture.commands.filter(command => command[1] === '-importPlatform').length, 1);
+    const failed = runtimeProvisioningFixture({previous, cacheError: 'fixture cache failed'});
+    assert.throws(failed.run, /fixture cache failed/);
+    assert.ok(!failed.events.includes('retire'));
+    for (const changed of [{vmId: 'other-vm'}, {consoleUser: 'other-user'}]) {
+        const other = runtimeProvisioningFixture({previous: {...previous, ...changed}});
+        assert.throws(other.run, /different VM or account/);
+        assert.deepEqual(other.events, []);
+        assert.deepEqual(other.commands, []);
+    }
+});
+
+test('guest setup retires early only below the measured download reserve and rechecks free space', () => {
+    const reserve = 16 * 1024 ** 3;
+    const previous = {version: 1, vmId: 'fixture', consoleUser: 'tester',
+        runtimes: [{platform: 'iOS', version: '26.4', buildVersion: '23E222'}]};
+    const sufficient = runtimeProvisioningFixture({previous, freeBefore: reserve});
+    sufficient.run();
+    assert.ok(sufficient.events.indexOf('retire') > sufficient.events.lastIndexOf('devices'));
+    const reclaimable = runtimeProvisioningFixture({previous, freeBefore: reserve - 1, freeAfter: reserve});
+    reclaimable.run();
+    assert.ok(reclaimable.events.includes('retire'));
+    assert.ok(reclaimable.events.indexOf('retire') < reclaimable.events.indexOf('-downloadPlatform'));
+    assert.equal(reclaimable.events.filter(event => event === 'retire').length, 1);
+    const exhausted = runtimeProvisioningFixture({previous, freeBefore: reserve - 1, freeAfter: reserve - 1});
+    assert.throws(exhausted.run, /Insufficient guest system-volume space/);
+    assert.equal(exhausted.events.filter(event => event === 'retire').length, 1);
+    assert.deepEqual(exhausted.commands, []);
+});
+
+test('two-platform upgrades reclaim the second old runtime only if the first leaves too little space', () => {
+    const previous = {version: 1, vmId: 'fixture', consoleUser: 'tester', runtimes: [
+        {platform: 'iOS', version: '26.4', buildVersion: '23E222'},
+        {platform: 'visionOS', version: '26.4', buildVersion: '23N111'},
+    ]};
+    const additionalPins = [{platform: 'visionOS', version: '27.0', buildVersion: '24M362'}];
+    for (const reused of [false, true]) {
+        const reserve = (reused ? 8 : 16) * 1024 ** 3;
+        for (const firstIsEnough of [true, false]) {
+            const fixture = runtimeProvisioningFixture({previous, additionalPins, reused, freeBefore: reserve - 2,
+                freeAfter: [firstIsEnough ? reserve : reserve - 1, reserve]});
+            fixture.run();
+            assert.deepEqual(fixture.retired, ['iOS', 'visionOS']);
+            const firstOperation = fixture.events.indexOf(reused ? 'cache' : '-downloadPlatform');
+            assert.equal(fixture.events.slice(0, firstOperation).filter(value => value === 'retire').length, firstIsEnough ? 1 : 2);
+            if (firstIsEnough) assert.ok(fixture.events.lastIndexOf('retire') > fixture.events.lastIndexOf('devices'));
+        }
+    }
+});
+
+test('resuming with an installed replacement reclaims space on the volume needed for cache or device preparation', () => {
+    const reserve = 8 * 1024 ** 3;
+    const previous = {version: 1, vmId: 'fixture', consoleUser: 'tester',
+        runtimes: [{platform: 'iOS', version: '26.4', buildVersion: '23E222'}]};
+    for (const [freeBefore, buildFreeBefore, expected] of [
+        [reserve - 1, reserve, ['retire', 'cache', 'create']],
+        [reserve, reserve - 1, ['cache', 'retire', 'create']],
+        [reserve, reserve, ['cache', 'create', 'retire']],
+    ]) {
+        const fixture = runtimeProvisioningFixture({previous, reused: true, deviceExists: false, freeBefore, buildFreeBefore});
+        fixture.run();
+        assert.deepEqual(fixture.events.filter(event => ['cache', 'create', 'retire'].includes(event)), expected);
+        assert.deepEqual(fixture.commands, []);
+    }
+    const failed = runtimeProvisioningFixture({previous, reused: true, cacheError: 'fixture cache error'});
+    assert.throws(failed.run, /fixture cache error/);
+    assert.ok(!failed.events.includes('retire'));
+});
+
+test('guest setup retires a replaced build with the same runtime identifier before import', () => {
+    const previous = {version: 1, vmId: 'fixture', consoleUser: 'tester',
+        runtimes: [{platform: 'iOS', version: '27.0', buildVersion: '24A111'}]};
+    const fixture = runtimeProvisioningFixture({previous});
+    fixture.run();
+    assert.ok(fixture.events.includes('retire'));
+    assert.ok(fixture.events.indexOf('retire') < fixture.events.indexOf('-importPlatform'));
 });
 
 test('runtime provisioning rejects a different installed build after downloading', () => {
@@ -1655,6 +1789,285 @@ test('cache command output is bounded and retained on failure without enabling s
         result = {status: 0, stdout: '', stderr: '', ...interruption};
         assert.throws(() => command('Cache preparation', '/usr/bin/env', [], options), /failed/);
     }
+});
+
+function runtimeRetirementFixture(t, {iosVersion = '27.2'} = {}) {
+    const root = filesystem.realpathSync(mkdtempSync(path.join(tmpdir(), 'wallet-runtime-retirement-')));
+    t.after(() => rmSync(root, {recursive: true, force: true}));
+    const buildRoot = path.join(root, 'build'), state = path.join(root, 'state');
+    const vmId = 'fixture-vm';
+    const images = new Map(), devices = {}, mutations = [];
+    const add = (platform, version, buildVersion) => {
+        const pin = {platform, version, buildVersion};
+        const key = [platform, version, buildVersion].join('-');
+        const marker = platform === 'iOS' ? 'iOS' : 'xrOS';
+        const runtimeIdentifier = 'com.apple.CoreSimulator.SimRuntime.' + marker + '-' + version.replaceAll('.', '-');
+        const image = {identifier: randomUUID(), runtimeIdentifier, version, build: buildVersion, state: 'Ready',
+            platformIdentifier: 'com.apple.platform.' + (platform === 'iOS' ? 'iphone' : 'xr') + 'simulator',
+            signatureState: 'Verified', deletable: true, kind: 'Disk Image'};
+        image.path = '/Library/Developer/CoreSimulator/Images/' + image.identifier + '.dmg';
+        images.set(image.identifier, image);
+        const device = {udid: randomUUID(), name: platform === 'iOS' ? 'iPhone 18 Pro' : 'Apple Vision Pro',
+            isAvailable: true, state: 'Shutdown'};
+        (devices[runtimeIdentifier] ??= []).push(device);
+        const download = path.join(buildRoot, 'RuntimeDownloads', key);
+        const repairSource = path.join(buildRoot, 'RuntimeRepairSources', key);
+        const receipt = path.join(state, 'RuntimeRepairs', key + '.json');
+        for (const directory of [download, repairSource, path.dirname(receipt)]) mkdirSync(directory, {recursive: true, mode: 0o700});
+        writeFileSync(path.join(download, 'runtime.dmg'), 'exported fixture');
+        const sourcePath = path.join(repairSource, 'runtime.dmg');
+        writeFileSync(sourcePath, 'preserved fixture');
+        writeFileSync(receipt, JSON.stringify({version: 1, vmId, pin, phase: 'complete', sourcePath}), {mode: 0o600});
+        return {pin, image, device, artifacts: [download, repairSource, receipt]};
+    };
+    const previous = [add('iOS', '27.0', '24A434'), add('visionOS', '27.0', '24M362')];
+    const wanted = [add('iOS', iosVersion, '24B8117'), add('visionOS', '27.2', '24N120')];
+    const unrelated = add('iOS', '26.4', '23E222');
+    const developer = '/Applications/Xcode.app/Contents/Developer';
+    const behavior = {};
+    const synced = [];
+    const run = (_label, file, args, options) => {
+        if (file === '/usr/bin/find') {
+            assert.deepEqual(Array.from(args), ['.', '-xdev', '-mindepth', '1', '-delete']);
+            behavior.beforeWalk?.(process.cwd());
+            return execFileSync(file, Array.from(args), {encoding: 'utf8'});
+        }
+        assert.equal(file, '/usr/bin/env');
+        assert.deepEqual(Array.from(args).slice(0, 3), ['DEVELOPER_DIR=' + developer, '/usr/bin/xcrun', 'simctl']);
+        assert.equal(options.user, true);
+        const command = Array.from(args).slice(3);
+        if (command.join(' ') === 'runtime list --json') return JSON.stringify(Object.fromEntries(images));
+        if (command.join(' ') === 'list devices --json') return JSON.stringify({devices});
+        if (command.join(' ') === 'list runtimes --json') return JSON.stringify({runtimes: [...images.values()].map(image => ({
+            identifier: image.runtimeIdentifier, version: image.version, buildversion: image.build, isAvailable: true}))});
+        if (command[0] === 'delete') {
+            assert.equal(command.length, 2);
+            const attached = Object.values(devices).find(values => values.some(device => device.udid === command[1]));
+            assert.ok(attached, 'device deletion requires a single live UUID');
+            attached.splice(attached.findIndex(device => device.udid === command[1]), 1);
+        } else {
+            assert.deepEqual(command.slice(0, 2), ['runtime', 'delete']);
+            assert.equal(command.length, 3);
+            assert.ok(images.delete(command[2]), 'image deletion requires a single live UUID');
+        }
+        mutations.push(command);
+        behavior.afterMutation?.(command);
+        if (behavior.interrupt === command.at(-1)) {
+            delete behavior.interrupt;
+            throw new Error('fixture interruption after native deletion');
+        }
+        return '';
+    };
+    const fs = {...filesystem, lstatSync(filename, options) {
+        const info = filesystem.lstatSync(filename, options);
+        if (info) info.uid = filename === behavior.assetOwnedPath ? 200 : 0;
+        if (info && filename === behavior.mount) info.dev++;
+        return info;
+    }};
+    const retire = pureFunction('retireSupersededRuntimes', {check, validateRetirementPins, matchesRuntimeImage, run, fs, path, developer, state, config: {vmId}, process,
+        syncDirectory(directory) { synced.push(directory); behavior.onSync?.(directory); }});
+    const setup = (from = previous, to = wanted, verifyOnly = false) =>
+        retire(from.map(record => record.pin), to.map(record => record.pin), buildRoot, verifyOnly);
+    const assertPresent = (record, present) => {
+        assert.equal(images.has(record.image.identifier), present);
+        assert.equal(Object.values(devices).flat().some(device => device.udid === record.device.udid), present);
+        for (const artifact of record.artifacts) assert.equal(filesystem.existsSync(artifact), present, artifact);
+    };
+    return {previous, wanted, unrelated, behavior, images, devices, mutations, synced, setup, assertPresent};
+}
+
+test('superseded runtimes retire their images, devices, downloads and repair artifacts by exact pin', t => {
+    const fixture = runtimeRetirementFixture(t);
+    fixture.setup();
+    for (const record of fixture.previous) fixture.assertPresent(record, false);
+    for (const record of [...fixture.wanted, fixture.unrelated]) fixture.assertPresent(record, true);
+});
+
+test('a cold retry retires a returned baseline runtime after the guest records the replacement', t => {
+    const inventory = runtimeRetirementFixture(t);
+    const baseline = inventory.unrelated, replacement = inventory.previous[0];
+    const previous = {version: 1, vmId: 'fixture', consoleUser: 'tester', runtimes: [replacement.pin]};
+    const options = {reused: true, supersededRuntimes: [baseline.pin]};
+    for (const record of [undefined, {...previous, runtimes: [inventory.wanted[0].pin]}]) {
+        const denied = runtimeProvisioningFixture({...options, previous: record});
+        assert.throws(denied.run, /same-guest provisioning record|pins differ from the source baseline/);
+        assert.deepEqual(denied.events, []);
+    }
+    const fixture = runtimeProvisioningFixture({...options, previous, onRetirement(from, to, verifyOnly) {
+        inventory.setup(from.map(pin => ({pin})), to.map(pin => ({pin})), verifyOnly);
+    }});
+    fixture.run();
+    assert.deepEqual(fixture.commands, []);
+    assert.deepEqual(fixture.events.slice(-3), ['retire', 'verify:verify', 'verify-retirement']);
+    inventory.assertPresent(baseline, false);
+    for (const kept of [...inventory.previous, ...inventory.wanted]) inventory.assertPresent(kept, true);
+});
+
+test('superseded runtime retirement resumes after an exact device or image deletion', t => {
+    for (const kind of ['image', 'device']) {
+        const fixture = runtimeRetirementFixture(t);
+        const record = fixture.previous[0];
+        fixture.behavior.interrupt = kind === 'image' ? record.image.identifier : record.device.udid;
+        assert.throws(() => fixture.setup(), /fixture interruption after native deletion/);
+        fixture.setup();
+        for (const retired of fixture.previous) fixture.assertPresent(retired, false);
+        for (const kept of [...fixture.wanted, fixture.unrelated]) fixture.assertPresent(kept, true);
+    }
+});
+
+test('unchanged runtime pins preserve every registration, device and artifact', t => {
+    const fixture = runtimeRetirementFixture(t);
+    fixture.setup(fixture.previous, [...fixture.previous].reverse());
+    assert.deepEqual(fixture.mutations, []);
+    for (const record of [...fixture.previous, ...fixture.wanted, fixture.unrelated]) fixture.assertPresent(record, true);
+    fixture.setup(fixture.previous, [fixture.wanted[0], fixture.previous[1]]);
+    fixture.assertPresent(fixture.previous[0], false);
+    for (const record of [fixture.previous[1], ...fixture.wanted, fixture.unrelated]) fixture.assertPresent(record, true);
+});
+
+test('superseded builds sharing a runtime identifier keep the attached devices', t => {
+    const fixture = runtimeRetirementFixture(t, {iosVersion: '27.0'});
+    const old = fixture.previous[0], current = fixture.wanted[0];
+    const devices = structuredClone(fixture.devices[old.image.runtimeIdentifier]);
+    fixture.setup();
+    assert.equal(fixture.images.has(old.image.identifier), false);
+    assert.deepEqual(fixture.devices[current.image.runtimeIdentifier], devices);
+    fixture.assertPresent(current, true);
+    fixture.setup(fixture.previous, fixture.wanted, true);
+});
+
+test('foreign images sharing an old asset or a booted old device block retirement before deletion', t => {
+    for (const conflict of ['shared path', 'booted device']) {
+        const fixture = runtimeRetirementFixture(t);
+        const old = fixture.previous[0];
+        if (conflict === 'shared path') fixture.unrelated.image.path = old.image.path;
+        else old.device.state = 'Booted';
+        assert.throws(() => fixture.setup());
+        assert.deepEqual(fixture.mutations, []);
+        for (const record of [...fixture.previous, ...fixture.wanted, fixture.unrelated]) fixture.assertPresent(record, true);
+    }
+});
+
+test('retirement rechecks the next simulator after the first device deletion', t => {
+    for (const change of ['boot', 'move', 'shared runtime']) {
+        const fixture = runtimeRetirementFixture(t);
+        const old = fixture.previous[0], foreign = fixture.unrelated;
+        const devices = fixture.devices[old.image.runtimeIdentifier];
+        const next = {...old.device, udid: randomUUID()};
+        devices.push(next);
+        fixture.behavior.afterMutation = () => {
+            if (change === 'boot') next.state = 'Booted';
+            if (change === 'move') fixture.devices[foreign.image.runtimeIdentifier].push(devices.pop());
+            if (change === 'shared runtime') foreign.image.runtimeIdentifier = old.image.runtimeIdentifier;
+        };
+        assert.throws(() => fixture.setup());
+        assert.deepEqual(fixture.mutations, [['delete', old.device.udid]]);
+        assert.ok(Object.values(fixture.devices).flat().includes(next));
+    }
+});
+
+test('retirement preserves an artifact replaced or mounted after registration removal', t => {
+    for (const change of ['replacement', 'nested mount']) {
+        const fixture = runtimeRetirementFixture(t);
+        const old = fixture.previous[0], [download, , receipt] = old.artifacts;
+        const nested = path.join(download, 'Restore');
+        mkdirSync(nested);
+        fixture.behavior.afterMutation = command => {
+            if (command.at(-1) !== old.image.identifier) return;
+            if (change === 'replacement') {
+                filesystem.renameSync(download, download + '.saved');
+                mkdirSync(download);
+            } else fixture.behavior.mount = nested;
+        };
+        assert.throws(() => fixture.setup());
+        assert.ok(filesystem.existsSync(change === 'replacement' ? download : nested));
+        assert.ok(filesystem.existsSync(receipt));
+        fixture.assertPresent(fixture.unrelated, true);
+    }
+});
+
+test('a download path replaced during the removal walk cannot redirect it to foreign data', t => {
+    const fixture = runtimeRetirementFixture(t);
+    const [download, , receipt] = fixture.previous[0].artifacts;
+    const foreign = fixture.unrelated.artifacts[0];
+    fixture.behavior.beforeWalk = directory => {
+        assert.equal(directory, download);
+        filesystem.renameSync(download, download + '.saved');
+        symlinkSync(foreign, download);
+    };
+    assert.throws(() => fixture.setup(), /artifact was replaced/);
+    assert.ok(filesystem.lstatSync(download).isSymbolicLink());
+    assert.equal(readFileSync(path.join(foreign, 'runtime.dmg'), 'utf8'), 'exported fixture');
+    assert.ok(filesystem.existsSync(receipt));
+});
+
+test('the repair receipt survives a failed sidecar flush and retry flushes the already absent source', t => {
+    const fixture = runtimeRetirementFixture(t);
+    const old = fixture.previous[0], [download, source, receipt] = old.artifacts;
+    const retire = () => fixture.setup([old], [fixture.wanted[0]]);
+    fixture.behavior.onSync = directory => {
+        if (directory === path.dirname(source)) {
+            assert.ok(filesystem.existsSync(receipt));
+            throw new Error('fixture sidecar flush failure');
+        }
+    };
+    assert.throws(retire, /fixture sidecar flush failure/);
+    assert.ok(!filesystem.existsSync(source) && filesystem.existsSync(receipt));
+    assert.deepEqual(fixture.synced.splice(0), [path.dirname(download), path.dirname(source)]);
+    fixture.behavior.onSync = directory =>
+        assert.equal(filesystem.existsSync(receipt), directory !== path.dirname(receipt));
+    retire();
+    assert.deepEqual(fixture.synced, old.artifacts.map(file => path.dirname(file)));
+    fixture.assertPresent(old, false);
+});
+
+test('superseded runtime cleanup preserves foreign repair evidence and symlink targets', t => {
+    for (const conflict of ['foreign receipt', 'symlink']) {
+        const fixture = runtimeRetirementFixture(t);
+        const [download, , receipt] = fixture.previous[0].artifacts;
+        if (conflict === 'foreign receipt') {
+            const record = JSON.parse(readFileSync(receipt, 'utf8'));
+            writeFileSync(receipt, JSON.stringify({...record, vmId: 'another-guest'}));
+        } else {
+            symlinkSync(fixture.unrelated.artifacts[0], path.join(download, 'foreign-download'));
+        }
+        assert.throws(() => fixture.setup());
+        fixture.assertPresent(fixture.unrelated, true);
+        assert.equal(filesystem.existsSync(conflict === 'foreign receipt' ? receipt : download), true);
+    }
+});
+
+test('Apple export descendants can retain installer permissions only inside the protected download directory', t => {
+    const fixture = runtimeRetirementFixture(t);
+    const old = fixture.previous[0];
+    const [download, repair] = old.artifacts;
+    for (const protectedPath of [download, path.join(repair, 'runtime.dmg')]) {
+        fixture.behavior.assetOwnedPath = protectedPath;
+        assert.throws(() => fixture.setup());
+        assert.deepEqual(fixture.mutations, []);
+        fixture.assertPresent(old, true);
+    }
+    const bundle = path.join(download, 'runtime.exportedBundle');
+    const restore = path.join(bundle, 'Restore');
+    mkdirSync(restore, {recursive: true});
+    filesystem.renameSync(path.join(download, 'runtime.dmg'), path.join(restore, 'runtime.dmg'));
+    writeFileSync(path.join(bundle, 'ExportedMetadata.plist'), 'fixture metadata');
+    filesystem.chmodSync(restore, 0o775);
+    fixture.behavior.assetOwnedPath = bundle;
+    fixture.setup();
+    fixture.assertPresent(old, false);
+    fixture.assertPresent(fixture.unrelated, true);
+});
+
+test('superseded runtime verification detects a reappearing old registration without deleting it', t => {
+    const fixture = runtimeRetirementFixture(t);
+    fixture.setup();
+    const old = fixture.previous[0].image;
+    fixture.images.set(old.identifier, old);
+    const before = fixture.mutations.length;
+    assert.throws(() => fixture.setup(fixture.previous, fixture.wanted, true));
+    assert.equal(fixture.mutations.length, before);
+    assert.ok(fixture.images.has(old.identifier));
 });
 
 function runtimeRepairFixture({platform = 'iOS', healthy = false, sibling = false, exportParents = []} = {}) {
@@ -1738,6 +2151,7 @@ function runtimeRepairFixture({platform = 'iOS', healthy = false, sibling = fals
             if (behavior.verifyUnknown) return response('verification unavailable', 1);
             if (image.kind === 'Patchable Cryptex Disk Image') {
                 if (behavior.anchorNowVerified) return response('Signature verified, signature is valid.');
+                if (behavior.anchorVerificationUnknown) return response('Native verification unavailable', 1);
                 if (behavior.recreatedVerify === 'verified' && image.identifier !== oldID) return response('Signature verified, signature is valid.');
                 if (behavior.recreatedVerify === 'unknown' && image.identifier !== oldID) return response('Native verification unavailable', 1);
                 if (behavior.afterFailedVerify) behavior.afterFailedVerify(inventory);
@@ -1782,7 +2196,7 @@ function runtimeRepairFixture({platform = 'iOS', healthy = false, sibling = fals
     };
     const artifactBytes = pureFunction('runtimeArtifactBytes', {fs, path, check});
     const select = pureFunction('exportedRuntimeImage', {fs, path, check, runtimeArtifactBytes: artifactBytes});
-    const prepare = pureFunction('verifyOrRepairPinnedRuntime', {fs, path, check, fail: message => { throw new Error(message); },
+    const prepare = pureFunction('verifyOrRepairPinnedRuntime', {fs, path, check, matchesRuntimeImage, fail: message => { throw new Error(message); },
         state, config: {vmId: 'fixture-vm'}, performance: {now: () => clock},
         developer: '/Applications/Xcode.app/Contents/Developer', matchesRuntime: pureFunction('matchesRuntime'), run,
         runtimeMetadataField: pureFunction('runtimeMetadataField', {check, run}),
@@ -1792,9 +2206,17 @@ function runtimeRepairFixture({platform = 'iOS', healthy = false, sibling = fals
             if (filename.startsWith('/Library/Developer/CoreSimulator/Images/Inbox/')) throw Object.assign(new Error('Discarded native Inbox file'), {code: 'ENOENT'});
             if (filename.startsWith('/Library/Developer/CoreSimulator/Images/')) return behavior.normalHashMismatch ? {...source, sha256: 'f'.repeat(64)} : source;
             return digest(filename);
-        }, runtimeStorageCheckpoint(...args) { checkpoints.push(args); if (behavior.noSpace) throw new Error('fixture storage reserve'); },
+        }, runtimeStorageCheckpoint(...args) {
+            checkpoints.push(args);
+            if (behavior.noSpace) args[3]?.();
+            if (behavior.noSpace) throw new Error('fixture storage reserve');
+        },
         writeDurableJSON(filename, value) {
             writes.push(JSON.parse(JSON.stringify(value))); writeFileSync(filename, JSON.stringify(value), {mode: 0o600});
+            if (value.phase === behavior.interruptPhase) {
+                delete behavior.interruptPhase;
+                throw new Error('fixture repair interrupted');
+            }
             if (value.phase === 'adding' && value.addAttempted && behavior.interruptAddIntent) {
                 behavior.interruptAddIntent = false; throw new Error('fixture stopped before add');
             }
@@ -1803,7 +2225,7 @@ function runtimeRepairFixture({platform = 'iOS', healthy = false, sibling = fals
     const journalPath = path.join(state, 'RuntimeRepairs', `${key}.json`);
     return {pin, buildRoot, exported, inventory, calls, writes, checkpoints, logs, sleeps, queryTimeouts,
         elapsed: () => clock, behavior, oldID, probeID, newID, siblingID, journalPath,
-        prepare: mode => prepare(pin, buildRoot, mode), journal: () => JSON.parse(readFileSync(journalPath, 'utf8')),
+        prepare: (mode, retirement) => prepare(pin, buildRoot, mode, retirement), journal: () => JSON.parse(readFileSync(journalPath, 'utf8')),
         close: () => rmSync(root, {recursive: true, force: true})};
 }
 
@@ -1851,10 +2273,12 @@ test('a fresh signed runtime waits for its exact profile without creating a repa
     } finally { fixture.close(); }
 });
 
-test('completed Ready source import is fully verified and retained while only failed registrations are deleted', () => {
+test('a verified Ready import can demote the rejected cryptex before its exact deletion', () => {
     const fixture = runtimeRepairFixture();
     try {
         fixture.behavior.readyAdd = true;
+        fixture.behavior.afterProbe = inventory => Object.assign(inventory.get(fixture.oldID),
+            {state: 'Unusable', unusableErrorMessage: 'Cryptex Mount Preferred'});
         fixture.prepare();
         const record = fixture.journal();
         assert.equal(record.probeCompletion.exitCode, 0);
@@ -1865,6 +2289,9 @@ test('completed Ready source import is fully verified and retained while only fa
         assert.equal(fixture.calls.filter(args => args[1] === 'add').length, 1);
         assert.deepEqual(fixture.calls.filter(args => args[1] === 'delete').map(args => args[2]), [fixture.oldID]);
         assert.ok(fixture.calls.some(args => args[1] === 'verify' && args[2] === fixture.probeID));
+        const add = fixture.calls.findIndex(args => args[1] === 'add');
+        const deletion = fixture.calls.findIndex(args => args[1] === 'delete');
+        assert.ok(fixture.calls.slice(add + 1, deletion).some(args => args[1] === 'verify' && args[2] === fixture.oldID));
         assert.equal(record.phase, 'complete');
     } finally { fixture.close(); }
 });
@@ -2251,6 +2678,57 @@ test('native plist extraction preserves required fields when the manifest contai
     } finally { rmSync(root, {recursive: true, force: true}); }
 });
 
+test('resumed repairs tolerate new native UUIDs for both superseded pins and still track unrelated images', () => {
+    for (const phase of ['probe', 'deleting', 'adding']) {
+        const fixture = runtimeRepairFixture();
+        try {
+            const previous = {platform: 'iOS', version: '26.4', buildVersion: '23E222'};
+            const retired = {identifier: randomUUID(), platformIdentifier: 'com.apple.platform.iphonesimulator',
+                version: previous.version, build: previous.buildVersion, kind: 'Disk Image'};
+            const otherPin = {platform: 'visionOS', version: previous.version, buildVersion: '23N222'};
+            const otherImage = {...retired, identifier: randomUUID(), platformIdentifier: 'com.apple.platform.xrsimulator', build: otherPin.buildVersion};
+            const unrelated = {...otherImage, identifier: randomUUID(), build: previous.buildVersion};
+            fixture.inventory.set(retired.identifier, retired);
+            fixture.inventory.set(otherImage.identifier, otherImage);
+            fixture.inventory.set(unrelated.identifier, unrelated);
+            const retirement = {pins: [previous, otherPin], release() {
+                assert.ok(fixture.inventory.delete(retired.identifier));
+                fixture.behavior.noSpace = false;
+                throw new Error('fixture interrupted after retirement');
+            }};
+            fixture.behavior.interruptPhase = phase;
+            assert.throws(() => fixture.prepare('prepare', retirement), /fixture repair interrupted/);
+            const snapshot = phase === 'adding' ? fixture.journal().beforeAdd : fixture.journal().beforeProbe;
+            assert.ok(!snapshot.includes(retired.identifier));
+            assert.ok(!snapshot.includes(otherImage.identifier));
+            assert.ok(snapshot.includes(unrelated.identifier));
+            for (const image of [retired, otherImage]) {
+                fixture.inventory.delete(image.identifier);
+                image.identifier = randomUUID();
+                fixture.inventory.set(image.identifier, image);
+            }
+            if (phase === 'deleting') {
+                otherImage.path = fixture.inventory.get(fixture.oldID).path;
+                assert.throws(() => fixture.prepare('existing', retirement), /Another runtime pin shares the rejected asset/);
+                assert.ok(fixture.inventory.has(fixture.oldID));
+                delete otherImage.path;
+            }
+            fixture.behavior.noSpace = true;
+            assert.throws(() => fixture.prepare('existing', retirement), /fixture interrupted after retirement/);
+            assert.equal(fixture.journal().phase, phase);
+            if (phase === 'adding') {
+                fixture.inventory.delete(unrelated.identifier);
+                assert.throws(() => fixture.prepare('existing', retirement), /inventory changed before import/);
+                fixture.inventory.set(unrelated.identifier, unrelated);
+            }
+            fixture.prepare('existing', retirement);
+            assert.equal(fixture.journal().phase, 'complete');
+            assert.ok(fixture.inventory.has(otherImage.identifier));
+            assert.ok(fixture.inventory.has(unrelated.identifier));
+        } finally { fixture.close(); }
+    }
+});
+
 test('delete to import interruption resumes the exact empty inventory without redownload', () => {
     const fixture = runtimeRepairFixture();
     try {
@@ -2317,7 +2795,8 @@ test('same-asset historical aliases are bound to the active rejection and may re
 });
 
 test('resuming deletion requires a live verified Ready replacement and rejection before removing any alias', () => {
-    for (const changed of ['missing-probe', 'probe-hash', 'probe-profile', 'verified-anchor', 'missing-anchor', 'undeletable', 'foreign']) {
+    for (const changed of ['missing-probe', 'probe-hash', 'probe-profile', 'verified-anchor', 'inconclusive-anchor',
+        'other-demotion', 'other-signature-state', 'missing-anchor', 'undeletable', 'foreign']) {
         const fixture = runtimeRepairFixture({sibling: true});
         try {
             const anchor = fixture.inventory.get(fixture.oldID);
@@ -2328,19 +2807,34 @@ test('resuming deletion requires a live verified Ready replacement and rejection
             assert.throws(fixture.prepare, /must be shut down/);
             assert.equal(fixture.journal().phase, 'deleting');
             fixture.behavior.booted = false;
+            Object.assign(anchor, {state: 'Unusable', unusableErrorMessage: 'Cryptex Mount Preferred'});
             if (changed === 'missing-probe') fixture.inventory.delete(fixture.probeID);
             if (changed === 'probe-hash') fixture.behavior.normalHashMismatch = true;
             if (changed === 'probe-profile') fixture.behavior.profileWrongPin = true;
             if (changed === 'verified-anchor') fixture.behavior.anchorNowVerified = true;
+            if (changed === 'inconclusive-anchor') fixture.behavior.anchorVerificationUnknown = true;
+            if (changed === 'other-demotion') anchor.unusableErrorMessage = 'Unknown image format';
+            if (changed === 'other-signature-state') anchor.signatureState = 'Verified';
             if (changed === 'missing-anchor') fixture.inventory.delete(fixture.oldID);
             if (changed === 'undeletable') fixture.inventory.get(fixture.oldID).deletable = false;
             if (changed === 'foreign') fixture.behavior.afterFailedVerify = inventory => inventory.set(fixture.newID,
                 {...inventory.get(fixture.oldID), identifier: fixture.newID, build: '24A999'});
-            assert.throws(fixture.prepare, /Ready source|not mounted|signature changed|registration changed|shares the rejected asset/);
+            assert.throws(fixture.prepare, /Ready source|not mounted|signature changed|inconclusive|registration changed|shares the rejected asset/);
             assert.equal(fixture.calls.some(args => args[1] === 'delete'), false);
             assert.equal(fixture.journal().phase, 'deleting');
         } finally { fixture.close(); }
     }
+});
+
+test('a duplicate source probe cannot authorize deletion of a demoted cryptex', () => {
+    const fixture = runtimeRepairFixture();
+    try {
+        fixture.behavior.afterProbe = inventory => Object.assign(inventory.get(fixture.oldID),
+            {state: 'Unusable', unusableErrorMessage: 'Cryptex Mount Preferred'});
+        assert.throws(fixture.prepare, /registration changed/);
+        assert.ok(fixture.inventory.has(fixture.oldID));
+        assert.ok(!fixture.calls.some(args => args[1] === 'delete' && args[2] === fixture.oldID));
+    } finally { fixture.close(); }
 });
 
 test('resuming deletion after native co-retirement reconciles absent registrations without a live anchor', () => {

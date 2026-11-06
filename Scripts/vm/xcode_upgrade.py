@@ -187,7 +187,10 @@ def preview(host, args, state):
     check('manifestNode', host.manifest_node)
     def baseline():
         candidate_path = state / 'candidate.json'
-        candidate = host.read_json(candidate_path) if candidate_path.exists() else {}
+        candidate = {}
+        if candidate_path.exists():
+            candidate = host.read_json(candidate_path)
+            host.require_candidate_runtime_pins(candidate, target)
         pending_promotion = candidate.get('promotionPending')
         record = candidate if pending_promotion else host.read_json(state / 'baseline.json')
         if not host.matches_source_vm(record, args.vm) or not record.get('verifiedAt') or not record.get('consoleUser'):

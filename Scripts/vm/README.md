@@ -491,9 +491,10 @@ Running setup again without new inputs reuses the pending package, including
 its staged input files and selected account. It does not replace the package
 with defaults. Pending first-boot account creation also retains its intent and
 existing private password; retries do not generate a replacement password or
-reset an existing account. If guest tools or environment pins changed while it was pending,
-setup preserves the old package and stages its retained inputs with the current
-tools as a new request. Explicit new inputs supersede the pending
+reset an existing account. Resume an unfinished candidate with its recorded runtime pins.
+Use a separate state directory to start with different runtime pins. When restaging
+a pending package, setup keeps a runtime installer only if its platform, version
+and build still match. Explicit new inputs supersede the pending
 request; unapplied packages remain available. Promotion removes only packages
 whose ID was confirmed as applied.
 
@@ -512,6 +513,14 @@ already-bundled request-proof resource after validating its checked-in SHA-256.
 It does not query the host Keychain. Exact simulator installer DMGs can be
 supplied with `runtimes` entries containing `platform` and `dmgPath`; otherwise
 the guest downloads the pinned versions from Apple and checks their build IDs.
+
+To upgrade simulators, find the released arm64 runtime for each pinned Xcode SDK
+in [Apple's simulator catalog](https://devimages-cdn.apple.com/downloads/xcode/simulators/index2.dvtdownloadableindex).
+Use the matching `simulatorBuildUpdate` (prefer the `preferred` entry when present)
+for `buildVersion` in the two `runtimes` entries in `Scripts/vm/environment.json`,
+and update their versions. Run `Scripts/test_vm.sh setup` to replace the old pins'
+devices and runtimes in a candidate. Setup retains the previous baseline and its
+metadata. Run `Scripts/test_vm.sh run all` and require `fullSuiteVerified: true`.
 
 Setup imports Xcode's complete runtime export, verifies the pinned image and
 mounted profile, and prepares its shared cache. Repair of a signature-rejected
@@ -736,8 +745,8 @@ XCTest's default and maximum allowances are ten minutes per scenario iteration,
 so a ten-iteration method has a 100-minute allowance. The browser stage still has
 a two-hour normal or six-hour soak limit, and individual UI waits stay bounded.
 
-The pinned iOS 27.0 (24A434) runtime can leave XCTest waiting for Safari's
-animation-idle callback after the app's event loop is idle. The iOS Safari
+On iOS 27.0 (24A434), XCTest could keep waiting for Safari's animation-idle
+callback after the app's event loop became idle. The iOS Safari
 UI-test target uses a private XCTest hook restricted to the pinned XCUIAutomation
 image and method ABI. For `com.apple.mobilesafari` only, it calls the original
 quiescence implementation with animation waiting disabled; the event-loop wait,

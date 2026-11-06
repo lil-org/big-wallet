@@ -900,6 +900,20 @@ class GuestAccessTests(unittest.TestCase):
         self.assertFalse(installer.askpass.exists())
         self.assertEqual(installer.password, b'')
 
+    def test_installer_reports_guest_disk_exhaustion(self):
+        child = self.fake_child()
+        log = self.root / 'install.log'
+        with patch.object(access.subprocess, 'Popen', return_value=child):
+            installer = access.GuestInstaller('192.168.64.3', 'guest', self.password, self.known, 'big-wallet-vm-fixture', self.work,
+                                              log_path=log, provision_directory=self.payload)
+        installer.producer.join()
+        installer.output.write(b'tar: runtime-0.dmg: Write failed: No space left on device\n')
+        child.code = 1
+        result = installer.poll()
+        self.assertEqual(result['status'], 'failed')
+        self.assertIn('/Volumes/BigWalletBuild', result['error'])
+        self.assertIn(result['error'], log.read_text())
+
     def test_cancel_only_stops_the_owned_child_and_removes_helper(self):
         child = self.fake_child()
         with patch.object(access.subprocess, 'Popen', return_value=child), patch.object(access.os, 'killpg') as stop:

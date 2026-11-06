@@ -38,6 +38,16 @@ final class SafariLifecycleTests: XCTestCase {
     @MainActor private lazy var wallet = XCUIApplication()
 #endif
 #if os(iOS)
+    private struct FixtureProfile {
+        enum Deletion { case pending, confirmationAttempted, confirmed }
+
+        let name: String
+        let previousIdentifiers: Set<String>
+        var identifier: String?
+        var deletion = Deletion.pending
+    }
+
+    @MainActor private var fixtureProfile: FixtureProfile?
     @MainActor private var popup: XCUIElement {
         safari.webViews.matching(NSPredicate(format: "label == %@", "Wallet")).firstMatch
     }
@@ -432,6 +442,15 @@ final class SafariLifecycleTests: XCTestCase {
             let profiles = try await control.nativeProfileIdentifiers()
             try self.require(!profiles.subtracting(originalProfiles).isEmpty,
                              "Safari did not deliver a distinct native profile identity for the new profile")
+#if os(iOS)
+            try self.restoreFixtureAfterProfileCreation()
+            let ordinaryDocument = self.safari.otherElements.matching(
+                NSPredicate(format: "identifier BEGINSWITH %@ AND identifier CONTAINS %@", "TabDocument?", "&IsPrivate=false&")
+            ).firstMatch
+            try self.require(ordinaryDocument.exists, "Safari did not open the cleanup fixture page in ordinary browsing")
+            try self.assertProviderState(try await self.providerState(control: control),
+                                         address: config.addresses.ethereum, chainID: "0xaa36a7")
+#endif
         }
     }
 
@@ -1140,8 +1159,7 @@ final class SafariLifecycleTests: XCTestCase {
                 let iterationConfig = try await control.configuration()
                 try await body(control, iterationConfig)
                 attachEvidence("\(identifier)-\(iteration)")
-                try await cleanup(retainingSafari: canRetainSafari && iteration < config.iterations,
-                                  resettingProfileSession: identifier == "profiles-private")
+                try await cleanup(retainingSafari: canRetainSafari && iteration < config.iterations)
                 let synchronization = try synchronizationSnapshot()
                 finishAttempted = true
                 try await control.post("finish", ["scenario": identifier, "iteration": iteration,
@@ -1153,7 +1171,7 @@ final class SafariLifecycleTests: XCTestCase {
                 FileHandle.standardError.write(Data((boundedDiagnostic + "\n").utf8))
                 attachEvidence("\(identifier)-\(iteration)-failure")
                 var evidence = ["error": String(describing: error)]
-                do { try await cleanup(resettingProfileSession: identifier == "profiles-private") }
+                do { try await cleanup() }
                 catch { evidence["cleanupError"] = String(describing: error) }
                 if !finishAttempted {
                     var failure: [String: Any] = ["scenario": identifier, "iteration": iteration,
@@ -1182,13 +1200,11 @@ final class SafariLifecycleTests: XCTestCase {
     }
 
     @MainActor
-    private func cleanup(retainingSafari: Bool = false, resettingProfileSession: Bool = false) async throws {
+    private func cleanup(retainingSafari: Bool = false) async throws {
         var keepSafari = false
         var failure: Error?
         do {
-            keepSafari = try await cleanupBrowserWindows(
-                retainingSafari: retainingSafari, resettingProfileSession: resettingProfileSession
-            )
+            keepSafari = try await cleanupBrowserWindows(retainingSafari: retainingSafari)
         } catch {
             failure = error
         }
@@ -1217,8 +1233,11 @@ final class SafariLifecycleTests: XCTestCase {
     }
 
     @MainActor
-    private func cleanupBrowserWindows(retainingSafari: Bool, resettingProfileSession: Bool) async throws -> Bool {
+    private func cleanupBrowserWindows(retainingSafari: Bool) async throws -> Bool {
         try closeOwnedApprovalIfPresent()
+#if os(iOS)
+        if fixtureProfile != nil { try restoreFixtureAfterProfileCreation() }
+#endif
         guard safari.state != .notRunning, extensionActivated else { return false }
         safari.activate()
 #if os(macOS)
@@ -1231,24 +1250,12 @@ final class SafariLifecycleTests: XCTestCase {
 #else
         dismissKeyboardIntroduction(in: safari)
         if popupDone.exists { try closeApproval() }
-        let resetProfileSession = resettingProfileSession && profilesConfigured
-        try restoreOrdinaryBrowsing(profile: resetProfileSession ? "Personal" : nil)
+        try restoreOrdinaryBrowsing()
         if let activeDappURL {
-            if resetProfileSession {
-                safari.terminate()
-                safari.launch()
-                try newTab()
-                attachEvidence("ios-cleanup-ordinary-tab-ready")
-            }
             let ordinaryDocument = safari.otherElements.matching(
                 NSPredicate(format: "identifier BEGINSWITH %@ AND identifier CONTAINS %@", "TabDocument?", "&IsPrivate=false&")
             ).firstMatch
-            if resetProfileSession {
-                try require(ordinaryDocument.waitForExistence(timeout: 10),
-                            "Safari did not restore an ordinary tab after the profile cleanup restart")
-                try open(activeDappURL)
-                try require(ordinaryDocument.exists, "Safari did not open the cleanup fixture page in ordinary browsing")
-            } else if safari.textViews["TabOverview"].exists || !ordinaryDocument.exists || !safari.buttons["ethereum-connect"].exists {
+            if safari.textViews["TabOverview"].exists || !ordinaryDocument.exists || !safari.buttons["ethereum-connect"].exists {
                 try open(activeDappURL)
             }
             try await retirePopupRequests()
@@ -1367,13 +1374,7 @@ final class SafariLifecycleTests: XCTestCase {
         try restoreOrdinaryBrowsing(profile: profilesConfigured ? "Personal" : nil)
         try dismissStartPageExtensionDiscovery()
         let previousDocument = try fixtureDocumentIdentity()
-        guard let url = URL(string: config.dappURL), url.scheme == "http", url.host == "127.0.0.1" else {
-            throw SafariUIFailure("The initial fixture page URL is invalid")
-        }
-        XCUIDevice.shared.system.open(url)
-        try require(safari.wait(for: .runningForeground, timeout: 10),
-                    "Safari did not open the initial fixture URL in the foreground")
-        try waitForFixtureDocument(config.dappURL, replacing: previousDocument)
+        try openExternalFixture(config.dappURL, replacing: previousDocument)
 #else
         try open(config.dappURL)
 #endif
@@ -1907,7 +1908,7 @@ final class SafariLifecycleTests: XCTestCase {
         if profilesConfigured {
             let name = profile ?? "Personal"
             let permission = settings.switches[name]
-            try revealSettingsSwitch(permission, in: settings, description: "Big Wallet extension in \(name)")
+            try revealSettingsItem(permission, in: settings, description: "Big Wallet extension in \(name)")
             try setSwitch(permission, enabled: enabled, description: "Big Wallet extension in \(name)")
         } else {
             try setSwitch(global, enabled: enabled, description: "Big Wallet extension")
@@ -1973,7 +1974,7 @@ final class SafariLifecycleTests: XCTestCase {
         try clickSettingsItem("Extensions", in: settings)
         try clickSettingsItem("Wallet", in: settings)
         let permission = settings.switches.matching(NSPredicate(format: "label CONTAINS %@", "Private Browsing")).firstMatch
-        try revealSettingsSwitch(permission, in: settings, description: "Wallet extension access in Private Browsing")
+        try revealSettingsItem(permission, in: settings, description: "Wallet extension access in Private Browsing")
         try setSwitch(permission, enabled: true, description: "Wallet extension access in Private Browsing")
         if safari.state != .notRunning { safari.terminate() }
         safari.launch()
@@ -2239,10 +2240,23 @@ final class SafariLifecycleTests: XCTestCase {
         try click(safari.menuItems["New \(profile) Window"], "open isolated Safari profile")
 #else
         let settings = try openIOSSafariSettings()
+        let newProfile = settings.cells["NEW_PROFILE"]
+        try revealSettingsItem(newProfile, in: settings, description: "New Profile")
+        let existing = settings.cells.matching(NSPredicate(format: "identifier BEGINSWITH %@", "PROFILE_"))
+        let previousIdentifiers = Set(existing.allElementsBoundByIndex.map(\.identifier))
+        try require(!settings.cells[profile].exists, "A Safari profile already has the fixture profile name")
         try clickSettingsItem("New Profile", in: settings)
-        try click(settings.textFields["Name"], "Safari profile name")
-        settings.textFields["Name"].typeText(profile)
-        try click(settings.buttons["Done"], "save isolated Safari profile")
+        let name = settings.textFields["Name"]
+        try click(name, "Safari profile name")
+        name.typeText(profile)
+        let typedName = settings.textFields.matching(NSPredicate(format: "value == %@", profile)).firstMatch
+        try require(typedName.waitForExistence(timeout: 5), "Settings did not receive the exact fixture profile name")
+        let done = settings.buttons["Done"]
+        _ = try waitForStableTarget(done, "save isolated Safari profile", until: Date().addingTimeInterval(12))
+        let intent = FixtureProfile(name: profile, previousIdentifiers: previousIdentifiers)
+        fixtureProfile = intent
+        done.tap()
+        _ = try fixtureProfileRow(intent, in: settings)
         profilesConfigured = true
         safari.activate()
         try selectSafariProfile(profile)
@@ -2418,10 +2432,10 @@ final class SafariLifecycleTests: XCTestCase {
         try clickSettingsItem("Accessibility", in: settings)
         try clickSettingsItem("Motion", in: settings)
         let reduceMotion = settings.switches.matching(NSPredicate(format: "label == %@", "Reduce Motion")).firstMatch
-        try revealSettingsSwitch(reduceMotion, in: settings, description: "Reduce Motion")
+        try revealSettingsItem(reduceMotion, in: settings, description: "Reduce Motion")
         try setSwitch(reduceMotion, enabled: true, description: "Reduce Motion")
         let crossFade = settings.switches["REDUCE_MOTION_REDUCE_SLIDE_ANIMATIONS"]
-        try revealSettingsSwitch(crossFade, in: settings, description: "Prefer Cross-Fade Transitions")
+        try revealSettingsItem(crossFade, in: settings, description: "Prefer Cross-Fade Transitions")
         try setSwitch(crossFade, enabled: true, description: "Prefer Cross-Fade Transitions")
         let deadline = Date().addingTimeInterval(5)
         while (!UIAccessibility.isReduceMotionEnabled || !UIAccessibility.prefersCrossFadeTransitions), Date() < deadline {
@@ -2499,7 +2513,7 @@ final class SafariLifecycleTests: XCTestCase {
     }
 
     @MainActor
-    private func revealSettingsSwitch(_ element: XCUIElement, in settings: XCUIApplication, description: String) throws {
+    private func revealSettingsItem(_ element: XCUIElement, in settings: XCUIApplication, description: String) throws {
         for _ in 0..<8 {
             if element.exists && element.isHittable { break }
             settings.tables.firstMatch.swipeUp()
@@ -2687,11 +2701,85 @@ final class SafariLifecycleTests: XCTestCase {
     }
 
     @MainActor
+    private func fixtureProfileRow(_ profile: FixtureProfile, in settings: XCUIApplication) throws -> XCUIElement {
+        let rows = settings.cells.matching(NSPredicate(format: "label == %@", profile.name))
+        let row = rows.firstMatch
+        if !row.waitForExistence(timeout: 10) {
+            try revealSettingsItem(row, in: settings, description: "the fixture profile")
+        }
+        let identifier = row.identifier
+        try require(rows.count == 1 && identifier.hasPrefix("PROFILE_") &&
+                    UUID(uuidString: String(identifier.dropFirst("PROFILE_".count))) != nil &&
+                    !profile.previousIdentifiers.contains(identifier) &&
+                    (profile.identifier == nil || profile.identifier == identifier),
+                    "Settings did not expose the unique named fixture profile with its expected identity")
+        fixtureProfile?.identifier = identifier
+        return settings.cells[identifier]
+    }
+
+    @MainActor
+    private func restoreFixtureAfterProfileCreation() throws {
+        guard let fixtureProfile, let activeDappURL else { throw SafariUIFailure("Missing profile cleanup context") }
+        if safari.state != .notRunning { safari.terminate() }
+        if fixtureProfile.deletion != .confirmed {
+            try deleteCreatedProfile(fixtureProfile)
+            self.fixtureProfile?.deletion = .confirmed
+        }
+        try openExternalFixture(activeDappURL, replacing: nil)
+        self.fixtureProfile = nil
+    }
+
+    @MainActor
+    private func deleteCreatedProfile(_ profile: FixtureProfile) throws {
+        let settings = try openIOSSafariSettings()
+        let namedRow = settings.cells.matching(NSPredicate(format: "label == %@", profile.name)).firstMatch
+        if profile.deletion == .confirmationAttempted {
+            guard let identifier = profile.identifier else { throw SafariUIFailure("Missing fixture profile identity after deletion attempt") }
+            try revealSafariProfileList(in: settings)
+            if !settings.cells[identifier].exists && !namedRow.exists { return }
+        }
+        let row = try fixtureProfileRow(profile, in: settings)
+        try revealSettingsItem(row, in: settings, description: "the fixture profile")
+        try click(row, "edit the fixture profile")
+        try require(settings.navigationBars["Profile — \(profile.name)"].waitForExistence(timeout: 10),
+                    "Settings did not open the fixture profile")
+        let delete = settings.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Delete Profile")).firstMatch
+        try revealSettingsItem(delete, in: settings, description: "Delete Profile")
+        try click(delete, "delete the fixture profile")
+        let confirmation = settings.sheets.buttons["Delete"]
+        _ = try waitForStableTarget(confirmation, "confirm deleting the fixture profile", until: Date().addingTimeInterval(12))
+        fixtureProfile?.deletion = .confirmationAttempted
+        confirmation.tap()
+        try revealSafariProfileList(in: settings)
+        try require(row.waitForNonExistence(timeout: 10) && !namedRow.exists,
+                    "Safari Settings did not remove the fixture profile")
+    }
+
+    @MainActor
+    private func revealSafariProfileList(in settings: XCUIApplication) throws {
+        try require(settings.navigationBars["Safari"].waitForExistence(timeout: 10), "Settings did not return to Safari")
+        try revealSettingsItem(settings.cells["NEW_PROFILE"], in: settings, description: "the Safari profile list")
+    }
+
+    @MainActor
+    private func openExternalFixture(_ value: String, replacing previousDocument: String?) throws {
+        guard let url = URL(string: value), url.scheme == "http", url.host == "127.0.0.1" else {
+            throw SafariUIFailure("The fixture page URL is invalid")
+        }
+        XCUIDevice.shared.system.open(url)
+        try require(safari.wait(for: .runningForeground, timeout: 10), "Safari did not open the fixture URL in the foreground")
+        try waitForFixtureDocument(value, replacing: previousDocument)
+    }
+
+    @MainActor
     private func selectSafariProfile(_ profile: String) throws {
         try openTabOverview()
         try click(safari.buttons["MoreEditOptionsButton"], "Safari profile menu")
         let switcher = safari.buttons["ProfileSwitcher"]
-        try require(switcher.waitForExistence(timeout: 10), "Safari did not expose its profile switcher")
+        guard switcher.waitForExistence(timeout: 10) else {
+            attachEvidence("ios-profile-switcher-missing")
+            throw SafariUIFailure("Safari did not expose its profile switcher")
+        }
         if switcher.label != "Profile, \(profile)" {
             try click(switcher, "Safari profile selection")
             let menu = safari.otherElements["MoreMenu"]

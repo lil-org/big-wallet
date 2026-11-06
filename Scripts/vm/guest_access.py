@@ -803,6 +803,10 @@ class GuestInstaller:
                 if offset:
                     self.output.readline()
                 contents = self.output.read().replace(self.password, b'[REDACTED]')
+                if result['status'] == 'failed' and (b'ENOSPC' in contents or b'No space left on device' in contents):
+                    result['error'] = ('Guest provisioning ran out of disk space. For staged installers and runtime repair '
+                                       'copies, free space on /Volumes/BigWalletBuild before retrying setup.')
+                    contents += b'\n' + result['error'].encode() + b'\n'
                 descriptor = os.open(self.log_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
                 with os.fdopen(descriptor, 'wb') as file:
                     file.write(contents)

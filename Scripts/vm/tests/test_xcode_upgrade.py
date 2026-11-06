@@ -205,6 +205,28 @@ class XcodeUpgradeTests(unittest.TestCase):
         self.assertEqual(report['status'], 'ready')
         self.assertTrue(next(check for check in report['prerequisites'] if check['name'] == 'baseline')['detail']['promotionPending'])
 
+    def test_stale_candidate_runtime_pins_block_upgrade_before_pin_adoption(self):
+        self.ready()
+        candidate = self.state / 'candidate.vbvm'
+        candidate.mkdir()
+        record = host.read_json(self.state / 'baseline.json')
+        record['environment']['runtimes'][0]['buildVersion'] = 'older-build'
+        for promoting in (False, True):
+            with self.subTest(promoting=promoting):
+                if promoting:
+                    info = candidate.stat()
+                    record['promotionPending'] = {'candidateFileID': [info.st_dev, info.st_ino]}
+                host.atomic_json(self.state / 'candidate.json', record)
+                report, _ = upgrade.preview(host, self.args, self.state)
+                baseline = next(item for item in report['prerequisites'] if item['name'] == 'baseline')
+                self.assertEqual(report['status'], 'blocked')
+                self.assertIn('simulator runtime pins', baseline['detail'])
+                with patch.object(upgrade, 'adopt_pins', side_effect=AssertionError('No pin adoption')):
+                    for check in (True, False):
+                        self.args.check = check
+                        self.assertEqual(upgrade.upgrade(host, self.args, self.state), 2)
+        self.assertFalse((self.state / 'upgrades').exists())
+
     def test_invalid_safari_receipt_blocks_before_pin_adoption(self):
         self.ready()
         original = self.paths[0].read_bytes()
