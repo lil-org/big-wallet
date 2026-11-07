@@ -1887,6 +1887,80 @@ final class SafariApprovalVaultTests: XCTestCase {
         }
     }
 
+    func testPublicationSizeBoundsEncryptedFieldsWithoutChangingSource() throws {
+        var source = try fixture().source
+        defer { source.resetSecrets() }
+        let originalRecords = source.wallets
+        let originalPassword = try source.password.withUnsafeBytes { Data($0) }
+        let size = try SafariApprovalVault.publicationSize(source: source)
+        XCTAssertTrue(size.fitsCapacity)
+        XCTAssertEqual(source.wallets, originalRecords)
+        XCTAssertEqual(try source.password.withUnsafeBytes { Data($0) }, originalPassword)
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let vault = SafariApprovalVault(fileURL: url, keyStore: MemoryApprovalKeyStore())
+        try vault.publish(source: source, integrityKey: integrityKey)
+        XCTAssertLessThanOrEqual(try Data(contentsOf: url).count, size.envelopeBytes)
+
+        var envelope = try readEnvelope(at: url)
+        for index in envelope.accounts.indices {
+            envelope.accounts[index].nonce = Data(repeating: .max, count: 12)
+            envelope.accounts[index].ciphertext = Data(repeating: .max, count: 32)
+            envelope.accounts[index].tag = Data(repeating: .max, count: 16)
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        XCTAssertEqual(try encoder.encode(envelope).count, size.envelopeBytes)
+    }
+
+    func testPublicationCapacityIncludesAggregateEncryptedAccountOverhead() throws {
+        var original = try fixture().source
+        defer { original.resetSecrets() }
+        let address = try XCTUnwrap(original.catalog.accounts.first?.normalizedAddress)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(original.wallets.first?.storedKeyJSON)) as? [String: Any])
+        var accounts = [WalletAccountDescriptor]()
+        let records = try ["a", "b"].map { prefix in
+            let walletID = String(repeating: prefix, count: 256)
+            let descriptors = (0..<5_000).map {
+                WalletAccountDescriptor(walletID: walletID, coin: .ethereum, normalizedAddress: address,
+                                        derivationPath: "m/44'/60'/0'/0/\($0)")
+            }
+            accounts.append(contentsOf: descriptors)
+            var wallet = object
+            wallet["activeAccounts"] = descriptors.map {
+                ["address": $0.normalizedAddress, "coin": $0.coin.rawValue, "derivationPath": $0.derivationPath] as [String: Any]
+            }
+            return SafariApprovalWalletRecord(walletID: walletID, storedKeyJSON: try JSONSerialization.data(withJSONObject: wallet))
+        }
+        let source = SafariApprovalSourceSnapshot(catalog: WalletAccountCatalog(accounts: accounts), password: original.password, wallets: records)
+        let size = try SafariApprovalVault.publicationSize(source: source)
+        XCTAssertTrue(source.catalog.isValid)
+        XCTAssertLessThan(try source.catalog.canonicalData().count, SafariApprovalVault.maximumEnvelopeBytes)
+        XCTAssertLessThan(size.sourceBytes, SafariApprovalVault.maximumEnvelopeBytes)
+        XCTAssertGreaterThan(size.envelopeBytes, SafariApprovalVault.maximumEnvelopeBytes)
+        for record in records {
+            let single = SafariApprovalSourceSnapshot(
+                catalog: WalletAccountCatalog(accounts: accounts.filter { $0.walletID == record.walletID }),
+                password: original.password, wallets: [record]
+            )
+            XCTAssertTrue(try SafariApprovalVault.publicationSize(source: single).fitsCapacity)
+        }
+        let keys = MemoryApprovalKeyStore()
+        let url = temporaryURL()
+        defer {
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock"))
+        }
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys, randomKey: {
+            XCTFail("Oversized envelopes must be rejected before encrypted account keys are created")
+            throw SafariApprovalVault.Error.invalidKey
+        })
+        XCTAssertThrowsError(try vault.publish(source: source, integrityKey: integrityKey)) {
+            XCTAssertEqual($0 as? SafariApprovalVault.Error, .payloadTooLarge)
+        }
+        XCTAssertTrue(keys.keys.isEmpty)
+    }
+
     func testEnvelopeCapFailsClosedBeforeKeyPublication() throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
@@ -3932,6 +4006,71 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(vault.reviewCatalog()?.identity, original)
         XCTAssertEqual(try Data(contentsOf: url), envelope)
         XCTAssertTrue(keys.keys.keys.contains { $0.generation == original.generation })
+    }
+
+    func testOversizedAccountEditPreservesPublishedVaultAndMetadata() async throws {
+        let url = temporaryURL()
+        let requestRoot = temporaryURL()
+        try FileManager.default.createDirectory(at: requestRoot, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: requestRoot)
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock"))
+        }
+        let keys = MemoryApprovalKeyStore()
+        let vault = SafariApprovalVault(fileURL: url, keyStore: keys)
+        let suite = "SafariApprovalVaultHostTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaultsPreferenceStorage(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let source = try fixture().source
+        defer { source.password.invalidate() }
+        let host = SafariApprovalVaultHost(
+            vault: vault, defaults: defaults, integrityKeyStore: MemoryApprovalIntegrityKeyStore(key: integrityKey),
+            sourceSnapshot: { source.copyForTesting() }
+        )
+        await host.start(backgroundTask: { _ in {} }, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
+        await host.waitForReconciliation()
+        let originalIdentity = try XCTUnwrap(vault.reviewCatalog()?.identity)
+        let originalEnvelope = try Data(contentsOf: url)
+        let originalKeys = keys.keys
+        let metadataKey = "SafariApprovalVault.hostPublicationMetadata.v1"
+        let originalMetadata = try XCTUnwrap(defaults.data(forKey: metadataKey))
+        keys.onRemove = { XCTFail("Rejected edits must not invalidate the published vault") }
+        let reader = KeychainCopyMatchingStub()
+        let record = try XCTUnwrap(source.wallets.first)
+        reader.attributes = [reader.walletAttributes(id: record.walletID)]
+        reader.walletData = [record.walletID: record.storedKeyJSON]
+        reader.passwordData = try source.password.withUnsafeBytes { Data($0) }
+        let writes = LockedTestValue(0)
+        let keychain = Keychain(copyMatching: reader.copyMatching, update: { _, _ in
+            writes.increment()
+            return errSecIO
+        })
+        let repository = WalletRepository(keychain: keychain,
+            walletSourceMutator: ExtensionRequestFileStore(rootURL: requestRoot, directoryBoundary: requestRoot))
+        let state = try await repository.reload()
+        let wallet = try XCTUnwrap(state.wallets.first)
+        let account = try XCTUnwrap(wallet.accounts.first)
+        let oversized = WalletAccount(address: account.address, coin: account.coin, derivation: .custom,
+            derivationPath: account.derivationPath + "/1", publicKey: String(repeating: "a", count: 6 * 1_024 * 1_024),
+            extendedPublicKey: "")
+
+        do {
+            _ = try await host.performSourceMutation { willMutateSource in
+                try await repository.update(wallet: wallet, enabledAccounts: wallet.accounts + [oversized],
+                                            willMutateSource: willMutateSource, validateAccess: {})
+            }
+            XCTFail("Expected oversized account metadata to be rejected before source mutation")
+        } catch SafariApprovalVault.Error.payloadTooLarge {
+        }
+
+        await host.waitForReconciliation()
+        XCTAssertEqual(writes.value, 0)
+        XCTAssertEqual(reader.walletData[record.walletID], record.storedKeyJSON)
+        XCTAssertEqual(vault.reviewCatalog()?.identity, originalIdentity)
+        XCTAssertEqual(try Data(contentsOf: url), originalEnvelope)
+        XCTAssertEqual(keys.keys, originalKeys)
+        XCTAssertEqual(defaults.data(forKey: metadataKey), originalMetadata)
     }
 #endif
 

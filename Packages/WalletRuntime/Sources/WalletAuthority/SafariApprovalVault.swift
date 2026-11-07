@@ -604,6 +604,19 @@ final class SafariApprovalVault: Sendable {
         let sourceMAC: Data
     }
 
+    struct PublicationSize: Equatable, Sendable {
+        let sourceBytes: Int
+        let envelopeBytes: Int
+
+        var fitsCapacity: Bool {
+            sourceBytes <= SafariApprovalVault.maximumEnvelopeBytes && envelopeBytes <= SafariApprovalVault.maximumEnvelopeBytes
+        }
+
+        func doesNotExceed(_ other: Self) -> Bool {
+            sourceBytes <= other.sourceBytes && envelopeBytes <= other.envelopeBytes
+        }
+    }
+
     enum PublicationStatus: Equatable {
         case current
         case stale
@@ -780,11 +793,14 @@ final class SafariApprovalVault: Sendable {
         guard integrityKey.count == 32 else { throw Error.invalidKey }
         let generation = UUID()
         let catalogData = try source.catalog.canonicalData()
+        guard try Self.maximumEncodedEnvelopeSize(catalog: source.catalog, catalogData: catalogData) <= Self.maximumEnvelopeBytes else {
+            throw Error.payloadTooLarge
+        }
         let header = Header(
             version: Self.envelopeVersion,
             generation: generation
         )
-        let headerData = try canonicalEncoder().encode(header)
+        let headerData = try Self.canonicalEncoder().encode(header)
         let catalogDigest = Self.digest(catalogData)
         let sourceMAC = try sourceAuthenticationCode(
             source: source,
@@ -857,7 +873,7 @@ final class SafariApprovalVault: Sendable {
             catalog: catalogData,
             accounts: accounts
         )
-        let envelopeData = try canonicalEncoder().encode(envelope)
+        let envelopeData = try Self.canonicalEncoder().encode(envelope)
         guard envelopeData.count <= Self.maximumEnvelopeBytes else {
             throw Error.payloadTooLarge
         }
@@ -1247,7 +1263,7 @@ final class SafariApprovalVault: Sendable {
               ),
               header.version == envelope.version,
               header.generation == envelope.generation,
-              (try? canonicalEncoder().encode(header)) == envelope.header,
+              (try? Self.canonicalEncoder().encode(header)) == envelope.header,
               envelope.catalog.count <= Self.maximumEnvelopeBytes,
               let catalog = ValidatedWalletAccountCatalog(data: envelope.catalog),
               envelope.accounts.map(\.account) == catalog.catalog.accounts,
@@ -1337,7 +1353,7 @@ final class SafariApprovalVault: Sendable {
         try lock.withLock { _ in try operation() }
     }
 
-    private func canonicalEncoder() -> JSONEncoder {
+    private static func canonicalEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         return encoder
@@ -1348,7 +1364,7 @@ final class SafariApprovalVault: Sendable {
         catalogDigest: Data,
         account: WalletAccountDescriptor
     ) throws -> Data {
-        try canonicalEncoder().encode(AccountBinding(
+        try Self.canonicalEncoder().encode(AccountBinding(
             header: header,
             catalogDigest: catalogDigest,
             account: account
@@ -1360,13 +1376,48 @@ final class SafariApprovalVault: Sendable {
         catalogData: Data,
         integrityKey: SecretBytes
     ) throws -> Data {
+        try Self.withEncodedSourceFingerprint(source: source, catalogData: catalogData) { data in
+            guard data.count <= Self.maximumEnvelopeBytes else { throw Error.payloadTooLarge }
+            return try Self.authenticationCode(for: data, key: integrityKey)
+        }
+    }
+
+    static func publicationSize(source: SafariApprovalSourceSnapshot) throws -> PublicationSize {
+        let catalogData = try source.catalog.canonicalData()
+        return try PublicationSize(
+            sourceBytes: withEncodedSourceFingerprint(source: source, catalogData: catalogData) { $0.count },
+            envelopeBytes: maximumEncodedEnvelopeSize(catalog: source.catalog, catalogData: catalogData)
+        )
+    }
+
+    private static func maximumEncodedEnvelopeSize(catalog: WalletAccountCatalog, catalogData: Data) throws -> Int {
+        let generation = UUID()
+        let header = Header(version: envelopeVersion, generation: generation)
+        // All-ones bytes maximize base64 slash escaping before the encrypted fields exist.
+        let nonce = Data(repeating: .max, count: 12)
+        let ciphertext = Data(repeating: .max, count: 32)
+        let tag = Data(repeating: .max, count: 16)
+        let envelope = Envelope(
+            version: envelopeVersion, generation: generation,
+            header: try canonicalEncoder().encode(header), catalog: catalogData,
+            accounts: catalog.accounts.map {
+                EncryptedAccount(account: $0, nonce: nonce, ciphertext: ciphertext, tag: tag)
+            }
+        )
+        return try canonicalEncoder().encode(envelope).count
+    }
+
+    private static func withEncodedSourceFingerprint<Result>(
+        source: SafariApprovalSourceSnapshot,
+        catalogData: Data,
+        _ operation: (Data) throws -> Result
+    ) throws -> Result {
         try source.password.withTemporaryData { password in
             var fingerprint = SourceFingerprint(catalog: catalogData, password: password, wallets: source.wallets)
             defer { fingerprint.resetSecrets() }
             var data = try canonicalEncoder().encode(fingerprint)
             defer { data.resetBytes(in: 0..<data.count) }
-            guard data.count <= Self.maximumEnvelopeBytes else { throw Error.payloadTooLarge }
-            return try Self.authenticationCode(for: data, key: integrityKey)
+            return try operation(data)
         }
     }
 

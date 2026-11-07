@@ -614,13 +614,8 @@ final class WalletRemovalIntegrationTests: XCTestCase {
 
     func testAccountLimitRejectsOverflowBeforeWritingOrRevoking() async throws {
         let fixture = try makeRemovalFixture()
-        fixture.keychain.walletData[fixture.siblingID] = try fixture.walletData(accountCount: 16_381)
+        fixture.keychain.walletData[fixture.siblingID] = try fixture.walletData(accountCount: 16_382)
         let manager = fixture.manager { _ in XCTFail("Rejected edits must not revoke authority") }
-        await assertWalletReload(manager)
-        let wallet = try XCTUnwrap(manager.currentWallet(id: fixture.walletID))
-
-        try await manager.update(wallet: wallet, enabledAccounts: wallet.accounts + [fixture.additionalAccount(index: 2)],
-                                 access: manager.accessForTesting())
         await assertWalletReload(manager)
         XCTAssertEqual(manager.wallets.flatMap(\.accounts).count, 16_384)
         let current = try XCTUnwrap(manager.currentWallet(id: fixture.walletID))
@@ -634,13 +629,133 @@ final class WalletRemovalIntegrationTests: XCTestCase {
         } catch WalletsManager.Error.invalidInput {
         }
 
-        XCTAssertEqual(fixture.keychain.events, ["update"])
+        XCTAssertTrue(fixture.keychain.events.isEmpty)
         XCTAssertEqual(fixture.keychain.walletData, originalData)
         XCTAssertEqual(manager.wallets, originalWallets)
-        XCTAssertEqual(fixture.mutationCount, 1)
+        XCTAssertEqual(fixture.mutationCount, 0)
         await assertWalletReload(manager)
         XCTAssertEqual(manager.wallets, originalWallets)
     }
+
+#if os(iOS) || os(visionOS)
+    func testPublicationCapacityRejectsAggregateEnvelopeBeforeMutation() async throws {
+        let fixture = try RemovalFixture(walletID: String(repeating: "a", count: 256), siblingID: String(repeating: "b", count: 256))
+        addTeardownBlock { await fixture.cleanup() }
+        fixture.keychain.walletData[fixture.siblingID] = try fixture.walletData(accountCount: 5_000)
+        let manager = fixture.manager { _ in XCTFail("Rejected edits must not revoke authority") }
+        await assertWalletReload(manager)
+        let wallet = try XCTUnwrap(manager.currentWallet(id: fixture.walletID))
+        let removed = try XCTUnwrap(wallet.accounts.first)
+        fixture.metadata.saveAccountName("Keep this name", wallet: wallet, account: removed)
+        let replacement = Array(wallet.accounts.dropFirst()) + (2...5_000).map(fixture.additionalAccount)
+        var proposedData = fixture.keychain.walletData
+        proposedData[fixture.walletID] = try fixture.walletData(accounts: replacement)
+        var proposed = try fixture.publicationSource(records: proposedData)
+        var current = try fixture.publicationSource()
+        defer { proposed.resetSecrets(); current.resetSecrets() }
+        let size = try SafariApprovalVault.publicationSize(source: proposed)
+        XCTAssertTrue(proposed.catalog.isValid)
+        XCTAssertTrue(try SafariApprovalVault.publicationSize(source: current).fitsCapacity)
+        XCTAssertLessThan(size.sourceBytes, SafariApprovalVault.maximumEnvelopeBytes)
+        XCTAssertGreaterThan(size.envelopeBytes, SafariApprovalVault.maximumEnvelopeBytes)
+        let originalData = fixture.keychain.walletData
+        let originalWallets = manager.wallets
+
+        do {
+            try await manager.update(wallet: wallet, enabledAccounts: replacement, access: manager.accessForTesting())
+            XCTFail("Expected the aggregate envelope to exceed publication capacity")
+        } catch SafariApprovalVault.Error.payloadTooLarge {
+        }
+
+        XCTAssertEqual(fixture.keychain.walletData, originalData)
+        XCTAssertTrue(fixture.keychain.events.isEmpty)
+        XCTAssertEqual(manager.wallets, originalWallets)
+        XCTAssertEqual(fixture.mutationCount, 0)
+        XCTAssertEqual(fixture.vaultInvalidationCount, 0)
+        XCTAssertEqual(fixture.metadata.getAccountName(walletId: wallet.id, account: removed), "Keep this name")
+    }
+
+    func testPublicationCapacityCountsRawSiblingBytesBeforeCreationAndImport() async throws {
+        for createWallet in [false, true] {
+            let fixture = try makeRemovalFixture()
+            let padding = Data(repeating: 32, count: 6 * 1_024 * 1_024)
+            fixture.keychain.walletData[fixture.siblingID] = try fixture.walletData() + padding
+            let manager = fixture.manager { _ in XCTFail("Rejected insertions must not revoke authority") }
+            await assertWalletReload(manager)
+            var source = try fixture.publicationSource()
+            defer { source.resetSecrets() }
+            let size = try SafariApprovalVault.publicationSize(source: source)
+            XCTAssertTrue(source.catalog.isValid)
+            XCTAssertGreaterThan(size.sourceBytes, SafariApprovalVault.maximumEnvelopeBytes)
+            XCTAssertLessThan(size.envelopeBytes, SafariApprovalVault.maximumEnvelopeBytes)
+            let originalData = fixture.keychain.walletData
+            let originalWallets = manager.wallets
+
+            do {
+                if createWallet {
+                    _ = try await manager.createWallet(access: manager.accessForTesting())
+                } else {
+                    _ = try await manager.addWallet(input: WalletCrypto.hexString(data: Vectors.onePrivateKey),
+                                                   inputPassword: nil, access: manager.accessForTesting())
+                }
+                XCTFail("Expected raw sibling bytes to exceed publication capacity")
+            } catch SafariApprovalVault.Error.payloadTooLarge {
+            }
+
+            XCTAssertEqual(fixture.keychain.walletData, originalData)
+            XCTAssertTrue(fixture.keychain.events.isEmpty)
+            XCTAssertEqual(manager.wallets, originalWallets)
+            XCTAssertEqual(fixture.mutationCount, 0)
+            XCTAssertEqual(fixture.vaultInvalidationCount, 0)
+        }
+    }
+
+    func testByteOversizedCatalogAllowsNonexpandingRemovalsButNotAdditions() async throws {
+        for useEnabledAccounts in [false, true] {
+            let fixture = try makeRemovalFixture()
+            var object = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture.walletData()) as? [String: Any])
+            object["name"] = String(repeating: "n", count: 6 * 1_024 * 1_024)
+            fixture.keychain.walletData[fixture.walletID] = try JSONSerialization.data(withJSONObject: object)
+            let manager = fixture.manager { _ in }
+            await assertWalletReload(manager)
+            let wallet = try XCTUnwrap(manager.currentWallet(id: fixture.walletID))
+            var original = try fixture.publicationSource()
+            defer { original.resetSecrets() }
+            let originalSize = try SafariApprovalVault.publicationSize(source: original)
+            XCTAssertTrue(original.catalog.isValid)
+            XCTAssertFalse(originalSize.fitsCapacity)
+            let originalData = fixture.keychain.walletData
+
+            do {
+                try await manager.update(wallet: wallet, enabledAccounts: wallet.accounts + [fixture.additionalAccount(index: 2)],
+                                         access: manager.accessForTesting())
+                XCTFail("Oversized publications must not accept additions")
+            } catch SafariApprovalVault.Error.payloadTooLarge {
+            }
+            XCTAssertEqual(fixture.keychain.walletData, originalData)
+            XCTAssertTrue(fixture.keychain.events.isEmpty)
+            XCTAssertEqual(fixture.vaultInvalidationCount, 0)
+
+            if useEnabledAccounts {
+                try await manager.update(wallet: wallet, enabledAccounts: Array(wallet.accounts.dropLast()), access: manager.accessForTesting())
+            } else {
+                try await manager.update(wallet: wallet, removeAccounts: [try XCTUnwrap(wallet.accounts.last)], access: manager.accessForTesting())
+            }
+            var reduced = try fixture.publicationSource()
+            defer { reduced.resetSecrets() }
+            let reducedSize = try SafariApprovalVault.publicationSize(source: reduced)
+            XCTAssertFalse(reducedSize.fitsCapacity)
+            XCTAssertLessThan(reducedSize.sourceBytes, originalSize.sourceBytes)
+            XCTAssertLessThan(reducedSize.envelopeBytes, originalSize.envelopeBytes)
+            XCTAssertEqual(manager.currentWallet(id: wallet.id)?.accounts.count, 1)
+
+            try await manager.delete(wallet: try XCTUnwrap(manager.currentWallet(id: wallet.id)), access: manager.accessForTesting())
+            XCTAssertEqual(fixture.keychain.events, ["update", "delete"])
+            XCTAssertEqual(fixture.mutationCount, 2)
+            XCTAssertEqual(fixture.vaultInvalidationCount, 2)
+        }
+    }
+#endif
 
     func testOversizedStoredCatalogAllowsExportAndRemovalButNotAdditions() async throws {
         for useEnabledAccounts in [false, true] {
@@ -1211,19 +1326,23 @@ final class WalletRemovalIntegrationTests: XCTestCase {
     }
 
     private final class RemovalFixture: Sendable {
-        let walletID = "removal-test-\(UUID().uuidString)"
-        let siblingID = "removal-sibling-\(UUID().uuidString)"
+        let walletID: String
+        let siblingID: String
         let keychain = WalletRemovalKeychainStub()
         private let mutations = Mutex(0)
         var mutationCount: Int { mutations.withLock { $0 } }
         private let metadataSuite = "WalletRemovalMetadataTests.\(UUID().uuidString)"
         let metadata: WalletsMetadataService
 #if os(iOS) || os(visionOS)
+        private let vaultInvalidations = Mutex(0)
+        var vaultInvalidationCount: Int { vaultInvalidations.withLock { $0 } }
         private let vaultDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("WalletRemovalVault-\(UUID().uuidString)", isDirectory: true)
         private let vaultHosts = Mutex([SafariApprovalVaultHost]())
 #endif
 
-        init() throws {
+        init(walletID: String = "removal-test-\(UUID().uuidString)", siblingID: String = "removal-sibling-\(UUID().uuidString)") throws {
+            self.walletID = walletID
+            self.siblingID = siblingID
 #if os(iOS) || os(visionOS)
             try FileManager.default.createDirectory(at: vaultDirectory, withIntermediateDirectories: true)
 #endif
@@ -1250,7 +1369,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
                 metadataMutations: metadata.mutations, clock: clock
             )
 #if os(iOS) || os(visionOS)
-            let keys = WalletRemovalFixtureVaultKeys()
+            let keys = WalletRemovalFixtureVaultKeys(onRemove: { [weak self] in self?.vaultInvalidations.withLock { $0 += 1 } })
             let vault = SafariApprovalVault(fileURL: vaultDirectory.appendingPathComponent(UUID().uuidString), keyStore: keys,
                 canEvaluateAuthentication: { _, _ in XCTFail("Source mutation must not authenticate"); return false },
                 authentication: { _, _, _ in XCTFail("Source mutation must not authenticate"); return false })
@@ -1290,6 +1409,27 @@ final class WalletRemovalIntegrationTests: XCTestCase {
                         "derivationPath": account.derivationPath] as [String: Any]
             }
             return try JSONSerialization.data(withJSONObject: object)
+        }
+
+        func walletData(accounts: [WalletAccount]) throws -> Data {
+            var object = try XCTUnwrap(JSONSerialization.jsonObject(with: walletData()) as? [String: Any])
+            object["activeAccounts"] = accounts.map { account in
+                ["address": account.address, "coin": account.coin.rawValue, "derivation": account.derivation.rawValue,
+                 "derivationPath": account.derivationPath, "publicKey": account.publicKey,
+                 "extendedPublicKey": account.extendedPublicKey] as [String: Any]
+            }
+            return try JSONSerialization.data(withJSONObject: object)
+        }
+
+        func publicationSource(records: [String: Data]? = nil) throws -> SafariApprovalSourceSnapshot {
+            let records = records ?? keychain.walletData
+            let wallets = try records.keys.sorted().map { id in
+                WalletContainer(id: id, key: try XCTUnwrap(WalletStoredKey.importJSON(json: XCTUnwrap(records[id]))))
+            }
+            return SafariApprovalSourceSnapshot(
+                catalog: WalletAccountCatalog(wallets: wallets), password: try XCTUnwrap(keychain.passwordData),
+                wallets: try wallets.map { SafariApprovalWalletRecord(walletID: $0.id, storedKeyJSON: try XCTUnwrap(records[$0.id])) }
+            )
         }
 
         func additionalAccount(index: Int) -> WalletAccount {
@@ -2453,6 +2593,10 @@ final class WalletSigningScopeTests: XCTestCase {
 
 #if os(iOS) || os(visionOS)
 private final class WalletRemovalFixtureVaultKeys: SafariApprovalKeyStoring, SafariApprovalIntegrityKeyStoring, Sendable {
+    private let onRemove: @Sendable () -> Void
+
+    init(onRemove: @escaping @Sendable () -> Void) { self.onRemove = onRemove }
+
     func store(_ key: SecretBytes, identity: SafariApprovalKeyIdentity) throws {
         XCTFail("Source mutation fixture must not publish keys")
         throw SafariApprovalVault.Error.unavailable
@@ -2464,7 +2608,7 @@ private final class WalletRemovalFixtureVaultKeys: SafariApprovalKeyStoring, Saf
     func availability(identities: [SafariApprovalKeyIdentity]) -> [SafariApprovalKeyIdentity: SafariApprovalKeyAvailability] {
         Dictionary(uniqueKeysWithValues: identities.map { ($0, .missing) })
     }
-    func removeAll() throws {}
+    func removeAll() throws { onRemove() }
     func loadOrCreate() throws -> SecretBytes {
         XCTFail("Source mutation fixture must not create integrity keys")
         throw SafariApprovalVault.Error.unavailable

@@ -5813,13 +5813,16 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         XCTAssertEqual(completion, .persisted)
         let inactiveURL = profileURL(inactiveProfile)
+        let inactiveData = try Data(contentsOf: inactiveURL)
+        let inactiveState = try PropertyListDecoder().decode(ExtensionRequestProfile.State.self, from: inactiveData)
+        XCTAssertEqual(inactiveState.records.map(\.handle), [handle])
         clock.setDate(clock.date.addingTimeInterval(ExtensionBridge.responseExpiry))
         let pollingFixture = try makeFixture(id: 36)
         let pollingHandle = try accepted(await bridge.enqueue(
             ingress: pollingFixture.ingress,
             profileIdentifier: nil
         )).handle
-        XCTAssertTrue(FileManager.default.fileExists(atPath: inactiveURL.path))
+        XCTAssertEqual(try Data(contentsOf: inactiveURL), inactiveData)
 
         for _ in 0..<3 {
             guard case .found = await bridge.load(handle: pollingHandle) else {
@@ -5832,14 +5835,17 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 profileIdentifier: nil, access: .worker
             ) else { return XCTFail("Expected pending polled response") }
         }
-        XCTAssertTrue(FileManager.default.fileExists(atPath: inactiveURL.path))
+        XCTAssertEqual(try Data(contentsOf: inactiveURL), inactiveData)
 
         guard case .available = await bridge.list(profileIdentifier: nil) else {
             return XCTFail("Expected current profile listing")
         }
-        XCTAssertTrue(FileManager.default.fileExists(atPath: inactiveURL.path))
+        XCTAssertEqual(try Data(contentsOf: inactiveURL), inactiveData)
         await bridge.performMaintenance()
-        XCTAssertTrue(FileManager.default.fileExists(atPath: inactiveURL.path))
+        let maintainedState = try PropertyListDecoder().decode(
+            ExtensionRequestProfile.State.self, from: Data(contentsOf: inactiveURL)
+        )
+        XCTAssertTrue(maintainedState.records.isEmpty)
     }
 
     func testMaintenanceRetainsAlreadyEmptyAuthorityProfile() async throws {

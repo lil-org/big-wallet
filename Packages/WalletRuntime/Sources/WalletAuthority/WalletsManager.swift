@@ -688,27 +688,56 @@ actor WalletRepository {
     }
 
     private func readWallets() throws -> [WalletContainer] {
+        try readWalletRecords().map(\.wallet)
+    }
+
+    private func readWalletRecords() throws -> [(wallet: WalletContainer, data: Data)] {
         try Task.checkCancellation()
         let walletIDs = try keychain.readAllWalletIDs()
         guard Set(walletIDs).count == walletIDs.count else { throw WalletsManager.LoadFailure.corrupt }
-        var loaded = [WalletContainer]()
+        var loaded = [(wallet: WalletContainer, data: Data)]()
         loaded.reserveCapacity(walletIDs.count)
         for id in walletIDs {
             try Task.checkCancellation()
             guard let data = try keychain.readWalletData(id: id) else { throw WalletsManager.LoadFailure.unavailable }
             guard let wallet = walletContainer(id: id, data: data),
                   wallet.accounts.count == wallet.key.accountCount else { throw WalletsManager.LoadFailure.corrupt }
-            loaded.append(wallet)
+            loaded.append((wallet, data))
         }
         return loaded
     }
 
-    private func validateCatalog(replacing wallet: WalletContainer) throws {
-        let current = try readWallets()
-        let proposed = WalletAccountCatalog(wallets: current.filter { $0.id != wallet.id } + [wallet])
+    private func validateCatalog(replacing wallet: WalletContainer, data: Data) throws {
+        let current = try readWalletRecords()
+        var replacement = current
+        if let index = replacement.firstIndex(where: { $0.wallet.id == wallet.id }) {
+            replacement[index] = (wallet, data)
+        } else {
+            replacement.append((wallet, data))
+        }
+        let existing = WalletAccountCatalog(wallets: current.map(\.wallet))
+        let proposed = WalletAccountCatalog(wallets: replacement.map(\.wallet))
         guard proposed.isValid ||
-              (proposed.hasValidAccounts && Set(proposed.accounts).isSubset(of: Set(WalletAccountCatalog(wallets: current).accounts)))
+              (proposed.hasValidAccounts && Set(proposed.accounts).isSubset(of: Set(existing.accounts)))
         else { throw WalletsManager.Error.invalidInput }
+#if os(iOS) || os(visionOS)
+        guard let password = try keychain.readPasswordSecret() else { throw WalletsManager.Error.keychainAccessFailure }
+        defer { password.invalidate() }
+        func size(_ catalog: WalletAccountCatalog, _ records: [(wallet: WalletContainer, data: Data)]) throws -> SafariApprovalVault.PublicationSize {
+            try SafariApprovalVault.publicationSize(source: .init(
+                catalog: catalog, password: password,
+                wallets: records.map { SafariApprovalWalletRecord(walletID: $0.wallet.id, storedKeyJSON: $0.data) }
+            ))
+        }
+        let proposedSize = try size(proposed, replacement)
+        guard proposedSize.fitsCapacity else {
+            guard Set(proposed.accounts).isStrictSubset(of: Set(existing.accounts)),
+                  try proposedSize.doesNotExceed(size(existing, current)) else {
+                throw SafariApprovalVault.Error.payloadTooLarge
+            }
+            return
+        }
+#endif
     }
 
     func prepareNewWallet(input: String?, inputPassword: String?) async throws -> PreparedCreation {
@@ -736,7 +765,7 @@ actor WalletRepository {
                   let wallet = walletContainer(id: prepared.walletID, data: prepared.data) else {
                 throw WalletsManager.Error.keychainAccessFailure
             }
-            try validateCatalog(replacing: wallet)
+            try validateCatalog(replacing: wallet, data: prepared.data)
             return PreparedWalletSourceMutation(payload: wallet, authorityRemovals: [])
         }, beforeCommit: {
             try validateAccess()
@@ -830,7 +859,7 @@ actor WalletRepository {
                     publicKey: account.publicKey, extendedPublicKey: account.extendedPublicKey)
             }
             guard let data = current.key.exportJSON() else { throw WalletKeyStoreError.invalidPassword }
-            try validateCatalog(replacing: current)
+            try validateCatalog(replacing: current, data: data)
             let retained = Set(replacement.map { WalletAccountDescriptor(walletID: wallet.id, account: $0) })
             let removed = originalAccounts.filter { !retained.contains(WalletAccountDescriptor(walletID: wallet.id, account: $0)) }
             let removals: [WalletAuthorityRemoval] = removed.isEmpty ? [] : [.accounts(Set(removed.map {

@@ -855,7 +855,16 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         call.onUpdate(call.transaction)
 
         call.onFeeEstimate(Self.makeEstimate())
+        await waitForSnapshot(coordinator) {
+            $0.transaction.currentBaseFeePerGas == 90 && $0.transaction.nextBaseFeePerGas == 100
+        }
+        XCTAssertEqual(coordinator.snapshot.transaction.currentBaseFeePerGas, 90)
+        XCTAssertEqual(coordinator.snapshot.transaction.nextBaseFeePerGas, 100)
+
         call.onFeeEstimate(Self.makeLegacyEstimate())
+        await waitForSnapshot(coordinator) {
+            $0.transaction.currentBaseFeePerGas == nil && $0.transaction.nextBaseFeePerGas == nil
+        }
 
         XCTAssertNil(
             coordinator.snapshot.transaction.currentBaseFeePerGas

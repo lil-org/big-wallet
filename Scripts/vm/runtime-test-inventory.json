@@ -8196,6 +8196,15 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/SafariApprovalVaultTests/testOversizedAccountEditPreservesPublishedVaultAndMetadata",
+      "variants": [
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/SafariApprovalVaultTests/testOwnershipValidationStopsOnCancellationBeforeDecryptionAndAccountDerivation",
       "variants": [
         "macos.debug",
@@ -8239,6 +8248,17 @@
     },
     {
       "id": "WalletAuthorityTests/SafariApprovalVaultTests/testPublicationAndSelectedSignerRejectUnownedMnemonicAccount",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/SafariApprovalVaultTests/testPublicationCapacityIncludesAggregateEncryptedAccountOverhead",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -8324,6 +8344,17 @@
     {
       "id": "WalletAuthorityTests/SafariApprovalVaultTests/testPublicationRevokesOldKeysBeforeSourceMutation",
       "variants": [
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/SafariApprovalVaultTests/testPublicationSizeBoundsEncryptedFieldsWithoutChangingSource",
+      "variants": [
+        "macos.debug",
+        "macos.release",
         "ios.debug",
         "ios.release",
         "visionos.debug",
@@ -11926,6 +11957,15 @@
       ]
     },
     {
+      "id": "WalletAuthorityTests/WalletRemovalIntegrationTests/testByteOversizedCatalogAllowsNonexpandingRemovalsButNotAdditions",
+      "variants": [
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletAuthorityTests/WalletRemovalIntegrationTests/testCanceledImportNeverEntersSourceCommit",
       "variants": [
         "macos.debug",
@@ -12062,6 +12102,24 @@
       "variants": [
         "macos.debug",
         "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletRemovalIntegrationTests/testPublicationCapacityCountsRawSiblingBytesBeforeCreationAndImport",
+      "variants": [
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletAuthorityTests/WalletRemovalIntegrationTests/testPublicationCapacityRejectsAggregateEnvelopeBeforeMutation",
+      "variants": [
         "ios.debug",
         "ios.release",
         "visionos.debug",

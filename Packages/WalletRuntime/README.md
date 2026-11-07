@@ -174,6 +174,13 @@ authorization or unify unlock grants with signing or export grants.
 
 The account editor merges external account changes into its open draft. Local additions and removals are reapplied to the latest wallet; untouched accounts follow that wallet's current state. An edit already satisfied externally becomes clean, so later external changes apply normally. Existing preview pages remain available, and only removal or replacement of the wallet closes the editor. Saving still merges against current storage and cannot remove the final account.
 
+On iOS and visionOS, creation, import, and account edits check the entire proposed
+catalog against the approval vault's 8 MiB source and envelope limits before
+revoking authority, clearing the vault, or writing wallet storage. The envelope
+estimate includes encrypted-field encoding overhead. An already oversized catalog
+can still lose accounts when neither serialized size grows; whole-wallet deletion
+remains available.
+
 ### Password setup and secret exports
 
 New wallet imports accept at most 1 MiB of UTF-8 input. Imported PBKDF2 keystores
