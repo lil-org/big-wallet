@@ -549,8 +549,7 @@ class RecoverySession:
 def recover(host, args, state):
     state = Path(state)
     plan = prepare_plan(host, state, args.run_id)
-    environment = host.read_json(host.TOOLS / 'environment.json')
-    reserve = environment['minimumHostFreeBytes']
+    reserve = host.HOST_RESERVE_BYTES
     host.check_capacity(state, reserve)
     check_capacity(state, reserve)
     binaries = host.build_tools(state, args.xcode)

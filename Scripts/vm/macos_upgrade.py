@@ -398,7 +398,7 @@ def preview(host, args, state):
             host.validate_vm(args.vm)
             return str(args.vm)
         check('sourceVM', source_vm)
-        check('disk', lambda: host.check_capacity(state, environment['minimumHostFreeBytes']))
+        check('disk', lambda: host.check_capacity(state, host.HOST_RESERVE_BYTES))
         check('manifestNode', host.manifest_node)
         check('xcode', xcode)
     if disk_bytes and not attaching:

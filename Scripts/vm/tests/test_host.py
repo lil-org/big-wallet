@@ -346,7 +346,7 @@ class LifecycleTests(unittest.TestCase):
                         patch.object(host, 'check_capacity', side_effect=host.RunnerError('fixture preparation reached')) as capacity:
                     with self.assertRaisesRegex(host.RunnerError, 'fixture preparation reached'):
                         host.run_tests(args, self.root, environment)
-                capacity.assert_called_once()
+                capacity.assert_called_once_with(self.root, host.HOST_RESERVE_BYTES)
 
     def test_source_comparison_rejects_invalid_records_and_does_not_follow_symlinks(self):
         source = self.root.resolve() / 'source.vbvm'

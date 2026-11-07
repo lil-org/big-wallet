@@ -32,6 +32,7 @@ STAGES = ('build', 'test', 'performance', 'tsan', 'asan', 'fuzz', 'parser-fuzz',
 EXCLUDED_PARTS = {'.git', '.asc-runtime', 'node_modules', 'DerivedData', 'build', '.build',
                   '.cache', '.vm-testing', '__pycache__', '.venv', 'venv'}
 SECRET_SUFFIXES = {'.p12', '.p8', '.pem', '.key', '.mobileprovision', '.provisionprofile'}
+HOST_RESERVE_BYTES = 10_000_000_000
 MAX_SNAPSHOT_BYTES = 1024 ** 3
 MAX_SNAPSHOT_FILES = 100000
 STOP_FINALIZATION_SECONDS = 600
@@ -693,7 +694,7 @@ def host_doctor(args, state, environment):
             checks.append({'name': name, 'status': 'blocked', 'detail': str(error)})
     check('vm', lambda: {'cpuCount': validate_vm(args.vm)['hardware']['cpuCount'],
                         'memoryBytes': validate_vm(args.vm)['hardware']['memorySize']})
-    check('disk', lambda: check_capacity(state, environment['minimumHostFreeBytes']))
+    check('disk', lambda: check_capacity(state, HOST_RESERVE_BYTES))
     check('manifestNode', manifest_node)
     def xcode():
         with open_regular(args.xcode / 'Contents/version.plist') as file:
@@ -1264,7 +1265,7 @@ def monitor_owned_vm(args, state, vm, exchange, run_id, binaries, environment, t
                         if not isinstance(status, dict):
                             raise RunnerError('VM returned an invalid status record')
                     try:
-                        check_capacity(state, environment['minimumHostFreeBytes'])
+                        check_capacity(state, HOST_RESERVE_BYTES)
                     except RunnerError as error:
                         reason = 'host_disk_reserve_reached'
                         capacity_error = str(error)
@@ -1315,7 +1316,7 @@ def monitor_owned_vm(args, state, vm, exchange, run_id, binaries, environment, t
                                     break
                             if setup_hook is not None:
                                 try:
-                                    check_capacity(state, environment['minimumHostFreeBytes'])
+                                    check_capacity(state, HOST_RESERVE_BYTES)
                                 except RunnerError as error:
                                     capacity_error = str(error)
                                     break
@@ -2106,7 +2107,7 @@ def prepare_safari_activation(args, state, environment, operation):
             existing.get('bootstrapSourceDigest') != source_digest or existing.get('verificationSigningMode') != 'local' or
             not existing.get('verifiedAt') or existing.get('consoleUser') != selected_console_user(args, existing)):
         raise RunnerError('Safari activation requires the current verified baseline and guest account; run ordinary setup first')
-    check_capacity(state, environment['minimumHostFreeBytes'])
+    check_capacity(state, HOST_RESERVE_BYTES)
     validate_vm(baseline)
     ensure_disk_idle(baseline)
     baseline_info = baseline.lstat()
@@ -2282,7 +2283,7 @@ def prepare_setup(args, state, environment, operation, *, force_verification=Fal
     if getattr(args, 'safari_activation', False):
         return prepare_safari_activation(args, state, environment, operation)
     run_id, exchange = operation['runId'], operation['exchange']
-    check_capacity(state, environment['minimumHostFreeBytes'])
+    check_capacity(state, HOST_RESERVE_BYTES)
     record_path = state / 'candidate.json'
     if record_path.exists():
         pending = read_json(record_path)
@@ -2535,7 +2536,7 @@ def run_tests(args, state, environment, *, result_callback=None):
         raise RunnerError('Pinned environment changed. Re-run setup to validate a new baseline.')
     if record.get('bootstrapSourceDigest') != bootstrap_source_digest():
         raise RunnerError('Guest bootstrap/environment changed. Re-run setup before testing.')
-    check_capacity(state, environment['minimumHostFreeBytes'])
+    check_capacity(state, HOST_RESERVE_BYTES)
     run_id, exchange = new_exchange(state, 'run')
     clone = state / 'runs' / (run_id + '.vbvm')
     clone_owned = False

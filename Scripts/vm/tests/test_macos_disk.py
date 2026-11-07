@@ -80,8 +80,7 @@ class DiskGrowthTests(unittest.TestCase):
         self.receipt = self.state / 'system-disk-growth.json'
         self.tools = self.state / 'tools'
         self.tools.mkdir()
-        (self.tools / 'environment.json').write_text(json.dumps({'minimumHostFreeBytes': 4096}))
-        self.host = SimpleNamespace(TOOLS=self.tools, RunnerError=RuntimeError,
+        self.host = SimpleNamespace(TOOLS=self.tools, RunnerError=RuntimeError, HOST_RESERVE_BYTES=4096,
             read_json=lambda path: json.loads(path.read_text()),
             atomic_json=lambda path, value: path.write_text(json.dumps(value)),
             private_directory=self.private_directory, ensure_disk_idle=Mock(), validate_vm=self.validate_vm)

@@ -1337,8 +1337,8 @@ class MacOSUpgradeTests(unittest.TestCase):
         from test_macos_disk import fixture_image
         (self.baseline / 'Disk.img').write_bytes(fixture_image(recovery_sectors=512))
         self.args.system_disk_gib = 96
-        reserve = self.environment['minimumHostFreeBytes']
-        for free, expected in ((reserve + 1, 'blocked'), (reserve + 512 * 512, 'ready')):
+        reserve = 10_000_000_000
+        for free, expected in ((reserve + 512 * 512 - 1, 'blocked'), (reserve + 512 * 512, 'ready')):
             with patch.object(shutil, 'disk_usage', return_value=SimpleNamespace(free=free)):
                 self.assertEqual(upgrade.preview(host, self.args, self.state)['status'], expected)
         self.clones.assert_not_called()

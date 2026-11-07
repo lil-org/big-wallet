@@ -183,7 +183,7 @@ def preview(host, args, state):
     capacity_path = state
     while not capacity_path.exists():
         capacity_path = capacity_path.parent
-    check('disk', lambda: host.check_capacity(capacity_path, environment['minimumHostFreeBytes']))
+    check('disk', lambda: host.check_capacity(capacity_path, host.HOST_RESERVE_BYTES))
     check('manifestNode', host.manifest_node)
     def baseline():
         candidate_path = state / 'candidate.json'

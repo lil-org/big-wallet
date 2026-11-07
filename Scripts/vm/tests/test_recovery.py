@@ -312,11 +312,12 @@ class RecoveryTests(RecoveryFixture, unittest.TestCase):
                 path.write_bytes(before)
 
     def test_capacity_requires_real_free_archive_and_extraction_bytes_plus_reserve(self):
-        with patch.object(recovery.shutil, 'disk_usage', return_value=SimpleNamespace(free=199)):
+        needed = 2048
+        with patch.object(recovery.shutil, 'disk_usage', return_value=SimpleNamespace(free=10_000_000_000 + needed - 1)):
             with self.assertRaises(recovery.RecoveryError):
-                recovery.check_capacity(self.root, 100, 100)
-        with patch.object(recovery.shutil, 'disk_usage', return_value=SimpleNamespace(free=200)):
-            recovery.check_capacity(self.root, 100, 100)
+                recovery.check_capacity(self.root, host.HOST_RESERVE_BYTES, needed)
+        with patch.object(recovery.shutil, 'disk_usage', return_value=SimpleNamespace(free=10_000_000_000 + needed)):
+            recovery.check_capacity(self.root, host.HOST_RESERVE_BYTES, needed)
 
     def test_nonfinal_guest_report_is_collected_as_raw_partial_diagnostics(self):
         before = self.original_bytes()
@@ -437,6 +438,7 @@ class RecoveryTests(RecoveryFixture, unittest.TestCase):
             password = b''
             def __init__(self, api, plan, attempt, process, deadline, cancelled, reserve):
                 outer.assertEqual(process, vm)
+                outer.assertEqual(reserve, 10_000_000_000)
                 self.attempt = attempt
                 if close_error:
                     outer.scratch(attempt)
@@ -459,10 +461,14 @@ class RecoveryTests(RecoveryFixture, unittest.TestCase):
                 raise shutdown_error
             vm.poll.return_value = 0
         with patch.object(host, 'build_tools', return_value=self.root / 'tools'), \
-                patch.object(recovery, 'check_capacity'), patch.object(recovery, 'RecoverySession', Session), \
+                patch.object(recovery, 'check_capacity') as free_capacity, patch.object(recovery, 'RecoverySession', Session), \
                 patch.object(recovery.subprocess, 'Popen', return_value=vm) as launch, \
                 patch.object(host, 'stop_owned_process', side_effect=stop):
             code = recovery.recover(host, args, self.state)
+        self.host_capacity.assert_called_once_with(self.state, 10_000_000_000)
+        self.assertGreaterEqual(free_capacity.call_count, 2)
+        for call in free_capacity.call_args_list:
+            self.assertEqual(call.args, (self.state, 10_000_000_000))
         command = launch.call_args.args[0]
         self.assertEqual(command[:3], [str(self.root / 'tools/VMHost'), '--vm', str(self.vm)])
         self.assertNotIn('--provision-user', command)

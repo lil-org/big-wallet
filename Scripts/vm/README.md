@@ -215,11 +215,15 @@ the planned stage inventory from the source snapshot. Test commands execute in
 the guest. The host plan remains separate from guest execution results and
 identifies every requested stage if the guest cannot start.
 
-The host keeps a 30 GiB available-capacity reserve. On macOS this includes
+The host keeps a 10 GB (10,000,000,000 bytes; about 9.31 GiB) available-capacity
+reserve, defined by `HOST_RESERVE_BYTES` in `host.py`. On macOS this includes
 purgeable storage that the system can reclaim for user-requested work, matching
 the available-space concept in Storage settings. `doctor` reports both that
 estimate and currently free bytes. If the macOS estimate is unavailable, the
 runner falls back to currently free bytes. Capacity is checked again during runs.
+The `minimumHostFreeBytes` field in the pinned environment remains part of the
+verified baseline identity but does not control host capacity; all host reserve
+checks use the host policy.
 
 The pinned environment is in `environment.json`, including exact Xcode, Node,
 npm, jq, iOS Simulator, and visionOS Simulator versions and build identities.
@@ -435,7 +439,7 @@ the extracted new Xcode, and the previous guest Xcode retained by provisioning.
 The old baseline and diagnostic clones also retain disk blocks. APFS clones
 share existing blocks initially, but installing Xcode and running the full
 matrix allocate additional blocks; adding the sizes printed by `du` for cloned
-VM bundles overstates their unique host usage. The host's 30 GiB capacity reserve
+VM bundles overstates their unique host usage. The host's 10 GB capacity reserve
 still applies, and passing that check does not prove that the guest's 96 GiB
 build volume has enough free space for extraction and builds. Capacity failures
 require diagnosis before retrying; the upgrade does not discard baseline

@@ -276,8 +276,7 @@ def _new_file(path, contents, mode):
 
 
 def _capacity(host, directory, layout, new_bytes):
-    environment = host.read_json(host.TOOLS / 'environment.json')
-    reserve = environment['minimumHostFreeBytes']
+    reserve = host.HOST_RESERVE_BYTES
     needed = layout['partitions'][2]['bytes'] if new_bytes > layout['bytes'] else 0
     _require(type(reserve) is int and reserve >= 0 and shutil.disk_usage(directory).free >= reserve + needed,
              'Boot-disk growth requires actual free host space for its Recovery copy plus the configured reserve')

@@ -71,11 +71,16 @@ class ExchangeMonitorTests(unittest.TestCase):
         return value
 
     def run_monitor(self, timeout=100, *, previous_stops=()):
+        def check_capacity(directory, minimum):
+            self.assertEqual(directory, self.root)
+            self.assertEqual(minimum, 10_000_000_000)
+            return self.capacity()
+
         with ExitStack() as stack:
             launch = stack.enter_context(patch.object(host.subprocess, 'Popen', return_value=self.vm))
             stack.enter_context(patch.object(host.time, 'monotonic', side_effect=lambda: self.clock))
             stack.enter_context(patch.object(host.time, 'sleep', side_effect=self.sleep))
-            stack.enter_context(patch.object(host, 'check_capacity', side_effect=lambda *_: self.capacity()))
+            stack.enter_context(patch.object(host, 'check_capacity', side_effect=check_capacity))
             stack.enter_context(patch.object(host, 'stop_owned_process', side_effect=self.stop_vm))
             result = host.monitor_vm(SimpleNamespace(command='run'), self.root, self.root / 'owned.vbvm',
                 self.exchange, self.run_id, self.root / 'tools', {'minimumHostFreeBytes': 1}, timeout,
@@ -466,6 +471,39 @@ class ExchangeMonitorTests(unittest.TestCase):
         self.assertIn('fixture disk reserve reached', result['hostTermination']['error'])
         self.assertEqual(self.clock, 0)
         self.assertEqual(self.hook.polls, 1)
+
+    def test_exact_ten_gb_reserve_allows_artifact_collection_to_finish(self):
+        check_capacity = host.check_capacity
+        self.capacity = lambda: check_capacity(self.root, host.HOST_RESERVE_BYTES)
+
+        def finish(count):
+            self.report()
+            if count == 2:
+                self.hook.exchange_complete = True
+
+        self.on_poll = finish
+        with patch.object(host, 'macos_available_capacity', return_value=10_000_000_000), \
+                patch.object(host.shutil, 'disk_usage', return_value=SimpleNamespace(total=100_000_000_000, free=10_000_000_000)):
+            result = self.run_monitor()
+        self.assertEqual(result['status'], 'passed')
+        self.assertEqual(self.clock, 1)
+        self.assertTrue(self.hook.exchange_complete)
+
+    def test_drop_below_ten_gb_reserve_stops_vm_and_rejects_partial_coverage(self):
+        check_capacity = host.check_capacity
+        self.capacity = lambda: check_capacity(self.root, host.HOST_RESERVE_BYTES)
+
+        def progress(_):
+            self.report('running', terminal=False)
+
+        self.on_poll = progress
+        with patch.object(host, 'macos_available_capacity', side_effect=[10_000_000_000, 9_999_999_999, 9_999_999_999]), \
+                patch.object(host.shutil, 'disk_usage', return_value=SimpleNamespace(total=100_000_000_000, free=20_000_000_000)):
+            result = self.run_monitor()
+        self.assertEqual(result['reason'], 'host_disk_reserve_reached')
+        self.assertFalse(result['coverage']['fullSuiteVerified'])
+        self.assertEqual(self.clock, 1)
+        self.assertEqual(self.events[-2:], ['cancel-transfer', 'stop-vm'])
 
 
 if __name__ == '__main__':

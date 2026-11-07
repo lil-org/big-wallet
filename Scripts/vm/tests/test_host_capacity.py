@@ -19,55 +19,55 @@ class HostCapacityTests(unittest.TestCase):
         patches = contextlib.ExitStack()
         self.addCleanup(patches.close)
         self.state = Path('/fixture/VM state')
-        self.usage = SimpleNamespace(total=500 * GIB, used=487 * GIB, free=13 * GIB)
+        self.usage = SimpleNamespace(total=500 * GIB, used=497 * GIB, free=3 * GIB)
         self.disk = patches.enter_context(patch.object(host.shutil, 'disk_usage', return_value=self.usage))
         self.capacity = patches.enter_context(patch.object(host, 'macos_available_capacity', return_value=117 * GIB))
 
     def test_reclaimable_capacity_satisfies_reserve_and_preserves_raw_free_diagnostic(self):
-        self.assertEqual(host.check_capacity(self.state, 30 * GIB), {
-            'availableBytes': 117 * GIB, 'freeBytes': 13 * GIB, 'capacitySource': 'macOSImportantUsage',
+        self.assertEqual(host.check_capacity(self.state, host.HOST_RESERVE_BYTES), {
+            'availableBytes': 117 * GIB, 'freeBytes': 3 * GIB, 'capacitySource': 'macOSImportantUsage',
         })
         self.disk.assert_called_once_with(self.state)
         self.capacity.assert_called_once_with(self.state)
 
     def test_available_capacity_below_reserve_blocks_even_when_raw_free_is_larger(self):
         self.usage.free = 60 * GIB
-        self.capacity.return_value = 29 * GIB
-        with self.assertRaisesRegex(host.RunnerError, r'29\.0 GiB available .*60\.0 GiB currently free.*30\.0 GiB reserve'):
-            host.check_capacity(self.state, 30 * GIB)
+        self.capacity.return_value = 9_999_999_999
+        with self.assertRaisesRegex(host.RunnerError, r'9\.3 GiB available .*60\.0 GiB currently free.*9\.3 GiB reserve'):
+            host.check_capacity(self.state, host.HOST_RESERVE_BYTES)
 
     def test_zero_available_capacity_is_valid_and_blocks(self):
         self.usage.free = 60 * GIB
         self.capacity.return_value = 0
         with self.assertRaisesRegex(host.RunnerError, r'0\.0 GiB available'):
-            host.check_capacity(self.state, 30 * GIB)
+            host.check_capacity(self.state, host.HOST_RESERVE_BYTES)
 
     def test_exact_reserve_is_sufficient(self):
-        self.capacity.return_value = 30 * GIB
-        self.assertEqual(host.check_capacity(self.state, 30 * GIB)['availableBytes'], 30 * GIB)
+        self.capacity.return_value = 10_000_000_000
+        self.assertEqual(host.check_capacity(self.state, host.HOST_RESERVE_BYTES)['availableBytes'], 10_000_000_000)
 
     def test_unavailable_or_invalid_estimate_falls_back_to_sufficient_raw_free(self):
-        self.usage.free = 31 * GIB
+        self.usage.free = 10_000_000_000
         for estimate in (None, True, False, -1, 117.0 * GIB, 501 * GIB, '117'):
             with self.subTest(estimate=estimate):
                 self.capacity.return_value = estimate
-                self.assertEqual(host.check_capacity(self.state, 30 * GIB), {
-                    'availableBytes': 31 * GIB, 'freeBytes': 31 * GIB, 'capacitySource': 'filesystemFree',
+                self.assertEqual(host.check_capacity(self.state, host.HOST_RESERVE_BYTES), {
+                    'availableBytes': 10_000_000_000, 'freeBytes': 10_000_000_000, 'capacitySource': 'filesystemFree',
                 })
 
     def test_unavailable_or_invalid_estimate_cannot_bypass_raw_free_reserve(self):
-        self.usage.free = 29 * GIB
+        self.usage.free = 9_999_999_999
         for estimate in (None, True, False, -1, 117.0 * GIB, 501 * GIB, '117'):
             with self.subTest(estimate=estimate):
                 self.capacity.return_value = estimate
-                with self.assertRaisesRegex(host.RunnerError, r'29\.0 GiB available'):
-                    host.check_capacity(self.state, 30 * GIB)
+                with self.assertRaisesRegex(host.RunnerError, r'9\.3 GiB available'):
+                    host.check_capacity(self.state, host.HOST_RESERVE_BYTES)
 
     def test_each_check_uses_current_capacity(self):
-        self.capacity.side_effect = [117 * GIB, 29 * GIB]
-        self.assertEqual(host.check_capacity(self.state, 30 * GIB)['availableBytes'], 117 * GIB)
+        self.capacity.side_effect = [10_000_000_000, 9_999_999_999]
+        self.assertEqual(host.check_capacity(self.state, host.HOST_RESERVE_BYTES)['availableBytes'], 10_000_000_000)
         with self.assertRaises(host.RunnerError):
-            host.check_capacity(self.state, 30 * GIB)
+            host.check_capacity(self.state, host.HOST_RESERVE_BYTES)
         self.assertEqual(self.capacity.call_count, 2)
 
 

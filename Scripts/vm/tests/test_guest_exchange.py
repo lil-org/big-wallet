@@ -1112,7 +1112,7 @@ errorFS.unlinkSync = filename => {{
     def test_report_retry_does_not_extend_guest_terminal_report_grace(self):
         transport = self.established()
         self.report_responses(self.banner_failure())
-        now = time.monotonic()
+        now = 100.0
         transport.guest_finished_at = now - 25
         transport.next_poll = now
         self.report_attempt(now)
