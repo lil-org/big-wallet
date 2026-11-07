@@ -38,7 +38,7 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
     private var statusBottomConstraint: NSLayoutConstraint?
     private var originalBottomInset: CGFloat = 0
 
-    func retireForWalletLock() {
+    func retire() {
         retireEditor()
     }
 
@@ -208,7 +208,7 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
 
     private func previewDidChange(_ change: AccountPreviewState.Change) {
         guard acceptsManagementActions else {
-            retireForWalletLock()
+            retire()
             return
         }
         updatePreviewStatus()

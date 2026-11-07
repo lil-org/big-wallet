@@ -39,9 +39,13 @@ struct NativeWalletAccess {
 }
 
 @MainActor
-protocol NativeWalletProtectedContent: AnyObject {
+protocol NativeWindowContentRetirement: AnyObject {
+    func retire()
+}
+
+@MainActor
+protocol NativeWalletProtectedContent: NativeWindowContentRetirement {
     var walletAccess: NativeWalletAccess { get set }
-    func retireForWalletLock()
 }
 
 final class WalletWindowController: NSWindowController, WalletAccessObserver {
@@ -77,14 +81,7 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
     func walletAccessDidLock() {
         contentInstallationID = nil
         currentAuthenticationSession?.cancel()
-        if let protected = contentViewController as? NativeWalletProtectedContent { protected.retireForWalletLock() }
-        else { (contentViewController as? NativeApprovalReviewTeardown)?.invalidateNativeApprovalReview() }
-        switch contentViewController {
-        case let password as PasswordViewController: password.retire()
-        case let welcome as WelcomeViewController: welcome.retire()
-        case let waiting as WaitingViewController: waiting.retire()
-        default: break
-        }
+        (contentViewController as? any NativeWindowContentRetirement)?.retire()
         Window.dismissSheets(in: window)
         if let modal = NSApp.modalWindow, modal !== window, modal.sheetParent == nil {
             Window.clearText(in: modal.contentView)
@@ -116,14 +113,7 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
             isCurrent() && contentInstallationID == installationID
         }
         func discardInstallation() {
-            if let protected = next as? NativeWalletProtectedContent { protected.retireForWalletLock() }
-            else { (next as? NativeApprovalReviewTeardown)?.invalidateNativeApprovalReview() }
-            switch next {
-            case let password as PasswordViewController: password.retire()
-            case let welcome as WelcomeViewController: welcome.retire()
-            case let waiting as WaitingViewController: waiting.retire()
-            default: break
-            }
+            (next as? any NativeWindowContentRetirement)?.retire()
             if walletAccess?.isLocked == true, walletAccess?.hasLocked == true { walletAccessDidLock() }
             if contentViewController !== next, let retiredView = next.viewIfLoaded,
                retiredView !== window?.contentView {

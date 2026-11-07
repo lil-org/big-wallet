@@ -36,7 +36,7 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
         !isRetired && walletAccess.isCurrent && viewIfLoaded?.window?.contentViewController === self
     }
 
-    func retireForWalletLock() {
+    func retire() {
         retireImport()
     }
 

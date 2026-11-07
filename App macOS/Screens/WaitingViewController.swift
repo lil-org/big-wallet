@@ -5,7 +5,7 @@ import WalletNetworking
 
 import Cocoa
 
-class WaitingViewController: NSViewController {
+class WaitingViewController: NSViewController, NativeWindowContentRetirement {
     
     private var reason = ""
     private var isWorking = true

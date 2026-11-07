@@ -28,7 +28,7 @@ test("both acceptance profiles include the same focused runtime and app ASan inv
         assert.deepEqual(stage.args.filter(argument => argument.startsWith("-only-testing:")), expected.map(id => `-only-testing:${id}`));
     }
     assert.equal(baseline[0].nativeAudit.requiredTests.length, 173);
-    assert.equal(baseline[1].nativeAudit.requiredTests.length, 38);
+    assert.equal(baseline[1].nativeAudit.requiredTests.length, 43);
     assert.ok(tests(baseline).includes("WalletAuthorityTests/WalletCoreProxyPerformanceGateTests/testScryptDefaultParametersAndSequentialDerivationVectors"));
     assert.ok(tests(baseline).every(id => !PERFORMANCE_TESTS.some(name => id.endsWith(`/${name}`))));
 });
@@ -77,7 +77,7 @@ test("ASan selectors narrow its inventory and omit unrelated invocations", () =>
         [`WalletAuthorityTests/${method}`]);
     const apps = asan({stages: ["asan"], onlyTesting: ["Tests macOS"]});
     assert.deepEqual(apps.map(stage => stage.id), ["asan.focused"]);
-    assert.equal(tests(apps).length, 38);
+    assert.equal(tests(apps).length, 43);
     const appMethod = "Tests macOS/SecretHandlingTests/testInvalidationRejectsLateSecretResultsAndCallbacks";
     assert.deepEqual(tests(asan({stages: ["asan"], onlyTesting: [appMethod]})), [appMethod]);
     const mixed = asan({stages: ["asan"], onlyTesting: [`WalletAuthorityTests/${method}`, appMethod]});

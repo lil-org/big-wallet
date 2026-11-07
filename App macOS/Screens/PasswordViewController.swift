@@ -5,7 +5,7 @@ import WalletNetworking
 
 import Cocoa
 
-final class PasswordViewController: NSViewController {
+final class PasswordViewController: NSViewController, NativeWindowContentRetirement {
     var walletAccess = NativeWalletAccess()
     enum Mode {
         case create, repeatAfterCreate, enter

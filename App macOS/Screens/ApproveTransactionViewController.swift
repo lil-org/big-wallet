@@ -72,7 +72,7 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
 
     private var acceptsReview: Bool { walletAccess.isCurrent && !isRetiredForAccess && review.isActive }
 
-    func retireForWalletLock() {
+    func retire() {
         isRetiredForAccess = true
         invalidateNativeApprovalReview()
         balance = nil

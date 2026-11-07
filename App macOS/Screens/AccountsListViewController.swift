@@ -16,15 +16,10 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
     private var cellModels = [CellModel]()
     private var preferencesButton: NSButton?
     private var loadTask: Task<Void, Never>?
-    private var authenticationTask: Task<Void, Never>?
-    private var keyExportTask: Task<Void, Never>?
+    private var deletionAuthenticationTask: Task<Void, Never>?
     private var menuTask: Task<Void, Never>?
     private var safariPreferencesTask: Task<Void, Never>?
     private var walletMutationTasks = [UUID: Task<Void, Never>]()
-    private let secretSession = SecretPresentationSession()
-    private var secretToken: SecretPresentationSession.Token?
-    private var secretAuthenticationToken: SecretPresentationSession.Token?
-    private weak var secretOwnerWindow: NSWindow?
     private var secretPresentation: NativeSecretAlertPresentation?
     private var isClosed = false
     var newWalletId: String?
@@ -68,7 +63,7 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
     private var hasCurrentPresentation: Bool { !isClosed && walletAccess.hasCurrentPresentation }
     private var showsEnabledStoreActions: Bool { hasCurrentPresentation && walletsManager.isStoreReady }
 
-    func retireForWalletLock() {
+    func retire() {
         retireManagement()
     }
 
@@ -88,18 +83,26 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
 
     isolated deinit {
         loadTask?.cancel()
-        secretSession.invalidate()
-        secretPresentation?.dismiss()
-        keyExportTask?.cancel()
+        secretPresentation?.invalidate()
         safariPreferencesTask?.cancel()
         walletMutationTasks.values.forEach { $0.cancel() }
-        authenticationTask?.cancel()
+        deletionAuthenticationTask?.cancel()
         menuTask?.cancel()
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         guard acceptsManagementActions else { return }
+        secretPresentation = NativeSecretAlertPresentation(
+            sourceIsCurrent: { [weak self] window in
+                guard let self else { return false }
+                return acceptsStoreActions && viewIfLoaded?.window === window && window.contentViewController === self
+            },
+            copy: { [weak self] secret in
+                guard self?.walletAccess.beginAction() == true else { return }
+                SecretClipboard.shared.copy(secret)
+            }
+        )
         (tableView.enclosingScrollView?.verticalScroller as? WalletActivityScroller)?.accessibilityInteraction = { [weak self] in
             guard let self, !isClosed, viewIfLoaded?.window?.contentViewController === self else { return false }
             return walletAccess.beginAction()
@@ -131,14 +134,6 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
         NotificationCenter.default.addObserver(self, selector: #selector(walletLoadStateChanged), name: .walletsLoadStateChanged, object: walletsManager)
         updateLoadPresentation()
         startLoadingIfNeeded()
-        for name in [NSApplication.willResignActiveNotification, NSApplication.willHideNotification] {
-            NotificationCenter.default.addObserver(self, selector: #selector(secretApplicationWillDeactivate), name: name, object: nil)
-        }
-        for name in [NSWindow.willCloseNotification, NSWindow.willMiniaturizeNotification] {
-            NotificationCenter.default.addObserver(self, selector: #selector(secretWindowWillDisappear), name: name, object: nil)
-        }
-        NotificationCenter.default.addObserver(self, selector: #selector(secretWindowDidResignKey), name: NSWindow.didResignKeyNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(secretWindowDidBecomeKey), name: NSWindow.didBecomeKeyNotification, object: nil)
     }
     
     override func viewDidAppear() {
@@ -156,81 +151,7 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
         super.viewWillDisappear()
         loadTask?.cancel()
         loadTask = nil
-        if secretAuthenticationToken == nil { invalidateSecretPresentation() }
-    }
-
-    private var secretOwnerIsActive: Bool {
-        guard acceptsStoreActions, NSApp.isActive,
-              let window = secretOwnerWindow,
-              window.isVisible, !window.isMiniaturized,
-              window.contentViewController === self,
-              viewIfLoaded?.window === window else { return false }
-        return NativeSecretAlertPresentation.acceptsKeyWindow(
-            NSApp.keyWindow,
-            owner: window,
-            presentation: secretPresentation
-        )
-    }
-
-    private func beginSecretPresentation() -> SecretPresentationSession.Token? {
-        invalidateSecretPresentation()
-        secretOwnerWindow = viewIfLoaded?.window
-        guard secretOwnerIsActive else {
-            secretOwnerWindow = nil
-            return nil
-        }
-        let token = secretSession.begin()
-        secretToken = token
-        return token
-    }
-
-    private func canPresentSecret(for token: SecretPresentationSession.Token) -> Bool {
-        secretToken == token && secretSession.isCurrent(token) && secretOwnerIsActive
-    }
-
-    private func invalidateSecretPresentation() {
-        secretSession.invalidate()
-        secretToken = nil
-        if secretAuthenticationToken != nil {
-            authenticationTask?.cancel()
-            authenticationTask = nil
-        }
-        secretAuthenticationToken = nil
-        keyExportTask?.cancel()
-        keyExportTask = nil
-        let presentation = secretPresentation
-        secretPresentation = nil
-        secretOwnerWindow = nil
-        presentation?.dismiss()
-    }
-
-    @objc private func secretApplicationWillDeactivate() {
-        guard secretAuthenticationToken == nil else { return }
-        invalidateSecretPresentation()
-    }
-
-    @objc private func secretWindowWillDisappear(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow,
-              window === secretOwnerWindow || window === secretPresentation?.alert.window else { return }
-        invalidateSecretPresentation()
-    }
-
-    @objc private func secretWindowDidResignKey(_ notification: Notification) {
-        guard secretAuthenticationToken == nil, let token = secretToken,
-              let window = notification.object as? NSWindow,
-              window === secretOwnerWindow || window === secretPresentation?.alert.window else { return }
-        Task { @MainActor [weak self] in
-            await Task.yield()
-            guard let self, secretToken == token, !secretOwnerIsActive else { return }
-            invalidateSecretPresentation()
-        }
-    }
-
-    @objc private func secretWindowDidBecomeKey(_ notification: Notification) {
-        guard secretAuthenticationToken == nil, secretToken != nil,
-              let window = notification.object as? NSWindow,
-              window !== secretOwnerWindow, window !== secretPresentation?.alert.window else { return }
-        invalidateSecretPresentation()
+        secretPresentation?.sourceWillDisappear()
     }
 
     private func reloadHeader() {
@@ -331,7 +252,7 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
     
     private func startWalletMutation(
         showsFailure: Bool = true,
-        revealToken: SecretPresentationSession.Token? = nil,
+        revealToken: NativeSecretAlertPresentation.Token? = nil,
         _ operation: @escaping @MainActor (WalletAccessSession) async throws -> WalletSnapshot?
     ) {
         guard acceptsStoreActions else { return }
@@ -348,16 +269,15 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
                     newWalletId = created.id
                     blinkNewWalletCellIfNeeded()
                     let authorization = walletsManager.takeInitialBackupAuthorization(wallet: created)
-                    guard let revealToken, canPresentSecret(for: revealToken), let authorization else {
+                    guard let revealToken, let authorization, let secretPresentation else {
                         authorization?.invalidate()
                         return
                     }
-                    showKey(wallet: created, specificAccount: nil, token: revealToken, authorization: authorization)
+                    secretPresentation.reveal(for: revealToken, authorization: authorization,
+                        export: secretExport(wallet: created, specificAccount: nil))
                 }
             } catch {
-                if let revealToken, self?.secretToken == revealToken {
-                    self?.invalidateSecretPresentation()
-                }
+                if let revealToken { self?.secretPresentation?.invalidate(ifCurrent: revealToken) }
                 guard let self, !Task.isCancelled, acceptsStoreActions, showsFailure else { return }
                 presentMessageAlert(Strings.somethingWentWrong, style: .informational)
             }
@@ -365,7 +285,8 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
     }
 
     private func createNewAccountAndShowSecretWords() {
-        guard acceptsStoreActions, let token = beginSecretPresentation() else { return }
+        guard acceptsStoreActions, let window = viewIfLoaded?.window,
+              let token = secretPresentation?.begin(in: window, title: Strings.secretWords) else { return }
         startWalletMutation(showsFailure: false, revealToken: token) { [walletsManager] session in
             try await walletsManager.createWallet(access: session)
         }
@@ -523,13 +444,17 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
                   acceptsStoreActions else { return }
             if response == .alertFirstButtonReturn, walletAccess.beginAction() {
                 let window = viewIfLoaded?.window
-                authenticationTask?.cancel()
-                authenticationTask = Task { [weak self, weak window] in
+                secretPresentation?.cancelAuthentication()
+                deletionAuthenticationTask?.cancel()
+                deletionAuthenticationTask = Task { [weak self, weak window] in
                     guard let self, !Task.isCancelled, acceptsStoreActions else { return }
                     let credentials = ApplicationServices.shared.credentials
                     let challenge = credentials.makeWalletAccessChallenge()
                     defer { challenge.invalidate() }
-                    let authorization = await authenticateWhenStoreReady(in: window, reason: .removeWallet, challenge: challenge)
+                    let result = await authenticate(window, .removeWallet, challenge)
+                    let authorization = await Self.finishAuthentication(result, walletsManager: walletsManager) { [weak self] in
+                        self?.acceptsManagementActions == true
+                    }
                     guard let authorization, !Task.isCancelled, acceptsStoreActions,
                           let access = credentials.accessSession(authorization: authorization) else { return }
                     defer { access.invalidate() }
@@ -565,24 +490,26 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
         guard acceptsManagementActions else { return }
         if !walletsManager.isStoreReady {
             let isRefreshing = walletsManager.loadState == .loading
-            if !isRefreshing || secretAuthenticationToken == nil { invalidateSecretPresentation() }
+            secretPresentation?.walletLoadStateChanged(walletsManager.loadState)
             if !isRefreshing {
-                authenticationTask?.cancel()
-                authenticationTask = nil
+                deletionAuthenticationTask?.cancel()
+                deletionAuthenticationTask = nil
             }
             cancelMenuTracking()
         }
         updateLoadPresentation()
     }
 
-    private func authenticateWhenStoreReady(
-        in window: NSWindow?, reason: AuthenticationReason, challenge: WalletAuthenticationChallenge
+    private static func finishAuthentication(
+        _ authorization: WalletAuthenticationGrant?,
+        walletsManager: WalletsManager,
+        isCurrent: @MainActor () -> Bool
     ) async -> WalletAuthenticationGrant? {
-        guard let authorization = await authenticate(window, reason, challenge) else { return nil }
-        if !Task.isCancelled, acceptsManagementActions, walletsManager.loadState == .loading {
+        guard let authorization else { return nil }
+        if !Task.isCancelled, isCurrent(), walletsManager.loadState == .loading {
             _ = await walletsManager.reloadFromStore()
         }
-        guard !Task.isCancelled, acceptsStoreActions else {
+        guard !Task.isCancelled, isCurrent(), walletsManager.isStoreReady else {
             authorization.invalidate()
             return nil
         }
@@ -675,104 +602,46 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
         alert.addButton(withTitle: Strings.iUnderstandTheRisks)
         alert.addButton(withTitle: Strings.cancel)
         presentAlert(alert) { [weak self] response in
-            guard let self,
-                  acceptsStoreActions else { return }
-            if response == .alertFirstButtonReturn, walletAccess.beginAction() {
-                guard let token = beginSecretPresentation() else { return }
-                let reason: AuthenticationReason = showingMnemonic
-                    ? .showSecretWords
-                    : .showPrivateKey
-                let window = viewIfLoaded?.window
-                authenticationTask?.cancel()
-                secretAuthenticationToken = token
-                authenticationTask = Task { [weak self, weak window, walletsManager] in
-                    guard self?.acceptsStoreActions == true, !Task.isCancelled else { return }
-                    let challenge: WalletAuthenticationChallenge
-                    do {
-                        challenge = try await walletsManager.makeExportChallenge(
-                            wallet: wallet, account: specificAccount,
-                            kind: showingMnemonic ? .mnemonic : .privateKey
-                        )
-                    } catch {
-                        if self?.secretToken == token { self?.invalidateSecretPresentation() }
-                        return
-                    }
-                    guard let self, !Task.isCancelled, secretToken == token else {
-                        challenge.invalidate()
-                        return
-                    }
-                    let authorization = await authenticateWhenStoreReady(in: window, reason: reason, challenge: challenge)
-                    guard secretToken == token else {
-                        challenge.invalidate()
-                        return
-                    }
-                    secretAuthenticationToken = nil
-                    authenticationTask = nil
-                    guard let authorization, !Task.isCancelled, canPresentSecret(for: token) else {
-                        challenge.invalidate()
-                        invalidateSecretPresentation()
-                        return
-                    }
-                    showKey(
-                        wallet: wallet,
-                        specificAccount: specificAccount,
-                        token: token,
-                        authorization: authorization
+            guard let self, acceptsStoreActions else { return }
+            guard response == .alertFirstButtonReturn, walletAccess.beginAction(),
+                  let window = viewIfLoaded?.window, let secretPresentation,
+                  let token = secretPresentation.begin(in: window, title: showingMnemonic ? Strings.secretWords : Strings.privateKey)
+            else { return }
+            deletionAuthenticationTask?.cancel()
+            deletionAuthenticationTask = nil
+            let reason: AuthenticationReason = showingMnemonic ? .showSecretWords : .showPrivateKey
+            secretPresentation.authenticateAndReveal(for: token, authenticate: { [weak self, weak window, walletsManager, authenticate] in
+                let challenge: WalletAuthenticationChallenge
+                do {
+                    challenge = try await walletsManager.makeExportChallenge(
+                        wallet: wallet, account: specificAccount,
+                        kind: showingMnemonic ? .mnemonic : .privateKey
                     )
+                } catch { return nil }
+                guard !Task.isCancelled, self != nil else { challenge.invalidate(); return nil }
+                let result = await authenticate(window, reason, challenge)
+                let authorization = await Self.finishAuthentication(result, walletsManager: walletsManager) { [weak self] in
+                    self?.acceptsManagementActions == true
                 }
-            }
-        }
-    }
-    
-    private func showKey(wallet: WalletSnapshot, specificAccount: WalletAccount?, token: SecretPresentationSession.Token, authorization: WalletAuthenticationGrant) {
-        guard acceptsStoreActions, canPresentSecret(for: token),
-              let wallet = walletsManager.currentWallet(id: wallet.id) else {
-            authorization.invalidate()
-            return
-        }
-        let showingMnemonic = wallet.isMnemonic && specificAccount == nil
-        keyExportTask?.cancel()
-        keyExportTask = Task { [weak self, walletsManager] in
-            defer { authorization.invalidate() }
-            guard self?.canPresentSecret(for: token) == true, !Task.isCancelled else { return }
-            let secret: WalletExportedSecret
-            do {
-                if showingMnemonic {
-                    secret = try await walletsManager.exportMnemonic(wallet: wallet, authorization: authorization)
-                } else {
-                    secret = try await walletsManager.exportPrivateKey(wallet: wallet, account: specificAccount, authorization: authorization)
-                }
-            } catch {
-                if self?.secretToken == token { self?.invalidateSecretPresentation() }
-                return
-            }
-            guard let self, !Task.isCancelled, canPresentSecret(for: token) else { secret.invalidate(); return }
-            keyExportTask = nil
-            presentSecret(secret, showingMnemonic: showingMnemonic, token: token)
+                if authorization == nil { challenge.invalidate() }
+                return authorization
+            }, export: secretExport(wallet: wallet, specificAccount: specificAccount))
         }
     }
 
-    private func presentSecret(_ secret: WalletExportedSecret, showingMnemonic: Bool, token: SecretPresentationSession.Token) {
-        guard canPresentSecret(for: token), let window = secretOwnerWindow,
-              secretSession.store(secret, for: token) else { secret.invalidate(); return }
-        let presentation = NativeSecretAlertPresentation(
-            session: secretSession,
-            token: token,
-            title: showingMnemonic ? Strings.secretWords : Strings.privateKey,
-            canCopy: { [weak self] in self?.canPresentSecret(for: token) == true },
-            copy: { [weak self] secret in
-                guard self?.walletAccess.beginAction() == true else { return }
-                SecretClipboard.shared.copy(secret)
-            },
-            didEnd: { [weak self] in
-                guard let self, secretToken == token else { return }
-                invalidateSecretPresentation()
+    private func secretExport(wallet: WalletSnapshot, specificAccount: WalletAccount?) -> NativeSecretAlertPresentation.Export {
+        let walletsManager = walletsManager
+        return { authorization in
+            guard let current = walletsManager.currentWallet(id: wallet.id) else {
+                throw WalletCredentialError.authorizationUnavailable
             }
-        )
-        secretPresentation = presentation
-        presentation.present(for: window)
+            if current.isMnemonic && specificAccount == nil {
+                return try await walletsManager.exportMnemonic(wallet: current, authorization: authorization)
+            }
+            return try await walletsManager.exportPrivateKey(wallet: current, account: specificAccount, authorization: authorization)
+        }
     }
-    
+
     private func updateCellModels() {
         guard !isClosed else { return }
         if wallets.isEmpty {
@@ -1002,14 +871,14 @@ extension AccountsListViewController {
     private func closeManagement() {
         loadTask?.cancel()
         loadTask = nil
-        invalidateSecretPresentation()
+        secretPresentation?.invalidate()
         safariPreferencesTask?.cancel()
         safariPreferencesTask = nil
         walletMutationTasks.values.forEach { $0.cancel() }
         walletMutationTasks.removeAll()
         cancelMenuTracking()
-        authenticationTask?.cancel()
-        authenticationTask = nil
+        deletionAuthenticationTask?.cancel()
+        deletionAuthenticationTask = nil
         menuTask?.cancel()
         menuTask = nil
         endAllSheets()

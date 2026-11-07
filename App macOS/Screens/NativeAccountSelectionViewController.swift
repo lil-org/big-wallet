@@ -47,7 +47,7 @@ final class NativeAccountSelectionViewController: NSViewController, NativeWallet
 
     required init?(coder: NSCoder) { return nil }
 
-    func retireForWalletLock() {
+    func retire() {
         isRetired = true
         invalidateNativeApprovalReview()
         cellModels.removeAll()

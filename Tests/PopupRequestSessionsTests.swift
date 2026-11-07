@@ -776,7 +776,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         let initialToken = session.reviewToken
 
         let token = try XCTUnwrap(session.beginApproval())
-        guard case .working = session.presentation else { return XCTFail("Expected claiming presentation") }
+        guard case .working = session.publicPresentation else { return XCTFail("Expected claiming presentation") }
         XCTAssertNotEqual(token, initialToken)
 
         XCTAssertFalse(session.hasActiveClaim)
@@ -784,17 +784,18 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertTrue(session.acceptClaim(token: token))
         XCTAssertTrue(session.hasActiveClaim)
         XCTAssertTrue(session.beginAuthentication(token: token))
-        guard case .authenticating = session.presentation else { return XCTFail("Expected authentication presentation") }
+        guard case .authenticating = session.publicPresentation else { return XCTFail("Expected authentication presentation") }
         XCTAssertTrue(session.finishAuthentication(token: token))
-        guard case .working = session.presentation else { return XCTFail("Expected working presentation") }
+        guard case .working = session.publicPresentation else { return XCTFail("Expected working presentation") }
         XCTAssertTrue(session.returnToReview(token: token))
-        guard case .review(let review) = session.presentation else { return XCTFail("Expected review presentation") }
+        guard case .review(let review) = session.publicPresentation else { return XCTFail("Expected review presentation") }
         XCTAssertEqual(review.reviewToken, session.reviewToken)
         XCTAssertFalse(session.hasActiveClaim)
 
         session.fail("Unavailable")
-        guard case .error(let message) = session.presentation else { return XCTFail("Expected error presentation") }
+        guard case .error(let message, let actions) = session.publicPresentation else { return XCTFail("Expected error presentation") }
         XCTAssertEqual(message, "Unavailable")
+        XCTAssertEqual(actions, [.retry, .reject])
     }
 
     func testStaleReviewTokenCannotMutateSession() throws {
@@ -806,7 +807,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertTrue(session.acceptClaim(token: token))
         XCTAssertFalse(session.beginAuthentication(token: stale))
         session.fail("stale", token: stale)
-        guard case .working = session.presentation else { return XCTFail("Stale actions changed the presentation") }
+        guard case .working = session.publicPresentation else { return XCTFail("Stale actions changed the presentation") }
     }
 
     func testMaterialReviewChangesRotateTheSingleReviewToken() throws {
@@ -845,11 +846,11 @@ final class PopupRequestSessionsTests: XCTestCase {
         let session = try makeSession()
         let token = try XCTUnwrap(session.beginApproval())
         XCTAssertTrue(session.returnToReview(token: token))
-        guard case .review = session.presentation else { return XCTFail("Expected review after abandoning claim") }
+        guard case .review = session.publicPresentation else { return XCTFail("Expected review after abandoning claim") }
         let freshToken = session.reviewToken
         XCTAssertNotEqual(freshToken, token)
         session.fail("Unavailable", token: token)
-        guard case .review = session.presentation else { return XCTFail("Stale failure replaced the review") }
+        guard case .review = session.publicPresentation else { return XCTFail("Stale failure replaced the review") }
         XCTAssertFalse(session.returnToReview(token: token))
         session.fail("Unavailable", token: freshToken)
         XCTAssertTrue(session.returnToReview(token: freshToken))
@@ -3706,11 +3707,11 @@ extension PopupRequestSessionsTests {
             XCTAssertEqual(reviewed.network, network)
             XCTAssertEqual(session.reviewToken, token)
             XCTAssertEqual(session.presentationRevision, revision)
-            guard case .review(let presentation) = session.presentation else {
+            guard case .review(let presentation) = session.publicPresentation else {
                 return XCTFail("Expected selection presentation")
             }
             let presented: SelectAccountAction
-            let presentedDraft: PopupRequestSession.SelectionDraft
+            let presentedDraft: PopupReviewSnapshot.Selection
             switch presentation.content {
             case .selectAccount(let action, let draft):
                 XCTAssertFalse(switchesAccount)
@@ -3784,12 +3785,12 @@ extension PopupRequestSessionsTests {
         session.rotateReviewToken()
 
         for _ in 0..<2 {
-            guard case .review(let presentation) = session.presentation,
+            guard case .review(let presentation) = session.publicPresentation,
                   case .approveTransaction(let action, let presented) = presentation.content,
                   case .approveTransaction(let canonical) = session.preparedAction else {
                 return XCTFail("Expected transaction presentation")
             }
-            XCTAssertTrue(presented === transaction)
+            XCTAssertTrue(session.transaction === transaction)
             XCTAssertEqual(presented.snapshot.transaction.decimalNonceString, "7")
             XCTAssertEqual(presented.snapshot.transaction.preparedFee, .legacy(gasPrice: 20))
             XCTAssertEqual(action.transaction.id, original.transaction.id)
@@ -3804,27 +3805,29 @@ extension PopupRequestSessionsTests {
         let selection = SelectAccountAction(coinType: .ethereum, selectedAccounts: [], initiallyConnectedProviders: [], network: nil)
         let message = SignMessageAction(subject: .signPersonalMessage, walletId: "wallet", account: popupTestAccount(),
             meta: "reviewed", payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8))))
-        guard case .approveTransaction(let action) = popupTransactionAction() else {
-            return XCTFail("Expected transaction action")
-        }
-        let transaction = PopupTransactionSession(action: action, operations: unusedPopupTransactionOperations())
-        let selectionDraft = PopupReviewSnapshot.Selection(selectedAccounts: [], network: nil)
-        let cases: [(PopupReviewSnapshot.Content, String)] = [
-            (.selectAccount(action: selection, draft: selectionDraft), Strings.connectWallet),
-            (.switchAccount(action: selection, draft: selectionDraft), Strings.switchAccount),
-            (.approveMessage(message), message.subject.title),
-            (.approveTransaction(action: action, transaction: .init(snapshot: transaction.snapshot, balance: transaction.balance)), Strings.sendTransaction),
-            (.addEthereumChain(.init(chainToAdd: popupTestNetwork())), Strings.addNetwork),
+        let cases: [(InpageProvider, String?, DappRequestAction, String)] = [
+            (.ethereum, "requestAccounts", .selectAccount(selection), Strings.connectWallet),
+            (.unknown, nil, .switchAccount(selection), Strings.switchAccount),
+            (.ethereum, "signPersonalMessage", .approveMessage(message), message.subject.title),
+            (.ethereum, "signTransaction", popupTransactionAction(), Strings.sendTransaction),
+            (.ethereum, "addEthereumChain", .addEthereumChain(.init(chainToAdd: popupTestNetwork())), Strings.addNetwork),
         ]
         let presenter = PopupApprovalStatePresenter(environment: popupPresentationEnvironment(), messages: ApplicationServices.shared.authority.messages)
-        for (content, title) in cases {
-            let state = presenter.state(id: 43, presentation: .review(.init(
-                reviewToken: UUID(), content: content, reviewCatalog: nil, feedback: nil
-            )))
+        for (index, item) in cases.enumerated() {
+            let raw = try popupSnapshot(id: 430 + index, provider: item.0, method: item.1)
+            let binding = try requestBindingForTesting(XCTUnwrap(raw.request))
+            let session = PopupRequestSession(intent: try reviewIntentForTesting(binding: binding, action: item.2),
+                transactionApprovalOperations: unusedPopupTransactionOperations())
+            defer { session.invalidate() }
+            guard case .review(let projection) = session.publicPresentation else {
+                return XCTFail("Expected projected review")
+            }
+            XCTAssertEqual(projection.reviewToken, session.reviewToken)
+            let state = presenter.state(id: session.handle.id, presentation: session.publicPresentation)
             guard case .review(let review, _, _) = state.content else {
                 return XCTFail("Expected review title")
             }
-            XCTAssertEqual(review.title, title)
+            XCTAssertEqual(review.title, item.3)
         }
     }
 

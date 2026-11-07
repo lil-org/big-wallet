@@ -174,6 +174,48 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         }
     }
 
+    func testRejectedInstallationRetiresUnloadedOnboardingActions() {
+        let window = makeWindow()
+        defer { window.close() }
+        let original = window.contentViewController
+        for kind in 0..<3 {
+            var callbackCalls = 0
+            weak var callbackOwner: NSObject?
+            let content: NSViewController = {
+                let owner = NSObject()
+                callbackOwner = owner
+                let action = { withExtendedLifetime(owner) { callbackCalls += 1 } }
+                switch kind {
+                case 0:
+                    return PasswordViewController.with(configuration: .init(mode: .enter, availability: .unavailable)) { _ in action() }
+                case 1:
+                    return WelcomeViewController.new(onGetStarted: action)
+                default:
+                    return WaitingViewController.with(reason: "Retry", retryAction: action, closeCompletion: action)
+                }
+            }()
+            XCTAssertNotNil(callbackOwner)
+            XCTAssertFalse(content.isViewLoaded)
+            XCTAssertFalse(window.installContent(content, while: { false }))
+            XCTAssertTrue(window.contentViewController === original)
+            XCTAssertFalse(content.isViewLoaded)
+            XCTAssertNil(callbackOwner)
+            switch content {
+            case let password as PasswordViewController:
+                password.actionButtonTapped(content)
+                password.cancelButtonTapped(NSButton())
+            case let welcome as WelcomeViewController:
+                welcome.actionButtonTapped(content)
+            case let waiting as WaitingViewController:
+                waiting.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: window.window))
+            default:
+                XCTFail("Unexpected onboarding screen")
+            }
+            XCTAssertEqual(callbackCalls, 0)
+            XCTAssertFalse(content.isViewLoaded)
+        }
+    }
+
     func testManagementRowRenderingCannotReentrantlyLockAndReloadTheTable() async throws {
         let fixture = WalletAccessTestFixture()
         try fixture.unlock()
@@ -455,7 +497,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
             let result = await controller.authenticate(reason: .showPrivateKey, challenge: dependencies.credentials.makeWalletAccessChallenge(), dependencies: dependencies)
             wasDismissedAtReturn = authenticationSheet?.sheetParent == nil && authenticationSheet?.isVisible == false
             ownerWasEligibleAtReturn = NSApp.isActive && NativeSecretAlertPresentation.acceptsKeyWindow(
-                NSApp.keyWindow, owner: owner, presentation: nil
+                NSApp.keyWindow, owner: owner
             )
             return result
         }
@@ -489,7 +531,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
             let result = await controller.authenticate(reason: .showPrivateKey, challenge: dependencies.credentials.makeWalletAccessChallenge(), dependencies: dependencies)
             wasDismissedAtReturn = authenticationSheet?.sheetParent == nil && authenticationSheet?.isVisible == false
             ownerWasEligibleAtReturn = NativeSecretAlertPresentation.acceptsKeyWindow(
-                NSApp.keyWindow, owner: owner, presentation: nil
+                NSApp.keyWindow, owner: owner
             )
             otherWasKeyAtReturn = NSApp.keyWindow === other && other.isKeyWindow
             return result
@@ -897,7 +939,7 @@ private final class ReentrantProtectedViewController: NSViewController, NativeWa
         onAppear?()
     }
 
-    func retireForWalletLock() { retired = true }
+    func retire() { retired = true }
 }
 
 private struct WindowFocusFailure: Error, CustomStringConvertible {

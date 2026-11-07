@@ -83,7 +83,7 @@ location. They always use macOS Debug, independently of `--configuration` and
 
 The current selection contains 173 runtime tests for secret buffers, Scrypt,
 private keys, HD derivation, stored keys, signing lifetime, and private-key imports,
-plus 38 app tests for secret handling, lifetime, and alert presentation. The
+plus 43 app tests for secret handling, lifetime, and alert presentation. The
 functional Scrypt vector test is included; timed performance gates are excluded.
 The selected app methods are recorded alongside the package tests in
 `runtime-test-inventory.json`. Regenerate that inventory after adding or moving

@@ -164,8 +164,7 @@ class Agent: NSObject, WalletAccessObserver {
         func detachForWalletLock() -> NSWindowController? {
             retire()
             let controller = windowController
-            if let protected = controller?.contentViewController as? NativeWalletProtectedContent { protected.retireForWalletLock() }
-            else { (controller?.contentViewController as? NativeApprovalReviewTeardown)?.invalidateNativeApprovalReview() }
+            (controller?.contentViewController as? any NativeWindowContentRetirement)?.retire()
             (controller as? WalletWindowController)?.currentAuthenticationSession?.cancel()
             Window.dismissSheets(in: controller?.window)
             controller?.window?.delegate = nil

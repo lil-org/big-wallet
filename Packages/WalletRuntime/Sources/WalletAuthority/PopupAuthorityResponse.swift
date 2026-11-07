@@ -54,27 +54,3 @@ public struct PopupReviewSnapshot {
     public let reviewCatalog: WalletReviewCatalog?
     public let feedback: String?
 }
-
-extension PopupRequestSession {
-    var publicPresentation: PopupAuthorityState.Content {
-        switch presentation {
-        case .authenticating: return .authenticating
-        case .working: return .working
-        case .error(let message): return .error(message: message, actions: [.retry, .reject])
-        case .review(let review):
-            let content: PopupReviewSnapshot.Content
-            switch review.content {
-            case .selectAccount(let action, let draft):
-                content = .selectAccount(action: action, draft: .init(selectedAccounts: draft.selectedAccounts, network: draft.network))
-            case .switchAccount(let action, let draft):
-                content = .switchAccount(action: action, draft: .init(selectedAccounts: draft.selectedAccounts, network: draft.network))
-            case .approveMessage(let action): content = .approveMessage(action)
-            case .approveTransaction(let action, let transaction):
-                content = .approveTransaction(action: action, transaction: .init(snapshot: transaction.snapshot, balance: transaction.balance))
-            case .addEthereumChain(let action): content = .addEthereumChain(action)
-            }
-            return .review(PopupReviewSnapshot(reviewToken: review.reviewToken, content: content,
-                reviewCatalog: review.reviewCatalog, feedback: review.feedback))
-        }
-    }
-}

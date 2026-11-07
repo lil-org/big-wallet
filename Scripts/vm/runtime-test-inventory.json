@@ -20179,6 +20179,1021 @@
       ]
     },
     {
+      "id": "Tests iOS/PopupRequestSessionsTests/testAccountSelectionPreservesSelectedNetworkAndNormalizedAddressThroughExecution",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testAccountSelectionRejectsInvalidEntriesWithoutClaimingOrDroppingAccounts",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testAddChainApprovalSkipsRevisionsAndRejectUsesSingleActionPath",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testAdmissionDistinguishesUnavailableSigningAccountsFromRemovedAccounts",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testApprovalDispatchAwaitsAuthenticationAndFinalPersistence",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testApprovalDispatchAwaitsBroadcastSend",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testAuthenticationCancellationDoesNotRestoreUnavailableReviewContext",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testAuthenticationCancellationPreservesReviewedFeeNotice",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testAuthenticationCancellationRebuildsReviewWhenNetworkChanges",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testAuthenticationCancellationRebuildsReviewWhenWalletAuthorityChanges",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testAuthenticationCancellationReleasesClaimAndReturnsToReview",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testAuthenticationDeadlineReleasesClaimAndInvalidatesSignerRegardlessOfTimerOrder",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testAuthenticationPreflightCatalogExecutionAndLeaseShareOneDeadline",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testBroadcastCheckpointsBeforeSendAndCompletion",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testBroadcastStillSendsWhenDeadlineExpiresAfterCheckpoint",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCachedControllerShowsWorkingAfterForeignClaim",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCachedReviewsRefreshWhenAvailableAccountsChangeWithinSameGeneration",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCachedSigningAndSelectionReviewsDetectVaultTombstone",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCallerCancellationAfterCheckpointPersistsTheBroadcastResult",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCallerCancellationDuringAuthenticationReviewRestorationRemainsInterrupted",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCallerCancellationStopsUncommittedWorkAndDisposesLateResults",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCancellationAtCommittedCheckpointStillStartsBroadcastOnce",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCancellationBeforePreparationReturnsOrdinaryAbandonment",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCancelledTransactionAuthenticationPreservesEditsAndRequiresFreshApproval",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCancelledTransactionSpeedLeavesFeeAndSelectionUnchanged",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCatalogPreparationFailuresPreserveAdmissionAndPopupRecovery",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCatalogResolutionDeadlineReleasesClaimAndDiscardsLateApproval",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCatalogReviewsReloadAccountNamesWithoutRestarting",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testChangedChainSwitchMaterializesImmediateResponseFromCatalog",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testChangedVaultDuringAuthenticationReleasesBeforeRematerializing",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testColdControllerRejectsQueuedHandleWithoutMaterializingSession",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testColdControllerShowsWorkingForApprovingSnapshot",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCommandRepliesCarryCurrentStateWithoutAnotherRead",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCompletedPopupSpeedChangePublishesConsistentSelectionAndPreparesOnce",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCompletedRequestPollingSettlesPendingTransactionPreflight",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCompletionOwnershipLossToReceiptRequiresApprovalDelivery",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testConsumedSignerCanAcquireLeaseAndIsInvalidatedBeforeBroadcastSend",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCopiedClaimCannotPrepareTwiceAcrossExecutors",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCorrectionReviewRequiresCurrentBindingCatalogAndNetwork",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCustomFeeEditReplacesSliderProvenanceForBothFields",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testCustomNetworkRetryWaitsForFreshStorageBeforeReviewingOrRejecting",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testDuplicateExecutionCannotReleaseTheOriginalPermit",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testEmptyReviewCatalogIsRetainedForSubsequentAvailabilityChecks",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testExecutingApprovalIgnoresPopupRetryAndStaleActions",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testExecutionLeaseCoversDurableCommitAndEndsBeforeBroadcast",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testExecutorMapsClaimAbandonmentOutcomes",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testExecutorReleasesUnapprovedLeaseWhenAuthorizationAndAbandonFail",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testExpiredOperationDeadlineNeverStartsWorkOrAcquiresLease",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testFailedClaimReleaseDoesNotRestoreActionableReview",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testFailedRejectPreservesCachedReviewSession",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testFeeCapEditPreservesUntouchedPriorityFeeProvenance",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testFinalSelectionDistinguishesRemovedAndUnavailableAccountsAfterClaim",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testFreshTransactionSessionUsesCurrentSuggestedNonce",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testHungBroadcastTimesOutToRecoveryAndInvokesSendOnce",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testImmediatePersistenceFailureRetriesExplicitlyAndDuplicateRetryDoesNotRestartWork",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testImmediatePersistenceRetryCanMaterializeAReview",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testImmediateResponsePersistenceShowsWorkingUntilReconciled",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testInvalidCustomFeeDoesNotApplyNonceAndNoOpDoesNotRestartPreparation",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testLateCatalogFailureCannotDiscardAuthenticatingSession",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testMaterialReviewChangesRotateTheSingleReviewToken",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testMessageApprovalPersistsDenialWhenAccountDisappears",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testMessageApprovalRetainsReviewedActionAndUsesFreshUnlockedAccess",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testMissingVaultDuringAuthenticationShowsSecureSetupRequired",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testMobileDeadlineRollsBackAtEveryExactPrecommitBoundary",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testNativeAuthorityChangeDuringAuthenticationReleasesWithoutSigning",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testNativeDeliveryFencesCachedTransactionMutations",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testNonceOnlyEditKeepsFailedTransactionUnapprovable",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testNonceOnlyEditPreservesFeeProvenance",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testOldImmediatePersistenceCompletionPreservesReplacementFailure",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testOldImmediatePersistenceCompletionPreservesReplacementReview",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testOperationTimeoutReturnsBeforeUncooperativeWorkAndNeverSendsLateBroadcast",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testOrdinarySigningClaimRejectsNativeCommitBeforeResolution",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testPendingResponseCarriesCompletedIdentitiesBeforeQueuedRequests",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testPendingResponseIsFIFO",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testPopupRejectsSignerBoundToAnotherReviewedCatalogAccount",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testPopupSignerSignsOnlyReviewedAccountAndPayloadOnce",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testPreflightFeeNoticeRetainsUpdatedReviewAndRequiresFreshApproval",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testPreflightWarningAtDeadlineDoesNotRestoreCorrectionReview",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testPriorityFeeEditPreservesUntouchedFeeCapProvenance",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testPrivatePopupCommandsNeverExposeStoredReview",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testQueueCleanupPreservesOtherProfileReviewAndImmediatePersistence",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testReadsPreserveCachedErrorUntilIdentityBoundRetry",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testReceiptOwnedApprovalStateInvalidatesCachedReview",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testReceiptOwnedReplaySkipsWalletMaterialization",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testRecoveryWorkerCommandsUseExactNativeEnvelopes",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testRejectedRequestCannotReappearAfterSuspendedCatalogValidation",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testRejectedRequestCannotReappearAfterSuspendedPreparation",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testRemovedSelectedAccountDuringAuthenticationPersistsDenial",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testRequestScopeInvalidatesOwnedAccessOnceWithoutClearingBorrowedCatalog",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testReservedRejectionAndQueueRepliesNeverPrepareAReview",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testRetryNeverRematerializesNativeOwnedOrApprovingCachedErrors",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testReusedTransactionRequestIDAndReplacementAccountDoNotInheritEdits",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testReviewPresentationTitlesCoverEveryAction",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testRevokedAuthorityCannotBeApproved",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testSelectionCatalogFailureRebuildsReviewAndRequiresExplicitRetryNetwork",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testSelectionCatalogRemovalRequiresSecureSetup",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testSelectionDraftPreservesPreparedActionAndReviewRevision",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testSelectionPersistsFailureWhenNetworkDisappearsAfterClaim",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testSelectionResolvesNetworkLossBetweenReviewAndApproval",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testSessionCanReturnToReviewFromUnclaimedAndFailedAttempts",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testSessionPreservesFeedbackAcrossAuthentication",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testSessionUsesFourDisposablePhasesAndOneReviewToken",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testSigningApprovalTakesExecutionDeadlineFromNativeClaim",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testSigningContinuesWhenSiblingAccountBecomesUnavailableDuringAuthentication",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testSigningValidationRollbackDoesNotAcquireWalletLease",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testStaleReviewTokenCannotMutateSession",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testStaleReviewTokenRejectsApproveAndMutation",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testStoppedPreparationPreservesReasonAndClaimReleaseOutcome",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testSuggestedEditRestoresNonceAndOwnershipOfUnchangedFee",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testSupersededAuthenticationInvalidatesSignerAndPreservesReplacementReview",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTaskCancellationDuringAuthenticationDiscardsLateUnlockAndRequiresRetry",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionApprovalAwaitsSynchronousAuthenticationOutputAndPreflight",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionApprovalPreservesReviewedPayloadDespiteChangedPreflightOutput",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionApprovalRejectsFreshRPCEndpointDrift",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionApprovalRetainsReviewedPayloadAndAppliesExecutionEdits",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionNoticeReleasesClaimAndRetryRequiresCurrentReview",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionPreflightDeadlineReleasesClaimAndIgnoresLateResults",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionPresentationChangeWhileCheckingAuthorityReturnsToReview",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionPresentationChangeWhileClaimingRequiresRetry",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionPresentationRetainsEditsAndSessionWithoutChangingIntent",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionRematerializesAfterRetryableExecutionStartFailure",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionResponsesOwnLoadingPresentationAndTransientEditFeedback",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionSessionAuthenticationRefusalAllowsFreshApproval",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionSessionCompletesSynchronousPreflightOnce",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionSessionInvalidationCancelsContextAndIgnoresLateResult",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionSessionInvalidationRejectsLateAuthentication",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionSessionInvalidationSettlesPreflightAndIgnoresLateResults",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionSessionInvalidationWinsAlreadyResumedPreflight",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionSessionPreflightNoticesRemainPresentable",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionSessionRejectsDuplicatesAndFreezesPreparationDuringAuthentication",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testTransactionTokenRotationDuringCatalogReadReturnsCurrentReview",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testUnavailableAuthenticationKeepsFeedbackUntilFreshReviewRetry",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testUnavailableAuthorityPreservesReviewForRetry",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testUnavailableCatalogAllowsRetryAndRejection",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testUnavailablePreparationAbandonsOrdinaryAndNativeClaimsBeforeResolution",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testUnavailableReviewedSigningAccountWithUsableSiblingRequiresFreshReview",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testUnavailableStoreNeverLooksLikeCompletedRequest",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testUnavailableVaultCommitAbandonsOrdinaryAndNativeClaims",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testUnknownNonemptySwitchPersistsWithoutReadingCatalog",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testVaultAuthenticationCancellationCreatesFreshReviewAuthority",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testVaultRotationDuringSigningDiscardsPreparedBroadcast",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testWalletDependentAdmissionDefersWithoutCatalogProvider",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testWalletDependentImmediateResponseUsesInjectedCatalog",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testWalletIndependentApprovalDoesNotRequireVaultCatalog",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
+      "id": "Tests iOS/PopupRequestSessionsTests/testZeroBroadcastTimeoutPersistsRecoveryWithoutLateRedispatch",
+      "variants": [
+        "ios.debug",
+        "ios.release"
+      ]
+    },
+    {
       "id": "Tests iOS/WalletAccessControllerTests/testCancellationRetiresChallengeBeforeTaskAndOwnerCallbacks",
       "variants": [
         "ios.debug",
@@ -20564,6 +21579,13 @@
       ]
     },
     {
+      "id": "Tests macOS/AccountsListViewControllerTests/testReplacingAuthenticationRejectsLateResultsWithoutCancellingTheReplacement",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
       "id": "Tests macOS/AccountsListViewControllerTests/testRetiredWalletListDoesNotResumeLoadingOrPublishRows",
       "variants": [
         "macos.debug",
@@ -20572,6 +21594,20 @@
     },
     {
       "id": "Tests macOS/AccountsListViewControllerTests/testSuccessfulAuthenticationWaitsForTheForegroundReloadBeforeExportOrDelete",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountsListViewControllerTests/testSuspendedAuthenticationDoesNotRetainTheAccountsController",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountsListViewControllerTests/testWalletCreationSurvivesLosingItsInitialBackupPresentation",
       "variants": [
         "macos.debug",
         "macos.release"
@@ -21124,6 +22160,20 @@
       ]
     },
     {
+      "id": "Tests macOS/NativeSecretAlertPresentationTests/testAuthenticationSurvivesInactivityAndReloadUntilOwnershipIsRechecked",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeSecretAlertPresentationTests/testCloseMinimizeLockAndStoreFailureRejectLateAuthenticationAndExport",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
       "id": "Tests macOS/NativeSecretAlertPresentationTests/testClosingAndAbortingNeverCopy",
       "variants": [
         "macos.debug",
@@ -21132,6 +22182,13 @@
     },
     {
       "id": "Tests macOS/NativeSecretAlertPresentationTests/testCopyClearsPresentationBeforeCopyingAndOnlyRunsOnce",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeSecretAlertPresentationTests/testExportSurvivesAuthenticationOnlyCancellationButNotInactivity",
       "variants": [
         "macos.debug",
         "macos.release"
@@ -21160,6 +22217,20 @@
     },
     {
       "id": "Tests macOS/NativeSecretAlertPresentationTests/testObsoletePresentationCannotCopyOrInvalidateReplacement",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeSecretAlertPresentationTests/testOwnerDeallocationCancelsSuspendedWorkBeforeItReturns",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/NativeSecretAlertPresentationTests/testReplacementPreservesItsSecretAfterLateAuthenticationAndExport",
       "variants": [
         "macos.debug",
         "macos.release"
@@ -23126,6 +24197,13 @@
       ]
     },
     {
+      "id": "Tests macOS/WindowAuthenticationSessionTests/testRejectedInstallationRetiresUnloadedOnboardingActions",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
       "id": "Tests macOS/WindowAuthenticationSessionTests/testReviewInvalidationDismissesOnlyItsAuthenticationSheet",
       "variants": [
         "macos.debug",
@@ -23344,6 +24422,1021 @@
     },
     {
       "id": "Tests visionOS/PasswordStorageTests/testUIKitTransientPasswordDisappearancePreservesTheEditableForm",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testAccountSelectionPreservesSelectedNetworkAndNormalizedAddressThroughExecution",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testAccountSelectionRejectsInvalidEntriesWithoutClaimingOrDroppingAccounts",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testAddChainApprovalSkipsRevisionsAndRejectUsesSingleActionPath",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testAdmissionDistinguishesUnavailableSigningAccountsFromRemovedAccounts",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testApprovalDispatchAwaitsAuthenticationAndFinalPersistence",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testApprovalDispatchAwaitsBroadcastSend",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testAuthenticationCancellationDoesNotRestoreUnavailableReviewContext",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testAuthenticationCancellationPreservesReviewedFeeNotice",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testAuthenticationCancellationRebuildsReviewWhenNetworkChanges",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testAuthenticationCancellationRebuildsReviewWhenWalletAuthorityChanges",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testAuthenticationCancellationReleasesClaimAndReturnsToReview",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testAuthenticationDeadlineReleasesClaimAndInvalidatesSignerRegardlessOfTimerOrder",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testAuthenticationPreflightCatalogExecutionAndLeaseShareOneDeadline",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testBroadcastCheckpointsBeforeSendAndCompletion",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testBroadcastStillSendsWhenDeadlineExpiresAfterCheckpoint",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCachedControllerShowsWorkingAfterForeignClaim",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCachedReviewsRefreshWhenAvailableAccountsChangeWithinSameGeneration",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCachedSigningAndSelectionReviewsDetectVaultTombstone",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCallerCancellationAfterCheckpointPersistsTheBroadcastResult",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCallerCancellationDuringAuthenticationReviewRestorationRemainsInterrupted",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCallerCancellationStopsUncommittedWorkAndDisposesLateResults",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCancellationAtCommittedCheckpointStillStartsBroadcastOnce",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCancellationBeforePreparationReturnsOrdinaryAbandonment",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCancelledTransactionAuthenticationPreservesEditsAndRequiresFreshApproval",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCancelledTransactionSpeedLeavesFeeAndSelectionUnchanged",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCatalogPreparationFailuresPreserveAdmissionAndPopupRecovery",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCatalogResolutionDeadlineReleasesClaimAndDiscardsLateApproval",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCatalogReviewsReloadAccountNamesWithoutRestarting",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testChangedChainSwitchMaterializesImmediateResponseFromCatalog",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testChangedVaultDuringAuthenticationReleasesBeforeRematerializing",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testColdControllerRejectsQueuedHandleWithoutMaterializingSession",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testColdControllerShowsWorkingForApprovingSnapshot",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCommandRepliesCarryCurrentStateWithoutAnotherRead",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCompletedPopupSpeedChangePublishesConsistentSelectionAndPreparesOnce",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCompletedRequestPollingSettlesPendingTransactionPreflight",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCompletionOwnershipLossToReceiptRequiresApprovalDelivery",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testConsumedSignerCanAcquireLeaseAndIsInvalidatedBeforeBroadcastSend",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCopiedClaimCannotPrepareTwiceAcrossExecutors",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCorrectionReviewRequiresCurrentBindingCatalogAndNetwork",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCustomFeeEditReplacesSliderProvenanceForBothFields",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testCustomNetworkRetryWaitsForFreshStorageBeforeReviewingOrRejecting",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testDuplicateExecutionCannotReleaseTheOriginalPermit",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testEmptyReviewCatalogIsRetainedForSubsequentAvailabilityChecks",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testExecutingApprovalIgnoresPopupRetryAndStaleActions",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testExecutionLeaseCoversDurableCommitAndEndsBeforeBroadcast",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testExecutorMapsClaimAbandonmentOutcomes",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testExecutorReleasesUnapprovedLeaseWhenAuthorizationAndAbandonFail",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testExpiredOperationDeadlineNeverStartsWorkOrAcquiresLease",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testFailedClaimReleaseDoesNotRestoreActionableReview",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testFailedRejectPreservesCachedReviewSession",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testFeeCapEditPreservesUntouchedPriorityFeeProvenance",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testFinalSelectionDistinguishesRemovedAndUnavailableAccountsAfterClaim",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testFreshTransactionSessionUsesCurrentSuggestedNonce",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testHungBroadcastTimesOutToRecoveryAndInvokesSendOnce",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testImmediatePersistenceFailureRetriesExplicitlyAndDuplicateRetryDoesNotRestartWork",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testImmediatePersistenceRetryCanMaterializeAReview",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testImmediateResponsePersistenceShowsWorkingUntilReconciled",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testInvalidCustomFeeDoesNotApplyNonceAndNoOpDoesNotRestartPreparation",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testLateCatalogFailureCannotDiscardAuthenticatingSession",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testMaterialReviewChangesRotateTheSingleReviewToken",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testMessageApprovalPersistsDenialWhenAccountDisappears",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testMessageApprovalRetainsReviewedActionAndUsesFreshUnlockedAccess",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testMissingVaultDuringAuthenticationShowsSecureSetupRequired",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testMobileDeadlineRollsBackAtEveryExactPrecommitBoundary",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testNativeAuthorityChangeDuringAuthenticationReleasesWithoutSigning",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testNativeDeliveryFencesCachedTransactionMutations",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testNonceOnlyEditKeepsFailedTransactionUnapprovable",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testNonceOnlyEditPreservesFeeProvenance",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testOldImmediatePersistenceCompletionPreservesReplacementFailure",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testOldImmediatePersistenceCompletionPreservesReplacementReview",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testOperationTimeoutReturnsBeforeUncooperativeWorkAndNeverSendsLateBroadcast",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testOrdinarySigningClaimRejectsNativeCommitBeforeResolution",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testPendingResponseCarriesCompletedIdentitiesBeforeQueuedRequests",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testPendingResponseIsFIFO",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testPopupRejectsSignerBoundToAnotherReviewedCatalogAccount",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testPopupSignerSignsOnlyReviewedAccountAndPayloadOnce",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testPreflightFeeNoticeRetainsUpdatedReviewAndRequiresFreshApproval",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testPreflightWarningAtDeadlineDoesNotRestoreCorrectionReview",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testPriorityFeeEditPreservesUntouchedFeeCapProvenance",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testPrivatePopupCommandsNeverExposeStoredReview",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testQueueCleanupPreservesOtherProfileReviewAndImmediatePersistence",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testReadsPreserveCachedErrorUntilIdentityBoundRetry",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testReceiptOwnedApprovalStateInvalidatesCachedReview",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testReceiptOwnedReplaySkipsWalletMaterialization",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testRecoveryWorkerCommandsUseExactNativeEnvelopes",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testRejectedRequestCannotReappearAfterSuspendedCatalogValidation",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testRejectedRequestCannotReappearAfterSuspendedPreparation",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testRemovedSelectedAccountDuringAuthenticationPersistsDenial",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testRequestScopeInvalidatesOwnedAccessOnceWithoutClearingBorrowedCatalog",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testReservedRejectionAndQueueRepliesNeverPrepareAReview",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testRetryNeverRematerializesNativeOwnedOrApprovingCachedErrors",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testReusedTransactionRequestIDAndReplacementAccountDoNotInheritEdits",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testReviewPresentationTitlesCoverEveryAction",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testRevokedAuthorityCannotBeApproved",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testSelectionCatalogFailureRebuildsReviewAndRequiresExplicitRetryNetwork",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testSelectionCatalogRemovalRequiresSecureSetup",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testSelectionDraftPreservesPreparedActionAndReviewRevision",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testSelectionPersistsFailureWhenNetworkDisappearsAfterClaim",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testSelectionResolvesNetworkLossBetweenReviewAndApproval",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testSessionCanReturnToReviewFromUnclaimedAndFailedAttempts",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testSessionPreservesFeedbackAcrossAuthentication",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testSessionUsesFourDisposablePhasesAndOneReviewToken",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testSigningApprovalTakesExecutionDeadlineFromNativeClaim",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testSigningContinuesWhenSiblingAccountBecomesUnavailableDuringAuthentication",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testSigningValidationRollbackDoesNotAcquireWalletLease",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testStaleReviewTokenCannotMutateSession",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testStaleReviewTokenRejectsApproveAndMutation",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testStoppedPreparationPreservesReasonAndClaimReleaseOutcome",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testSuggestedEditRestoresNonceAndOwnershipOfUnchangedFee",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testSupersededAuthenticationInvalidatesSignerAndPreservesReplacementReview",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTaskCancellationDuringAuthenticationDiscardsLateUnlockAndRequiresRetry",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionApprovalAwaitsSynchronousAuthenticationOutputAndPreflight",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionApprovalPreservesReviewedPayloadDespiteChangedPreflightOutput",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionApprovalRejectsFreshRPCEndpointDrift",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionApprovalRetainsReviewedPayloadAndAppliesExecutionEdits",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionNoticeReleasesClaimAndRetryRequiresCurrentReview",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionPreflightDeadlineReleasesClaimAndIgnoresLateResults",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionPresentationChangeWhileCheckingAuthorityReturnsToReview",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionPresentationChangeWhileClaimingRequiresRetry",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionPresentationRetainsEditsAndSessionWithoutChangingIntent",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionRematerializesAfterRetryableExecutionStartFailure",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionResponsesOwnLoadingPresentationAndTransientEditFeedback",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionSessionAuthenticationRefusalAllowsFreshApproval",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionSessionCompletesSynchronousPreflightOnce",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionSessionInvalidationCancelsContextAndIgnoresLateResult",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionSessionInvalidationRejectsLateAuthentication",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionSessionInvalidationSettlesPreflightAndIgnoresLateResults",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionSessionInvalidationWinsAlreadyResumedPreflight",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionSessionPreflightNoticesRemainPresentable",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionSessionRejectsDuplicatesAndFreezesPreparationDuringAuthentication",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testTransactionTokenRotationDuringCatalogReadReturnsCurrentReview",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testUnavailableAuthenticationKeepsFeedbackUntilFreshReviewRetry",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testUnavailableAuthorityPreservesReviewForRetry",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testUnavailableCatalogAllowsRetryAndRejection",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testUnavailablePreparationAbandonsOrdinaryAndNativeClaimsBeforeResolution",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testUnavailableReviewedSigningAccountWithUsableSiblingRequiresFreshReview",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testUnavailableStoreNeverLooksLikeCompletedRequest",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testUnavailableVaultCommitAbandonsOrdinaryAndNativeClaims",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testUnknownNonemptySwitchPersistsWithoutReadingCatalog",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testVaultAuthenticationCancellationCreatesFreshReviewAuthority",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testVaultRotationDuringSigningDiscardsPreparedBroadcast",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testWalletDependentAdmissionDefersWithoutCatalogProvider",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testWalletDependentImmediateResponseUsesInjectedCatalog",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testWalletIndependentApprovalDoesNotRequireVaultCatalog",
+      "variants": [
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "Tests visionOS/PopupRequestSessionsTests/testZeroBroadcastTimeoutPersistsRecoveryWithoutLateRedispatch",
       "variants": [
         "visionos.debug",
         "visionos.release"

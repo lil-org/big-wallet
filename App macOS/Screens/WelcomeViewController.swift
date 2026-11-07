@@ -5,7 +5,7 @@ import WalletNetworking
 
 import Cocoa
 
-final class WelcomeViewController: NSViewController {
+final class WelcomeViewController: NSViewController, NativeWindowContentRetirement {
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet weak var messageLabel: NSTextField!
     @IBOutlet weak var getStartedButton: NSButton!

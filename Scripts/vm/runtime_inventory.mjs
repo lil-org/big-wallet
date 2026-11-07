@@ -15,7 +15,7 @@ export const APP_TEST_CLASS_PLATFORMS = {
     MobileWalletAccessTests: ["ios", "visionos"],
     NativeApprovalCoordinatorTests: ["macos"],
     NativeAccountSelectionViewControllerTests: ["macos"],
-    PopupRequestSessionsTests: ["macos"],
+    PopupRequestSessionsTests: PLATFORMS,
     TransactionApprovalCoordinatorTests: PLATFORMS,
     PasswordStorageTests: PLATFORMS,
     SecretHandlingTests: ["macos"],

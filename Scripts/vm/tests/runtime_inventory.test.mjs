@@ -68,7 +68,7 @@ test("app inventory limits secret classes to macOS while preserving split test p
             writeFileSync(join(directory, "Tests.swift"), `@testable import ${target.slice(0, -5)}\nclass ${target}: XCTestCase { func testOne() {} }`);
         }
         mkdirSync(join(root, "Tests"));
-        for (const name of [...secretClasses, "NativeApprovalCoordinatorTests", "TransactionApprovalCoordinatorTests", "PasswordStorageTests"]) {
+        for (const name of [...secretClasses, "NativeApprovalCoordinatorTests", "TransactionApprovalCoordinatorTests", "PasswordStorageTests", "PopupRequestSessionsTests"]) {
             writeFileSync(join(root, "Tests", `${name}.swift`), `class ${name}: XCTestCase {
     #if canImport(Big_Wallet) && !SWIFT_PACKAGE
     func testAppOnly() {}
@@ -89,7 +89,7 @@ class UnselectedTests: XCTestCase { func testIgnored() {} }
                 {id: `Tests macOS/${name}/testMacDebug`, variants: ["macos.debug"]},
             ]);
         }
-        for (const name of ["TransactionApprovalCoordinatorTests", "PasswordStorageTests"]) {
+        for (const name of ["TransactionApprovalCoordinatorTests", "PasswordStorageTests", "PopupRequestSessionsTests"]) {
             for (const platform of PLATFORMS) {
                 const entries = inventory.appTests.filter(entry => entry.id.startsWith(`${platform.target}/${name}/`));
                 assert.equal(entries.length, 2);
@@ -112,11 +112,11 @@ class UnselectedTests: XCTestCase { func testIgnored() {} }
     } finally { rmSync(root, {recursive: true, force: true}); }
 });
 
-test("committed secret app inventory includes all 38 macOS tests and excludes UIKit branches", () => {
+test("committed secret app inventory includes all 43 macOS tests and excludes UIKit branches", () => {
     const inventory = loadRuntimeInventory();
-    const counts = {SecretHandlingTests: 18, MacSecretLifetimeTests: 12, NativeSecretAlertPresentationTests: 8};
+    const counts = {SecretHandlingTests: 18, MacSecretLifetimeTests: 12, NativeSecretAlertPresentationTests: 13};
     const selected = inventory.appTests.filter(entry => Object.hasOwn(counts, entry.id.split("/")[1]));
-    assert.equal(selected.length, 38);
+    assert.equal(selected.length, 43);
     for (const [name, count] of Object.entries(counts)) {
         const entries = selected.filter(entry => entry.id.startsWith(`Tests macOS/${name}/`));
         assert.equal(entries.length, count);
@@ -129,6 +129,23 @@ test("committed secret app inventory includes all 38 macOS tests and excludes UI
     }
     assert.ok(selected.some(entry => entry.id.endsWith("/testManagedClipboardExpiresWhileTaskIsInsideAppKitModalLoop")));
     assert.ok(!selected.some(entry => entry.id.endsWith("/testUIKitAdapterWritesLocalOnlySystemExpirationWithoutAdoptingReplacement")));
+});
+
+test("popup session selectors retain each platform's declared tests", () => {
+    const source = readFileSync(new URL("../../../Tests/PopupRequestSessionsTests.swift", import.meta.url), "utf8");
+    for (const configuration of ["Debug", "Release"]) {
+        const manifest = createManifest(job({stages: ["test"], onlyTesting: ["PopupRequestSessionsTests"], configuration}));
+        for (const platform of PLATFORMS) {
+            assert.deepEqual(testingForPlatform(["PopupRequestSessionsTests"], platform, configuration),
+                [`${platform.target}/PopupRequestSessionsTests`]);
+            const stage = manifest.find(stage => stage.id === `test.${platform.id}.${configuration.toLowerCase()}`);
+            assert.ok(stage);
+            const expected = declaredTests(source, platform.id, configuration, {swiftPackage: false})
+                .map(name => `${platform.target}/${name}`).sort();
+            assert.ok(expected.length > 0);
+            assert.deepEqual([...stage.nativeAudit.requiredAppTests].sort(), expected);
+        }
+    }
 });
 
 test("runtime extensions resolve XCTest classes across files for each active variant", () => {

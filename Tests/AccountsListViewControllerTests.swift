@@ -8,6 +8,101 @@ import XCTest
 
 @MainActor
 final class AccountsListViewControllerTests: XCTestCase {
+    func testSuspendedAuthenticationDoesNotRetainTheAccountsController() async throws {
+        let host = try await WalletOperationRecoveryHost()
+        defer { host.close() }
+        let entered = expectation(description: "authentication entered")
+        let cancelled = expectation(description: "authentication cancelled on controller release")
+        let returned = expectation(description: "authentication returned after controller release")
+        let gate = TestGate<Void>()
+        defer { gate.resolve(()) }
+        host.controller.authenticate = { _, _, challenge in
+            let grant = challenge.issueGrant(for: challenge.authorityID, credentialIdentity: .init(status: { .current }))
+            return await withTaskCancellationHandler {
+                entered.fulfill()
+                await gate.wait()
+                returned.fulfill()
+                return grant
+            } onCancel: {
+                cancelled.fulfill()
+            }
+        }
+        try await host.begin(.export, waitingFor: entered)
+        weak let controller = host.controller
+
+        host.releaseController()
+
+        await fulfillment(of: [cancelled], timeout: 3)
+        await expectEventually { controller == nil }
+        gate.resolve(())
+        await fulfillment(of: [returned], timeout: 3)
+        await Task.yield()
+        XCTAssertNil(host.window.attachedSheet)
+        XCTAssertEqual(host.manager.wallets.count, 1)
+    }
+
+    func testReplacingAuthenticationRejectsLateResultsWithoutCancellingTheReplacement() async throws {
+        for firstOperation in WalletOperationRecoveryHost.Operation.allCases {
+            let host = try await WalletOperationRecoveryHost()
+            defer { host.close() }
+            let entered = expectation(description: "first authentication entered")
+            let returned = expectation(description: "first authentication returned late")
+            let cancelled = expectation(description: "first authentication cancelled")
+            let gate = TestGate<Void>()
+            defer { gate.resolve(()) }
+            let replacement = HeldWalletAuthentication()
+            defer { replacement.complete() }
+            host.controller.authenticate = { _, reason, challenge in
+                let operation: WalletOperationRecoveryHost.Operation = reason == .removeWallet ? .delete : .export
+                if operation != firstOperation { return await replacement.run(challenge) }
+                let grant = challenge.issueGrant(for: challenge.authorityID, credentialIdentity: .init(status: { .current }))
+                return await withTaskCancellationHandler {
+                    entered.fulfill()
+                    await gate.wait()
+                    returned.fulfill()
+                    return grant
+                } onCancel: {
+                    cancelled.fulfill()
+                }
+            }
+            let secondOperation: WalletOperationRecoveryHost.Operation = firstOperation == .export ? .delete : .export
+            try await host.begin(firstOperation, waitingFor: entered)
+            try await host.begin(secondOperation, waitingFor: replacement.entered)
+            await fulfillment(of: [cancelled], timeout: 3)
+
+            gate.resolve(())
+            await fulfillment(of: [returned], timeout: 3)
+            await Task.yield()
+
+            XCTAssertEqual(replacement.cancellations, 0)
+            XCTAssertFalse(host.didPerform(.delete))
+            XCTAssertFalse(host.didPerform(.export))
+            replacement.complete()
+            await expectEventually(timeout: 5) { host.didPerform(secondOperation) }
+            XCTAssertFalse(host.didPerform(firstOperation))
+        }
+    }
+
+    func testWalletCreationSurvivesLosingItsInitialBackupPresentation() async throws {
+        let host = try await WalletOperationRecoveryHost()
+        defer { host.close() }
+        let existingIDs = Set(host.manager.wallets.map(\.id))
+        host.inventory.holdNextRead()
+        defer { host.inventory.release() }
+
+        host.confirmWarning(selector: "didClickCreateAccount")
+        await fulfillment(of: [host.inventory.entered], timeout: 5)
+        NotificationCenter.default.post(name: NSApplication.willResignActiveNotification, object: NSApp)
+        host.inventory.release()
+        await expectEventually(timeout: 5) { host.manager.wallets.count == existingIDs.count + 1 }
+
+        let created = try XCTUnwrap(host.manager.wallets.first { !existingIDs.contains($0.id) })
+        XCTAssertNotNil(host.reader.walletData[created.id])
+        XCTAssertFalse(host.access.access.isLocked)
+        XCTAssertNil(host.window.attachedSheet)
+        XCTAssertNil(host.manager.takeInitialBackupAuthorization(wallet: created))
+    }
+
     func testPendingAuthenticationSurvivesSuccessfulForegroundReload() async throws {
         for operation in WalletOperationRecoveryHost.Operation.allCases {
             let host = try await WalletOperationRecoveryHost()
@@ -147,7 +242,7 @@ final class AccountsListViewControllerTests: XCTestCase {
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
         await assertWalletReload(manager, succeeds: false)
         let controller = managementController(manager: manager)
-        controller.retireForWalletLock()
+        controller.retire()
         reader.attributesStatus = errSecSuccess
         controller.content.loadRetryButton?.performClick(nil)
         await Task.yield()
@@ -345,7 +440,8 @@ private final class WalletOperationRecoveryHost {
     let inventory = HeldWalletInventory()
     let authentication = HeldWalletAuthentication()
     let manager: WalletsManager
-    let controller = AccountsListViewController()
+    private var retainedController: AccountsListViewController? = AccountsListViewController()
+    var controller: AccountsListViewController { retainedController! }
     let window: NSWindow
     private let windowController: WalletWindowController
     private let deletionCount: RecoveryDeletionCount
@@ -369,6 +465,16 @@ private final class WalletOperationRecoveryHost {
                 inventory.waitIfHeld()
             }
             return reader.copyMatching(query, result)
+        }, add: { query, _ in
+            let values = query as NSDictionary
+            let prefix = "org.lil.wallet.wallet."
+            guard let account = values[kSecAttrAccount as String] as? String, account.hasPrefix(prefix),
+                  let data = values[kSecValueData as String] as? Data else { return errSecParam }
+            let id = String(account.dropFirst(prefix.count))
+            guard reader.walletData[id] == nil else { return errSecDuplicateItem }
+            reader.walletData[id] = data
+            reader.attributes.append(reader.walletAttributes(id: id))
+            return errSecSuccess
         }, delete: { query in
             guard (query as NSDictionary)[kSecAttrAccount as String] as? String == "org.lil.wallet.wallet.\(walletID)" else {
                 return errSecParam
@@ -399,9 +505,15 @@ private final class WalletOperationRecoveryHost {
         catch { close(); throw error }
     }
 
-    func begin(_ operation: Operation) async throws {
+    func begin(_ operation: Operation, waitingFor entered: XCTestExpectation? = nil) async throws {
         controller.tableView.deselectedRow = 1
         let selector = operation == .export ? "didClickShowKey:" : "didClickRemoveWallet:"
+        confirmWarning(selector: selector)
+        let result = await XCTWaiter.fulfillment(of: [entered ?? authentication.entered], timeout: 3)
+        XCTAssertEqual(result, .completed)
+    }
+
+    func confirmWarning(selector: String) {
         let acceptWarning = Timer(timeInterval: 0.05, repeats: false) { [weak window] _ in
             MainActor.assumeIsolated {
                 guard let warning = NSApp.modalWindow else {
@@ -416,9 +528,8 @@ private final class WalletOperationRecoveryHost {
         }
         RunLoop.main.add(acceptWarning, forMode: .modalPanel)
         defer { acceptWarning.invalidate() }
-        _ = controller.perform(NSSelectorFromString(selector), with: NSMenuItem())
-        let entered = await XCTWaiter.fulfillment(of: [authentication.entered], timeout: 3)
-        XCTAssertEqual(entered, .completed)
+        if selector.hasSuffix(":") { _ = controller.perform(NSSelectorFromString(selector), with: NSMenuItem()) }
+        else { _ = controller.perform(NSSelectorFromString(selector)) }
     }
 
     func didPerform(_ operation: Operation) -> Bool {
@@ -428,6 +539,11 @@ private final class WalletOperationRecoveryHost {
             guard let sheet = window.attachedSheet, let content = sheet.contentView else { return false }
             return containsMnemonic(content)
         }
+    }
+
+    func releaseController() {
+        window.contentViewController = nil
+        retainedController = nil
     }
 
     private func containsMnemonic(_ view: NSView) -> Bool {

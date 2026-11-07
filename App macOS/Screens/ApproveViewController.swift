@@ -39,7 +39,7 @@ class ApproveViewController: NSViewController, NativeWalletProtectedContent {
         return !isRetiredForAccess && review.isActive && !didCallCompletion && (solanaClusterOptions == nil || selectedCluster != nil)
     }
 
-    func retireForWalletLock() {
+    func retire() {
         isRetiredForAccess = true
         invalidateNativeApprovalReview()
         meta = nil

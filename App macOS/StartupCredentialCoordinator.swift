@@ -193,12 +193,7 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
     }
 
     private func retirePresentation() {
-        switch windowController?.contentViewController {
-        case let password as PasswordViewController: password.retire()
-        case let welcome as WelcomeViewController: welcome.retire()
-        case let waiting as WaitingViewController: waiting.retire()
-        default: break
-        }
+        (windowController?.contentViewController as? any NativeWindowContentRetirement)?.retire()
     }
 
     private func present(_ controller: NSViewController, generation: UInt64) {
