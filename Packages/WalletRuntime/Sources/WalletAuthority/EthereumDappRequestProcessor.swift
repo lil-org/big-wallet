@@ -281,10 +281,10 @@ struct EthereumDappRequestProcessor {
         to request: SafariRequest,
         expectedHash: String,
         recoveryResponse: ResponseToExtension,
-        result: Result<String, EthereumSendFailure>
+        result: BroadcastResult
     ) -> ResponseToExtension {
         switch result {
-        case .success(let hash):
+        case .accepted(let hash):
             guard hash.caseInsensitiveCompare(expectedHash) == .orderedSame else {
                 return recoveryResponse
             }
@@ -292,23 +292,13 @@ struct EthereumDappRequestProcessor {
                 to: request,
                 result: .string(expectedHash)
             )
-        case .failure(let failure):
-            switch failure {
-            case .rpc(.unknown), .transport:
-                return recoveryResponse
-            case .rpc(.serverError(let code, let message, _))
-                where code == -32_000 &&
-                    message.range(
-                        of: "already known",
-                        options: .caseInsensitive
-                    ) != nil:
-                return recoveryResponse
-            case .rpc(.serverError), .rpc(.notSubmitted):
-                return response(
-                    to: request,
-                    error: providerError(for: failure)
-                )
-            }
+        case .rejected(.ethereum(let failure)):
+            guard case .rpc(.serverError) = failure else { return recoveryResponse }
+            return response(to: request, error: providerError(for: failure))
+        case .notSubmitted(.ethereum(.rpc(.notSubmitted))):
+            return response(to: request, error: providerError(for: .rpc(.notSubmitted)))
+        default:
+            return recoveryResponse
         }
     }
 

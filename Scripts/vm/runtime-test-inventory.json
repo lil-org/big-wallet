@@ -14305,17 +14305,6 @@
       ]
     },
     {
-      "id": "WalletDomainTests/WalletDomainTests/testBroadcastOutcomePreservesChainFailure",
-      "variants": [
-        "macos.debug",
-        "macos.release",
-        "ios.debug",
-        "ios.release",
-        "visionos.debug",
-        "visionos.release"
-      ]
-    },
-    {
       "id": "WalletFlowsTests/NativeIngressGateTests/testBroadFoundationArrayIsRejectedBeforeReadingItsElements",
       "variants": [
         "macos.debug",
@@ -17821,6 +17810,17 @@
       ]
     },
     {
+      "id": "WalletNetworkingTests/NativeRPCClientPolicyTests/testBroadcastClassifiesAlreadyKnownAndProcessedResponses",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
       "id": "WalletNetworkingTests/NativeRPCClientPolicyTests/testBroadcastPolicyFailuresRemainUnknownWithoutResubmission",
       "variants": [
         "macos.debug",
@@ -17833,6 +17833,17 @@
     },
     {
       "id": "WalletNetworkingTests/NativeRPCClientPolicyTests/testBroadcastRejectsEveryRedirectWithoutTargetDispatchOrResubmission",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCClientPolicyTests/testBroadcastValidatesReturnedTransactionIdentity",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -17888,6 +17899,17 @@
     },
     {
       "id": "WalletNetworkingTests/NativeRPCClientPolicyTests/testFailedTransfersDiscardValidJSONPrefixesWithoutResubmitting",
+      "variants": [
+        "macos.debug",
+        "macos.release",
+        "ios.debug",
+        "ios.release",
+        "visionos.debug",
+        "visionos.release"
+      ]
+    },
+    {
+      "id": "WalletNetworkingTests/NativeRPCClientPolicyTests/testSolanaConfirmationOutcomesValidateSubmittedIdentity",
       "variants": [
         "macos.debug",
         "macos.release",
@@ -21425,6 +21447,13 @@
       ]
     },
     {
+      "id": "Tests macOS/AccountPreviewStateTests/testNestedStoreFailureSurvivesRecoveryNotification",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
       "id": "Tests macOS/AccountPreviewStateTests/testPagingWaitsForLayoutAndCoalescesViewportRequests",
       "variants": [
         "macos.debug",
@@ -21510,6 +21539,13 @@
     },
     {
       "id": "Tests macOS/AccountPreviewStateTests/testStoreFailureRetainsCachedRowsAndCancelsPendingPagination",
+      "variants": [
+        "macos.debug",
+        "macos.release"
+      ]
+    },
+    {
+      "id": "Tests macOS/AccountPreviewStateTests/testStoreRecoveryCallbackInvalidationPreventsRestart",
       "variants": [
         "macos.debug",
         "macos.release"

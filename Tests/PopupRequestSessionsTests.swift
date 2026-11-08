@@ -878,7 +878,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                 environment: popupExecutionEnvironment(requestProcessor: processor,
                     broadcaster: PopupBroadcastSender { _, _ in
                         XCTFail("Expired broadcast must not be sent")
-                        return .failure(.transport)
+                        return .submissionUnknown(.ethereum(.transport))
                     },
                     clock: { clock.date }
                 )
@@ -917,7 +917,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                 }) { _ in .immediate(.failure(.internalError)) },
                 broadcaster: PopupBroadcastSender { _, _ in
                     await store.record("send")
-                    return .failure(.rpc(.serverError(4001, Strings.canceled)))
+                    return .rejected(.ethereum(.rpc(.serverError(4001, Strings.canceled))))
                 },
                 clock: { clock.date }
             )
@@ -951,7 +951,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                     }) { _ in .immediate(.failure(.internalError)) },
                     broadcaster: PopupBroadcastSender { _, _ in
                         state.observeBroadcast()
-                        return .failure(.rpc(.serverError(4001, Strings.canceled)))
+                        return .rejected(.ethereum(.rpc(.serverError(4001, Strings.canceled))))
                     })
             )
             let result = await execute(executor, setup: setup, signing: makeWalletSigningPreparationForTesting(
@@ -1205,7 +1205,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                 }) { _ in .immediate(.failure(.internalError)) },
                 broadcaster: PopupBroadcastSender { _, _ in
                     XCTFail("Late prepared broadcast must not send")
-                    return .failure(.transport)
+                    return .submissionUnknown(.ethereum(.transport))
                 },
                 clock: { setup.claim.executionDeadline.addingTimeInterval(-0.1) }
             )
@@ -1289,7 +1289,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                             started.fulfill()
                             await gate.wait()
                             XCTAssertFalse(Task.isCancelled)
-                            return .failure(.rpc(.serverError(4001, Strings.canceled)))
+                            return .rejected(.ethereum(.rpc(.serverError(4001, Strings.canceled))))
                         })
             )
             let task = Task { @MainActor in
@@ -1322,7 +1322,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                     broadcaster: PopupBroadcastSender { _, _ in
                             XCTAssertFalse(Task.isCancelled)
                             await store.record("send")
-                            return .failure(.rpc(.serverError(4001, Strings.canceled)))
+                            return .rejected(.ethereum(.rpc(.serverError(4001, Strings.canceled))))
                         })
             )
             let task = Task { @MainActor in
@@ -1596,7 +1596,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                     await store.record("send")
                     await gate.wait()
                     senderReturned.fulfill()
-                    return .failure(.rpc(.serverError(4001, Strings.canceled)))
+                    return .rejected(.ethereum(.rpc(.serverError(4001, Strings.canceled))))
                 },
                 broadcastTimeoutNanoseconds: 0
             )
@@ -5406,7 +5406,7 @@ extension PopupRequestSessionsTests {
             XCTAssertEqual(network.rpcURL, expectedNetwork.rpcURL)
             XCTAssertEqual(network.allowsAlchemyAuthorization, expectedNetwork.allowsAlchemyAuthorization)
             await store.record("send")
-            return .failure(.rpc(.serverError(4001, Strings.canceled)))
+            return .rejected(.ethereum(.rpc(.serverError(4001, Strings.canceled))))
         }
         let processor = CompactPopupProcessor(execute: { request, approval, walletAccess, permit in
             XCTAssertTrue(permit.isExecuting)
@@ -5466,10 +5466,10 @@ extension PopupRequestSessionsTests {
                     guard let boundSigner,
                           case .failure(.authorizationUnavailable) = await boundSigner.sign() else {
                         XCTFail("Broadcast must not retain signing authority")
-                        return .failure(.rpc(.serverError(-32603, Strings.somethingWentWrong)))
+                        return .rejected(.ethereum(.rpc(.serverError(-32603, Strings.somethingWentWrong))))
                     }
                     await store.record("send")
-                    return .failure(.rpc(.serverError(4001, Strings.canceled)))
+                    return .rejected(.ethereum(.rpc(.serverError(4001, Strings.canceled))))
 
         }
         let processor = CompactPopupAccessProcessor(execute: { request, _, signer, permit in
@@ -5537,7 +5537,7 @@ extension PopupRequestSessionsTests {
         var rotateDuringSigning = true
         let sender = PopupBroadcastSender { _, _ in
                     await store.record("broadcastSent")
-                    return .failure(.rpc(.serverError(4001, Strings.canceled)))
+                    return .rejected(.ethereum(.rpc(.serverError(4001, Strings.canceled))))
 
         }
         let processor = CompactPopupAccessProcessor(execute: { request, approval, walletAccess, permit in
@@ -5800,7 +5800,7 @@ extension PopupRequestSessionsTests {
                     reviewPreparations += 1
                     return .approval(popupTransactionAction())
                 },
-                broadcaster: PopupBroadcastSender { _, _ in .failure(.rpc(.notSubmitted)) }
+                broadcaster: PopupBroadcastSender { _, _ in .notSubmitted(.ethereum(.rpc(.notSubmitted))) }
             )
         )
         let initialToken = try await materializeToken(controller: controller, snapshot: snapshot)
@@ -6960,7 +6960,7 @@ extension PopupRequestSessionsTests {
         let sender = PopupBroadcastSender { _, _ in
                     await store.record("sendStarted")
                     await sendGate.wait()
-                    return .failure(.rpc(.serverError(4001, Strings.canceled)))
+                    return .rejected(.ethereum(.rpc(.serverError(4001, Strings.canceled))))
 
         }
         let processor = CompactPopupProcessor(execute: { request, approval, walletAccess, permit in
@@ -8051,7 +8051,7 @@ extension PopupRequestSessionsTests {
                     await gate.wait()
                     await store.record("late")
                     late.fulfill()
-                    return .failure(.rpc(.serverError(4001, Strings.canceled)))
+                    return .rejected(.ethereum(.rpc(.serverError(4001, Strings.canceled))))
 
         }
         let processor = CompactPopupProcessor(execute: { request, approval, walletAccess, permit in
@@ -9048,7 +9048,7 @@ extension PopupRequestSessionsTests {
             )
             let sender = PopupBroadcastSender { _, _ in
                         sends += 1
-                        return .failure(.rpc(.serverError(-32603, Strings.somethingWentWrong)))
+                        return .rejected(.ethereum(.rpc(.serverError(-32603, Strings.somethingWentWrong))))
 
         }
         let finalizer = makePopupNativeFinalizerForTesting(
@@ -9109,7 +9109,7 @@ extension PopupRequestSessionsTests {
         let started = expectation(description: "signing started")
         let gate = makeGate()
         var sends = 0
-        let sender = PopupBroadcastSender { _, _ in sends += 1; return .failure(.rpc(.serverError(-32603, Strings.somethingWentWrong)))
+        let sender = PopupBroadcastSender { _, _ in sends += 1; return .rejected(.ethereum(.rpc(.serverError(-32603, Strings.somethingWentWrong))))
         }
         let finalizer = makePopupNativeFinalizerForTesting(
             store: store,
@@ -9847,7 +9847,7 @@ extension PopupRequestSessionsTests {
             )
             let sender = PopupBroadcastSender { _, _ in
                         sends += 1
-                        return .failure(.rpc(.serverError(-32603, Strings.somethingWentWrong)))
+                        return .rejected(.ethereum(.rpc(.serverError(-32603, Strings.somethingWentWrong))))
 
         }
         let processor = CompactPopupProcessor(execute: { request, _, signer, permit in
@@ -9977,7 +9977,7 @@ extension PopupRequestSessionsTests {
             let sender = PopupBroadcastSender { _, _ in
                     if retired { workAfterRelease.fulfill() }
                     sends += 1
-                    return .failure(.rpc(.serverError(-32603, Strings.somethingWentWrong)))
+                    return .rejected(.ethereum(.rpc(.serverError(-32603, Strings.somethingWentWrong))))
 
         }
         let processor = CompactPopupProcessor(execute: { request, _, signer, permit in
@@ -10061,7 +10061,7 @@ extension PopupRequestSessionsTests {
         snapshot: ExtensionBridge.Snapshot,
         action: DappRequestAction,
         onPresentation: @escaping () -> Void = {},
-        attempt: @escaping @MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult
+        attempt: @escaping @MainActor @Sendable (ReviewConsent) async -> NativeApprovalOperation.Result
     ) -> NativeApprovalCoordinator {
         let coordinator = NativeApprovalCoordinator(
             handle: snapshot.handle, nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
@@ -10488,11 +10488,11 @@ private final class PopupSigningProbe: Sendable {
 
 @MainActor
 private final class PopupBroadcastSender: SignedTransactionBroadcasting {
-    private let ethereum: (String, ResolvedEthereumNetwork) async -> Result<String, EthereumSendFailure>
+    private let ethereum: (String, ResolvedEthereumNetwork) async -> BroadcastResult
 
     init(
-        ethereum: @escaping (String, ResolvedEthereumNetwork) async -> Result<String, EthereumSendFailure> = { _, _ in
-            .failure(.rpc(.serverError(4001, Strings.canceled, dataJSON: nil)))
+        ethereum: @escaping (String, ResolvedEthereumNetwork) async -> BroadcastResult = { _, _ in
+            .rejected(.ethereum(.rpc(.serverError(4001, Strings.canceled, dataJSON: nil))))
         }
     ) {
         self.ethereum = ethereum
@@ -10501,7 +10501,7 @@ private final class PopupBroadcastSender: SignedTransactionBroadcasting {
     func broadcast(_ request: BroadcastRequest) async -> BroadcastResult {
         switch request {
         case .ethereum(let signed, _, let network):
-            return broadcastResultForTesting(await ethereum(signed, network))
+            return await ethereum(signed, network)
         case .solana:
             XCTFail("Expected an Ethereum broadcast")
             return .notSubmitted(.solana(.notSubmitted))

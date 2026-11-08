@@ -4,10 +4,6 @@ import WalletStorageSupport
 
 import Foundation
 
-enum NativeApprovalFinalizationResult: Equatable {
-    case responseReady, pending, reviewRequired, interruptionRequired
-}
-
 @MainActor
 final class NativeApprovalFinalizer {
     typealias SigningPreparationFactory = @MainActor @Sendable (WalletSigningScope) -> WalletSigningPreparation
@@ -38,7 +34,7 @@ final class NativeApprovalFinalizer {
         )
     }
 
-    func attempt(consent: ReviewConsent) async -> NativeApprovalFinalizationResult {
+    func attempt(consent: ReviewConsent) async -> NativeApprovalOperation.Result {
         let claim: ExtensionBridge.ApprovalClaim
         switch await store.claimNativeExecution(consent: consent) {
         case .claimed(let value):

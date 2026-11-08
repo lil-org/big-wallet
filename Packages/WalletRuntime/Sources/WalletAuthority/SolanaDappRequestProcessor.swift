@@ -338,10 +338,10 @@ struct SolanaDappRequestProcessor {
         to request: SafariRequest,
         expectedSignature: String,
         recoveryResponse: ResponseToExtension,
-        result: Result<String, Solana.SendTransactionError>
+        result: BroadcastResult
     ) -> ResponseToExtension {
         switch result {
-        case .success(let signature):
+        case .accepted(let signature):
             guard signature == expectedSignature else {
                 return recoveryResponse
             }
@@ -349,26 +349,29 @@ struct SolanaDappRequestProcessor {
                 to: request,
                 result: .string(expectedSignature)
             )
-        case .failure(let error):
+        case .rejected(.solana(let error)):
             switch error {
-            case .confirmationFailed(let signature, _, _),
-                 .confirmationTimedOut(let signature):
-                guard signature == expectedSignature else {
-                    return recoveryResponse
-                }
-            case .unknown:
-                return recoveryResponse
-            case .rpcError(let message, let code)
-                where code == -32_002 &&
-                    message.range(of: "already", options: .caseInsensitive) != nil &&
-                    message.range(of: "processed", options: .caseInsensitive) != nil:
-                return recoveryResponse
             case .invalidMessage, .invalidSendOptions,
                  .blockhashNotFound, .unsupportedMultiSignature,
-                 .rpcError, .rpcUnavailable, .notSubmitted:
+                 .rpcError, .rpcUnavailable:
                 break
+            default:
+                return recoveryResponse
             }
             return response(to: request, sendResult: .failure(error))
+        case .notSubmitted(.solana(.notSubmitted)):
+            return response(to: request, sendResult: .failure(.notSubmitted))
+        case .confirmationFailed(let transactionID, .solana(let error)):
+            guard transactionID == expectedSignature else { return recoveryResponse }
+            switch error {
+            case .confirmationFailed(let signature, _, _), .confirmationTimedOut(let signature):
+                guard signature == expectedSignature else { return recoveryResponse }
+            default:
+                return recoveryResponse
+            }
+            return response(to: request, sendResult: .failure(error))
+        default:
+            return recoveryResponse
         }
     }
 

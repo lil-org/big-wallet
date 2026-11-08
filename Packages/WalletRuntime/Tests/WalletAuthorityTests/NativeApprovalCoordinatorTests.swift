@@ -427,7 +427,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         for locksDuringObservation in [false, true] {
             let clock = TestClock(uptimeNanoseconds: 0)
             let waits = ScheduledWaits()
-            let finalizer = TestGate<NativeApprovalFinalizationResult>()
+            let finalizer = TestGate<NativeApprovalOperation.Result>()
             let started = expectation(description: "Accepted finalization started")
             var decisions = 0
             var capturedConsent: ReviewConsent?
@@ -1541,7 +1541,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testApprovalFinalizesImmediatelyAfterFreshReadWithExactAuthorization() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
-        let finalizer = TestGate<NativeApprovalFinalizationResult>()
+        let finalizer = TestGate<NativeApprovalOperation.Result>()
         let started = expectation(description: "finalization started without a timer")
         var authorizations = [ReviewConsent]()
         let fixture = try makeFixture(clock: clock, environment: .init(
@@ -1650,7 +1650,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testPendingFinalizationObservesWithBackoffWithoutReplayingDecision() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
-        let finalizer = TestGate<NativeApprovalFinalizationResult>()
+        let finalizer = TestGate<NativeApprovalOperation.Result>()
         let started = expectation(description: "finalization started")
         var decisions = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
@@ -1849,7 +1849,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testPendingExecutionReturningToQueueInterruptsWithoutReplayingDecision() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
-        let finalizer = TestGate<NativeApprovalFinalizationResult>()
+        let finalizer = TestGate<NativeApprovalOperation.Result>()
         let started = expectation(description: "finalization started")
         var decisions = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
@@ -2325,7 +2325,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testCanceledObservationWaitCannotPollTheNewApprovalState() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
-        let finalizer = TestGate<NativeApprovalFinalizationResult>()
+        let finalizer = TestGate<NativeApprovalOperation.Result>()
         let started = expectation(description: "finalization started")
         var finalizations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
@@ -2383,7 +2383,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let waits = ScheduledWaits()
         let probe = TestGate<ExtensionBridge.SnapshotResult>()
         let probeStarted = expectation(description: "observation load suspended")
-        let finalizer = TestGate<NativeApprovalFinalizationResult>()
+        let finalizer = TestGate<NativeApprovalOperation.Result>()
         let finalizerStarted = expectation(description: "finalization started")
         var finalizations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
@@ -2459,7 +2459,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testPendingFinalizerAtDeadlineFinishesWithoutAnotherObservation() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
-        let finalizer = TestGate<NativeApprovalFinalizationResult>()
+        let finalizer = TestGate<NativeApprovalOperation.Result>()
         let finalizerStarted = expectation(description: "finalizer suspended")
         var finalizations = 0
         let fixture = try makeFixture(clock: clock, environment: .init(
@@ -2550,9 +2550,9 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
 
     func testSuspendedFinalizerDoesNotRetainCoordinatorOrPresentAfterRelease() async throws {
-        for result in [NativeApprovalFinalizationResult.responseReady, .interruptionRequired] {
+        for result in [NativeApprovalOperation.Result.responseReady, .interruptionRequired] {
             let clock = TestClock(uptimeNanoseconds: 0)
-            let finalizer = TestGate<NativeApprovalFinalizationResult>()
+            let finalizer = TestGate<NativeApprovalOperation.Result>()
             let started = expectation(description: "finalizer suspended")
             let returned = expectation(description: "released finalizer returned")
             var fixture: Fixture? = try makeFixture(clock: clock, environment: .init(

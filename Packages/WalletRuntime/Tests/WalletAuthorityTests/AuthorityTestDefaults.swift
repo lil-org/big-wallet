@@ -113,33 +113,6 @@ func storeDependenciesForTesting(
         completeChainAddition: completeChainAddition, resolveImmediate: resolveImmediate)
 }
 
-func broadcastResultForTesting(_ result: Result<String, EthereumSendFailure>) -> BroadcastResult {
-    switch result {
-    case .success(let identity): return .accepted(identity)
-    case .failure(let error):
-        switch error {
-        case .transport, .rpc(.unknown): return .submissionUnknown(.ethereum(error))
-        case .rpc(.notSubmitted): return .notSubmitted(.ethereum(error))
-        case .rpc(.serverError): return .rejected(.ethereum(error))
-        }
-    }
-}
-
-func broadcastResultForTesting(_ result: Result<String, Solana.SendTransactionError>) -> BroadcastResult {
-    switch result {
-    case .success(let identity): return .accepted(identity)
-    case .failure(let error):
-        switch error {
-        case .unknown, .rpcUnavailable, .confirmationTimedOut: return .submissionUnknown(.solana(error))
-        case .notSubmitted: return .notSubmitted(.solana(error))
-        case .confirmationFailed(let signature, _, _):
-            return .confirmationFailed(transactionID: signature, failure: .solana(error))
-        case .invalidMessage, .unsupportedMultiSignature, .blockhashNotFound, .invalidSendOptions, .rpcError:
-            return .rejected(.solana(error))
-        }
-    }
-}
-
 struct RejectingBroadcastForTesting: SignedTransactionBroadcasting {
     func broadcast(_ request: BroadcastRequest) async -> BroadcastResult {
         XCTFail("Unexpected transaction broadcast")

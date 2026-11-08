@@ -321,7 +321,7 @@ export function createManifest(job) {
     add("metadata.localizations", "repository", "/bin/bash", ["Scripts/asc/validate_localizations.sh"], {requirements: ["jq"]});
     add("scripts.approval-worker-target", "repository", "node", ["--test", "Scripts/tests/approval_worker_target.test.mjs"]);
     add("scripts.upgrade-consumer-target", "repository", "node", ["--test", "Scripts/tests/upgrade_consumer_target.test.mjs"]);
-    add("scripts.parser-fuzz-target", "repository", "node", ["--test", "Scripts/tests/parser_fuzz_target.test.mjs"]);
+    add("scripts.parser-fuzz-target", "repository", "node", ["--test", "Scripts/tests/parser_fuzz_target.test.mjs"], {requirements: ["node", "xcode"]});
     add("scripts.native-parser-fuzz", "repository", "node", ["--test", "Scripts/native_parser_fuzz/*.test.mjs"], {dependencies: ["provider.install"]});
     add("scripts.security-mutations", "repository", "node", ["--test", "Scripts/security_mutations/*.test.mjs"]);
     add("upgrade.archive", "repository", "python3", ["Scripts/wallet_upgrade/archive.py", "--verify"], {requirements: ["python"]});

@@ -25,7 +25,6 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
     private var didAppear = false
     private var isSaving = false
     private var isRetired = false
-    private var previewNeedsStoreRecovery = false
     private var acceptsManagementActions: Bool { walletAccess.isCurrent && !isRetired }
     private var canEditPreview: Bool {
         !isRetired && walletAccess.hasCurrentPresentation && walletsManager.isStoreReady &&
@@ -282,24 +281,17 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
 
     @objc private func storeLoadStateChanged() {
         guard acceptsManagementActions, let previewState else { return }
-        if walletsManager.isStoreReady {
-            guard case .keepEditing = previewState.refresh(wallet: walletsManager.currentWallet(id: previewState.wallet.id)) else {
-                showAccountsList()
-                return
-            }
-            if previewNeedsStoreRecovery, previewState.canRetry { previewState.retry() }
-            else if previewState.status == .idle { previewState.reset() }
-            previewNeedsStoreRecovery = false
-        } else if case .failed = walletsManager.loadState {
-            previewNeedsStoreRecovery = true
+        if case .failed = walletsManager.loadState {
             previewLayoutTask?.cancel()
             previewPagingTask?.cancel()
             previewPagingTask = nil
-            previewState.suspendForStore()
-        } else if walletsManager.loadState == .loading,
-                  previewState.status == .loadingInitial || previewState.status == .recovering {
-            previewNeedsStoreRecovery = true
-            previewState.suspendForStore()
+        }
+        if case .close = previewState.reconcileStore(
+            loadState: walletsManager.loadState,
+            wallet: walletsManager.currentWallet(id: previewState.wallet.id)
+        ) {
+            showAccountsList()
+            return
         }
         updatePreviewStatus()
     }

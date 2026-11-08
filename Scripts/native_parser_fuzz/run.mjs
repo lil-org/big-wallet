@@ -41,7 +41,7 @@ async function sourceInventory() {
     }
     for (const path of [join(ROOT, "Packages/WalletRuntime/Package.swift"), join(ROOT, "Packages/WalletRuntime/Sources"),
         join(HARNESS, "Package.swift"), join(HARNESS, "Sources"), join(ROOT, "Scripts/native_parser_fuzz"),
-        join(ROOT, "Scripts/validate_parser_fuzz_target.mjs")]) { await visit(path); }
+        join(ROOT, "Scripts/validate_parser_fuzz_target.mjs"), join(ROOT, "Scripts/harness_package.mjs")]) { await visit(path); }
     return paths.sort((a, b) => a.path.localeCompare(b.path));
 }
 

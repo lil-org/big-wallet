@@ -7804,7 +7804,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let checkpoint = await prepareReviewedBroadcast(execution)
             XCTAssertEqual(checkpoint, .persisted)
             let sender = StorageBroadcastSender()
-            sender.ethereumResult = .failure(.rpc(.serverError(code, "Rejected", dataJSON: #"{"reason":"custom"}"#)))
+            sender.ethereumOutcome = .rejected(.ethereum(.rpc(.serverError(code, "Rejected", dataJSON: #"{"reason":"custom"}"#))))
             let dispatched = await execution.broadcast?.dispatch(using: try XCTUnwrap(execution.dispatch), broadcaster: sender)
             let rejection = try XCTUnwrap(dispatched)
             let completion = await completeReviewedExecution(execution, result: rejection)
@@ -10231,26 +10231,17 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
     @MainActor
     private final class StorageBroadcastSender: SignedTransactionBroadcasting {
-    func broadcast(_ request: BroadcastRequest) async -> BroadcastResult {
-        switch request {
-        case .ethereum(let signed, _, let network):
-            return broadcastResultForTesting(await sendEthereum(signedTransaction: signed, network: network))
-        case .solana(let signed, _, let cluster, _, let options):
-            return broadcastResultForTesting(await sendSolana(signedTransaction: signed, cluster: cluster, options: options))
-        }
-    }
-
         var calls = 0
-        var ethereumResult: Result<String, EthereumSendFailure>?
+        var ethereumOutcome: BroadcastResult?
 
-        func sendEthereum(signedTransaction: String, network: ResolvedEthereumNetwork) async -> Result<String, EthereumSendFailure> {
+        func broadcast(_ request: BroadcastRequest) async -> BroadcastResult {
             calls += 1
-            return ethereumResult ?? .success(EthereumSigner.transactionHash(signedTransaction: signedTransaction)!)
-        }
-
-        func sendSolana(signedTransaction: String, cluster: Solana.Cluster, options: Solana.PreparedSendOptions) async -> Result<String, Solana.SendTransactionError> {
-            calls += 1
-            return .success(SolanaSigner.transactionSignature(signedTransaction: signedTransaction)!)
+            switch request {
+            case .ethereum(let signed, _, _):
+                return ethereumOutcome ?? .accepted(EthereumSigner.transactionHash(signedTransaction: signed)!)
+            case .solana(let signed, _, _, _, _):
+                return .accepted(SolanaSigner.transactionSignature(signedTransaction: signed)!)
+            }
         }
     }
 

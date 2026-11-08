@@ -309,7 +309,7 @@ extension NativeApprovalCoordinatorTests {
         requestAction: DappRequestAction? = nil,
         attemptNativeDecision: @escaping @MainActor @Sendable (
             ReviewConsent
-        ) async -> NativeApprovalFinalizationResult = { _ in .pending }
+        ) async -> NativeApprovalOperation.Result = { _ in .pending }
     ) throws -> Fixture {
         let key = key ?? approvalKey(id: 100)
         let store = CoordinatorStore()

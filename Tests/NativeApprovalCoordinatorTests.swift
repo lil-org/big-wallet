@@ -336,8 +336,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func testWalletLockPreservesAcceptedFinalizationWithoutReactivatingItsWindow() async throws {
-        for outcome in [NativeApprovalFinalizationResult.responseReady, .reviewRequired] {
-            let finalizer = TestGate<NativeApprovalFinalizationResult>()
+        for outcome in [NativeApprovalOperation.Result.responseReady, .reviewRequired] {
+            let finalizer = TestGate<NativeApprovalOperation.Result>()
             let started = expectation(description: "accepted finalization suspended")
             var decisions = 0
             let fixture = try makeFixture(attemptNativeDecision: { _ in
@@ -1103,7 +1103,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
 
     func testSuspendedFinalizationSurvivesCloseAndRecoveryBudget() async throws {
-        let finalizer = TestGate<NativeApprovalFinalizationResult>()
+        let finalizer = TestGate<NativeApprovalOperation.Result>()
         let started = expectation(description: "finalizer suspended")
         var decisions = 0
         let fixture = try makeFixture(attemptNativeDecision: { _ in
@@ -1550,7 +1550,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         for dismissed in [false, true] {
             let clock = TestClock(uptimeNanoseconds: 0)
             let waits = ScheduledWaits()
-            let finalizer = TestGate<NativeApprovalFinalizationResult>()
+            let finalizer = TestGate<NativeApprovalOperation.Result>()
             let started = expectation(description: "finalizer suspended")
             let fixture = try makeFixture(clock: clock, environment: .init(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
@@ -1730,7 +1730,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
 
     func testGenericForegroundReopensDismissedOutstandingApprovalWithoutRetrying() async throws {
-        let gate = TestGate<NativeApprovalFinalizationResult>()
+        let gate = TestGate<NativeApprovalOperation.Result>()
         let started = expectation(description: "finalization in flight")
         var decisions = 0
         let fixture = try makeFixture(attemptNativeDecision: { _ in

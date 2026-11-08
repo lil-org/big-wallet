@@ -57,6 +57,7 @@ final class AccountPreviewState {
     private var lastCompletedPageAt: ContinuousClock.Instant?
     private var hasLoadedAllPages = false
     private var recoveryTargetPage = 0
+    private var needsStoreRecovery = false
 
     init(
         wallet: WalletSnapshot,
@@ -129,10 +130,14 @@ final class AccountPreviewState {
     @discardableResult
     func retry() -> Bool {
         guard case .failed(let page) = status else { return false }
+        startRecovery(through: page, change: .status)
+        return true
+    }
+
+    private func startRecovery(through page: Int, change: Change) {
         cancelWork()
         status = .recovering
-        startFreshSession(through: page, change: .status)
-        return true
+        startFreshSession(through: page, change: change)
     }
 
     func suspendForStore() {
@@ -249,6 +254,29 @@ final class AccountPreviewState {
     }
 
     func refresh(wallet: WalletSnapshot?) -> RefreshOutcome {
+        refresh(wallet: wallet, recoveringStore: false)
+    }
+
+    @discardableResult
+    func reconcileStore(loadState: WalletsManager.LoadState, wallet: WalletSnapshot?) -> RefreshOutcome {
+        switch loadState {
+        case .ready:
+            let recoveringStore = needsStoreRecovery
+            needsStoreRecovery = false
+            return refresh(wallet: wallet, recoveringStore: recoveringStore)
+        case .failed:
+            needsStoreRecovery = true
+            suspendForStore()
+        case .loading where status == .loadingInitial || status == .recovering:
+            needsStoreRecovery = true
+            suspendForStore()
+        case .idle, .loading:
+            break
+        }
+        return .keepEditing
+    }
+
+    private func refresh(wallet: WalletSnapshot?, recoveringStore: Bool) -> RefreshOutcome {
         guard let wallet, wallet.id == self.wallet.id else {
             invalidate()
             return .close
@@ -259,7 +287,9 @@ final class AccountPreviewState {
         let removedKeys = previousKeys.subtracting(selectedKeys)
         selectedKeys = currentKeys.subtracting(removedKeys).union(addedKeys)
         self.wallet = wallet
-        if session != nil || canRetry || status == .recovering {
+        if recoveringStore, case .failed(let page) = status {
+            startRecovery(through: page, change: .reload)
+        } else if session != nil || canRetry || status == .recovering {
             didChange(.reload)
         } else {
             restartInitialPreview()
@@ -269,6 +299,7 @@ final class AccountPreviewState {
 
     func invalidate() {
         cancelWork()
+        needsStoreRecovery = false
         status = .idle
         nextPage = 0
         lastCompletedPageAt = nil

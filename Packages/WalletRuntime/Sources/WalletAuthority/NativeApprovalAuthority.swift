@@ -22,7 +22,7 @@ public final class NativeApprovalReview {
     private let authenticationScope = UUID()
     private let access: WalletAccessSession?
     private let receipt: NativeDeliveryReceipt?
-    private let finalize: @MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult
+    private let finalize: @MainActor @Sendable (ReviewConsent) async -> NativeApprovalOperation.Result
     private var authenticationChallenge: WalletAuthenticationChallenge?
     public private(set) var isActive = true
     private var participants = [ObjectIdentifier: Participant]()
@@ -34,7 +34,7 @@ public final class NativeApprovalReview {
     init(intent: BoundApprovalIntent, authorityID: UUID = UUID(), clock: @escaping @Sendable () -> Date = Date.init,
          monotonicClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }, hooks: AuthorityExecutionHooks = .none,
          access: WalletAccessSession? = nil, receipt: NativeDeliveryReceipt? = nil,
-         finalize: @escaping @MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult = { _ in .pending }) {
+         finalize: @escaping @MainActor @Sendable (ReviewConsent) async -> NativeApprovalOperation.Result = { _ in .pending }) {
         self.access = access
         self.receipt = receipt
         self.finalize = finalize
@@ -197,20 +197,15 @@ extension ExtensionBridge: NativeDeliveryStore, NativeImmediateCompleting {}
 public final class NativeApprovalOperation {
     public enum Result: Equatable, Sendable { case responseReady, interruptionRequired, reviewRequired, pending }
     private let consent: ReviewConsent
-    private let finalize: @MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult
+    private let finalize: @MainActor @Sendable (ReviewConsent) async -> NativeApprovalOperation.Result
 
-    fileprivate init(consent: ReviewConsent, finalize: @escaping @MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult) {
+    fileprivate init(consent: ReviewConsent, finalize: @escaping @MainActor @Sendable (ReviewConsent) async -> NativeApprovalOperation.Result) {
         self.consent = consent
         self.finalize = finalize
     }
 
     public func attempt() async -> Result {
-        switch await finalize(consent) {
-        case .responseReady: .responseReady
-        case .interruptionRequired: .interruptionRequired
-        case .reviewRequired: .reviewRequired
-        case .pending: .pending
-        }
+        await finalize(consent)
     }
 }
 
@@ -245,7 +240,7 @@ public final class NativeApprovalAuthority {
         let prepare: @MainActor @Sendable (ExtensionBridge.RequestBinding, WalletReviewCatalog?) async -> DappRequestPreparation
         let reloadWallets: @MainActor @Sendable () async -> Bool
         let currentReviewCatalog: @MainActor @Sendable () -> WalletReviewCatalog?
-        let attemptNativeDecision: @MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult
+        let attemptNativeDecision: @MainActor @Sendable (ReviewConsent) async -> NativeApprovalOperation.Result
 
         init(
             now: @escaping @Sendable () -> Date,
@@ -259,7 +254,7 @@ public final class NativeApprovalAuthority {
             prepare: (@MainActor @Sendable (ExtensionBridge.RequestBinding, WalletReviewCatalog?) async -> DappRequestPreparation)? = nil,
             reloadWallets: (@MainActor @Sendable () async -> Bool)? = nil,
             currentReviewCatalog: (@MainActor @Sendable () -> WalletReviewCatalog?)? = nil,
-            attemptNativeDecision: (@MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult)? = nil
+            attemptNativeDecision: (@MainActor @Sendable (ReviewConsent) async -> NativeApprovalOperation.Result)? = nil
         ) {
             self.now = now
             self.monotonicClock = monotonicClock

@@ -295,12 +295,12 @@ final class AccountPreviewStateTests: XCTestCase {
         XCTAssertTrue(state.activatePaging(for: try XCTUnwrap(changes.generations.last)))
         state.loadMore()
         await fulfillment(of: [obsolete.entered], timeout: 2)
-        state.suspendForStore()
+        state.reconcileStore(loadState: .failed(.unavailable), wallet: nil)
         XCTAssertFalse(state.canEdit)
         XCTAssertTrue(state.canRetry)
         XCTAssertTrue(sessions.created[0].isInvalidated)
         XCTAssertEqual(state.accounts, [account(0), account(1)])
-        XCTAssertTrue(state.retry())
+        XCTAssertEqual(state.reconcileStore(loadState: .ready, wallet: wallet(accounts: [account(0)])), .keepEditing)
         await finish(replacement, with: [account(0), account(1)])
         await fulfillment(of: [recoveredPage.entered], timeout: 2)
         obsolete.resolve([account(7)])
@@ -310,6 +310,83 @@ final class AccountPreviewStateTests: XCTestCase {
         await expectEventually { state.status == .ready }
         XCTAssertEqual(state.accounts, [account(0), account(1), account(2)])
         XCTAssertEqual(state.enabledAccounts, [account(0), account(1)])
+    }
+
+    func testStoreRecoveryCallbackInvalidationPreventsRestart() async {
+        let original = wallet(accounts: [account(0)])
+        let initial = PreviewRequest()
+        let recovered = PreviewRequest()
+        let sessions = PreviewSessions(initial: [initial, recovered])
+        defer { sessions.finishPendingRequests() }
+        var reenter = false
+        weak var observedState: AccountPreviewState?
+        let state = AccountPreviewState(
+            wallet: original,
+            makeSession: { _ in await sessions.makeSession() },
+            didChange: { _ in
+                guard reenter else { return }
+                reenter = false
+                observedState?.invalidate()
+            }
+        )
+        observedState = state
+        state.reset()
+        await finish(initial, with: [account(0), account(1)])
+        await expectEventually { state.canEdit }
+        state.toggle(at: 1)
+        state.reconcileStore(loadState: .failed(.unavailable), wallet: nil)
+
+        recovered.entered.isInverted = true
+        reenter = true
+        state.reconcileStore(loadState: .ready, wallet: original)
+
+        XCTAssertFalse(reenter)
+        XCTAssertEqual(state.status, .idle)
+        XCTAssertFalse(state.canEdit)
+        XCTAssertTrue(sessions.created[0].isInvalidated)
+        await fulfillment(of: [recovered.entered], timeout: 0.05)
+        XCTAssertEqual(sessions.initialCalls, 1)
+        XCTAssertEqual(state.enabledAccounts, [account(0), account(1)])
+    }
+
+    func testNestedStoreFailureSurvivesRecoveryNotification() async {
+        let original = wallet(accounts: [account(0)])
+        let initial = PreviewRequest()
+        let recovered = PreviewRequest()
+        let sessions = PreviewSessions(initial: [initial, recovered])
+        defer { sessions.finishPendingRequests() }
+        var reenter = false
+        weak var observedState: AccountPreviewState?
+        let state = AccountPreviewState(
+            wallet: original,
+            makeSession: { _ in await sessions.makeSession() },
+            didChange: { _ in
+                guard reenter else { return }
+                reenter = false
+                observedState?.reconcileStore(loadState: .failed(.unavailable), wallet: nil)
+            }
+        )
+        observedState = state
+        state.reset()
+        await finish(initial, with: [account(0), account(1)])
+        await expectEventually { state.canEdit }
+        state.toggle(at: 1)
+        state.reconcileStore(loadState: .failed(.unavailable), wallet: nil)
+
+        reenter = true
+        state.reconcileStore(loadState: .ready, wallet: original)
+
+        XCTAssertFalse(reenter)
+        XCTAssertEqual(state.status, .failed(page: 0))
+        XCTAssertFalse(state.canEdit)
+        XCTAssertEqual(state.enabledAccounts, [account(0), account(1)])
+
+        state.reconcileStore(loadState: .ready, wallet: original)
+        await finish(recovered, with: [account(0), account(1)])
+        await expectEventually { state.canEdit }
+        XCTAssertEqual(sessions.initialCalls, 2)
+        XCTAssertEqual(state.enabledAccounts, [account(0), account(1)])
+        XCTAssertTrue(state.hasChanges)
     }
 
     func testRefreshKeepsMetadataChangesAndPristinePreviewPages() async throws {
@@ -450,6 +527,8 @@ final class AccountPreviewStateTests: XCTestCase {
 
         await expectEventually { state.canRetry }
         XCTAssertEqual(state.refresh(wallet: wallet(accounts: [account(1)])), .keepEditing)
+        XCTAssertEqual(state.reconcileStore(loadState: .ready, wallet: wallet(accounts: [account(1)])), .keepEditing)
+        XCTAssertEqual(state.status, .failed(page: 0))
         XCTAssertEqual(sessions.initialCalls, 1)
         XCTAssertTrue(state.retry())
         await finish(replacement, with: [account(0), account(1)])

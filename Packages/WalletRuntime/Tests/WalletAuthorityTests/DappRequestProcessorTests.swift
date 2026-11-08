@@ -1975,10 +1975,16 @@ final class DappRequestProcessorTests: XCTestCase {
                 to: request,
                 transactionHash: expectedHash
             )
-        let ambiguousResults: [Result<String, EthereumSendFailure>] = [
-            .success("0xdifferent"),
-            .failure(.transport),
-            .failure(.rpc(.unknown)),
+        let ambiguousResults: [BroadcastResult] = [
+            .accepted("0xdifferent"),
+            .submissionUnknown(.ethereum(.transport)),
+            .submissionUnknown(.ethereum(.rpc(.unknown))),
+            .rejected(.solana(.rpcError(message: "rejected", code: -32_003))),
+            .rejected(.ethereum(.transport)),
+            .rejected(.ethereum(.rpc(.notSubmitted))),
+            .notSubmitted(.ethereum(.rpc(.unknown))),
+            .notSubmitted(.solana(.notSubmitted)),
+            .confirmationFailed(transactionID: expectedHash, failure: .ethereum(.rpc(.unknown))),
         ]
         for result in ambiguousResults {
             let response = EthereumDappRequestProcessor.transactionBroadcastResponse(
@@ -1997,7 +2003,7 @@ final class DappRequestProcessorTests: XCTestCase {
             to: request,
             expectedHash: expectedHash,
             recoveryResponse: recovery,
-            result: .success("0XABC123")
+            result: .accepted("0XABC123")
         )
         XCTAssertEqual(success.json["result"] as? String, expectedHash)
         XCTAssertNil(success.json["error"])
@@ -2007,11 +2013,11 @@ final class DappRequestProcessorTests: XCTestCase {
                 to: request,
                 expectedHash: expectedHash,
                 recoveryResponse: recovery,
-                result: .failure(.rpc(.serverError(
+                result: .rejected(.ethereum(.rpc(.serverError(
                     -32_000,
                     "transaction rejected",
                     dataJSON: #"{"reason":"nonce"}"#
-                )))
+                ))))
             )
         XCTAssertEqual((serverFailure.json["error"] as? [String: Any])?["message"] as? String, "transaction rejected")
         XCTAssertEqual((serverFailure.json["error"] as? [String: Any])?["code"] as? Int, -32_000)
@@ -2025,7 +2031,7 @@ final class DappRequestProcessorTests: XCTestCase {
                 to: request,
                 expectedHash: expectedHash,
                 recoveryResponse: recovery,
-                result: .failure(.rpc(.notSubmitted))
+                result: .notSubmitted(.ethereum(.rpc(.notSubmitted)))
             )
         XCTAssertEqual((notSubmitted.json["error"] as? [String: Any])?["message"] as? String, AuthorityStrings.failedToSend)
         XCTAssertEqual(
@@ -2049,11 +2055,11 @@ final class DappRequestProcessorTests: XCTestCase {
             to: request,
             expectedHash: expectedHash,
             recoveryResponse: recovery,
-            result: .failure(.rpc(.serverError(
+            result: .submissionUnknown(.ethereum(.rpc(.serverError(
                 -32_000,
                 "already known",
                 dataJSON: nil
-            )))
+            ))))
         )
 
         XCTAssertEqual(
@@ -2073,10 +2079,19 @@ final class DappRequestProcessorTests: XCTestCase {
                 to: request,
                 signature: expectedSignature
             )
-        let ambiguousResults: [Result<String, Solana.SendTransactionError>] = [
-            .success("different-signature"),
-            .failure(.unknown),
-            .failure(.confirmationTimedOut(signature: "different-signature")),
+        let ambiguousResults: [BroadcastResult] = [
+            .accepted("different-signature"),
+            .submissionUnknown(.solana(.unknown)),
+            .rejected(.ethereum(.rpc(.serverError(-32_000, "rejected")))),
+            .rejected(.solana(.unknown)),
+            .rejected(.solana(.notSubmitted)),
+            .rejected(.solana(.confirmationTimedOut(signature: expectedSignature))),
+            .notSubmitted(.solana(.unknown)),
+            .notSubmitted(.ethereum(.rpc(.notSubmitted))),
+            .confirmationFailed(transactionID: "different-signature", failure: .solana(.confirmationTimedOut(signature: expectedSignature))),
+            .confirmationFailed(transactionID: expectedSignature, failure: .solana(.confirmationTimedOut(signature: "different-signature"))),
+            .confirmationFailed(transactionID: expectedSignature, failure: .solana(.rpcError(message: "rejected", code: -32_003))),
+            .confirmationFailed(transactionID: expectedSignature, failure: .ethereum(.transport)),
         ]
         for result in ambiguousResults {
             let response = SolanaDappRequestProcessor.transactionBroadcastResponse(
@@ -2095,7 +2110,7 @@ final class DappRequestProcessorTests: XCTestCase {
             to: request,
             expectedSignature: expectedSignature,
             recoveryResponse: recovery,
-            result: .success(expectedSignature)
+            result: .accepted(expectedSignature)
         )
         XCTAssertEqual(success.json["result"] as? String, expectedSignature)
         XCTAssertNil(success.json["error"])
@@ -2105,9 +2120,9 @@ final class DappRequestProcessorTests: XCTestCase {
                 to: request,
                 expectedSignature: expectedSignature,
                 recoveryResponse: recovery,
-                result: .failure(.confirmationTimedOut(
+                result: .confirmationFailed(transactionID: expectedSignature, failure: .solana(.confirmationTimedOut(
                     signature: expectedSignature
-                ))
+                )))
             )
         XCTAssertEqual(
             (confirmationFailure.json["error"] as? [String: Any])?["message"] as? String,
@@ -2118,15 +2133,27 @@ final class DappRequestProcessorTests: XCTestCase {
             expectedSignature
         )
 
+        let confirmationRejection = SolanaDappRequestProcessor.transactionBroadcastResponse(
+            to: request,
+            expectedSignature: expectedSignature,
+            recoveryResponse: recovery,
+            result: .confirmationFailed(transactionID: expectedSignature,
+                failure: .solana(.confirmationFailed(signature: expectedSignature, message: "confirmation rejected", code: -32_004)))
+        )
+        let confirmationError = try XCTUnwrap(confirmationRejection.json["error"] as? [String: Any])
+        XCTAssertEqual(confirmationError["message"] as? String, "confirmation rejected")
+        XCTAssertEqual(confirmationError["code"] as? Int, -32_004)
+        XCTAssertEqual((confirmationError["data"] as? [String: Any])?["signature"] as? String, expectedSignature)
+
         let explicitFailure = SolanaDappRequestProcessor
             .transactionBroadcastResponse(
                 to: request,
                 expectedSignature: expectedSignature,
                 recoveryResponse: recovery,
-                result: .failure(.rpcError(
+                result: .rejected(.solana(.rpcError(
                     message: "transaction rejected",
                     code: -32_003
-                ))
+                )))
             )
         XCTAssertEqual((explicitFailure.json["error"] as? [String: Any])?["message"] as? String, "transaction rejected")
         XCTAssertEqual((explicitFailure.json["error"] as? [String: Any])?["code"] as? Int, -32_003)
@@ -2136,7 +2163,7 @@ final class DappRequestProcessorTests: XCTestCase {
             to: request,
             expectedSignature: expectedSignature,
             recoveryResponse: recovery,
-            result: .failure(.notSubmitted)
+            result: .notSubmitted(.solana(.notSubmitted))
         )
         XCTAssertEqual((notSubmitted.json["error"] as? [String: Any])?["message"] as? String, AuthorityStrings.failedToSend)
         XCTAssertEqual(
@@ -2166,10 +2193,10 @@ final class DappRequestProcessorTests: XCTestCase {
             to: request,
             expectedSignature: expectedSignature,
             recoveryResponse: recovery,
-            result: .failure(.rpcError(
+            result: .submissionUnknown(.solana(.rpcError(
                 message: alreadyProcessed,
                 code: -32_002
-            ))
+            )))
         )
 
         XCTAssertEqual(
@@ -2190,7 +2217,7 @@ final class DappRequestProcessorTests: XCTestCase {
             recoveryResponse: SolanaDappRequestProcessor.transactionSubmissionUnknownResponse(
                 to: request, signature: signature
             ),
-            result: .failure(.blockhashNotFound)
+            result: .rejected(.solana(.blockhashNotFound))
         )
         let error = try XCTUnwrap(response.json["error"] as? [String: Any])
         XCTAssertEqual(error["code"] as? Int, -32003)
@@ -3914,26 +3941,19 @@ private final class ProcessorWalletSigner: WalletSigning {
 
 @MainActor
 private final class ProcessorBroadcastSender: SignedTransactionBroadcasting {
-    func broadcast(_ request: BroadcastRequest) async -> BroadcastResult {
-        switch request {
-        case .ethereum(let signed, _, let network):
-            return broadcastResultForTesting(await sendEthereum(signedTransaction: signed, network: network))
-        case .solana(let signed, _, let cluster, _, let options):
-            return broadcastResultForTesting(await sendSolana(signedTransaction: signed, cluster: cluster, options: options))
-        }
-    }
-
     private(set) var sends = 0
     private(set) var solanaSettings: (cluster: Solana.Cluster, options: Solana.PreparedSendOptions)?
 
-    func sendEthereum(signedTransaction: String, network: ResolvedEthereumNetwork) async -> Result<String, EthereumSendFailure> {
+    func broadcast(_ request: BroadcastRequest) async -> BroadcastResult {
         sends += 1
-        return EthereumSigner.transactionHash(signedTransaction: signedTransaction).map(Result.success) ?? .failure(.transport)
-    }
-
-    func sendSolana(signedTransaction: String, cluster: Solana.Cluster, options: Solana.PreparedSendOptions) async -> Result<String, Solana.SendTransactionError> {
-        sends += 1
-        solanaSettings = (cluster, options)
-        return SolanaSigner.transactionSignature(signedTransaction: signedTransaction).map(Result.success) ?? .failure(.invalidMessage)
+        switch request {
+        case .ethereum(let signed, _, _):
+            return EthereumSigner.transactionHash(signedTransaction: signed).map(BroadcastResult.accepted)
+                ?? .submissionUnknown(.ethereum(.transport))
+        case .solana(let signed, _, let cluster, _, let options):
+            solanaSettings = (cluster, options)
+            return SolanaSigner.transactionSignature(signedTransaction: signed).map(BroadcastResult.accepted)
+                ?? .rejected(.solana(.invalidMessage))
+        }
     }
 }

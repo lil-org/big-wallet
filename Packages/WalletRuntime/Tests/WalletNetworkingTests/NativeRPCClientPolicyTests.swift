@@ -6,6 +6,90 @@ import XCTest
 
 @MainActor
 final class NativeRPCClientPolicyTests: XCTestCase {
+    func testBroadcastClassifiesAlreadyKnownAndProcessedResponses() async throws {
+        let cases: [(NativeChain, Int, String, Bool)] = [
+            (.ethereum, -32_000, "ALREADY Known", true),
+            (.ethereum, -32_001, "already known", false),
+            (.ethereum, -32_000, "transaction rejected", false),
+            (.solana, -32_002, "Transaction ALREADY PROCESSED", true),
+            (.solana, -32_003, "already processed", false),
+            (.solana, -32_002, "transaction rejected", false),
+        ]
+        for (chain, code, message, isUnknown) in cases {
+            let body = try JSONSerialization.data(withJSONObject: [
+                "jsonrpc": "2.0", "id": 1, "error": ["code": code, "message": message],
+            ])
+            let authorization = NativeClientAuthorization()
+            let session = makeSession { _, _ in .init(chunks: [body]) }
+            defer { session.invalidateAndCancel(); NativeClientURLProtocol.reset() }
+            let result = await broadcaster(session, authorization: authorization).broadcast(broadcastRequest(chain))
+            let failure: BroadcastFailure = switch chain {
+            case .ethereum: .ethereum(.rpc(.serverError(code, message)))
+            case .solana: .solana(.rpcError(message: message, code: code))
+            }
+            XCTAssertEqual(result, isUnknown ? .submissionUnknown(failure) : .rejected(failure))
+            XCTAssertEqual(NativeClientURLProtocol.requests.map(\.rpcMethod), [chain.sendMethod])
+            XCTAssertEqual(authorization.replacementCount, 0)
+        }
+    }
+
+    func testBroadcastValidatesReturnedTransactionIdentity() async throws {
+        let cases: [(NativeChain, String, Bool)] = [
+            (.ethereum, NativeChain.ethereum.transactionID.uppercased(), true),
+            (.ethereum, "0xdifferent", false),
+            (.solana, NativeChain.solana.transactionID, true),
+            (.solana, "different-signature", false),
+        ]
+        for (chain, returnedID, matches) in cases {
+            let authorization = NativeClientAuthorization()
+            let session = makeSession { _, _ in .init(chunks: [Self.success(returnedID)]) }
+            defer { session.invalidateAndCancel(); NativeClientURLProtocol.reset() }
+            let result = await broadcaster(session, authorization: authorization).broadcast(broadcastRequest(chain))
+            let failure: BroadcastFailure = chain == .ethereum ? .ethereum(.transport) : .solana(.unknown)
+            XCTAssertEqual(result, matches ? .accepted(chain.transactionID) : .submissionUnknown(failure))
+            XCTAssertEqual(NativeClientURLProtocol.requests.map(\.rpcMethod), [chain.sendMethod])
+            XCTAssertEqual(authorization.replacementCount, 0)
+        }
+    }
+
+    func testSolanaConfirmationOutcomesValidateSubmittedIdentity() async throws {
+        for timesOut in [false, true] {
+            for returnedSignature in [NativeChain.solana.transactionID, "different-signature"] {
+                let authorization = NativeClientAuthorization()
+                let clock = NativeClientCounter()
+                let session = makeSession { request, _ in
+                    if request.rpcMethod == "sendTransaction" {
+                        return .init(chunks: [Self.success(returnedSignature)])
+                    }
+                    return timesOut
+                        ? .init(chunks: [Data(#"{"jsonrpc":"2.0","id":1,"result":{"value":[null]}}"#.utf8)])
+                        : ResponsePolicyCase.depth.plan(status: 200)
+                }
+                defer { session.invalidateAndCancel(); NativeClientURLProtocol.reset() }
+                let client = broadcaster(session, authorization: authorization, timing: .init(
+                    now: { Date(timeIntervalSince1970: Double(clock.value) * 60) },
+                    sleep: { _ in clock.increment() }
+                ))
+                let result = await client.broadcast(broadcastRequest(.solana, confirmation: .confirmed))
+                if returnedSignature != NativeChain.solana.transactionID {
+                    XCTAssertEqual(result, .submissionUnknown(.solana(.unknown)))
+                } else if timesOut {
+                    XCTAssertEqual(result, .confirmationFailed(transactionID: returnedSignature,
+                        failure: .solana(.confirmationTimedOut(signature: returnedSignature))))
+                } else {
+                    guard case .confirmationFailed(let transactionID, .solana(.confirmationFailed(let signature, _, _))) = result else {
+                        XCTFail("Expected confirmation failure, got \(result)")
+                        continue
+                    }
+                    XCTAssertEqual(transactionID, returnedSignature)
+                    XCTAssertEqual(signature, returnedSignature)
+                }
+                XCTAssertEqual(NativeClientURLProtocol.requests.map(\.rpcMethod), ["sendTransaction", "getSignatureStatuses"])
+                XCTAssertEqual(authorization.replacementCount, 0)
+            }
+        }
+    }
+
     func testEthereumReadPolicyFailuresDoNotRetryOrReplaceAuthorization() async throws {
         for policy in ResponsePolicyCase.allCases {
             for status in [200, 401] {
@@ -293,11 +377,15 @@ final class NativeRPCClientPolicyTests: XCTestCase {
         }
     }
 
-    private func broadcaster(_ session: URLSession, authorization: NativeClientAuthorization) -> SignedBroadcastClient {
+    private func broadcaster(
+        _ session: URLSession,
+        authorization: NativeClientAuthorization,
+        timing: SolanaRPCClient.Timing = .init(now: { Date() }, sleep: { _ in throw UnexpectedNativeClientPoll() })
+    ) -> SignedBroadcastClient {
         SignedBroadcastClient(
             ethereum: EthereumBroadcastClient(rpc: EthereumRPC(urlSession: session, authorizationProvider: authorization, waitForRetry: {})),
             solana: SolanaRPCClient(urlSession: session, authorizationProvider: authorization,
-                                   timing: .init(now: { Date() }, sleep: { _ in throw UnexpectedNativeClientPoll() }),
+                                   timing: timing,
                                    messages: .init(failedToSend: "Failed to send", blockhashNotFound: "Blockhash not found"))
         )
     }

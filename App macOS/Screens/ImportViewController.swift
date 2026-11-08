@@ -24,8 +24,7 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
     var walletAccess = NativeWalletAccess()
     var dependencies = Dependencies()
     private var validationTask: Task<Void, Never>?
-    private var importTask: Task<WalletSnapshot, Error>?
-    private var importResultTask: Task<Void, Never>?
+    private var importTask: Task<Void, Never>?
     private var retirementCheckTask: Task<Void, Never>?
     private var closeObserver: NativeApprovalWindowCloseObserver?
     private var inputValidationResult = WalletsManager.InputValidationResult.invalid
@@ -47,8 +46,6 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
         validationTask = nil
         importTask?.cancel()
         importTask = nil
-        importResultTask?.cancel()
-        importResultTask = nil
         retirementCheckTask?.cancel()
         retirementCheckTask = nil
         closeObserver?.disable()
@@ -81,7 +78,6 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
     isolated deinit {
         validationTask?.cancel()
         importTask?.cancel()
-        importResultTask?.cancel()
         retirementCheckTask?.cancel()
         closeObserver?.disable()
         Window.clearSecretInput(textField)
@@ -172,21 +168,21 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
         let prepareStore = dependencies.prepareStore
         let operation = dependencies.importWallet
         let access = walletAccess
-        let task = Task { [weak self] in
-            try Task.checkCancellation()
-            guard await prepareStore() else { throw WalletsManager.LoadFailure.unavailable }
-            try Task.checkCancellation()
-            let session = try access.requireCurrentAccess()
-            guard self?.acceptsManagementActions == true else { throw CancellationError() }
-            self?.cancelButton.isEnabled = false
-            return try await operation(input, password, session)
-        }
-        importTask = task
-        importResultTask = Task { [weak self] in
-            let result = await task.result
+        importTask = Task { [weak self] in
+            let result: Result<WalletSnapshot, Error>
+            do {
+                try Task.checkCancellation()
+                guard await prepareStore() else { throw WalletsManager.LoadFailure.unavailable }
+                try Task.checkCancellation()
+                let session = try access.requireCurrentAccess()
+                guard self?.acceptsManagementActions == true else { throw CancellationError() }
+                self?.cancelButton.isEnabled = false
+                result = .success(try await operation(input, password, session))
+            } catch {
+                result = .failure(error)
+            }
             guard let self, !Task.isCancelled, acceptsManagementActions else { return }
             importTask = nil
-            importResultTask = nil
             switch result {
             case .success(let wallet):
                 showAccountsList(newWalletId: wallet.id)

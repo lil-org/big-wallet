@@ -17,6 +17,7 @@ async function fixture(run, phase = "build") {
     const arguments_ = ["swift", "build", "--configuration", "release", "--scratch-path", "/cache", "--sanitize", "address", "-Xswiftc", "-enable-testing"];
     const fixtureBytes = await readFile(FIXTURES_PATH);
     const sources = [...Array.from({length: 9}, (_, index) => ({path: `Packages/WalletRuntime/Sources/WalletDomain/${index}.swift`, sha256: "b".repeat(64)})),
+        {path: "Scripts/harness_package.mjs", sha256: "d".repeat(64)},
         {path: "Packages/WalletParserFuzzHarness/Sources/WalletParserFuzzWorker/Resources/fixtures.json", sha256: sha256(fixtureBytes)}].sort((a, b) => a.path.localeCompare(b.path));
     const manifest = JSON.stringify({version: 1, files: sources.map(value => ({...value, type: "file", mode: 0o644}))});
     policy.sourceSHA256 = sha256(manifest);

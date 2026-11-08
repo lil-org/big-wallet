@@ -280,13 +280,18 @@ final class MacSecretLifetimeTests: XCTestCase {
             defer { host.close() }
             let started = expectation(description: "held import started")
             let returned = expectation(description: "held import returned")
+            let cancelled = expectation(description: "held import cancelled")
             let result = TestGate<Result<WalletSnapshot, Error>>()
             defer { result.resolve(.failure(CancellationError())) }
             host.controller.dependencies.importWallet = { _, _, _ in
-                started.fulfill()
-                let value = await result.wait()
-                returned.fulfill()
-                return try value.get()
+                try await withTaskCancellationHandler {
+                    started.fulfill()
+                    let value = await result.wait()
+                    returned.fulfill()
+                    return try value.get()
+                } onCancel: {
+                    cancelled.fulfill()
+                }
             }
             let editor = try enter("in-flight draft", in: host.controller.textField)
             await expectEventually { host.controller.okButton.isEnabled }
@@ -300,6 +305,7 @@ final class MacSecretLifetimeTests: XCTestCase {
             case .lock: host.fixture.access.lock(reason: .idle)
             }
             await expectEventually { host.controller.textField.stringValue.isEmpty }
+            await fulfillment(of: [cancelled], timeout: 2)
             let current = host.window.contentViewController
             result.resolve(.success(Self.wallet))
             await fulfillment(of: [returned], timeout: 2)

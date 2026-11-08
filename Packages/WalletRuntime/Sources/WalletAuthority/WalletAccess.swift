@@ -234,10 +234,9 @@ struct PreparedBroadcast: Sendable {
                     signedTransaction: signed, expectedHash: expectedHash, network: network
                 ))
             }
-            guard let result = outcome.ethereumResult else { return recovery }
             response = EthereumDappRequestProcessor.transactionBroadcastResponse(
                 to: permit.request, expectedHash: expectedHash,
-                recoveryResponse: recoveryResponse, result: result
+                recoveryResponse: recoveryResponse, result: outcome
             )
         case .solana(let signed, let expectedSignature, let cluster, let endpoint, let options):
             guard !Task.isCancelled else { return recovery }
@@ -248,10 +247,9 @@ struct PreparedBroadcast: Sendable {
                     cluster: cluster, endpoint: endpoint, options: options
                 ))
             }
-            guard let result = outcome.solanaResult else { return recovery }
             response = SolanaDappRequestProcessor.transactionBroadcastResponse(
                 to: permit.request, expectedSignature: expectedSignature,
-                recoveryResponse: recoveryResponse, result: result
+                recoveryResponse: recoveryResponse, result: outcome
             )
         }
         return .broadcastResponse(response, permit: permit)

@@ -8,7 +8,7 @@ export const EXCHANGE = "/Volumes/BigWalletBuild/Exchange";
 
 export function isParserSource(path) {
     if (typeof path !== "string" || path.split("/").some(part => part.startsWith("."))) { return false; }
-    return ["Packages/WalletRuntime/Package.swift", "Packages/WalletParserFuzzHarness/Package.swift", "Scripts/validate_parser_fuzz_target.mjs"].includes(path) ||
+    return ["Packages/WalletRuntime/Package.swift", "Packages/WalletParserFuzzHarness/Package.swift", "Scripts/validate_parser_fuzz_target.mjs", "Scripts/harness_package.mjs"].includes(path) ||
         ["Packages/WalletRuntime/Sources/", "Packages/WalletParserFuzzHarness/Sources/", "Scripts/native_parser_fuzz/"].some(prefix => path.startsWith(prefix));
 }
 

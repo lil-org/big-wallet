@@ -36,26 +36,6 @@ public enum BroadcastResult: Sendable, Equatable {
     case notSubmitted(BroadcastFailure)
     case submissionUnknown(BroadcastFailure)
     case confirmationFailed(transactionID: String, failure: BroadcastFailure)
-
-    public var ethereumResult: Result<String, EthereumSendFailure>? {
-        switch self {
-        case .accepted(let identity): return .success(identity)
-        case .rejected(.ethereum(let failure)), .notSubmitted(.ethereum(let failure)),
-             .submissionUnknown(.ethereum(let failure)), .confirmationFailed(_, .ethereum(let failure)):
-            return .failure(failure)
-        default: return nil
-        }
-    }
-
-    public var solanaResult: Result<String, Solana.SendTransactionError>? {
-        switch self {
-        case .accepted(let identity): return .success(identity)
-        case .rejected(.solana(let failure)), .notSubmitted(.solana(let failure)),
-             .submissionUnknown(.solana(let failure)), .confirmationFailed(_, .solana(let failure)):
-            return .failure(failure)
-        default: return nil
-        }
-    }
 }
 
 @MainActor

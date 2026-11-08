@@ -169,7 +169,7 @@ extension NativeApprovalCoordinatorTests {
 
     private func makeAuthorityBoundaryFixture(
         beforePreparation: @escaping @MainActor @Sendable () async -> Void = {},
-        finalize: @escaping @MainActor @Sendable (ReviewConsent) async -> NativeApprovalFinalizationResult = { _ in .responseReady }
+        finalize: @escaping @MainActor @Sendable (ReviewConsent) async -> NativeApprovalOperation.Result = { _ in .responseReady }
     ) throws -> AuthorityBoundaryFixture {
         let clock = TestClock(uptimeNanoseconds: 0)
         let key = approvalKey(id: 31_001)
