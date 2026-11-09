@@ -124,8 +124,10 @@ public struct WalletAccountCatalog: Codable, Equatable, Sendable {
     }
 
     public var isValid: Bool {
-        accounts.count <= 16_384 && hasValidAccounts
+        fitsAccountLimit && hasValidAccounts
     }
+
+    package var fitsAccountLimit: Bool { accounts.count <= 16_384 }
 
     public var hasValidAccounts: Bool {
         accounts.allSatisfy(\.isValid) && Set(accounts).count == accounts.count

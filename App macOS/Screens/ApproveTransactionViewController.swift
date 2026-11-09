@@ -8,6 +8,9 @@ import Cocoa
 class ApproveTransactionViewController: NSViewController, NativeWalletProtectedContent {
 
     var walletAccess = NativeWalletAccess()
+    var authenticate: @MainActor (NSWindow?, WalletAuthenticationChallenge, NativeApprovalReview) async -> WalletAuthenticationResult = {
+        await Window.authenticate(in: $0, reason: .sendTransaction, challenge: $1, review: $2)
+    }
     private var isRetiredForAccess = false
 
     private enum SheetState {
@@ -55,6 +58,7 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
     }
 
     private var approvalAttempt: ApprovalAttempt?
+    private var authenticationFailed = false
     private var balanceTask: Task<Void, Never>?
     private var priceTask: Task<Void, Never>?
     private var coordinator: TransactionApprovalCoordinator!
@@ -70,7 +74,9 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
     private var sheetState = SheetState.idle
     private var review: NativeApprovalReview!
 
-    private var acceptsReview: Bool { walletAccess.isCurrent && !isRetiredForAccess && review.isActive }
+    private var acceptsReview: Bool { walletAccess.hasCurrentPresentation && !isRetiredForAccess && review.isActive }
+
+    private func validateReview() -> Bool { walletAccess.validateCurrentAccess() && acceptsReview }
 
     func retire() {
         isRetiredForAccess = true
@@ -83,7 +89,12 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
         approvalSnapshot.transaction
     }
     
-    static func with(transaction: Transaction, chain: EthereumNetwork, account: WalletAccount, walletId: String, review: NativeApprovalReview, completion: @escaping (ApprovedTransaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(
+        transaction: Transaction, chain: EthereumNetwork, account: WalletAccount, walletId: String,
+        review: NativeApprovalReview,
+        operations: TransactionApprovalOperations = ApplicationServices.shared.ethereum.makePreparationOperations(),
+        completion: @escaping (ApprovedTransaction?) -> Void
+    ) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self)
         new.walletId = walletId
         new.review = review
@@ -93,7 +104,7 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
         new.coordinator = TransactionApprovalCoordinator(
             transaction: transaction,
             network: chain,
-            operations: ApplicationServices.shared.ethereum.makePreparationOperations()
+            operations: operations
         )
         new.approvalSnapshot = new.coordinator.snapshot
         new.coordinator.onSnapshot = { [weak new] snapshot in
@@ -103,7 +114,7 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
     }
 
     func render(_ snapshot: TransactionApprovalSnapshot) {
-        guard acceptsReview else { return }
+        guard validateReview() else { return }
         let revealNotice = snapshot.notice != nil && snapshot.notice != approvalSnapshot.notice
         approvalSnapshot = snapshot
         updateInterface(revealNotice: revealNotice)
@@ -118,7 +129,7 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
     override func viewDidLoad() {
         super.viewDidLoad()
         review.register(self)
-        guard acceptsReview else { return }
+        guard validateReview() else { return }
         (metaTextView.enclosingScrollView?.verticalScroller as? WalletActivityScroller)?.accessibilityInteraction = { [weak self] in
             guard let self, !isRetiredForAccess, review.isActive,
                   viewIfLoaded?.window?.contentViewController === self else { return false }
@@ -132,10 +143,9 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
         
         priceTask = Task { [weak self, priceService] in
             await priceService.update()
-            guard let self, !Task.isCancelled, acceptsReview else { return }
+            guard let self, !Task.isCancelled, validateReview() else { return }
             updateTextView()
         }
-        titleLabel.stringValue = Strings.sendTransaction
         speedSlider.isContinuous = true
         speedSlider.minValue = 0
         speedSlider.maxValue = GasSpeedConfiguration.maximumSliderPosition
@@ -158,7 +168,7 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
         let address = account.address
         balanceTask = Task { [weak self, ethereum] in
             guard let balance = try? await ethereum.getBalance(network: network, address: address),
-                  let self, !Task.isCancelled, acceptsReview else { return }
+                  let self, !Task.isCancelled, validateReview() else { return }
             self.balance = balance.eth(shortest: true) + " " + network.symbol
             updateTextView()
         }
@@ -167,7 +177,7 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
 
     override func viewDidAppear() {
         super.viewDidAppear()
-        guard !isRetiredForAccess else { return }
+        guard validateReview() else { return }
         updateRequester()
         view.window?.delegate = self
         view.window?.makeFirstResponder(view)
@@ -193,11 +203,13 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
             coordinator.releaseReservation(reservation)
             return
         }
+        authenticationFailed = false
+        let authenticate = authenticate
         let task = Task { [weak self, weak window] in
             defer { challenge.invalidate() }
-            guard self?.acceptsReview == true, !Task.isCancelled else { return }
-            let authorization = await Window.authenticate(in: window, reason: .sendTransaction, challenge: challenge, review: lifetime)
-            guard let self, !Task.isCancelled, walletAccess.isCurrent, lifetime.isActive,
+            guard self?.validateReview() == true, !Task.isCancelled else { return }
+            let result = await authenticate(window, challenge, lifetime)
+            guard let self, !Task.isCancelled, walletAccess.validateCurrentAccess(), lifetime.isActive,
                   approvalAttempt?.reservation == reservation else { return }
             defer {
                 if approvalAttempt?.reservation == reservation {
@@ -205,12 +217,16 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
                     updateInterface()
                 }
             }
-            guard let authorization else {
+            guard let authorization = result.grant else {
+                switch result {
+                case .failed, .interactionUnavailable: authenticationFailed = true
+                default: break
+                }
                 coordinator.releaseReservation(reservation)
                 return
             }
             let outcome = await coordinator.preflight(reservation)
-            guard !Task.isCancelled, walletAccess.isCurrent, lifetime.isActive,
+            guard !Task.isCancelled, walletAccess.validateCurrentAccess(), lifetime.isActive,
                   approvalAttempt?.reservation == reservation else { return }
             if case .approved(let transaction) = outcome {
                 approvalAttempt = nil
@@ -218,6 +234,7 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
             }
         }
         approvalAttempt = ApprovalAttempt(challenge: challenge, reservation: reservation, task: task)
+        updateInterface()
     }
 
     private func cancelApproval() {
@@ -261,7 +278,7 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
     }
 
     private func transactionEditorDidEnd(_ editorWindow: NSWindow) {
-        guard acceptsReview else {
+        guard validateReview() else {
             editorWindow.orderOut(nil)
             return
         }
@@ -289,7 +306,8 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
         
         updateTextView(revealNotice: revealNotice)
         let primaryAction = Self.primaryAction(for: approvalSnapshot)
-        okButton.title = primaryAction.title
+        titleLabel.stringValue = authenticationFailed ? Strings.failedToVerify : Strings.sendTransaction
+        okButton.title = authenticationFailed && primaryAction == .approve ? Strings.tryAgain : primaryAction.title
         okButton.isEnabled = approvalAttempt == nil && primaryAction != .unavailable
         editTransactionButton.isEnabled = approvalAttempt == nil && approvalSnapshot.canEdit
         updateSpeedConfigurationState()
@@ -451,7 +469,7 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
                     return
                 }
                 self.endTransactionEditorSheet { [weak self] in
-                    guard let self, acceptsReview,
+                    guard let self, validateReview(),
                           self.approvalSnapshot.phase != .finished else {
                         return
                     }
@@ -476,7 +494,7 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
     }
     
     @IBAction func sliderValueChanged(_ sender: NSSlider) {
-        guard acceptsReview else { return }
+        guard validateReview() else { return }
         walletAccess.controller?.recordContinuousInteraction()
         guard acceptsReview, approvalSnapshot.allowsMutation,
               approvalSnapshot.hasGasSpeedInfo else {
@@ -589,7 +607,7 @@ extension ApproveTransactionViewController:
 extension ApproveTransactionViewController: NSWindowDelegate {
 
     func windowDidResignKey(_ notification: Notification) {
-        guard acceptsReview else { return }
+        guard validateReview() else { return }
         guard gasSliderInteractionStartValue != nil else { return }
         guard approvalSnapshot.allowsMutation else {
             finishGasSliderInteraction(

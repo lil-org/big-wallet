@@ -57,20 +57,48 @@ XCTest matrix and may be repeated; omitted platforms remain unverified in a
 filtered report. App and Safari selectors keep their platform-specific targets.
 
 Package test builds explicitly enable testability. Each test target must compile
-an `@testable` import of its own module; production module builds and ordinary
-import API contracts remain separate. The committed
-`Scripts/vm/runtime-test-inventory.json` lists every XCTest declaration and its
-platform/configuration variants. Run `node Scripts/vm/runtime_inventory.mjs --write`
-after adding or moving package tests. The VM checks that inventory against source
-before building and requires each selected test to appear exactly once in the
-result bundle. Empty, omitted, duplicated, unexpected, or skipped tests fail;
-the existing Debug performance skips still require passing Release gates.
+its unconditional `TestabilityContract.swift` import; production module builds
+and ordinary-import API contracts remain separate. Evaluated SwiftPM source lists
+must include every test source, and critical app suites must belong to their
+required Xcode targets.
+
+The host plans required build and discovery stages without parsing Swift test
+declarations. Inside the VM, each variant builds its complete test targets, then
+enumerates the exact `.xctestrun` with Xcode's JSON test-discovery output. The
+runner resolves selectors against that inventory and executes the same bound
+products before building another instrumentation variant. Every test variant is
+cleaned before its test build so its build log identifies freshly built products
+under default DerivedData. App tests clean through their containing app scheme
+to prevent inherited standalone modules from shadowing current package frameworks.
+
+Every selected method must appear exactly once in the result bundle. Empty,
+omitted, duplicated, disabled, unexpected, or skipped tests fail; the existing
+Debug performance skips still require passing Release gates. The raw discovery,
+built test plan, build log, product hashes, and resolved stage plan are retained.
+The hashes cover the test and host executables and the frameworks linked or
+embedded by their build. macOS Debug package discovery also checks every runtime
+mutation witness against its full target, class, and method identifier. The host
+independently resolves the archived discovery, checks each recorded enumeration
+and execution command, and audits the guest-exported XCTest summary and test
+tree against the selected methods before accepting a passing report.
+There is no checked-in method inventory to regenerate. Fine-grained selector
+errors are detected in the VM and can be reported after earlier matching stages
+have run. Every requested selector must match before the run can pass.
 
 `--stage runtime --only-testing WalletNetworkingTests` compiles one package test
 target without running it or requiring unrelated package targets to compile.
 The four production module names are also accepted. `ApprovalCrashWorker`
 validates the closed package dependency graph and builds the standalone harness.
 These focused compilation runs do not establish runtime test coverage.
+With `--stage runtime --stage test`, module and harness selectors request
+compilation, while XCTest selectors choose which tests to run.
+
+Use `--stage test` to select an individual native test class or method. An
+unqualified selector runs wherever Xcode discovers a match among the selected
+platforms and configurations. Use a test target prefix to limit its scope.
+Build-only runs accept test target names and the existing Safari scenario
+selectors. A performance-only run always executes the full set of Release
+performance gates and rejects `--only-testing`.
 
 ### Address Sanitizer
 
@@ -81,18 +109,17 @@ Sanitizer disabled, using serial XCTest execution and the default DerivedData
 location. They always use macOS Debug, independently of `--configuration` and
 `--runtime-platform`, and use the run's existing signing mode.
 
-The current selection contains 173 runtime tests for secret buffers, Scrypt,
-private keys, HD derivation, stored keys, signing lifetime, and private-key imports,
-plus 43 app tests for secret handling, lifetime, and alert presentation. The
+The selection covers secret buffers, Scrypt, private keys, HD derivation, stored
+keys, signing lifetime, private-key imports, and app secret presentation. The
 functional Scrypt vector test is included; timed performance gates are excluded.
-The selected app methods are recorded alongside the package tests in
-`runtime-test-inventory.json`. Regenerate that inventory after adding or moving
-tests in these app classes as well.
+The static focus policy is checked against the instrumented products' own Xcode
+discovery. Newly added methods in a selected class are included automatically.
 
 Use `--stage asan` to run only these checks and their prerequisites.
-`--only-testing` narrows the focused selection by target, class, or method;
-unrelated invocations are omitted. An explicit ASan selection that matches no
-focused tests fails before execution. Mobile-only vault and UIKit paths are
+`--only-testing` narrows the focused selection by target, class, or method.
+The planner skips sanitizer builds whose focus cannot match any selector. Xcode
+checks individual methods within a selected class during discovery. An explicit
+ASan selection that matches no focused tests cannot pass. Mobile-only vault and UIKit paths are
 outside this coverage. Sanitizer instrumentation adds build time, execution time,
 and memory use to normal acceptance runs.
 
@@ -691,19 +718,19 @@ adds broader TSan, the deeper native parser and nineteen-mutant tiers, three fix
 Debug/Release lifecycle soaks of 1,000 sequences × 200 actions, and ten iterations
 of every selected Safari lifecycle scenario in Release on both browser platforms.
 
-`--only-testing` narrows TSan to matching tests in the selected profile. An explicit
-`--stage tsan` selection with no matching tests fails before execution. App methods
-must exist in the macOS Debug inventory, and every selected test must run exactly once.
+`--only-testing` narrows TSan to matching tests in the selected profile. The
+planner skips disjoint tiers and test targets. An explicit `--stage tsan` selection
+must match a focused test in the selected profile.
+App methods must exist in the instrumented macOS Debug inventory, and every
+selected test must run exactly once.
 
-Ordinary app XCTest runs also require every registered critical app test selected
-for their platform and configuration. A focused selection made entirely from
-registered classes or methods requires that exact inventory; full app runs allow
-other classes while still requiring all registered tests. The inventory includes
-wallet access, onboarding, mobile access, and window authentication. Missing,
-duplicated, skipped, wrong-bundle, or unexpected focused tests cannot establish a
-passing run. Known app classes route only to platforms that contain their tests.
-Mixed selections may include unregistered classes, but each explicitly requested
-selector must execute at least one test and no test may fall outside that selection.
+Ordinary app XCTest runs require the exact discovered method inventory, including
+classes outside the critical-suite policy. Critical suites such as wallet access,
+onboarding, mobile access, and window authentication must enumerate nonempty tests
+on their promised platforms. Missing, duplicated, skipped, wrong-bundle, or
+unexpected tests cannot establish a passing run. Mixed selections may include
+unregistered classes; each requested selector must match and no test may execute
+outside the resolved selection. Interrupted discovery remains incomplete coverage.
 
 Both signing modes run the same selected tests, performance thresholds, crash
 scenarios, and result audits. Local native unit-test verification removes production

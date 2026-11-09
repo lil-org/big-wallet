@@ -149,7 +149,7 @@ final class WalletsManagerPreviewTests: XCTestCase {
             case 1: reader.walletData["wallet"] = Vectors.walletCoreJSONPrivateKeyFixture
             default: reader.passwordData = Data("replacement".utf8)
             }
-            await manager.handleExternalWalletStoreChange()
+            await manager.handleExternalWalletStoreChange().value
 
             XCTAssertFalse(session.isActive)
         }
@@ -170,7 +170,7 @@ final class WalletsManagerPreviewTests: XCTestCase {
         object["name"] = "Changed public name"
         reader.walletData["wallet"] = try JSONSerialization.data(withJSONObject: object)
 
-        await manager.handleExternalWalletStoreChange()
+        await manager.handleExternalWalletStoreChange().value
 
         XCTAssertTrue(try XCTUnwrap(session).isActive)
         session = nil
@@ -589,6 +589,183 @@ final class WalletsManagerPreviewTests: XCTestCase {
         XCTAssertEqual(reader.passwordReadCount, 3)
     }
 
+    func testHealthyRefreshDoesNotAbortPrivateKeyExport() async throws {
+        try await assertHealthyRefreshPreservesPreparation(preview: false)
+    }
+
+    func testPresentedExportsMatchTheirWalletBytesAndCredential() async throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.attributes = [reader.walletAttributes(id: "wallet")]
+        reader.walletData = ["wallet": Vectors.walletCoreJSONMnemonicFixture]
+        reader.passwordData = Vectors.walletCoreJSONMnemonicPassword
+        let readsOnMainThread = Mutex([Bool]())
+        let manager = WalletsManager(keychain: Keychain(copyMatching: { query, result in
+            readsOnMainThread.withLock { $0.append(Thread.isMainThread) }
+            return reader.copyMatching(query, result)
+        }))
+        await assertWalletReload(manager)
+        let wallet = try XCTUnwrap(manager.currentWallet(id: "wallet"))
+        var exports = [WalletExportedSecret]()
+        defer { exports.forEach { $0.invalidate() } }
+        for kind in [WalletSecretExport.mnemonic, .privateKey] {
+            let account = kind == .privateKey ? try XCTUnwrap(wallet.accounts.first) : nil
+            let challenge = try await manager.makeExportChallenge(wallet: wallet, account: account, kind: kind)
+            let grant = try XCTUnwrap(challenge.issueGrant(for: manager.authorityID, credentialIdentity: .init(status: { .current })))
+            switch kind {
+            case .mnemonic: exports.append(try await manager.exportMnemonic(wallet: wallet, authorization: grant))
+            case .privateKey: exports.append(try await manager.exportPrivateKey(wallet: wallet, account: account, authorization: grant))
+            }
+        }
+
+        reader.attributes.append(reader.walletAttributes(id: "sibling"))
+        reader.walletData["sibling"] = Vectors.walletCoreJSONPrivateKeyFixture
+        await assertWalletReload(manager)
+        readsOnMainThread.withLock { $0.removeAll() }
+        for secret in exports {
+            let current = await manager.isCurrentExport(secret)
+            XCTAssertTrue(current)
+        }
+        let checks = readsOnMainThread.withLock { $0 }
+        XCTAssertFalse(checks.isEmpty)
+        XCTAssertFalse(checks.contains(true))
+        reader.passwordData = Data("replacement".utf8)
+        for secret in exports {
+            let current = await manager.isCurrentExport(secret)
+            XCTAssertFalse(current)
+        }
+        reader.passwordData = Vectors.walletCoreJSONMnemonicPassword
+        reader.walletData["wallet"] = Vectors.walletCoreJSONMnemonicFixture + Data([32])
+        await assertWalletReload(manager)
+        XCTAssertEqual(manager.currentWallet(id: "wallet")?.accounts, wallet.accounts)
+        for secret in exports {
+            let current = await manager.isCurrentExport(secret)
+            XCTAssertFalse(current)
+        }
+    }
+
+    func testRecoveredStoreCannotRepublishAnExportIssuedBeforeAnUnpublishedFailure() async throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.attributes = [reader.walletAttributes(id: "wallet")]
+        reader.walletData = ["wallet": Vectors.walletCoreJSONMnemonicFixture]
+        reader.passwordData = Vectors.walletCoreJSONMnemonicPassword
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager)
+        let wallet = try XCTUnwrap(manager.wallets.first)
+        let challenge = try await manager.makeExportChallenge(wallet: wallet, kind: .mnemonic)
+        let grant = try XCTUnwrap(challenge.issueGrant(for: manager.authorityID, credentialIdentity: .init(status: { .current })))
+        let secret = try await manager.exportMnemonic(wallet: wallet, authorization: grant)
+        defer { secret.invalidate() }
+        reader.attributesStatus = errSecInteractionNotAllowed
+        guard case .failed = await manager.repository.load() else { return XCTFail("Expected a repository failure") }
+        reader.attributesStatus = errSecSuccess
+        await assertWalletReload(manager)
+        let accepted = await manager.isCurrentExport(secret)
+        XCTAssertFalse(accepted)
+        XCTAssertFalse(secret.withText { _ in XCTFail("Recovered storage exposed an old export") })
+    }
+
+    func testHealthyRefreshDoesNotAbortPreviewPreparation() async throws {
+        try await assertHealthyRefreshPreservesPreparation(preview: true)
+    }
+
+    func testExportValidationRechecksTheSourceWhenARepositoryReadOvertakesIt() async throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.attributes = [reader.walletAttributes(id: "wallet")]
+        reader.walletData = ["wallet": Vectors.walletCoreJSONMnemonicFixture]
+        reader.passwordData = Vectors.walletCoreJSONMnemonicPassword
+        let afterWalletRead = Mutex<(@Sendable () -> Void)?>(nil)
+        let manager = WalletsManager(keychain: Keychain(copyMatching: { query, result in
+            let status = reader.copyMatching(query, result)
+            if (query as NSDictionary)[kSecAttrAccount as String] as? String == "org.lil.wallet.wallet.wallet" {
+                let wait = afterWalletRead.withLock { callback in
+                    defer { callback = nil }
+                    return callback
+                }
+                wait?()
+            }
+            return status
+        }))
+        await assertWalletReload(manager)
+        let wallet = try XCTUnwrap(manager.currentWallet(id: "wallet"))
+        let challenge = try await manager.makeExportChallenge(wallet: wallet, kind: .mnemonic)
+        let grant = try XCTUnwrap(challenge.issueGrant(for: manager.authorityID, credentialIdentity: .init(status: { .current })))
+        let secret = try await manager.exportMnemonic(wallet: wallet, authorization: grant)
+        defer { secret.invalidate() }
+
+        for replace in [false, true] {
+            let entered = expectation(description: "Validation captured the old wallet bytes")
+            let release = DispatchSemaphore(value: 0)
+            defer { release.signal() }
+            afterWalletRead.withLock { callback in
+                callback = { entered.fulfill(); release.wait() }
+            }
+            let validation = Task { await manager.isCurrentExport(secret) }
+            defer { validation.cancel() }
+            guard await XCTWaiter.fulfillment(of: [entered], timeout: 3) == .completed else {
+                return XCTFail("Export validation did not read the wallet")
+            }
+            if replace { reader.walletData["wallet"] = Vectors.walletCoreJSONMnemonicFixture + Data([32]) }
+            guard case .loaded = await manager.repository.load() else { return XCTFail("Expected a healthy catalog read") }
+            let reads = reader.walletReadCount
+            release.signal()
+            let valid = await validation.value
+
+            XCTAssertEqual(valid, !replace)
+            XCTAssertEqual(reader.walletReadCount, reads + 1)
+        }
+    }
+
+    private func assertHealthyRefreshPreservesPreparation(preview: Bool) async throws {
+        let reader = KeychainCopyMatchingStub()
+        reader.attributes = [reader.walletAttributes(id: "wallet")]
+        reader.walletData = ["wallet": preview ? Vectors.walletCoreJSONMnemonicFixture : Vectors.walletCoreJSONPrivateKeyFixture]
+        reader.passwordData = preview ? Vectors.walletCoreJSONMnemonicPassword : Vectors.walletCoreJSONPrivateKeyPassword
+        let armed = Mutex(false)
+        let entered = expectation(description: "Preparation captured access before reading its source")
+        let refreshEntered = expectation(description: "Healthy refresh started")
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        let manager = WalletsManager(keychain: Keychain(copyMatching: { query, result in
+            if (query as NSDictionary)[kSecAttrAccount as String] as? String == "org.lil.wallet.wallet.wallet",
+               armed.withLock({ value in defer { value = false }; return value }) {
+                entered.fulfill()
+                release.wait()
+            }
+            return reader.copyMatching(query, result)
+        }))
+        await assertWalletReload(manager)
+        let wallet = try XCTUnwrap(manager.wallets.first)
+        let access = manager.accessForTesting()
+        defer { access.invalidate() }
+        let challenge = try await manager.makeExportChallenge(wallet: wallet, kind: .privateKey)
+        let grant = try XCTUnwrap(challenge.issueGrant(for: challenge.authorityID, credentialIdentity: .init(status: { .current })))
+        defer { grant.invalidate() }
+        armed.withLock { $0 = true }
+        let operation = Task { () async throws -> String in
+            if preview {
+                let session = try await manager.previewSession(wallet: wallet, access: access)
+                defer { session.invalidate() }
+                let accounts = try await session.previewAccounts(page: 0)
+                return try XCTUnwrap(accounts.first).address
+            }
+            let secret = try await manager.exportPrivateKey(wallet: wallet, authorization: grant)
+            defer { secret.invalidate() }
+            var text: String?
+            secret.withText { text = $0 }
+            return try XCTUnwrap(text)
+        }
+        await fulfillment(of: [entered], timeout: 3)
+        let refresh = Task { refreshEntered.fulfill(); return await manager.reloadFromStore() }
+        await fulfillment(of: [refreshEntered], timeout: 3)
+        XCTAssertEqual(manager.loadState, .ready)
+        release.signal()
+        let value = try await operation.value
+        let loaded = await refresh.value
+        XCTAssertTrue(loaded)
+        if preview { XCTAssertEqual(value.lowercased(), Vectors.walletCoreJSONMnemonicDerivedEthereumAddress.lowercased()) }
+        else { XCTAssertEqual(WalletCrypto.hexData(string: value), Vectors.walletCoreJSONPrivateKeyData) }
+    }
+
     func testKeychainWalletOrderingIsDeterministicForTiedAndMissingDates() async throws {
         let reader = KeychainCopyMatchingStub()
         let earlier = Date(timeIntervalSince1970: 10)
@@ -739,14 +916,14 @@ final class WalletsManagerPreviewTests: XCTestCase {
         reader.attributes = [reader.walletAttributes(id: "wallet-b")]
         reader.walletData = ["wallet-b": Vectors.walletCoreJSONPrivateKeyFixture]
         reader.attributesStatus = errSecInteractionNotAllowed
-        await manager.handleExternalWalletStoreChange()
+        await manager.handleExternalWalletStoreChange().value
 
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet-a"])
         XCTAssertEqual(metadataReloadCount, 1)
         XCTAssertEqual(localPublicationCount, 1)
 
         reader.attributesStatus = errSecSuccess
-        await manager.handleExternalWalletStoreChange()
+        await manager.handleExternalWalletStoreChange().value
 
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet-b"])
         XCTAssertEqual(metadataReloadCount, 2)
@@ -759,12 +936,14 @@ final class WalletsManagerPreviewTests: XCTestCase {
         reader.walletData = ["wallet": Vectors.walletCoreJSONPrivateKeyFixture]
         var metadataReloadCount = 0
         var localPublicationCount = 0
+        var cancelledOwner = false
         let manager = WalletsManager(
             keychain: Keychain(copyMatching: reader.copyMatching),
             reloadMetadata: {
                 metadataReloadCount += 1
                 if metadataReloadCount == 2 {
                     withUnsafeCurrentTask { $0?.cancel() }
+                    cancelledOwner = Task.isCancelled
                 }
             },
             publishLocalChange: { localPublicationCount += 1 }
@@ -773,10 +952,10 @@ final class WalletsManagerPreviewTests: XCTestCase {
         XCTAssertEqual(manager.wallets.count, 1)
         reader.attributes = []
 
-        let reload = Task { await manager.handleExternalWalletStoreChange() }
+        let reload = Task { await manager.handleExternalWalletStoreChange().value }
         await reload.value
 
-        XCTAssertTrue(reload.isCancelled)
+        XCTAssertTrue(cancelledOwner)
         XCTAssertTrue(manager.wallets.isEmpty)
         XCTAssertEqual(localPublicationCount, 2)
     }

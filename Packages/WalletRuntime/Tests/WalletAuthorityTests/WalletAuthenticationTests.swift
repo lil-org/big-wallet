@@ -532,6 +532,27 @@ final class WalletAuthenticationTests: XCTestCase {
         XCTAssertNil(expired.issueGrant(for: expired.authorityID, credentialIdentity: .init(status: { .current })))
     }
 
+    func testNativeAuthenticationRetryRequiresTheOriginalReviewAndBothDeadlines() throws {
+        for expiration in ["elapsed", "absolute", "retired"] {
+            let clock = TestClock()
+            let review = try nativeMessageReview(clock: clock)
+            defer { review.invalidate() }
+            XCTAssertTrue(review.canRetryAuthentication)
+            clock.advanceUptime(by: 149_000_000_000)
+            for _ in 0..<3 { XCTAssertTrue(review.canRetryAuthentication) }
+            switch expiration {
+            case "elapsed":
+                clock.advanceUptime(by: 1_000_000_000)
+                clock.setDate(.distantPast)
+            case "absolute":
+                clock.setDate(review.request.admissionDeadline)
+            default:
+                review.invalidate()
+            }
+            XCTAssertFalse(review.canRetryAuthentication)
+        }
+    }
+
     func testNativeChallengeAlsoExpiresAtTheAbsoluteRequestDeadline() throws {
         let clock = TestClock()
         let review = try nativeMessageReview(clock: clock)

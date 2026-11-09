@@ -4,15 +4,16 @@ import {spawn} from "node:child_process";
 import {observeProcess} from "../process_lifecycle.mjs";
 import {createHash} from "node:crypto";
 import {constants, createWriteStream} from "node:fs";
-import {lstat, mkdir, open, readdir, realpath, writeFile} from "node:fs/promises";
+import {lstat, mkdir, open, realpath, writeFile} from "node:fs/promises";
 import {availableParallelism, cpus, freemem, loadavg, totalmem, userInfo} from "node:os";
-import {dirname, isAbsolute, join, relative, resolve, sep} from "node:path";
+import {dirname, isAbsolute, join, resolve, sep} from "node:path";
 import {pathToFileURL} from "node:url";
-import {createManifest, validateJob, commandForStage} from "./test_manifest.mjs";
-import {asanDiagnostics, auditApprovalResult, auditNativeResult, auditResults, auditSafariPreparation, auditSafariResult} from "./result_audit.mjs";
+import {createManifest, validateJob, commandForStage, stagePlan} from "./test_manifest.mjs";
+import {auditASanLog, resultBundleInventory, auditApprovalResult, auditNativeResult, auditResults, auditSafariPreparation, auditSafariResult} from "./result_audit.mjs";
 import {auditUpgradeResult} from "../wallet_upgrade/audit.mjs";
 import {auditParserFuzzEvidence} from "../native_parser_fuzz/audit.mjs";
 import {auditMutationEvidence} from "../security_mutations/audit.mjs";
+import {auditDiscoveryStages, captureTestDiscovery, stagesAfterDiscovery, verifyDiscoveryProducts} from "./test_discovery.mjs";
 
 const EXCHANGE_PATH = "/Volumes/BigWalletBuild/Exchange";
 const MAX_JSON_BYTES = 16 * 1024 * 1024;
@@ -319,7 +320,7 @@ function credentialCoverage(job, stages, preflight) {
         productionDistributionSigning: "not-verified", osEntitlementIntegration: "not-verified"};
 }
 
-export function coverageReport(job, stages, preflight) {
+export function coverageReport(job, stages, preflight, manifest) {
     const options = job.payload;
     const selected = options.stages.length > 0 || options.onlyTesting.length > 0 || Boolean(options.configuration) || Boolean(options.approvalArgs?.length) || Boolean(options.parserFuzzReplay) || Boolean(options.runtimePlatforms?.length);
     const missingPrerequisites = requiredPrerequisites(job).filter(name => preflight?.checks?.[name] !== true);
@@ -329,7 +330,7 @@ export function coverageReport(job, stages, preflight) {
         return {scope: "prerequisites", status: preflight && !missingPrerequisites.length ? "complete" : "partial",
             missingPrerequisites, signingMode, credentialCoverage: credentials};
     }
-    const manifest = createManifest(job);
+    manifest ??= createManifest(job);
     const outcomes = new Map(stages.map(stage => [stage.id, stage.status]));
     const safariStages = manifest.filter(stage => stage.nativeAudit?.kind === "safari");
     const safari = {status: safariStages.length ? "incomplete" : "not-requested", signingMode,
@@ -428,37 +429,6 @@ export async function auditSafariLog(path, {stopRequested = async () => false} =
     } finally { await file.close(); }
 }
 
-export async function auditASanLog(path, {stopRequested = async () => false} = {}) {
-    const maximum = 256 * 1024 * 1024;
-    const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-    try {
-        const info = await file.stat();
-        if (!info.isFile() || info.size === 0 || info.size > maximum) {
-            throw new Error("AddressSanitizer log must be a nonempty bounded regular file");
-        }
-        const bytes = Buffer.alloc(64 * 1024);
-        const diagnostics = new Set();
-        let bytesScanned = 0;
-        let carry = "";
-        for (;;) {
-            if (await stopRequested()) { throw Object.assign(new Error("AddressSanitizer log auditing was cancelled"), {cancelled: true}); }
-            const {bytesRead} = await file.read(bytes, 0, bytes.length, bytesScanned);
-            if (!bytesRead) { break; }
-            bytesScanned += bytesRead;
-            if (bytesScanned > maximum) { throw new Error("AddressSanitizer log exceeded its size limit"); }
-            const chunk = carry + bytes.subarray(0, bytesRead).toString("latin1");
-            for (const diagnostic of asanDiagnostics(chunk)) { diagnostics.add(diagnostic); }
-            carry = chunk.slice(-8192);
-        }
-        const after = await file.stat();
-        if (bytesScanned !== info.size || after.size !== info.size || after.mtimeMs !== info.mtimeMs || after.ctimeMs !== info.ctimeMs) {
-            throw new Error("AddressSanitizer log changed during auditing");
-        }
-        const issues = [...diagnostics].map(diagnostic => `${diagnostic} in the stage log`);
-        return {ok: !issues.length, issues, diagnostics: [...diagnostics], bytesScanned};
-    } finally { await file.close(); }
-}
-
 export async function prepareNativeSimulators(platform, {destinations, artifacts, stageId, execute, writeJSON, stopRequested = async () => false}) {
     const preparation = {platform, status: "running", artifact: `${stageId}.simulators.json`, startedAt: timestamp(), steps: []};
     const invoke = async (args, timeoutSeconds) => {
@@ -516,13 +486,7 @@ export async function prepareNativeSimulators(platform, {destinations, artifacts
 }
 
 export function pendingStageResults(manifest) {
-    return manifest.map(stage => ({id: stage.id, group: stage.group, status: "pending",
-        ...(stage.nativeAudit ? {nativeAudit: stage.nativeAudit} : {}),
-        ...(stage.approvalAudit ? {approvalAudit: stage.approvalAudit} : {}),
-        ...(stage.upgradeAudit ? {upgradeAudit: stage.upgradeAudit} : {}),
-        ...(stage.parserFuzzAudit ? {parserFuzzAudit: stage.parserFuzzAudit} : {}),
-        ...(stage.mutationAudit ? {mutationAudit: stage.mutationAudit} : {}),
-        ...(stage.preparationResult ? {preparationResult: true} : {})}));
+    return stagePlan(manifest);
 }
 
 async function preserveGeneratedArtifact(workspace, artifacts, stageId, path, previousHash) {
@@ -560,18 +524,21 @@ async function preserveGeneratedArtifact(workspace, artifacts, stageId, path, pr
 
 export async function executeStages(manifest, {workspace, artifacts, preflight: checked, proofKey, execute = runProcess,
     stopRequested = async () => false, publish = async () => {}, runId, exchange, unlockSigning, writeJSON, hashFile, measureResources = resourceSnapshot,
-    auditParserFuzz = auditParserFuzzEvidence, auditMutation = auditMutationEvidence, inspectResultBundle = resultBundleInventory}) {
-    const results = pendingStageResults(manifest);
+    auditParserFuzz = auditParserFuzzEvidence, auditMutation = auditMutationEvidence, inspectResultBundle = resultBundleInventory,
+    discover = captureTestDiscovery, verifyProducts = verifyDiscoveryProducts}) {
+    const queue = [...manifest];
+    const results = pendingStageResults(queue);
     const byID = new Map(results.map(result => [result.id, result]));
-    await publish(results);
-    for (const stage of manifest) {
+    await publish(results, queue);
+    for (let index = 0; index < queue.length; index++) {
+        const stage = queue[index];
         const result = byID.get(stage.id);
         result.resources = {started: measureResources()};
         if (await stopRequested()) {
             result.status = "cancelled";
             result.reason = "Stop requested";
             result.resources.finished = measureResources();
-            await publish(results);
+            await publish(results, queue);
             continue;
         }
         const dependencies = stage.dependencies.filter(id => byID.get(id)?.status !== "passed");
@@ -583,16 +550,16 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
                 result.reason.prerequisite = checked.safariAutomationIssue ?? "Run Scripts/test_vm.sh setup to configure unattended guest UI automation.";
             }
             result.resources.finished = measureResources();
-            await publish(results);
+            await publish(results, queue);
             continue;
         }
         result.startedAt = timestamp();
         result.status = "running";
-        await publish(results);
+        await publish(results, queue);
         try {
             if (stage.requirements.includes("signing") && (!unlockSigning || !await unlockSigning())) { throw new Error("Guest signing keychain could not be unlocked"); }
-            if (stage.nativeAudit || stage.preparationResult) {
-                result.simulatorPreparation = await prepareNativeSimulators(stage.nativeAudit?.platform ?? "macos", {
+            if (stage.nativeAudit || stage.nativeDiscovery || stage.preparationResult) {
+                result.simulatorPreparation = await prepareNativeSimulators(stage.nativeAudit?.platform ?? stage.nativeDiscovery?.platform ?? "macos", {
                     destinations: checked.destinations, artifacts, stageId: stage.id, execute, writeJSON, stopRequested,
                 });
                 if (result.simulatorPreparation.status !== "passed") {
@@ -610,6 +577,29 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
             }
             result.command = [command, ...args];
             result.log = `${stage.id}.log`;
+            if (stage.nativeDiscovery) {
+                const build = stage.dependencies.map(id => byID.get(id)).find(result => result?.id.startsWith("build-") && result.command);
+                if (!build) { throw new Error("Test discovery requires the successful test build command"); }
+                result.discovery = await discover({stage, buildCommand: build.command, buildLog: build.log, artifacts,
+                    workspace: join(workspace, stage.cwd), destination: checked.destinations[stage.nativeDiscovery.platform], execute, stopRequested});
+                result.command = result.discovery.command;
+                result.exitCode = 0;
+                result.status = "passed";
+                const additions = stagesAfterDiscovery(stage, result.discovery.identifiers, result.discovery, new Set(queue.map(stage => stage.id)));
+                queue.splice(index + 1, 0, ...additions);
+                const pending = pendingStageResults(additions);
+                results.splice(index + 1, 0, ...pending);
+                for (const added of pending) { byID.set(added.id, added); }
+                result.finishedAt = timestamp();
+                result.resources.finished = measureResources();
+                await publish(results, queue);
+                continue;
+            }
+            const boundDiscovery = stage.discoveryStage ? byID.get(stage.discoveryStage)?.discovery : null;
+            if (stage.discoveryStage) {
+                if (!boundDiscovery) { throw new Error("Native execution has no bound discovery"); }
+                await verifyProducts(boundDiscovery);
+            }
             const before = Object.fromEntries(await Promise.all((stage.unchanged ?? []).map(async path => [path, await hashFile(join(workspace, path))])));
             const outcome = await execute(command, args, {
                 cwd: join(workspace, stage.cwd), env: {...cleanEnvironment(), ...(stage.env ?? {}),
@@ -627,6 +617,10 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
             result.signal = outcome.signal;
             if (outcome.outputDrainTimedOut) { result.outputDrainTimedOut = true; }
             result.status = outcome.cancelled ? "cancelled" : outcome.timedOut || outcome.error || outcome.code !== 0 ? "failed" : "passed";
+            if (boundDiscovery) {
+                await verifyProducts(boundDiscovery);
+                result.productsVerified = true;
+            }
             if ((stage.parserFuzzAudit || stage.mutationAudit) && outcome.outputDrainTimedOut) {
                 result.status = "failed";
                 result.reason = "Hardening stage output did not finish draining";
@@ -736,36 +730,22 @@ export async function executeStages(manifest, {workspace, artifacts, preflight: 
         } catch (error) { result.status = error.cancelled ? "cancelled" : "failed"; result.reason = error.message; }
         result.finishedAt = timestamp();
         result.resources.finished = measureResources();
-        await publish(results);
+        await publish(results, queue);
     }
     return results;
-}
-
-export async function resultBundleInventory(bundle) {
-    const files = new Map();
-    for (const entry of await readdir(bundle, {recursive: true, withFileTypes: true})) {
-        if (entry.isDirectory()) { continue; }
-        if (!entry.isFile()) { throw new Error("Unexpected file type in XCTest result bundle"); }
-        const path = join(entry.parentPath, entry.name);
-        files.set(relative(bundle, path), (await lstat(path)).size);
-    }
-    if (!files.get("Info.plist") || !files.get("database.sqlite3") ||
-        !Array.from(files).some(([path, size]) => path.startsWith("Data/data.") && size > 0)) {
-        throw new Error("Incomplete XCTest result bundle");
-    }
-    const entries = Array.from(files, ([path, size]) => Buffer.from(`${path}\0${size}\0`));
-    return sha256(Buffer.concat(entries.sort(Buffer.compare)));
 }
 
 export async function runJob({job: input, identity, provision, workspace, exchange, artifacts, source, buildVolume,
     bootstrapEvidence, stopRequested, writeJSON, readSnapshotFile, hashFile, inspectPreflight = preflight}) {
     const job = validateJob(input);
     const manifest = job.kind === "run" ? createManifest(job) : [];
+    let resolvedManifest = manifest;
     const reportPath = join(artifacts, "result.json");
     const report = {version: 1, runId: job.runId, vmId: job.vmId, kind: job.kind, profile: job.profile, signingMode: job.payload.signing ?? "local", status: "running", startedAt: timestamp(),
         resources: {started: resourceSnapshot()}, identity, source, buildVolume, stages: pendingStageResults(manifest)};
     try {
         await writeJSON(reportPath, report);
+        if (job.kind === "run") { await writeJSON(join(artifacts, "resolved-plan.json"), stagePlan(manifest)); }
         if (await stopRequested()) { throw new Error("Run cancelled"); }
         const checked = await inspectPreflight({workspace, identity, provision, bootstrapEvidence, readSnapshotFile,
             signing: report.signingMode, expectedMacOS: job.payload.expectedMacOS, stopRequested});
@@ -780,9 +760,17 @@ export async function runJob({job: input, identity, provision, workspace, exchan
         } else {
             report.stages = await executeStages(manifest, {
                 workspace, artifacts, preflight: checked.report, proofKey: checked.proofKey, unlockSigning: checked.unlockSigning, stopRequested, runId: job.runId, exchange,
-                writeJSON, hashFile, publish: async stages => { report.stages = structuredClone(stages); await writeJSON(reportPath, report); },
+                writeJSON, hashFile, publish: async (stages, queue) => {
+                    resolvedManifest = queue;
+                    report.stages = structuredClone(stages);
+                    await writeJSON(join(artifacts, "resolved-plan.json"), stagePlan(queue));
+                    await writeJSON(reportPath, report);
+                },
             });
-            report.summary = auditResults(report.stages);
+            const {stages: resolved, ...discoveryAudit} = await auditDiscoveryStages(manifest, report.stages, {job, artifacts});
+            resolvedManifest = resolved;
+            report.discoveryAudit = discoveryAudit;
+            report.summary = auditResults(report.stages, discoveryAudit);
             report.status = report.summary.status;
         }
     } catch (error) {
@@ -798,7 +786,11 @@ export async function runJob({job: input, identity, provision, workspace, exchan
     } finally {
         report.finishedAt = timestamp();
         report.resources.finished = resourceSnapshot();
-        report.coverage = coverageReport(job, report.stages, report.preflight);
+        report.coverage = coverageReport(job, report.stages, report.preflight, resolvedManifest);
+        if (job.kind === "run" && (report.status !== "passed" || report.discoveryAudit?.ok !== true)) {
+            report.coverage.fullSuiteVerified = false;
+            report.coverage.status = "partial";
+        }
         await writeJSON(reportPath, report);
     }
     return report;

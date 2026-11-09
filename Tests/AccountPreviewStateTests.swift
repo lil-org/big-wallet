@@ -515,6 +515,28 @@ final class AccountPreviewStateTests: XCTestCase {
         XCTAssertFalse(state.hasChanges)
     }
 
+    func testUnchangedRefreshPreservesPendingFirstPageAndItsSession() async throws {
+        let initial = PreviewRequest()
+        let sessions = PreviewSessions(initial: [initial])
+        defer { sessions.finishPendingRequests() }
+        let changes = PreviewChanges()
+        let original = wallet(accounts: [account(0)])
+        let state = makeState(wallet: original, sessions: sessions, changes: changes)
+        state.reset()
+        await fulfillment(of: [initial.entered], timeout: 2)
+        let session = try XCTUnwrap(sessions.created.first)
+        XCTAssertEqual(state.refresh(wallet: original), .keepEditing)
+        XCTAssertEqual(state.status, .loadingInitial)
+        XCTAssertFalse(session.isInvalidated)
+        XCTAssertEqual(sessions.initialCalls, 1)
+        initial.resolve([account(0), account(1)])
+        await fulfillment(of: [initial.returned], timeout: 2)
+        await expectEventually { state.canEdit }
+        XCTAssertEqual(state.accounts, [account(0), account(1)])
+        XCTAssertEqual(changes.generations.count, 1)
+        XCTAssertEqual(sessions.initialCalls, 1)
+    }
+
     func testRefreshPreservesFailureUntilExplicitRetryWithTheLatestWallet() async {
         let failed = PreviewRequest()
         let replacement = PreviewRequest()

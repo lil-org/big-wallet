@@ -45,7 +45,7 @@ private struct WalletSceneView: View {
             }
             .task(id: scenePhase) {
                 guard scenePhase == .active else { return }
-                access.checkAccess()
+                access.validateCurrentAccess()
                 ApplicationServices.shared.prewarm()
                 _ = await ApplicationServices.shared.wallets.reloadFromStore()
                 guard !Task.isCancelled else { return }

@@ -2,11 +2,25 @@ import Foundation
 import WalletDomain
 
 public final class WalletExportedSecret: Sendable {
+    struct Binding: Sendable {
+        let source: WalletSecretExportBinding
+        let validity: WalletStoreValidity.Token
+    }
+
     private let bytes: SecretBytes
+    private let binding: Binding?
 
-    init(bytes: SecretBytes) { self.bytes = bytes }
+    func activeBinding(in store: WalletStoreValidity) -> WalletSecretExportBinding? {
+        guard let binding, binding.validity.store === store, binding.validity.isCurrent, bytes.isAvailable else { return nil }
+        return binding.source
+    }
 
-    static func privateKey(_ key: WalletPrivateKey, coin: WalletCoin) throws -> WalletExportedSecret {
+    init(bytes: SecretBytes, binding: Binding?) {
+        self.bytes = bytes
+        self.binding = binding
+    }
+
+    static func privateKey(_ key: WalletPrivateKey, coin: WalletCoin, binding: Binding?) throws -> WalletExportedSecret {
         let encoded = try key.withUnsafeBytes { privateBytes in
             switch coin {
             case .ethereum:
@@ -30,7 +44,7 @@ public final class WalletExportedSecret: Sendable {
                 return try secret.withUnsafeBytes(encodeBase58)
             }
         }
-        return WalletExportedSecret(bytes: encoded)
+        return WalletExportedSecret(bytes: encoded, binding: binding)
     }
 
     private static func encodeBase58(_ input: UnsafeRawBufferPointer) throws -> SecretBytes {
@@ -64,6 +78,7 @@ public final class WalletExportedSecret: Sendable {
 
     @discardableResult
     public func withText(_ consume: (String) -> Void) -> Bool {
+        guard binding?.validity.isCurrent != false else { return false }
         do {
             try bytes.withUTF8String(consume)
             return true

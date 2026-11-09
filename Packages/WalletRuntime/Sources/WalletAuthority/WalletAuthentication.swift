@@ -265,6 +265,12 @@ public final class WalletAccessSession: Sendable {
 
 public enum WalletAuthenticationResult: Sendable {
     case granted(WalletAuthenticationGrant)
+    case cancelled
     case failed
     case interactionUnavailable
+
+    public var grant: WalletAuthenticationGrant? {
+        guard case .granted(let grant) = self else { return nil }
+        return grant
+    }
 }

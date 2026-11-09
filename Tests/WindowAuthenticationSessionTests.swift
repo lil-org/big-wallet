@@ -23,7 +23,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
             controller.bindAccess(fixture.access, unlock: {})
             let review = try nativeReviewForTesting()
             let content = ApproveViewController.with(subject: .signMessage, meta: "Cascade fixture",
-                account: account, walletId: wallet.id, review: review, completion: { _ in })
+                account: account, walletId: wallet.id, review: review, completion: { _, _ in })
             content.walletAccess = NativeWalletAccess(fixture.access)
             XCTAssertTrue(controller.installProtectedContent(content, access: content.walletAccess))
             XCTAssertFalse(controller.window?.isVisible == true)
@@ -138,7 +138,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         let review = try nativeReviewForTesting()
         review.invalidate()
         let message = ApproveViewController.with(subject: .signMessage, meta: "fixture", account: account,
-            walletId: wallet.id, review: review, completion: { _ in })
+            walletId: wallet.id, review: review, completion: { _, _ in })
         _ = message.view
         XCTAssertTrue(message.metaTextView.enclosingScrollView?.verticalScroller is WalletActivityScroller)
         let transaction = ApproveTransactionViewController.with(
@@ -235,7 +235,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         XCTAssertNotNil(controller.tableView(controller.tableView, rowViewForRow: 0))
         XCTAssertEqual(probes, 0)
         XCTAssertFalse(fixture.access.isLocked)
-        XCTAssertFalse(fixture.access.checkAccess())
+        XCTAssertFalse(fixture.access.validateCurrentAccess())
         XCTAssertEqual(controller.numberOfRows(in: controller.tableView), 0)
         XCTAssertNil(controller.tableView(controller.tableView, rowViewForRow: 0))
         XCTAssertEqual(controller.tableView(controller.tableView, heightOfRow: 0), controller.tableView.rowHeight)
@@ -264,7 +264,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         XCTAssertEqual(probes, 1)
         XCTAssertFalse(fixture.access.isLocked)
         XCTAssertGreaterThan(controller.numberOfRows(in: controller.tableView), 0)
-        XCTAssertFalse(fixture.access.checkAccess())
+        XCTAssertFalse(fixture.access.validateCurrentAccess())
         XCTAssertEqual(controller.numberOfRows(in: controller.tableView), 0)
         XCTAssertNil(controller.tableView(controller.tableView, rowViewForRow: 0))
         XCTAssertEqual(controller.tableView(controller.tableView, heightOfRow: 0), controller.tableView.rowHeight)
@@ -302,7 +302,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         XCTAssertEqual(probes, 1)
         XCTAssertTrue(controller.previewState === preview)
         XCTAssertFalse(fixture.access.isLocked)
-        XCTAssertFalse(fixture.access.checkAccess())
+        XCTAssertFalse(fixture.access.validateCurrentAccess())
         XCTAssertNil(controller.previewState)
         XCTAssertEqual(controller.numberOfRows(in: controller.tableView), 0)
         XCTAssertNil(controller.tableView(controller.tableView, rowViewForRow: 0))
@@ -320,7 +320,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         try fixture.unlock()
         applicationNotifications.post(name: NSApplication.didResignActiveNotification, object: nil)
         applicationNotifications.post(name: NSApplication.willResignActiveNotification, object: nil)
-        XCTAssertTrue(fixture.access.checkAccess())
+        XCTAssertTrue(fixture.access.validateCurrentAccess())
 
         let boundaries: [(NotificationCenter, Notification.Name, WalletAccessController.LockReason)] = [
             (applicationNotifications, Notification.Name.NSApplicationProtectedDataWillBecomeUnavailable, .protectedDataUnavailable),
@@ -354,7 +354,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         try fixture.unlock()
         fixture.advance(by: .seconds(899))
         applicationNotifications.post(name: NSApplication.didBecomeActiveNotification, object: nil)
-        XCTAssertTrue(fixture.access.checkAccess())
+        XCTAssertTrue(fixture.access.validateCurrentAccess())
         fixture.advance(by: .seconds(1))
         applicationNotifications.post(name: NSApplication.didBecomeActiveNotification, object: nil)
         XCTAssertTrue(fixture.access.isLocked)
@@ -383,7 +383,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         XCTAssertNil(weakLifecycle)
         applicationNotifications.post(name: Notification.Name.NSApplicationProtectedDataWillBecomeUnavailable, object: nil)
         workspaceNotifications.post(name: NSWorkspace.willSleepNotification, object: nil)
-        XCTAssertTrue(fixture.access.checkAccess())
+        XCTAssertTrue(fixture.access.validateCurrentAccess())
     }
 
     func testWalletLockCancelsActionAuthenticationAndKeepsTheLockedSurface() async throws {
@@ -395,7 +395,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         let challenge = fixture.credentials.makeWalletAccessChallenge()
         let authentication = Task {
             await controller.authenticate(reason: .showPrivateKey, challenge: challenge,
-                dependencies: .init(credentials: fixture.credentials, attemptBiometrics: { _, _ in nil }))
+                dependencies: .init(credentials: fixture.credentials, attemptBiometrics: { _, _ in nil })).grant
         }
         let (sheet, form) = try await passwordSheet(in: controller)
         form.passwordTextField.stringValue = "password"
@@ -428,7 +428,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
             dependencies: .init(credentials: fixture.credentials, attemptBiometrics: { _, _ in
                 attempts += 1
                 return nil
-            }))
+            })).grant
         XCTAssertNil(result)
         XCTAssertEqual(attempts, 0)
         XCTAssertTrue(fixture.access.isLocked)
@@ -469,7 +469,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         let controller = makeWindow()
         defer { controller.close() }
         let authentication = Task {
-            await controller.authenticate(reason: .showPrivateKey, challenge: challenge, dependencies: dependencies)
+            await controller.authenticate(reason: .showPrivateKey, challenge: challenge, dependencies: dependencies).grant
         }
         let (_, form) = try await passwordSheet(in: controller)
         form.cancelButtonTapped(form.cancelButton)
@@ -494,7 +494,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         var wasDismissedAtReturn = false
         var ownerWasEligibleAtReturn = false
         let authentication = Task {
-            let result = await controller.authenticate(reason: .showPrivateKey, challenge: dependencies.credentials.makeWalletAccessChallenge(), dependencies: dependencies)
+            let result = await controller.authenticate(reason: .showPrivateKey, challenge: dependencies.credentials.makeWalletAccessChallenge(), dependencies: dependencies).grant
             wasDismissedAtReturn = authenticationSheet?.sheetParent == nil && authenticationSheet?.isVisible == false
             ownerWasEligibleAtReturn = NSApp.isActive && NativeSecretAlertPresentation.acceptsKeyWindow(
                 NSApp.keyWindow, owner: owner
@@ -528,7 +528,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         var ownerWasEligibleAtReturn = true
         var otherWasKeyAtReturn = false
         let authentication = Task {
-            let result = await controller.authenticate(reason: .showPrivateKey, challenge: dependencies.credentials.makeWalletAccessChallenge(), dependencies: dependencies)
+            let result = await controller.authenticate(reason: .showPrivateKey, challenge: dependencies.credentials.makeWalletAccessChallenge(), dependencies: dependencies).grant
             wasDismissedAtReturn = authenticationSheet?.sheetParent == nil && authenticationSheet?.isVisible == false
             ownerWasEligibleAtReturn = NativeSecretAlertPresentation.acceptsKeyWindow(
                 NSApp.keyWindow, owner: owner
@@ -575,7 +575,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         let first = begin(controller, fixture: fixture)
         let (sheet, form) = try await passwordSheet(in: controller)
         let originalSession = controller.currentAuthenticationSession
-        let duplicate = await controller.authenticate(reason: .removeWallet, challenge: fixture.credentials.makeWalletAccessChallenge(), dependencies: dependencies(fixture))
+        let duplicate = await controller.authenticate(reason: .removeWallet, challenge: fixture.credentials.makeWalletAccessChallenge(), dependencies: dependencies(fixture)).grant
         XCTAssertNil(duplicate)
         XCTAssertTrue(controller.currentAuthenticationSession === originalSession)
         XCTAssertTrue(controller.currentAuthenticationSession?.sheet === sheet)
@@ -709,7 +709,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
                 }
             )
             let authentication = Task {
-                await controller.authenticate(reason: .sendTransaction, challenge: dependencies.credentials.makeWalletAccessChallenge(), review: review, dependencies: dependencies)
+                await controller.authenticate(reason: .sendTransaction, challenge: dependencies.credentials.makeWalletAccessChallenge(), review: review, dependencies: dependencies).grant
             }
             await gate.waitForEntry()
             if invalidatesReview { review.invalidate() }
@@ -755,14 +755,18 @@ final class WindowAuthenticationSessionTests: XCTestCase {
 
     func testActionBiometricsNeverFallBackAfterFailedAvailableAttempt() async throws {
         let fixture = AuthenticationKeychainFixture(password: "password")
-        for outcome in [WalletAuthenticationOutcome.failed, .interactionUnavailable, .succeeded] {
+        for outcome in [WalletAuthenticationOutcome.cancelled, .failed, .interactionUnavailable, .succeeded] {
             let controller = makeWindow()
             defer { controller.close() }
             let original = controller.contentViewController
             var dependencies = dependencies(fixture)
             dependencies.attemptBiometrics = { _, challenge in fixture.authentication(outcome, challenge: challenge) }
             let result = await controller.authenticate(reason: .removeWallet, challenge: dependencies.credentials.makeWalletAccessChallenge(), dependencies: dependencies)
-            XCTAssertEqual(result != nil, outcome == .succeeded)
+            switch (outcome, result) {
+            case (.cancelled, .cancelled), (.failed, .failed), (.interactionUnavailable, .interactionUnavailable): break
+            case (.succeeded, .granted(let grant)): grant.invalidate()
+            default: XCTFail("Window authentication lost the biometric outcome")
+            }
             XCTAssertTrue(controller.window?.sheets.isEmpty == true)
             XCTAssertTrue(controller.contentViewController === original)
         }
@@ -776,11 +780,11 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         var calls = 0
         var dependencies = WindowAuthenticationSession.Dependencies()
         dependencies.attemptBiometrics = { _, _ in calls += 1; return .failed }
-        let absent = await Window.authenticate(in: nil, reason: .removeWallet, challenge: dependencies.credentials.makeWalletAccessChallenge())
-        let closed = await controller.authenticate(reason: .removeWallet, challenge: dependencies.credentials.makeWalletAccessChallenge(), dependencies: dependencies)
+        let absent = await Window.authenticate(in: nil, reason: .removeWallet, challenge: dependencies.credentials.makeWalletAccessChallenge()).grant
+        let closed = await controller.authenticate(reason: .removeWallet, challenge: dependencies.credentials.makeWalletAccessChallenge(), dependencies: dependencies).grant
         let other = makeWindow()
         defer { other.close() }
-        let retired = await other.authenticate(reason: .sendTransaction, challenge: dependencies.credentials.makeWalletAccessChallenge(), review: review, dependencies: dependencies)
+        let retired = await other.authenticate(reason: .sendTransaction, challenge: dependencies.credentials.makeWalletAccessChallenge(), review: review, dependencies: dependencies).grant
         XCTAssertNil(absent)
         XCTAssertNil(closed)
         XCTAssertNil(retired)
@@ -888,7 +892,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
     private func begin(_ controller: WalletWindowController, fixture: AuthenticationKeychainFixture, review: NativeApprovalReview? = nil) -> Task<WalletAuthenticationGrant?, Never> {
         let dependencies = dependencies(fixture)
         return Task {
-            await controller.authenticate(reason: .showPrivateKey, challenge: dependencies.credentials.makeWalletAccessChallenge(), review: review, dependencies: dependencies)
+            await controller.authenticate(reason: .showPrivateKey, challenge: dependencies.credentials.makeWalletAccessChallenge(), review: review, dependencies: dependencies).grant
         }
     }
 
@@ -990,6 +994,7 @@ private final class AuthenticationKeychainFixture: Sendable {
             guard let password = state.withLock({ $0.password }),
                   let grant = try? credentials.verify(password: password, challenge: challenge) else { return .failed }
             return .granted(grant)
+        case .cancelled?: return .cancelled
         case .failed?: return .failed
         case .interactionUnavailable?: return .interactionUnavailable
         case nil: return nil

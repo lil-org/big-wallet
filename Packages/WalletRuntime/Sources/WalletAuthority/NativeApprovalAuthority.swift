@@ -123,10 +123,14 @@ public final class NativeApprovalReview {
         }
     }
 
+    public var canRetryAuthentication: Bool {
+        isActive && monotonicClock() < authenticationDeadline && clock() < request.admissionDeadline
+    }
+
     private var canAccept: Bool {
-        guard isActive, monotonicClock() < authenticationDeadline, clock() < request.admissionDeadline,
+        guard canRetryAuthentication,
               access?.validateCredentials(for: authorityID) == true else { return false }
-        return isActive && monotonicClock() < authenticationDeadline && clock() < request.admissionDeadline
+        return canRetryAuthentication
     }
 
     private func accept(_ decision: (ApprovalReview, Date, NativeDeliveryReceipt) -> ReviewConsent?) -> NativeApprovalOperation? {
@@ -245,16 +249,16 @@ public final class NativeApprovalAuthority {
         init(
             now: @escaping @Sendable () -> Date,
             monotonicClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now },
-            messages: AuthorityMessages = .testingEnglish,
-            authorityID: UUID = UUID(),
+            messages: AuthorityMessages,
+            authorityID: UUID,
             hooks: AuthorityExecutionHooks = .none,
             uptime: (@MainActor @Sendable () -> TimeInterval)? = nil,
             wait: @escaping @MainActor @Sendable (UInt64) async -> Void,
             waitForAuthenticationExpiry: (@MainActor @Sendable (TimeInterval) async throws -> Void)? = nil,
-            prepare: (@MainActor @Sendable (ExtensionBridge.RequestBinding, WalletReviewCatalog?) async -> DappRequestPreparation)? = nil,
-            reloadWallets: (@MainActor @Sendable () async -> Bool)? = nil,
-            currentReviewCatalog: (@MainActor @Sendable () -> WalletReviewCatalog?)? = nil,
-            attemptNativeDecision: (@MainActor @Sendable (ReviewConsent) async -> NativeApprovalOperation.Result)? = nil
+            prepare: @escaping @MainActor @Sendable (ExtensionBridge.RequestBinding, WalletReviewCatalog?) async -> DappRequestPreparation,
+            reloadWallets: @escaping @MainActor @Sendable () async -> Bool,
+            currentReviewCatalog: @escaping @MainActor @Sendable () -> WalletReviewCatalog?,
+            attemptNativeDecision: @escaping @MainActor @Sendable (ReviewConsent) async -> NativeApprovalOperation.Result
         ) {
             self.now = now
             self.monotonicClock = monotonicClock
@@ -267,10 +271,10 @@ public final class NativeApprovalAuthority {
                 let clock = ContinuousClock()
                 try await clock.sleep(until: clock.now.advanced(by: .seconds(seconds)), tolerance: nil)
             }
-            self.prepare = prepare ?? { _, _ in .unavailable }
-            self.reloadWallets = reloadWallets ?? { false }
-            self.currentReviewCatalog = currentReviewCatalog ?? { nil }
-            self.attemptNativeDecision = attemptNativeDecision ?? { _ in .pending }
+            self.prepare = prepare
+            self.reloadWallets = reloadWallets
+            self.currentReviewCatalog = currentReviewCatalog
+            self.attemptNativeDecision = attemptNativeDecision
         }
 
         static func live(

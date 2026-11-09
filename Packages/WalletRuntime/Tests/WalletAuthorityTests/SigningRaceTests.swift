@@ -75,8 +75,8 @@ final class SigningRaceTests: XCTestCase {
                     case .granted(let grant):
                         XCTAssertFalse(cancelled)
                         XCTAssertNotNil(credentials.accessSession(authorization: grant))
-                    case .failed: XCTAssertTrue(cancelled)
-                    case .interactionUnavailable: XCTFail("Fixture biometrics must complete")
+                    case .cancelled: XCTAssertTrue(cancelled)
+                    case .failed, .interactionUnavailable: XCTFail("Fixture biometrics must complete")
                     }
                 } else {
                     authentication.cancel()

@@ -41,7 +41,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             let waits = ScheduledWaits()
             var decisions = 0
             var capturedDecision: DappApprovalDecision?
-            let fixture = try makeFixture(clock: clock, environment: .init(
+            let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) }, wait: waits.wait,
                 prepare: { binding, _ in self.approvalPreparation(binding, action: action) },
                 attemptNativeDecision: { authorization in
@@ -189,7 +189,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
         let outage = LockedTestValue(false)
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 },
             wait: { delay in
                 if outage.value {
@@ -286,7 +286,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let returned = expectation(description: "Locked wallet reload returned")
         var preparations = 0
         var catalogReads = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 },
             wait: { _ in try? await TestDeferred<Void>().value() },
@@ -351,7 +351,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             let monotonic = LockedTestValue(started)
             let access = NativeApprovalTestAuthorization.accessSession(accessClock: { monotonic.value })
             var decisions = 0
-            let fixture = try makeFixture(clock: clock, environment: .init(
+            let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
                 uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 },
                 wait: { _ in try? await TestDeferred<Void>().value() },
@@ -431,7 +431,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             let started = expectation(description: "Accepted finalization started")
             var decisions = 0
             var capturedConsent: ReviewConsent?
-            let fixture = try makeFixture(clock: clock, environment: .init(
+            let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
                 uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 }, wait: waits.wait,
                 prepare: { binding, _ in self.approvalPreparation(binding) },
@@ -493,7 +493,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testAccessLockRejectionFailureCannotRestoreReviewAfterFreshAuthentication() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
         var preparations = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 },
             wait: { _ in try? await TestDeferred<Void>().value() },
@@ -573,7 +573,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testUnavailableValidationBecomesDormantAndExplicitlyRecovers() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
         var reads = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 clock.advance(to: clock.date.addingTimeInterval(Double(delay) / 1_000_000_000))
@@ -690,7 +690,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testForeignReceiptBeforeStartupNeverAuthenticatesOrPreparesWallets() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in XCTFail("Foreign ownership must not retry") },
@@ -811,7 +811,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let clock = TestClock(uptimeNanoseconds: 0)
         let expiryWaits = ScheduledWaits()
         defer { expiryWaits.resumeAll() }
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in XCTFail("Authentication expiry must not use recovery polling") },
             waitForAuthenticationExpiry: { await expiryWaits.wait(UInt64($0 * 1_000_000_000)) }
@@ -860,7 +860,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let clock = TestClock(uptimeNanoseconds: 0)
         let expiryWaits = ScheduledWaits()
         defer { expiryWaits.resumeAll() }
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in XCTFail("Authentication expiry must not use recovery polling") },
             waitForAuthenticationExpiry: { await expiryWaits.wait(UInt64($0 * 1_000_000_000)) }
@@ -890,7 +890,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let clock = TestClock(uptimeNanoseconds: 0)
         let expiryWaits = ScheduledWaits()
         defer { expiryWaits.resumeAll() }
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in XCTFail("Suspended rejection must not poll") },
             waitForAuthenticationExpiry: { await expiryWaits.wait(UInt64($0 * 1_000_000_000)) }
@@ -940,7 +940,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             unexpectedExpiry.isInverted = true
             var completions = 0
             var rejections = 0
-            let fixture = try makeFixture(clock: clock, environment: .init(
+            let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in XCTFail("Immediate completion must not poll") },
                 waitForAuthenticationExpiry: { _ in
@@ -987,7 +987,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testOwnedCancellationDeadlineExpiresAuthenticationWaiting() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
@@ -1060,7 +1060,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var catalogReads = 0
         var needsCatalog = true
         var revalidated = false
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             wait: { _ in try? await TestDeferred<Void>().value() },
             prepare: { binding, _ in
@@ -1101,7 +1101,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let clock = TestClock(uptimeNanoseconds: 0)
         var reloads = 0
         var preparations = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
@@ -1140,7 +1140,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testSuccessfulWalletReloadPastDeadlineLeavesLoadingState() async throws {
         for expiresRequest in [false, true] {
             let clock = TestClock(uptimeNanoseconds: 0)
-            let fixture = try makeFixture(clock: clock, environment: .init(
+            let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in XCTFail("Expired preparation must not retry") },
                 prepare: { _, _ in
@@ -1175,7 +1175,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testPostauthenticationLoadingStopsAtAdmissionDeadline() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
         var reloads = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in clock.advance(to: clock.date.addingTimeInterval(301)) },
@@ -1202,7 +1202,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testPostauthenticationUnavailableLoadingStopsAtDeadline() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in clock.advance(to: clock.date.addingTimeInterval(ExtensionBridge.requestTTL)) }
@@ -1347,7 +1347,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             handle: handle,
             nativeDeliveryNonce: nonce,
             store: store,
-            environment: .init(
+            environment: nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
                 uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in await Task.yield() },
@@ -1372,7 +1372,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             let clock = TestClock(uptimeNanoseconds: 0)
             let started = expectation(description: "response in flight")
             let gate = TestGate<ExtensionBridge.StoreMutationResult>()
-            let fixture = try makeFixture(clock: clock, environment: .init(
+            let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in await Task.yield() },
                 prepare: { request, _ in
@@ -1409,7 +1409,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let clock = TestClock(uptimeNanoseconds: 0)
         let retryWrite = expectation(description: "response retries through a storage outage")
         let gate = TestGate<ExtensionBridge.StoreMutationResult>()
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
@@ -1456,7 +1456,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testResponseOwnershipLossRepeatedlyPausesWithoutRepreparing() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
         var preparations = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in XCTFail("Semantic failure must pause") },
             prepare: { request, _ in
@@ -1498,7 +1498,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var delays = [UInt64]()
         var reloads = 0
         var preparations = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 delays.append(delay)
@@ -1544,7 +1544,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let finalizer = TestGate<NativeApprovalOperation.Result>()
         let started = expectation(description: "finalization started without a timer")
         var authorizations = [ReviewConsent]()
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) }, wait: waits.wait,
             prepare: { binding, _ in self.approvalPreparation(binding) },
             attemptNativeDecision: { authorization in
@@ -1653,7 +1653,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let finalizer = TestGate<NativeApprovalOperation.Result>()
         let started = expectation(description: "finalization started")
         var decisions = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) }, wait: waits.wait,
             prepare: { binding, _ in self.approvalPreparation(binding) },
             attemptNativeDecision: { _ in
@@ -1696,7 +1696,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let available = LockedTestValue(false)
         var preparations = 0
         var completions = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) }, wait: waits.wait,
             prepare: { binding, _ in
                 preparations += 1
@@ -1730,7 +1730,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let waits = ScheduledWaits()
         var preparations = 0
         var consents = [ReviewConsent]()
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) }, wait: waits.wait,
             prepare: { binding, _ in
                 preparations += 1
@@ -1793,7 +1793,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let waits = ScheduledWaits()
         var decisions = 0
         var preparations = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) }, wait: waits.wait,
             prepare: { binding, _ in
                 preparations += 1
@@ -1852,7 +1852,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let finalizer = TestGate<NativeApprovalOperation.Result>()
         let started = expectation(description: "finalization started")
         var decisions = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) }, wait: waits.wait,
             prepare: { binding, _ in self.approvalPreparation(binding) },
             attemptNativeDecision: { _ in
@@ -1895,7 +1895,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
         var decisions = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) }, wait: waits.wait,
             prepare: { binding, _ in self.approvalPreparation(binding) },
             attemptNativeDecision: { _ in decisions += 1; return .interruptionRequired }
@@ -1992,7 +1992,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let clock = TestClock(uptimeNanoseconds: 0)
         let waiting = expectation(description: "retry suspended")
         let gate = TestGate<Void>()
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in waiting.fulfill(); await gate.wait() },
             prepare: { request, _ in
@@ -2023,7 +2023,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let clock = TestClock(uptimeNanoseconds: 0)
         let writeStarted = expectation(description: "response write in flight")
         let gate = TestGate<ExtensionBridge.StoreMutationResult>()
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in await Task.yield() },
@@ -2086,7 +2086,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         for result in [ExtensionBridge.StoreMutationResult.ownershipLost,
                        .retryablePersistenceFailure] {
             let clock = TestClock(uptimeNanoseconds: 0)
-            let fixture = try makeFixture(clock: clock, environment: .init(
+            let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
                 uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in XCTFail("Foreign ownership must not retry") },
@@ -2119,7 +2119,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let clock = TestClock(uptimeNanoseconds: 0)
         let started = clock.date
         var delays = [UInt64]()
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 delays.append(delay)
@@ -2160,7 +2160,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testLateResponseReconciliationRecognizesDurableWork() async throws {
         for phase in [RequestPhase.approving, .responded] {
             let clock = TestClock(uptimeNanoseconds: 0)
-            let fixture = try makeFixture(clock: clock, environment: .init(
+            let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in try? await TestDeferred<Void>().value() },
                 prepare: { request, _ in
@@ -2214,7 +2214,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             handle: handle,
             nativeDeliveryNonce: nonce,
             store: store,
-            environment: .init(
+            environment: nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
                 uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in await Task.yield() },
@@ -2268,7 +2268,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             handle: handle,
             nativeDeliveryNonce: nonce,
             store: store,
-            environment: .init(
+            environment: nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
                 uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in
@@ -2298,7 +2298,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let clock = TestClock(uptimeNanoseconds: 0)
         let started = (Double(clock.uptimeNanoseconds) / 1_000_000_000)
         var writes = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 clock.advanceUptime(by: UInt64((Double(delay) / 1_000_000_000) * 1_000_000_000))
@@ -2328,7 +2328,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let finalizer = TestGate<NativeApprovalOperation.Result>()
         let started = expectation(description: "finalization started")
         var finalizations = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: waits.wait,
@@ -2386,7 +2386,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let finalizer = TestGate<NativeApprovalOperation.Result>()
         let finalizerStarted = expectation(description: "finalization started")
         var finalizations = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: waits.wait,
@@ -2462,7 +2462,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let finalizer = TestGate<NativeApprovalOperation.Result>()
         let finalizerStarted = expectation(description: "finalizer suspended")
         var finalizations = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: waits.wait,
@@ -2500,7 +2500,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             let clock = TestClock(uptimeNanoseconds: 0)
             let waits = ScheduledWaits()
             let load = TestGate<ExtensionBridge.SnapshotResult>()
-            var fixture: Fixture? = try makeFixture(clock: clock, environment: .init(
+            var fixture: Fixture? = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
                 uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: waits.wait,
@@ -2555,7 +2555,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             let finalizer = TestGate<NativeApprovalOperation.Result>()
             let started = expectation(description: "finalizer suspended")
             let returned = expectation(description: "released finalizer returned")
-            var fixture: Fixture? = try makeFixture(clock: clock, environment: .init(
+            var fixture: Fixture? = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in await Task.yield() },
                 prepare: { binding, _ in self.approvalPreparation(binding) },
@@ -2609,7 +2609,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testDormantCancellationPreservesRejectionOnForegroundRecovery() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 clock.advance(to: clock.date.addingTimeInterval(Double(delay) / 1_000_000_000))
@@ -2632,7 +2632,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testDormantEntriesExpireWithoutBlockingInboxCapacity() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 clock.advance(to: clock.date.addingTimeInterval(Double(delay) / 1_000_000_000))
@@ -2657,7 +2657,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testFreshReviewAfterRetryFencesTheNextApproval() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
         let available = LockedTestValue(false)
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 if available.value { try? await TestDeferred<Void>().value() }
@@ -2703,7 +2703,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let waits = ScheduledWaits()
         let unavailable = LockedTestValue(false)
         var preparations = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 if unavailable.value {
@@ -2751,7 +2751,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testObservedExecutionWithoutLocalDecisionCannotExecute() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
         var executions = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in await Task.yield() },
             prepare: { binding, _ in self.approvalPreparation(binding) },
@@ -2813,7 +2813,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             var decisions = 0
             var rejections = 0
             var reviews = 0
-            let fixture = try makeFixture(clock: clock, environment: .init(
+            let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in observationWaits += 1; unexpectedObservation.fulfill() },
                 prepare: { binding, _ in self.approvalPreparation(binding) },
@@ -2861,7 +2861,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var completions = 0
         var recoveries = 0
         var finishes = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 waits += 1
@@ -2986,7 +2986,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         ), source: .custom)
         let transaction = Transaction(from: account.address, to: account.address, value: "0x0", data: "0x")
         var preparations = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in await Task.yield() },
             prepare: { binding, _ in
@@ -3072,7 +3072,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testWalletIndependentBootstrapSkipsReloadAndDoesNotReacquireReceipt() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in try? await TestDeferred<Void>().value() },

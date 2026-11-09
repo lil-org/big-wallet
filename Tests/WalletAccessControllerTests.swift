@@ -29,14 +29,16 @@ final class WalletAccessTestFixture {
     }
 
     @MainActor
-    final class Scheduler {
+    final class Scheduler: WalletAccessExpirationScheduling {
         var expirations = [ScheduledExpiration]()
 
-        func schedule(_ delay: Duration, action: @escaping @MainActor () -> Void) -> @MainActor () -> Void {
+        func schedule(after delay: Duration, action: @escaping @MainActor () -> Void) {
+            cancel()
             let expiration = ScheduledExpiration(delay: delay, action: action)
             expirations.append(expiration)
-            return { expiration.cancelled = true }
         }
+
+        func cancel() { expirations.last?.cancelled = true }
     }
 
     let authorityID: UUID
@@ -61,7 +63,7 @@ final class WalletAccessTestFixture {
 #endif
         let scheduler = Scheduler()
         self.scheduler = scheduler
-        access = WalletAccessController(credentials: credentials, schedule: scheduler.schedule, activityClock: { time.now })
+        access = WalletAccessController(credentials: credentials, expirationScheduler: scheduler, activityClock: { time.now })
     }
 
     func advance(by duration: Duration) {
@@ -99,7 +101,7 @@ final class WalletAccessControllerTests: XCTestCase {
         fixture.advance(by: .seconds(900))
 
         XCTAssertFalse(fixture.access.recordInteraction())
-        XCTAssertFalse(fixture.access.accepts(generation))
+        XCTAssertFalse(fixture.access.validateCurrentAccess(expectedGeneration: generation))
         XCTAssertTrue(fixture.access.isLocked)
         XCTAssertEqual(fixture.access.lockReason, .idle)
         XCTAssertFalse(fixture.credentials.validateAccess(session))
@@ -115,12 +117,12 @@ final class WalletAccessControllerTests: XCTestCase {
         let renewed = try XCTUnwrap(fixture.scheduler.expirations.last)
         fixture.advance(by: .seconds(1))
         first.action()
-        XCTAssertTrue(fixture.access.checkAccess())
+        XCTAssertTrue(fixture.access.validateCurrentAccess())
 
         fixture.access.lock(reason: .background)
         let replacement = try fixture.unlock()
         renewed.action()
-        XCTAssertTrue(fixture.access.checkAccess())
+        XCTAssertTrue(fixture.access.validateCurrentAccess())
         XCTAssertTrue(fixture.access.session === replacement)
     }
 
@@ -147,7 +149,7 @@ final class WalletAccessControllerTests: XCTestCase {
         fixture.access.recordContinuousInteraction()
         XCTAssertEqual(fixture.scheduler.expirations.count, count + 1)
         fixture.access.session?.invalidate()
-        XCTAssertFalse(fixture.access.checkAccess())
+        XCTAssertFalse(fixture.access.validateCurrentAccess())
         XCTAssertTrue(fixture.access.isLocked)
     }
 
@@ -185,7 +187,7 @@ final class WalletAccessControllerTests: XCTestCase {
         let replacement = try fixture.makeSession()
         XCTAssertTrue(second.complete(replacement))
         first.cancel()
-        XCTAssertTrue(fixture.access.checkAccess())
+        XCTAssertTrue(fixture.access.validateCurrentAccess())
 
         fixture.access.lock(reason: .sessionInactive)
         XCTAssertFalse(first.complete(oldSession), "SECURITY-MUTATION[access.stale-authentication]")
@@ -236,7 +238,7 @@ final class WalletAccessControllerTests: XCTestCase {
         XCTAssertTrue(second.complete(replacement))
         XCTAssertFalse(attempt.isCurrent)
         XCTAssertFalse(second.isCurrent)
-        XCTAssertTrue(fixture.access.checkAccess())
+        XCTAssertTrue(fixture.access.validateCurrentAccess())
     }
 
     func testCancellationRetiresChallengeBeforeTaskAndOwnerCallbacks() async throws {
@@ -388,15 +390,15 @@ final class WalletAccessControllerTests: XCTestCase {
         let generation = fixture.access.generation
         fixture.keychain.readStatus = errSecInteractionNotAllowed
         for _ in 0..<100 {
-            XCTAssertTrue(fixture.access.checkAccess())
-            XCTAssertTrue(fixture.access.accepts(generation))
+            XCTAssertTrue(fixture.access.validateCurrentAccess())
+            XCTAssertTrue(fixture.access.validateCurrentAccess(expectedGeneration: generation))
             XCTAssertTrue(fixture.access.recordInteraction())
             fixture.access.recordContinuousInteraction()
         }
         fixture.advance(by: .seconds(400))
         fixture.scheduler.expirations.last?.action()
         XCTAssertEqual(fixture.scheduler.expirations.last?.delay, .seconds(500))
-        XCTAssertTrue(fixture.access.checkAccess())
+        XCTAssertTrue(fixture.access.validateCurrentAccess())
         fixture.advance(by: .seconds(500))
         fixture.scheduler.expirations.last?.action()
         XCTAssertTrue(fixture.access.isLocked)
@@ -409,12 +411,12 @@ final class WalletAccessControllerTests: XCTestCase {
         try fixture.unlock()
         let reads = fixture.keychain.passwordReadCount
         fixture.keychain.passwordData = Data("replacement".utf8)
-        XCTAssertTrue(fixture.access.checkAccess())
+        XCTAssertTrue(fixture.access.validateCurrentAccess())
         XCTAssertEqual(fixture.keychain.passwordReadCount, reads)
         XCTAssertThrowsError(try fixture.access.requireCurrentAccess())
-        XCTAssertFalse(fixture.access.checkAccess())
+        XCTAssertFalse(fixture.access.validateCurrentAccess())
         fixture.keychain.passwordData = Data("password".utf8)
-        XCTAssertFalse(fixture.access.checkAccess())
+        XCTAssertFalse(fixture.access.validateCurrentAccess())
         XCTAssertFalse(fixture.access.recordInteraction())
         XCTAssertTrue(fixture.access.hasLocked)
         XCTAssertEqual(fixture.keychain.passwordReadCount, reads + 1)
@@ -427,7 +429,7 @@ final class WalletAccessControllerTests: XCTestCase {
         fixture.keychain.readStatus = errSecInteractionNotAllowed
         XCTAssertThrowsError(try fixture.access.requireCurrentAccess())
         XCTAssertEqual(fixture.keychain.passwordReadCount, reads + 1)
-        XCTAssertTrue(fixture.access.checkAccess())
+        XCTAssertTrue(fixture.access.validateCurrentAccess())
         XCTAssertTrue(fixture.access.recordInteraction())
         XCTAssertEqual(fixture.keychain.passwordReadCount, reads + 1)
         fixture.keychain.readStatus = nil
@@ -484,37 +486,49 @@ final class WalletAccessControllerTests: XCTestCase {
         XCTAssertFalse(fixture.credentials.validateAccess(session))
     }
 
-    func testCredentialChangeDuringSchedulingCannotPublishAnUnlock() throws {
+    func testPresentationMatchingHasNoValidationOrTimerSideEffects() throws {
         let fixture = WalletAccessTestFixture()
-        let access = WalletAccessController(credentials: fixture.credentials, schedule: { _, _ in
-            fixture.keychain.passwordData = Data("replacement".utf8)
-            return {}
-        })
-        let observer = Observer()
-        var unlocked = false
-        observer.onUnlock = { unlocked = true }
-        access.addObserver(observer)
-        let attempt = access.beginAuthentication(onCancelled: { _ in })
-        XCTAssertFalse(attempt.complete(try fixture.makeSession()))
-        XCTAssertFalse(unlocked)
-        XCTAssertTrue(access.isLocked)
+        try fixture.unlock()
+        let generation = fixture.access.generation
+        let reads = fixture.keychain.passwordReadCount
+        let timers = fixture.scheduler.expirations.count
+        var availabilityReads = 0
+        fixture.access.isProtectedDataAvailable = { availabilityReads += 1; return false }
+        fixture.advance(by: .seconds(900))
+        for _ in 0..<10 {
+            XCTAssertTrue(fixture.access.matchesPresentation(generation))
+            XCTAssertFalse(fixture.access.matchesPresentation(generation &+ 1))
+        }
+        XCTAssertEqual(fixture.keychain.passwordReadCount, reads)
+        XCTAssertEqual(fixture.scheduler.expirations.count, timers)
+        XCTAssertEqual(availabilityReads, 0)
+        XCTAssertFalse(fixture.access.isLocked)
+        XCTAssertFalse(fixture.access.validateCurrentAccess(expectedGeneration: generation))
+        XCTAssertTrue(fixture.access.isLocked)
     }
 
-    func testSynchronousSchedulerLockCannotReportSuccessfulInteraction() throws {
+    func testStaleGenerationCannotValidateRenewOrLockAReplacementSession() throws {
         let fixture = WalletAccessTestFixture()
-        let scheduling = ReentrantScheduler()
-        let access = WalletAccessController(credentials: fixture.credentials, schedule: scheduling.schedule)
-        scheduling.access = access
-        let attempt = access.beginAuthentication(onCancelled: { _ in })
-        XCTAssertTrue(attempt.complete(try fixture.makeSession()))
-        scheduling.shouldLock = true
-        XCTAssertFalse(access.recordInteraction())
-        XCTAssertTrue(access.isLocked)
+        try fixture.unlock()
+        let old = fixture.access.generation
+        fixture.access.lock(reason: .background)
+        let current = try fixture.unlock()
+        let generation = fixture.access.generation
+        let timers = fixture.scheduler.expirations.count
+        var availabilityReads = 0
+        fixture.access.isProtectedDataAvailable = { availabilityReads += 1; return false }
+        XCTAssertFalse(fixture.access.validateCurrentAccess(expectedGeneration: old))
+        XCTAssertFalse(fixture.access.recordInteraction(expectedGeneration: old))
+        XCTAssertThrowsError(try fixture.access.requireCurrentAccess(expectedGeneration: old))
+        XCTAssertTrue(fixture.access.matchesPresentation(generation))
+        XCTAssertTrue(fixture.access.session === current)
+        XCTAssertEqual(availabilityReads, 0)
+        XCTAssertEqual(fixture.scheduler.expirations.count, timers)
     }
 
     func testDeallocationInvalidatesAccessAndCancelsRetainedTimer() throws {
         let fixture = WalletAccessTestFixture()
-        var access: WalletAccessController? = WalletAccessController(credentials: fixture.credentials, schedule: fixture.scheduler.schedule)
+        var access: WalletAccessController? = WalletAccessController(credentials: fixture.credentials, expirationScheduler: fixture.scheduler)
         let attempt = try XCTUnwrap(access?.beginAuthentication(onCancelled: { _ in }))
         let session = try fixture.makeSession()
         XCTAssertTrue(attempt.complete(session))
@@ -582,14 +596,4 @@ final class WalletAccessControllerTests: XCTestCase {
         func walletAccessDidUnlock() { onUnlock?() }
     }
 
-    @MainActor
-    private final class ReentrantScheduler {
-        weak var access: WalletAccessController?
-        var shouldLock = false
-
-        func schedule(_ delay: Duration, action: @escaping @MainActor () -> Void) -> @MainActor () -> Void {
-            if shouldLock { access?.lock(reason: .systemSleep) }
-            return {}
-        }
-    }
 }

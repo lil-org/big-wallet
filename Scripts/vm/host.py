@@ -57,6 +57,15 @@ def read_json(path):
         return json.load(file)
 
 
+def bounded_json_bytes(path, description):
+    maximum = 16 * 1024 ** 2
+    with open_regular(path, nonblocking=True) as file:
+        contents = file.read(maximum + 1)
+    if len(contents) > maximum:
+        raise RunnerError(f'{description} exceeds 16 MiB')
+    return contents
+
+
 def xcode_upgrade_module():
     spec = importlib.util.spec_from_file_location('vm_xcode_upgrade', TOOLS / 'xcode_upgrade.py')
     module = importlib.util.module_from_spec(spec)
@@ -647,13 +656,16 @@ def manifest_node():
     return {'executable': executable, 'version': version}
 
 
-def stage_planned_result(exchange, job):
+def verified_manifest_path(exchange, job):
     manifest_path = exchange / 'source/Scripts/vm/test_manifest.mjs'
     if hash_regular_file(exchange / 'snapshot-manifest.json') != job['source']['sha256']:
         raise RunnerError('The staged source snapshot does not match the planned job')
     snapshot = read_json(exchange / 'snapshot-manifest.json')
     for relative in ('Scripts/vm/test_manifest.mjs', 'Scripts/safari/scenarios.mjs', 'Scripts/safari/synchronization.mjs',
-                     'Scripts/vm/environment.json', 'Scripts/vm/runtime_inventory.mjs', 'Scripts/vm/runtime-test-inventory.json',
+                     'Scripts/vm/environment.json', 'Scripts/vm/test_policy.mjs', 'Scripts/vm/test_discovery.mjs',
+                     'Scripts/vm/verify_discovery.mjs', 'Scripts/vm/result_audit.mjs', 'Scripts/vm/guest_bootstrap.mjs',
+                     'Scripts/approval_lifecycle/source_identity.mjs',
+                     'Scripts/security_mutations/products.mjs', 'Scripts/security_mutations/manifest.json',
                      'Scripts/wallet_upgrade/contract.mjs'):
         entries = [entry for entry in snapshot['files'] if entry.get('path') == relative]
         if (len(entries) != 1 or entries[0].get('type') != 'file' or
@@ -662,6 +674,12 @@ def stage_planned_result(exchange, job):
     job_path = exchange / 'job.json'
     if read_json(job_path) != job:
         raise RunnerError('The staged job does not match the requested test plan')
+    return manifest_path
+
+
+def stage_planned_result(exchange, job):
+    manifest_path = verified_manifest_path(exchange, job)
+    job_path = exchange / 'job.json'
     node = manifest_node()
     try:
         stages = json.loads(checked([node['executable'], TOOLS / 'plan_manifest.mjs', manifest_path],
@@ -675,6 +693,16 @@ def stage_planned_result(exchange, job):
               'selection': job_selection(job)}
     atomic_json(exchange / 'artifacts/planned-result.json', result)
     return result
+
+
+def resolved_stage_plan(exchange, job):
+    manifest_path = verified_manifest_path(exchange, job)
+    node = manifest_node()
+    try:
+        return json.loads(checked([node['executable'], manifest_path.with_name('verify_discovery.mjs'), manifest_path, exchange / 'artifacts'],
+                                  input=json.dumps(job).encode(), env=node_planning_environment(), timeout=120))
+    except subprocess.TimeoutExpired as error:
+        raise RunnerError('Independent XCTest discovery verification timed out') from error
 
 
 def job_selection(job):
@@ -1157,6 +1185,14 @@ def monitor_vm(args, state, vm, exchange, run_id, binaries, environment, timeout
             not macos_attested(result.get('preflight', {}), expected_macos)):
         result = finalize_owned_interruption(state, exchange, run_id, 'guest_macos_does_not_match_verified_baseline')
         active = read_json(path)
+    if result.get('status') == 'passed' and (args.command == 'run' or (exchange / 'job.json').exists()):
+        try:
+            job = read_json(exchange / 'job.json')
+            if job['kind'] == 'run':
+                resolved_stage_plan(exchange, job)
+        except (RunnerError, OSError, ValueError, TypeError, KeyError) as error:
+            result = finalize_owned_interruption(state, exchange, run_id, 'guest_discovery_does_not_match_test_plan', host_error=str(error))
+            active = read_json(path)
     active['acceptedResultSHA256'] = hash_regular_file(result_path)
     if active.get('phase') == 'preparing' or setup_hook is not None and setup_hook.exchange_complete is True:
         active['artifactsExported'] = True
@@ -1370,10 +1406,7 @@ def stage_approval_arguments(arguments, exchange):
         if arguments.count('--replay') != 1 or index + 1 >= len(arguments):
             raise RunnerError('Supply exactly one replay JSON path')
         source = Path(arguments[index + 1]).expanduser()
-        with open_regular(source) as file:
-            contents = file.read(16 * 1024 * 1024 + 1)
-        if len(contents) > 16 * 1024 * 1024:
-            raise RunnerError('Replay JSON exceeds 16 MiB')
+        contents = bounded_json_bytes(source, 'Replay JSON')
         json.loads(contents)
         destination = private_directory(exchange / 'inputs') / 'approval-replay.json'
         destination.write_bytes(contents)
@@ -1382,10 +1415,7 @@ def stage_approval_arguments(arguments, exchange):
 
 
 def stage_parser_fuzz_replay(path, exchange):
-    with open_regular(Path(path).expanduser(), nonblocking=True) as file:
-        contents = file.read(16 * 1024 * 1024 + 1)
-    if len(contents) > 16 * 1024 * 1024:
-        raise RunnerError('Native parser replay JSON exceeds 16 MiB')
+    contents = bounded_json_bytes(Path(path).expanduser(), 'Native parser replay JSON')
     def bounded_number(conversion):
         def parse(value):
             if len(value) > 128:
@@ -2203,6 +2233,7 @@ def prepare_safari_activation(args, state, environment, operation):
         check_setup_stop(operation)
         preflight = result.get('preflight', {})
         actual_stages = result.get('stages', [])
+        expected_stages = resolved_stage_plan(exchange, job)
         verified_source = result.get('source')
         source_matches = (isinstance(verified_source, dict) and
                           all(verified_source.get(key) == value for key, value in source.items()) and
@@ -2213,10 +2244,10 @@ def prepare_safari_activation(args, state, environment, operation):
                 preflight.get('bootstrap', {}).get('hashes') != bootstrap_tools or not environment_attested(preflight, environment, record['macos']) or
                 not isinstance(actual_stages, list) or
                 any(not isinstance(stage, dict) for stage in actual_stages) or
-                [stage.get('id') for stage in actual_stages] != [stage['id'] for stage in plan['stages']] or
+                [stage.get('id') for stage in actual_stages] != [stage['id'] for stage in expected_stages] or
                 any(stage.get('status') != 'passed' or
                     planned.get('nativeAudit') and (stage.get('nativeAudit') != planned['nativeAudit'] or stage.get('audit', {}).get('ok') is not True)
-                    for stage, planned in zip(actual_stages, plan['stages']))):
+                    for stage, planned in zip(actual_stages, expected_stages))):
             result.update({'status': 'blocked', 'reason': 'safari_preparation_guest_validation_did_not_match_requested_setup'})
             atomic_json(exchange / 'artifacts/result.json', result)
             break

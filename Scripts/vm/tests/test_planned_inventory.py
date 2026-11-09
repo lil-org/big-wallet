@@ -20,7 +20,7 @@ spec.loader.exec_module(host)
 
 class RunSnapshotBindingTests(unittest.TestCase):
     sources = ('VMGuestAgent.swift', 'guest_runner', 'guest_bootstrap.mjs', 'provision_guest.sh', 'environment.json')
-    harness = ('guest.mjs', 'test_manifest.mjs', 'result_audit.mjs', 'runtime_inventory.mjs', 'runtime-test-inventory.json')
+    harness = ('guest.mjs', 'test_manifest.mjs', 'result_audit.mjs', 'test_policy.mjs', 'test_discovery.mjs')
 
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -29,8 +29,15 @@ class RunSnapshotBindingTests(unittest.TestCase):
         self.repository = self.root / 'repository'
         self.tools = self.repository / 'Scripts/vm'
         self.tools.mkdir(parents=True)
-        for name in (*self.sources, *self.harness, 'plan_manifest.mjs'):
+        for name in (*self.sources, *self.harness, 'plan_manifest.mjs', 'verify_discovery.mjs'):
             shutil.copyfile(host.TOOLS / name, self.tools / name)
+        mutations = self.tools.parent / 'security_mutations'
+        mutations.mkdir()
+        for name in ('products.mjs', 'manifest.json'):
+            shutil.copyfile(host.TOOLS.parent / 'security_mutations' / name, mutations / name)
+        identity = self.tools.parent / 'approval_lifecycle/source_identity.mjs'
+        identity.parent.mkdir()
+        shutil.copyfile(host.TOOLS.parent / 'approval_lifecycle/source_identity.mjs', identity)
         scenarios = self.tools.parent / 'safari/scenarios.mjs'
         scenarios.parent.mkdir()
         shutil.copyfile(host.TOOLS.parent / 'safari/scenarios.mjs', scenarios)
@@ -218,6 +225,30 @@ class RunSnapshotBindingTests(unittest.TestCase):
         self.assertIn('worker.current-check', [stage['id'] for stage in plan['stages']])
         self.assertNotIn('worker.check', [stage['id'] for stage in plan['stages']])
 
+    def test_final_verification_uses_only_the_hash_checked_snapshot_verifier(self):
+        self.assertEqual(host.run_tests(self.args, self.state, self.environment), 0)
+        exchange = self.monitor_vm.call_args.args[3]
+        job = host.read_json(exchange / 'job.json')
+        artifacts = exchange / 'artifacts'
+        stages = host.stage_planned_result(exchange, job)['stages']
+        report = {key: job[key] for key in ('kind', 'runId', 'vmId', 'profile', 'source')}
+        report.update({'status': 'passed', 'finishedAt': 'fixture',
+                       'stages': [{**stage, 'status': 'passed'} for stage in stages]})
+        host.atomic_json(artifacts / 'result.json', report)
+        (artifacts / 'resolved-plan.json').write_text(json.dumps(stages))
+
+        live = self.tools / 'verify_discovery.mjs'
+        live.write_text('throw new Error("Ran the edited checkout verifier");')
+        self.assertEqual(host.resolved_stage_plan(exchange, job), stages)
+        live.unlink()
+        self.assertEqual(host.resolved_stage_plan(exchange, job), stages)
+
+        captured = exchange / 'source/Scripts/vm/verify_discovery.mjs'
+        captured.write_text('process.stdout.write("[]");')
+        with patch.object(host, 'manifest_node', side_effect=AssertionError('Launched Node with modified input')), \
+                self.assertRaisesRegex(host.RunnerError, 'verify_discovery.mjs'):
+            host.resolved_stage_plan(exchange, job)
+
     def test_malformed_parser_replay_finalizes_without_starting_or_retaining_an_operation(self):
         replay = self.root / 'bad-replay.json'
         replay.write_text('{not json')
@@ -323,9 +354,18 @@ class PlannedInventoryTests(unittest.TestCase):
         self.manifest = self.exchange / 'source/Scripts/vm/test_manifest.mjs'
         self.manifest.parent.mkdir(parents=True)
         shutil.copyfile(host.TOOLS / 'test_manifest.mjs', self.manifest)
-        runtime_files = [self.manifest.with_name(name) for name in ('runtime_inventory.mjs', 'runtime-test-inventory.json')]
+        runtime_files = [self.manifest.with_name(name) for name in ('test_policy.mjs', 'test_discovery.mjs', 'verify_discovery.mjs', 'result_audit.mjs', 'guest_bootstrap.mjs')]
         for path in runtime_files:
             shutil.copyfile(host.TOOLS / path.name, path)
+        identity = self.exchange / 'source/Scripts/approval_lifecycle/source_identity.mjs'
+        identity.parent.mkdir()
+        shutil.copyfile(host.TOOLS.parent / 'approval_lifecycle/source_identity.mjs', identity)
+        runtime_files.append(identity)
+        mutations = self.exchange / 'source/Scripts/security_mutations'
+        mutations.mkdir()
+        for name in ('products.mjs', 'manifest.json'):
+            shutil.copyfile(host.TOOLS.parent / 'security_mutations' / name, mutations / name)
+            runtime_files.append(mutations / name)
         scenarios = self.exchange / 'source/Scripts/safari/scenarios.mjs'
         scenarios.parent.mkdir()
         shutil.copyfile(host.TOOLS.parent / 'safari/scenarios.mjs', scenarios)
@@ -414,26 +454,26 @@ class PlannedInventoryTests(unittest.TestCase):
                 self.assertTrue(all(Path(call.args[0][0]).name == 'node' for call in commands.call_args_list))
                 ids = {stage['id'] for stage in plan['stages']}
                 if selection.get('stages') == ['asan']:
-                    asan = [stage for stage in plan['stages'] if stage['group'] == 'asan']
+                    asan = [stage for stage in plan['stages'] if stage['group'] == 'asan' and stage.get('nativeDiscovery')]
                     self.assertTrue(asan)
                     for stage in asan:
-                        self.assertEqual(stage['nativeAudit']['platform'], 'macos')
-                        self.assertEqual(stage['nativeAudit']['configuration'], 'Debug')
-                        self.assertTrue(stage['nativeAudit']['requiredTests'])
+                        self.assertEqual(stage['nativeDiscovery']['platform'], 'macos')
+                        self.assertEqual(stage['nativeDiscovery']['configuration'], 'Debug')
+                        self.assertTrue(stage['nativeDiscovery']['focus'])
                     if selection.get('onlyTesting') == ['WalletAuthorityTests/SecretBytesTests']:
-                        self.assertEqual({stage['id'] for stage in asan}, {'asan.focused.runtime'})
+                        self.assertEqual({stage['id'] for stage in asan}, {'discover.asan.focused.runtime'})
                     elif selection.get('onlyTesting') == ['Tests macOS/MacSecretLifetimeTests']:
-                        self.assertEqual({stage['id'] for stage in asan}, {'asan.focused'})
+                        self.assertEqual({stage['id'] for stage in asan}, {'discover.asan.focused'})
                 if selection.get('onlyTesting') == ['Tests visionOS']:
                     self.assertTrue({'provider.install', 'protocol.check', 'build-tests.visionos.debug',
-                                     'test.visionos.debug'} <= ids)
+                                     'discover.test.visionos.debug'} <= ids)
                     self.assertFalse(any(identifier.startswith('performance.') for identifier in ids))
                     self.assertFalse(any('.ios.' in identifier or '.macos.' in identifier for identifier in ids))
                 if any(test.startswith('Tests iOS/') for test in selection['onlyTesting']):
                     self.assertIn('build-tests.ios.debug', ids)
                     self.assertFalse(any(identifier.startswith('performance.') for identifier in ids))
                 if overrides == {'profile': 'extended'}:
-                    self.assertTrue({'tsan.extended', 'fuzz.seed-42', 'fuzz.seed-20261013',
+                    self.assertTrue({'discover.tsan.extended', 'fuzz.seed-42', 'fuzz.seed-20261013',
                                      'fuzz.seed-3735928559', 'approval.soak-debug', 'approval.soak-release'} <= ids)
 
     def test_source_or_guest_manifest_drift_prevents_any_planning_command(self):
@@ -589,6 +629,7 @@ class PlannedInventoryTests(unittest.TestCase):
             raise OSError('fixture: clone cleanup failed')
         with self.cloning_fixture(clone) as (args, *_), \
                 patch.object(host, 'monitor_vm', wraps=original_monitor), \
+                patch.object(host, 'resolved_stage_plan', return_value=[]), \
                 patch.object(host.subprocess, 'Popen', side_effect=launch), \
                 patch.object(host, 'prepared_guest_hook', return_value=SimpleNamespace(
                     exchange_complete=True, cancel=lambda: None)), \
@@ -748,6 +789,7 @@ class PlannedInventoryTests(unittest.TestCase):
                 initial = {'runId': self.job['runId'], 'status': 'passed', 'finishedAt': 'guest-result',
                            'preflight': {'macos': {'expected': macos, 'actual': macos, 'available': True}}} if phase == 'acceptance' else None
                 with self.running_monitor_fixture(report=initial, late_success=phase != 'acceptance') as (args, child, _, remove), \
+                        patch.object(host, 'resolved_stage_plan', return_value=[]), \
                         patch.object(host, 'read_json', side_effect=transient), \
                         patch.object(host, 'atomic_json', side_effect=failing_write):
                     with self.assertRaisesRegex(OSError, 'durable report write failed'):

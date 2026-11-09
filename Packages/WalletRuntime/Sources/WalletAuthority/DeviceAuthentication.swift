@@ -12,11 +12,11 @@ struct DeviceAuthentication {
 
     @MainActor
     static func attemptBiometrics(reason: String) async -> WalletAuthenticationOutcome {
-        guard !Task.isCancelled else { return .failed }
+        guard !Task.isCancelled else { return .cancelled }
         let attempt = AuthenticationAttempt()
         return await withTaskCancellationHandler {
             let outcome = await attempt.evaluate(reason: reason)
-            return Task.isCancelled ? .failed : outcome
+            return Task.isCancelled ? .cancelled : outcome
         } onCancel: {
             Task { @MainActor in attempt.cancel() }
         }
@@ -38,10 +38,12 @@ struct DeviceAuthentication {
                 context.evaluatePolicy(policy, localizedReason: reason) { success, error in
                     if success {
                         continuation.resume(returning: .succeeded)
-                    } else if (error as? LAError)?.code == .notInteractive {
-                        continuation.resume(returning: .interactionUnavailable)
                     } else {
-                        continuation.resume(returning: .failed)
+                        switch (error as? LAError)?.code {
+                        case .userCancel, .systemCancel, .appCancel: continuation.resume(returning: .cancelled)
+                        case .notInteractive: continuation.resume(returning: .interactionUnavailable)
+                        default: continuation.resume(returning: .failed)
+                        }
                     }
                 }
             }

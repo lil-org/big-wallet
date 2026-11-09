@@ -380,8 +380,10 @@ test("Safari audits retain detailed failure messages while ordinary audits ident
     assert.ok(safari.issues.includes("1 XCTest failures"));
     assert.ok(safari.issues.includes(`Safari XCTest failure: ${detail}`));
     assert.ok(safari.issues.some(issue => issue.startsWith("Safari test must execute exactly once:")));
-    const ordinary = auditNativeResult(summary, tree, {configuration: "Debug", kind: "full", platform: "macos"});
-    assert.deepEqual(ordinary.issues, ["1 XCTest failures", "XCTest failed: Safari UI Tests macOS-Runner encountered an error"]);
+    const ordinary = auditNativeResult(summary, tree, {configuration: "Debug", kind: "full", platform: "macos",
+        requiredTests: ["Tests macOS/FixtureTests/testWorks"]});
+    assert.ok(ordinary.issues.includes("XCTest failed: Safari UI Tests macOS-Runner encountered an error"));
+    assert.ok(!ordinary.issues.some(issue => issue.includes(detail)));
     const bounded = auditNativeResult({...summary,
         testFailures: Array.from({length: 12}, (_, index) => ({failureText: `${index}:` + "x".repeat(3000)}))}, tree, stage.nativeAudit);
     const details = bounded.issues.filter(issue => issue.startsWith("Safari XCTest failure:"));

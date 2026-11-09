@@ -1,17 +1,15 @@
 import {createHash} from "node:crypto";
-import {isAbsolute, resolve} from "node:path";
+import {constants} from "node:fs";
+import {lstat, open, readdir} from "node:fs/promises";
+import {isAbsolute, join, relative, resolve} from "node:path";
 import {PERFORMANCE_TESTS, RUNTIME_TEST_TARGETS, validSafariPreparationReference} from "./test_manifest.mjs";
+import {APP_TEST_TARGETS} from "./test_policy.mjs";
 import {auditSynchronizationProof, expectedSynchronizationPolicy} from "../safari/synchronization.mjs";
 import {validateSourceIdentity} from "../approval_lifecycle/source_identity.mjs";
 
 const finiteCount = value => Number.isSafeInteger(value) && value >= 0;
 const count = (summary, name) => finiteCount(summary[name]) ? summary[name] : undefined;
 const bundleMetadata = value => typeof value === "string" && value.trim().length > 0 && value.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value);
-
-function appTestIdentifier(test, target) {
-    const identifier = test.identifier.replace(/\(\)$/, "");
-    return identifier.split("/").length === 2 && (!test.target || test.target === target) ? `${target}/${identifier}` : identifier;
-}
 
 export function testCases(tree) {
     const cases = [];
@@ -56,6 +54,59 @@ export function asanDiagnostics(text) {
     return diagnostics;
 }
 
+export async function auditASanLog(path, {stopRequested = async () => false} = {}) {
+    const maximum = 256 * 1024 * 1024;
+    const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    try {
+        const info = await file.stat();
+        if (!info.isFile() || info.size === 0 || info.size > maximum) {
+            throw new Error("AddressSanitizer log must be a nonempty bounded regular file");
+        }
+        const bytes = Buffer.alloc(64 * 1024);
+        const diagnostics = new Set();
+        let bytesScanned = 0;
+        let carry = "";
+        for (;;) {
+            if (await stopRequested()) { throw Object.assign(new Error("AddressSanitizer log auditing was cancelled"), {cancelled: true}); }
+            const {bytesRead} = await file.read(bytes, 0, bytes.length, bytesScanned);
+            if (!bytesRead) { break; }
+            bytesScanned += bytesRead;
+            if (bytesScanned > maximum) { throw new Error("AddressSanitizer log exceeded its size limit"); }
+            const chunk = carry + bytes.subarray(0, bytesRead).toString("latin1");
+            for (const diagnostic of asanDiagnostics(chunk)) { diagnostics.add(diagnostic); }
+            carry = chunk.slice(-8192);
+        }
+        const after = await file.stat();
+        if (bytesScanned !== info.size || after.size !== info.size || after.mtimeMs !== info.mtimeMs || after.ctimeMs !== info.ctimeMs) {
+            throw new Error("AddressSanitizer log changed during auditing");
+        }
+        const issues = [...diagnostics].map(diagnostic => `${diagnostic} in the stage log`);
+        return {ok: !issues.length, issues, diagnostics: [...diagnostics], bytesScanned};
+    } finally { await file.close(); }
+}
+
+export async function resultBundleInventory(bundle) {
+    if (!(await lstat(bundle)).isDirectory()) { throw new Error("XCTest result bundle must be a directory"); }
+    const files = new Map();
+    const directories = [bundle];
+    while (directories.length) {
+        const directory = directories.pop();
+        for (const name of await readdir(directory)) {
+            const path = join(directory, name);
+            const info = await lstat(path);
+            if (info.isDirectory()) { directories.push(path); }
+            else if (info.isFile()) { files.set(relative(bundle, path), info.size); }
+            else { throw new Error("Unexpected file type in XCTest result bundle"); }
+        }
+    }
+    if (!files.get("Info.plist") || !files.get("database.sqlite3") ||
+        !Array.from(files).some(([path, size]) => path.startsWith("Data/data.") && size > 0)) {
+        throw new Error("Incomplete XCTest result bundle");
+    }
+    const entries = Array.from(files, ([path, size]) => Buffer.from(`${path}\0${size}\0`));
+    return createHash("sha256").update(Buffer.concat(entries.sort(Buffer.compare))).digest("hex");
+}
+
 export function auditNativeResult(summary, tree, policy) {
     if (!summary || typeof summary !== "object") { throw new Error("Missing XCTest summary"); }
     const counts = {
@@ -96,97 +147,40 @@ export function auditNativeResult(summary, tree, policy) {
     if (policy.kind === "performance") {
         for (const name of PERFORMANCE_TESTS) { if (!performancePassed.includes(name)) { issues.push(`Release performance gate did not pass: ${name}`); } }
     }
-    const sanitizerInventory = policy.kind === "asan" || policy.kind === "tsan";
-    if (policy.runtime === true || sanitizerInventory) {
-        const label = policy.runtime === true ? "Runtime" : policy.kind === "tsan" ? "ThreadSanitizer" : "AddressSanitizer";
-        const targets = policy.runtime === true ? RUNTIME_TEST_TARGETS : ["Tests macOS"];
+    const sanitizer = {asan: "AddressSanitizer", tsan: "ThreadSanitizer"}[policy.kind];
+    if (policy.runtime || sanitizer || policy.kind === "full") {
+        const label = policy.runtime ? "Runtime" : sanitizer ?? "App";
+        const targets = policy.runtime ? RUNTIME_TEST_TARGETS : [sanitizer ? APP_TEST_TARGETS.macos : APP_TEST_TARGETS[policy.platform]];
         const expected = policy.requiredTests;
-        if (!Array.isArray(expected) || !expected.length || expected.some(name => typeof name !== "string" ||
-            !targets.some(target => name.startsWith(`${target}/`)) ||
-            sanitizerInventory && !/^[^/]+\/[A-Za-z_][A-Za-z0-9_]*\/[A-Za-z_][A-Za-z0-9_]*$/.test(name)) || new Set(expected).size !== expected.length) {
+        const methods = new Set(Array.isArray(expected) ? expected : []);
+        if (!Array.isArray(expected) || !methods.size || methods.size !== expected.length || expected.some(name =>
+            typeof name !== "string" || !targets.includes(name.split("/")[0]) ||
+            !/^[^/]+\/[A-Za-z_]\w*\/[A-Za-z_]\w*$/.test(name))) {
             issues.push(`${label} audit requires a nonempty, unique expected-test inventory`);
         } else {
-            const inventory = new Map();
+            const seen = new Set();
             for (const test of cases) {
-                let identifier = test.identifier.replace(/\(\)$/, "");
-                if (!(identifier.split("/").length === 3 && targets.some(target => identifier.startsWith(`${target}/`)))) {
-                    if (targets.includes(test.target)) { identifier = `${test.target}/${identifier}`; }
-                    else if (!test.target) {
-                        const matches = expected.filter(name => name.endsWith(`/${identifier}`));
-                        if (matches.length === 1) { identifier = matches[0]; }
+                let id = test.identifier.replace(/\(\)$/, "");
+                if (id.split("/").length === 2) {
+                    if (test.target) { id = `${test.target}/${id}`; }
+                    else {
+                        const matches = targets.map(target => `${target}/${id}`).filter(name => methods.has(name));
+                        if (matches.length === 1) { [id] = matches; }
                     }
                 }
-                inventory.set(identifier, (inventory.get(identifier) ?? 0) + 1);
-                if (!expected.includes(identifier)) { issues.push(`Unexpected ${label.toLowerCase()} test: ${test.identifier}`); }
-                if (sanitizerInventory && test.target && identifier.split("/")[0] !== test.target) {
-                    const sanitizer = policy.kind === "tsan" ? "ThreadSanitizer" : "AddressSanitizer";
-                    issues.push(`${sanitizer} test bundle does not match its identifier: ${test.identifier}`);
+                if (test.target && id.split("/")[0] !== test.target) {
+                    issues.push(`${sanitizer ?? label} test bundle does not match its identifier: ${test.identifier}`);
                 }
+                if (!methods.has(id)) { issues.push(`Unexpected ${label.toLowerCase()} test: ${test.identifier}`); }
+                if (seen.has(id)) { issues.push(`${label} test must execute exactly once: ${id}`); }
+                seen.add(id);
                 if (test.result !== "passed" && !(test.result === "skipped" && policy.configuration === "Debug" &&
-                    policy.kind === "full" && performanceTestName(identifier))) {
+                    policy.kind === "full" && performanceTestName(id))) {
                     issues.push(`${label} test did not pass: ${test.identifier} (${test.result})`);
                 }
             }
-            for (const identifier of expected) {
-                if (inventory.get(identifier) !== 1) { issues.push(`${label} test must execute exactly once: ${identifier}`); }
-            }
-        }
-    }
-    if (policy.requiredAppTests !== undefined || policy.exactAppInventory !== undefined) {
-        const target = {macos: "Tests macOS", ios: "Tests iOS", visionos: "Tests visionOS"}[policy.platform];
-        const expected = policy.requiredAppTests;
-        if (policy.kind !== "full" || policy.runtime === true || !target || typeof policy.exactAppInventory !== "boolean" ||
-            !Array.isArray(expected) || !expected.length || new Set(expected).size !== expected.length ||
-            expected.some(name => typeof name !== "string" || !name.startsWith(`${target}/`) ||
-                !/^[^/]+\/[A-Za-z_][A-Za-z0-9_]*\/[A-Za-z_][A-Za-z0-9_]*$/.test(name))) {
-            issues.push("App audit requires a nonempty, unique platform-specific expected-test inventory");
-        } else {
-            const inventory = new Map();
-            const trackedClasses = new Set(expected.map(name => name.split("/").slice(0, 2).join("/")));
-            for (const test of cases) {
-                const identifier = appTestIdentifier(test, target);
-                if (test.target && test.target !== target || !identifier.startsWith(`${target}/`)) {
-                    issues.push(`App test bundle does not match its platform: ${test.identifier}`);
-                }
-                inventory.set(identifier, (inventory.get(identifier) ?? 0) + 1);
-                if (!expected.includes(identifier) && (policy.exactAppInventory || trackedClasses.has(identifier.split("/").slice(0, 2).join("/")))) {
-                    issues.push(`Unexpected app test: ${test.identifier}`);
-                }
-            }
-            for (const identifier of expected) {
-                if (inventory.get(identifier) !== 1) { issues.push(`App test must execute exactly once: ${identifier}`); }
-            }
-            for (const [identifier, count] of inventory) {
-                if (count !== 1 && !expected.includes(identifier)) { issues.push(`Duplicate app test: ${identifier}`); }
-            }
-        }
-    }
-    if (policy.appSelectors !== undefined) {
-        const target = {macos: "Tests macOS", ios: "Tests iOS", visionos: "Tests visionOS"}[policy.platform];
-        const selectors = policy.appSelectors;
-        if (policy.kind !== "full" || policy.runtime === true || !target || !Array.isArray(selectors) || !selectors.length ||
-            new Set(selectors).size !== selectors.length || selectors.some(selector => typeof selector !== "string" ||
-                selector !== target && (!selector.startsWith(`${target}/`) || !/^[^/]+\/[A-Za-z_][A-Za-z0-9_]*(?:\/[A-Za-z_][A-Za-z0-9_]*)?$/.test(selector)))) {
-            issues.push("App audit requires unique platform-specific requested selectors");
-        } else {
-            const identifiers = cases.map(test => appTestIdentifier(test, target));
-            for (const selector of selectors) {
-                if (!identifiers.some(identifier => identifier === selector || identifier.startsWith(`${selector}/`))) {
-                    issues.push(`Requested app selector did not execute: ${selector}`);
-                }
-            }
-            for (const identifier of identifiers) {
-                if (!selectors.some(selector => identifier === selector || identifier.startsWith(`${selector}/`))) {
-                    issues.push(`App test was outside the requested selection: ${identifier}`);
-                }
-            }
-            if (policy.requiredAppTests === undefined) {
-                if (new Set(identifiers).size !== identifiers.length) { issues.push("App result contains duplicate test identifiers"); }
-                for (const [index, test] of cases.entries()) {
-                    if (test.target && test.target !== target || !identifiers[index].startsWith(`${target}/`)) {
-                        issues.push(`App test bundle does not match its platform: ${test.identifier}`);
-                    }
-                }
+            for (const id of methods) {
+                if (!seen.has(id)) { issues.push(`${label} test must execute exactly once: ${id}`); }
             }
         }
     }
@@ -463,8 +457,8 @@ export function auditSafariPreparation(evidence, {runId} = {}) {
         preparation: {preparationRunID: runId, receiptSHA256: evidence.receiptSHA256}};
 }
 
-export function auditResults(stages) {
-    const issues = [];
+export function auditResults(stages, discoveryAudit) {
+    const issues = discoveryAudit?.ok === false ? [...discoveryAudit.issues] : [];
     const released = new Map();
     for (const stage of stages) {
         const platform = stage.nativeAudit?.platform;
@@ -476,8 +470,7 @@ export function auditResults(stages) {
     }
     for (const stage of stages) {
         if (stage.status === "passed") {
-            if ((stage.nativeAudit?.requiredAppTests !== undefined || stage.nativeAudit?.exactAppInventory !== undefined ||
-                stage.nativeAudit?.appSelectors !== undefined) && stage.audit?.ok !== true) {
+            if (stage.nativeAudit?.kind === "full" && !stage.nativeAudit.runtime && stage.audit?.ok !== true) {
                 issues.push(`${stage.id} has no passing app XCTest inventory audit`);
             }
             if (stage.nativeAudit?.runtime === true && stage.audit?.ok !== true) {

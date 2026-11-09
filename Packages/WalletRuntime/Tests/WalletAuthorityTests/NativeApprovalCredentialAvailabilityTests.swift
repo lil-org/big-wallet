@@ -124,7 +124,7 @@ extension NativeApprovalCoordinatorTests {
                     let clock = TestClock(uptimeNanoseconds: 0)
                     let waits = ScheduledWaits()
                     defer { waits.resumeAll() }
-                    let fixture = try makeFixture(clock: clock, environment: .init(
+                    let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
                         now: { clock.date }, authorityID: authorityID,
                         uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 }, wait: waits.wait,
                         prepare: { binding, _ in self.approvalPreparation(binding, action: action) },

@@ -125,6 +125,7 @@ class MacOSUpgradeTests(unittest.TestCase):
             stages = [{'id': 'scripts.fixture_check'}, {'id': native, 'nativeAudit': {'kind': 'safari'}}]
             host.atomic_json(directory / 'planned-result.json', {'origin': 'host-plan', 'vmId': vm_id,
                 'runId': report['runId'], 'stages': [{**stage, 'status': 'pending'} for stage in stages]})
+            host.atomic_json(directory / 'resolved-plan.json', [{**stage, 'status': 'pending'} for stage in stages])
             report['stages'] = [{**stage, 'status': status, 'log': stage['id'] + '.log'} for stage in stages]
             for stage in report['stages']:
                 (directory / stage['log']).touch()
@@ -1004,6 +1005,51 @@ class MacOSUpgradeTests(unittest.TestCase):
         self.assert_parent_unchanged()
         self.assertTrue(withdrawn.is_dir())
         self.assertFalse(self.result['fullSuiteVerified'])
+
+    def test_archive_accepts_a_16_mib_resolved_plan_and_rejects_one_extra_byte(self):
+        path, report = self.report()
+        resolved = path.parent / 'resolved-plan.json'
+        resolved.write_bytes(resolved.read_bytes().ljust(16 * 1024 ** 2))
+        upgrade.suite_archive_identity(host, path.parent, report)
+        with resolved.open('ab') as file:
+            file.write(b' ')
+        with self.assertRaisesRegex(host.RunnerError, 'Resolved XCTest plan exceeds 16 MiB'):
+            upgrade.suite_archive_identity(host, path.parent, report)
+
+    def test_discovery_artifacts_are_required_and_sealed_with_the_resolved_plan(self):
+        for missing in (None, 'discover.fixture.discovery.json', 'discover.fixture.discovery.xctestrun',
+                        'discover.fixture.discovery.plan.json', 'build-fixture.log',
+                        'discover.fixture.simulators.json'):
+            with self.subTest(missing=missing):
+                path, report = self.report()
+                artifacts = path.parent
+                discovery = {'id': 'discover.fixture', 'group': 'test', 'status': 'pending',
+                    'nativeDiscovery': {'executionID': 'test.fixture', 'platform': 'macos', 'configuration': 'Debug'}}
+                plan = host.read_json(artifacts / 'planned-result.json')
+                plan['stages'].append(discovery)
+                host.atomic_json(artifacts / 'planned-result.json', plan)
+                host.atomic_json(artifacts / 'resolved-plan.json', plan['stages'])
+                evidence = {'artifact': 'discover.fixture.discovery.json', 'log': 'discover.fixture.log',
+                    'build': {'artifact': 'build-fixture.log'},
+                    'plan': {'artifact': 'discover.fixture.discovery.xctestrun', 'decodedArtifact': 'discover.fixture.discovery.plan.json'},
+                    'products': [{'path': '/fixture/test-binary'}]}
+                report['stages'].append({**discovery, 'status': 'passed', 'log': 'discover.fixture.log', 'discovery': evidence,
+                    'simulatorPreparation': {'artifact': 'discover.fixture.simulators.json', 'status': 'passed', 'steps': []}})
+                for name in (evidence['artifact'], evidence['log'], *evidence['plan'].values(),
+                             *evidence['build'].values(), 'discover.fixture.simulators.json'):
+                    (artifacts / name).write_text('{}')
+                if missing:
+                    (artifacts / missing).unlink()
+                    with self.assertRaisesRegex(host.RunnerError, 'missing required artifacts'):
+                        upgrade.suite_archive_identity(host, artifacts, report)
+                else:
+                    original = upgrade.suite_archive_identity(host, artifacts, report)
+                    (artifacts / evidence['artifact']).write_text('[]')
+                    self.assertNotEqual(upgrade.suite_archive_identity(host, artifacts, report), original)
+                    altered = copy.deepcopy(report)
+                    altered['stages'][-1]['nativeDiscovery']['configuration'] = 'Release'
+                    with self.assertRaisesRegex(host.RunnerError, 'resolved policy'):
+                        upgrade.suite_archive_identity(host, artifacts, altered)
 
     def test_missing_stage_log_on_resume_keeps_original_baseline(self):
         withdrawn = self.interrupt_before_swap()

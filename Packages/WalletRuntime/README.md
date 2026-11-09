@@ -30,6 +30,9 @@ services. The existing helper retains wallet management because it presents the
 wallet and onboarding UI. These construction and API boundaries do not introduce
 additional OS process isolation. Ordinary-import fixtures and Xcode membership
 checks prevent extension composition from reaching the application facade.
+Native approval construction requires its preparation, catalog, and finalization
+operations explicitly. Inert defaults belong to test fixtures, not production
+authority construction.
 
 ## Concurrency
 
@@ -89,6 +92,13 @@ Abandoning an execution releases its local ownership and uses the same recovery 
 Canceling popup authentication returns directly to review after the claim is released and current authority is verified. When the request, account catalog, and network are unchanged, the review keeps its nonce and fee edits, estimates, and notices. The review receives a new token; another Approve requires a new claim, fresh authentication, and fresh consent. Changed authority rebuilds the review or resolves the request through its normal checks. Task cancellation, expired deadlines, unavailable authority, and uncertain claim release retain their interruption or recovery behavior.
 
 Native consent receives one finalization attempt. Subsequent polling only observes the existing execution. Before execution is authorized, unavailable wallet or network data returns the request to explicit Retry on both native and popup approvals. Retry rebuilds the review and requires new consent without extending the request's original deadline. Confirmed account or network changes instead complete the request with the same provider error on both surfaces. Unexpected interruption and durable broadcast recovery retain their existing behavior; observation cannot reuse old consent or repeat dispatch.
+
+Canceling native signing authentication returns to the same current, unexpired
+review and preserves its selected Solana cluster. Failed or unavailable
+authentication shows “Failed to verify” with a Try Again action. Each attempt
+creates a new challenge and requires fresh authentication and consent. Closing, locking,
+replacing, rejecting, or expiring the review never restores its controls. The
+original absolute and monotonic deadlines are not extended by cancellation.
 
 The approval surface owns authentication. The transaction engine reserves a frozen review while authentication runs, then performs a fresh fee preflight. Updated fees and recoverable preparation failures appear inline, with Approve, Retry, or Edit Fees as the primary action. Updated fees require another explicit approval and authentication; transaction Retry only refreshes preparation and never signs or extends the request deadline.
 
@@ -170,9 +180,31 @@ screen transition cannot install content or retire a newer screen. Credential an
 grant validation stays inside Authority; the app ownership layer does not issue
 authorization or unify unlock grants with signing or export grants.
 
+Presentation matching only compares generation and locked state. Actions,
+activation, asynchronous results, and secret publication explicitly validate the
+access lease; only user interaction renews it. Credential validation remains at
+privileged operation boundaries. Lock publishes its state before synchronously
+invalidating sessions, authentication, and presented secrets. Timer registration
+cannot call back synchronously; delivered callbacks still check their generation.
+
 ### Account editing
 
+Healthy wallet refreshes retain the ready presentation and do not revoke in-flight
+imports, exports, or previews. Repository-observed catalog failures invalidate
+operation tokens before UI publication. Recovery permits new operations without
+reviving pre-failure tokens. One owner publishes each shared reload result;
+cancellation cannot conceal a storage failure that a started read already returned.
+Source, credential, and capacity validation still run at the operation boundary.
+An external store notification withholds the approval catalog until a full read
+covers that notification. On macOS it also clears any displayed secret while
+the wallet checks its source and issuing epoch again.
+
 The account editor merges external account changes into its open draft. Local additions and removals are reapplied to the latest wallet; untouched accounts follow that wallet's current state. An edit already satisfied externally becomes clean, so later external changes apply normally. Existing preview pages remain available, and only removal or replacement of the wallet closes the editor. Saving still merges against current storage and cannot remove the final account.
+
+Removing the final account uses one confirmation containing both the last-account
+warning and the irreversible-removal warning, followed by fresh authentication.
+The deletion transaction checks that the confirmed account is still the wallet's
+only account before revoking authority or removing the wallet.
 
 On iOS and visionOS, creation, import, and account edits check the entire proposed
 catalog against the approval vault's 8 MiB source and envelope limits before
@@ -266,8 +298,9 @@ conditional or implicit fixture singleton.
 `Scripts/check_runtime_boundaries.mjs` checks dependencies, source ownership,
 private APIs, test-only imports, and Xcode compilation membership. Its compiler
 fixtures use ordinary imports: positive fixtures must compile and negative
-fixtures must fail for the expected access-control reason. The committed VM test
-inventory rejects missing, duplicate, skipped, unexpected, and zero-test results.
+fixtures must fail for the expected access-control reason. VM discovery binds the
+expected test inventory to the built products and rejects missing, duplicate,
+skipped, unexpected, and zero-test results.
 
 Run native validation only through `Scripts/test_vm.sh`; see
 [`Scripts/vm/README.md`](../../Scripts/vm/README.md). Focused package compilation is

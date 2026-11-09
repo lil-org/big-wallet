@@ -53,7 +53,7 @@ final class EditAccountsViewControllerTests: XCTestCase {
     }
 #endif
 
-    func testSuccessfulStoreReloadRestartsPendingInitialPreview() async throws {
+    func testSuccessfulStoreReloadPreservesPendingInitialPreview() async throws {
         let fixture = try AccountEditorFixture()
         addTeardownBlock { try await fixture.tearDown() }
         await assertWalletReload(fixture.manager)
@@ -69,21 +69,21 @@ final class EditAccountsViewControllerTests: XCTestCase {
 
         await assertWalletReload(fixture.manager)
 
-        await fulfillment(of: [creation.cancelled], timeout: 2)
+        XCTAssertEqual(creation.cancellations, 0)
+        XCTAssertEqual(creation.calls, 1)
+        XCTAssertEqual(state.status, .loadingInitial)
+        creation.release()
+        await fulfillment(of: [creation.returned], timeout: 2)
         await expectEventually(timeout: 5) { state.canEdit }
-        XCTAssertEqual(creation.calls, 2)
         XCTAssertEqual(host.departures, 0)
         XCTAssertFalse(state.accounts.isEmpty)
         XCTAssertFalse(state.hasChanges)
         XCTAssertTrue(host.controller.okButton.isEnabled)
-        creation.release()
-        await fulfillment(of: [creation.returned], timeout: 2)
-        for _ in 0..<3 { await Task.yield() }
         XCTAssertTrue(state.canEdit)
         XCTAssertFalse(state.canRetry)
     }
 
-    func testSuccessfulStoreReloadRestartsPendingPreviewRecoveryPreservingDraft() async throws {
+    func testSuccessfulStoreReloadPreservesPendingRecoveryAndDraft() async throws {
         let fixture = try AccountEditorFixture()
         addTeardownBlock { try await fixture.tearDown() }
         await assertWalletReload(fixture.manager)
@@ -108,18 +108,18 @@ final class EditAccountsViewControllerTests: XCTestCase {
 
         await assertWalletReload(fixture.manager)
 
-        await fulfillment(of: [creation.cancelled], timeout: 2)
+        XCTAssertEqual(creation.cancellations, 0)
+        XCTAssertEqual(creation.calls, 2)
+        XCTAssertEqual(state.status, .recovering)
+        creation.release()
+        await fulfillment(of: [creation.returned], timeout: 2)
         await expectEventually(timeout: 5) { state.canEdit }
-        XCTAssertEqual(creation.calls, 3)
         XCTAssertEqual(host.departures, 0)
         XCTAssertEqual(state.accounts, loaded)
         XCTAssertEqual(state.enabledAccounts, enabled)
         XCTAssertTrue(state.hasChanges)
         XCTAssertTrue(host.controller.okButton.isEnabled)
         XCTAssertTrue(host.controller.previewRetryButton.isHidden)
-        creation.release()
-        await fulfillment(of: [creation.returned], timeout: 2)
-        for _ in 0..<3 { await Task.yield() }
         XCTAssertTrue(state.canEdit)
         XCTAssertFalse(state.canRetry)
         XCTAssertEqual(state.enabledAccounts, enabled)
@@ -319,7 +319,7 @@ final class EditAccountsViewControllerTests: XCTestCase {
         holdRead.withLock { $0 = true }
         let reload = Task { await fixture.manager.reloadFromStore() }
         await fulfillment(of: [storeRead], timeout: 5)
-        XCTAssertEqual(fixture.manager.loadState, .loading)
+        XCTAssertEqual(fixture.manager.loadState, .ready)
 
         layout.resolve(())
         await fulfillment(of: [finishedLayout], timeout: 2)
@@ -469,13 +469,14 @@ final class EditAccountsViewControllerTests: XCTestCase {
 
 private final class HeldAccountEditorPreviewCreation: Sendable {
     let entered = XCTestExpectation(description: "Preview session creation is pending")
-    let cancelled = XCTestExpectation(description: "Obsolete preview session creation is cancelled")
-    let returned = XCTestExpectation(description: "Obsolete preview session creation returns")
+    private let cancellationCount = Mutex(0)
+    let returned = XCTestExpectation(description: "Pending preview session creation returns")
     private let heldCall: Int
     private let callCount = Mutex(0)
     private let result = TestGate<Void>()
 
     var calls: Int { callCount.withLock { $0 } }
+    var cancellations: Int { cancellationCount.withLock { $0 } }
 
     init(heldCall: Int) { self.heldCall = heldCall }
 
@@ -487,10 +488,10 @@ private final class HeldAccountEditorPreviewCreation: Sendable {
                 entered.fulfill()
                 await result.wait()
             } onCancel: {
-                self.cancelled.fulfill()
+                self.cancellationCount.withLock { $0 += 1 }
             }
             returned.fulfill()
-            throw WalletsManager.Error.keychainAccessFailure
+            try Task.checkCancellation()
         }
         return try await manager.previewSession(wallet: wallet, access: access)
     }

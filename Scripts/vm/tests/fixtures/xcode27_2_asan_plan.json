@@ -1,0 +1,217 @@
+{
+  "TestConfigurations": [
+    {
+      "IsEnabled": true,
+      "Name": "Test Scheme Action",
+      "TestTargets": [
+        {
+          "PreferredScreenCaptureFormat": "screenRecording",
+          "BlueprintProviderRelativePath": "WalletRuntime",
+          "IsMemoryTaggingAddressSanitizerEnabled": false,
+          "TestLanguage": "",
+          "ProductModuleName": "WalletNetworkingTests",
+          "DefaultTestExecutionTimeAllowance": 600,
+          "BlueprintProviderName": "WalletRuntime",
+          "UserAttachmentLifetime": "deleteOnSuccess",
+          "DiagnosticCollectionPolicy": 1,
+          "TestHostPath": "__PLATFORMS__/MacOSX.platform/Developer/Library/Xcode/Agents/xctest",
+          "TestInteropMode": "complete",
+          "EnvironmentVariables": {
+            "TERM": "dumb",
+            "PERFC_ENABLE_PROFILE_MODE": "1",
+            "APP_DISTRIBUTOR_ID_OVERRIDE": "com.apple.AppStore",
+            "DYLD_INSERT_LIBRARIES": "/usr/lib/libRPAC.dylib",
+            "IDE_CHOSEN_LOGGING_METHOD": "1",
+            "PERFC_ENABLE_EXTENDED_DIAGNOSTIC_FORMAT": "1",
+            "SQLITE_ENABLE_THREAD_ASSERTIONS": "1",
+            "OS_ACTIVITY_DT_MODE": "YES",
+            "PERFC_SUPPRESS_SYSTEM_REPORTS": "1",
+            "PERFC_RESET_INSERT_LIBRARIES": "1"
+          },
+          "CommandLineArguments": [],
+          "SystemAttachmentLifetime": "deleteOnSuccess",
+          "TestingEnvironmentVariables": {
+            "DYLD_LIBRARY_PATH": "__TESTROOT__/Debug:__PLATFORMS__/MacOSX.platform/Developer/usr/lib",
+            "DYLD_FRAMEWORK_PATH": "__TESTROOT__/Debug:__TESTROOT__/Debug/PackageFrameworks:__SHAREDFRAMEWORKS__:__PLATFORMS__/MacOSX.platform/Developer/Library/Frameworks",
+            "XCODE_SCHEME_NAME": "WalletRuntime-Package",
+            "DYLD_INSERT_LIBRARIES": "__TESTBUNDLE__/Contents/Frameworks/libclang_rt.asan_osx_dynamic.dylib:__DEVELOPERUSRLIB__/libMainThreadChecker.dylib:/usr/lib/libRPAC.dylib",
+            "XCODE_TEST_PLAN_NAME": "WalletRuntime-Package",
+            "__XCODE_BUILT_PRODUCTS_DIR_PATHS": "__TESTROOT__/Debug",
+            "ASAN_OPTIONS": "color=never:external_symbolizer_path='':abort_on_error=1",
+            "__XPC_DYLD_LIBRARY_PATH": "__TESTROOT__/Debug",
+            "__XPC_DYLD_FRAMEWORK_PATH": "__TESTROOT__/Debug",
+            "PERFC_SUPPRESS_SYSTEM_REPORTS": "1"
+          },
+          "BlueprintName": "WalletNetworkingTests",
+          "TestRegion": "",
+          "TestTimeoutsEnabled": false,
+          "TestBundlePath": "__TESTROOT__/Debug/WalletNetworkingTests.xctest",
+          "DependentProductPaths": [
+            "__TESTROOT__/Debug/WalletAuthorityTests.xctest",
+            "__TESTROOT__/Debug/WalletDomainTests.xctest",
+            "__TESTROOT__/Debug/WalletFlowsTests.xctest",
+            "__TESTROOT__/Debug/WalletNetworkingTests.xctest"
+          ]
+        },
+        {
+          "PreferredScreenCaptureFormat": "screenRecording",
+          "BlueprintProviderRelativePath": "WalletRuntime",
+          "IsMemoryTaggingAddressSanitizerEnabled": false,
+          "TestLanguage": "",
+          "ProductModuleName": "WalletFlowsTests",
+          "DefaultTestExecutionTimeAllowance": 600,
+          "BlueprintProviderName": "WalletRuntime",
+          "UserAttachmentLifetime": "deleteOnSuccess",
+          "DiagnosticCollectionPolicy": 1,
+          "TestHostPath": "__PLATFORMS__/MacOSX.platform/Developer/Library/Xcode/Agents/xctest",
+          "TestInteropMode": "complete",
+          "EnvironmentVariables": {
+            "TERM": "dumb",
+            "PERFC_ENABLE_PROFILE_MODE": "1",
+            "APP_DISTRIBUTOR_ID_OVERRIDE": "com.apple.AppStore",
+            "DYLD_INSERT_LIBRARIES": "/usr/lib/libRPAC.dylib",
+            "IDE_CHOSEN_LOGGING_METHOD": "1",
+            "PERFC_ENABLE_EXTENDED_DIAGNOSTIC_FORMAT": "1",
+            "SQLITE_ENABLE_THREAD_ASSERTIONS": "1",
+            "OS_ACTIVITY_DT_MODE": "YES",
+            "PERFC_SUPPRESS_SYSTEM_REPORTS": "1",
+            "PERFC_RESET_INSERT_LIBRARIES": "1"
+          },
+          "CommandLineArguments": [],
+          "SystemAttachmentLifetime": "deleteOnSuccess",
+          "TestingEnvironmentVariables": {
+            "DYLD_LIBRARY_PATH": "__TESTROOT__/Debug:__PLATFORMS__/MacOSX.platform/Developer/usr/lib",
+            "DYLD_FRAMEWORK_PATH": "__TESTROOT__/Debug:__TESTROOT__/Debug/PackageFrameworks:__SHAREDFRAMEWORKS__:__PLATFORMS__/MacOSX.platform/Developer/Library/Frameworks",
+            "XCODE_SCHEME_NAME": "WalletRuntime-Package",
+            "DYLD_INSERT_LIBRARIES": "__TESTBUNDLE__/Contents/Frameworks/libclang_rt.asan_osx_dynamic.dylib:__DEVELOPERUSRLIB__/libMainThreadChecker.dylib:/usr/lib/libRPAC.dylib",
+            "XCODE_TEST_PLAN_NAME": "WalletRuntime-Package",
+            "__XCODE_BUILT_PRODUCTS_DIR_PATHS": "__TESTROOT__/Debug",
+            "ASAN_OPTIONS": "color=never:external_symbolizer_path='':abort_on_error=1",
+            "__XPC_DYLD_LIBRARY_PATH": "__TESTROOT__/Debug",
+            "__XPC_DYLD_FRAMEWORK_PATH": "__TESTROOT__/Debug",
+            "PERFC_SUPPRESS_SYSTEM_REPORTS": "1"
+          },
+          "BlueprintName": "WalletFlowsTests",
+          "TestRegion": "",
+          "TestTimeoutsEnabled": false,
+          "TestBundlePath": "__TESTROOT__/Debug/WalletFlowsTests.xctest",
+          "DependentProductPaths": [
+            "__TESTROOT__/Debug/WalletAuthorityTests.xctest",
+            "__TESTROOT__/Debug/WalletDomainTests.xctest",
+            "__TESTROOT__/Debug/WalletFlowsTests.xctest",
+            "__TESTROOT__/Debug/WalletNetworkingTests.xctest"
+          ]
+        },
+        {
+          "PreferredScreenCaptureFormat": "screenRecording",
+          "BlueprintProviderRelativePath": "WalletRuntime",
+          "IsMemoryTaggingAddressSanitizerEnabled": false,
+          "TestLanguage": "",
+          "ProductModuleName": "WalletDomainTests",
+          "DefaultTestExecutionTimeAllowance": 600,
+          "BlueprintProviderName": "WalletRuntime",
+          "UserAttachmentLifetime": "deleteOnSuccess",
+          "DiagnosticCollectionPolicy": 1,
+          "TestHostPath": "__PLATFORMS__/MacOSX.platform/Developer/Library/Xcode/Agents/xctest",
+          "TestInteropMode": "complete",
+          "EnvironmentVariables": {
+            "TERM": "dumb",
+            "PERFC_ENABLE_PROFILE_MODE": "1",
+            "APP_DISTRIBUTOR_ID_OVERRIDE": "com.apple.AppStore",
+            "DYLD_INSERT_LIBRARIES": "/usr/lib/libRPAC.dylib",
+            "IDE_CHOSEN_LOGGING_METHOD": "1",
+            "PERFC_ENABLE_EXTENDED_DIAGNOSTIC_FORMAT": "1",
+            "SQLITE_ENABLE_THREAD_ASSERTIONS": "1",
+            "OS_ACTIVITY_DT_MODE": "YES",
+            "PERFC_SUPPRESS_SYSTEM_REPORTS": "1",
+            "PERFC_RESET_INSERT_LIBRARIES": "1"
+          },
+          "CommandLineArguments": [],
+          "SystemAttachmentLifetime": "deleteOnSuccess",
+          "TestingEnvironmentVariables": {
+            "DYLD_LIBRARY_PATH": "__TESTROOT__/Debug:__PLATFORMS__/MacOSX.platform/Developer/usr/lib",
+            "DYLD_FRAMEWORK_PATH": "__TESTROOT__/Debug:__TESTROOT__/Debug/PackageFrameworks:__SHAREDFRAMEWORKS__:__PLATFORMS__/MacOSX.platform/Developer/Library/Frameworks",
+            "XCODE_SCHEME_NAME": "WalletRuntime-Package",
+            "DYLD_INSERT_LIBRARIES": "__TESTBUNDLE__/Contents/Frameworks/libclang_rt.asan_osx_dynamic.dylib:__DEVELOPERUSRLIB__/libMainThreadChecker.dylib:/usr/lib/libRPAC.dylib",
+            "XCODE_TEST_PLAN_NAME": "WalletRuntime-Package",
+            "__XCODE_BUILT_PRODUCTS_DIR_PATHS": "__TESTROOT__/Debug",
+            "ASAN_OPTIONS": "color=never:external_symbolizer_path='':abort_on_error=1",
+            "__XPC_DYLD_LIBRARY_PATH": "__TESTROOT__/Debug",
+            "__XPC_DYLD_FRAMEWORK_PATH": "__TESTROOT__/Debug",
+            "PERFC_SUPPRESS_SYSTEM_REPORTS": "1"
+          },
+          "BlueprintName": "WalletDomainTests",
+          "TestRegion": "",
+          "TestTimeoutsEnabled": false,
+          "TestBundlePath": "__TESTROOT__/Debug/WalletDomainTests.xctest",
+          "DependentProductPaths": [
+            "__TESTROOT__/Debug/WalletAuthorityTests.xctest",
+            "__TESTROOT__/Debug/WalletDomainTests.xctest",
+            "__TESTROOT__/Debug/WalletFlowsTests.xctest",
+            "__TESTROOT__/Debug/WalletNetworkingTests.xctest"
+          ]
+        },
+        {
+          "PreferredScreenCaptureFormat": "screenRecording",
+          "BlueprintProviderRelativePath": "WalletRuntime",
+          "IsMemoryTaggingAddressSanitizerEnabled": false,
+          "TestLanguage": "",
+          "ProductModuleName": "WalletAuthorityTests",
+          "DefaultTestExecutionTimeAllowance": 600,
+          "BlueprintProviderName": "WalletRuntime",
+          "UserAttachmentLifetime": "deleteOnSuccess",
+          "DiagnosticCollectionPolicy": 1,
+          "TestHostPath": "__PLATFORMS__/MacOSX.platform/Developer/Library/Xcode/Agents/xctest",
+          "TestInteropMode": "complete",
+          "EnvironmentVariables": {
+            "TERM": "dumb",
+            "PERFC_ENABLE_PROFILE_MODE": "1",
+            "APP_DISTRIBUTOR_ID_OVERRIDE": "com.apple.AppStore",
+            "DYLD_INSERT_LIBRARIES": "/usr/lib/libRPAC.dylib",
+            "IDE_CHOSEN_LOGGING_METHOD": "1",
+            "PERFC_ENABLE_EXTENDED_DIAGNOSTIC_FORMAT": "1",
+            "SQLITE_ENABLE_THREAD_ASSERTIONS": "1",
+            "OS_ACTIVITY_DT_MODE": "YES",
+            "PERFC_SUPPRESS_SYSTEM_REPORTS": "1",
+            "PERFC_RESET_INSERT_LIBRARIES": "1"
+          },
+          "CommandLineArguments": [],
+          "SystemAttachmentLifetime": "deleteOnSuccess",
+          "TestingEnvironmentVariables": {
+            "DYLD_LIBRARY_PATH": "__TESTROOT__/Debug:__PLATFORMS__/MacOSX.platform/Developer/usr/lib",
+            "DYLD_FRAMEWORK_PATH": "__TESTROOT__/Debug:__TESTROOT__/Debug/PackageFrameworks:__SHAREDFRAMEWORKS__:__PLATFORMS__/MacOSX.platform/Developer/Library/Frameworks",
+            "XCODE_SCHEME_NAME": "WalletRuntime-Package",
+            "DYLD_INSERT_LIBRARIES": "__TESTBUNDLE__/Contents/Frameworks/libclang_rt.asan_osx_dynamic.dylib:__DEVELOPERUSRLIB__/libMainThreadChecker.dylib:/usr/lib/libRPAC.dylib",
+            "XCODE_TEST_PLAN_NAME": "WalletRuntime-Package",
+            "__XCODE_BUILT_PRODUCTS_DIR_PATHS": "__TESTROOT__/Debug",
+            "ASAN_OPTIONS": "color=never:external_symbolizer_path='':abort_on_error=1",
+            "__XPC_DYLD_LIBRARY_PATH": "__TESTROOT__/Debug",
+            "__XPC_DYLD_FRAMEWORK_PATH": "__TESTROOT__/Debug",
+            "PERFC_SUPPRESS_SYSTEM_REPORTS": "1"
+          },
+          "BlueprintName": "WalletAuthorityTests",
+          "TestRegion": "",
+          "TestTimeoutsEnabled": false,
+          "TestBundlePath": "__TESTROOT__/Debug/WalletAuthorityTests.xctest",
+          "DependentProductPaths": [
+            "__TESTROOT__/Debug/WalletAuthorityTests.xctest",
+            "__TESTROOT__/Debug/WalletDomainTests.xctest",
+            "__TESTROOT__/Debug/WalletFlowsTests.xctest",
+            "__TESTROOT__/Debug/WalletNetworkingTests.xctest"
+          ]
+        }
+      ]
+    }
+  ],
+  "__xctestrun_metadata__": {
+    "FormatVersion": 2
+  },
+  "ContainerInfo": {
+    "ContainerName": "WalletRuntime",
+    "SchemeName": "WalletRuntime-Package"
+  },
+  "TestPlan": {
+    "IsDefault": true,
+    "Name": "WalletRuntime-Package"
+  }
+}

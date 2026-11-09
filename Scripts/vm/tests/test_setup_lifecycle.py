@@ -41,7 +41,8 @@ class SetupFixture:
                 'sourceVM': str(self.original), 'consoleUser': 'wallet-test', 'environment': self.environment,
                 'bootstrapTools': self.tools, 'bootstrapSourceDigest': 'outdated'})
         for name, value in [('check_capacity', None), ('bootstrap_tool_hashes', self.tools),
-                            ('ensure_disk_idle', None), ('environment_attested', True), ('verify_setup_sources', None)]:
+                            ('ensure_disk_idle', None), ('environment_attested', True), ('verify_setup_sources', None),
+                            ('resolved_stage_plan', [{'id': 'test.fixture', 'status': 'pending'}])]:
             self.stack.enter_context(patch.object(host, name, return_value=value))
         for name, action in [('build_tools', self.build_tools), ('clone_vm', self.clone),
                              ('stage_provisioning', self.stage), ('snapshot_source', self.snapshot),

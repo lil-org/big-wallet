@@ -1483,3 +1483,24 @@ actor ApprovalStoreTestFixture: NativeApprovalStore {
         }
     }
 }
+
+@MainActor
+func nativeApprovalEnvironmentForTesting(
+    now: @escaping @Sendable () -> Date,
+    monotonicClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now },
+    messages: AuthorityMessages = .testingEnglish,
+    authorityID: UUID = UUID(),
+    hooks: AuthorityExecutionHooks = .none,
+    uptime: (@MainActor @Sendable () -> TimeInterval)? = nil,
+    wait: @escaping @MainActor @Sendable (UInt64) async -> Void,
+    waitForAuthenticationExpiry: (@MainActor @Sendable (TimeInterval) async throws -> Void)? = nil,
+    prepare: @escaping @MainActor @Sendable (ExtensionBridge.RequestBinding, WalletReviewCatalog?) async -> DappRequestPreparation = { _, _ in .unavailable },
+    reloadWallets: @escaping @MainActor @Sendable () async -> Bool = { false },
+    currentReviewCatalog: @escaping @MainActor @Sendable () -> WalletReviewCatalog? = { nil },
+    attemptNativeDecision: @escaping @MainActor @Sendable (ReviewConsent) async -> NativeApprovalOperation.Result = { _ in .pending }
+) -> NativeApprovalAuthority.Environment {
+    .init(now: now, monotonicClock: monotonicClock, messages: messages, authorityID: authorityID,
+          hooks: hooks, uptime: uptime, wait: wait, waitForAuthenticationExpiry: waitForAuthenticationExpiry,
+          prepare: prepare, reloadWallets: reloadWallets, currentReviewCatalog: currentReviewCatalog,
+          attemptNativeDecision: attemptNativeDecision)
+}

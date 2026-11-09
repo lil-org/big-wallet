@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
 import {auditNativeResult, auditResults, performanceTestName, testCases} from "../result_audit.mjs";
-import {createManifest, PERFORMANCE_TESTS, PLATFORMS, BOOTSTRAP_TOOL_NAMES} from "../test_manifest.mjs";
+import {PERFORMANCE_TESTS, PLATFORMS, BOOTSTRAP_TOOL_NAMES} from "../test_manifest.mjs";
+import {resolvedFixtureManifest as createManifest} from "./discovery_support.mjs";
 
 const captured = JSON.parse(await readFile(new URL("./fixtures/xcresult_xcode27_performance_debug.json", import.meta.url), "utf8"));
-const debugPolicy = {configuration: "Debug", kind: "full", platform: "ios"};
+const releaseMethods = PERFORMANCE_TESTS.map(name => `Tests iOS/WalletCoreProxyPerformanceGateTests/${name}`);
+const debugPolicy = {configuration: "Debug", kind: "full", platform: "ios",
+    requiredTests: [...releaseMethods, "Tests iOS/WalletCoreProxyPerformanceGateTests/testPerformanceGateThresholdResolutionSkipsUnlessBaselineIsConfigured",
+        "Tests iOS/WalletCoreProxyPerformanceGateTests/testScryptDefaultParametersAndSequentialDerivationVectors"]};
 
 function passedGates() {
     const tree = structuredClone(captured.tree);
@@ -17,7 +21,7 @@ function passedGates() {
 test("app result summaries cannot hide a failed or unknown individual test outcome", () => {
     const tree = {testNodes: [{nodeType: "Test Case", nodeIdentifier: "AccessTests/testLateResult()", result: "Failed"}]};
     const passedSummary = {totalTestCount: 1, passedTests: 1, failedTests: 0, skippedTests: 0};
-    const policy = {configuration: "Debug", kind: "full", platform: "macos"};
+    const policy = {configuration: "Debug", kind: "full", platform: "macos", requiredTests: ["Tests macOS/AccessTests/testLateResult"]};
     const audit = auditNativeResult(passedSummary, tree, policy);
     assert.equal(audit.ok, false);
     assert.ok(audit.issues.includes("Failed-test inventory does not match XCTest summary"));
@@ -48,7 +52,7 @@ test("captured XCTest27 cases retain skip-message children without counting them
 test("current-schema passed cases expose all five Release gates for full and focused runs", () => {
     const {summary, tree} = passedGates();
     for (const kind of ["full", "performance"]) {
-        const audit = auditNativeResult(summary, tree, {configuration: "Release", kind, platform: "ios"});
+        const audit = auditNativeResult(summary, tree, {configuration: "Release", kind, platform: "ios", requiredTests: releaseMethods});
         assert.equal(audit.ok, true);
         assert.deepEqual(new Set(audit.performancePassed), new Set(PERFORMANCE_TESTS));
         assert.deepEqual(audit.expectedSkips, []);
@@ -59,7 +63,7 @@ test("Debug skip proof requires passing Release gates on the corresponding platf
     const debug = {id: "test.ios.debug", status: "passed", nativeAudit: debugPolicy,
         audit: auditNativeResult(captured.summary, captured.tree, debugPolicy)};
     const {summary, tree} = passedGates();
-    const releasePolicy = {configuration: "Release", kind: "full", platform: "ios"};
+    const releasePolicy = {configuration: "Release", kind: "full", platform: "ios", requiredTests: releaseMethods};
     const release = {id: "test.ios.release", status: "passed", nativeAudit: releasePolicy,
         audit: auditNativeResult(summary, tree, releasePolicy)};
     assert.equal(auditResults([debug]).status, "failed");

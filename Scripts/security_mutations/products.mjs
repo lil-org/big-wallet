@@ -39,7 +39,7 @@ function expand(value, products, host = null) {
     return resolve(expanded);
 }
 
-export function bindTestPlan(plan, {family, selectors, products}) {
+export function bindTestPlan(plan, {family, selectors, products, configuration = "Debug", platform = family === "ios-app" ? "ios" : "macos"}) {
     if (!isAbsolute(products) || resolve(products) !== products) { throw new Error("Invalid build products directory"); }
     const expected = [...new Set(selectors.map(selector => selector.split("/")[0]))];
     const available = targets(plan);
@@ -59,8 +59,8 @@ export function bindTestPlan(plan, {family, selectors, products}) {
         }
         if (family !== "runtime" && !host) { throw new Error(`App witness has no bound test host: ${name}`); }
         const bundle = expand(target.TestBundlePath, products, host);
-        const configuration = join(products, family === "ios-app" ? "Debug-iphonesimulator" : "Debug");
-        if (!inside(configuration, bundle) || host && !inside(configuration, host)) { return null; }
+        const configurationDirectory = join(products, configuration + ({macos: "", ios: "-iphonesimulator", visionos: "-xrsimulator"}[platform] ?? "-unsupported"));
+        if (!inside(configurationDirectory, bundle) || host && !inside(configurationDirectory, host)) { return null; }
         if (!bundle.endsWith(".xctest") || !inside(products, bundle) || host && !inside(products, host)) { throw new Error("XCTest product escaped its build root"); }
         chosen.push({target: name, bundle, host});
     }

@@ -1,0 +1,1470 @@
+{
+  "errors" : [
+
+  ],
+  "values" : [
+    {
+      "disabledTests" : [
+
+      ],
+      "enabledTests" : [
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testDeinitializationCancelsSessionCreation()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testDeinitializationRetiresAnIdleInstalledSession()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testDisablingAndRestoringTheLastSelection()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testElapsedThrottleAndExhaustionDoNotScheduleExtraWork()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testExternallyFulfilledEditsBecomeCleanAndLaterChangesFollowTheNewBaseline()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testFailedRecoveryPreservesTheEntireCachedPageRangeAndLateRetryIsSilenced()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testFailuresRequireExplicitRetryAndRebuildCachedPagesWithoutLosingSelection()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testInitialPageCallbackCanRetireTheAdoptedSession()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testInvalidationCancelsWorkAndSilencesLateResults()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testInvalidationRetiresInitialSessionBeforeTheFirstPageReturns()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testLoadingDoesNotRetainStateAndDeinitializationCancelsTheRequest()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testNestedStoreFailureSurvivesRecoveryNotification()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testPagingWaitsForLayoutAndCoalescesViewportRequests()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testRefreshCanLeaveAnEmptyDraftForTheUserToRepair()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testRefreshClosesOnlyRemovedOrDifferentWallets()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testRefreshDiscardsLateSessionCreationWithoutStartingItsFirstPage()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testRefreshKeepsMetadataChangesAndPristinePreviewPages()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testRefreshPreservesFailureUntilExplicitRetryWithTheLatestWallet()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testRefreshRebasesDraftAndOffPageSelectionsWithoutRestartingPendingPagination()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testRefreshRestartsPendingFirstPageAndIgnoresItsLateResult()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testReloadCallbackCanInvalidateBeforeTheLoadStarts()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testResetRejectsLateAdditionalPageAndOldLayoutActivation()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testResetRejectsLateFirstPageWithoutClearingTheReplacementLoad()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testSelectionPreservesUndiscoveredAccountsAndOutputOrder()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testStoreFailureRetainsCachedRowsAndCancelsPendingPagination()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testStoreRecoveryCallbackInvalidationPreventsRestart()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountPreviewStateTests/testThrottleUsesSuccessfulCompletionAndRemainingDelay()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testAccountHeaderTeardownCancelsItsMenu()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testEmptyWalletCreateCanBeActivatedWithReturn()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testEmptyWalletOptionsSupportKeyboardAndMouseImport()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testFailedForegroundReloadOrLockRetiresAuthenticationWithoutExportOrDelete()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testFailedRefreshPreservesCachedRowsAndAllowsOnlyPublicAccountActions()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testInitialReadFailureOffersRetryBeforeEmptyWalletActions()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testOrdinaryWalletCloseStillFencesRetainedActions()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testPendingAuthenticationSurvivesSuccessfulForegroundReload()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testReplacingAuthenticationRejectsLateResultsWithoutCancellingTheReplacement()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testRetiredWalletListDoesNotResumeLoadingOrPublishRows()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testSuccessfulAuthenticationWaitsForTheForegroundReloadBeforeExportOrDelete()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testSuspendedAuthenticationDoesNotRetainTheAccountsController()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testWalletCreationSurvivesLosingItsInitialBackupPresentation()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testWalletListCancelledDragClearsSelectionAndAllowsNextClick()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testWalletListHidesApprovalControls()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testWalletListKeyboardSelectionOpensMenuAndAllowsNextClick()"
+        },
+        {
+          "identifier" : "Tests macOS/AccountsListViewControllerTests/testWalletListPendingMenuDoesNotOpenAfterSelectionClears()"
+        },
+        {
+          "identifier" : "Tests macOS/CustomNetworkPackagingTests/testCustomRPCPlistsAllowHTTPAndDescribeLocalNetworkAccess()"
+        },
+        {
+          "identifier" : "Tests macOS/EditAccountsViewControllerTests/testCancelRemainsAvailableAfterStorageFailure()"
+        },
+        {
+          "identifier" : "Tests macOS/EditAccountsViewControllerTests/testClosingWindowRetiresPreviewAndSuppressesLateSaveFailure()"
+        },
+        {
+          "identifier" : "Tests macOS/EditAccountsViewControllerTests/testInitialPreviewFailureShowsRetryWithoutClosingTheEditor()"
+        },
+        {
+          "identifier" : "Tests macOS/EditAccountsViewControllerTests/testOwnSaveNotificationDoesNotCancelTheSaveOrLeaveTheEditorEarly()"
+        },
+        {
+          "identifier" : "Tests macOS/EditAccountsViewControllerTests/testStorageFailureKeepsDraftReadOnlyUntilRetrySucceeds()"
+        },
+        {
+          "identifier" : "Tests macOS/EditAccountsViewControllerTests/testSuccessfulStoreReloadRestartsPendingInitialPreview()"
+        },
+        {
+          "identifier" : "Tests macOS/EditAccountsViewControllerTests/testSuccessfulStoreReloadRestartsPendingPreviewRecoveryPreservingDraft()"
+        },
+        {
+          "identifier" : "Tests macOS/EditAccountsViewControllerTests/testWalletNotificationsRebaseTheOpenEditorAndStopAfterDeletion()"
+        },
+        {
+          "identifier" : "Tests macOS/MacSecretLifetimeTests/testAccountsNavigationCancelsPendingMutationBeforeLockAndReleasesItsController()"
+        },
+        {
+          "identifier" : "Tests macOS/MacSecretLifetimeTests/testCancelAndLockDuringStoreRecoveryPreventLateImport()"
+        },
+        {
+          "identifier" : "Tests macOS/MacSecretLifetimeTests/testCancelClearsTheDraftAndRejectsLateValidationInTheSameAccessSession()"
+        },
+        {
+          "identifier" : "Tests macOS/MacSecretLifetimeTests/testCancellingKeystorePromptClearsOnlyItsPassword()"
+        },
+        {
+          "identifier" : "Tests macOS/MacSecretLifetimeTests/testImportRevalidatesChangedCredentialsBeforeMutatingTheWallet()"
+        },
+        {
+          "identifier" : "Tests macOS/MacSecretLifetimeTests/testImportSecretEditingDoesNotCreateUndoOrDeleteUnrelatedTextUndo()"
+        },
+        {
+          "identifier" : "Tests macOS/MacSecretLifetimeTests/testLockDuringKeystorePromptClearsBothInputsAndRejectsItsConfirmation()"
+        },
+        {
+          "identifier" : "Tests macOS/MacSecretLifetimeTests/testRecoverableFailureKeepsTheDraftButClearsTheKeystorePasswordBeforeImport()"
+        },
+        {
+          "identifier" : "Tests macOS/MacSecretLifetimeTests/testRemovalCloseAndLockRetireAnImportBeforeItsLateSuccess()"
+        },
+        {
+          "identifier" : "Tests macOS/MacSecretLifetimeTests/testRetiredPasswordClearsItsRealFieldEditorWithoutUndo()"
+        },
+        {
+          "identifier" : "Tests macOS/MacSecretLifetimeTests/testStoreRecoveryRetryPreservesTheDraftUntilImportSucceeds()"
+        },
+        {
+          "identifier" : "Tests macOS/MacSecretLifetimeTests/testSuccessfulImportClearsTheDraftBeforeReplacingContent()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountPickerKeyboardNavigatesAndActivatesWithoutSubmitting()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountPickerKeyboardSkipsDisabledCoinsAndFollowsMouseFocus()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountSelectionClickIgnoresOtherCoinAndCanClearSelection()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountSelectionClickSwitchesAndDeselectsOncePreservingOtherCoin()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountSelectionCompletionUsesSessionNetwork()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountSelectionQueriesDoNotChangeSelectedAccounts()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountSelectionSubmissionImmediatelyFencesControls()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountSelectionTeardownFencesNavigationAndClosesItsSheet()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testAccountSelectionUsesCompactNetworkButtonWithAccessibleIdentity()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testApprovalPickerBlocksWalletManagementActions()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testApprovalPickerRefreshPreservesOnlyExistingSelectionsWithoutSubmitting()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testControllersLoadIndependentInstancesOfTheSharedAccountView()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testEmptyApprovalShowsRequesterAndSeparateWalletManagement()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testFailedStoreLoadKeepsApprovalPendingAndAllowsCancellation()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testManageWalletsCanRetryAfterReloadAbortsItsQueuedLaunch()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testManageWalletsHandoffKeepsApprovalPendingAndFencesLateCallbacks()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testNetworkSheetCanDismissAfterStoreFailureWithoutApplyingASelection()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testSelectionSubmissionKeepsReviewAliveAndFencesReentrantSubmission()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testStoreRetryRestoresAccountSelectionWithoutReplacingApproval()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAccountSelectionViewControllerTests/testSwitchAccountHeaderDoesNotDependOnConnectedProviders()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAgentRuntimeTests/testBuiltHelperAndExtensionPreserveTheirCodeSignatures()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAgentRuntimeTests/testEmbeddedHelperStaysInsideTheSafariExtensionBundle()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeAgentRuntimeTests/testNativeCodeValidationRechecksMappedResourcesOffMainActor()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testAccessibilityRetryRenewsAccessAndRetiredRetryCannotRenewAgain()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testAmbientMissingPasswordRejectsApprovalBeforeOnboarding()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testApprovalAlertPreservesAccessoryAndParentSheet()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testApprovalHostingSheetPreservesMainContentAndSize()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testApprovalInboxBoundsOnlyUnverifiedRoutesAndKeepsWalletIntentSeparate()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testApprovalPasswordPreservesMainLayout()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testApprovalWindowContextSurvivesContentReplacement()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testClosingApprovalPasswordTearsDownReviewWithoutAuthenticating()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testClosingOrdinaryPasswordCancelsAuthenticationOnce()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testClosingUnapprovedRecoveryWindowRejectsTheRequest()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testDismissedWindowRendersLatestRecoverySnapshotWithoutRetrying()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testDockOnboardingRejectsHelpersOutsideExpectedBundleStructure()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testDockOnboardingResolvesAppContainingSafariExtensionHelper()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testExplicitWalletRouteShowsLockedSurfaceWithoutStartingAuthentication()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testFailedAuthenticationHandoffReusesActiveApprovalOnRetry()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testFinalizerInterruptionPublishesRejectingBeforeFirstPersistenceCompletes()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testFinishedApprovalAlwaysClosesExistingWindow()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testFreshReviewKeepsOldSelectionAndPasswordCallbacksInactive()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testGenericForegroundReopensDismissedOutstandingApprovalWithoutRetrying()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testImmediateResponseFinishesWithoutCreatingApprovalWindow()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testInitialAuthenticationFailureFallsBackOnlyOnStart()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testInterruptedPresentationRetainsOnlyVisibleErrorWindow()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testLateToolbarIntentPreservesTerminalRequestsAndOnlyShowsLockedWallet()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testMessageApprovalRestoresRequesterNameWhenReplacingVisibleContent()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testOldestApprovalWindowCanBeFrontmostWithoutClosingNewer()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testOrdinaryApprovalAuthenticationDoesNotOpenWalletManagement()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testOrdinaryHostingSheetPreservesMainContentAndSize()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testPendingWalletOpenIntentIsConsumedOnce()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testRepeatedDeliveryPreservesReviewControllerAndSheet()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testRepeatedDeliveryShowsWaitingDuringInitialLoad()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testRepeatedDeliveryShowsWaitingDuringSilentResponsePersistence()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testRequestsArrivingWhileLockedRejectWithoutPresentationOrRestartingWrites()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testRetiredApprovalFencesRetainedSelectionAndWindowCallbacks()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testStartupPasswordCanAuthenticateAfterChallengeLifetime()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testSuspendedFinalizationSurvivesCloseAndRecoveryBudget()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testToolbarApprovalRevealsLockedWalletWithoutAuthenticatingAndRejectsTheOldRequest()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testToolbarApprovalWhileUnlockedShowsOnlyItsApprovalWindow()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testTransactionApprovalDescriptionPreservesContractData()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testTransactionApprovalDescriptionPreservesMainSummary()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testWaitingSurfaceReplacesRetryActionAndSpinnerMode()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testWalletImportPreservesMainLayout()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeApprovalCoordinatorTests/testWalletLockPreservesAcceptedFinalizationWithoutReactivatingItsWindow()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeExtensionResponderTests/testExtensionRequestCompletesOrCancelsExactlyOnceAcrossTasks()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testAdmittedIngressCannotChangeProfileOrEscapePrivateBrowsing()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testBadBlockFileOutputIsRejectedBeforeNetworkWhileReadsAreForwarded()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testDocumentOwnershipRejectsForeignReplayFocusPollAndAcknowledgement()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testMalformedCommandsNeverReachDependencies()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testManualSwitchCoalescingKeepsDocumentAndWorkerOwnersSeparate()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testNativeAdmissionAndReplayKeepStoredIdentity()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testOrdinaryDappRequestsAndRPCRequireSiteContext()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testPlatformPolicyAndPrivateBrowsingPreserveRouting()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testPopupAdmissionDoesNotLaunchTheNativeHelper()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testPrivateContextsCannotPerformWalletWork()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testPrivateDappRequestIsRejectedBeforeAdmission()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testPrivilegedRPCAliasesNeverReachEndpointAuthorizationOrNetwork()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testRPCAdmissionRejectsMalformedAndProhibitedBodiesBeforeNetworkLookup()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testRPCRejectsValidatedResponseForAnotherRequest()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testRPCResponseIsProjectedAndCorrelatedWithoutLeakingUpstreamFields()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testRPCUsesItsOwnRequestLimitInsteadOfTheApprovalPayloadLimit()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testRecoveryAndPopupCompletionKeepStoredOriginsAndOSProfiles()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testSaturatedRPCDoesNotBlockApprovalRejectionOrRecovery()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testShowApprovalRequiresTheStoredOriginAndProfile()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testSiteIdentityMismatchesNeverReachDependencies()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testSourceRolesRejectUnrelatedOperationsBeforeSideEffects()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testTerminalDeliveryAndAcknowledgementUseTheSameStoredResponse()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testUnauthorizedDappResponsePreservesAuthorityAndCorrelation()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testUnavailableRPCEndpointReturnsTransportFailureWithoutDispatching()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testWirePayloadCannotSelectTheNativeProfile()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeMessageDispatcherTests/testWorkerToolbarManualSwitchStillAdmitsAndFocuses()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeSecretAlertPresentationTests/testAuthenticationSurvivesInactivityAndReloadUntilOwnershipIsRechecked()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeSecretAlertPresentationTests/testCloseMinimizeLockAndStoreFailureRejectLateAuthenticationAndExport()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeSecretAlertPresentationTests/testClosingAndAbortingNeverCopy()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeSecretAlertPresentationTests/testCopyClearsPresentationBeforeCopyingAndOnlyRunsOnce()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeSecretAlertPresentationTests/testExportSurvivesAuthenticationOnlyCancellationButNotInactivity()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeSecretAlertPresentationTests/testInactiveOwnerCannotCopyAndDisplayDoesNotAllowUnprotectedCopying()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeSecretAlertPresentationTests/testKeyWindowValidationRejectsStaleOwnershipAndUnrelatedWindows()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeSecretAlertPresentationTests/testNativeCopyActionRunsBeforeSheetIsDetached()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeSecretAlertPresentationTests/testObsoletePresentationCannotCopyOrInvalidateReplacement()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeSecretAlertPresentationTests/testOwnerDeallocationCancelsSuspendedWorkBeforeItReturns()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeSecretAlertPresentationTests/testReplacementPreservesItsSecretAfterLateAuthenticationAndExport()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeSecretAlertPresentationTests/testResignedSheetCannotUseStaleKeyWindowReferenceToCopy()"
+        },
+        {
+          "identifier" : "Tests macOS/NativeSecretAlertPresentationTests/testRevocationPreventsLateCopyCallback()"
+        },
+        {
+          "identifier" : "Tests macOS/NetworkCatalogResourceTests/testBundledCatalogInventoryAndEndpointDescriptors()"
+        },
+        {
+          "identifier" : "Tests macOS/NetworkCatalogResourceTests/testCatalogLoaderThrowsForMissingAndInvalidResources()"
+        },
+        {
+          "identifier" : "Tests macOS/NetworkCatalogResourceTests/testInvalidCatalogRecoversUnexpectedIDAndSuppressesItsCustomFallback()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testClosingEachOnboardingScreenDoesNotReopenOnActivation()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testClosingPasswordFailureRetiresSetupAndRetryCallbacks()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testCommittedPasswordCreationNotifiesAfterItsFlowCloses()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testCredentialReauthenticationStopsAfterCancellationOrAnotherLock()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testDockHandoffDeduplicatesAndIgnoresRetiredSuccess()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testExplicitOpenSurvivesCredentialReplacementOrRemoval()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testExplicitOpenUpdatesAnExistingCredentialRetry()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testExplicitStartupUnlockOpensAccountsAfterTheOriginalOpenWasCanceledByLock()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testExternalCredentialRequiresAuthenticationAndRetiresSetupCallbacks()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testLockClearsStartupPasswordAndRequiresExplicitUnlock()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testLockDiscardsSuccessfulStartupBiometricsThatReturnLate()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testLockDuringExplicitReauthenticationRetiresOwnedWorkImmediately()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testOldSuccessfulAuthenticationCannotFinishReplacementFlow()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testPasswordDisappearingDuringAuthenticationRetiresItsResult()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testRepeatedOpenDeduplicatesSetupAndAuthentication()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testReplacingAnExistingCredentialRequiresAFreshStartupSession()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testRetiredBiometricFailureCannotReplaceExplicitRetryScreen()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testRetiredFormAndWindowCannotCancelReplacementOnboarding()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testRetirementReentryCannotInstallAnOldFailureOverReplacementOnboarding()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testRetryRechecksUnavailableAndNewlyCreatedCredentials()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testReturningToWelcomeRetiresOldActionsAndKeepsWindowCancellation()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testStartupAuthenticationIsRememberedOnlyUntilCredentialStateChanges()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testStartupPasswordFailureUsesSameWindowAndRetiresForm()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testStorageFailureReplacesEverySetupStageAndRequiresExplicitRetry()"
+        },
+        {
+          "identifier" : "Tests macOS/OnboardingCancellationTests/testTemporaryKeychainFailureShowsRetryWithoutDiscardingTheAccessSession()"
+        },
+        {
+          "identifier" : "Tests macOS/PasswordStorageTests/testMacPasswordEntryAcceptsExistingShortPasswordAfterRetry()"
+        },
+        {
+          "identifier" : "Tests macOS/PasswordStorageTests/testMacPasswordRetryNeverInterpretsUnavailableStorageAsMissing()"
+        },
+        {
+          "identifier" : "Tests macOS/PasswordStorageTests/testMacWelcomeReportsUnavailableStorageAndRetiresItsCallbacks()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testAccountSelectionPreservesSelectedNetworkAndNormalizedAddressThroughExecution()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testAccountSelectionRejectsInvalidEntriesWithoutClaimingOrDroppingAccounts()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testAddChainApprovalSkipsRevisionsAndRejectUsesSingleActionPath()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testAdmissionDistinguishesUnavailableSigningAccountsFromRemovedAccounts()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testApprovalDispatchAwaitsAuthenticationAndFinalPersistence()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testApprovalDispatchAwaitsBroadcastSend()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testAuthenticationCancellationDoesNotRestoreUnavailableReviewContext()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testAuthenticationCancellationPreservesReviewedFeeNotice()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testAuthenticationCancellationRebuildsReviewWhenNetworkChanges()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testAuthenticationCancellationRebuildsReviewWhenWalletAuthorityChanges()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testAuthenticationCancellationReleasesClaimAndReturnsToReview()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testAuthenticationDeadlineReleasesClaimAndInvalidatesSignerRegardlessOfTimerOrder()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testAuthenticationPreflightCatalogExecutionAndLeaseShareOneDeadline()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testBroadcastCheckpointsBeforeSendAndCompletion()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testBroadcastStillSendsWhenDeadlineExpiresAfterCheckpoint()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCachedControllerShowsWorkingAfterForeignClaim()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCachedReviewsRefreshWhenAvailableAccountsChangeWithinSameGeneration()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCachedSigningAndSelectionReviewsDetectVaultTombstone()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCallerCancellationAfterCheckpointPersistsTheBroadcastResult()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCallerCancellationDuringAuthenticationReviewRestorationRemainsInterrupted()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCallerCancellationStopsUncommittedWorkAndDisposesLateResults()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCanceledNativeExecutionCannotCheckpointOrBroadcast()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCancellationAtCommittedCheckpointStillStartsBroadcastOnce()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCancellationBeforePreparationReturnsOrdinaryAbandonment()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCancelledTransactionAuthenticationPreservesEditsAndRequiresFreshApproval()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCancelledTransactionSpeedLeavesFeeAndSelectionUnchanged()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCatalogPreparationFailuresPreserveAdmissionAndPopupRecovery()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCatalogResolutionDeadlineReleasesClaimAndDiscardsLateApproval()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCatalogReviewsReloadAccountNamesWithoutRestarting()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testChangedChainSwitchMaterializesImmediateResponseFromCatalog()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testChangedVaultDuringAuthenticationReleasesBeforeRematerializing()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testColdControllerRejectsQueuedHandleWithoutMaterializingSession()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testColdControllerShowsWorkingForApprovingSnapshot()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCommandRepliesCarryCurrentStateWithoutAnotherRead()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCompletedPopupSpeedChangePublishesConsistentSelectionAndPreparesOnce()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCompletedRequestPollingSettlesPendingTransactionPreflight()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCompletionOwnershipLossToReceiptRequiresApprovalDelivery()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testConsumedSignerCanAcquireLeaseAndIsInvalidatedBeforeBroadcastSend()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCopiedClaimCannotPrepareTwiceAcrossExecutors()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCorrectionReviewRequiresCurrentBindingCatalogAndNetwork()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCustomFeeEditReplacesSliderProvenanceForBothFields()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testCustomNetworkRetryWaitsForFreshStorageBeforeReviewingOrRejecting()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testDuplicateExecutionCannotReleaseTheOriginalPermit()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testEmptyReviewCatalogIsRetainedForSubsequentAvailabilityChecks()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testExecutingApprovalIgnoresPopupRetryAndStaleActions()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testExecutionLeaseCoversDurableCommitAndEndsBeforeBroadcast()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testExecutorMapsClaimAbandonmentOutcomes()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testExecutorReleasesUnapprovedLeaseWhenAuthorizationAndAbandonFail()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testExpiredOperationDeadlineNeverStartsWorkOrAcquiresLease()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testFailedClaimReleaseDoesNotRestoreActionableReview()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testFailedRejectPreservesCachedReviewSession()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testFeeCapEditPreservesUntouchedPriorityFeeProvenance()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testFinalSelectionDistinguishesRemovedAndUnavailableAccountsAfterClaim()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testFreshTransactionSessionUsesCurrentSuggestedNonce()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testHungBroadcastTimesOutToRecoveryAndInvokesSendOnce()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testImmediatePersistenceFailureRetriesExplicitlyAndDuplicateRetryDoesNotRestartWork()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testImmediatePersistenceRetryCanMaterializeAReview()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testImmediateResponsePersistenceShowsWorkingUntilReconciled()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testInvalidCustomFeeDoesNotApplyNonceAndNoOpDoesNotRestartPreparation()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testLateCatalogFailureCannotDiscardAuthenticatingSession()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testMaterialReviewChangesRotateTheSingleReviewToken()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testMessageApprovalPersistsDenialWhenAccountDisappears()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testMessageApprovalRetainsReviewedActionAndUsesFreshUnlockedAccess()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testMissingVaultDuringAuthenticationShowsSecureSetupRequired()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testMobileDeadlineRollsBackAtEveryExactPrecommitBoundary()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeAgentCannotQuitWithoutCapturedProcessStart()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeAgentConfirmationUsesProcessStartWhenLaunchDateIsNil()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeAgentFailsClosedWhenProcessStartLookupBecomesUnavailable()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeAgentLaunchConfigurationIsPrivateAndCopyIsolated()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeAgentQuitDoesNotTargetReusedProcessIdentifier()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeAgentQuitTargetsOnlyTheRevalidatedProcess()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeAgentTreatsUnidentifiedLiveProcessAsRunning()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeAuthorityChangeDuringAuthenticationReleasesWithoutSigning()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeCancellationAfterClaimRetiresConsentBeforePreparation()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeCoordinatorOwnsFailedAttemptInterruption()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeCoordinatorRequiresFreshReviewAfterDeliveryOwnerIsCleared()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeDeliveryFencesCachedTransactionMutations()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerAddChainDoesNotCreateOrPassSigner()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerDistinguishesMissingAndChangedReviewedRPCEndpoint()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerDoesNotAgeMessageSigning()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerDoesNotReprepareAcceptedIntent()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerEnforcesTransactionDecisionCutoff()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerExecutesDeliveredApprovalWithoutWorkerTrigger()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerExecutesMatchingDecisionExactlyOnce()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerFailureCannotExecuteAgain()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerKeepsApprovedWalletWhenAnotherWalletHasSameAddress()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerMissingSigningAccountPreservesProviderDenialAndSolanaRevocation()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerNeverResendsAfterAmbiguousCheckpointFailure()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerOverlappingAttemptPreservesExecutingConsent()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerPreservesGrantWhenSigningAccountIsKnownButUnavailable()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerRechecksSolanaTransactionAgeBeforeExecution()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerRechecksTransactionAgeAfterClaim()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerRechecksTransactionAgeAfterRefreshingFacts()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerRejectsFutureSolanaTransactionDecisions()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerRejectsFutureTransactionDecisionBeforeResolve()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerRejectsRevokedAuthorityBeforeResolve()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerRequiresFreshConsentAfterWalletRefreshFailure()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerSharesCanonicalSelectionAndDisconnectRules()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNativeFinalizerTerminalAndMissingRequestsDoNoPrivilegedWork()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNonceOnlyEditKeepsFailedTransactionUnapprovable()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testNonceOnlyEditPreservesFeeProvenance()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testOldImmediatePersistenceCompletionPreservesReplacementFailure()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testOldImmediatePersistenceCompletionPreservesReplacementReview()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testOperationTimeoutReturnsBeforeUncooperativeWorkAndNeverSendsLateBroadcast()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testOrdinarySigningClaimRejectsNativeCommitBeforeResolution()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testPendingResponseCarriesCompletedIdentitiesBeforeQueuedRequests()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testPendingResponseIsFIFO()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testPopupRejectsSignerBoundToAnotherReviewedCatalogAccount()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testPopupSignerSignsOnlyReviewedAccountAndPayloadOnce()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testPreflightFeeNoticeRetainsUpdatedReviewAndRequiresFreshApproval()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testPreflightWarningAtDeadlineDoesNotRestoreCorrectionReview()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testPriorityFeeEditPreservesUntouchedFeeCapProvenance()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testPrivatePopupCommandsNeverExposeStoredReview()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testQueueCleanupPreservesOtherProfileReviewAndImmediatePersistence()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testReadsPreserveCachedErrorUntilIdentityBoundRetry()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testReceiptOwnedApprovalStateInvalidatesCachedReview()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testReceiptOwnedReplaySkipsWalletMaterialization()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testRecoveryWorkerCommandsUseExactNativeEnvelopes()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testRejectedRequestCannotReappearAfterSuspendedCatalogValidation()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testRejectedRequestCannotReappearAfterSuspendedPreparation()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testReleasedNativeCoordinatorCannotReplayFailedClaimOrCheckpoint()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testRemovedSelectedAccountDuringAuthenticationPersistsDenial()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testRequestScopeInvalidatesOwnedAccessOnceWithoutClearingBorrowedCatalog()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testReservedRejectionAndQueueRepliesNeverPrepareAReview()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testRetryNeverRematerializesNativeOwnedOrApprovingCachedErrors()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testReusedTransactionRequestIDAndReplacementAccountDoNotInheritEdits()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testReviewPresentationTitlesCoverEveryAction()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testRevokedAuthorityCannotBeApproved()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testRuntimeIdentityPrefersLiveProcessStartOverLaunchDate()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testRuntimeIdentityRejectsLaunchDateWithoutProcessStart()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testSafariSandboxAllowsAppleEventsOnlyToAmbient()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testSelectionCatalogFailureRebuildsReviewAndRequiresExplicitRetryNetwork()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testSelectionCatalogRemovalRequiresSecureSetup()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testSelectionDraftPreservesPreparedActionAndReviewRevision()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testSelectionPersistsFailureWhenNetworkDisappearsAfterClaim()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testSelectionResolvesNetworkLossBetweenReviewAndApproval()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testSessionCanReturnToReviewFromUnclaimedAndFailedAttempts()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testSessionPreservesFeedbackAcrossAuthentication()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testSessionUsesFourDisposablePhasesAndOneReviewToken()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testSigningApprovalTakesExecutionDeadlineFromNativeClaim()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testSigningContinuesWhenSiblingAccountBecomesUnavailableDuringAuthentication()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testSigningValidationRollbackDoesNotAcquireWalletLease()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testStaleReviewTokenCannotMutateSession()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testStaleReviewTokenRejectsApproveAndMutation()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testStoppedPreparationPreservesReasonAndClaimReleaseOutcome()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testSuggestedEditRestoresNonceAndOwnershipOfUnchangedFee()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testSupersededAuthenticationInvalidatesSignerAndPreservesReplacementReview()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTaskCancellationDuringAuthenticationDiscardsLateUnlockAndRequiresRetry()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionApprovalAwaitsSynchronousAuthenticationOutputAndPreflight()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionApprovalPreservesReviewedPayloadDespiteChangedPreflightOutput()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionApprovalRejectsFreshRPCEndpointDrift()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionApprovalRetainsReviewedPayloadAndAppliesExecutionEdits()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionNoticeReleasesClaimAndRetryRequiresCurrentReview()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionPreflightDeadlineReleasesClaimAndIgnoresLateResults()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionPresentationChangeWhileCheckingAuthorityReturnsToReview()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionPresentationChangeWhileClaimingRequiresRetry()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionPresentationRetainsEditsAndSessionWithoutChangingIntent()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionRematerializesAfterRetryableExecutionStartFailure()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionResponsesOwnLoadingPresentationAndTransientEditFeedback()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionSessionAuthenticationRefusalAllowsFreshApproval()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionSessionCompletesSynchronousPreflightOnce()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionSessionInvalidationCancelsContextAndIgnoresLateResult()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionSessionInvalidationRejectsLateAuthentication()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionSessionInvalidationSettlesPreflightAndIgnoresLateResults()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionSessionInvalidationWinsAlreadyResumedPreflight()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionSessionPreflightNoticesRemainPresentable()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionSessionRejectsDuplicatesAndFreezesPreparationDuringAuthentication()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testTransactionTokenRotationDuringCatalogReadReturnsCurrentReview()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testUnavailableAuthenticationKeepsFeedbackUntilFreshReviewRetry()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testUnavailableAuthorityPreservesReviewForRetry()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testUnavailableCatalogAllowsRetryAndRejection()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testUnavailablePreparationAbandonsOrdinaryAndNativeClaimsBeforeResolution()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testUnavailableReviewedSigningAccountWithUsableSiblingRequiresFreshReview()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testUnavailableStoreNeverLooksLikeCompletedRequest()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testUnavailableVaultCommitAbandonsOrdinaryAndNativeClaims()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testUnknownNonemptySwitchPersistsWithoutReadingCatalog()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testVaultAuthenticationCancellationCreatesFreshReviewAuthority()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testVaultRotationDuringSigningDiscardsPreparedBroadcast()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testWalletDependentAdmissionDefersWithoutCatalogProvider()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testWalletDependentImmediateResponseUsesInjectedCatalog()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testWalletIndependentApprovalDoesNotRequireVaultCatalog()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupRequestSessionsTests/testZeroBroadcastTimeoutPersistsRecoveryWithoutLateRedispatch()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testApprovalErrorHasExactRefreshOnlyEnvelope()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testApprovalStringsCoverEveryCatalogLocale()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testBeginningApprovalRemovesReviewContentAndActions()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testControlHeavySelectionBecomesAtomicFallbackWithoutShorteningLabels()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testGweiUnitsRideAlongWithTheFeeLabels()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testLongAddChainNameRemainsExactWhenResponseFits()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testMoreThan256AccountAndNetworkChoicesRemainExactWhenTheyFit()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testNonFiniteTransactionJSONUsesGenericFallback()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testOversizedHostCannotOverflowErrorEnvelope()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testOversizedIgnoredCommandPreservesDispositionAndRecovery()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testOversizedMutationResponsesUseApprovalErrorEnvelope()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testOversizedPopupResponseBecomesRejectOnlyErrorWithoutTruncation()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testOversizedQueueUsesUnavailableStatus()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testOversizedResponsePreservesExistingRecoveryCapability()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testOversizedSelectionReturnsAtomicRejectOnlyFallback()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testPopupResponseDropsDecorativeImagesBeforeFailingClosed()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testPopupStringsAreNeverEmpty()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testPopupStringsCoverEveryChromeKey()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testQueuePositionKeepsBothPositionalSpecifiers()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testRejectableErrorHasExactRejectOnlyEnvelope()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testReviewTokenIsLowercaseAndAbsentOptionalsAreOmitted()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testSecureSetupRequiredStateAllowsRefreshAndRejection()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testStatusOnlySliderMutationIsRejectedByExactDecoder()"
+        },
+        {
+          "identifier" : "Tests macOS/PopupStringsTests/testTypedResponsesMatchSharedPopupContract()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testActivationRechecksOverdueClipboardWithoutWaitingForTimer()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testAppDeactivationLeavesClipboardTimerRunning()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testClipboardExpirationPreservesReplacementContents()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testClipboardUsesLocalOnlyOptionsAndExpiresAfterThirtySeconds()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testClipboardUsesOwnershipReturnedByPrepareRatherThanLaterChangeCount()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testFailedClipboardWriteDoesNotScheduleCleanupForAnotherOwner()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testInvalidationRejectsLateSecretResultsAndCallbacks()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testManagedClipboardExpiresWhileTaskIsInsideAppKitModalLoop()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testManagedClipboardPreservesReplacementInsideAppKitModalLoop()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testNewPresentationClearsOldSecretAndRejectsOldTokens()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testPresentationInvalidationDoesNotCancelClipboardExpiration()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testReleasingClipboardCancelsTimerAndRejectsItsLateCallback()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testRepeatedCopiesRetireOldTimerAndUseNewDeadline()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testSystemManagedClipboardNeverSchedulesOrManuallyClearsContents()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testTerminationClearsOnlyOwnedSecret()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testWakeClearsOverdueSecretAndRetiresScheduledTimer()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testWakeReschedulesRemainingTimeWithoutClearingNewContents()"
+        },
+        {
+          "identifier" : "Tests macOS/SecretHandlingTests/testWallClockRollbackCannotExtendManagedClipboardExpiration()"
+        },
+        {
+          "identifier" : "Tests macOS/SolanaRPCPresentationTests/testSolanaRPCSourcesUseAccurateDisplayNames()"
+        },
+        {
+          "identifier" : "Tests macOS/TransactionApprovalCoordinatorTests/testNativePrimaryActionAndDescriptionFollowInlineRecovery()"
+        },
+        {
+          "identifier" : "Tests macOS/TransactionApprovalCoordinatorTests/testNewFeeNoticeIsVisibleAfterScrollingTransactionDetails()"
+        },
+        {
+          "identifier" : "Tests macOS/TransactionFeePresentationTests/testEIP1559FeeSummaryDisplaysOnlyMaximumFee()"
+        },
+        {
+          "identifier" : "Tests macOS/TransactionFeePresentationTests/testEIP1559FeeSummaryDisplaysSingleCalculatingFee()"
+        },
+        {
+          "identifier" : "Tests macOS/TransactionFeePresentationTests/testLegacyFeeSummaryRemainsUnchanged()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testCancellationRetiresChallengeBeforeTaskAndOwnerCallbacks()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testContinuousInputCoalescesRenewalsWithoutChangingActionExpiryChecks()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testCredentialChangeDuringSchedulingCannotPublishAnUnlock()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testDeallocationCancelsPendingAuthentication()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testDeallocationInvalidatesAccessAndCancelsRetainedTimer()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testEarlyTimerDeliveryReschedulesOnlyRemainingTime()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testExpiryIsEnforcedBeforeAnActionWithoutTimerDelivery()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testInactivityTimerExpiresInsideAnAppKitModalLoop()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testLockDuringUnlockNotificationCannotPublishLaterUnlockCallbacks()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testLockInvalidatesAccessBeforeCancellingAuthenticationAndNotifying()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testLockObserverCannotReentrantlyUnlockOrPreventOtherTeardown()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testOldAuthenticationCannotReplaceNewAuthenticationOrUnlockAfterLock()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testOldTimersCannotLockARenewedOrReplacementSession()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testPendingAuthenticationIdentityDoesNotReadCredentialsOrProtectedData()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testProtectedDataLossRejectsAuthenticationBeforeAnEventIsDelivered()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testReentrantCancellationCannotOverwriteOrCancelTheReplacementAttempt()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testReplacingAnOperationRejectsItsLateGrantAndSession()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testRetainedAuthenticationWorkIsInvalidatedWhenItsControllerDeallocates()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testSensitiveOperationDetectsReplacementAndRetiresTheSessionPermanently()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testSensitiveOperationFailsDuringKeychainOutageWithoutRevokingTheLease()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testSuccessfulOperationDetachesBeforeObserversWithoutCancellingItself()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testSynchronousSchedulerLockCannotReportSuccessfulInteraction()"
+        },
+        {
+          "identifier" : "Tests macOS/WalletAccessControllerTests/testUIActivityAndTimersDoNotReadCredentials()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testAbsentClosedOrRetiredOwnerNeverStartsAuthentication()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testAccessibilityScrollerRejectsExpiredAndReplacedAccess()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testAccessibilityScrollerRenewsExplicitActionsButNotProgrammaticScrolling()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testAccountPreviewRenderingDoesNotRetireItsModelMidUpdate()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testAccountSelectionRefreshChecksAccessOnlyBeforeRendering()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testActionBiometricsNeverFallBackAfterFailedAvailableAttempt()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testAllProtectedResourceScrollersUseTheActivitySubclass()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testCancellationInvalidatesTheChallengeBeforeAuthenticationReturns()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testCancellingDuringSuccessfulSheetDismissalCannotAuthenticate()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testClosingOwnerCancelsQueuedSheetAndRetiresItsForm()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testDeferredApprovalWindowsCascadeAfterContentInstallationOnlyOnce()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testExpiredAccessBlocksAuthenticationBeforeOpeningASheet()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testExternalSheetDismissalClearsDraftAndFencesRetainedActions()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testLateBiometricSuccessCannotSurviveOwnerCloseOrReviewInvalidation()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testMacActivationChecksProtectedAvailabilityAndExpiryWithoutRenewing()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testMacLifecycleLocksForProtectedDataSleepAndSessionChangesOnly()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testMacLifecycleRemovesInjectedNotificationObserversOnRelease()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testManagementRowRenderingCannotReentrantlyLockAndReloadTheTable()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testManagementScrollerRetainsItsOriginatingAccessGeneration()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testMissingPasswordNeverOffersCreationFromActionSheet()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testPasswordAuthenticationRestoresSecretOwnerEligibilityBeforeReturning()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testPasswordCompletionPreservesUnrelatedFocusAndLeavesSecretOwnerIneligible()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testPasswordSheetPreservesOwnerAndCompletesOnlyAfterDismissal()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testProtectedContentInstallationPreservesTheLockedViewDuringReentry()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testQueuedAuthenticationCancellationPreservesExistingEditorSheet()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testRejectedInstallationRetiresUnloadedOnboardingActions()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testReviewInvalidationDismissesOnlyItsAuthenticationSheet()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testSameWindowDuplicateFailsWithoutChangingOriginalSession()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testSeparateWindowsAuthenticateIndependently()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testUnavailablePasswordStaysAnEntryFormAndRetryUsesCurrentStorage()"
+        },
+        {
+          "identifier" : "Tests macOS/WindowAuthenticationSessionTests/testWalletLockCancelsActionAuthenticationAndKeepsTheLockedSurface()"
+        }
+      ],
+      "testPlan" : "Tests macOS"
+    }
+  ]
+}

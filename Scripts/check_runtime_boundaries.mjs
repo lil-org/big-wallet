@@ -258,7 +258,7 @@ export function parseProject(source) {
     return project;
 }
 
-export function validateProjectMembership(project, {root, sourceExists = existsSync, validateSource = () => {}} = {}) {
+export function projectFilePaths(project, root) {
     const objects = project.objects;
     if (!objects || !project.rootObject || objects[project.rootObject]?.isa !== "PBXProject") { throw new Error("Invalid Xcode project inventory"); }
     const paths = new Map;
@@ -271,6 +271,12 @@ export function validateProjectMembership(project, {root, sourceExists = existsS
         for (const child of value.children ?? []) { walk(child, path); }
     };
     walk(objects[project.rootObject].mainGroup, root);
+    return paths;
+}
+
+export function validateProjectMembership(project, {root, sourceExists = existsSync, validateSource = () => {}} = {}) {
+    const objects = project.objects;
+    const paths = projectFilePaths(project, root);
     for (const target of Object.values(objects).filter(value => value.isa === "PBXNativeTarget")) {
         if (/test/i.test(target.productType ?? "") || /Tests/.test(target.name ?? "")) { continue; }
         const nativeExtension = target.productType === "com.apple.product-type.app-extension";

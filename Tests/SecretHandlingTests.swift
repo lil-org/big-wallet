@@ -12,24 +12,26 @@ import UIKit
 
 @MainActor
 final class SecretHandlingTests: XCTestCase {
-    func testInvalidationRejectsLateSecretResultsAndCallbacks() {
-        let session = SecretPresentationSession()
+    func testInvalidationRejectsLateSecretResultsAndCallbacks() async {
+        let session = SecretPresentationSession(validateExport: { _ in true })
         let token = session.begin()
         XCTAssertTrue(session.store(WalletExportedSecret(text: "secret"), for: token))
-        let copyValue = { session.textForTesting(for: token) }
-        XCTAssertEqual(copyValue(), "secret")
+        let copyValue = { await session.textForTesting(for: token) }
+        let copied = await copyValue()
+        XCTAssertEqual(copied, "secret")
 
         session.invalidate()
 
         XCTAssertFalse(session.isCurrent(token))
-        XCTAssertNil(session.textForTesting(for: token))
-        XCTAssertNil(copyValue())
+        await session.assertText(nil, for: token)
+        let lateCopy = await copyValue()
+        XCTAssertNil(lateCopy)
         XCTAssertFalse(session.store(WalletExportedSecret(text: "late secret"), for: token))
-        XCTAssertNil(session.textForTesting(for: token))
+        await session.assertText(nil, for: token)
     }
 
-    func testNewPresentationClearsOldSecretAndRejectsOldTokens() {
-        let session = SecretPresentationSession()
+    func testNewPresentationClearsOldSecretAndRejectsOldTokens() async {
+        let session = SecretPresentationSession(validateExport: { _ in true })
         let first = session.begin()
         XCTAssertTrue(session.store(WalletExportedSecret(text: "first secret"), for: first))
 
@@ -38,11 +40,11 @@ final class SecretHandlingTests: XCTestCase {
         XCTAssertNotEqual(first, second)
         XCTAssertFalse(session.isCurrent(first))
         XCTAssertTrue(session.isCurrent(second))
-        XCTAssertNil(session.textForTesting(for: first))
-        XCTAssertNil(session.textForTesting(for: second))
+        await session.assertText(nil, for: first)
+        await session.assertText(nil, for: second)
         XCTAssertFalse(session.store(WalletExportedSecret(text: "late first secret"), for: first))
         XCTAssertTrue(session.store(WalletExportedSecret(text: "second secret"), for: second))
-        XCTAssertEqual(session.textForTesting(for: second), "second secret")
+        await session.assertText("second secret", for: second)
     }
 
     func testClipboardUsesLocalOnlyOptionsAndExpiresAfterThirtySeconds() {
@@ -277,17 +279,18 @@ final class SecretHandlingTests: XCTestCase {
         XCTAssertNil(fixture.pasteboard.value)
     }
 
-    func testPresentationInvalidationDoesNotCancelClipboardExpiration() {
+    func testPresentationInvalidationDoesNotCancelClipboardExpiration() async {
         let fixture = ClipboardFixture()
-        let session = SecretPresentationSession()
+        let session = SecretPresentationSession(validateExport: { _ in true })
         let token = session.begin()
         session.store(WalletExportedSecret(text: "secret"), for: token)
-        fixture.clipboard.copy(session.textForTesting(for: token)!)
+        let value = await session.textForTesting(for: token)
+        fixture.clipboard.copy(value!)
         XCTAssertEqual(fixture.scheduler.intervals.count, 1)
 
         session.invalidate()
 
-        XCTAssertNil(session.textForTesting(for: token))
+        await session.assertText(nil, for: token)
         XCTAssertEqual(fixture.pasteboard.value, "secret")
         XCTAssertEqual(fixture.scheduler.cancellations, [false])
         fixture.clock.advance(by: 30_000_000_000)
@@ -595,9 +598,18 @@ private final class ClipboardPasteboard {
 
 @MainActor
 extension SecretPresentationSession {
-    func textForTesting(for token: Token) -> String? {
-        var text: String?
-        withText(for: token) { text = $0 }
-        return text
+    func textForTesting(for token: Token) async -> String? {
+        await withCheckedContinuation { continuation in
+            validate(token) { secret in
+                var text: String?
+                secret?.withText { text = $0 }
+                continuation.resume(returning: text)
+            }
+        }
+    }
+
+    func assertText(_ expected: String?, for token: Token, file: StaticString = #filePath, line: UInt = #line) async {
+        let text = await textForTesting(for: token)
+        XCTAssertEqual(text, expected, file: file, line: line)
     }
 }

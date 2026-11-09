@@ -346,7 +346,7 @@ final class MobileSecretLifetimeTests: XCTestCase {
         await fulfillment(of: [imported], timeout: 2)
         XCTAssertEqual(fixture.scheduler.expirations.count, afterConfirmation)
         fixture.advance(by: .seconds(500))
-        XCTAssertFalse(fixture.access.checkAccess())
+        XCTAssertFalse(fixture.access.validateCurrentAccess())
         XCTAssertTrue(controller.isRetired)
         await expectEventually { result.isCancelled }
     }

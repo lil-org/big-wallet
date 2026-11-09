@@ -31,6 +31,7 @@ class ExchangeMonitorTests(unittest.TestCase):
         self.hook.request_stop = self.request_stop
         self.hook.cancel = lambda: self.events.append('cancel-transfer')
         self.on_poll = lambda _: None
+        self.invalid_discovery = False
         host.atomic_json(self.exchange / 'snapshot-manifest.json', {'version': 1, 'files': []})
         self.source = {'sha256': host.hash_regular_file(self.exchange / 'snapshot-manifest.json'), 'commit': 'a' * 40}
         self.job = {'runId': self.run_id, 'vmId': 'fixture-vm', 'kind': 'run', 'profile': 'extended', 'source': self.source}
@@ -76,12 +77,21 @@ class ExchangeMonitorTests(unittest.TestCase):
             self.assertEqual(minimum, 10_000_000_000)
             return self.capacity()
 
+        def verify_discovery(exchange, job):
+            self.assertTrue(self.hook.exchange_complete)
+            self.assertEqual(exchange, self.exchange)
+            self.assertEqual(job, self.job)
+            if self.invalid_discovery:
+                raise host.RunnerError('Fixture discovery does not match its selected configuration')
+            return host.read_json(exchange / 'artifacts/planned-result.json')['stages']
+
         with ExitStack() as stack:
             launch = stack.enter_context(patch.object(host.subprocess, 'Popen', return_value=self.vm))
             stack.enter_context(patch.object(host.time, 'monotonic', side_effect=lambda: self.clock))
             stack.enter_context(patch.object(host.time, 'sleep', side_effect=self.sleep))
             stack.enter_context(patch.object(host, 'check_capacity', side_effect=check_capacity))
             stack.enter_context(patch.object(host, 'stop_owned_process', side_effect=self.stop_vm))
+            stack.enter_context(patch.object(host, 'resolved_stage_plan', side_effect=verify_discovery))
             result = host.monitor_vm(SimpleNamespace(command='run'), self.root, self.root / 'owned.vbvm',
                 self.exchange, self.run_id, self.root / 'tools', {'minimumHostFreeBytes': 1}, timeout,
                 setup_hook=self.hook, keep_operation=True, previous_stops=previous_stops)
@@ -128,6 +138,30 @@ class ExchangeMonitorTests(unittest.TestCase):
         active = host.read_json(self.root / 'active.json')
         self.assertEqual(active['phase'], 'starting')
         self.assertNotIn('artifactsExported', active)
+
+    def test_host_rejects_a_passing_report_with_unverified_discovery(self):
+        def finish(_):
+            self.report()
+            self.hook.exchange_complete = True
+        self.on_poll = finish
+        self.invalid_discovery = True
+        result = self.run_monitor()
+        self.assertNotEqual(result['status'], 'passed')
+        self.assertEqual(result['reason'], 'guest_discovery_does_not_match_test_plan')
+        self.assertFalse(result['coverage']['fullSuiteVerified'])
+
+    def test_mislabeled_passing_report_cannot_bypass_discovery_for_a_run_job(self):
+        def finish(_):
+            report = self.report()
+            host.atomic_json(self.result_path, {**report, 'kind': 'doctor'})
+            self.hook.exchange_complete = True
+
+        self.on_poll = finish
+        self.invalid_discovery = True
+        result = self.run_monitor()
+        self.assertNotEqual(result['status'], 'passed')
+        self.assertEqual(result['reason'], 'guest_discovery_does_not_match_test_plan')
+        self.assertIn('Fixture discovery', result['hostTermination']['error'])
 
     def test_exported_guest_failure_is_preserved_without_transport_failure(self):
         def finish(_):

@@ -66,7 +66,7 @@ final class OnboardingCancellationTests: XCTestCase {
         password.actionButtonTapped(password.okButton as Any)
 
         XCTAssertEqual(events, [.unlockRequested, .authenticated])
-        XCTAssertTrue(fixture.access.checkAccess())
+        XCTAssertTrue(fixture.access.validateCurrentAccess())
         XCTAssertNil(flow.windowController)
     }
 
@@ -104,7 +104,7 @@ final class OnboardingCancellationTests: XCTestCase {
         freshForm.passwordTextField.stringValue = "password"
         freshForm.actionButtonTapped(freshForm.okButton as Any)
         XCTAssertEqual(events, [.unlockRequested, .authenticated])
-        XCTAssertTrue(fixture.access.checkAccess())
+        XCTAssertTrue(fixture.access.validateCurrentAccess())
         locked.unlockWallet()
         XCTAssertEqual(attempts, 2)
         XCTAssertNil(flow.windowController)
@@ -144,7 +144,7 @@ final class OnboardingCancellationTests: XCTestCase {
             NSApp.windows.contains { !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible && $0.contentViewController is AccountsListViewController }
         }
         XCTAssertFalse(startup.isVisible)
-        XCTAssertTrue(fixture.access.checkAccess())
+        XCTAssertTrue(fixture.access.validateCurrentAccess())
         XCTAssertEqual(NSApp.windows.filter {
             !originalWindows.contains(ObjectIdentifier($0)) && $0.isVisible && $0.contentViewController is AccountsListViewController
         }.count, 1)
@@ -202,7 +202,7 @@ final class OnboardingCancellationTests: XCTestCase {
             password.passwordTextField.stringValue = "replacement"
             password.actionButtonTapped(password.okButton as Any)
 
-            XCTAssertTrue(fixture.access.checkAccess())
+            XCTAssertTrue(fixture.access.validateCurrentAccess())
             XCTAssertFalse(startup.isVisible)
             XCTAssertTrue(accountsWindow.isVisible)
             XCTAssertTrue(accountsWindow.contentViewController is AccountsListViewController)
@@ -930,6 +930,7 @@ private final class OnboardingKeychainFixture: Sendable {
             guard let password,
                   let grant = try? credentials.verify(password: password, challenge: challenge) else { return .failed }
             return .granted(grant)
+        case .cancelled?: return .cancelled
         case .failed?: return .failed
         case .interactionUnavailable?: return .interactionUnavailable
         case nil: return nil

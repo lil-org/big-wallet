@@ -46,15 +46,14 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
     private(set) var loadRetryButton: UIButton?
     private var statusBottomInset: CGFloat = 0
     private weak var secretScene: UIWindowScene?
-    private(set) lazy var secretPresentation = SecretAlertPresentation(isActive: { [weak self] in
-        self?.canPresentSecret == true
-    }, copy: { [weak self] secret in
-        guard self?.beginWalletAction() == true else { return }
-        SecretClipboard.shared.copy(secret)
-    })
+    private(set) lazy var secretPresentation = SecretAlertPresentation(
+        validateSource: { [weak self] in self?.validateSecretPresentation() == true },
+        validateExport: { [weak self] in await self?.walletsManager.isCurrentExport($0) == true },
+        beginCopy: { [weak self] in self?.beginWalletAction() == true }
+    )
 
-    var canPresentSecret: Bool {
-        guard hasWalletAccess, walletsManager.isStoreReady, isVisibleForSecretPresentation, let window = viewIfLoaded?.window,
+    func validateSecretPresentation() -> Bool {
+        guard validateCurrentAccess(), walletsManager.isStoreReady, isVisibleForSecretPresentation, let window = viewIfLoaded?.window,
               window.windowScene?.activationState == .foregroundActive,
               secretScene == nil || window.windowScene === secretScene else { return false }
         return !isBeingDismissed && !isMovingFromParent &&
@@ -230,7 +229,8 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
     }
     
     @objc private func walletsChanged() {
-        guard hasWalletAccess else { return }
+        guard validateCurrentAccess() else { return }
+        secretPresentation.sourceDidChange()
         reloadData()
     }
     
@@ -300,13 +300,11 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
     }
 
     @objc private func walletLoadStateChanged() {
-        guard hasWalletAccess else { return }
+        guard validateCurrentAccess() else { return }
         if !walletsManager.isStoreReady {
             invalidateSecretPresentation()
-            if walletsManager.loadState != .loading {
-                authenticationTask?.cancel()
-                authenticationTask = nil
-            }
+            authenticationTask?.cancel()
+            authenticationTask = nil
         }
         updateDataState()
     }
@@ -318,10 +316,7 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
             challenge.invalidate()
             return nil
         }
-        if !Task.isCancelled, hasWalletAccess, walletsManager.loadState == .loading {
-            _ = await walletsManager.reloadFromStore()
-        }
-        guard !Task.isCancelled, hasWalletAccess, walletsManager.isStoreReady else {
+        guard !Task.isCancelled, validateCurrentAccess(), walletsManager.isStoreReady else {
             authorization.invalidate()
             return nil
         }
@@ -341,11 +336,11 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
     }
 
     private func loadWallets(retry: Bool) {
-        guard hasWalletAccess, loadTask == nil else { return }
+        guard validateCurrentAccess(), loadTask == nil else { return }
         loadTask = Task { [weak self, walletsManager] in
             if retry { await walletsManager.reloadFromStore() }
             else { await walletsManager.start() }
-            guard let self, !Task.isCancelled, hasWalletAccess else { return }
+            guard let self, !Task.isCancelled, validateCurrentAccess() else { return }
             loadTask = nil
             updateDataState()
         }
@@ -444,14 +439,14 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
     
 
     private func showKey(wallet: WalletSnapshot, specificAccount: WalletAccount?, authorization: WalletAuthenticationGrant) {
-        guard hasWalletAccess, walletsManager.isStoreReady, let token = beginSecretPresentation() else {
+        guard validateCurrentAccess(), walletsManager.isStoreReady, let token = beginSecretPresentation() else {
             authorization.invalidate()
             return
         }
         let showingMnemonic = wallet.isMnemonic && specificAccount == nil
         keyExportTask?.cancel()
         keyExportTask = Task { [weak self, walletsManager] in
-            guard let self, !Task.isCancelled, hasWalletAccess else { authorization.invalidate(); return }
+            guard let self, !Task.isCancelled, validateCurrentAccess() else { authorization.invalidate(); return }
             let secret: WalletExportedSecret
             do {
                 if showingMnemonic {
@@ -463,7 +458,7 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
                 secretPresentation.finish(token, copying: false)
                 return
             }
-            guard !Task.isCancelled, hasWalletAccess, secretPresentation.accepts(token) else { secret.invalidate(); return }
+            guard !Task.isCancelled, validateCurrentAccess(), secretPresentation.validate(token) else { secret.invalidate(); return }
             presentSecret(secret, showingMnemonic: showingMnemonic, token: token)
         }
     }
@@ -638,7 +633,7 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
     private func attemptToRemoveAccount(_ account: WalletAccount, fromWallet wallet: WalletSnapshot) {
         guard beginStoreAction() else { return }
         guard wallet.accounts.count > 1 else {
-            warnOnLastAccountRemovalAttempt(wallet: wallet)
+            askBeforeRemoving(wallet: wallet, lastAccount: account)
             return
         }
         
@@ -648,26 +643,13 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
         }
     }
     
-    private func warnOnLastAccountRemovalAttempt(wallet: WalletSnapshot) {
+    private func askBeforeRemoving(wallet: WalletSnapshot, lastAccount: WalletAccount? = nil) {
         guard beginStoreAction() else { return }
-        let alert = UIAlertController(title: Strings.removingTheLastAccount, message: nil, preferredStyle: .alert)
-        
-        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+        let alert = UIAlertController(
+            title: lastAccount != nil ? Strings.removingTheLastAccount : Strings.removedWalletsCantBeRecovered,
+            message: lastAccount != nil ? Strings.removedWalletsCantBeRecovered : nil, preferredStyle: .alert)
         let removeAction = UIAlertAction(title: Strings.removeAnyway, style: .destructive) { [weak self] _ in
-            self?.askBeforeRemoving(wallet: wallet)
-        }
-        
-        alert.addAction(cancelAction)
-        alert.addAction(removeAction)
-        
-        present(alert, animated: true)
-    }
-    
-    private func askBeforeRemoving(wallet: WalletSnapshot) {
-        guard beginStoreAction() else { return }
-        let alert = UIAlertController(title: Strings.removedWalletsCantBeRecovered, message: nil, preferredStyle: .alert)
-        let removeAction = UIAlertAction(title: Strings.removeAnyway, style: .destructive) { [weak self] _ in
-            self?.authenticateForRemoval(wallet)
+            self?.authenticateForRemoval(wallet, lastAccount: lastAccount)
         }
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
         alert.addAction(cancelAction)
@@ -675,11 +657,11 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
         present(alert, animated: true)
     }
 
-    func authenticateForRemoval(_ wallet: WalletSnapshot) {
+    func authenticateForRemoval(_ wallet: WalletSnapshot, lastAccount: WalletAccount? = nil) {
         guard beginStoreAction(), let scene = viewIfLoaded?.window?.windowScene else { return }
         authenticationTask?.cancel()
         authenticationTask = Task { [weak self, weak scene] in
-            guard let self, !Task.isCancelled, hasWalletAccess else { return }
+            guard let self, !Task.isCancelled, validateCurrentAccess() else { return }
             let credentials = ApplicationServices.shared.credentials
             let challenge = credentials.makeWalletAccessChallenge()
             defer { challenge.invalidate() }
@@ -687,17 +669,17 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
                 reason: Strings.removeWallet, passwordReason: Strings.toRemoveWallet, challenge: challenge)
             guard let authorization else { return }
             defer { authorization.invalidate() }
-            guard let scene, !Task.isCancelled, hasWalletAccess, walletsManager.isStoreReady,
+            guard let scene, !Task.isCancelled, validateCurrentAccess(), walletsManager.isStoreReady,
                   viewIfLoaded?.window?.windowScene === scene, scene.activationState == .foregroundActive,
                   let session = credentials.accessSession(authorization: authorization) else { return }
             defer { session.invalidate() }
-            removeWallet(wallet)
+            removeWallet(wallet, lastAccount: lastAccount)
         }
     }
     
-    private func removeWallet(_ wallet: WalletSnapshot) {
+    private func removeWallet(_ wallet: WalletSnapshot, lastAccount: WalletAccount?) {
         performWalletMutation { [walletsManager] session in
-            try await walletsManager.delete(wallet: wallet, access: session)
+            try await walletsManager.delete(wallet: wallet, requiringSoleAccount: lastAccount, access: session)
             return nil
         }
     }
@@ -709,35 +691,36 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
         guard beginStoreAction(), view.isUserInteractionEnabled else { return }
         setWalletMutationActive(true)
         walletMutationTask = Task { [weak self] in
-            guard let self, !Task.isCancelled, hasWalletAccess else { return }
+            guard let self, !Task.isCancelled, validateCurrentAccess() else { return }
             do {
                 let session = try requireCurrentAccess()
                 let created = try await operation(session)
-                guard !Task.isCancelled, hasWalletAccess else { return }
+                guard !Task.isCancelled, validateCurrentAccess() else { return }
                 setWalletMutationActive(false)
                 reloadData()
-                if let created, let revealToken, secretPresentation.accepts(revealToken) {
+                if let created, let revealToken, secretPresentation.validate(revealToken) {
                     exportCreatedWalletSecret(created, token: revealToken)
                 }
             } catch {
                 if let revealToken { secretPresentation.finish(revealToken, copying: false) }
-                guard !Task.isCancelled, hasWalletAccess else { return }
+                guard !Task.isCancelled, validateCurrentAccess() else { return }
                 setWalletMutationActive(false)
-                showMessageAlert(text: Strings.somethingWentWrong)
+                let message = if case WalletsManager.Error.lastAccountChanged = error { Strings.reviewChanged } else { Strings.somethingWentWrong }
+                showMessageAlert(text: message)
             }
         }
     }
 
     private func exportCreatedWalletSecret(_ wallet: WalletSnapshot, token: SecretAlertPresentation.Token) {
-        guard hasWalletAccess, let authorization = walletsManager.takeInitialBackupAuthorization(wallet: wallet) else {
+        guard validateCurrentAccess(), let authorization = walletsManager.takeInitialBackupAuthorization(wallet: wallet) else {
             secretPresentation.finish(token, copying: false)
             return
         }
         keyExportTask?.cancel()
         keyExportTask = Task { [weak self, walletsManager] in
-            guard let self, !Task.isCancelled, hasWalletAccess else { authorization.invalidate(); return }
+            guard let self, !Task.isCancelled, validateCurrentAccess() else { authorization.invalidate(); return }
             let secret = try? await walletsManager.exportMnemonic(wallet: wallet, authorization: authorization)
-            guard !Task.isCancelled, hasWalletAccess, secretPresentation.accepts(token) else { secret?.invalidate(); return }
+            guard !Task.isCancelled, validateCurrentAccess(), secretPresentation.validate(token) else { secret?.invalidate(); return }
             guard let secret else {
                 secretPresentation.finish(token, copying: false)
                 return
@@ -774,7 +757,7 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
         let passwordReason = willExportMnemonic ? Strings.toShowSecretWords : Strings.toShowPrivateKey
         authenticationTask?.cancel()
         authenticationTask = Task { [weak self, weak scene, walletsManager] in
-            guard let self, !Task.isCancelled, hasWalletAccess else { return }
+            guard let self, !Task.isCancelled, validateCurrentAccess() else { return }
             let challenge: WalletAuthenticationChallenge
             do {
                 challenge = try await walletsManager.makeExportChallenge(
@@ -782,11 +765,11 @@ class AccountsListViewController: WalletAccessViewController, DataStateContainer
                     kind: willExportMnemonic ? .mnemonic : .privateKey
                 )
             } catch { return }
-            guard !Task.isCancelled, hasWalletAccess else { challenge.invalidate(); return }
+            guard !Task.isCancelled, validateCurrentAccess() else { challenge.invalidate(); return }
             let authorization = await authenticateWhenStoreReady(
                 reason: reason, passwordReason: passwordReason, challenge: challenge)
-            guard let scene, let authorization, !Task.isCancelled, hasWalletAccess,
-                  viewIfLoaded?.window?.windowScene === scene, canPresentSecret else {
+            guard let scene, let authorization, !Task.isCancelled, validateCurrentAccess(),
+                  viewIfLoaded?.window?.windowScene === scene, validateSecretPresentation() else {
                 authorization?.invalidate()
                 return
             }

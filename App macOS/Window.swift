@@ -15,26 +15,24 @@ struct NativeWalletAccess {
         generation = controller?.generation
     }
 
-    var isCurrent: Bool {
+    @discardableResult
+    func validateCurrentAccess() -> Bool {
         guard let controller, let generation else { return true }
-        return controller.accepts(generation)
+        return controller.validateCurrentAccess(expectedGeneration: generation)
     }
 
     var hasCurrentPresentation: Bool {
         guard let controller, let generation else { return true }
-        return controller.generation == generation && !controller.isLocked
+        return controller.matchesPresentation(generation)
     }
 
     func beginAction() -> Bool {
-        guard isCurrent else { return false }
-        return controller?.recordInteraction() ?? true
+        controller?.recordInteraction(expectedGeneration: generation) ?? true
     }
 
     func requireCurrentAccess() throws -> WalletAccessSession {
-        guard isCurrent, let controller else { throw WalletCredentialError.authorizationUnavailable }
-        let session = try controller.requireCurrentAccess()
-        guard isCurrent else { throw WalletCredentialError.authorizationUnavailable }
-        return session
+        guard let controller else { throw WalletCredentialError.authorizationUnavailable }
+        return try controller.requireCurrentAccess(expectedGeneration: generation)
     }
 }
 
@@ -102,7 +100,7 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
 
     @discardableResult
     func installProtectedContent(_ next: NSViewController, access: NativeWalletAccess) -> Bool {
-        installContent(next) { access.isCurrent }
+        installContent(next) { access.validateCurrentAccess() }
     }
 
     @discardableResult
@@ -151,12 +149,12 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
         challenge: WalletAuthenticationChallenge,
         review: NativeApprovalReview? = nil,
         dependencies: WindowAuthenticationSession.Dependencies = .init()
-    ) async -> WalletAuthenticationGrant? {
+    ) async -> WalletAuthenticationResult {
         guard currentAuthenticationSession == nil, !Task.isCancelled,
               review?.isActive != false,
               let window, Window.isVisibleContentWindow(window) else {
             challenge.invalidate()
-            return nil
+            return .interactionUnavailable
         }
         var dependencies = dependencies
         if dependencies.access == nil { dependencies.access = walletAccess }
@@ -265,7 +263,7 @@ final class MacWalletAccessLifecycle: NSObject {
 
     func checkActivation() {
         if !protectedDataAvailable() { access.lock(reason: .protectedDataUnavailable) }
-        else { access.checkAccess() }
+        else { access.validateCurrentAccess() }
     }
 
     isolated deinit {
@@ -311,10 +309,10 @@ struct Window {
         reason: AuthenticationReason,
         challenge: WalletAuthenticationChallenge,
         review: NativeApprovalReview? = nil
-    ) async -> WalletAuthenticationGrant? {
+    ) async -> WalletAuthenticationResult {
         guard let controller = window?.windowController as? WalletWindowController else {
             challenge.invalidate()
-            return nil
+            return .interactionUnavailable
         }
         return await controller.authenticate(reason: reason, challenge: challenge, review: review)
     }

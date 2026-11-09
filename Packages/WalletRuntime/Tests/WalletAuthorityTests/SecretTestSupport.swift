@@ -11,7 +11,7 @@ extension SecretBytes {
 }
 
 extension WalletExportedSecret {
-    convenience init(text: String) { self.init(bytes: SecretBytes(utf8: text)) }
+    convenience init(text: String) { self.init(bytes: SecretBytes(utf8: text), binding: nil) }
 }
 
 extension Scrypt {
@@ -264,7 +264,7 @@ extension WalletsManager {
     func accessForTesting() -> WalletAccessSession { walletAccessForTesting(authorityID: authorityID) }
 
     nonisolated static func privateKeyExportString(privateKey: WalletPrivateKey, coin: WalletCoin) -> String {
-        guard let exported = try? WalletExportedSecret.privateKey(privateKey, coin: coin) else { return "" }
+        guard let exported = try? WalletExportedSecret.privateKey(privateKey, coin: coin, binding: nil) else { return "" }
         defer { exported.invalidate() }
         var text = ""
         exported.withText { text = $0 }

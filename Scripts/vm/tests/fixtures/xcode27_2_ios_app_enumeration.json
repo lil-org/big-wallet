@@ -1,0 +1,1008 @@
+{
+  "errors" : [
+
+  ],
+  "values" : [
+    {
+      "disabledTests" : [
+
+      ],
+      "enabledTests" : [
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testDeinitializationCancelsSessionCreation()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testDeinitializationRetiresAnIdleInstalledSession()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testDisablingAndRestoringTheLastSelection()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testElapsedThrottleAndExhaustionDoNotScheduleExtraWork()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testExternallyFulfilledEditsBecomeCleanAndLaterChangesFollowTheNewBaseline()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testFailedRecoveryPreservesTheEntireCachedPageRangeAndLateRetryIsSilenced()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testFailuresRequireExplicitRetryAndRebuildCachedPagesWithoutLosingSelection()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testInitialPageCallbackCanRetireTheAdoptedSession()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testInvalidationCancelsWorkAndSilencesLateResults()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testInvalidationRetiresInitialSessionBeforeTheFirstPageReturns()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testLoadingDoesNotRetainStateAndDeinitializationCancelsTheRequest()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testNestedStoreFailureSurvivesRecoveryNotification()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testPagingWaitsForLayoutAndCoalescesViewportRequests()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testRefreshCanLeaveAnEmptyDraftForTheUserToRepair()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testRefreshClosesOnlyRemovedOrDifferentWallets()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testRefreshDiscardsLateSessionCreationWithoutStartingItsFirstPage()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testRefreshKeepsMetadataChangesAndPristinePreviewPages()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testRefreshPreservesFailureUntilExplicitRetryWithTheLatestWallet()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testRefreshRebasesDraftAndOffPageSelectionsWithoutRestartingPendingPagination()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testRefreshRestartsPendingFirstPageAndIgnoresItsLateResult()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testReloadCallbackCanInvalidateBeforeTheLoadStarts()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testResetRejectsLateAdditionalPageAndOldLayoutActivation()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testResetRejectsLateFirstPageWithoutClearingTheReplacementLoad()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testSelectionPreservesUndiscoveredAccountsAndOutputOrder()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testStoreFailureRetainsCachedRowsAndCancelsPendingPagination()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testStoreRecoveryCallbackInvalidationPreventsRestart()"
+        },
+        {
+          "identifier" : "Tests iOS/AccountPreviewStateTests/testThrottleUsesSuccessfulCompletionAndRemainingDelay()"
+        },
+        {
+          "identifier" : "Tests iOS/BWSafariSynchronizationTests/testForwardingAndRuntimeGuards"
+        },
+        {
+          "identifier" : "Tests iOS/CustomNetworkPackagingTests"
+        },
+        {
+          "identifier" : "Tests iOS/EditAccountsViewControllerTests/testCachedPreviewFailureKeepsRetryVisibleWhileScrolling()"
+        },
+        {
+          "identifier" : "Tests iOS/EditAccountsViewControllerTests/testCancelRemainsAvailableAfterStorageFailure()"
+        },
+        {
+          "identifier" : "Tests iOS/EditAccountsViewControllerTests/testDisplayedThresholdRowCannotCancelPendingPagingActivation()"
+        },
+        {
+          "identifier" : "Tests iOS/EditAccountsViewControllerTests/testExternalWalletRemovalDoesNotRenewWalletAccess()"
+        },
+        {
+          "identifier" : "Tests iOS/EditAccountsViewControllerTests/testInitialPagingActivationSurvivesAnOverlappingSuccessfulStoreReload()"
+        },
+        {
+          "identifier" : "Tests iOS/EditAccountsViewControllerTests/testInitialPreviewFailureShowsRetryWithoutClosingTheEditor()"
+        },
+        {
+          "identifier" : "Tests iOS/EditAccountsViewControllerTests/testOwnSaveNotificationDoesNotCancelTheSaveOrLeaveTheEditorEarly()"
+        },
+        {
+          "identifier" : "Tests iOS/EditAccountsViewControllerTests/testStorageFailureKeepsDraftReadOnlyUntilRetrySucceeds()"
+        },
+        {
+          "identifier" : "Tests iOS/EditAccountsViewControllerTests/testSuccessfulStoreReloadRestartsPendingInitialPreview()"
+        },
+        {
+          "identifier" : "Tests iOS/EditAccountsViewControllerTests/testSuccessfulStoreReloadRestartsPendingPreviewRecoveryPreservingDraft()"
+        },
+        {
+          "identifier" : "Tests iOS/EditAccountsViewControllerTests/testWalletDeletionDismissesEditorAndPresentedAlert()"
+        },
+        {
+          "identifier" : "Tests iOS/EditAccountsViewControllerTests/testWalletNotificationsRebaseTheOpenEditorAndStopAfterDeletion()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileSecretLifetimeTests/testCancelDuringKeystoreDismissalPreventsImportAndClearsDraft()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileSecretLifetimeTests/testCancelOrLockDuringImportRecoveryPreventsLateImport()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileSecretLifetimeTests/testCanceledImportIgnoresLateSuccessAndRetainedSubmission()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileSecretLifetimeTests/testDynamicPasswordPromptClearsOnlyItsAuthenticHistoryOnConfirmCancelAndLock()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileSecretLifetimeTests/testFailedImportPreservesEditableDraftForRetry()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileSecretLifetimeTests/testImportChecksStoredCredentialsOnlyWhenSubmitting()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileSecretLifetimeTests/testImportRetriesFailedStoreWithoutDiscardingItsDraft()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileSecretLifetimeTests/testImportSuccessRetiresDraftBeforeCompletionAndDismissal()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileSecretLifetimeTests/testKeystoreConfirmationRenewsAccessButDelayedDismissalDoesNot()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileSecretLifetimeTests/testKeystoreImportWaitsForPromptDismissalAndClearsThePassword()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileSecretLifetimeTests/testLockedPasswordControlCannotRestoreAnAuthenticEditThroughUndo()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileSecretLifetimeTests/testPasswordDisappearanceWaitsForConfirmedTransitionBeforeClearingDrafts()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileSecretLifetimeTests/testRemovingImportFromItsParentRetiresTheDraft()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileSecretLifetimeTests/testTerminalImportClearRemovesOnlyItsAuthenticUndoHistory()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileSecretLifetimeTests/testTransientAndCanceledRemovalPreserveDraftUntilRemovalCompletes()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testAccessibilityScrollRenewsBothAccountTablesButProgrammaticScrollingDoesNot()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testAllRootsLockWithoutStartingAuthenticationUntilUnlockIsSelected()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testBackgroundLocksOnlyAfterTheLastForegroundSceneLeaves()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testDisconnectingTheLastForegroundSceneLocksOnce()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testEachVisibleLockedRootCanReplaceAnotherRootsAuthentication()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testFailedSharedReloadOrLockCancelsAuthenticationBeforeExportOrDelete()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testLockClearsImportDraftAndRejectsRetainedSubmission()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testLockWhileLoadingAccountsCannotInstallItsViewAboveTheLockedScreen()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testLockedWalletListIgnoresRetainedRetryActions()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testPasswordEntryPublishesSessionAndRetiresItsOldCallbacks()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testPendingAuthenticationSurvivesSharedWalletReload()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testProtectedDataLossKeepsPrivacyCoverThroughLateActivation()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testReplacingAuthenticationLeavesTheOtherSceneUsableWithoutAnotherPrompt()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testRetainedManagementControllerCannotActAfterRelockingAndUnlocking()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testSceneNotificationsCoverTransientInactivityAndLockOnBackground()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testSuccessfulAuthenticationWaitsForSharedReloadBeforeExportOrDelete()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testWalletListFailedRefreshKeepsPublicRowsAndFencesEditing()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testWalletListInitialFailureStaysDistinctFromAnEmptyWallet()"
+        },
+        {
+          "identifier" : "Tests iOS/MobileWalletAccessTests/testWrongPasswordCancellationClearsTheDraftAndRestoresTheForm()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeExtensionResponderTests/testExtensionRequestCompletesOrCancelsExactlyOnceAcrossTasks()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testAdmittedIngressCannotChangeProfileOrEscapePrivateBrowsing()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testBadBlockFileOutputIsRejectedBeforeNetworkWhileReadsAreForwarded()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testDocumentOwnershipRejectsForeignReplayFocusPollAndAcknowledgement()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testMalformedCommandsNeverReachDependencies()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testManualSwitchCoalescingKeepsDocumentAndWorkerOwnersSeparate()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testNativeAdmissionAndReplayKeepStoredIdentity()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testOrdinaryDappRequestsAndRPCRequireSiteContext()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testPlatformPolicyAndPrivateBrowsingPreserveRouting()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testPopupAdmissionDoesNotLaunchTheNativeHelper()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testPrivateContextsCannotPerformWalletWork()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testPrivateDappRequestIsRejectedBeforeAdmission()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testPrivilegedRPCAliasesNeverReachEndpointAuthorizationOrNetwork()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testRPCAdmissionRejectsMalformedAndProhibitedBodiesBeforeNetworkLookup()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testRPCRejectsValidatedResponseForAnotherRequest()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testRPCResponseIsProjectedAndCorrelatedWithoutLeakingUpstreamFields()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testRPCUsesItsOwnRequestLimitInsteadOfTheApprovalPayloadLimit()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testRecoveryAndPopupCompletionKeepStoredOriginsAndOSProfiles()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testSaturatedRPCDoesNotBlockApprovalRejectionOrRecovery()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testShowApprovalRequiresTheStoredOriginAndProfile()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testSiteIdentityMismatchesNeverReachDependencies()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testSourceRolesRejectUnrelatedOperationsBeforeSideEffects()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testTerminalDeliveryAndAcknowledgementUseTheSameStoredResponse()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testUnauthorizedDappResponsePreservesAuthorityAndCorrelation()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testUnavailableRPCEndpointReturnsTransportFailureWithoutDispatching()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testWirePayloadCannotSelectTheNativeProfile()"
+        },
+        {
+          "identifier" : "Tests iOS/NativeMessageDispatcherTests/testWorkerToolbarManualSwitchStillAdmitsAndFocuses()"
+        },
+        {
+          "identifier" : "Tests iOS/NetworkCatalogResourceTests/testBundledCatalogInventoryAndEndpointDescriptors()"
+        },
+        {
+          "identifier" : "Tests iOS/NetworkCatalogResourceTests/testCatalogLoaderThrowsForMissingAndInvalidResources()"
+        },
+        {
+          "identifier" : "Tests iOS/NetworkCatalogResourceTests/testInvalidCatalogRecoversUnexpectedIDAndSuppressesItsCustomFallback()"
+        },
+        {
+          "identifier" : "Tests iOS/PasswordStorageTests/testPasswordAlertClearsInputAndWaitsForDismissalBeforeResolving()"
+        },
+        {
+          "identifier" : "Tests iOS/PasswordStorageTests/testPasswordFallbackReadFailureRetriesWithoutReportingMismatch()"
+        },
+        {
+          "identifier" : "Tests iOS/PasswordStorageTests/testUIKitMatchedPasswordConfirmationClearsDraftsBeforeQueuedSave()"
+        },
+        {
+          "identifier" : "Tests iOS/PasswordStorageTests/testUIKitPasswordReadFailureClearsDraftAndRecoversThroughRetry()"
+        },
+        {
+          "identifier" : "Tests iOS/PasswordStorageTests/testUIKitPoppedPasswordConfirmationRetiresItsDraftAndCallbacks()"
+        },
+        {
+          "identifier" : "Tests iOS/PasswordStorageTests/testUIKitStaleRepeatLoadDoesNotMutateNavigationUntilVisible()"
+        },
+        {
+          "identifier" : "Tests iOS/PasswordStorageTests/testUIKitStaleRepeatSubmissionDropsDraftWithoutCreatingPassword()"
+        },
+        {
+          "identifier" : "Tests iOS/PasswordStorageTests/testUIKitTransientPasswordDisappearancePreservesTheEditableForm()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testAccountSelectionPreservesSelectedNetworkAndNormalizedAddressThroughExecution()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testAccountSelectionRejectsInvalidEntriesWithoutClaimingOrDroppingAccounts()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testAddChainApprovalSkipsRevisionsAndRejectUsesSingleActionPath()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testAdmissionDistinguishesUnavailableSigningAccountsFromRemovedAccounts()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testApprovalDispatchAwaitsAuthenticationAndFinalPersistence()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testApprovalDispatchAwaitsBroadcastSend()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testAuthenticationCancellationDoesNotRestoreUnavailableReviewContext()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testAuthenticationCancellationPreservesReviewedFeeNotice()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testAuthenticationCancellationRebuildsReviewWhenNetworkChanges()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testAuthenticationCancellationRebuildsReviewWhenWalletAuthorityChanges()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testAuthenticationCancellationReleasesClaimAndReturnsToReview()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testAuthenticationDeadlineReleasesClaimAndInvalidatesSignerRegardlessOfTimerOrder()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testAuthenticationPreflightCatalogExecutionAndLeaseShareOneDeadline()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testBroadcastCheckpointsBeforeSendAndCompletion()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testBroadcastStillSendsWhenDeadlineExpiresAfterCheckpoint()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCachedControllerShowsWorkingAfterForeignClaim()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCachedReviewsRefreshWhenAvailableAccountsChangeWithinSameGeneration()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCachedSigningAndSelectionReviewsDetectVaultTombstone()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCallerCancellationAfterCheckpointPersistsTheBroadcastResult()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCallerCancellationDuringAuthenticationReviewRestorationRemainsInterrupted()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCallerCancellationStopsUncommittedWorkAndDisposesLateResults()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCancellationAtCommittedCheckpointStillStartsBroadcastOnce()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCancellationBeforePreparationReturnsOrdinaryAbandonment()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCancelledTransactionAuthenticationPreservesEditsAndRequiresFreshApproval()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCancelledTransactionSpeedLeavesFeeAndSelectionUnchanged()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCatalogPreparationFailuresPreserveAdmissionAndPopupRecovery()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCatalogResolutionDeadlineReleasesClaimAndDiscardsLateApproval()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCatalogReviewsReloadAccountNamesWithoutRestarting()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testChangedChainSwitchMaterializesImmediateResponseFromCatalog()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testChangedVaultDuringAuthenticationReleasesBeforeRematerializing()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testColdControllerRejectsQueuedHandleWithoutMaterializingSession()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testColdControllerShowsWorkingForApprovingSnapshot()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCommandRepliesCarryCurrentStateWithoutAnotherRead()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCompletedPopupSpeedChangePublishesConsistentSelectionAndPreparesOnce()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCompletedRequestPollingSettlesPendingTransactionPreflight()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCompletionOwnershipLossToReceiptRequiresApprovalDelivery()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testConsumedSignerCanAcquireLeaseAndIsInvalidatedBeforeBroadcastSend()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCopiedClaimCannotPrepareTwiceAcrossExecutors()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCorrectionReviewRequiresCurrentBindingCatalogAndNetwork()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCustomFeeEditReplacesSliderProvenanceForBothFields()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testCustomNetworkRetryWaitsForFreshStorageBeforeReviewingOrRejecting()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testDuplicateExecutionCannotReleaseTheOriginalPermit()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testEmptyReviewCatalogIsRetainedForSubsequentAvailabilityChecks()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testExecutingApprovalIgnoresPopupRetryAndStaleActions()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testExecutionLeaseCoversDurableCommitAndEndsBeforeBroadcast()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testExecutorMapsClaimAbandonmentOutcomes()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testExecutorReleasesUnapprovedLeaseWhenAuthorizationAndAbandonFail()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testExpiredOperationDeadlineNeverStartsWorkOrAcquiresLease()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testFailedClaimReleaseDoesNotRestoreActionableReview()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testFailedRejectPreservesCachedReviewSession()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testFeeCapEditPreservesUntouchedPriorityFeeProvenance()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testFinalSelectionDistinguishesRemovedAndUnavailableAccountsAfterClaim()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testFreshTransactionSessionUsesCurrentSuggestedNonce()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testHungBroadcastTimesOutToRecoveryAndInvokesSendOnce()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testImmediatePersistenceFailureRetriesExplicitlyAndDuplicateRetryDoesNotRestartWork()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testImmediatePersistenceRetryCanMaterializeAReview()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testImmediateResponsePersistenceShowsWorkingUntilReconciled()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testInvalidCustomFeeDoesNotApplyNonceAndNoOpDoesNotRestartPreparation()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testLateCatalogFailureCannotDiscardAuthenticatingSession()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testMaterialReviewChangesRotateTheSingleReviewToken()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testMessageApprovalPersistsDenialWhenAccountDisappears()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testMessageApprovalRetainsReviewedActionAndUsesFreshUnlockedAccess()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testMissingVaultDuringAuthenticationShowsSecureSetupRequired()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testMobileDeadlineRollsBackAtEveryExactPrecommitBoundary()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testNativeAuthorityChangeDuringAuthenticationReleasesWithoutSigning()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testNativeDeliveryFencesCachedTransactionMutations()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testNonceOnlyEditKeepsFailedTransactionUnapprovable()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testNonceOnlyEditPreservesFeeProvenance()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testOldImmediatePersistenceCompletionPreservesReplacementFailure()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testOldImmediatePersistenceCompletionPreservesReplacementReview()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testOperationTimeoutReturnsBeforeUncooperativeWorkAndNeverSendsLateBroadcast()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testOrdinarySigningClaimRejectsNativeCommitBeforeResolution()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testPendingResponseCarriesCompletedIdentitiesBeforeQueuedRequests()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testPendingResponseIsFIFO()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testPopupRejectsSignerBoundToAnotherReviewedCatalogAccount()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testPopupSignerSignsOnlyReviewedAccountAndPayloadOnce()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testPreflightFeeNoticeRetainsUpdatedReviewAndRequiresFreshApproval()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testPreflightWarningAtDeadlineDoesNotRestoreCorrectionReview()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testPriorityFeeEditPreservesUntouchedFeeCapProvenance()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testPrivatePopupCommandsNeverExposeStoredReview()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testQueueCleanupPreservesOtherProfileReviewAndImmediatePersistence()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testReadsPreserveCachedErrorUntilIdentityBoundRetry()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testReceiptOwnedApprovalStateInvalidatesCachedReview()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testReceiptOwnedReplaySkipsWalletMaterialization()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testRecoveryWorkerCommandsUseExactNativeEnvelopes()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testRejectedRequestCannotReappearAfterSuspendedCatalogValidation()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testRejectedRequestCannotReappearAfterSuspendedPreparation()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testRemovedSelectedAccountDuringAuthenticationPersistsDenial()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testRequestScopeInvalidatesOwnedAccessOnceWithoutClearingBorrowedCatalog()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testReservedRejectionAndQueueRepliesNeverPrepareAReview()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testRetryNeverRematerializesNativeOwnedOrApprovingCachedErrors()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testReusedTransactionRequestIDAndReplacementAccountDoNotInheritEdits()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testReviewPresentationTitlesCoverEveryAction()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testRevokedAuthorityCannotBeApproved()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testSelectionCatalogFailureRebuildsReviewAndRequiresExplicitRetryNetwork()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testSelectionCatalogRemovalRequiresSecureSetup()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testSelectionDraftPreservesPreparedActionAndReviewRevision()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testSelectionPersistsFailureWhenNetworkDisappearsAfterClaim()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testSelectionResolvesNetworkLossBetweenReviewAndApproval()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testSessionCanReturnToReviewFromUnclaimedAndFailedAttempts()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testSessionPreservesFeedbackAcrossAuthentication()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testSessionUsesFourDisposablePhasesAndOneReviewToken()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testSigningApprovalTakesExecutionDeadlineFromNativeClaim()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testSigningContinuesWhenSiblingAccountBecomesUnavailableDuringAuthentication()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testSigningValidationRollbackDoesNotAcquireWalletLease()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testStaleReviewTokenCannotMutateSession()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testStaleReviewTokenRejectsApproveAndMutation()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testStoppedPreparationPreservesReasonAndClaimReleaseOutcome()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testSuggestedEditRestoresNonceAndOwnershipOfUnchangedFee()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testSupersededAuthenticationInvalidatesSignerAndPreservesReplacementReview()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTaskCancellationDuringAuthenticationDiscardsLateUnlockAndRequiresRetry()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionApprovalAwaitsSynchronousAuthenticationOutputAndPreflight()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionApprovalPreservesReviewedPayloadDespiteChangedPreflightOutput()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionApprovalRejectsFreshRPCEndpointDrift()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionApprovalRetainsReviewedPayloadAndAppliesExecutionEdits()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionNoticeReleasesClaimAndRetryRequiresCurrentReview()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionPreflightDeadlineReleasesClaimAndIgnoresLateResults()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionPresentationChangeWhileCheckingAuthorityReturnsToReview()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionPresentationChangeWhileClaimingRequiresRetry()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionPresentationRetainsEditsAndSessionWithoutChangingIntent()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionRematerializesAfterRetryableExecutionStartFailure()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionResponsesOwnLoadingPresentationAndTransientEditFeedback()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionSessionAuthenticationRefusalAllowsFreshApproval()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionSessionCompletesSynchronousPreflightOnce()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionSessionInvalidationCancelsContextAndIgnoresLateResult()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionSessionInvalidationRejectsLateAuthentication()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionSessionInvalidationSettlesPreflightAndIgnoresLateResults()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionSessionInvalidationWinsAlreadyResumedPreflight()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionSessionPreflightNoticesRemainPresentable()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionSessionRejectsDuplicatesAndFreezesPreparationDuringAuthentication()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testTransactionTokenRotationDuringCatalogReadReturnsCurrentReview()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testUnavailableAuthenticationKeepsFeedbackUntilFreshReviewRetry()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testUnavailableAuthorityPreservesReviewForRetry()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testUnavailableCatalogAllowsRetryAndRejection()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testUnavailablePreparationAbandonsOrdinaryAndNativeClaimsBeforeResolution()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testUnavailableReviewedSigningAccountWithUsableSiblingRequiresFreshReview()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testUnavailableStoreNeverLooksLikeCompletedRequest()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testUnavailableVaultCommitAbandonsOrdinaryAndNativeClaims()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testUnknownNonemptySwitchPersistsWithoutReadingCatalog()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testVaultAuthenticationCancellationCreatesFreshReviewAuthority()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testVaultRotationDuringSigningDiscardsPreparedBroadcast()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testWalletDependentAdmissionDefersWithoutCatalogProvider()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testWalletDependentImmediateResponseUsesInjectedCatalog()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testWalletIndependentApprovalDoesNotRequireVaultCatalog()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupRequestSessionsTests/testZeroBroadcastTimeoutPersistsRecoveryWithoutLateRedispatch()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testApprovalErrorHasExactRefreshOnlyEnvelope()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testApprovalStringsCoverEveryCatalogLocale()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testBeginningApprovalRemovesReviewContentAndActions()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testControlHeavySelectionBecomesAtomicFallbackWithoutShorteningLabels()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testGweiUnitsRideAlongWithTheFeeLabels()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testLongAddChainNameRemainsExactWhenResponseFits()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testMoreThan256AccountAndNetworkChoicesRemainExactWhenTheyFit()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testNonFiniteTransactionJSONUsesGenericFallback()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testOversizedHostCannotOverflowErrorEnvelope()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testOversizedIgnoredCommandPreservesDispositionAndRecovery()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testOversizedMutationResponsesUseApprovalErrorEnvelope()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testOversizedPopupResponseBecomesRejectOnlyErrorWithoutTruncation()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testOversizedQueueUsesUnavailableStatus()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testOversizedResponsePreservesExistingRecoveryCapability()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testOversizedSelectionReturnsAtomicRejectOnlyFallback()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testPopupResponseDropsDecorativeImagesBeforeFailingClosed()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testPopupStringsAreNeverEmpty()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testPopupStringsCoverEveryChromeKey()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testQueuePositionKeepsBothPositionalSpecifiers()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testRejectableErrorHasExactRejectOnlyEnvelope()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testReviewTokenIsLowercaseAndAbsentOptionalsAreOmitted()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testSecureSetupRequiredStateAllowsRefreshAndRejection()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testStatusOnlySliderMutationIsRejectedByExactDecoder()"
+        },
+        {
+          "identifier" : "Tests iOS/PopupStringsTests/testTypedResponsesMatchSharedPopupContract()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretAlertPresentationTests/testCopyChecksActivityEvenBeforeLifecycleNotificationArrives()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretAlertPresentationTests/testDeactivationClearsVisibleSecretAndDisablesRetainedCopyCallback()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretAlertPresentationTests/testDoneClearsSecretWithoutCopying()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretAlertPresentationTests/testInactivePresentationRejectsExportBeforeNotificationArrives()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretAlertPresentationTests/testLateExportCannotReappearAfterReturnToForeground()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretAlertPresentationTests/testNavigationRevokesExportBeforeControllerFinishesDisappearing()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretAlertPresentationTests/testOldCallbackCannotCopyOrDismissANewerReveal()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretAlertPresentationTests/testOwningSceneDeactivationRevokesControllerReveal()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretAlertPresentationTests/testReleasingPresentationClearsAnAlertRetainedByUIKit()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretAlertPresentationTests/testRevocationBeforeQueuedPresentationCompletesKeepsSecretHidden()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretHandlingTests/testActivationRechecksOverdueClipboardWithoutWaitingForTimer()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretHandlingTests/testAppDeactivationLeavesClipboardTimerRunning()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretHandlingTests/testClipboardExpirationPreservesReplacementContents()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretHandlingTests/testClipboardUsesLocalOnlyOptionsAndExpiresAfterThirtySeconds()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretHandlingTests/testInvalidationRejectsLateSecretResultsAndCallbacks()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretHandlingTests/testNewPresentationClearsOldSecretAndRejectsOldTokens()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretHandlingTests/testPresentationInvalidationDoesNotCancelClipboardExpiration()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretHandlingTests/testReleasingClipboardCancelsTimerAndRejectsItsLateCallback()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretHandlingTests/testRepeatedCopiesRetireOldTimerAndUseNewDeadline()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretHandlingTests/testSystemManagedClipboardNeverSchedulesOrManuallyClearsContents()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretHandlingTests/testTerminationClearsOnlyOwnedSecret()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretHandlingTests/testUIKitAdapterWritesLocalOnlySystemExpirationWithoutAdoptingReplacement()"
+        },
+        {
+          "identifier" : "Tests iOS/SecretHandlingTests/testWallClockRollbackCannotExtendManagedClipboardExpiration()"
+        },
+        {
+          "identifier" : "Tests iOS/SolanaRPCPresentationTests/testSolanaRPCSourcesUseAccurateDisplayNames()"
+        },
+        {
+          "identifier" : "Tests iOS/TransactionFeePresentationTests/testEIP1559FeeSummaryDisplaysOnlyMaximumFee()"
+        },
+        {
+          "identifier" : "Tests iOS/TransactionFeePresentationTests/testEIP1559FeeSummaryDisplaysSingleCalculatingFee()"
+        },
+        {
+          "identifier" : "Tests iOS/TransactionFeePresentationTests/testLegacyFeeSummaryRemainsUnchanged()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testCancellationRetiresChallengeBeforeTaskAndOwnerCallbacks()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testContinuousInputCoalescesRenewalsWithoutChangingActionExpiryChecks()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testCredentialChangeDuringSchedulingCannotPublishAnUnlock()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testDeallocationCancelsPendingAuthentication()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testDeallocationInvalidatesAccessAndCancelsRetainedTimer()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testEarlyTimerDeliveryReschedulesOnlyRemainingTime()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testExpiryIsEnforcedBeforeAnActionWithoutTimerDelivery()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testLockDuringUnlockNotificationCannotPublishLaterUnlockCallbacks()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testLockInvalidatesAccessBeforeCancellingAuthenticationAndNotifying()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testLockObserverCannotReentrantlyUnlockOrPreventOtherTeardown()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testOldAuthenticationCannotReplaceNewAuthenticationOrUnlockAfterLock()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testOldTimersCannotLockARenewedOrReplacementSession()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testPendingAuthenticationIdentityDoesNotReadCredentialsOrProtectedData()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testProtectedDataLossRejectsAuthenticationBeforeAnEventIsDelivered()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testReentrantCancellationCannotOverwriteOrCancelTheReplacementAttempt()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testReplacingAnOperationRejectsItsLateGrantAndSession()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testRetainedAuthenticationWorkIsInvalidatedWhenItsControllerDeallocates()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testSensitiveOperationDetectsReplacementAndRetiresTheSessionPermanently()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testSensitiveOperationFailsDuringKeychainOutageWithoutRevokingTheLease()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testSuccessfulOperationDetachesBeforeObserversWithoutCancellingItself()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testSynchronousSchedulerLockCannotReportSuccessfulInteraction()"
+        },
+        {
+          "identifier" : "Tests iOS/WalletAccessControllerTests/testUIActivityAndTimersDoNotReadCredentials()"
+        }
+      ],
+      "testPlan" : "Tests iOS"
+    }
+  ]
+}

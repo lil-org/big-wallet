@@ -8,6 +8,114 @@ import XCTest
 
 @MainActor
 final class AccountsListViewControllerTests: XCTestCase {
+    func testHealthyRefreshPreservesAnAlreadyRevealedSecret() async throws {
+        let host = try await WalletOperationRecoveryHost()
+        defer { host.close() }
+        try await host.begin(.export)
+        host.authentication.complete()
+        await expectEventually(timeout: 5) { host.didPerform(.export) }
+        let sheet = try XCTUnwrap(host.window.attachedSheet)
+        host.inventory.holdNextRead()
+        let refresh = Task { await host.manager.reloadFromStore() }
+        defer { refresh.cancel(); host.inventory.release() }
+        await fulfillment(of: [host.inventory.entered], timeout: 3)
+        XCTAssertTrue(host.didPerform(.export))
+        XCTAssertTrue(host.window.attachedSheet === sheet)
+        host.inventory.release()
+        let loaded = await refresh.value
+        XCTAssertTrue(loaded)
+        await expectEventually { host.didPerform(.export) }
+        XCTAssertTrue(host.window.attachedSheet === sheet)
+    }
+
+    func testExternalStoreChangeMasksTheSecretBeforeTheInventoryReadFinishes() async throws {
+        let host = try await WalletOperationRecoveryHost()
+        defer { host.close() }
+        try await host.begin(.export)
+        host.authentication.complete()
+        await expectEventually(timeout: 5) { host.didPerform(.export) }
+        let id = try XCTUnwrap(host.manager.wallets.first?.id)
+        host.reader.walletData[id] = try XCTUnwrap(host.reader.walletData[id]) + Data([32])
+        host.inventory.holdNextRead()
+        let refresh = host.manager.handleExternalWalletStoreChange()
+        defer { refresh.cancel(); host.inventory.release() }
+        XCTAssertFalse(host.didPerform(.export))
+        await fulfillment(of: [host.inventory.entered], timeout: 3)
+        XCTAssertFalse(host.didPerform(.export))
+        host.inventory.release()
+        await refresh.value
+        await expectEventually { host.window.attachedSheet == nil }
+    }
+
+    func testLastAccountRemovalHasOneCompleteWarningAndFreshAuthentication() async throws {
+        for confirms in [false, true] {
+            let host = try await WalletOperationRecoveryHost()
+            defer { host.close() }
+            var authentications = 0
+            host.controller.authenticate = { _, _, _ in authentications += 1; return nil }
+            let remove = NSSelectorFromString("didClickRemoveAccount:")
+            let item = try XCTUnwrap(host.controller.menuForRow(1)?.items.first { $0.action == remove })
+            let warnings = Mutex([String]())
+            let timer = Timer(timeInterval: 0.05, repeats: true) { [weak window = host.window] _ in
+                MainActor.assumeIsolated {
+                    guard let modal = NSApp.modalWindow else { return }
+                    func text(_ view: NSView) -> String {
+                        ((view as? NSTextField)?.stringValue ?? "") + "\n" + view.subviews.map(text).joined(separator: "\n")
+                    }
+                    warnings.withLock { $0.append(modal.contentView.map(text) ?? "") }
+                    XCTAssertEqual(modal.defaultButtonCell?.title, Strings.cancel)
+                    NSApp.stopModal(withCode: confirms ? .alertSecondButtonReturn : .alertFirstButtonReturn)
+                    modal.orderOut(nil)
+                    window?.makeKeyAndOrderFront(nil)
+                }
+            }
+            RunLoop.main.add(timer, forMode: .modalPanel)
+            _ = host.controller.perform(remove, with: item)
+            timer.invalidate()
+            if confirms { await expectEventually { authentications == 1 } }
+            let displayed = warnings.withLock { $0 }
+            XCTAssertEqual(displayed.count, 1)
+            XCTAssertTrue(displayed.first?.contains(Strings.removingTheLastAccount) == true)
+            XCTAssertTrue(displayed.first?.contains(Strings.removedWalletsCantBeRecovered) == true)
+            XCTAssertEqual(authentications, confirms ? 1 : 0)
+            XCTAssertFalse(host.didPerform(.delete))
+        }
+    }
+
+    func testReplacingWalletBytesClearsAnAlreadyRevealedSecret() async throws {
+        let host = try await WalletOperationRecoveryHost()
+        defer { host.close() }
+        try await host.begin(.export)
+        host.authentication.complete()
+        await expectEventually(timeout: 5) { host.didPerform(.export) }
+        let id = try XCTUnwrap(host.manager.wallets.first?.id)
+        host.reader.walletData[id] = try XCTUnwrap(host.reader.walletData[id]) + Data([32])
+
+        await assertWalletReload(host.manager)
+
+        await expectEventually { host.window.attachedSheet == nil }
+        XCTAssertFalse(host.didPerform(.export))
+        XCTAssertNil(host.window.attachedSheet)
+    }
+
+    func testRetainedMenuActionCannotCopyAnAccountFromAReusedRow() async throws {
+        let host = try await WalletOperationRecoveryHost()
+        defer { host.close() }
+        let copy = NSSelectorFromString("didClickCopyAddress:")
+        let item = try XCTUnwrap(host.controller.menuForRow(1)?.items.first { $0.action == copy })
+        let id = "replacement-wallet"
+        host.reader.attributes = [host.reader.walletAttributes(id: id)]
+        host.reader.walletData = [id: WalletCoreProxyTestVectors.walletCoreJSONMnemonicFixture]
+        await assertWalletReload(host.manager)
+        host.controller.tableView.selectRowIndexes([1], byExtendingSelection: false)
+        host.controller.menuDidClose(try XCTUnwrap(host.controller.tableView.menu))
+        let previous = NSPasteboard.general.changeCount
+
+        _ = host.controller.perform(copy, with: item)
+
+        XCTAssertEqual(NSPasteboard.general.changeCount, previous)
+    }
+
     func testSuspendedAuthenticationDoesNotRetainTheAccountsController() async throws {
         let host = try await WalletOperationRecoveryHost()
         defer { host.close() }
@@ -90,7 +198,7 @@ final class AccountsListViewControllerTests: XCTestCase {
         host.inventory.holdNextRead()
         defer { host.inventory.release() }
 
-        host.confirmWarning(selector: "didClickCreateAccount")
+        host.confirmWarning { _ = host.controller.perform(NSSelectorFromString("didClickCreateAccount")) }
         await fulfillment(of: [host.inventory.entered], timeout: 5)
         NotificationCenter.default.post(name: NSApplication.willResignActiveNotification, object: NSApp)
         host.inventory.release()
@@ -112,7 +220,7 @@ final class AccountsListViewControllerTests: XCTestCase {
             let reload = Task { await host.manager.reloadFromStore() }
             defer { reload.cancel(); host.inventory.release() }
             await fulfillment(of: [host.inventory.entered], timeout: 3)
-            XCTAssertEqual(host.manager.loadState, .loading)
+            XCTAssertEqual(host.manager.loadState, .ready)
             XCTAssertEqual(host.authentication.cancellations, 0)
 
             host.inventory.release()
@@ -139,7 +247,7 @@ final class AccountsListViewControllerTests: XCTestCase {
             host.authentication.complete()
             await fulfillment(of: [host.authentication.returned], timeout: 3)
             for _ in 0..<3 { await Task.yield() }
-            XCTAssertEqual(host.manager.loadState, .loading)
+            XCTAssertEqual(host.manager.loadState, .ready)
             XCTAssertFalse(host.didPerform(operation))
             XCTAssertEqual(host.authentication.cancellations, 0)
 
@@ -506,14 +614,20 @@ private final class WalletOperationRecoveryHost {
     }
 
     func begin(_ operation: Operation, waitingFor entered: XCTestExpectation? = nil) async throws {
-        controller.tableView.deselectedRow = 1
-        let selector = operation == .export ? "didClickShowKey:" : "didClickRemoveWallet:"
-        confirmWarning(selector: selector)
+        switch operation {
+        case .export:
+            let showKey = NSSelectorFromString("didClickShowKey:")
+            let item = try XCTUnwrap(controller.menuForRow(1)?.items.first { $0.action == showKey })
+            confirmWarning { _ = controller.perform(showKey, with: item) }
+        case .delete:
+            let header = try XCTUnwrap(controller.tableView.rowView(atRow: 0, makeIfNecessary: true))
+            confirmWarning { controller.didClickRemoveWallet(sender: header) }
+        }
         let result = await XCTWaiter.fulfillment(of: [entered ?? authentication.entered], timeout: 3)
         XCTAssertEqual(result, .completed)
     }
 
-    func confirmWarning(selector: String) {
+    func confirmWarning(_ perform: () -> Void) {
         let acceptWarning = Timer(timeInterval: 0.05, repeats: false) { [weak window] _ in
             MainActor.assumeIsolated {
                 guard let warning = NSApp.modalWindow else {
@@ -528,8 +642,7 @@ private final class WalletOperationRecoveryHost {
         }
         RunLoop.main.add(acceptWarning, forMode: .modalPanel)
         defer { acceptWarning.invalidate() }
-        if selector.hasSuffix(":") { _ = controller.perform(NSSelectorFromString(selector), with: NSMenuItem()) }
-        else { _ = controller.perform(NSSelectorFromString(selector)) }
+        perform()
     }
 
     func didPerform(_ operation: Operation) -> Bool {

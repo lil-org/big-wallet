@@ -11,6 +11,13 @@ final class SecretPresentationSession {
 
     private var token: Token?
     private var secret: WalletExportedSecret?
+    private let validateExport: @MainActor (WalletExportedSecret) async -> Bool
+    private var validationTask: Task<Void, Never>?
+    private var sourceRevision: UInt64 = 0
+
+    init(validateExport: @escaping @MainActor (WalletExportedSecret) async -> Bool) {
+        self.validateExport = validateExport
+    }
 
     func begin() -> Token {
         invalidate()
@@ -34,14 +41,31 @@ final class SecretPresentationSession {
         return true
     }
 
-    @discardableResult
-    func withText(for token: Token, _ consume: (String) -> Void) -> Bool {
-        guard isCurrent(token), let secret else { return false }
-        return secret.withText(consume)
+    func validate(_ token: Token, then completion: @escaping @MainActor (WalletExportedSecret?) -> Void) {
+        guard isCurrent(token), let secret else { completion(nil); return }
+        validationTask?.cancel()
+        validationTask = Task { [weak self, validateExport] in
+            while !Task.isCancelled, let revision = self?.sourceRevision {
+                let valid = await validateExport(secret)
+                guard !Task.isCancelled, let self, isCurrent(token), self.secret === secret else { return }
+                guard revision == sourceRevision else { continue }
+                validationTask = nil
+                completion(valid ? secret : nil)
+                return
+            }
+        }
+    }
+
+    func sourceDidChange(_ completion: @escaping @MainActor (Token, WalletExportedSecret?) -> Void) {
+        sourceRevision &+= 1
+        guard validationTask == nil, let token, secret != nil else { return }
+        validate(token) { completion(token, $0) }
     }
 
     func invalidate() {
         token = nil
+        validationTask?.cancel()
+        validationTask = nil
         secret?.invalidate()
         secret = nil
     }

@@ -3,8 +3,8 @@ import {mkdtemp, readFile, realpath, rm, symlink, truncate, writeFile} from "nod
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import test from "node:test";
-import {asanDiagnostics, auditNativeResult, auditResults} from "../result_audit.mjs";
-import {auditASanLog, executeStages} from "../guest.mjs";
+import {asanDiagnostics, auditASanLog, auditNativeResult, auditResults} from "../result_audit.mjs";
+import {executeStages} from "../guest.mjs";
 import {atomicJSON, hashFile} from "../guest_bootstrap.mjs";
 
 const fixture = async operation => {

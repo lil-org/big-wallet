@@ -130,11 +130,11 @@ class ImportViewController: WalletAccessViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        guard !isRetired, hasWalletAccess else { return }
+        guard !isRetired, validateCurrentAccess() else { return }
         layoutTask?.cancel()
         layoutTask = Task { [weak self] in
             await Task.yield()
-            guard let self, !Task.isCancelled, !isRetired, hasWalletAccess else { return }
+            guard let self, !Task.isCancelled, !isRetired, validateCurrentAccess() else { return }
             navigationController?.navigationBar.sizeToFit()
             textView.becomeFirstResponder()
         }
@@ -154,7 +154,7 @@ class ImportViewController: WalletAccessViewController {
     }
 
     private func attemptImportWithCurrentInput() {
-        guard !isRetired, hasWalletAccess, !isWaiting, importTask == nil else { return }
+        guard !isRetired, validateCurrentAccess(), !isWaiting, importTask == nil else { return }
         validationGeneration &+= 1
         validationTask?.cancel()
         validationTask = nil
@@ -166,20 +166,20 @@ class ImportViewController: WalletAccessViewController {
         let prepareStore = prepareStore
         let importWallet = importWallet
         importTask = Task { [weak self] in
-            guard self?.acceptsSubmission(generation) == true else { return }
+            guard self?.validateSubmission(generation) == true else { return }
             let password: String?
             if needsPassword {
                 let prompt = makePrompt()
                 self?.passwordPrompt = prompt
                 password = await prompt.present(from: { [weak self] in
-                    guard let self, acceptsSubmission(generation) else { return nil }
+                    guard let self, validateSubmission(generation) else { return nil }
                     return self
                 }, title: Strings.enterKeystorePassword, message: nil, requestsPassword: true,
                     authorizeConfirmation: { [weak self] in
-                        guard let self, acceptsSubmission(generation) else { return false }
+                        guard let self, validateSubmission(generation) else { return false }
                         return beginWalletAction()
                     })
-                guard self?.acceptsSubmission(generation) == true else { return }
+                guard self?.validateSubmission(generation) == true else { return }
                 self?.passwordPrompt = nil
                 guard password != nil else {
                     self?.importTask = nil
@@ -192,14 +192,14 @@ class ImportViewController: WalletAccessViewController {
             let result: Result<WalletSnapshot, Error>
             do {
                 guard await prepareStore() else { throw WalletsManager.LoadFailure.unavailable }
-                guard self?.acceptsSubmission(generation) == true else { return }
+                guard self?.validateSubmission(generation) == true else { return }
                 guard let self else { return }
                 setWaiting(true)
                 let session = try requireCurrentAccess()
                 result = .success(try await importWallet(input, password, session))
             }
             catch { result = .failure(error) }
-            guard let self, acceptsSubmission(generation) else { return }
+            guard let self, validateSubmission(generation) else { return }
             self.importTask = nil
             switch result {
             case .success:
@@ -219,8 +219,8 @@ class ImportViewController: WalletAccessViewController {
         }
     }
 
-    private func acceptsSubmission(_ generation: UInt64) -> Bool {
-        !Task.isCancelled && !isRetired && submissionGeneration == generation && hasWalletAccess
+    private func validateSubmission(_ generation: UInt64) -> Bool {
+        !Task.isCancelled && !isRetired && submissionGeneration == generation && validateCurrentAccess()
     }
 
     @objc func cancelImport() {
@@ -264,7 +264,7 @@ class ImportViewController: WalletAccessViewController {
     }
 
     private func validateInput(proceedIfValid: Bool) {
-        guard !isRetired, hasWalletAccess else { return }
+        guard !isRetired, validateCurrentAccess() else { return }
         hasImportFailed = false
         okButton.setNeedsUpdateConfiguration()
         placeholderLabel.isHidden = !textView.text.isEmpty
@@ -277,7 +277,7 @@ class ImportViewController: WalletAccessViewController {
         validationTask = Task { [weak self] in
             let result = await validate(input)
             guard let self, !Task.isCancelled, !isRetired, validationGeneration == generation,
-                  hasWalletAccess, textView.text == input else { return }
+                  validateCurrentAccess(), textView.text == input else { return }
             validationTask = nil
             inputValidationResult = result
             let isValid = result != .invalid

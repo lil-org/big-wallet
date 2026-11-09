@@ -11,16 +11,13 @@ const {manifest} = await loadManifest();
 test("the six core and nineteen extended mutations each have unique current anchors and named witnesses", async () => {
     assert.equal(selectedMutants(manifest, "core").length, 6);
     assert.equal(selectedMutants(manifest, "extended").length, 19);
-    const inventory = JSON.parse(await readFile(new URL("Scripts/vm/runtime-test-inventory.json", repository)));
     for (const mutant of manifest.mutants) {
         const source = await readFile(new URL(mutant.source, repository), "utf8");
         const changed = applyMutation(source, mutant);
         assert.notEqual(changed.patch.beforeSHA256, changed.patch.afterSHA256, mutant.id);
         const witness = await readFile(new URL(mutant.witness.file, repository), "utf8");
         assert.ok(witness.includes(mutant.witness.marker), mutant.id);
-        if (mutant.family === "runtime") {
-            assert.equal(inventory.tests.filter(test => test.id === mutant.witness.selector).length, 1, mutant.id);
-        } else if (mutant.family !== "javascript") {
+        if (mutant.family !== "javascript") {
             assert.ok(witness.includes(`func ${mutant.witness.selector.split("/")[2]}(`), mutant.id);
         } else { assert.ok(witness.includes(`test("${mutant.witness.selector}"`), mutant.id); }
     }

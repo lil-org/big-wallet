@@ -7,24 +7,118 @@ import XCTest
 
 @MainActor
 final class NativeSecretAlertPresentationTests: XCTestCase {
-    func testNativeCopyActionRunsBeforeSheetIsDetached() async throws {
+    func testCopyRevalidatesTheExportBeforeCatalogNotification() async throws {
         let fixture = PresentationFixture()
+        defer { fixture.close() }
+        let alert = try await fixture.show(WalletExportedSecret(text: "private-key"))
+        fixture.exportIsCurrent = false
+
+        alert.buttons[1].performClick(nil)
+
+        await expectEventually { fixture.presentation?.alert == nil }
+        XCTAssertTrue(fixture.copies.isEmpty)
+        XCTAssertNil(fixture.presentation?.alert)
+    }
+
+    func testCatalogChangeDuringValidationDiscardsTheEarlierResult() async throws {
+        let fixture = PresentationFixture()
+        defer { fixture.close() }
+        let alert = try await fixture.show(WalletExportedSecret(text: "private-key"))
+        let field = try XCTUnwrap(alert.accessoryView as? NSTextField)
+        let checking = expectation(description: "First source validation started")
+        let release = TestGate<Void>()
+        defer { release.resolve(()) }
+        var checks = 0
+        fixture.checkExport = {
+            checks += 1
+            if checks == 1 {
+                checking.fulfill()
+                await release.wait()
+                return true
+            }
+            return false
+        }
+        fixture.presentation?.sourceDidChange()
+        XCTAssertEqual(field.stringValue, "")
+        await fulfillment(of: [checking], timeout: 2)
+        fixture.presentation?.sourceDidChange()
+        release.resolve(())
+        await expectEventually { fixture.presentation?.alert == nil }
+        XCTAssertEqual(checks, 2)
+        XCTAssertEqual(field.stringValue, "")
+        XCTAssertTrue(fixture.copies.isEmpty)
+    }
+
+    func testCopyPreservesANewerPasteboardWriteWhileValidationIsPending() async throws {
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        let fixture = PresentationFixture(pasteboardChangeCount: { pasteboard.changeCount })
+        defer { fixture.close() }
+        let alert = try await fixture.show(WalletExportedSecret(text: "private-key"))
+        let checking = expectation(description: "Copy validation started")
+        let release = TestGate<Void>()
+        defer { release.resolve(()) }
+        fixture.checkExport = {
+            checking.fulfill()
+            await release.wait()
+            return true
+        }
+
+        alert.buttons[1].performClick(nil)
+        await fulfillment(of: [checking], timeout: 2)
+        pasteboard.clearContents()
+        XCTAssertTrue(pasteboard.setString("public address", forType: .string))
+        release.resolve(())
+        await expectEventually { fixture.presentation?.alert == nil }
+
+        XCTAssertTrue(fixture.copies.isEmpty)
+        XCTAssertEqual(pasteboard.string(forType: .string), "public address")
+    }
+
+    func testNativeCopyActionRunsBeforeSheetIsDetached() async throws {
+        var sheet: NSWindow?
+        let fixture = PresentationFixture(beginCopy: { sheet?.sheetParent != nil })
         defer { fixture.close() }
         let secret = WalletExportedSecret(text: "private-key")
         let alert = try await fixture.show(secret)
-        var checkedWhileAttached = false
-        fixture.checkSource = {
-            checkedWhileAttached = alert.window.sheetParent === fixture.window
-            return checkedWhileAttached
-        }
+        sheet = alert.window
 
         XCTAssertTrue(alert.window.sheetParent === fixture.window)
         alert.buttons[1].performClick(nil)
 
+        await expectEventually { fixture.copies.count == 1 }
         XCTAssertEqual(fixture.copies, ["private-key"])
-        XCTAssertTrue(checkedWhileAttached)
         XCTAssertNil(alert.window.sheetParent)
         XCTAssertFalse(secret.withText { _ in XCTFail("Copied secret was retained") })
+    }
+
+    func testCopyRenewsAccessAtClickOnly() async throws {
+        let wallet = WalletAccessTestFixture()
+        try wallet.unlock()
+        let fixture = PresentationFixture(beginCopy: { wallet.access.recordInteraction() })
+        defer { fixture.close() }
+        fixture.checkSource = { wallet.access.validateCurrentAccess() }
+        let alert = try await fixture.show(WalletExportedSecret(text: "private-key"))
+        let checking = expectation(description: "Copy validation started")
+        let release = TestGate<Void>()
+        defer { release.resolve(()) }
+        fixture.checkExport = {
+            checking.fulfill()
+            await release.wait()
+            return true
+        }
+
+        wallet.advance(by: .seconds(899))
+        alert.buttons[1].performClick(nil)
+        await fulfillment(of: [checking], timeout: 2)
+        wallet.advance(by: .seconds(2))
+        XCTAssertTrue(wallet.access.validateCurrentAccess())
+        release.resolve(())
+        await expectEventually { fixture.presentation?.alert == nil }
+
+        XCTAssertEqual(fixture.copies, ["private-key"])
+        wallet.advance(by: .seconds(898))
+        XCTAssertFalse(wallet.access.validateCurrentAccess())
     }
 
     func testKeyWindowValidationRejectsStaleOwnershipAndUnrelatedWindows() {
@@ -77,6 +171,7 @@ final class NativeSecretAlertPresentationTests: XCTestCase {
             alert.buttons[1].performClick(nil)
         }
 
+        await expectEventually { !fixture.copies.isEmpty }
         XCTAssertEqual(fixture.copies, ["private-key"])
     }
 
@@ -128,6 +223,7 @@ final class NativeSecretAlertPresentationTests: XCTestCase {
         XCTAssertFalse(oldSecret.withText { _ in XCTFail("Old secret was retained") })
         XCTAssertTrue(replacement.withText { XCTAssertEqual($0, "new-secret") })
         currentAlert.buttons[1].performClick(nil)
+        await expectEventually { !fixture.copies.isEmpty }
         XCTAssertEqual(fixture.copies, ["new-secret"])
     }
 
@@ -148,7 +244,7 @@ final class NativeSecretAlertPresentationTests: XCTestCase {
         XCTAssertEqual(field.stringValue, "")
     }
 
-    func testAuthenticationSurvivesInactivityAndReloadUntilOwnershipIsRechecked() async throws {
+    func testAuthenticationSurvivesInactivityUntilOwnershipIsRechecked() async throws {
         for restoresActivity in [false, true] {
             let fixture = PresentationFixture()
             defer { fixture.close() }
@@ -166,10 +262,8 @@ final class NativeSecretAlertPresentationTests: XCTestCase {
             fixture.applicationIsActive = false
             fixture.notifications.post(name: NSApplication.willResignActiveNotification, object: nil)
             fixture.presentation?.sourceWillDisappear()
-            fixture.presentation?.walletLoadStateChanged(.loading)
             XCTAssertEqual(work.cancellations.withLock { $0 }, 0)
             fixture.applicationIsActive = restoresActivity
-            fixture.presentation?.walletLoadStateChanged(.ready)
             work.release()
             await fulfillment(of: [work.returned], timeout: 2)
             await Task.yield()
@@ -199,7 +293,7 @@ final class NativeSecretAlertPresentationTests: XCTestCase {
                 case 0: fixture.notifications.post(name: NSWindow.willCloseNotification, object: fixture.window)
                 case 1: fixture.notifications.post(name: NSWindow.willMiniaturizeNotification, object: fixture.window)
                 case 2: fixture.presentation?.invalidate()
-                default: fixture.presentation?.walletLoadStateChanged(.failed(.unavailable))
+                default: fixture.presentation?.invalidate()
                 }
                 await fulfillment(of: [work.cancelled], timeout: 2)
                 work.release()
@@ -306,21 +400,29 @@ private final class PresentationFixture {
     var presentation: NativeSecretAlertPresentation?
     var currentKeyWindow: NSWindow?
     var applicationIsActive = true
+    var exportIsCurrent = true
+    var checkExport: (() async -> Bool)?
     var sourceIsCurrent = true
     var checkSource: (() -> Bool)?
     var beforeCopy: (() -> Void)?
     var copies = [String]()
 
-    init() {
+    init(beginCopy: @escaping () -> Bool = { true }, pasteboardChangeCount: @escaping () -> Int = { 0 }) {
         window.isReleasedWhenClosed = false
         window.alphaValue = 0
         window.orderFront(nil)
         currentKeyWindow = window
         presentation = NativeSecretAlertPresentation(
-            sourceIsCurrent: { [weak self] _ in
+            validateSource: { [weak self] _ in
                 guard let self, sourceIsCurrent else { return false }
                 return checkSource?() ?? true
             },
+            validateExport: { [weak self] _ in
+                if let check = self?.checkExport { return await check() }
+                return self?.exportIsCurrent == true
+            },
+            beginCopy: beginCopy,
+            pasteboardChangeCount: pasteboardChangeCount,
             copy: { [weak self] text in
                 self?.beforeCopy?()
                 self?.copies.append(text)

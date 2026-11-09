@@ -114,7 +114,7 @@ final class MobileWalletSceneRegistry: NSObject {
 
     private func setCovered(_ entry: Entry, _ covered: Bool) {
         guard let window = entry.window else { return }
-        if !covered { access.checkAccess() }
+        if !covered { access.validateCurrentAccess() }
         let covered = covered || !protectedDataAvailable()
         entry.cover.frame = window.bounds
         window.bringSubviewToFront(entry.cover)
@@ -229,23 +229,25 @@ class WalletAccessViewController: UIViewController, WalletAccessObserver {
         access.removeObserver(self)
     }
 
-    var hasWalletAccess: Bool {
+    @discardableResult
+    func validateCurrentAccess() -> Bool {
         guard let accessGeneration else { return false }
-        return access.accepts(accessGeneration)
+        return access.validateCurrentAccess(expectedGeneration: accessGeneration)
     }
 
     var hasCurrentWalletPresentation: Bool {
-        accessGeneration == access.generation && !access.isLocked
+        accessGeneration.map(access.matchesPresentation) == true
     }
 
     @discardableResult
     func beginWalletAction() -> Bool {
-        hasWalletAccess && access.recordInteraction()
+        guard let accessGeneration else { return false }
+        return access.recordInteraction(expectedGeneration: accessGeneration)
     }
 
     func requireCurrentAccess() throws -> WalletAccessSession {
-        guard hasWalletAccess else { throw WalletCredentialError.authorizationUnavailable }
-        return try access.requireCurrentAccess()
+        guard let accessGeneration else { throw WalletCredentialError.authorizationUnavailable }
+        return try access.requireCurrentAccess(expectedGeneration: accessGeneration)
     }
 
     func walletAccessDidLock() {
@@ -312,7 +314,7 @@ final class MobileWalletRootViewController: UIViewController, WalletAccessObserv
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         access.addObserver(self)
-        if access.checkAccess() { walletAccessDidUnlock() }
+        if access.validateCurrentAccess() { walletAccessDidUnlock() }
         else if access.hasLocked { walletAccessDidLock() }
         else { showAuthentication() }
     }
@@ -320,7 +322,7 @@ final class MobileWalletRootViewController: UIViewController, WalletAccessObserv
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         if let window = view.window { registerWindow(window) }
-        access.checkAccess()
+        access.validateCurrentAccess()
     }
 
     isolated deinit { access.removeObserver(self) }
@@ -336,7 +338,7 @@ final class MobileWalletRootViewController: UIViewController, WalletAccessObserv
     }
 
     func walletAccessDidUnlock() {
-        guard access.checkAccess() else { return }
+        guard access.validateCurrentAccess() else { return }
         replaceContent { makeAccounts(access) }
     }
 

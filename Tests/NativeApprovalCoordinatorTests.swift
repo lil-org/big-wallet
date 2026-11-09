@@ -15,7 +15,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 let clock = TestClock(uptimeNanoseconds: 0)
                 var preparations = 0
                 var decisions = 0
-                let fixture = try makeFixture(clock: clock, environment: .init(
+                let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
                     now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
                     uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 },
                     wait: { _ in try? await TestDeferred<Void>().value() },
@@ -127,7 +127,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             .compactMap { $0.contentViewController as? PasswordViewController }.first)
         password.passwordTextField.stringValue = "test-password"
         password.actionButtonTapped(password.okButton as Any)
-        XCTAssertTrue(access.checkAccess())
+        XCTAssertTrue(access.validateCurrentAccess())
         XCTAssertEqual(authenticationAttempts, 1)
         XCTAssertTrue(lockedWindow.contentViewController is AccountsListViewController)
 
@@ -223,7 +223,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             accessFixture.access.lock(reason: .idle)
             let clock = TestClock(uptimeNanoseconds: 0)
             let waits = ScheduledWaits()
-            let fixture = try makeFixture(clock: clock, environment: .init(
+            let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
                 uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 },
                 wait: { await waits.wait($0) },
@@ -407,7 +407,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             await windowController.authenticate(
                 reason: .approveTransaction, challenge: credentials.makeWalletAccessChallenge(), review: oldReview,
                 dependencies: .init(credentials: credentials, attemptBiometrics: { _, _ in nil })
-            )
+            ).grant
         }
         defer { authentication.cancel() }
         await waitForCondition { windowController.currentAuthenticationSession?.sheet?.sheetParent === window }
@@ -472,7 +472,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             let result = await windowController.authenticate(
                 reason: .approveTransaction, challenge: credentials.makeWalletAccessChallenge(), review: lifetime,
                 dependencies: .init(credentials: credentials, attemptBiometrics: { _, _ in nil })
-            )
+            ).grant
             completions.append(result != nil)
             return result
         }
@@ -514,7 +514,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             let result = await windowController.authenticate(
                 reason: .approveTransaction, challenge: credentials.makeWalletAccessChallenge(),
                 dependencies: .init(credentials: credentials, attemptBiometrics: { _, _ in nil })
-            )
+            ).grant
             completions.append(result != nil)
             return result
         }
@@ -564,7 +564,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 dependencies: .init(credentials: credentials, attemptBiometrics: { _, challenge in
                     outcome == .succeeded ? .granted(NativeApprovalTestAuthorization.grant(challenge)) : .failed
                 })
-            )
+            ).grant
             XCTAssertEqual(authenticated != nil, outcome == .succeeded)
             authenticated?.invalidate()
             XCTAssertNil(window.attachedSheet)
@@ -1005,7 +1005,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             account: account,
             walletId: "appearance-test",
             review: try nativeReviewForTesting(),
-            completion: { _ in XCTFail("Appearance does not approve a request") }
+            completion: { _, _ in XCTFail("Appearance does not approve a request") }
         )
         windowController.contentViewController = controller
         let requesterAppeared = XCTNSPredicateExpectation(
@@ -1030,6 +1030,134 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         controller.invalidateNativeApprovalReview()
         withExtendedLifetime(outgoing) { window.close() }
         XCTAssertEqual(outgoingCloses, 0)
+    }
+
+    func testCancelledSigningAuthenticationRestoresTheSameReviewAndRequiresANewChallenge() async throws {
+        var finalizations = 0
+        var rejections = 0
+        let fixture = try messageApprovalFixture { _ in finalizations += 1; return .responseReady }
+        fixture.store.rejectHandler = { _, _, _ in rejections += 1; return .persisted }
+        let first = TestGate<Void>()
+        defer { first.resolve(()) }
+        let entered = expectation(description: "First signing authentication entered")
+        var challenges = [WalletAuthenticationChallenge]()
+        start(fixture)
+        await waitForState(fixture.coordinator, .awaitingAuthentication)
+        let (agent, _, window) = try attachApprovalWindow(to: fixture, authenticate: { _, _, challenge, _ in
+            challenges.append(challenge)
+            if challenges.count == 1 {
+                entered.fulfill()
+                await first.wait()
+                return .cancelled
+            }
+            if challenges.count == 2 { return .interactionUnavailable }
+            guard let grant = challenge.issueGrant(for: challenge.authorityID, credentialIdentity: .init(status: { .current })) else { return .failed }
+            return .granted(grant)
+        })
+        defer { withExtendedLifetime(agent) {}; fixture.coordinator.onEvent = nil; window.close() }
+        fixture.coordinator.resumeAfterAuthentication(authorization: NativeApprovalTestAuthorization.accessSession())
+        await waitForState(fixture.coordinator, .reviewing)
+        let review = try presentedReview(fixture.coordinator)
+        let controller = try XCTUnwrap(window.contentViewController as? ApproveViewController)
+        controller.actionButtonTapped(controller.okButton as Any)
+        controller.actionButtonTapped(controller.okButton as Any)
+        await fulfillment(of: [entered], timeout: 3)
+        XCTAssertFalse(controller.okButton.isEnabled)
+        XCTAssertFalse(controller.cancelButton.isEnabled)
+        XCTAssertEqual(challenges.count, 1)
+        first.resolve(())
+        await expectEventually { controller.okButton.isEnabled }
+        XCTAssertTrue(window.contentViewController === controller)
+        XCTAssertTrue(try presentedReview(fixture.coordinator) === review)
+        XCTAssertTrue(controller.cancelButton.isEnabled)
+        XCTAssertEqual(finalizations, 0)
+        XCTAssertEqual(rejections, 0)
+        XCTAssertFalse(challenges[0].isPending(for: challenges[0].authorityID))
+        XCTAssertEqual(controller.okButton.title, Strings.ok)
+        controller.actionButtonTapped(controller.okButton as Any)
+        await expectEventually { controller.okButton.isEnabled && controller.okButton.title == Strings.tryAgain }
+        XCTAssertEqual(controller.titleLabel.stringValue, Strings.failedToVerify)
+        XCTAssertTrue(try presentedReview(fixture.coordinator) === review)
+        XCTAssertEqual(finalizations, 0)
+        XCTAssertEqual(rejections, 0)
+        controller.actionButtonTapped(controller.okButton as Any)
+        await expectEventually { finalizations == 1 }
+        XCTAssertEqual(Set(challenges.map(ObjectIdentifier.init)).count, 3)
+        XCTAssertEqual(rejections, 0)
+    }
+
+    func testLateAuthenticationCannotRestoreAClosedReplacedLockedOrExpiredReview() async throws {
+        for retirement in ["close", "replace", "lock", "expire"] {
+            for returnsGrant in [false, true] {
+                let clock = TestClock(uptimeNanoseconds: 0)
+                var finalizations = 0
+                let fixture = try messageApprovalFixture(clock: clock) { _ in finalizations += 1; return .responseReady }
+                fixture.store.rejectHandler = { _, _, _ in .persisted }
+                let accessFixture = WalletAccessTestFixture(authorityID: NativeApprovalTestAuthorization.authorityID)
+                let access = try accessFixture.unlock()
+                let gate = TestGate<Void>()
+                let entered = expectation(description: "Authentication entered before \(retirement)")
+                let returned = expectation(description: "Authentication returned after \(retirement)")
+                defer { gate.resolve(()) }
+                start(fixture)
+                await waitForState(fixture.coordinator, .awaitingAuthentication)
+                let (agent, _, window) = try attachApprovalWindow(to: fixture, access: accessFixture.access, authenticate: { _, _, challenge, _ in
+                    let grant = returnsGrant ? challenge.issueGrant(for: challenge.authorityID, credentialIdentity: .init(status: { .current })) : nil
+                    entered.fulfill()
+                    await gate.wait()
+                    returned.fulfill()
+                    return grant.map(WalletAuthenticationResult.granted) ?? .cancelled
+                })
+                defer { withExtendedLifetime(agent) {}; fixture.coordinator.onEvent = nil; window.close() }
+                fixture.coordinator.resumeAfterAuthentication(authorization: access)
+                await waitForState(fixture.coordinator, .reviewing)
+                let review = try presentedReview(fixture.coordinator)
+                let controller = try XCTUnwrap(window.contentViewController as? ApproveViewController)
+                controller.actionButtonTapped(controller.okButton as Any)
+                await fulfillment(of: [entered], timeout: 3)
+                switch retirement {
+                case "close": window.close()
+                case "replace":
+                    review.invalidate()
+                    window.contentViewController = WaitingViewController.with(reason: "replacement")
+                case "lock": accessFixture.access.lock(reason: .systemSleep)
+                default:
+                    clock.setDate(review.request.admissionDeadline)
+                    clock.advanceUptime(by: 900_000_000_000)
+                }
+                gate.resolve(())
+                await fulfillment(of: [returned], timeout: 3)
+                await Task.yield()
+                XCTAssertFalse(controller.okButton.isEnabled)
+                XCTAssertEqual(finalizations, 0)
+            }
+        }
+    }
+
+    func testReturningToReviewPreservesTheSelectedSolanaClusterAndExplicitRejection() throws {
+        let review = try nativeReviewForTesting()
+        defer { review.invalidate() }
+        let account = WalletAccount(address: WalletCoreProxyTestVectors.solanaAddressFromPublicKey, coin: .solana,
+            derivation: .default, derivationPath: "m/44'/501'/0'/0'", publicKey: "", extendedPublicKey: "")
+        var selections = [Solana.Cluster?]()
+        var rejections = 0
+        let controller = ApproveViewController.with(subject: .approveTransaction, meta: "Cluster review",
+            account: account, walletId: "cluster", solanaClusterOptions: .init(suggestedCluster: .devnet), review: review) { _, decision in
+                switch decision {
+                case .approved(let cluster): selections.append(cluster)
+                case .rejected: rejections += 1
+                }
+            }
+        _ = controller.view
+        controller.actionButtonTapped(controller.okButton as Any)
+        XCTAssertTrue(controller.resumeReview(after: .cancelled))
+        controller.actionButtonTapped(controller.okButton as Any)
+        XCTAssertEqual(selections, [.devnet, .devnet])
+        XCTAssertTrue(controller.resumeReview(after: .cancelled))
+        controller.cancelButtonTapped(controller.cancelButton)
+        controller.cancelButtonTapped(controller.cancelButton)
+        XCTAssertEqual(rejections, 1)
+        XCTAssertFalse(controller.resumeReview(after: .cancelled))
     }
 
 
@@ -1194,7 +1322,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testDismissedWindowRendersLatestRecoverySnapshotWithoutRetrying() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
         var rejecting = false
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 if rejecting {
@@ -1250,7 +1378,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let clock = TestClock(uptimeNanoseconds: 0)
         let accessClock = TestClock(uptimeNanoseconds: 0)
         var preparations = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
             uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 },
             wait: { _ in try? await TestDeferred<Void>().value() },
@@ -1263,7 +1391,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         fixture.store.rejectHandler = { _, _, _ in .persisted }
         let credentials = authenticationCredentials(accessClock: { accessClock.instant })
         let scheduler = WalletAccessTestFixture.Scheduler()
-        let access = WalletAccessController(credentials: credentials, schedule: scheduler.schedule,
+        let access = WalletAccessController(credentials: credentials, expirationScheduler: scheduler,
             activityClock: { accessClock.instant })
         let attempt = access.beginAuthentication(onCancelled: { _ in })
         let grant = try XCTUnwrap(credentials.verify(password: "test-password", challenge: credentials.makeWalletAccessChallenge()))
@@ -1296,7 +1424,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(preparations, 2)
         accessClock.advanceUptime(by: 2_000_000_000)
         originalExpiration.action()
-        XCTAssertTrue(access.checkAccess())
+        XCTAssertTrue(access.validateCurrentAccess())
         XCTAssertEqual(credentials.remainingAccessLifetime(session), .seconds(898))
         XCTAssertEqual(fixture.coordinator.phase, .reviewing)
 
@@ -1306,7 +1434,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let afterRetirement = scheduler.expirations.count
         recovery.actionButtonTapped(self)
         XCTAssertEqual(scheduler.expirations.count, afterRetirement)
-        XCTAssertTrue(access.checkAccess())
+        XCTAssertTrue(access.validateCurrentAccess())
 
         access.lock(reason: .systemSleep)
         let afterLock = scheduler.expirations.count
@@ -1390,7 +1518,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     func testRepeatedDeliveryShowsWaitingDuringSilentResponsePersistence() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
         var preparations = 0
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in XCTFail("The pending write must settle before recovery") },
             prepare: { request, _ in
@@ -1472,7 +1600,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
 
     func testImmediateResponseFinishesWithoutCreatingApprovalWindow() async throws {
         let clock = TestClock(uptimeNanoseconds: 0)
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { _ in XCTFail("An immediate response must not poll") },
             prepare: { request, _ in
@@ -1552,7 +1680,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             let waits = ScheduledWaits()
             let finalizer = TestGate<NativeApprovalOperation.Result>()
             let started = expectation(description: "finalizer suspended")
-            let fixture = try makeFixture(clock: clock, environment: .init(
+            let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { await waits.wait($0) },
                 prepare: { binding, _ in self.approvalPreparation(binding) },
@@ -1677,7 +1805,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let clock = TestClock(uptimeNanoseconds: 0)
         let waits = ScheduledWaits()
         let outage = LockedTestValue(false)
-        let fixture = try makeFixture(clock: clock, environment: .init(
+        let fixture = try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
             now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID, uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
             wait: { delay in
                 if outage.value {
@@ -1821,8 +1949,28 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
 
-    func attachApprovalWindow(to fixture: Fixture, access: WalletAccessController? = nil, credentials: WalletCredentials? = nil) throws -> (Agent, Agent.ActiveApproval, TrackingWindow) {
-        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator, access: access)
+    private func messageApprovalFixture(
+        clock: TestClock = TestClock(uptimeNanoseconds: 0),
+        finalize: @escaping @MainActor @Sendable (ReviewConsent) async -> NativeApprovalOperation.Result
+    ) throws -> Fixture {
+        let account = WalletAccount(address: "0x0000000000000000000000000000000000000001", coin: .ethereum,
+            derivation: .default, derivationPath: "m/44'/60'/0'/0/0", publicKey: "", extendedPublicKey: "")
+        let action = DappRequestAction.approveMessage(SignMessageAction(subject: .signPersonalMessage,
+            walletId: "message-review", account: account, meta: "Reviewed message",
+            payload: .signature(.ethereumPersonalMessage(Data("reviewed".utf8)))))
+        return try makeFixture(clock: clock, environment: nativeApprovalEnvironmentForTesting(
+            now: { clock.date }, monotonicClock: { clock.instant }, authorityID: NativeApprovalTestAuthorization.authorityID,
+            uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 },
+            wait: { _ in try? await TestDeferred<Void>().value() },
+            prepare: { binding, _ in self.approvalPreparation(binding, action: action) },
+            attemptNativeDecision: finalize
+        ), requestAction: action)
+    }
+
+    func attachApprovalWindow(to fixture: Fixture, access: WalletAccessController? = nil, credentials: WalletCredentials? = nil, authenticate: Agent.ActiveApproval.Authentication? = nil) throws -> (Agent, Agent.ActiveApproval, TrackingWindow) {
+        let approval: Agent.ActiveApproval
+        if let authenticate { approval = Agent.ActiveApproval(coordinator: fixture.coordinator, access: access, authenticate: authenticate) }
+        else { approval = Agent.ActiveApproval(coordinator: fixture.coordinator, access: access) }
         var inbox = ApprovalInbox<Agent.ActiveApproval>()
         XCTAssertTrue(inbox.register(fixture.coordinator))
         XCTAssertTrue(inbox.activate(approval, for: fixture.key))

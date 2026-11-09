@@ -81,9 +81,11 @@ final class NativeSecretAlertPresentation {
         }
     }
 
-    private let session = SecretPresentationSession()
+    private let session: SecretPresentationSession
     private var active: Reveal?
-    private let sourceIsCurrent: (NSWindow) -> Bool
+    private let validateSource: (NSWindow) -> Bool
+    private let beginCopy: () -> Bool
+    private let pasteboardChangeCount: () -> Int
     private let copy: (String) -> Void
     private let notifications: NotificationCenter
     private let applicationIsActive: () -> Bool
@@ -93,13 +95,19 @@ final class NativeSecretAlertPresentation {
     var alert: NSAlert? { active?.sheet?.alert }
 
     init(
-        sourceIsCurrent: @escaping (NSWindow) -> Bool,
+        validateSource: @escaping (NSWindow) -> Bool,
+        validateExport: @escaping @MainActor (WalletExportedSecret) async -> Bool,
+        beginCopy: @escaping () -> Bool = { true },
+        pasteboardChangeCount: @escaping () -> Int = { NSPasteboard.general.changeCount },
         copy: @escaping (String) -> Void = { SecretClipboard.shared.copy($0) },
         notifications: NotificationCenter = .default,
         applicationIsActive: @escaping () -> Bool = { NSApp.isActive },
         keyWindow: @escaping () -> NSWindow? = { NSApp.keyWindow }
     ) {
-        self.sourceIsCurrent = sourceIsCurrent
+        self.validateSource = validateSource
+        session = SecretPresentationSession(validateExport: validateExport)
+        self.beginCopy = beginCopy
+        self.pasteboardChangeCount = pasteboardChangeCount
         self.copy = copy
         self.notifications = notifications
         self.applicationIsActive = applicationIsActive
@@ -129,7 +137,7 @@ final class NativeSecretAlertPresentation {
         invalidate()
         let reveal = Reveal(token: session.begin(), window: window, title: title)
         active = reveal
-        guard accepts(reveal) else {
+        guard validatePresentation(reveal) else {
             invalidate(ifCurrent: reveal.token)
             return nil
         }
@@ -146,7 +154,7 @@ final class NativeSecretAlertPresentation {
 
     private func start(for token: Token, authorization: Authorization, export: @escaping Export) {
         guard let reveal = active, reveal.token == token, reveal.phase == .waitingForSecret,
-              accepts(reveal) else {
+              validatePresentation(reveal) else {
             authorization.invalidate()
             return
         }
@@ -193,9 +201,9 @@ final class NativeSecretAlertPresentation {
         active?.token == token && session.isCurrent(token)
     }
 
-    private func accepts(_ reveal: Reveal) -> Bool {
+    private func validatePresentation(_ reveal: Reveal) -> Bool {
         guard active === reveal, let window = reveal.window else { return false }
-        let eligible = sourceIsCurrent(window) && applicationIsActive() && window.isVisible && !window.isMiniaturized &&
+        let eligible = validateSource(window) && applicationIsActive() && window.isVisible && !window.isMiniaturized &&
             Self.acceptsKeyWindow(keyWindow(), owner: window, sheetWindow: reveal.sheet?.alert.window)
         return eligible && active === reveal && session.isCurrent(reveal.token)
     }
@@ -203,31 +211,49 @@ final class NativeSecretAlertPresentation {
     private func beginExport(for token: Token) -> Bool {
         guard let reveal = active, reveal.token == token else { return false }
         reveal.phase = .exporting
-        return accepts(reveal)
+        return validatePresentation(reveal)
     }
 
     private func show(_ secret: WalletExportedSecret, for token: Token) -> Bool {
         guard let reveal = active, reveal.token == token, reveal.phase == .exporting,
-              accepts(reveal), let window = reveal.window,
+              validatePresentation(reveal),
               session.store(secret, for: token) else { return false }
+        session.validate(token) { [weak self, weak reveal] export in
+            guard let self, let reveal else { return }
+            guard let export, validatePresentation(reveal), let window = reveal.window else {
+                invalidate(ifCurrent: token)
+                return
+            }
+            present(export, for: reveal, in: window)
+        }
+        return true
+    }
+
+    private func present(_ secret: WalletExportedSecret, for reveal: Reveal, in window: NSWindow) {
+        let token = reveal.token
         let sheet = Sheet(title: reveal.title) { [weak self] sheet, response in
             self?.finish(response, for: token, sheet: sheet)
         }
-        guard session.withText(for: token, { sheet.secretField.stringValue = $0 }) else { return false }
+        guard secret.withText({ sheet.secretField.stringValue = $0 }) else { invalidate(ifCurrent: token); return }
         reveal.phase = .showing
         reveal.task = nil
         reveal.sheet = sheet
         sheet.present(for: window)
-        return true
     }
 
     private func finish(_ response: NSApplication.ModalResponse, for token: Token, sheet: Sheet) {
         guard let reveal = active, reveal.token == token, reveal.sheet === sheet else { return }
-        if response == .alertSecondButtonReturn, accepts(reveal), session.withText(for: token, { secret in
-            invalidate(ifCurrent: token)
-            copy(secret)
-        }) { return }
-        invalidate(ifCurrent: token)
+        guard response == .alertSecondButtonReturn, validatePresentation(reveal) else { invalidate(ifCurrent: token); return }
+        let changeCount = pasteboardChangeCount()
+        guard beginCopy() else { invalidate(ifCurrent: token); return }
+        sheet.secretField.stringValue = ""
+        session.validate(token) { [weak self, weak reveal] export in
+            guard let self, let reveal else { return }
+            guard let export, let window = reveal.window, validatePresentation(reveal), export.withText({ text in
+                invalidate(ifCurrent: token)
+                if validateSource(window), active == nil, pasteboardChangeCount() == changeCount { copy(text) }
+            }) else { invalidate(ifCurrent: token); return }
+        }
     }
 
     func invalidate(ifCurrent token: Token? = nil) {
@@ -243,13 +269,17 @@ final class NativeSecretAlertPresentation {
         if active?.phase == .authenticating { invalidate() }
     }
 
-    func sourceWillDisappear() {
-        if active?.phase != .authenticating { invalidate() }
+    func sourceDidChange() {
+        active?.sheet?.secretField.stringValue = ""
+        session.sourceDidChange { [weak self] token, export in
+            guard let self, let reveal = active, reveal.token == token else { return }
+            guard let export, validatePresentation(reveal), let sheet = reveal.sheet,
+                  export.withText({ sheet.secretField.stringValue = $0 }) else { invalidate(ifCurrent: token); return }
+        }
     }
 
-    func walletLoadStateChanged(_ state: WalletsManager.LoadState) {
-        guard state != .ready else { return }
-        if state != .loading || active?.phase != .authenticating { invalidate() }
+    func sourceWillDisappear() {
+        if active?.phase != .authenticating { invalidate() }
     }
 
     private func receive(_ name: Notification.Name, window: NSWindow?) {
@@ -265,7 +295,7 @@ final class NativeSecretAlertPresentation {
             let token = reveal.token
             Task { [weak self] in
                 await Task.yield()
-                guard let self, let current = active, current.token == token, !accepts(current) else { return }
+                guard let self, let current = active, current.token == token, !validatePresentation(current) else { return }
                 invalidate(ifCurrent: token)
             }
         case NSWindow.didBecomeKeyNotification:

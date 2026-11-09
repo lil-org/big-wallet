@@ -270,11 +270,21 @@ final class SafariLifecycleTests: XCTestCase {
             let cancelAuthentication = firstWindow.buttons["safari.authentication.cancel"]
             try self.require(cancelAuthentication.isEnabled, "The first request's authentication cannot be cancelled")
             try self.click(cancelAuthentication, "cancel only the still-locked first request")
+            let restored = firstWindow.buttons["safari.approval.approve"]
+            let reviewReady = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND enabled == true"), object: restored)
+            try self.require(await XCTWaiter.fulfillment(of: [reviewReady], timeout: 10) == .completed,
+                             "Cancelling authentication did not restore the first request's review")
+            try self.require(!firstWindow.secureTextFields["safari.authentication.password"].exists,
+                             "The cancelled authentication sheet remained attached")
+            try await control.assertSingleSettlement("ethereum-sign", expected: 1)
+            try self.require(try await control.eventCount("signingStarted") == 1,
+                             "Cancelling authentication signed the first request")
+            try self.click(firstWindow.buttons["safari.approval.reject"], "explicitly reject the restored first review")
             try self.require(firstWindow.waitForNonExistence(timeout: 10),
-                             "Cancelling the first request's authentication did not close its approval window")
+                             "Rejecting the first review did not close its approval window")
             let firstResult = try await control.result("ethereum-sign", success: false, occurrence: 2)
             try self.require(firstResult["documentId"] as? String == firstDocument,
-                             "Cancelling the first window rejected another document's request")
+                             "Rejecting the first window settled another document's request")
             try self.require(try await control.eventCount("signingStarted") == 1,
                              "Authenticating one approval window signed more than its owned request")
             try await control.assertSingleSettlement("ethereum-sign", expected: 2)
@@ -2194,8 +2204,13 @@ final class SafariLifecycleTests: XCTestCase {
         for identifier in identifiers {
             let window = helper.windows[identifier]
             guard window.exists else { continue }
-            try focusApprovalWindow(window)
-            try click(window.buttons[XCUIIdentifierCloseWindow], "retire the interrupted request's approval window")
+            do {
+                try focusApprovalWindow(window)
+                guard window.exists else { continue }
+                try click(window.buttons[XCUIIdentifierCloseWindow], "retire the interrupted request's approval window")
+            } catch let error as SafariUIFailure {
+                if window.exists { throw error }
+            }
             try require(window.waitForNonExistence(timeout: 10), "The interrupted approval window did not close")
         }
         return identifiers
@@ -2962,12 +2977,14 @@ final class SafariLifecycleTests: XCTestCase {
         let deadline = Date().addingTimeInterval(15)
         var openedMenu = false
         var expandedAddress = false
+        @MainActor func popupIsPresented(contentExists: Bool) throws -> Bool {
+            if contentExists { return true }
+            guard popupDone.exists else { return false }
+            try require(popup.waitForExistence(timeout: 12), "Safari presented Wallet popup controls without its extension content")
+            return true
+        }
         while Date() < deadline {
-            if popup.waitForExistence(timeout: 1) { return }
-            if popupDone.exists {
-                try require(popup.waitForExistence(timeout: 12), "Safari presented Wallet popup controls without its extension content")
-                return
-            }
+            if try popupIsPresented(contentExists: popup.waitForExistence(timeout: 1)) { return }
             if pageMenu.exists {
                 openedMenu = true
                 break
@@ -2980,11 +2997,7 @@ final class SafariLifecycleTests: XCTestCase {
                 collapsedAddress.tap()
                 expandedAddress = true
             }
-            if popup.exists { return }
-            if popupDone.exists {
-                try require(popup.waitForExistence(timeout: 12), "Safari presented Wallet popup controls without its extension content")
-                return
-            }
+            if try popupIsPresented(contentExists: popup.exists) { return }
             if pageMenu.exists {
                 openedMenu = true
                 break
@@ -2992,11 +3005,9 @@ final class SafariLifecycleTests: XCTestCase {
             guard menu.exists && menu.isHittable else { continue }
             _ = try waitForStableTarget(menu, "Safari Page Menu control", until: deadline)
             menu.tap()
-            openedMenu = true
-            break
         }
-        try require(openedMenu, "Safari presented neither its Wallet popup nor an available Page Menu")
-        if popup.exists { return }
+        if try popupIsPresented(contentExists: popup.exists) { return }
+        try require(openedMenu || pageMenu.exists, "Safari presented neither its Wallet popup nor an available Page Menu")
         let selectionDeadline = Date().addingTimeInterval(12)
         do {
             while Date() < selectionDeadline {

@@ -29,7 +29,6 @@ final class WalletActivityScroller: NSScroller {
 class RightClickTableView: NSTableView {
     
     weak var menuSource: TableViewMenuSource?
-    var deselectedRow = -1
     var keyboardActivation: (() -> Void)?
     private(set) var isHandlingKeyDown = false
 

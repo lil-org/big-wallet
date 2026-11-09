@@ -59,19 +59,21 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
     }
 
     func requestAccess(openWallet: Bool = false) {
-        if access.checkAccess(), let session = access.session {
-            if dependencies.credentials.validateAccess(session) {
+        if access.validateCurrentAccess() {
+            do {
+                _ = try access.requireCurrentAccess()
                 transition(to: .authenticated)
                 closeWindow()
                 onEvent(.authenticated)
                 return
+            } catch {
+                if !access.isLocked {
+                    showUnavailable(openWallet: openWallet)
+                    if let windowController { Window.reactivateWindow(windowController) }
+                    return
+                }
+                if openWallet { onEvent(.unlockRequested) }
             }
-            if access.checkAccess() {
-                showUnavailable(openWallet: openWallet)
-                if let windowController { Window.reactivateWindow(windowController) }
-                return
-            }
-            if openWallet { onEvent(.unlockRequested) }
         }
         if authenticationAttempt?.isCurrent != true { beginAccessAuthentication() }
         guard authenticationAttempt?.isCurrent == true else { return }
@@ -158,7 +160,7 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
             case .present:
                 switch state {
                 case .authenticated:
-                    if access.checkAccess() {
+                    if access.validateCurrentAccess() {
                         onEvent(.authenticated)
                     } else {
                         beginAuthentication()

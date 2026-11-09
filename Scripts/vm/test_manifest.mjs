@@ -1,12 +1,12 @@
+import {readFileSync} from "node:fs";
 import {isAbsolute, join, resolve, sep} from "node:path";
 import {SAFARI_SCENARIOS, SAFARI_TEST_CLASS} from "../safari/scenarios.mjs";
 import {expectedSynchronizationPolicy} from "../safari/synchronization.mjs";
-import {APP_TEST_CLASS_PLATFORMS, RUNTIME_TEST_TARGETS, loadRuntimeInventory} from "./runtime_inventory.mjs";
+import {RUNTIME_MODULES, RUNTIME_TEST_TARGETS, TSAN_FOCUS, candidateTargets, focusMayMatch, isCompileOnlyTarget, matchesTestSelector} from "./test_policy.mjs";
 import {BASELINE as UPGRADE_BASELINE} from "../wallet_upgrade/contract.mjs";
+const mutationManifest = JSON.parse(readFileSync(new URL("../security_mutations/manifest.json", import.meta.url), "utf8"));
 
-export {RUNTIME_TEST_TARGETS};
-export const RUNTIME_MODULES = ["WalletDomain", "WalletNetworking", "WalletAuthority", "WalletFlows"];
-const runtimeInventory = loadRuntimeInventory(new URL("./runtime-test-inventory.json", import.meta.url));
+export {RUNTIME_MODULES, RUNTIME_TEST_TARGETS};
 
 export const SELECTORS = ["build", "test", "performance", "tsan", "asan", "fuzz", "parser-fuzz", "mutation", "approval", "upgrade", "safari", "repository", "worker", "runtime"];
 export const BOOTSTRAP_TOOL_NAMES = ["VMGuestAgent", "guest_runner", "guest_bootstrap.mjs"];
@@ -35,18 +35,6 @@ export const PERFORMANCE_ENV = {
 export const PERFORMANCE_TESTS = [
     "testScryptDefaultDerivationPerformanceGate", "testScryptWalletCoreJSONImportPerformanceGate",
     "testSecp256k1PublicKeyPerformanceGate", "testSecp256k1SigningPerformanceGate", "testEd25519SigningPerformanceGate",
-];
-export const TSAN_TESTS = [
-    "AsyncTestSupportTests", "AlchemyJWTProviderTests", "SolanaOptionsTests", "ApprovalResolutionTests",
-    "WalletSigningSessionTests", "WalletSigningScopeTests", "NativeApprovalServiceTests", "TransactionInspectorTests",
-    "WalletsManagerPreviewTests", "AccountPreviewStateTests", "WalletCoreProxyParallelDerivationTests",
-    "SafariRPCRequestTests", "SafariRPCServiceTests", "SafariRPCStreamingTests",
-];
-export const EXTENDED_TSAN_TESTS = [
-    "ExtensionBridgeStoredRequestTests", "PopupRequestSessionsTests", "DurableProfilePersistenceTests",
-    "WalletAuthorityRevocationLedgerTests", "NativeApprovalCoordinatorTests", "WalletsManagerPrivateKeyImportTests",
-    "AccountsListViewControllerTests", "NativeAccountSelectionViewControllerTests",
-    "TransactionApprovalCoordinatorTests",
 ];
 export const ASAN_RUNTIME_TESTS = [
     "SecretBytesTests", "ScryptROMixShimTests", "WalletCoreProxyCoinAndCryptoTests",
@@ -93,6 +81,9 @@ export function validateJob(value) {
         throw new Error("Invalid XCTest selection");
     }
     for (const selector of options.onlyTesting) {
+        if (value.kind === "run" && isCompileOnlyTarget(selector) && options.stages.length && !options.stages.includes("runtime")) {
+            throw new Error(`Compile-only selector ${selector} requires --stage runtime`);
+        }
         if (isSafariSelector(selector) &&
             !SAFARI_PLATFORMS.some(platform => safariTestsForPlatform([selector], platform).length)) {
             throw new Error(`Safari selection did not match any known tests: ${selector}`);
@@ -141,6 +132,14 @@ export function validateJob(value) {
         options.stages.length && !options.stages.includes("safari") ||
         !safariTestsForPlatform(options.onlyTesting, SAFARI_PLATFORMS.find(platform => platform.id === "macos")).length)) {
         throw new Error("Prepared Safari mode requires selected local macOS Safari runtime tests and a valid preparation reference");
+    }
+    if (value.kind === "run" && options.stages.length && !options.stages.some(stage => ["test", "tsan", "asan"].includes(stage))) {
+        for (const selector of options.onlyTesting) {
+            if (isSafariSelector(selector)) { continue; }
+            if (options.stages.includes("build") && TEST_TARGETS.includes(selector)) { continue; }
+            if (options.stages.includes("runtime") && (isCompileOnlyTarget(selector) || RUNTIME_TEST_TARGETS.includes(selector))) { continue; }
+            throw new Error(`XCTest selector did not match a selected stage that accepts it: ${selector}. Use --stage test for individual classes or methods.`);
+        }
     }
     if (!value.bootstrapTools || typeof value.bootstrapTools !== "object" || Array.isArray(value.bootstrapTools) ||
         Object.keys(value.bootstrapTools).length !== BOOTSTRAP_TOOL_NAMES.length || BOOTSTRAP_TOOL_NAMES.some(name => !/^[a-f0-9]{64}$/.test(value.bootstrapTools[name]))) {
@@ -210,88 +209,11 @@ function approvalAudit(args) {
         modes: mode === "alternate" ? ["native", "popup"] : [mode]};
 }
 
-export function testingForPlatform(selectors, platform, configuration) {
-    return selectors.flatMap(selector => {
-        if (RUNTIME_MODULES.includes(selector)) { return []; }
-        if (TEST_TARGETS.some(target => selector === target || selector.startsWith(`${target}/`))) {
-            return selector === platform.target || selector.startsWith(`${platform.target}/`) ? [selector] : [];
-        }
-        const normalized = selector.replace(/\(\)$/, "");
-        if (Object.hasOwn(APP_TEST_CLASS_PLATFORMS, normalized.split("/")[0])) {
-            return runtimeInventory.appTests.some(test => test.id.startsWith(`${platform.target}/`) &&
-                (!configuration || test.variants.includes(`${platform.id}.${configuration.toLowerCase()}`)) &&
-                (test.id === `${platform.target}/${normalized}` || test.id.startsWith(`${platform.target}/${normalized}/`)))
-                ? [`${platform.target}/${selector}`] : [];
-        }
-        if (runtimeInventory.tests.some(test => test.id.split("/").slice(1).join("/") === normalized ||
-            test.id.split("/")[1] === normalized)) { return []; }
-        if ((selector === SAFARI_TEST_CLASS || selector.startsWith(`${SAFARI_TEST_CLASS}/`)) &&
-            !SAFARI_PLATFORMS.some(candidate => candidate.target === platform.target)) { return []; }
-        return [`${platform.target}/${selector}`];
-    });
-}
-
-export function runtimeTestsForPlatform(selectors, platform, configuration) {
-    const variant = `${platform}.${configuration.toLowerCase()}`;
-    return runtimeInventory.tests.filter(test => test.variants.includes(variant) && (!selectors.length || selectors.some(raw => {
-        const selector = raw.replace(/\(\)$/, "");
-        if (RUNTIME_MODULES.includes(selector)) { return false; }
-        const name = test.id.split("/").slice(1).join("/");
-        return test.id === selector || test.id.startsWith(`${selector}/`) || name === selector || name.startsWith(`${selector}/`);
-    }))).map(test => test.id);
-}
-
-export function appTestPolicy(selected, platform, configuration) {
-    const appSelectors = [...new Set(selected.map(selector => selector.replace(/\(\)$/, "")))];
-    const selection = appSelectors.length ? {appSelectors} : {};
-    const available = runtimeInventory.appTests.filter(test => test.id.startsWith(`${platform.target}/`) &&
-        test.variants.includes(`${platform.id}.${configuration.toLowerCase()}`)).map(test => test.id);
-    const requiredAppTests = available.filter(test => !selected.length || selected.some(selector => matchesTestSelector(test, selector)));
-    if (!requiredAppTests.length) { return selection; }
-    const exactAppInventory = selected.length > 0 && selected.every(selector => selector !== platform.target &&
-        available.some(test => matchesTestSelector(test, selector)));
-    return {requiredAppTests, exactAppInventory, ...selection};
-}
-
-function validateKnownAppSelections(options, configurations) {
-    if (options.stages.length && !options.stages.includes("test")) { return; }
-    for (const raw of options.onlyTesting) {
-        const selector = raw.replace(/\(\)$/, "");
-        const qualified = PLATFORMS.some(platform => selector.startsWith(`${platform.target}/`));
-        const name = selector.split("/")[qualified ? 1 : 0];
-        if (!Object.hasOwn(APP_TEST_CLASS_PLATFORMS, name)) { continue; }
-        const appMatches = runtimeInventory.appTests.some(test => matchesTestSelector(test.id, selector) &&
-            configurations.some(configuration => test.variants.some(variant => variant.endsWith(`.${configuration.toLowerCase()}`))));
-        const runtimeMatches = !qualified && PLATFORMS.filter(platform => !options.runtimePlatforms?.length || options.runtimePlatforms.includes(platform.id))
-            .some(platform => configurations.some(configuration =>
-            runtimeTestsForPlatform([selector], platform.id, configuration).length));
-        if (!appMatches && !runtimeMatches) { throw new Error(`App test selection did not match the declared inventory: ${raw}`); }
-    }
-}
-
-function matchesTestSelector(identifier, rawSelector) {
-    const selector = rawSelector.replace(/\(\)$/, "");
-    const name = identifier.split("/").slice(1).join("/");
-    return identifier === selector || identifier.startsWith(`${selector}/`) || name === selector || name.startsWith(`${selector}/`);
-}
-
-function focusedTests(inventory, focus, selectors, sanitizer) {
-    const available = inventory.filter(test => test.variants.includes("macos.debug"));
-    for (const selector of focus) {
-        if (!available.some(test => matchesTestSelector(test.id, selector))) {
-            throw new Error(`${sanitizer} test inventory is missing ${selector}`);
-        }
-    }
-    return available.filter(test => focus.some(selector => matchesTestSelector(test.id, selector)) &&
-        (!selectors.length || selectors.some(selector => matchesTestSelector(test.id, selector)))).map(test => test.id);
-}
-
 export function safariTestsForPlatform(selectors, platform) {
-    const selected = testingForPlatform(selectors, platform).map(selector => selector.replace(/\(\)$/, ""));
     const scenarios = SAFARI_SCENARIOS.filter(scenario => scenario.platforms.includes(platform.id));
     return scenarios.filter(scenario => {
         const identifier = `${platform.target}/${SAFARI_TEST_CLASS}/${scenario.method}`;
-        return !selectors.length || selected.some(selector => identifier === selector || identifier.startsWith(`${selector}/`));
+        return !selectors.length || selectors.some(selector => matchesTestSelector(identifier, selector));
     });
 }
 
@@ -299,16 +221,16 @@ export function createManifest(job) {
     validateJob(job);
     const options = job.payload;
     const stages = [];
-    const debugPerformancePlatforms = new Set();
-    const add = (id, group, command, args, extra = {}) => stages.push({
+    const makeStage = (id, group, command, args, extra = {}) => ({
         id, group, command, args, cwd: ".", dependencies: [], requirements: ["node"], timeoutSeconds: 900, ...extra,
     });
+    const add = (...args) => stages.push(makeStage(...args));
     const provider = "Safari Shared/Inpage Provider";
     const worker = "Workers/alchemy-jwt";
     add("provider.install", "repository", "npm", ["ci", "--include=dev", "--include=optional", "--no-audit"], {cwd: provider});
     add("protocol.check", "repository", "node", ["Scripts/generate_wire_protocol.mjs", "--check"]);
     add("pins.check", "repository", "python3", ["Scripts/vm/environment_pins.py", "--check"], {requirements: ["python"]});
-    add("runtime.inventory", "repository", "node", ["Scripts/vm/runtime_inventory.mjs", "--check"]);
+    add("runtime.test-membership", "repository", "node", ["Scripts/vm/test_membership.mjs"], {requirements: ["node", "xcode"]});
     add("runtime.boundaries", "repository", "node", ["Scripts/check_runtime_boundaries.mjs"]);
     add("runtime.boundary-tests", "repository", "node", ["--test", "Scripts/tests/runtime_boundaries.test.mjs"]);
     add("provider.bundle", "repository", "npm", ["run", "build"], {cwd: provider, dependencies: ["provider.install", "protocol.check"], unchanged: ["Safari Shared/Resources/inpage.js"]});
@@ -335,22 +257,41 @@ export function createManifest(job) {
     ]) { add(`worker.${id}`, "worker", "npm", ["run", script, ...suffix], {cwd: worker, dependencies: ["worker.install"]}); }
 
     const configurations = options.configuration ? [options.configuration] : ["Debug", "Release"];
-    validateKnownAppSelections(options, configurations);
-    const asanRuntimeTests = focusedTests(runtimeInventory.tests, ASAN_RUNTIME_TESTS, options.onlyTesting, "ASan");
-    const asanAppTests = focusedTests(runtimeInventory.appTests, ASAN_APP_TESTS, options.onlyTesting, "ASan");
-    if (options.stages.includes("asan") && !asanRuntimeTests.length && !asanAppTests.length) {
-        throw new Error("ASan selection did not match any focused macOS tests");
-    }
-    for (const selector of options.onlyTesting.filter(selector => RUNTIME_TEST_TARGETS.some(target => selector === target || selector.startsWith(`${target}/`)))) {
-        if (!(options.runtimePlatforms?.length ? options.runtimePlatforms : PLATFORMS.map(platform => platform.id)).some(platform =>
-            configurations.some(configuration => runtimeTestsForPlatform([selector], platform, configuration).length)) &&
-            !((!options.stages.length || options.stages.includes("asan")) && asanRuntimeTests.some(test => matchesTestSelector(test, selector)))) {
-            throw new Error(`Runtime selection did not match any tests on the selected platforms: ${selector}`);
-        }
-    }
+    const runtimeSelected = platform => (!options.runtimePlatforms?.length || options.runtimePlatforms.includes(platform)) &&
+        candidateTargets(options.onlyTesting, platform, true).length > 0;
     const apiValidation = !options.stages.length || ["build", "performance", "tsan"].some(group => options.stages.includes(group)) ||
-        options.stages.includes("test") &&
-        (!options.onlyTesting.length || PLATFORMS.some(platform => runtimeTestsForPlatform(options.onlyTesting, platform.id, configurations[0]).length));
+        options.stages.includes("test") && PLATFORMS.some(platform => runtimeSelected(platform.id));
+    const nativeStages = (id, group, args, policy, extra = {}) => {
+        const buildID = policy.kind === "full"
+            ? `${policy.runtime ? "build-runtime-tests" : "build-tests"}.${policy.platform}.${policy.configuration.toLowerCase()}`
+            : `build-${id}`;
+        const buildArgs = ["build-for-testing", ...args, "ENABLE_TESTABILITY=YES"];
+        const groupForBuild = policy.kind === "full" ? "build" : group;
+        const cleanID = `clean-${id}`;
+        const platform = PLATFORMS.find(platform => platform.id === policy.platform);
+        const clean = makeStage(cleanID, groupForBuild, "xcodebuild", policy.runtime
+            ? ["clean", "-scheme", "WalletRuntime-Package", "-configuration", policy.configuration,
+                "-destination", `$destination:${policy.platform}`]
+            : ["clean", "-project", "Wallet.xcodeproj", "-scheme", platform.scheme,
+                "-configuration", policy.configuration, "-destination", `$destination:${policy.platform}`], {
+            cwd: extra.cwd ?? ".", dependencies: extra.dependencies ?? [],
+            requirements: ["xcode", platform.requirement], timeoutSeconds: 300,
+        });
+        const dependencies = [cleanID];
+        const build = makeStage(buildID, groupForBuild, "xcodebuild", buildArgs, {
+            ...extra, dependencies, timeoutSeconds: 3600,
+            ...(policy.runtime ? {runtimeTestability: RUNTIME_MODULES} : {}),
+        });
+        const {proofKey, runtimeTestability, ...execution} = extra;
+        const discovery = makeStage(`discover.${id}`, group, "xcodebuild", ["test-without-building", ...args], {
+            ...execution, dependencies: [buildID], requirements: ["xcode", policy.platform],
+            nativeDiscovery: {...policy, executionID: id, scheme: args[args.indexOf("-scheme") + 1],
+                targets: policy.runtime ? RUNTIME_TEST_TARGETS : [PLATFORMS.find(platform => platform.id === policy.platform).target],
+                selectors: policy.kind === "performance" ? [] : options.onlyTesting.filter(selector => !isSafariSelector(selector) && !isCompileOnlyTarget(selector))},
+        });
+        return [clean, build, discovery];
+    };
+    const addNative = (...args) => stages.push(...nativeStages(...args));
     if (options.onlyTesting.includes("ApprovalCrashWorker")) {
         add("runtime.harness-graph", "runtime", "node", ["Scripts/validate_approval_worker_target.mjs"], {requirements: ["node", "xcode"], timeoutSeconds: 300});
     }
@@ -379,125 +320,81 @@ export function createManifest(job) {
         }
         for (const platform of PLATFORMS) {
             const slug = `${platform.id}.${configuration.toLowerCase()}`;
-            const requiredRuntimeTests = !options.runtimePlatforms?.length || options.runtimePlatforms.includes(platform.id)
-                ? runtimeTestsForPlatform(options.onlyTesting, platform.id, configuration) : [];
-            if (requiredRuntimeTests.length) {
-                const runtimeBase = ["-jobs", "2", "-enableCodeCoverage", "NO", "-scheme", "WalletRuntime-Package",
+            if (runtimeSelected(platform.id)) {
+                addNative(`test-runtime.${slug}`, "test", ["-jobs", "2", "-enableCodeCoverage", "NO", "-scheme", "WalletRuntime-Package",
                     "-configuration", configuration, "-destination", `$destination:${platform.id}`,
-                    "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "CODE_SIGNING_ALLOWED=YES"];
-                add(`build-runtime-tests.${slug}`, "build", "xcodebuild", ["build-for-testing", ...runtimeBase, "ENABLE_TESTABILITY=YES",
-                    ...(options.onlyTesting.length ? requiredRuntimeTests.map(test => `-only-testing:${test}`) : [])], {
-                    cwd: "Packages/WalletRuntime", dependencies: ["runtime.inventory", ...(apiValidation ? [`runtime.api.${configuration.toLowerCase()}`] : [])], requirements: ["xcode", platform.requirement], timeoutSeconds: 3600,
-                    runtimeTestability: RUNTIME_MODULES,
-                });
-                add(`test-runtime.${slug}`, "test", "xcodebuild", ["test-without-building", ...runtimeBase,
-                    "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never",
-                    ...(options.onlyTesting.length ? requiredRuntimeTests.map(test => `-only-testing:${test}`) : [])], {
-                    cwd: "Packages/WalletRuntime", dependencies: [`build-runtime-tests.${slug}`], requirements: ["xcode", platform.requirement], timeoutSeconds: 7200,
-                    nativeAudit: {configuration, platform: platform.id, kind: "full", runtime: true, requiredTests: requiredRuntimeTests,
-                        filtered: requiredRuntimeTests.length !== runtimeTestsForPlatform([], platform.id, configuration).length},
-                    env: configuration === "Release" ? PERFORMANCE_ENV : {}, resultBundle: true,
-                });
-                if (configuration === "Debug" && requiredRuntimeTests.some(test => test.includes("/WalletCoreProxyPerformanceGateTests/") &&
-                    PERFORMANCE_TESTS.some(name => test.endsWith(`/${name}`)))) {
-                    debugPerformancePlatforms.add(platform.id);
-                }
+                    "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "CODE_SIGNING_ALLOWED=YES"],
+                    {configuration, platform: platform.id, kind: "full", runtime: true,
+                        ...(configuration === "Debug" && platform.id === "macos" ? {
+                            mutationWitnesses: mutationManifest.mutants.filter(mutant => mutant.family === "runtime").map(mutant => mutant.witness.selector),
+                        } : {})}, {
+                        cwd: "Packages/WalletRuntime", dependencies: ["runtime.test-membership", ...(apiValidation ? [`runtime.api.${configuration.toLowerCase()}`] : [])],
+                        requirements: ["xcode", platform.requirement], timeoutSeconds: 7200,
+                        env: configuration === "Release" ? PERFORMANCE_ENV : {},
+                    });
             }
             const signing = platform.id === "macos" ? ["signing"] : [];
             add(`build.${slug}`, "build", "xcodebuild", ["-jobs", "2", "build", "-project", "Wallet.xcodeproj", "-scheme", platform.scheme,
                 "-configuration", configuration, "-destination", platform.generic, ...(platform.id === "macos" ? [] : ["CODE_SIGNING_ALLOWED=NO"])], {
                 dependencies: ["provider.install", "protocol.check"], requirements: ["node", "xcode", "proofKey", ...signing], proofKey: true, timeoutSeconds: 3600,
             });
-            const base = ["-jobs", "2", "-enableCodeCoverage", "NO", "-project", "Wallet.xcodeproj", "-scheme", platform.target,
-                "-configuration", configuration, "-destination", `$destination:${platform.id}`];
-            add(`build-tests.${slug}`, "build", "xcodebuild", ["build-for-testing", ...base, "ENABLE_TESTABILITY=YES"], {
-                dependencies: ["provider.install", "protocol.check"], requirements: ["node", "xcode", "proofKey", platform.requirement, ...signing], proofKey: true, timeoutSeconds: 3600,
-            });
-            const selectedTests = testingForPlatform(options.onlyTesting, platform, configuration);
-            if (options.onlyTesting.length && !selectedTests.length) { continue; }
-            add(`test.${slug}`, "test", "xcodebuild", ["test-without-building", ...base, "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never",
-                ...selectedTests.map(test => `-only-testing:${test}`)], {
-                dependencies: [`build-tests.${slug}`, "runtime.inventory"], requirements: ["xcode", platform.requirement], timeoutSeconds: 7200,
-                nativeAudit: {configuration, platform: platform.id, kind: "full", filtered: selectedTests.length > 0 && !selectedTests.includes(platform.target),
-                    ...appTestPolicy(selectedTests, platform, configuration)},
-                env: configuration === "Release" ? PERFORMANCE_ENV : {}, resultBundle: true,
-            });
-        }
-    }
-    const nativeBase = ["-jobs", "2", "-enableCodeCoverage", "NO", "test", "-project", "Wallet.xcodeproj", "-scheme", "Tests macOS",
-        "-destination", "$destination:macos", "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never"];
-    const nativeRequirements = ["node", "xcode", "proofKey", "macos", "signing"];
-    const nativeDependencies = ["provider.install", "protocol.check"];
-    const runtimeChecks = ["runtime.inventory", ...(apiValidation ? [`runtime.api.${configurations.includes("Release") ? "release" : "debug"}`] : [])];
-    const runtimePerformanceTests = PERFORMANCE_TESTS.map(name => `WalletAuthorityTests/WalletCoreProxyPerformanceGateTests/${name}`);
-    const runtimeNativeBase = ["-jobs", "2", "-enableCodeCoverage", "NO", "test", "-scheme", "WalletRuntime-Package",
-        "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never", "ENABLE_TESTABILITY=YES",
-        "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "CODE_SIGNING_ALLOWED=YES"];
-    add("performance.release", "performance", "xcodebuild", [...runtimeNativeBase, "-configuration", "Release", "-destination", "$destination:macos",
-        ...runtimePerformanceTests.map(test => `-only-testing:${test}`)], {
-        cwd: "Packages/WalletRuntime", dependencies: runtimeChecks, requirements: ["xcode", "macos"], timeoutSeconds: 7200,
-        env: PERFORMANCE_ENV, nativeAudit: {configuration: "Release", platform: "macos", kind: "performance", runtime: true, requiredTests: runtimePerformanceTests}, resultBundle: true,
-    });
-    if (options.configuration === "Debug" && (!options.stages.length || options.stages.includes("test"))) {
-        for (const platform of PLATFORMS.filter(platform => platform.id !== "macos" && debugPerformancePlatforms.has(platform.id))) {
-            add(`performance.${platform.id}.release`, "performance", "xcodebuild", [...runtimeNativeBase, "-configuration", "Release",
-                "-destination", `$destination:${platform.id}`, ...runtimePerformanceTests.map(test => `-only-testing:${test}`)], {
-                cwd: "Packages/WalletRuntime", dependencies: runtimeChecks, requirements: ["xcode", platform.requirement], timeoutSeconds: 7200,
-                env: PERFORMANCE_ENV, nativeAudit: {configuration: "Release", platform: platform.id, kind: "performance", runtime: true, requiredTests: runtimePerformanceTests}, resultBundle: true,
-            });
-        }
-    }
-    for (const [id, classes] of [["tsan.focused", TSAN_TESTS], ...(job.profile === "extended" ? [["tsan.extended", EXTENDED_TSAN_TESTS]] : [])]) {
-        const packageTests = runtimeTestsForPlatform(classes, "macos", "Debug").filter(test =>
-            !options.onlyTesting.length || options.onlyTesting.some(selector => matchesTestSelector(test, selector)));
-        if (packageTests.length) {
-            add(`${id}.runtime`, "tsan", "xcodebuild", [...runtimeNativeBase, "-configuration", "Debug", "-destination", "$destination:macos",
-                "-enableThreadSanitizer", "YES", ...packageTests.map(test => `-only-testing:${test}`)], {
-                cwd: "Packages/WalletRuntime", dependencies: runtimeChecks, requirements: ["xcode", "macos"], timeoutSeconds: 14400,
-                nativeAudit: {configuration: "Debug", platform: "macos", kind: "tsan", runtime: true, requiredTests: packageTests,
-                    filtered: options.onlyTesting.length > 0}, resultBundle: true,
-            });
-        }
-        const focusedAppTests = testingForPlatform(classes, PLATFORMS[0], "Debug");
-        if (!options.stages.length || options.stages.includes("tsan")) {
-            for (const rawSelector of options.onlyTesting) {
-                const normalized = rawSelector.replace(/\(\)$/, "");
-                const selector = normalized.startsWith("Tests macOS/") ? normalized : `Tests macOS/${normalized}`;
-                if (focusedAppTests.some(focus => selector.startsWith(`${focus}/`)) &&
-                    !runtimeInventory.appTests.some(test => test.id === selector && test.variants.includes("macos.debug")) &&
-                    !runtimeTestsForPlatform([normalized], "macos", "Debug").length) {
-                    throw new Error(`TSan app method is not available on macOS Debug: ${selector}`);
-                }
+            if (candidateTargets(options.onlyTesting, platform.id, false).length) {
+                addNative(`test.${slug}`, "test", ["-jobs", "2", "-enableCodeCoverage", "NO", "-project", "Wallet.xcodeproj", "-scheme", platform.target,
+                    "-configuration", configuration, "-destination", `$destination:${platform.id}`],
+                    {configuration, platform: platform.id, kind: "full"}, {
+                        dependencies: ["provider.install", "protocol.check", "runtime.test-membership"],
+                        requirements: ["node", "xcode", "proofKey", platform.requirement, ...signing], proofKey: true, timeoutSeconds: 7200,
+                        env: configuration === "Release" ? PERFORMANCE_ENV : {},
+                    });
             }
         }
-        const appTests = focusedTests(runtimeInventory.appTests, focusedAppTests, options.onlyTesting, "TSan");
-        if (appTests.length) {
-            add(id, "tsan", "xcodebuild", [...nativeBase, "-configuration", "Debug", "-enableThreadSanitizer", "YES", ...appTests.map(test => `-only-testing:${test}`)], {
-                dependencies: [...nativeDependencies, "runtime.inventory"], requirements: nativeRequirements, proofKey: true, timeoutSeconds: 14400,
-                nativeAudit: {configuration: "Debug", platform: "macos", kind: "tsan", requiredTests: appTests,
-                    filtered: options.onlyTesting.length > 0}, resultBundle: true,
+    }
+    const nativeBase = ["-jobs", "2", "-enableCodeCoverage", "NO", "-project", "Wallet.xcodeproj", "-scheme", "Tests macOS"];
+    const nativeRequirements = ["node", "xcode", "proofKey", "macos", "signing"];
+    const nativeDependencies = ["provider.install", "protocol.check", "runtime.test-membership"];
+    const runtimeChecks = ["runtime.test-membership", ...(apiValidation ? [`runtime.api.${configurations.includes("Release") ? "release" : "debug"}`] : [])];
+    const runtimePerformanceTests = PERFORMANCE_TESTS.map(name => `WalletAuthorityTests/WalletCoreProxyPerformanceGateTests/${name}`);
+    const runtimeNativeBase = ["-jobs", "2", "-enableCodeCoverage", "NO", "-scheme", "WalletRuntime-Package",
+        "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "CODE_SIGNING_ALLOWED=YES"];
+    const releaseProof = new Map();
+    for (const platform of PLATFORMS.filter(platform => platform.id === "macos" || options.configuration === "Debug" && (!options.stages.length || options.stages.includes("test")) && runtimeSelected(platform.id))) {
+        const id = platform.id === "macos" ? "performance.release" : `performance.${platform.id}.release`;
+        const proof = nativeStages(id, "performance", [...runtimeNativeBase, "-configuration", "Release", "-destination", `$destination:${platform.id}`],
+            {configuration: "Release", platform: platform.id, kind: "performance", runtime: true, focus: runtimePerformanceTests}, {
+                cwd: "Packages/WalletRuntime", dependencies: runtimeChecks, requirements: ["xcode", platform.requirement], timeoutSeconds: 7200, env: PERFORMANCE_ENV,
             });
+        releaseProof.set(platform.id, proof);
+        if (platform.id === "macos") { stages.push(...proof); }
+    }
+    for (const [name, focus] of Object.entries(TSAN_FOCUS)) {
+        if (name === "extended" && job.profile !== "extended") { continue; }
+        for (const runtime of [true, false]) {
+            const tests = runtime ? focus.runtime : focus.app;
+            if (!focusMayMatch(options.onlyTesting, tests)) { continue; }
+            addNative(`tsan.${name}${runtime ? ".runtime" : ""}`, "tsan",
+                [...(runtime ? runtimeNativeBase : nativeBase), "-configuration", "Debug", "-destination", "$destination:macos",
+                    "-enableThreadSanitizer", "YES", "-enableAddressSanitizer", "NO"],
+                {configuration: "Debug", platform: "macos", kind: "tsan", runtime, focus: tests}, {
+                    cwd: runtime ? "Packages/WalletRuntime" : ".", dependencies: runtime ? runtimeChecks : nativeDependencies,
+                    requirements: runtime ? ["xcode", "macos"] : nativeRequirements, ...(!runtime ? {proofKey: true} : {}), timeoutSeconds: 14400,
+                });
         }
     }
-    if (options.stages.includes("tsan") && !stages.some(stage => stage.group === "tsan")) {
-        throw new Error("TSan selection did not match any tests in the selected profile");
+    for (const runtime of [true, false]) {
+        const tests = runtime ? ASAN_RUNTIME_TESTS : ASAN_APP_TESTS;
+        if (!focusMayMatch(options.onlyTesting, tests)) { continue; }
+        addNative(`asan.focused${runtime ? ".runtime" : ""}`, "asan",
+            [...(runtime ? runtimeNativeBase : nativeBase), "-configuration", "Debug", "-destination", "$destination:macos",
+                "-enableAddressSanitizer", "YES", "-enableThreadSanitizer", "NO"],
+            {configuration: "Debug", platform: "macos", kind: "asan", runtime, focus: tests}, {
+                cwd: runtime ? "Packages/WalletRuntime" : ".", dependencies: runtime ? runtimeChecks : nativeDependencies,
+                requirements: runtime ? ["xcode", "macos"] : nativeRequirements, ...(!runtime ? {proofKey: true} : {}), timeoutSeconds: 14400,
+            });
     }
-    const asanArguments = ["-configuration", "Debug", "-enableAddressSanitizer", "YES", "-enableThreadSanitizer", "NO"];
-    if (asanRuntimeTests.length) {
-        add("asan.focused.runtime", "asan", "xcodebuild", [...runtimeNativeBase, ...asanArguments, "-destination", "$destination:macos",
-            ...asanRuntimeTests.map(test => `-only-testing:${test}`)], {
-            cwd: "Packages/WalletRuntime", dependencies: runtimeChecks, requirements: ["xcode", "macos"], timeoutSeconds: 14400,
-            nativeAudit: {configuration: "Debug", platform: "macos", kind: "asan", runtime: true, requiredTests: asanRuntimeTests,
-                filtered: options.onlyTesting.length > 0}, resultBundle: true,
-        });
-    }
-    if (asanAppTests.length) {
-        add("asan.focused", "asan", "xcodebuild", [...nativeBase, ...asanArguments,
-            ...asanAppTests.map(test => `-only-testing:${test}`)], {
-            dependencies: [...nativeDependencies, "runtime.inventory"], requirements: nativeRequirements, proofKey: true, timeoutSeconds: 14400,
-            nativeAudit: {configuration: "Debug", platform: "macos", kind: "asan", requiredTests: asanAppTests,
-                filtered: options.onlyTesting.length > 0}, resultBundle: true,
-        });
+    for (const kind of ["asan", "tsan"]) {
+        if (options.stages.includes(kind) && !stages.some(stage => stage.nativeDiscovery?.kind === kind)) {
+            throw new Error(`Explicit ${kind} selection did not match any focused tests`);
+        }
     }
     if (!options.parserFuzzReplay) {
         add("fuzz.default", "fuzz", "node", ["Scripts/fuzz_wire_protocol.mjs"], {dependencies: ["protocol.check"], requirements: ["node", "xcode"], timeoutSeconds: 3600, failureDirectory: true});
@@ -530,7 +427,7 @@ export function createManifest(job) {
         add("mutation.security", "mutation", "node", ["Scripts/security_mutations/run.mjs", "--tier", tier,
             "--destination-macos", "$destination:macos", ...(tier === "extended" ? ["--destination-ios", "$destination:ios"] : []),
             "--signing", options.signing ?? "local"], {
-            dependencies: ["runtime.inventory", "runtime.boundaries", "provider.install", "protocol.check", "scripts.security-mutations"],
+            dependencies: ["runtime.test-membership", "runtime.boundaries", "provider.install", "protocol.check", "scripts.security-mutations"],
             requirements: ["node", "xcode", "macos", ...(tier === "extended" ? ["ios"] : []), ...(apple ? ["signing", "proofKey"] : [])],
             ...(apple ? {proofKey: true} : {}), failureDirectory: true, scratchDirectory: true,
             timeoutSeconds: (tier === "extended" ? 7200 : 3600) + 120,
@@ -614,34 +511,10 @@ export function createManifest(job) {
     }
     const selected = new Set(stages.filter(stage => !options.stages.length || options.stages.includes(stage.group) ||
         options.stages.includes("parser-fuzz") && stage.parserFuzzAudit).map(stage => stage.id));
-    for (const stage of stages) {
-        if (selected.has(stage.id) && stage.nativeAudit?.runtime === true && stage.nativeAudit.configuration === "Debug" && stage.nativeAudit.kind === "full" &&
-            (!stage.nativeAudit.filtered || debugPerformancePlatforms.has(stage.nativeAudit.platform))) {
-            const requiredGates = PERFORMANCE_TESTS.filter(name => stage.nativeAudit.requiredTests.some(test =>
-                test.includes("/WalletCoreProxyPerformanceGateTests/") && test.endsWith(`/${name}`)));
-            const releaseAlreadySelected = stages.some(candidate => selected.has(candidate.id) && candidate.nativeAudit?.runtime === true &&
-                candidate.nativeAudit.configuration === "Release" && candidate.nativeAudit.platform === stage.nativeAudit.platform &&
-                requiredGates.every(name => candidate.nativeAudit.requiredTests.some(test => test.includes("/WalletCoreProxyPerformanceGateTests/") && test.endsWith(`/${name}`))));
-            if (releaseAlreadySelected) { continue; }
-            const gate = stage.nativeAudit.platform === "macos" ? "performance.release" : `performance.${stage.nativeAudit.platform}.release`;
-            if (stages.some(candidate => candidate.id === gate)) { selected.add(gate); }
-        }
-    }
     const byID = new Map(stages.map(stage => [stage.id, stage]));
     const include = id => { for (const dependency of byID.get(id).dependencies) { if (!selected.has(dependency)) { selected.add(dependency); include(dependency); } } };
     for (const id of selected) { include(id); }
-    if (!options.stages.length || options.stages.includes("test")) {
-        const plannedTests = stages.filter(stage => selected.has(stage.id)).flatMap(stage => [
-            ...(stage.nativeAudit?.requiredTests ?? []), ...(stage.nativeAudit?.requiredAppTests ?? []),
-        ]);
-        for (const selector of options.onlyTesting) {
-            if (runtimeInventory.tests.some(test => matchesTestSelector(test.id, selector)) &&
-                !plannedTests.some(identifier => matchesTestSelector(identifier, selector))) {
-                throw new Error(`Runtime selection did not match any tests on the selected platforms or configurations: ${selector}`);
-            }
-        }
-    }
-    return stages.filter(stage => selected.has(stage.id)).map(stage => {
+    const configure = stage => {
         if ((options.signing ?? "local") === "local" && stage.command === "xcodebuild") {
             const {proofKey, ...local} = stage;
             const deviceBuild = stage.args.includes("generic/platform=iOS") || stage.args.includes("generic/platform=visionOS");
@@ -652,6 +525,16 @@ export function createManifest(job) {
             };
         }
         return {...stage, requirements: [...new Set(["bootstrap", ...stage.requirements])]};
+    };
+    return stages.filter(stage => selected.has(stage.id)).map(stage => {
+        const policy = stage.nativeDiscovery;
+        if (options.configuration === "Debug" && policy?.runtime && policy.kind === "full") {
+            const proof = releaseProof.get(policy.platform);
+            if (!proof.every(stage => selected.has(stage.id))) {
+                stage = {...stage, releaseStages: proof.map(configure)};
+            }
+        }
+        return configure(stage);
     });
 }
 
@@ -671,4 +554,11 @@ export function commandForStage(stage, {destinations, artifacts, scratch}) {
     }
     if (args.some(arg => arg.includes("derivedDataPath"))) { throw new Error("Custom DerivedData is prohibited"); }
     return {command: stage.command, args};
+}
+
+export function stagePlan(stages) {
+    return stages.map(stage => ({id: stage.id, group: stage.group, status: "pending",
+        ...Object.fromEntries(["nativeAudit", "nativeDiscovery", "discoveryStage", "approvalAudit", "upgradeAudit", "parserFuzzAudit", "mutationAudit"]
+            .filter(key => stage[key] !== undefined).map(key => [key, stage[key]])),
+        ...(stage.preparationResult ? {preparationResult: true} : {})}));
 }

@@ -766,6 +766,15 @@ final class WalletRemovalIntegrationTests: XCTestCase {
             await assertWalletReload(manager)
             XCTAssertEqual(manager.wallets.flatMap(\.accounts).count, 16_386)
             XCTAssertNil(manager.reviewCatalog())
+#if os(iOS) || os(visionOS)
+            let token = try manager.repository.validity.token()
+            do {
+                _ = try await manager.makeSafariApprovalSourceReader()()
+                XCTFail("An oversized catalog produced an approval vault source")
+            } catch WalletsManager.Error.invalidInput {}
+            XCTAssertTrue(manager.isStoreReady)
+            XCTAssertNoThrow(try manager.repository.validity.validate(token))
+#endif
             let wallet = try XCTUnwrap(manager.currentWallet(id: fixture.walletID))
             let mnemonic = try await exportMnemonicForTesting(manager: manager, wallet: wallet)
             XCTAssertEqual(mnemonic, Vectors.walletCoreJSONMnemonic)
@@ -829,9 +838,66 @@ final class WalletRemovalIntegrationTests: XCTestCase {
             XCTAssertEqual(fixture.keychain.walletData, expectedData)
             XCTAssertEqual(manager.wallets, originalWallets)
             XCTAssertEqual(fixture.mutationCount, 0)
+            XCTAssertTrue(manager.isStoreReady)
             await assertWalletReload(manager)
             XCTAssertEqual(manager.wallets.flatMap(\.accounts).count, 16_384)
         }
+    }
+
+    func testHealthyRefreshDoesNotAbortWalletImport() async throws {
+        let fixture = try makeRemovalFixture()
+        let manager = fixture.manager { _ in XCTFail("Import must not revoke existing accounts") }
+        await assertWalletReload(manager)
+        let original = fixture.keychain.walletData
+        let entered = expectation(description: "Import reached source mutation preparation")
+        let refreshed = expectation(description: "Healthy refresh started")
+        let release = DispatchSemaphore(value: 0)
+        let armed = Mutex(true)
+        defer { release.signal(); fixture.keychain.beforeWalletRead = nil }
+        fixture.keychain.beforeWalletRead = { id in
+            guard original[id] == nil, armed.withLock({ value in defer { value = false }; return value }) else { return }
+            entered.fulfill()
+            release.wait()
+        }
+        let access = manager.accessForTesting()
+        defer { access.invalidate() }
+        let importing = Task {
+            try await manager.addWallet(input: WalletCrypto.hexString(data: Vectors.onePrivateKey), inputPassword: nil, access: access)
+        }
+        await fulfillment(of: [entered], timeout: 10)
+        let refresh = Task { refreshed.fulfill(); return await manager.reloadFromStore() }
+        await fulfillment(of: [refreshed], timeout: 3)
+        XCTAssertEqual(manager.loadState, .ready)
+        release.signal()
+        let wallet = try await importing.value
+        let loaded = await refresh.value
+        XCTAssertTrue(loaded)
+        XCTAssertEqual(fixture.keychain.events, ["add"])
+        XCTAssertEqual(fixture.keychain.walletData.count, original.count + 1)
+        for (id, bytes) in original { XCTAssertEqual(fixture.keychain.walletData[id], bytes) }
+        let exported = try await exportPrivateKeyForTesting(manager: manager, wallet: wallet)
+        XCTAssertEqual(WalletCrypto.hexData(string: exported), Vectors.onePrivateKey)
+    }
+
+    func testCorruptExistingCatalogAtMutationEntryInvalidatesStoreWithoutWriting() async throws {
+        let fixture = try makeRemovalFixture()
+        let manager = fixture.transactionManager(ObservedWalletSourceMutator(
+            base: WalletSourceMutationStub(onRevoke: { _ in XCTFail("Corrupt catalog must not revoke authority") }),
+            beforePreparation: { fixture.keychain.walletData[fixture.siblingID] = Data("corrupt".utf8) }
+        ))
+        await assertWalletReload(manager)
+        let original = manager.wallets
+        let token = try manager.repository.validity.token()
+        do {
+            try await manager.update(wallet: try XCTUnwrap(manager.currentWallet(id: fixture.walletID)),
+                removeAccounts: [], access: manager.accessForTesting())
+            XCTFail("Corrupt catalog accepted a mutation")
+        } catch WalletsManager.LoadFailure.corrupt {}
+        XCTAssertEqual(manager.loadState, .failed(.corrupt))
+        XCTAssertFalse(manager.isStoreReady)
+        XCTAssertThrowsError(try manager.repository.validity.validate(token))
+        XCTAssertEqual(manager.wallets, original)
+        XCTAssertTrue(fixture.keychain.events.isEmpty)
     }
 
     func testWalletCreationAndImportDoNotPublishAfterFailedInsertion() async throws {
@@ -1102,6 +1168,35 @@ final class WalletRemovalIntegrationTests: XCTestCase {
                 XCTAssertEqual(fixture.keychain.walletData, originalData)
                 XCTAssertEqual(manager.wallets.map(\.id), originalWalletIDs)
             }
+        }
+    }
+
+    func testLastAccountDeletionRechecksTheConfirmedAccountBeforeRevokingOrDeleting() async throws {
+        for change in ["added", "replaced", "unchanged"] {
+            let fixture = try makeRemovalFixture()
+            fixture.keychain.walletData[fixture.walletID] = Vectors.walletCoreJSONMnemonicFixture
+            let manager = fixture.manager { _ in XCTAssertEqual(change, "unchanged") }
+            await assertWalletReload(manager)
+            let wallet = try XCTUnwrap(manager.currentWallet(id: fixture.walletID))
+            XCTAssertEqual(wallet.accounts.count, 1)
+            let confirmed = try XCTUnwrap(wallet.accounts.first)
+            if change == "unchanged" {
+                try await manager.delete(wallet: wallet, requiringSoleAccount: confirmed, access: manager.accessForTesting())
+                XCTAssertNil(fixture.keychain.walletData[wallet.id])
+                continue
+            }
+
+            let added = fixture.additionalAccount(index: 1)
+            let accounts = change == "added" ? [confirmed, added] : [added]
+            let updated = try fixture.walletData(accounts: accounts)
+            fixture.keychain.walletData[wallet.id] = updated
+            do {
+                try await manager.delete(wallet: wallet, requiringSoleAccount: confirmed, access: manager.accessForTesting())
+                XCTFail("A changed last account must require a new confirmation")
+            } catch WalletsManager.Error.lastAccountChanged {}
+            XCTAssertTrue(fixture.keychain.events.isEmpty)
+            XCTAssertEqual(fixture.keychain.walletData[wallet.id], updated)
+            XCTAssertEqual(manager.currentWallet(id: wallet.id)?.accounts.map(\.address), accounts.map(\.address))
         }
     }
 

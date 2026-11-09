@@ -184,7 +184,7 @@ extension NativeApprovalCoordinatorTests {
             deadline: clock.date.addingTimeInterval(300),
             receipt: .init(nativeDeliveryNonce: key.nativeDeliveryNonce, owner: owner), action: action)
         let authority = NativeApprovalAuthority(handle: key.handle, nativeDeliveryNonce: key.nativeDeliveryNonce,
-            store: store, environment: .init(now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
+            store: store, environment: nativeApprovalEnvironmentForTesting(now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
                 uptime: { Double(clock.uptimeNanoseconds) / 1_000_000_000 }, wait: { _ in },
                 prepare: { binding, _ in
                     await beforePreparation()

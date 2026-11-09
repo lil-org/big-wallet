@@ -69,6 +69,8 @@ class SafariPreparationTests(unittest.TestCase):
             self.stack.enter_context(patch.object(host, name, return_value=value))
         self.stack.enter_context(patch.object(host, 'clone_vm', side_effect=shutil.copytree))
         self.stack.enter_context(patch.object(host, 'snapshot_source', side_effect=self.snapshot))
+        self.stack.enter_context(patch.object(host, 'resolved_stage_plan',
+            side_effect=lambda exchange, job: host.read_json(exchange / 'artifacts/resolved-plan.json')))
         self.real_monitor = host.monitor_vm
         self.stack.enter_context(patch.object(host, 'monitor_vm', side_effect=self.monitor))
         self.stack.enter_context(patch.object(host, 'stage_provisioning', side_effect=AssertionError('No installer staging')))
@@ -78,7 +80,9 @@ class SafariPreparationTests(unittest.TestCase):
     def snapshot(self, repository, exchange):
         paths = []
         for relative in ['Scripts/vm/test_manifest.mjs', 'Scripts/safari/scenarios.mjs', 'Scripts/safari/synchronization.mjs',
-                         'Scripts/vm/environment.json', 'Scripts/vm/runtime_inventory.mjs', 'Scripts/vm/runtime-test-inventory.json',
+                         'Scripts/vm/environment.json', 'Scripts/vm/test_policy.mjs', 'Scripts/vm/test_discovery.mjs', 'Scripts/vm/verify_discovery.mjs',
+                         'Scripts/vm/result_audit.mjs', 'Scripts/vm/guest_bootstrap.mjs', 'Scripts/approval_lifecycle/source_identity.mjs',
+                         'Scripts/security_mutations/products.mjs', 'Scripts/security_mutations/manifest.json',
                          'Scripts/wallet_upgrade/contract.mjs']:
             destination = exchange / 'source' / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -106,8 +110,17 @@ class SafariPreparationTests(unittest.TestCase):
             self.assertEqual(job['payload']['runtimePlatforms'], ['macos'])
             self.assertTrue(all(selector.startswith(('Tests macOS/', 'WalletAuthorityTests/')) for selector in job['payload']['onlyTesting']))
             self.assertTrue(all(stage.get('nativeAudit', {}).get('platform', 'macos') == 'macos' for stage in plan['stages']))
+        resolved = []
+        for stage in plan['stages']:
+            resolved.append(stage)
+            if stage.get('nativeDiscovery'):
+                policy = stage['nativeDiscovery']
+                resolved.append({'id': policy['executionID'], 'group': stage['group'], 'status': 'pending',
+                    'discoveryStage': stage['id'], 'nativeAudit': {'kind': policy['kind'], 'platform': policy['platform'],
+                        'configuration': policy['configuration']}})
+        host.atomic_json(exchange / 'artifacts/resolved-plan.json', resolved)
         stages = [{**stage, 'status': 'passed', **({'audit': {'ok': True}} if 'nativeAudit' in stage else {})}
-                  for stage in plan['stages']]
+                  for stage in resolved]
         report = {'version': 1, 'runId': run_id, 'vmId': job['vmId'],
             'source': {'files': job['source']['fileCount'], **job['source']}, 'status': 'passed',
             'finishedAt': '2026-10-20T10:00:02Z', 'identity': {'vmId': job['vmId'], 'consoleUser': 'wallet-test'},

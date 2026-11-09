@@ -143,7 +143,7 @@ final class NativeAccountSelectionViewControllerTests: XCTestCase {
         }
     }
 
-    func testManageWalletsCanRetryAfterReloadAbortsItsQueuedLaunch() async throws {
+    func testManageWalletsCanRetryAfterStoreFailureDuringHandoff() async throws {
         let reader = KeychainCopyMatchingStub()
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
         await assertWalletReload(manager)
@@ -151,22 +151,35 @@ final class NativeAccountSelectionViewControllerTests: XCTestCase {
         let window = accountSelectionWindow(controller: controller)
         defer { window.close() }
         var launches = 0
-        controller.openWalletManagement = { launches += 1; return true }
+        let entered = expectation(description: "Management handoff started while storage is valid")
+        let release = TestGate<Void>()
+        defer { release.resolve(()) }
+        controller.openWalletManagement = {
+            launches += 1
+            entered.fulfill()
+            await release.wait()
+            return true
+        }
 
         _ = controller.perform(NSSelectorFromString("manageWallets"))
         let launch = try XCTUnwrap(controller.managementTask)
+        await fulfillment(of: [entered], timeout: 2)
         reader.attributesStatus = errSecInteractionNotAllowed
         await assertWalletReload(manager, succeeds: false)
+        release.resolve(())
         await launch.value
-        XCTAssertEqual(launches, 0)
+        XCTAssertEqual(launches, 1)
+        _ = controller.perform(NSSelectorFromString("manageWallets"))
+        XCTAssertEqual(launches, 1)
 
         reader.attributesStatus = errSecSuccess
         await assertWalletReload(manager)
         let manageRow = controller.numberOfRows(in: controller.tableView) - 1
         XCTAssertEqual(controller.tableView(controller.tableView, rowViewForRow: manageRow)?.alphaValue, 1)
+        controller.openWalletManagement = { launches += 1; return true }
         _ = controller.perform(NSSelectorFromString("manageWallets"))
         await controller.managementTask?.value
-        XCTAssertEqual(launches, 1)
+        XCTAssertEqual(launches, 2)
         XCTAssertTrue(controller.accountSelection.review.isActive)
         XCTAssertFalse(controller.accountSelection.hasCompleted)
     }
@@ -293,7 +306,7 @@ final class NativeAccountSelectionViewControllerTests: XCTestCase {
             extendedPublicKey: Vectors.abandonEthereumExtendedPublicKey
         )
         reader.walletData[walletID] = try XCTUnwrap(key.exportJSON())
-        await manager.handleExternalWalletStoreChange()
+        await manager.handleExternalWalletStoreChange().value
         XCTAssertEqual(controller.numberOfRows(in: controller.tableView), initialRows + 1)
         XCTAssertEqual(controller.accountSelection.selectedAccounts, [selected])
         XCTAssertTrue(controller.primaryButton.isEnabled)
@@ -301,7 +314,7 @@ final class NativeAccountSelectionViewControllerTests: XCTestCase {
 
         key.removeAccountForCoinDerivationPath(coin: account.coin, derivationPath: account.derivationPath)
         reader.walletData[walletID] = try XCTUnwrap(key.exportJSON())
-        await manager.handleExternalWalletStoreChange()
+        await manager.handleExternalWalletStoreChange().value
         XCTAssertEqual(controller.accountSelection.selectedAccounts, [])
         XCTAssertFalse(controller.primaryButton.isEnabled)
         XCTAssertEqual(submissions, 0)

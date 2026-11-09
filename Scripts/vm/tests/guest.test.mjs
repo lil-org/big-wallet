@@ -4,10 +4,16 @@ import {chmod, mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFi
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import test from "node:test";
-import {auditNativeResult, auditResults, performanceTestName} from "../result_audit.mjs";
-import {chooseDestinations, cleanEnvironment, coverageReport, executeStages, pendingStageResults, pinnedEnvironmentEvidence, prepareStageScratch, resourceSnapshot, resultBundleInventory, runJob} from "../guest.mjs";
+import {auditNativeResult, auditResults, performanceTestName, resultBundleInventory} from "../result_audit.mjs";
+import {chooseDestinations, cleanEnvironment, coverageReport as rawCoverageReport, executeStages, pendingStageResults, pinnedEnvironmentEvidence, prepareStageScratch, resourceSnapshot, runJob} from "../guest.mjs";
 import {atomicJSON, hashFile, BUILD_VOLUME, EXCHANGE_PATH, materializeSource, provisioningEvidence, readGuestProvision, bootstrapToolsEvidence, validateGuestEvidence, validateSnapshotManifest, verifyBuildVolume, verifyExchangeDirectory} from "../guest_bootstrap.mjs";
-import {approvalArguments, commandForStage, createManifest, PERFORMANCE_ENV, PERFORMANCE_TESTS, PLATFORMS, SHELL_TESTS, TSAN_TESTS, EXTENDED_TSAN_TESTS, BOOTSTRAP_TOOL_NAMES, validateJob} from "../test_manifest.mjs";
+import {approvalArguments, commandForStage, createManifest as staticManifest, PERFORMANCE_ENV, PERFORMANCE_TESTS, PLATFORMS, SHELL_TESTS, BOOTSTRAP_TOOL_NAMES, validateJob} from "../test_manifest.mjs";
+
+import {auditFixtureSelection, resolvedFixtureManifest as createManifest} from "./discovery_support.mjs";
+import {TSAN_FOCUS} from "../test_policy.mjs";
+const TSAN_TESTS = [...new Set(Object.values(TSAN_FOCUS.focused).flat().map(name => name.split("/")[1]))];
+const EXTENDED_TSAN_TESTS = [...new Set(Object.values(TSAN_FOCUS.extended).flat().map(name => name.split("/")[1]))];
+const coverageReport = (job, stages, preflight) => rawCoverageReport(job, stages, preflight, createManifest(job));
 
 const digest = data => createHash("sha256").update(data).digest("hex");
 const job = ({payload, ...overrides} = {}) => ({version: 1, runId: "2026-10-13-test", vmId: "fixture-vm", kind: "run", profile: "all", payload: {stages: [], onlyTesting: [], ...payload},
@@ -58,7 +64,7 @@ const passedManifest = manifest => manifest.map(stage => ({id: stage.id, status:
     ...(stage.upgradeAudit ? {upgradeAudit: stage.upgradeAudit} : {}),
     ...(stage.parserFuzzAudit ? {parserFuzzAudit: stage.parserFuzzAudit} : {}),
     ...(stage.mutationAudit ? {mutationAudit: stage.mutationAudit} : {}),
-    ...(stage.nativeAudit?.runtime || stage.nativeAudit?.requiredAppTests || stage.nativeAudit?.appSelectors || stage.nativeAudit?.kind === "tsan" || stage.approvalAudit || stage.upgradeAudit || stage.parserFuzzAudit || stage.mutationAudit ? {audit: {ok: true}} : {}),
+    ...(stage.nativeAudit?.runtime || stage.nativeAudit?.kind === "full" || stage.nativeAudit?.kind === "tsan" || stage.approvalAudit || stage.upgradeAudit || stage.parserFuzzAudit || stage.mutationAudit ? {audit: {ok: true}} : {}),
     ...(stage.nativeAudit?.kind === "safari" ? {audit: {ok: true, safari: {ok: true}, safariLog: {ok: true}}} : {}),
     ...(stage.nativeAudit?.kind === "asan" ? {audit: {ok: true, asanLog: {ok: true}}} : {})}));
 
@@ -230,12 +236,15 @@ test("local and Apple modes retain the complete same test workload with explicit
                 assert.equal(stage.timeoutSeconds, signed.timeoutSeconds);
                 assert.deepEqual(stage.env, signed.env);
                 if (stage.command !== "xcodebuild") { assert.deepEqual(stage, signed); continue; }
+                if (stage.discoveryStage) { assert.deepEqual(stage.args, signed.args); continue; }
                 assert.equal(stage.proofKey, undefined);
                 assert.ok(!stage.requirements.includes("proofKey"));
                 assert.ok(!stage.requirements.includes("signing"));
                 if (stage.cwd === "Packages/WalletRuntime") {
-                    assert.ok(signed.args.includes("CODE_SIGN_IDENTITY=-"));
-                    assert.ok(signed.args.includes("CODE_SIGN_STYLE=Manual"));
+                    if (stage.args[0] !== "clean") {
+                        assert.ok(signed.args.includes("CODE_SIGN_IDENTITY=-"));
+                        assert.ok(signed.args.includes("CODE_SIGN_STYLE=Manual"));
+                    }
                     assert.equal(signed.proofKey, undefined);
                     assert.ok(!signed.requirements.includes("proofKey") && !signed.requirements.includes("signing"));
                     assert.deepEqual(stage.args.filter(arg => arg.startsWith("-only-testing:")), signed.args.filter(arg => arg.startsWith("-only-testing:")));
@@ -250,7 +259,7 @@ test("local and Apple modes retain the complete same test workload with explicit
                 const device = stage.args.includes("generic/platform=iOS") || stage.args.includes("generic/platform=visionOS");
                 assert.deepEqual(stage.args.filter(arg => arg.startsWith("CODE_SIGNING_ALLOWED=")), [`CODE_SIGNING_ALLOWED=${device ? "NO" : "YES"}`]);
                 assert.deepEqual(stage.args.filter(arg => arg.startsWith("-only-testing:")), signed.args.filter(arg => arg.startsWith("-only-testing:")));
-                if (stage.args.includes("test-without-building")) { continue; }
+                if (stage.args.includes("test-without-building") || stage.args.includes("clean")) { continue; }
                 assert.equal(signed.proofKey, true, signed.id);
                 assert.ok(signed.requirements.includes("proofKey"), signed.id);
                 if (stage.args.includes("generic/platform=macOS") || stage.args.includes("$destination:macos")) {
@@ -311,7 +320,7 @@ test("native stages retain audited result bundles without long-running system di
                     assert.equal(stage.args.filter(arg => arg === "-collect-test-diagnostics").length, 1, stage.id);
                     assert.equal(stage.args[stage.args.indexOf("-collect-test-diagnostics") + 1], "never", stage.id);
                     assert.equal(stage.resultBundle, true, stage.id);
-                    assert.equal(stage.nativeAudit.configuration, stage.args[stage.args.indexOf("-configuration") + 1], stage.id);
+                    assert.equal(stage.nativeAudit.configuration, manifest.find(value => value.id === stage.discoveryStage).nativeDiscovery.configuration, stage.id);
                     assert.equal(stage.nativeAudit.kind, stage.group === "test" ? "full" : stage.group, stage.id);
                     assert.equal(stage.timeoutSeconds, ["tsan", "asan"].includes(stage.group) ? 14400 : 7200, stage.id);
                     const command = commandForStage(stage, {destinations: {macos: "macos", ios: "ios", visionos: "visionos"}, artifacts: "/artifacts"});
@@ -376,7 +385,7 @@ test("extended matrix retains baseline checks and adds bounded seeds, soak, and 
 
 test("TSan filters runtime classes, targets, and individual methods", () => {
     for (const selector of ["WalletSigningSessionTests", "WalletAuthorityTests/WalletSigningSessionTests"]) {
-        const stages = createManifest(job({payload: {stages: ["tsan"], onlyTesting: [selector]}})).filter(stage => stage.group === "tsan");
+        const stages = createManifest(job({payload: {stages: ["tsan"], onlyTesting: [selector]}})).filter(stage => stage.nativeAudit?.kind === "tsan");
         assert.deepEqual(stages.map(stage => stage.id), ["tsan.focused.runtime"]);
         assert.ok(stages[0].nativeAudit.requiredTests.length > 0);
         assert.ok(stages[0].nativeAudit.requiredTests.every(id => id.startsWith("WalletAuthorityTests/WalletSigningSessionTests/")));
@@ -384,17 +393,17 @@ test("TSan filters runtime classes, targets, and individual methods", () => {
     }
     const method = "WalletAuthorityTests/WalletSigningSessionTests/testMismatchedSourceAccountDoesNotConsumePermit";
     const selected = createManifest(job({payload: {stages: ["tsan"], onlyTesting: [`${method}()`, method]}}))
-        .filter(stage => stage.group === "tsan");
+        .filter(stage => stage.nativeAudit?.kind === "tsan");
     assert.deepEqual(selected.map(stage => stage.nativeAudit.requiredTests), [[method]]);
     const target = createManifest(job({payload: {stages: ["tsan"], onlyTesting: ["WalletAuthorityTests"]}}))
-        .filter(stage => stage.group === "tsan");
+        .filter(stage => stage.nativeAudit?.kind === "tsan");
     assert.deepEqual(target.map(stage => stage.id), ["tsan.focused.runtime"]);
     assert.ok(target[0].nativeAudit.requiredTests.every(id => id.startsWith("WalletAuthorityTests/")));
 });
 
 test("TSan filters app selectors and retains only matching focused or extended stages", () => {
     const selected = (onlyTesting, profile = "all") => createManifest(job({profile, payload: {stages: ["tsan"], onlyTesting}}))
-        .filter(stage => stage.group === "tsan");
+        .filter(stage => stage.nativeAudit?.kind === "tsan");
     const selectors = stages => stages.flatMap(stage => stage.args.filter(arg => arg.startsWith("-only-testing:")));
     const appClass = "Tests macOS/AccountPreviewStateTests";
     const appMethod = `${appClass}/testDisablingAndRestoringTheLastSelection`;
@@ -406,7 +415,7 @@ test("TSan filters app selectors and retains only matching focused or extended s
         assert.deepEqual(stages.map(stage => stage.id), ["tsan.focused"]);
         assert.deepEqual(selectors(stages), fullClass);
         assert.deepEqual(stages[0].nativeAudit.requiredTests.map(id => `-only-testing:${id}`), fullClass);
-        assert.ok(stages[0].dependencies.includes("runtime.inventory"));
+        assert.ok(stages[0].dependencies.includes("discover.tsan.focused"));
         assert.equal(stages[0].nativeAudit.filtered, true);
     }
     assert.deepEqual(selectors(selected([`${appMethod}()`, appMethod])), [`-only-testing:${appMethod}`]);
@@ -421,25 +430,22 @@ test("TSan filters app selectors and retains only matching focused or extended s
     assert.deepEqual(selectors(extended), extended[0].nativeAudit.requiredTests.map(id => `-only-testing:${id}`));
 });
 
-test("TSan rejects nonexistent app methods even beside valid methods or class selectors", () => {
+test("TSan rejects nonexistent app methods even beside valid selectors after discovery", async () => {
     const valid = "Tests macOS/AccountPreviewStateTests/testDisablingAndRestoringTheLastSelection";
     for (const profile of ["all", "extended"]) {
-        const classes = ["AccountPreviewStateTests", ...(profile === "extended" ? ["NativeApprovalCoordinatorTests"] : [])];
-        for (const name of classes) {
-            for (const selector of [`${name}/thisDoesNotExist`, `Tests macOS/${name}/testMissing()`]) {
-                for (const onlyTesting of [[selector], [valid, selector], [`Tests macOS/${name}`, selector]]) {
-                    assert.throws(() => createManifest(job({profile, payload: {stages: ["tsan"], onlyTesting}})), /TSan app method is not available/);
-                }
-            }
+        for (const onlyTesting of [["AccountPreviewStateTests/testMissing"], [valid, "Tests macOS/AccountPreviewStateTests/testMissing()"]]) {
+            const selected = job({profile, payload: {stages: ["tsan"], onlyTesting}});
+            assert.doesNotThrow(() => staticManifest(selected));
+            assert.equal((await auditFixtureSelection(selected)).ok, false);
         }
     }
-    assert.throws(() => createManifest(job({payload: {stages: ["test"], onlyTesting: ["AccountPreviewStateTests/thisDoesNotExist"]}})), /App test selection did not match/);
 });
 
-test("explicit empty TSan selections fail without changing unrelated filtered runs", () => {
+test("explicit TSan selections with disjoint scopes fail during planning", () => {
     for (const selector of ["Tests macOS/WindowAuthenticationSessionTests", "MissingTests", "Tests iOS",
         "WalletDomainTests/BigUIntTests", "Tests macOS/PopupRequestSessionsTests"]) {
-        assert.throws(() => createManifest(job({payload: {stages: ["tsan"], onlyTesting: [selector]}})), /TSan selection did not match/);
+        const selected = job({payload: {stages: ["tsan"], onlyTesting: [selector]}});
+        assert.throws(() => staticManifest(selected), /tsan selection did not match/);
     }
     const unrelated = createManifest(job({payload: {onlyTesting: ["Tests iOS"]}}));
     assert.ok(!unrelated.some(stage => stage.group === "tsan"));
@@ -501,20 +507,25 @@ test("narrow test selection expands required builds but does not schedule unrela
     assert.ok(!ids.includes("build-tests.ios.debug"));
     assert.ok(!ids.includes("worker.test"));
     const stage = stages.find(stage => stage.id === "test.macos.debug");
-    assert.ok(stage.args.includes("-only-testing:Tests macOS/WindowAuthenticationSessionTests"));
+    assert.ok(stage.args.some(arg => arg.startsWith("-only-testing:Tests macOS/WindowAuthenticationSessionTests/")));
 });
 
 test("unqualified setup selectors run available classes across all three platforms", () => {
     const stages = createManifest(job({payload: {stages: ["test"], configuration: "Debug", onlyTesting: ["WindowAuthenticationSessionTests", "PasswordStorageTests", "SecretHandlingTests"]}}));
     for (const platform of PLATFORMS) {
         const stage = stages.find(stage => stage.id === `test.${platform.id}.debug`);
-        assert.ok(stage.args.includes(`-only-testing:${platform.target}/PasswordStorageTests`));
+        assert.ok(stage.args.some(arg => arg.startsWith(`-only-testing:${platform.target}/PasswordStorageTests/`)));
     }
 });
 
 test("full Debug test selections retain a Release performance run for skipped-gate accounting", () => {
     const stages = createManifest(job({payload: {stages: ["test"], configuration: "Debug"}}));
     assert.ok(stages.some(stage => stage.id === "performance.release"));
+    const completed = new Set();
+    for (const stage of stages) {
+        assert.ok(stage.dependencies.every(id => completed.has(id)), `Missing earlier dependency for ${stage.id}`);
+        completed.add(stage.id);
+    }
 });
 
 test("destination selection uses installed runtimes and exact simulator UUIDs", () => {
@@ -661,7 +672,7 @@ test("unowned workspace and symlinked source roots are rejected", async () => fi
 }));
 
 test("XCTest audit fails empty runs, unavailable counts, ordinary skips, and missing skip inventory", () => {
-    const policy = {configuration: "Debug", kind: "full"};
+    const policy = {configuration: "Debug", kind: "full", platform: "macos", requiredTests: ["Tests macOS/Class/testWorks"]};
     assert.equal(auditNativeResult(summary(1), nativeTree([["Class/testWorks()", "Passed"]]), policy).ok, true);
     assert.equal(auditNativeResult(summary(0), nativeTree([]), policy).ok, false);
     assert.equal(auditNativeResult({}, nativeTree([]), policy).ok, false);
@@ -673,7 +684,8 @@ test("XCTest audit fails empty runs, unavailable counts, ordinary skips, and mis
 
 test("unfinished stages never produce a passing aggregate and skipped counts remain numeric", () => {
     assert.equal(auditResults([{id: "pending", status: "running"}]).status, "failed");
-    const audit = auditNativeResult(summary(1), nativeTree([["Class/testWorks()", "Passed"]]), {configuration: "Debug", kind: "full"});
+    const audit = auditNativeResult(summary(1), nativeTree([["Class/testWorks()", "Passed"]]),
+        {configuration: "Debug", kind: "full", platform: "macos", requiredTests: ["Tests macOS/Class/testWorks"]});
     const result = auditResults([{id: "complete", status: "passed", nativeAudit: {configuration: "Debug"}, audit}]);
     assert.equal(result.status, "passed");
     assert.equal(result.tests[0].skipped, 0);
@@ -682,7 +694,9 @@ test("unfinished stages never produce a passing aggregate and skipped counts rem
 
 test("Debug performance skips are provisional until every corresponding Release gate passes", () => {
     const cases = PERFORMANCE_TESTS.map(name => [`WalletCoreProxyPerformanceGateTests/${name}()`, "Skipped"]);
-    const debug = auditNativeResult(summary(0, 5), nativeTree(cases), {configuration: "Debug", kind: "full"});
+    const policy = {configuration: "Debug", kind: "full", platform: "macos", runtime: true,
+        requiredTests: PERFORMANCE_TESTS.map(name => `WalletAuthorityTests/WalletCoreProxyPerformanceGateTests/${name}`)};
+    const debug = auditNativeResult(summary(0, 5), nativeTree(cases), policy);
     assert.equal(debug.ok, true);
     const debugStage = {id: "test.debug", status: "passed", nativeAudit: {configuration: "Debug", platform: "macos"}, audit: debug};
     assert.equal(auditResults([debugStage]).status, "failed");
@@ -690,7 +704,7 @@ test("Debug performance skips are provisional until every corresponding Release 
     assert.equal(release.ok, true);
     assert.equal(auditResults([debugStage, {id: "performance", status: "passed", nativeAudit: {configuration: "Release", platform: "macos"}, audit: release}]).status, "passed");
     assert.equal(auditNativeResult(summary(4), nativeTree(cases.slice(0, 4).map(([name]) => [name, "Passed"])), {configuration: "Release", kind: "performance"}).ok, false);
-    assert.equal(auditNativeResult(summary(0, 5), nativeTree(cases), {configuration: "Release", kind: "full"}).ok, false);
+    assert.equal(auditNativeResult(summary(0, 5), nativeTree(cases), {...policy, configuration: "Release"}).ok, false);
     assert.equal(performanceTestName("UnrelatedClass/testEd25519SigningPerformanceGate()"), undefined);
 });
 
@@ -818,7 +832,7 @@ test("XCTest bundle inventory binds each exported file name and size to the audi
 
 test("native result bundles are audited and totals retained even when a native command exits zero", async () => fixture(async root => {
     const stage = {id: "test.fixture", group: "test", command: "xcodebuild", args: ["test"], cwd: ".", dependencies: [], requirements: [], timeoutSeconds: 1,
-        resultBundle: true, nativeAudit: {configuration: "Debug", kind: "full", platform: "macos"}};
+        resultBundle: true, nativeAudit: {configuration: "Debug", kind: "full", platform: "macos", requiredTests: ["Tests macOS/Class/testSkipped"]}};
     const results = await executeStages([stage], {writeJSON: atomicJSON, hashFile, workspace: root, artifacts: root, preflight: {checks: {}, destinations: {}}, execute: async (command, args) => {
         if (command === "xcodebuild") { return success(); }
         return success(JSON.stringify(args.includes("summary") ? summary(0, 1) : nativeTree([["Class/testSkipped", "Skipped"]])));

@@ -15,7 +15,7 @@ public enum WalletCredentialError: Error {
 public enum WalletPasswordState: Equatable, Sendable { case missing, present }
 public enum WalletPasswordCreationResult: Equatable, Sendable { case created, alreadyExists }
 public enum WalletAuthenticationOutcome: Equatable, Sendable {
-    case succeeded, failed, interactionUnavailable
+    case succeeded, cancelled, failed, interactionUnavailable
 }
 
 struct WalletCredentialAuthentication: Sendable {
@@ -131,16 +131,19 @@ public struct WalletCredentials: Sendable {
 
     @MainActor
     public func attemptBiometrics(reason: String, challenge: WalletAuthenticationChallenge) async -> WalletAuthenticationResult {
-        guard !Task.isCancelled, challenge.isPending(for: authorityID) else { return .failed }
+        guard !Task.isCancelled else { return .cancelled }
+        guard challenge.isPending(for: authorityID) else { return .failed }
         let outcome = await AuthorityMessageContext.$current.withValue(messages) {
             await authentication.attemptBiometrics(reason)
         }
-        guard !Task.isCancelled, challenge.isPending(for: authorityID) else { return .failed }
+        guard !Task.isCancelled else { return .cancelled }
+        guard challenge.isPending(for: authorityID) else { return .failed }
         switch outcome {
         case .succeeded:
             guard let grant = try? issueGrant(for: challenge) else { return .failed }
-            guard !Task.isCancelled else { grant.invalidate(); return .failed }
+            guard !Task.isCancelled else { grant.invalidate(); return .cancelled }
             return .granted(grant)
+        case .cancelled: return .cancelled
         case .failed: return .failed
         case .interactionUnavailable: return .interactionUnavailable
         }

@@ -51,12 +51,9 @@ struct WalletManagementServices {
             authorityID: authorityID, clock: composition.dependencies.monotonicClock)
         self.wallets = wallets
 #if os(iOS) || os(visionOS)
-        let repository = wallets.repository
         let vault = dependencies.makeVault(composition.configuration, composition.dependencies)
         let vaultHost = SafariApprovalVaultHost(vault: vault, defaults: dependencies.vaultHostDefaults,
-            integrityKeyStore: dependencies.makeIntegrityKeyStore()) {
-                try await repository.safariApprovalSourceSnapshot()
-            }
+            integrityKeyStore: dependencies.makeIntegrityKeyStore(), sourceSnapshot: wallets.makeSafariApprovalSourceReader())
         self.vaultHost = vaultHost
         wallets.approvalVaultHost = vaultHost
         credentials = WalletCredentials(keychain: keychain, messages: composition.configuration.messages,

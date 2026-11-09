@@ -95,7 +95,7 @@ final class AccountsListView: NSView {
     }
 }
 
-enum WalletAccountListRow {
+enum WalletAccountListRow: Equatable {
     case mnemonicWalletHeader(WalletSnapshot)
     case privateKeyWalletsHeader
     case account(wallet: WalletSnapshot, account: WalletAccount)

@@ -326,7 +326,7 @@ extension NativeApprovalCoordinatorTests {
             handle: key.handle,
             nativeDeliveryNonce: key.nativeDeliveryNonce,
             store: store,
-            environment: environment ?? .init(
+            environment: environment ?? nativeApprovalEnvironmentForTesting(
                 now: { clock.date }, authorityID: NativeApprovalTestAuthorization.authorityID,
                 uptime: { (Double(clock.uptimeNanoseconds) / 1_000_000_000) },
                 wait: { _ in try? await TestDeferred<Void>().value() },

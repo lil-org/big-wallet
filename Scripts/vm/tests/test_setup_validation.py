@@ -30,9 +30,18 @@ class SetupValidationInventoryTests(unittest.TestCase):
         manifest = exchange / 'source/Scripts/vm/test_manifest.mjs'
         manifest.parent.mkdir(parents=True)
         shutil.copyfile(host.TOOLS / 'test_manifest.mjs', manifest)
-        runtime_files = [manifest.with_name(name) for name in ('runtime_inventory.mjs', 'runtime-test-inventory.json')]
+        runtime_files = [manifest.with_name(name) for name in ('test_policy.mjs', 'test_discovery.mjs', 'verify_discovery.mjs', 'result_audit.mjs', 'guest_bootstrap.mjs')]
         for path in runtime_files:
             shutil.copyfile(host.TOOLS / path.name, path)
+        identity = exchange / 'source/Scripts/approval_lifecycle/source_identity.mjs'
+        identity.parent.mkdir()
+        shutil.copyfile(host.TOOLS.parent / 'approval_lifecycle/source_identity.mjs', identity)
+        runtime_files.append(identity)
+        mutations = exchange / 'source/Scripts/security_mutations'
+        mutations.mkdir()
+        for name in ('products.mjs', 'manifest.json'):
+            shutil.copyfile(host.TOOLS.parent / 'security_mutations' / name, mutations / name)
+            runtime_files.append(mutations / name)
         scenarios = exchange / 'source/Scripts/safari/scenarios.mjs'
         scenarios.parent.mkdir()
         shutil.copyfile(host.TOOLS.parent / 'safari/scenarios.mjs', scenarios)
@@ -114,12 +123,13 @@ class SetupValidationInventoryTests(unittest.TestCase):
         self.assertEqual(result['source'], job['source'])
         self.assertEqual([stage['id'] for stage in result['stages']], [stage['id'] for stage in planned['stages']])
         self.assertEqual({stage['id'] for stage in result['stages']}, {
-            'provider.install', 'protocol.check', 'provider.test', 'runtime.inventory', 'runtime.boundaries',
+            'provider.install', 'protocol.check', 'provider.test', 'runtime.test-membership', 'runtime.boundaries',
             'runtime.WalletDomain.debug', 'runtime.WalletNetworking.debug', 'runtime.WalletAuthority.debug',
             'runtime.WalletFlows.debug', 'runtime.api.debug',
-            'build-runtime-tests.macos.debug', 'test-runtime.macos.debug',
-            'build-tests.macos.debug', 'test.macos.debug', 'build-tests.ios.debug', 'test.ios.debug',
-            'build-tests.visionos.debug', 'test.visionos.debug',
+            'clean-test-runtime.macos.debug', 'build-runtime-tests.macos.debug', 'discover.test-runtime.macos.debug',
+            'build-tests.macos.debug', 'discover.test.macos.debug', 'build-tests.ios.debug', 'discover.test.ios.debug',
+            'build-tests.visionos.debug', 'discover.test.visionos.debug',
+            'clean-test.macos.debug', 'clean-test.ios.debug', 'clean-test.visionos.debug',
         })
         self.assertTrue(all(stage['status'] == 'blocked' for stage in result['stages']))
         self.assertEqual(result['summary']['counts']['blocked'], len(planned['stages']))

@@ -598,22 +598,43 @@ def stopped(host, directory, result):
     return True
 
 
-def required_suite_artifacts(host, plan, report):
+def required_suite_artifacts(host, plan, resolved, report):
     stages = report.get('stages')
     if (not isinstance(plan, dict) or plan.get('origin') != 'host-plan' or plan.get('runId') != report.get('runId') or
             plan.get('vmId') != report.get('vmId') or not isinstance(plan.get('stages'), list) or
-            not isinstance(stages, list) or not stages or len(stages) != len(plan['stages'])):
+            not isinstance(resolved, list) or not isinstance(stages, list) or not stages or len(stages) != len(resolved) or
+            [stage for stage in resolved if not stage.get('discoveryStage')] != plan['stages']):
         raise host.RunnerError('The full-suite report does not match its archived stage plan')
-    files = {'planned-result.json'}
+    discoveries = {stage['id']: stage['nativeDiscovery'] for stage in plan['stages'] if 'nativeDiscovery' in stage}
+    files = {'planned-result.json', 'resolved-plan.json'}
     bundles = {}
     stage_ids = set()
-    for planned, stage in zip(plan['stages'], stages):
+    for planned, stage in zip(resolved, stages):
         name = planned.get('id') if isinstance(planned, dict) else None
         if (not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', name) or
                 name in stage_ids or not isinstance(stage, dict) or stage.get('id') != name or stage.get('status') != 'passed'):
             raise host.RunnerError('The full-suite report does not attest each planned stage')
         stage_ids.add(name)
+        if any(stage.get(key) != planned.get(key) for key in ('nativeAudit', 'nativeDiscovery', 'discoveryStage')):
+            raise host.RunnerError(f'The full-suite report changed its resolved policy for {name}')
+        if planned.get('discoveryStage'):
+            discovery = discoveries.get(planned['discoveryStage'])
+            if not discovery or discovery.get('executionID') != name or stage.get('productsVerified') is not True:
+                raise host.RunnerError(f'The full-suite test has no verified discovery obligation: {name}')
         references = {'log': f'{name}.log'}
+        if 'nativeDiscovery' in planned:
+            evidence = stage.get('discovery', {})
+            binding = evidence.get('plan', {})
+            build = evidence.get('build', {})
+            expected = {'artifact': f'{name}.discovery.json', 'log': f'{name}.log'}
+            if (any(evidence.get(key) != value for key, value in expected.items()) or
+                    binding.get('artifact') != f'{name}.discovery.xctestrun' or
+                    binding.get('decodedArtifact') != f'{name}.discovery.plan.json' or
+                    not isinstance(build.get('artifact'), str) or not build['artifact'].startswith('build-') or
+                    not build['artifact'].endswith('.log') or
+                    not isinstance(evidence.get('products'), list) or not evidence['products']):
+                raise host.RunnerError(f'The full-suite report lacks its discovery artifacts for {name}')
+            files.update((evidence['artifact'], binding['artifact'], binding['decodedArtifact'], build['artifact']))
         for audit, field, filename in (
                 ('approvalAudit', 'approvalEvidence', 'systematic-coverage.json'),
                 ('upgradeAudit', 'upgradeEvidence', 'upgrade-report.json'),
@@ -634,7 +655,7 @@ def required_suite_artifacts(host, plan, report):
                 references['safariEvidence'] = f'{name}.safari.json'
         if planned.get('preparationResult'):
             references['preparationResult'] = f'{name}.safari-preparation.json'
-        if 'nativeAudit' in planned or planned.get('preparationResult'):
+        if 'nativeAudit' in planned or 'nativeDiscovery' in planned or planned.get('preparationResult'):
             simulator = stage.get('simulatorPreparation')
             if (not isinstance(simulator, dict) or simulator.get('artifact') != f'{name}.simulators.json' or
                     simulator.get('status') != 'passed' or not isinstance(simulator.get('steps'), list)):
@@ -653,7 +674,8 @@ def required_suite_artifacts(host, plan, report):
 
 def suite_archive_identity(host, artifacts, report):
     plan = host.read_json(canonical(host, artifacts / 'planned-result.json'))
-    files, bundles = required_suite_artifacts(host, plan, report)
+    resolved = json.loads(host.bounded_json_bytes(canonical(host, artifacts / 'resolved-plan.json'), 'Resolved XCTest plan'))
+    files, bundles = required_suite_artifacts(host, plan, resolved, report)
     digest = hashlib.sha256()
 
     def fingerprint(path, info):

@@ -532,13 +532,21 @@ class LifecycleTests(unittest.TestCase):
     def test_completed_result_from_exited_vm_can_still_pass_without_interruption(self):
         exchange = self.root / 'completed-exit'
         (exchange / 'artifacts').mkdir(parents=True)
-        completed = {'runId': 'run-fixture', 'status': 'passed', 'finishedAt': 'fixture'}
+        job = {'version': 1, 'runId': 'run-fixture', 'vmId': 'fixture-vm', 'kind': 'run', 'profile': 'all',
+               'payload': {'stages': ['worker'], 'onlyTesting': []},
+               'source': {'sha256': 'a' * 64, 'commit': 'b' * 40},
+               'bootstrapTools': {name: 'c' * 64 for name in ('VMGuestAgent', 'guest_runner', 'guest_bootstrap.mjs')}}
+        host.atomic_json(exchange / 'job.json', job)
+        completed = {key: job[key] for key in ('version', 'runId', 'vmId', 'kind', 'profile', 'source')}
+        completed.update({'status': 'passed', 'finishedAt': 'fixture', 'stages': [{'id': 'worker.fixture', 'status': 'passed'}]})
         host.atomic_json(exchange / 'artifacts/result.json', completed)
         class Child:
             def poll(self): return 0
-        with patch.object(host.subprocess, 'Popen', return_value=Child()):
+        with patch.object(host.subprocess, 'Popen', return_value=Child()), \
+                patch.object(host, 'resolved_stage_plan', return_value=[{'id': 'worker.fixture', 'status': 'pending'}]) as verify:
             result = host.monitor_vm(SimpleNamespace(command='run'), self.root,
                                      self.root / 'unused.vbvm', exchange, 'run-fixture', self.root, {}, 100)
+        verify.assert_called_once_with(exchange, job)
         self.assertEqual(result, completed)
         self.assertFalse((exchange / 'stop.json').exists())
 

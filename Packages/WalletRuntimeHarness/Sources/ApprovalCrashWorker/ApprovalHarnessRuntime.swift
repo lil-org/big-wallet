@@ -504,7 +504,7 @@ final class HarnessRuntime {
         guard let owner = identity.nativeDeliveryOwner else { throw HarnessError.invalid("Invalid fixture delivery owner") }
         let clock = fixtures.clock
         let coordinator = NativeApprovalCoordinator(authority: NativeApprovalAuthority(handle: handle, nativeDeliveryNonce: nonce, store: store,
-            environment: .init(now: clock.now, monotonicClock: clock.instant, authorityID: authorityID, hooks: executionHooks, uptime: { Double(clock.uptime()) / 1_000_000_000 },
+            environment: .init(now: clock.now, monotonicClock: clock.instant, messages: .testingEnglish, authorityID: authorityID, hooks: executionHooks, uptime: { Double(clock.uptime()) / 1_000_000_000 },
                 wait: { duration in try? await clock.sleep(for: duration) },
                 waitForAuthenticationExpiry: { seconds in try await clock.sleep(until: clock.now().addingTimeInterval(seconds)) },
                 prepare: { [processor] binding, catalog in await processor.prepare(binding, catalog: catalog) },

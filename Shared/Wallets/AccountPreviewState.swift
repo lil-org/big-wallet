@@ -281,6 +281,7 @@ final class AccountPreviewState {
             invalidate()
             return .close
         }
+        let unchanged = wallet.isMnemonic == self.wallet.isMnemonic && wallet.accounts == self.wallet.accounts
         let previousKeys = Set(self.wallet.accounts.map(\.previewAccountKey))
         let currentKeys = Set(wallet.accounts.map(\.previewAccountKey))
         let addedKeys = selectedKeys.subtracting(previousKeys)
@@ -289,7 +290,7 @@ final class AccountPreviewState {
         self.wallet = wallet
         if recoveringStore, case .failed(let page) = status {
             startRecovery(through: page, change: .reload)
-        } else if session != nil || canRetry || status == .recovering {
+        } else if session != nil || canRetry || status == .recovering || status == .loadingInitial && unchanged {
             didChange(.reload)
         } else {
             restartInitialPreview()

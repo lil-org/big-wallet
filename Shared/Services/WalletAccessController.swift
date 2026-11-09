@@ -1,5 +1,4 @@
 import Foundation
-import Observation
 import WalletAuthority
 #if os(macOS)
 import AppKit
@@ -17,13 +16,49 @@ extension WalletAccessObserver {
 }
 
 @MainActor
-@Observable
+protocol WalletAccessExpirationScheduling: AnyObject {
+    // Registration and cancellation never invoke the action or access callbacks synchronously.
+    func schedule(after delay: Duration, action: @escaping @MainActor () -> Void)
+    func cancel()
+}
+
+@MainActor
+private final class WalletAccessExpirationScheduler: WalletAccessExpirationScheduling {
+    @MainActor
+    private final class Action: NSObject {
+        let run: @MainActor () -> Void
+        init(_ run: @escaping @MainActor () -> Void) { self.run = run }
+        @objc func fire(_ timer: Timer) { run() }
+    }
+
+    private var timer: Timer?
+
+    func schedule(after delay: Duration, action: @escaping @MainActor () -> Void) {
+        cancel()
+        let components = delay.components
+        let interval = Double(components.seconds) + Double(components.attoseconds) / 1e18
+        let timer = Timer(timeInterval: interval, target: Action(action), selector: #selector(Action.fire(_:)), userInfo: nil, repeats: false)
+        self.timer = timer
+        RunLoop.main.add(timer, forMode: .common)
+#if os(macOS)
+        RunLoop.main.add(timer, forMode: .modalPanel)
+        RunLoop.main.add(timer, forMode: .eventTracking)
+#endif
+    }
+
+    func cancel() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    isolated deinit { timer?.invalidate() }
+}
+
+@MainActor
 final class WalletAccessController {
     enum LockReason: Equatable {
         case idle, background, protectedDataUnavailable, systemSleep, sessionInactive
     }
-
-    typealias Schedule = @MainActor (Duration, @escaping @MainActor () -> Void) -> (@MainActor () -> Void)
 
     private struct Observer {
         weak var value: (any WalletAccessObserver)?
@@ -175,49 +210,35 @@ final class WalletAccessController {
         }
     }
 
-    @MainActor
-    private final class TimerAction: NSObject {
-        private let action: @MainActor () -> Void
-
-        init(_ action: @escaping @MainActor () -> Void) {
-            self.action = action
-        }
-
-        @objc func fire(_ timer: Timer) {
-            action()
-        }
-    }
-
     private(set) var session: WalletAccessSession?
     private(set) var generation: UInt64 = 0
     private(set) var isLocked = true
     private(set) var hasLocked = false
     private(set) var lockReason: LockReason?
-    @ObservationIgnored var isProtectedDataAvailable: @MainActor () -> Bool = { true }
+    var isProtectedDataAvailable: @MainActor () -> Bool = { true }
 
     private let credentials: WalletCredentials
-    private let schedule: Schedule
+    private let expirationScheduler: any WalletAccessExpirationScheduling
     private let activityClock: @MainActor () -> ContinuousClock.Instant
-    @ObservationIgnored private var observers = [ObjectIdentifier: Observer]()
-    @ObservationIgnored private var authentication: AuthenticationAttempt?
-    @ObservationIgnored private var cancelTimer: (@MainActor () -> Void)?
-    @ObservationIgnored private var timerGeneration: UInt64 = 0
-    @ObservationIgnored private var isLockTransitioning = false
-    @ObservationIgnored private var lastContinuousInteraction: ContinuousClock.Instant?
+    private var observers = [ObjectIdentifier: Observer]()
+    private var authentication: AuthenticationAttempt?
+    private var timerGeneration: UInt64 = 0
+    private var isLockTransitioning = false
+    private var lastContinuousInteraction: ContinuousClock.Instant?
 
     init(
         credentials: WalletCredentials,
-        schedule: @escaping Schedule = WalletAccessController.scheduleExpiration,
+        expirationScheduler: any WalletAccessExpirationScheduling = WalletAccessExpirationScheduler(),
         activityClock: @escaping @MainActor () -> ContinuousClock.Instant = { .now }
     ) {
         self.credentials = credentials
-        self.schedule = schedule
+        self.expirationScheduler = expirationScheduler
         self.activityClock = activityClock
     }
 
     isolated deinit {
         session?.invalidate()
-        cancelTimer?()
+        expirationScheduler.cancel()
         authentication?.retire(cancelled: true)
     }
 
@@ -267,13 +288,7 @@ final class WalletAccessController {
         lockReason = nil
         guard let remaining = remainingLifetime() else { return false }
         scheduleTimer(after: remaining)
-        guard self.generation == generation, self.session === session, checkAccess() else { return false }
-        guard credentials.validateAccess(session) else {
-            if self.generation == generation, self.session === session { lock(reason: .idle) }
-            else { session.invalidate() }
-            return false
-        }
-        guard self.generation == generation, self.session === session, checkAccess() else { return false }
+        guard self.generation == generation, self.session === session, validateCurrentAccess() else { return false }
         let currentObservers = liveObservers()
         for observer in currentObservers {
             guard self.generation == generation, !isLocked else { break }
@@ -290,9 +305,14 @@ final class WalletAccessController {
         attempt.retire(cancelled: true)
     }
 
+    func matchesPresentation(_ generation: UInt64) -> Bool {
+        self.generation == generation && !isLocked
+    }
+
     @discardableResult
-    func checkAccess() -> Bool {
-        remainingLifetime() != nil
+    func validateCurrentAccess(expectedGeneration: UInt64? = nil) -> Bool {
+        if let expectedGeneration, !matchesPresentation(expectedGeneration) { return false }
+        return remainingLifetime() != nil
     }
 
     private func remainingLifetime() -> Duration? {
@@ -308,37 +328,29 @@ final class WalletAccessController {
         return remaining
     }
 
-    func accepts(_ generation: UInt64) -> Bool {
-        self.generation == generation && checkAccess()
-    }
-
-    func requireCurrentAccess() throws -> WalletAccessSession {
-        guard checkAccess(), let session else { throw WalletCredentialError.authorizationUnavailable }
+    func requireCurrentAccess(expectedGeneration: UInt64? = nil) throws -> WalletAccessSession {
+        guard validateCurrentAccess(expectedGeneration: expectedGeneration), let session else { throw WalletCredentialError.authorizationUnavailable }
         let current = generation
         guard credentials.validateAccess(session) else {
-            checkAccess()
+            validateCurrentAccess()
             throw WalletCredentialError.authorizationUnavailable
         }
-        guard generation == current, self.session === session, checkAccess() else {
+        guard generation == current, self.session === session, validateCurrentAccess() else {
             throw WalletCredentialError.authorizationUnavailable
         }
         return session
     }
 
     @discardableResult
-    func recordInteraction() -> Bool {
-        guard !isLocked, let session else { return false }
+    func recordInteraction(expectedGeneration: UInt64? = nil) -> Bool {
+        guard validateCurrentAccess(expectedGeneration: expectedGeneration), let session else { return false }
         let current = generation
-        guard isProtectedDataAvailable() else {
-            lock(reason: .protectedDataUnavailable)
-            return false
-        }
         guard let remaining = credentials.recordInteraction(session) else {
-            checkAccess()
+            validateCurrentAccess()
             return false
         }
         scheduleTimer(after: remaining)
-        return generation == current && self.session === session && checkAccess()
+        return generation == current && self.session === session && !isLocked
     }
 
     func recordContinuousInteraction() {
@@ -353,15 +365,16 @@ final class WalletAccessController {
         defer { isLockTransitioning = false }
         generation &+= 1
         let current = generation
-        session?.invalidate()
+        let previousSession = session
+        let previousAuthentication = authentication
         session = nil
+        authentication = nil
         isLocked = true
         hasLocked = true
         lockReason = reason
         lastContinuousInteraction = nil
         cancelScheduledTimer()
-        let previousAuthentication = authentication
-        authentication = nil
+        previousSession?.invalidate()
         previousAuthentication?.retire(cancelled: true)
         let currentObservers = liveObservers()
         for observer in currentObservers {
@@ -377,9 +390,7 @@ final class WalletAccessController {
 
     private func cancelScheduledTimer() {
         timerGeneration &+= 1
-        let cancel = cancelTimer
-        cancelTimer = nil
-        cancel?()
+        expirationScheduler.cancel()
     }
 
     private func scheduleTimer(after remaining: Duration) {
@@ -389,24 +400,10 @@ final class WalletAccessController {
         guard !isLocked, let currentSession, session === currentSession,
               generation == accessGeneration else { return }
         let scheduledGeneration = timerGeneration
-        let cancel = schedule(remaining) { [weak self] in
+        expirationScheduler.schedule(after: remaining) { [weak self] in
             guard let self, timerGeneration == scheduledGeneration,
                   generation == accessGeneration, let remaining = remainingLifetime() else { return }
             scheduleTimer(after: remaining)
         }
-        if timerGeneration == scheduledGeneration { cancelTimer = cancel }
-        else { cancel() }
-    }
-
-    private static func scheduleExpiration(after delay: Duration, action: @escaping @MainActor () -> Void) -> @MainActor () -> Void {
-        let components = delay.components
-        let interval = Double(components.seconds) + Double(components.attoseconds) / 1e18
-        let timer = Timer(timeInterval: interval, target: TimerAction(action), selector: #selector(TimerAction.fire(_:)), userInfo: nil, repeats: false)
-        RunLoop.main.add(timer, forMode: .common)
-#if os(macOS)
-        RunLoop.main.add(timer, forMode: .modalPanel)
-        RunLoop.main.add(timer, forMode: .eventTracking)
-#endif
-        return { timer.invalidate() }
     }
 }

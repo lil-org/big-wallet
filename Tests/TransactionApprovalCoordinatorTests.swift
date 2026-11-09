@@ -9,6 +9,101 @@ import AppKit
 
 @MainActor
 final class TransactionApprovalCoordinatorTests: XCTestCase {
+    func testSigningAuthenticationRetryPreservesReviewAndRequiresFreshAuthenticationBeforePreflight() async throws {
+        let transaction = Self.makeReadyTransaction()
+        let network = Self.makeNetwork()
+        let account = WalletAccountDescriptor(walletID: "authentication-retry", coin: .ethereum,
+            normalizedAddress: transaction.from, derivationPath: "m/44'/60'/0'/0/0")
+        let fixture = try ApprovedExecutionTestFixture()
+        try fixture.establishGrant(account, network: network)
+        let snapshot = try fixture.enqueue(id: 81, name: "signTransaction", provider: .ethereum, body: [
+            "address": transaction.from, "chainId": network.chainIdHexString,
+            "object": ["to": transaction.to, "value": "0x0", "data": "0x", "nonce": "0x0", "gas": "0x5208", "gasPrice": "0xa"],
+        ])
+        let action = DappRequestAction.approveTransaction(.init(transaction: transaction,
+            resolvedNetwork: .init(network: network, source: .custom), walletId: account.walletID, account: account.account))
+        let review = NativeApprovalReview(intent: try reviewIntentForTesting(binding: XCTUnwrap(snapshot.requestBinding), action: action))
+        defer { review.invalidate() }
+        let stub = ApprovalOperationsStub()
+        var approvals = 0
+        let controller = ApproveTransactionViewController.with(transaction: transaction, chain: network,
+            account: account.account, walletId: account.walletID, review: review, operations: stub.operations) { result in
+                XCTAssertNotNil(result)
+                approvals += 1
+            }
+        let window = accountSelectionWindow(controller: controller)
+        defer { controller.retire(); window.close() }
+        let preparation = try XCTUnwrap(stub.preparationCalls.last)
+        preparation.completion(.success(transaction))
+        guard await expectEventually({ controller.okButton.isEnabled }) else { return }
+
+        var challenges = [WalletAuthenticationChallenge]()
+        var outcome = WalletAuthenticationResult.failed
+        controller.authenticate = { [weak controller] _, challenge, currentReview in
+            XCTAssertTrue(currentReview === review)
+            XCTAssertEqual(controller?.titleLabel.stringValue, Strings.sendTransaction)
+            challenges.append(challenge)
+            return outcome
+        }
+        for failure in [WalletAuthenticationResult.failed, .interactionUnavailable, .cancelled] {
+            outcome = failure
+            let calls = challenges.count
+            controller.actionButtonTapped(controller.okButton as Any)
+            guard await expectEventually({ challenges.count == calls + 1 && controller.okButton.isEnabled }) else { return }
+            let cancelled = if case .cancelled = failure { true } else { false }
+            XCTAssertEqual(controller.titleLabel.stringValue, cancelled ? Strings.sendTransaction : Strings.failedToVerify)
+            XCTAssertEqual(controller.okButton.title, cancelled ? Strings.ok : Strings.tryAgain)
+            XCTAssertTrue(stub.preflightCalls.isEmpty)
+            XCTAssertEqual(approvals, 0)
+            let challenge = try XCTUnwrap(challenges.last)
+            XCTAssertFalse(challenge.isPending(for: challenge.authorityID))
+        }
+
+        controller.authenticate = { _, challenge, _ in
+            challenges.append(challenge)
+            guard let grant = challenge.issueGrant(for: challenge.authorityID, credentialIdentity: .init(status: { .current })) else {
+                XCTFail("A fresh signing challenge must accept authentication")
+                return .failed
+            }
+            return .granted(grant)
+        }
+        controller.actionButtonTapped(controller.okButton as Any)
+        await waitForCalls(stub, .preflight, count: 1)
+        XCTAssertEqual(challenges.count, 4)
+        XCTAssertEqual(Set(challenges.map(ObjectIdentifier.init)).count, 4)
+        XCTAssertEqual(stub.preparationCalls.count, 1)
+        XCTAssertEqual(approvals, 0)
+        let preflight = try XCTUnwrap(stub.preflightCalls.first)
+        preflight.completion(.safe(preflight.transaction, Self.makeLegacyEstimate()))
+        await expectEventually { approvals == 1 }
+    }
+
+    func testPreparationSnapshotChecksAccessBeforeEnablingApproval() async throws {
+        let access = WalletAccessTestFixture()
+        try access.unlock()
+        let transaction = Self.makeReadyTransaction()
+        let stub = ApprovalOperationsStub()
+        let coordinator = makeCoordinator(transaction: transaction, stub: stub)
+        let review = try nativeReviewForTesting()
+        defer { review.invalidate() }
+        let account = WalletAccount(address: transaction.from, coin: .ethereum, derivation: .default,
+            derivationPath: "m/44'/60'/0'/0/0", publicKey: "", extendedPublicKey: "")
+        let controller = ApproveTransactionViewController.with(transaction: transaction, chain: Self.makeNetwork(),
+            account: account, walletId: "expired-review", review: review) { _ in XCTFail("Unexpected approval") }
+        controller.walletAccess = NativeWalletAccess(access.access)
+        _ = controller.view
+        controller.invalidateNativeApprovalReview()
+        coordinator.onSnapshot = { controller.render($0) }
+        coordinator.startPreparation(forceGasCheck: false)
+        let call = try XCTUnwrap(stub.preparationCalls.last)
+        XCTAssertFalse(controller.okButton.isEnabled)
+        access.advance(by: .seconds(900))
+        call.completion(.success(transaction))
+        await waitForSnapshot(coordinator) { $0.phase == .ready }
+        XCTAssertTrue(access.access.isLocked)
+        XCTAssertFalse(controller.okButton.isEnabled)
+    }
+
     func testNewFeeNoticeIsVisibleAfterScrollingTransactionDetails() async throws {
         var transaction = Self.makeReadyTransaction()
         transaction.interpretation = (1...100).map { "Transaction detail line \($0)" }.joined(separator: "\n")

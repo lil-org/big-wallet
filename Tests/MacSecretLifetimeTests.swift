@@ -53,8 +53,9 @@ final class MacSecretLifetimeTests: XCTestCase {
             window.contentViewController = controller
             window.orderFront(nil)
             defer { windowController.close() }
-            controller?.tableView.deselectedRow = 1
-            _ = controller?.perform(NSSelectorFromString("didClickRemoveAccount:"), with: NSMenuItem())
+            let remove = NSSelectorFromString("didClickRemoveAccount:")
+            let item = try XCTUnwrap(controller?.menuForRow(1)?.items.first { $0.action == remove })
+            _ = controller?.perform(remove, with: item)
             await fulfillment(of: [entered], timeout: 3)
             if locksDuringNavigation {
                 fixture.access.isProtectedDataAvailable = { [weak window] in

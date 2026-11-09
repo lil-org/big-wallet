@@ -10,6 +10,60 @@ import WalletDomain
 
 @MainActor
 final class MobileWalletAccessTests: XCTestCase {
+    func testHealthyRefreshPreservesAnAlreadyRevealedSecret() async throws {
+        let host = try await MobileWalletOperationHost()
+        addTeardownBlock { @MainActor in try await host.tearDown() }
+        defer { host.close() }
+        try await host.begin(.export)
+        host.authentication.complete()
+        await expectEventually(timeout: 5) { host.didPerform(.export) }
+        let alert = try XCTUnwrap(host.controller.secretPresentation.alert)
+        host.inventory.holdNextRead()
+        let refresh = Task { await host.manager.reloadFromStore() }
+        defer { refresh.cancel(); host.inventory.release() }
+        await fulfillment(of: [host.inventory.entered], timeout: 3)
+        XCTAssertTrue(host.didPerform(.export))
+        XCTAssertTrue(host.controller.secretPresentation.alert === alert)
+        host.inventory.release()
+        let loaded = await refresh.value
+        XCTAssertTrue(loaded)
+        await expectEventually { host.didPerform(.export) }
+        XCTAssertTrue(host.controller.secretPresentation.alert === alert)
+    }
+
+    func testLastAccountRemovalShowsBothWarningsBeforeAuthentication() async throws {
+        let host = try await MobileWalletOperationHost()
+        addTeardownBlock { @MainActor in try await host.tearDown() }
+        defer { host.close() }
+        var authentications = 0
+        host.controller.authenticate = { _, _, _, _ in authentications += 1; return nil }
+        host.controller.tableView(host.controller.tableView, commit: .delete, forRowAt: IndexPath(row: 0, section: 0))
+        let alert = try XCTUnwrap(host.controller.presentedViewController as? UIAlertController)
+        XCTAssertEqual(alert.title, Strings.removingTheLastAccount)
+        XCTAssertEqual(alert.message, Strings.removedWalletsCantBeRecovered)
+        XCTAssertEqual(alert.actions.map(\.title), [Strings.cancel, Strings.removeAnyway])
+        XCTAssertEqual(authentications, 0)
+        host.controller.dismiss(animated: false)
+        XCTAssertFalse(host.didPerform(.delete))
+    }
+
+    func testRemovedWalletClearsAnAlreadyRevealedSecret() async throws {
+        let host = try await MobileWalletOperationHost()
+        addTeardownBlock { @MainActor in try await host.tearDown() }
+        defer { host.close() }
+        try await host.begin(.export)
+        host.authentication.complete()
+        await expectEventually(timeout: 5) { host.didPerform(.export) }
+        let alert = try XCTUnwrap(host.controller.secretPresentation.alert)
+        host.reader.attributes = []
+        host.reader.walletData = [:]
+
+        await assertWalletReload(host.manager)
+
+        await expectEventually { host.controller.secretPresentation.alert == nil }
+        XCTAssertNil(alert.message)
+    }
+
     func testPendingAuthenticationSurvivesSharedWalletReload() async throws {
         for operation in MobileWalletOperationHost.Operation.allCases {
             let host = try await MobileWalletOperationHost()
@@ -20,7 +74,7 @@ final class MobileWalletAccessTests: XCTestCase {
             let reload = Task { await host.manager.reloadFromStore() }
             defer { reload.cancel(); host.inventory.release() }
             await fulfillment(of: [host.inventory.entered], timeout: 3)
-            XCTAssertEqual(host.manager.loadState, .loading)
+            XCTAssertEqual(host.manager.loadState, .ready)
             XCTAssertEqual(host.authentication.cancellations, 0)
 
             host.inventory.release()
@@ -48,7 +102,7 @@ final class MobileWalletAccessTests: XCTestCase {
             host.authentication.complete()
             await fulfillment(of: [host.authentication.returned], timeout: 3)
             for _ in 0..<3 { await Task.yield() }
-            XCTAssertEqual(host.manager.loadState, .loading)
+            XCTAssertEqual(host.manager.loadState, .ready)
             XCTAssertFalse(host.didPerform(operation))
             XCTAssertEqual(host.authentication.cancellations, 0)
 
@@ -442,7 +496,7 @@ final class MobileWalletAccessTests: XCTestCase {
         try fixture.unlock()
         controller.okButtonTapped(controller.okButton as Any)
         XCTAssertFalse(completed)
-        XCTAssertFalse(controller.hasWalletAccess)
+        XCTAssertFalse(controller.validateCurrentAccess())
     }
 
     func testAccessibilityScrollRenewsBothAccountTablesButProgrammaticScrollingDoesNot() throws {
@@ -483,7 +537,7 @@ final class MobileWalletAccessTests: XCTestCase {
             let afterUnlock = fixture.scheduler.expirations.count
             XCTAssertFalse(table.accessibilityScroll(.up))
             XCTAssertEqual(fixture.scheduler.expirations.count, afterUnlock)
-            XCTAssertFalse(controller.hasWalletAccess)
+            XCTAssertFalse(controller.validateCurrentAccess())
         }
     }
 
@@ -700,7 +754,7 @@ private final class MobileWalletOperationHost {
         window.rootViewController = controller
         window.makeKeyAndVisible()
         window.layoutIfNeeded()
-        await expectEventually { self.controller.canPresentSecret }
+        await expectEventually { self.controller.validateSecretPresentation() }
     }
 
     func begin(_ operation: Operation) async throws {

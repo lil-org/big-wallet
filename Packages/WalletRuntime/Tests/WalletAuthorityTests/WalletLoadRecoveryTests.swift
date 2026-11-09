@@ -37,7 +37,7 @@ final class WalletLoadRecoveryTests: XCTestCase {
         XCTAssertNotNil(manager.reviewCatalog())
         XCTAssertEqual(publications, 2)
         XCTAssertEqual(states.withLock { $0 }, [
-            .loading, .ready, .loading, .failed(.unavailable),
+            .loading, .ready, .failed(.unavailable),
             .loading, .failed(.unavailable), .loading, .ready,
         ])
     }
@@ -75,36 +75,38 @@ final class WalletLoadRecoveryTests: XCTestCase {
         XCTAssertEqual(manager.wallets.map(\.id), ["wallet"])
     }
 
-    func testCancelledRefreshPreservesSnapshotAndAllowsANewRetry() async throws {
-        let reader = makeReader()
-        let entered = expectation(description: "Refresh started")
-        let release = DispatchSemaphore(value: 0)
-        defer { release.signal() }
-        let reads = Mutex(0)
-        let manager = WalletsManager(keychain: Keychain(copyMatching: { query, result in
-            if (query as NSDictionary)[kSecReturnAttributes as String] as? Bool == true {
-                let blocked = reads.withLock { count in count += 1; return count == 2 }
-                if blocked { entered.fulfill(); release.wait() }
-            }
-            return reader.copyMatching(query, result)
-        }))
-        await assertWalletReload(manager)
-        let refresh = Task { await manager.reloadFromStore() }
-        await fulfillment(of: [entered], timeout: 2)
-        reader.attributesStatus = errSecInteractionNotAllowed
-        refresh.cancel()
-        release.signal()
-        let cancelled = await refresh.value
+    func testCancelledRefreshPreservesSnapshotAndAnyObservedFailure() async throws {
+        for readFails in [false, true] {
+            let reader = makeReader()
+            let entered = expectation(description: "Refresh started")
+            let release = DispatchSemaphore(value: 0)
+            defer { release.signal() }
+            let reads = Mutex(0)
+            let manager = WalletsManager(keychain: Keychain(copyMatching: { query, result in
+                if (query as NSDictionary)[kSecReturnAttributes as String] as? Bool == true {
+                    let blocked = reads.withLock { count in count += 1; return count == 2 }
+                    if blocked { entered.fulfill(); release.wait() }
+                }
+                return reader.copyMatching(query, result)
+            }))
+            await assertWalletReload(manager)
+            let refresh = Task { await manager.reloadFromStore() }
+            await fulfillment(of: [entered], timeout: 2)
+            reader.attributesStatus = readFails ? errSecInteractionNotAllowed : errSecSuccess
+            refresh.cancel()
+            release.signal()
+            let cancelled = await refresh.value
 
-        XCTAssertFalse(cancelled)
-        XCTAssertEqual(manager.loadState, .ready)
-        XCTAssertEqual(manager.wallets.map(\.id), ["wallet"])
-        reader.attributesStatus = errSecSuccess
-        reader.attributes = []
-        await assertWalletReload(manager)
-        XCTAssertTrue(manager.wallets.isEmpty)
-        XCTAssertTrue(manager.hasLoadedSnapshot)
-        XCTAssertTrue(manager.isStoreReady)
+            XCTAssertFalse(cancelled)
+            XCTAssertEqual(manager.loadState, readFails ? .failed(.unavailable) : .ready)
+            XCTAssertEqual(manager.wallets.map(\.id), ["wallet"])
+            reader.attributesStatus = errSecSuccess
+            reader.attributes = []
+            await assertWalletReload(manager)
+            XCTAssertTrue(manager.wallets.isEmpty)
+            XCTAssertTrue(manager.hasLoadedSnapshot)
+            XCTAssertTrue(manager.isStoreReady)
+        }
     }
 
     func testExternalMutationDuringEnumerationRequiresAFreshSnapshot() async throws {
@@ -127,7 +129,7 @@ final class WalletLoadRecoveryTests: XCTestCase {
         reader.walletData["new-wallet"] = WalletCoreProxyTestVectors.walletCoreJSONPrivateKeyFixture
         let external = Task {
             notified.fulfill()
-            await manager.handleExternalWalletStoreChange()
+            await manager.handleExternalWalletStoreChange().value
         }
         await fulfillment(of: [notified], timeout: 2)
         release.signal()
@@ -137,6 +139,38 @@ final class WalletLoadRecoveryTests: XCTestCase {
         XCTAssertTrue(loaded)
         XCTAssertEqual(Set(manager.wallets.map(\.id)), ["wallet", "new-wallet"])
         XCTAssertEqual(manager.loadState, .ready)
+    }
+
+    func testKnownExternalChangeWithholdsTheCatalogUntilAnUncancelledReadCoversIt() async throws {
+        let reader = makeReader()
+        let entered = expectation(description: "An external inventory read is pending")
+        let hold = Mutex(false)
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        let manager = WalletsManager(keychain: Keychain(copyMatching: { query, result in
+            if (query as NSDictionary)[kSecReturnAttributes as String] as? Bool == true,
+               hold.withLock({ value in defer { value = false }; return value }) {
+                entered.fulfill()
+                release.wait()
+            }
+            return reader.copyMatching(query, result)
+        }))
+        await assertWalletReload(manager)
+        XCTAssertNotNil(manager.reviewCatalog())
+        hold.withLock { $0 = true }
+        let first = manager.handleExternalWalletStoreChange()
+        XCTAssertTrue(manager.isStoreReady)
+        XCTAssertNil(manager.reviewCatalog())
+        await fulfillment(of: [entered], timeout: 3)
+        reader.attributes = []
+        let second = manager.handleExternalWalletStoreChange()
+        second.cancel()
+        release.signal()
+        await first.value
+        await second.value
+        XCTAssertNil(manager.reviewCatalog())
+        await assertWalletReload(manager)
+        XCTAssertEqual(manager.reviewCatalog()?.orderedAccounts.count, 0)
     }
 
     func testCorruptAndMissingRecordsNeverPublishAPartialSnapshot() async throws {
@@ -252,6 +286,213 @@ final class WalletLoadRecoveryTests: XCTestCase {
         await assertWalletReload(manager)
         XCTAssertEqual(manager.wallets, original)
     }
+
+    func testHealthyReloadPreservesValidityAndReadyPresentation() async throws {
+        let reader = makeReader()
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager)
+        let token = try manager.repository.validity.token()
+        let states = Mutex([WalletsManager.LoadState]())
+        let observer = NotificationCenter.default.addObserver(forName: .walletsLoadStateChanged, object: manager, queue: .main) { _ in
+            let state = MainActor.assumeIsolated { manager.loadState }
+            states.withLock { $0.append(state) }
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        await assertWalletReload(manager)
+        XCTAssertNoThrow(try manager.repository.validity.validate(token))
+        XCTAssertTrue(states.withLock { $0 }.isEmpty)
+        XCTAssertTrue(manager.isStoreReady)
+    }
+
+    func testSupersededReloadCannotServeAnOlderPublishedCatalog() async throws {
+        let reader = makeReader()
+        let entered = expectation(description: "Refresh reached the changed store")
+        let blockNextRead = Mutex(false)
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        let manager = WalletsManager(keychain: Keychain(copyMatching: { query, result in
+            if (query as NSDictionary)[kSecReturnAttributes as String] as? Bool == true,
+               blockNextRead.withLock({ block in defer { block = false }; return block }) {
+                entered.fulfill()
+                release.wait()
+            }
+            return reader.copyMatching(query, result)
+        }))
+        await assertWalletReload(manager)
+        reader.attributes = []
+        blockNextRead.withLock { $0 = true }
+        let refresh = Task { await manager.reloadFromStore() }
+        await fulfillment(of: [entered], timeout: 5)
+
+        let newerReadFinished = DispatchSemaphore(value: 0)
+        let newer = Task.detached { [repository = manager.repository] in
+            let result = await repository.load()
+            newerReadFinished.signal()
+            return result
+        }
+        release.signal()
+        XCTAssertEqual(newerReadFinished.wait(timeout: .now() + 5), .success)
+        guard case .loaded(let current) = await newer.value else { return XCTFail("Expected newer repository snapshot") }
+        XCTAssertTrue(current.wallets.isEmpty)
+        let succeeded = await refresh.value
+        XCTAssertFalse(succeeded)
+        XCTAssertTrue(manager.isStoreReady)
+        XCTAssertEqual(manager.wallets.map(\.id), ["wallet"])
+        XCTAssertNil(manager.reviewCatalog())
+
+        await assertWalletReload(manager)
+        XCTAssertTrue(manager.wallets.isEmpty)
+        XCTAssertNotNil(manager.reviewCatalog())
+    }
+
+    func testRepositoryFailureClosesAccessBeforeManagerPublicationAndRecoveryCannotReviveOldWork() async throws {
+        let reader = makeReader()
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager)
+        let original = manager.wallets
+        let validity = manager.repository.validity
+        let token = try validity.token()
+        reader.attributesStatus = errSecInteractionNotAllowed
+        guard case .failed = await manager.repository.load() else { return XCTFail("Read failure was not observed") }
+        XCTAssertEqual(manager.loadState, .ready)
+        XCTAssertFalse(manager.isStoreReady)
+        XCTAssertNil(manager.reviewCatalog())
+        XCTAssertThrowsError(try validity.validate(token))
+        reader.attributesStatus = errSecSuccess
+        await assertWalletReload(manager)
+        XCTAssertEqual(manager.wallets, original)
+        XCTAssertThrowsError(try validity.validate(token))
+        XCTAssertNoThrow(try validity.validate(validity.token()))
+    }
+
+    func testMutationRevisionAndOlderLoadCannotHealAnObservedFailure() throws {
+        let validity = WalletStoreValidity()
+        validity.recordLoad(revision: 1)
+        let token = try validity.token()
+        validity.recordLoad(revision: 3, failure: .corrupt)
+        validity.recordLoad(revision: 2)
+        validity.recordMutation(revision: 4)
+        XCTAssertEqual(validity.snapshot.status, .failed(.corrupt))
+        XCTAssertThrowsError(try validity.token())
+        validity.recordLoad(revision: 5)
+        XCTAssertThrowsError(try validity.validate(token))
+        XCTAssertNoThrow(try validity.validate(validity.token()))
+    }
+
+    func testCancellationDuringFailurePublicationCannotRestoreReadyState() async throws {
+        let reader = makeReader()
+        let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+        await assertWalletReload(manager)
+        let observer = NotificationCenter.default.addObserver(forName: .walletsLoadStateChanged, object: manager, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                if case .failed = manager.loadState { withUnsafeCurrentTask { $0?.cancel() } }
+            }
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        reader.attributesStatus = errSecInteractionNotAllowed
+        let result = await manager.reloadFromStore()
+        XCTAssertFalse(result)
+        XCTAssertEqual(manager.loadState, .failed(.unavailable))
+        XCTAssertFalse(manager.isStoreReady)
+        XCTAssertEqual(manager.wallets.count, 1)
+    }
+
+    func testCancelledOldReloadFailureCannotClearItsReplacementOrReviveOldTokens() async throws {
+        let reader = makeReader()
+        let oldEntered = expectation(description: "Old read started")
+        let newEntered = expectation(description: "Replacement read started")
+        let oldRelease = DispatchSemaphore(value: 0)
+        let newRelease = DispatchSemaphore(value: 0)
+        defer { oldRelease.signal(); newRelease.signal() }
+        let reads = Mutex(0)
+        let manager = WalletsManager(keychain: Keychain(copyMatching: { query, result in
+            if (query as NSDictionary)[kSecReturnAttributes as String] as? Bool == true {
+                let count = reads.withLock { $0 += 1; return $0 }
+                if count == 2 {
+                    oldEntered.fulfill()
+                    oldRelease.wait()
+                    return errSecInteractionNotAllowed
+                }
+                if count == 3 { newEntered.fulfill(); newRelease.wait() }
+            }
+            return reader.copyMatching(query, result)
+        }))
+        await assertWalletReload(manager)
+        let token = try manager.repository.validity.token()
+        let old = Task { await manager.reloadFromStore() }
+        await fulfillment(of: [oldEntered], timeout: 3)
+        old.cancel()
+        let replacement = Task { await manager.reloadFromStore() }
+        oldRelease.signal()
+        await fulfillment(of: [newEntered], timeout: 3)
+        let oldResult = await old.value
+        XCTAssertFalse(oldResult)
+        XCTAssertFalse(manager.isStoreReady)
+        XCTAssertThrowsError(try manager.repository.validity.validate(token))
+        XCTAssertEqual(manager.wallets.count, 1)
+        newRelease.signal()
+        let restored = await replacement.value
+        XCTAssertTrue(restored)
+        XCTAssertTrue(manager.isStoreReady)
+        XCTAssertThrowsError(try manager.repository.validity.validate(token))
+    }
+
+#if os(iOS) || os(visionOS)
+    func testVaultCatalogReadFailureInvalidatesTokensAndPublishesFailure() async throws {
+        for failure in [WalletsManager.LoadFailure.unavailable, .corrupt] {
+            let reader = makeReader()
+            reader.passwordData = WalletCoreProxyTestVectors.walletCoreJSONPrivateKeyPassword
+            let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
+            await assertWalletReload(manager)
+            let token = try manager.repository.validity.token()
+            let readSource = manager.makeSafariApprovalSourceReader()
+            switch failure {
+            case .unavailable: reader.walletReadStatuses["wallet"] = errSecInteractionNotAllowed
+            case .corrupt: reader.attributes.append(reader.walletAttributes(id: "wallet"))
+            }
+            do {
+                _ = try await readSource()
+                XCTFail("The vault accepted a failed catalog read")
+            } catch WalletCredentialError.failedToRead(errSecInteractionNotAllowed) {
+                XCTAssertEqual(failure, .unavailable)
+            } catch WalletsManager.LoadFailure.corrupt {
+                XCTAssertEqual(failure, .corrupt)
+            }
+            XCTAssertEqual(manager.loadState, .failed(failure))
+            XCTAssertThrowsError(try manager.repository.validity.validate(token))
+            reader.walletReadStatuses = [:]
+            reader.attributes = [reader.walletAttributes(id: "wallet")]
+            var source = try await readSource()
+            defer { source?.resetSecrets() }
+            XCTAssertEqual(source?.wallets.map(\.walletID), ["wallet"])
+            XCTAssertEqual(manager.loadState, .failed(failure))
+            await assertWalletReload(manager)
+            XCTAssertThrowsError(try manager.repository.validity.validate(token))
+        }
+    }
+
+    func testCancelledVaultCatalogReadPreservesValidStore() async throws {
+        let reader = makeReader()
+        reader.passwordData = WalletCoreProxyTestVectors.walletCoreJSONPrivateKeyPassword
+        let cancelEnumeration = Mutex(false)
+        let manager = WalletsManager(keychain: Keychain(copyMatching: { query, result in
+            if (query as NSDictionary)[kSecReturnAttributes as String] as? Bool == true,
+               cancelEnumeration.withLock({ $0 }) { withUnsafeCurrentTask { $0?.cancel() } }
+            return reader.copyMatching(query, result)
+        }))
+        await assertWalletReload(manager)
+        let token = try manager.repository.validity.token()
+        cancelEnumeration.withLock { $0 = true }
+        let readSource = manager.makeSafariApprovalSourceReader()
+        let task = Task { try await readSource() }
+        do {
+            _ = try await task.value
+            XCTFail("Cancelled vault enumeration returned a snapshot")
+        } catch is CancellationError {}
+        XCTAssertEqual(manager.loadState, .ready)
+        XCTAssertNoThrow(try manager.repository.validity.validate(token))
+    }
+#endif
 
     private func makeReader() -> KeychainCopyMatchingStub {
         let reader = KeychainCopyMatchingStub()

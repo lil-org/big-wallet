@@ -25,7 +25,7 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
     private var didAppear = false
     private var isSaving = false
     private var isRetired = false
-    private var acceptsManagementActions: Bool { walletAccess.isCurrent && !isRetired }
+    private var hasCurrentPresentation: Bool { walletAccess.hasCurrentPresentation && !isRetired }
     private var canEditPreview: Bool {
         !isRetired && walletAccess.hasCurrentPresentation && walletsManager.isStoreReady &&
             !isSaving && previewState?.canEdit == true
@@ -36,6 +36,8 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
     private var statusCenterConstraint: NSLayoutConstraint?
     private var statusBottomConstraint: NSLayoutConstraint?
     private var originalBottomInset: CGFloat = 0
+
+    private func validateManagementActions() -> Bool { walletAccess.validateCurrentAccess() && hasCurrentPresentation }
 
     func retire() {
         retireEditor()
@@ -77,7 +79,7 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        guard acceptsManagementActions else { return }
+        guard validateManagementActions() else { return }
         (tableView.enclosingScrollView?.verticalScroller as? WalletActivityScroller)?.accessibilityInteraction = { [weak self] in
             guard let self, !isRetired, viewIfLoaded?.window?.contentViewController === self else { return false }
             return walletAccess.beginAction()
@@ -104,7 +106,7 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
 
     override func viewDidAppear() {
         super.viewDidAppear()
-        guard acceptsManagementActions, let window = viewIfLoaded?.window else { return }
+        guard validateManagementActions(), let window = viewIfLoaded?.window else { return }
         closeObserver?.disable()
         let observer = NativeApprovalWindowCloseObserver { [weak self] in self?.retireEditor() }
         closeObserver = observer
@@ -124,13 +126,12 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
     }
     
     @IBAction func cancelButtonTapped(_ sender: Any) {
-        guard acceptsManagementActions, walletAccess.beginAction() else { return }
-        guard acceptsManagementActions else { return }
+        guard hasCurrentPresentation, walletAccess.beginAction() else { return }
         showAccountsList()
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
-        guard acceptsManagementActions, walletAccess.beginAction() else { return }
+        guard hasCurrentPresentation, walletAccess.beginAction() else { return }
         guard canEditPreview, let previewState else { return }
         guard previewState.hasChanges else {
             showAccountsList()
@@ -145,15 +146,15 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
         tableView.reloadData()
         updatePreviewStatus()
         mutationTask = Task { [weak self, walletsManager] in
-            guard let self, !Task.isCancelled, acceptsManagementActions else { return }
+            guard let self, !Task.isCancelled, validateManagementActions() else { return }
             do {
                 let session = try walletAccess.requireCurrentAccess()
                 try await walletsManager.update(wallet: wallet, enabledAccounts: newAccounts, access: session)
-                guard !Task.isCancelled, acceptsManagementActions else { return }
+                guard !Task.isCancelled, validateManagementActions() else { return }
                 finishSaving()
                 showAccountsList()
             } catch {
-                guard !Task.isCancelled, acceptsManagementActions else { return }
+                guard !Task.isCancelled, validateManagementActions() else { return }
                 finishSaving()
                 presentMessageAlert(Strings.somethingWentWrong, style: .informational)
             }
@@ -171,7 +172,7 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
     }
 
     private func showAccountsList() {
-        guard acceptsManagementActions else { return }
+        guard validateManagementActions() else { return }
         let destination = viewIfLoaded?.window
         let access = walletAccess
         let scrollPosition = getBackToRect
@@ -182,13 +183,13 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
         if let window = destination?.windowController as? WalletWindowController {
             window.installProtectedContent(accountsListViewController, access: access)
         } else {
-            guard access.isCurrent else { return }
+            guard access.validateCurrentAccess() else { return }
             destination?.contentViewController = accountsListViewController
         }
     }
     
     private func toggleAccount(at row: Int) {
-        guard acceptsManagementActions, walletAccess.beginAction() else { return }
+        guard hasCurrentPresentation, walletAccess.beginAction() else { return }
         guard canEditPreview else { return }
         previewState.toggle(at: row)
     }
@@ -206,7 +207,7 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
     }
 
     private func previewDidChange(_ change: AccountPreviewState.Change) {
-        guard acceptsManagementActions else {
+        guard validateManagementActions() else {
             retire()
             return
         }
@@ -229,7 +230,7 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
         previewLayoutTask = Task { [weak self] in
             await Task.yield()
             guard let self, !Task.isCancelled,
-                  acceptsManagementActions,
+                  validateManagementActions(),
                   previewState.activatePaging(for: generation) else { return }
             guard self.didAppear else { return }
             self.previewMoreAccountsIfNeededForCurrentViewport()
@@ -237,7 +238,7 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
     }
 
     private func previewMoreAccountsIfNeededForCurrentViewport() {
-        guard acceptsManagementActions, walletsManager.isStoreReady, let previewState else { return }
+        guard validateManagementActions(), walletsManager.isStoreReady, let previewState else { return }
         guard shouldPreviewMoreAccountsForCurrentViewport(), !isRetired,
               self.previewState === previewState else { return }
         previewState.loadMore()
@@ -266,13 +267,13 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
             await Task.yield()
             guard let self, !Task.isCancelled else { return }
             previewPagingTask = nil
-            guard acceptsManagementActions, walletsManager.isStoreReady, let previewState = self.previewState else { return }
+            guard validateManagementActions(), walletsManager.isStoreReady, let previewState = self.previewState else { return }
             previewState.loadMore()
         }
     }
 
     @objc private func walletsChanged() {
-        guard acceptsManagementActions, walletsManager.isStoreReady else { return }
+        guard validateManagementActions(), walletsManager.isStoreReady else { return }
         let currentWallet = walletsManager.currentWallet(id: previewState.wallet.id)
         if case .close = previewState.refresh(wallet: currentWallet) {
             showAccountsList()
@@ -280,7 +281,7 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
     }
 
     @objc private func storeLoadStateChanged() {
-        guard acceptsManagementActions, let previewState else { return }
+        guard validateManagementActions(), let previewState else { return }
         if case .failed = walletsManager.loadState {
             previewLayoutTask?.cancel()
             previewPagingTask?.cancel()
@@ -297,15 +298,15 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
     }
 
     @objc func retryPreview() {
-        guard acceptsManagementActions, walletAccess.beginAction(), retryTask == nil, !isSaving else { return }
-        guard acceptsManagementActions else { return }
+        guard hasCurrentPresentation, walletAccess.beginAction(), retryTask == nil, !isSaving else { return }
+        guard validateManagementActions() else { return }
         if walletsManager.isStoreReady {
             previewState.retry()
             return
         }
         retryTask = Task { [weak self, walletsManager] in
             _ = await walletsManager.reloadFromStore()
-            guard let self, !Task.isCancelled, acceptsManagementActions else { return }
+            guard let self, !Task.isCancelled, validateManagementActions() else { return }
             retryTask = nil
             updatePreviewStatus()
         }
@@ -389,7 +390,7 @@ extension EditAccountsViewController: NSTableViewDelegate {
     }
     
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-        guard acceptsManagementActions, walletAccess.beginAction(), canEditPreview else { return false }
+        guard hasCurrentPresentation, walletAccess.beginAction(), canEditPreview else { return false }
         if let rowView = tableView.rowView(atRow: row, makeIfNecessary: false) as? PreviewAccountCellView {
             rowView.toggle()
             toggleAccount(at: row)

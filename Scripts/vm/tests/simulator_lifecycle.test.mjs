@@ -5,7 +5,9 @@ import {join} from "node:path";
 import test from "node:test";
 import {atomicJSON, hashFile} from "../guest_bootstrap.mjs";
 import {coverageReport, executeStages, prepareNativeSimulators} from "../guest.mjs";
-import {createManifest, PERFORMANCE_ENV, PERFORMANCE_TESTS, PLATFORMS, BOOTSTRAP_TOOL_NAMES, validateJob} from "../test_manifest.mjs";
+import {createManifest as staticManifest, PERFORMANCE_ENV, PERFORMANCE_TESTS, PLATFORMS, BOOTSTRAP_TOOL_NAMES, validateJob} from "../test_manifest.mjs";
+
+import {resolvedFixtureManifest as createManifest} from "./discovery_support.mjs";
 
 const ios = "11111111-1111-1111-1111-111111111111";
 const visionos = "22222222-2222-2222-2222-222222222222";
@@ -25,7 +27,7 @@ const job = ({payload, ...overrides} = {}) => ({version: 1, runId: "simulator-fi
     source: {sha256: "b".repeat(64), commit: "c".repeat(40)}, ...overrides});
 const nativeStage = {id: "test.visionos.debug", group: "test", command: "xcodebuild", args: ["test-without-building"],
     cwd: ".", dependencies: [], requirements: [], timeoutSeconds: 60, resultBundle: true,
-    nativeAudit: {configuration: "Debug", platform: "visionos", kind: "full"}};
+    nativeAudit: {configuration: "Debug", platform: "visionos", kind: "full", requiredTests: ["Tests visionOS/FixtureTests/testWorks"]}};
 
 test("simulator preparation shuts down only another selected device before booting and waiting for the target", async () => fixture(async root => {
     const calls = [];
@@ -142,10 +144,11 @@ test("Debug-only unfiltered native tests receive Release performance proof on ea
             const gate = manifest.find(stage => stage.id === `performance.${platform}.release`);
             assert.ok(gate);
             assert.deepEqual(gate.nativeAudit, {configuration: "Release", platform, kind: "performance", runtime: true,
-                requiredTests: PERFORMANCE_TESTS.map(name => `WalletAuthorityTests/WalletCoreProxyPerformanceGateTests/${name}`)});
-            assert.equal(gate.args[gate.args.indexOf("-configuration") + 1], "Release");
-            assert.ok(gate.args.includes("ENABLE_TESTABILITY=YES"));
-            assert.ok(gate.args.includes("CODE_SIGNING_ALLOWED=YES"));
+                filtered: true, requiredTests: PERFORMANCE_TESTS.map(name => `WalletAuthorityTests/WalletCoreProxyPerformanceGateTests/${name}`).sort()});
+            const build = manifest.find(stage => stage.id === `build-${gate.id}`);
+            assert.equal(build.args[build.args.indexOf("-configuration") + 1], "Release");
+            assert.ok(build.args.includes("ENABLE_TESTABILITY=YES"));
+            assert.ok(build.args.includes("CODE_SIGNING_ALLOWED=YES"));
             assert.deepEqual(gate.env, PERFORMANCE_ENV);
             assert.equal(gate.proofKey, undefined);
             const selectors = gate.args.filter(arg => arg.startsWith("-only-testing:"));
@@ -171,13 +174,32 @@ test("normal full matrices and filtered or non-test Debug selections add no simu
     }
 });
 
+test("implicit simulator Release builds wait for discovered Debug performance methods", () => {
+    for (const stages of [[], ["test"], ["test", "performance"]]) {
+        const selected = job({payload: {configuration: "Debug", stages, onlyTesting: ["WalletNetworkingTests/SafariRPCServiceTests"]}});
+        const simulatorProof = stage => stage.group === "performance" && /performance\.(ios|visionos)\.release$/.test(stage.id);
+        assert.ok(!staticManifest(selected).some(simulatorProof));
+        const resolved = createManifest(selected);
+        assert.ok(!resolved.some(simulatorProof));
+        assert.equal(resolved.some(stage => stage.id === "performance.release"), !stages.length || stages.includes("performance"));
+        selected.payload.onlyTesting = ["WalletCoreProxyPerformanceGateTests/testEd25519SigningPerformanceGate"];
+        assert.ok(!staticManifest(selected).some(simulatorProof));
+        const proofs = createManifest(selected).filter(simulatorProof).map(stage => stage.id);
+        for (const platform of ["ios", "visionos"]) {
+            const id = `performance.${platform}.release`;
+            assert.deepEqual(proofs.filter(name => name.endsWith(id)), [`clean-${id}`, `build-${id}`, `discover.${id}`, id]);
+        }
+    }
+});
+
 test("whole-target selectors select only that platform and retain full target audit with selected overall scope", () => {
     const selectedJob = job({payload: {stages: ["test"], onlyTesting: ["Tests visionOS"]}});
     const manifest = createManifest(selectedJob);
     assert.deepEqual(manifest.filter(stage => stage.nativeAudit).map(stage => stage.id), ["test.visionos.debug", "test.visionos.release"]);
     for (const stage of manifest.filter(stage => stage.nativeAudit)) {
         assert.equal(stage.nativeAudit.filtered, false);
-        assert.ok(stage.args.includes("-only-testing:Tests visionOS"));
+        assert.ok(!stage.args.some(arg => arg.startsWith("-only-testing:")));
+        assert.ok(stage.nativeAudit.requiredTests.every(name => name.startsWith("Tests visionOS/")));
     }
     assert.ok(manifest.some(stage => stage.id === "build-tests.visionos.debug"));
     assert.ok(manifest.some(stage => stage.id === "build-tests.visionos.release"));

@@ -10066,7 +10066,7 @@ extension PopupRequestSessionsTests {
         let coordinator = NativeApprovalCoordinator(
             handle: snapshot.handle, nativeDeliveryNonce: snapshot.nativeDeliveryNonce,
             store: store.bridge,
-            environment: .init(
+            environment: nativeApprovalEnvironmentForTesting(
                 now: Date.init, authorityID: NativeApprovalTestAuthorization.authorityID, wait: { _ in await Task.yield() },
                 prepare: { binding, _ in preparationForTesting(binding: binding, action: action) },
                 attemptNativeDecision: attempt

@@ -31,9 +31,11 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
     private var isImporting = false
     private var isRetired = false
     private var passwordPrompt: NSAlert?
-    private var acceptsManagementActions: Bool {
-        !isRetired && walletAccess.isCurrent && viewIfLoaded?.window?.contentViewController === self
+    private var hasCurrentPresentation: Bool {
+        !isRetired && walletAccess.hasCurrentPresentation && viewIfLoaded?.window?.contentViewController === self
     }
+
+    private func validateManagementActions() -> Bool { walletAccess.validateCurrentAccess() && hasCurrentPresentation }
 
     func retire() {
         retireImport()
@@ -118,8 +120,8 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        guard acceptsManagementActions, walletAccess.beginAction() else { return }
-        guard acceptsManagementActions, !isImporting else { return }
+        guard hasCurrentPresentation, walletAccess.beginAction() else { return }
+        guard !isImporting else { return }
         if inputValidationResult == .requiresPassword {
             showPasswordAlert()
         } else {
@@ -128,7 +130,7 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
     }
  
     private func showPasswordAlert() {
-        guard acceptsManagementActions else { return }
+        guard validateManagementActions() else { return }
         let alert = NSAlert()
         let input = textField.stringValue
         alert.messageText = Strings.enterKeystorePassword
@@ -151,7 +153,7 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
             Window.clearSecretInput(passwordTextField)
             if passwordPrompt === alert { passwordPrompt = nil }
         }
-        if dependencies.runPasswordPrompt(alert) == .alertFirstButtonReturn, acceptsManagementActions, walletAccess.beginAction() {
+        if dependencies.runPasswordPrompt(alert) == .alertFirstButtonReturn, hasCurrentPresentation, walletAccess.beginAction() {
             let password = passwordTextField.stringValue
             Window.clearSecretInput(passwordTextField)
             importWith(
@@ -162,7 +164,7 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
     }
 
     private func importWith(input: String, password: String?) {
-        guard acceptsManagementActions, !isImporting else { return }
+        guard validateManagementActions(), !isImporting else { return }
         isImporting = true
         okButton.isEnabled = false
         let prepareStore = dependencies.prepareStore
@@ -175,13 +177,13 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
                 guard await prepareStore() else { throw WalletsManager.LoadFailure.unavailable }
                 try Task.checkCancellation()
                 let session = try access.requireCurrentAccess()
-                guard self?.acceptsManagementActions == true else { throw CancellationError() }
+                guard self?.validateManagementActions() == true else { throw CancellationError() }
                 self?.cancelButton.isEnabled = false
                 result = .success(try await operation(input, password, session))
             } catch {
                 result = .failure(error)
             }
-            guard let self, !Task.isCancelled, acceptsManagementActions else { return }
+            guard let self, !Task.isCancelled, validateManagementActions() else { return }
             importTask = nil
             switch result {
             case .success(let wallet):
@@ -206,7 +208,7 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
     
 
     private func showAccountsList(newWalletId: String?) {
-        guard acceptsManagementActions else { return }
+        guard validateManagementActions() else { return }
         let destination = viewIfLoaded?.window
         let access = walletAccess
         retireImport()
@@ -216,14 +218,13 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
         if let window = destination?.windowController as? WalletWindowController {
             window.installProtectedContent(accountsListViewController, access: access)
         } else {
-            guard access.isCurrent else { return }
+            guard access.validateCurrentAccess() else { return }
             destination?.contentViewController = accountsListViewController
         }
     }
     
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
-        guard acceptsManagementActions, walletAccess.beginAction() else { return }
-        guard acceptsManagementActions else { return }
+        guard hasCurrentPresentation, walletAccess.beginAction() else { return }
         showAccountsList(newWalletId: nil)
     }
     
@@ -232,8 +233,7 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
 extension ImportViewController: NSTextFieldDelegate {
     
     func controlTextDidChange(_ obj: Notification) {
-        guard acceptsManagementActions, walletAccess.beginAction() else { return }
-        guard acceptsManagementActions else { return }
+        guard hasCurrentPresentation, walletAccess.beginAction() else { return }
         validationTask?.cancel()
         let input = textField.stringValue
         okButton.title = Strings.ok
@@ -242,7 +242,7 @@ extension ImportViewController: NSTextFieldDelegate {
         validationTask = Task { [weak self] in
             guard !Task.isCancelled else { return }
             let result = await validate(input)
-            guard let self, !Task.isCancelled, acceptsManagementActions, textField.stringValue == input else { return }
+            guard let self, !Task.isCancelled, validateManagementActions(), textField.stringValue == input else { return }
             validationTask = nil
             inputValidationResult = result
             okButton.isEnabled = !isImporting && result != .invalid

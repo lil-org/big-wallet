@@ -26,8 +26,9 @@ class ApproveViewController: NSViewController, NativeWalletProtectedContent {
     private var approveTitle: String!
     private var meta: String!
     private var account: WalletAccount!
-    private var completion: ((Decision) -> Void)!
-    private var didCallCompletion = false
+    private var completion: ((ApproveViewController, Decision) -> Void)!
+    private enum DecisionState { case reviewing, authenticating, finished }
+    private var decisionState = DecisionState.reviewing
     private var isRetiredForAccess = false
     private var review: NativeApprovalReview!
     private var walletId: String!
@@ -36,7 +37,7 @@ class ApproveViewController: NSViewController, NativeWalletProtectedContent {
     var localWindowCloseCompletion: (() -> Void)?
     private weak var clusterPopUpButton: NSPopUpButton?
     private var canApprove: Bool {
-        return !isRetiredForAccess && review.isActive && !didCallCompletion && (solanaClusterOptions == nil || selectedCluster != nil)
+        return !isRetiredForAccess && review.isActive && decisionState == .reviewing && (solanaClusterOptions == nil || selectedCluster != nil)
     }
 
     func retire() {
@@ -53,7 +54,7 @@ class ApproveViewController: NSViewController, NativeWalletProtectedContent {
                      walletId: String,
                      solanaClusterOptions: SolanaClusterOptions? = nil,
                      review: NativeApprovalReview,
-                     completion: @escaping (Decision) -> Void) -> ApproveViewController {
+                     completion: @escaping (ApproveViewController, Decision) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self)
         new.walletId = walletId
         new.review = review
@@ -70,7 +71,7 @@ class ApproveViewController: NSViewController, NativeWalletProtectedContent {
     override func viewDidLoad() {
         super.viewDidLoad()
         review.register(self)
-        guard walletAccess.isCurrent, review.isActive else { return }
+        guard walletAccess.validateCurrentAccess(), review.isActive else { return }
         (metaTextView.enclosingScrollView?.verticalScroller as? WalletActivityScroller)?.accessibilityInteraction = { [weak self] in
             guard let self, !isRetiredForAccess, review.isActive,
                   viewIfLoaded?.window?.contentViewController === self else { return false }
@@ -142,7 +143,7 @@ class ApproveViewController: NSViewController, NativeWalletProtectedContent {
     }
 
     @objc private func solanaClusterSelectionChanged(_ sender: NSPopUpButton) {
-        guard review.isActive, !didCallCompletion, walletAccess.beginAction() else { return }
+        guard review.isActive, decisionState == .reviewing, walletAccess.beginAction() else { return }
         guard solanaClusterOptions != nil else { return }
         selectedCluster = sender.selectedItem?.representedObject as? Solana.Cluster
         updateOkButtonState()
@@ -150,6 +151,8 @@ class ApproveViewController: NSViewController, NativeWalletProtectedContent {
 
     private func updateOkButtonState() {
         okButton.isEnabled = canApprove
+        cancelButton.isEnabled = !isRetiredForAccess && review.isActive && decisionState == .reviewing
+        clusterPopUpButton?.isEnabled = cancelButton.isEnabled
     }
     
     private func updateDisplayedMeta() {
@@ -165,21 +168,44 @@ class ApproveViewController: NSViewController, NativeWalletProtectedContent {
     }
     
     private func callCompletion(result: Decision) {
-        if walletAccess.isCurrent && review.isActive && !didCallCompletion {
-            didCallCompletion = true
-            completion(result)
+        if walletAccess.hasCurrentPresentation && review.isActive && decisionState == .reviewing {
+            switch result {
+            case .rejected: decisionState = .finished
+            case .approved:
+                decisionState = .authenticating
+                titleLabel.stringValue = approveTitle
+                okButton.title = Strings.ok
+            }
+            updateOkButtonState()
+            completion(self, result)
         }
     }
 
+    @discardableResult
+    func resumeReview(after result: WalletAuthenticationResult) -> Bool {
+        guard walletAccess.validateCurrentAccess(), !isRetiredForAccess, review.canRetryAuthentication,
+              decisionState == .authenticating else { return false }
+        switch result {
+        case .failed, .interactionUnavailable:
+            titleLabel.stringValue = Strings.failedToVerify
+            okButton.title = Strings.tryAgain
+        case .cancelled: break
+        case .granted: return false
+        }
+        decisionState = .reviewing
+        updateOkButtonState()
+        return true
+    }
+
     @IBAction func actionButtonTapped(_ sender: Any) {
-        guard review.isActive, !didCallCompletion, walletAccess.beginAction() else { return }
+        guard review.isActive, decisionState == .reviewing, walletAccess.beginAction() else { return }
         guard canApprove else { return }
 
         callCompletion(result: .approved(solanaCluster: selectedCluster))
     }
     
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
-        guard review.isActive, !didCallCompletion, walletAccess.beginAction() else { return }
+        guard review.isActive, decisionState == .reviewing, walletAccess.beginAction() else { return }
         callCompletion(result: .rejected)
     }
     
@@ -188,7 +214,8 @@ class ApproveViewController: NSViewController, NativeWalletProtectedContent {
 extension ApproveViewController: NativeApprovalReviewTeardown {
 
     func invalidateNativeApprovalReview() {
-        didCallCompletion = true
+        decisionState = .finished
+        if isViewLoaded { updateOkButtonState() }
         localWindowCloseCompletion?()
         localWindowCloseCompletion = nil
     }
