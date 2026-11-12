@@ -2,6 +2,7 @@ import {execFileSync, spawnSync} from "node:child_process";
 import {existsSync, readFileSync, readdirSync, realpathSync} from "node:fs";
 import {dirname, isAbsolute, join, relative, resolve, sep} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
+import {containedPath, dependencyRecords, inspectSwiftPackage, namedInventory} from "./harness_package.mjs";
 
 const libraries = ["WalletDomain", "WalletAuthority", "WalletFlows", "WalletNetworking"];
 const productionTargets = [...libraries, "WalletStorageSupport", "CWalletCrypto"];
@@ -120,69 +121,63 @@ export function productionSource(source, {application = false} = {}) {
     return result.join("\n");
 }
 
-function balanced(source, start, open, close) {
-    const code = maskNonCode(source);
-    let depth = 0;
-    for (let index = start; index < code.length; index += 1) {
-        if (code[index] === open) { depth += 1; }
-        if (code[index] === close && --depth === 0) { return {body: source.slice(start + 1, index), end: index + 1}; }
-    }
-    throw new Error(`Unclosed ${open} in package manifest`);
-}
-
-function manifestCalls(source, names) {
-    const pattern = new RegExp(`\\.(${names.join("|")})\\s*\\(`, "g");
-    const code = maskNonCode(source);
-    const calls = [];
-    for (const match of code.matchAll(pattern)) {
-        const start = match.index + match[0].lastIndexOf("(");
-        calls.push({kind: match[1], ...balanced(source, start, "(", ")")});
-    }
-    return calls;
-}
-
-export function validateRuntimeManifest(source) {
+export function validateRuntimeManifestSource(source) {
     const text = maskNonCode(source, {strings: false});
-    if (/"-package-name"|\bpackageAccess\s*:\s*false/.test(text)) { throw new Error("Runtime compiler package identity may not be overridden"); }
-    if (/BW_SAFARI_VM_TESTING|enable-testing/.test(text)) { throw new Error("Production package contains fixture/test compiler settings"); }
-    const productCalls = manifestCalls(text, ["library", "executable"]);
-    const products = productCalls.map(call => /\bname\s*:\s*"([^"]+)"/.exec(call.body)?.[1]);
-    if (products.length !== libraries.length || products.some(name => !libraries.includes(name)) || new Set(products).size !== libraries.length) {
-        throw new Error("Runtime must expose exactly WalletDomain, WalletAuthority, WalletFlows and WalletNetworking");
+    if (/BW_SAFARI_VM_TESTING|enable-testing|-package-name|\bpackageAccess\s*:\s*false\b/.test(text)) {
+        throw new Error("Runtime manifest contains a forbidden test or package-identity setting");
     }
-    for (const product of productCalls) {
-        const name = /\bname\s*:\s*"([^"]+)"/.exec(product.body)?.[1];
-        if (product.kind !== "library" || !new RegExp(`\\btargets\\s*:\\s*\\[\\s*"${name}"\\s*\\]`).test(product.body)) {
-            throw new Error(`Runtime product has unexpected targets: ${name}`);
+}
+
+export function validateRuntimePackage({manifest, description}, root) {
+    const packageRoot = resolve(root, "Packages/WalletRuntime");
+    if (description?.name !== "WalletRuntime" || description.path !== packageRoot ||
+        !Array.isArray(description.dependencies) || description.dependencies.length ||
+        !Array.isArray(manifest?.dependencies) || manifest.dependencies.length) {
+        throw new Error("Runtime must be the expected local package without external dependencies");
+    }
+    for (const inventory of [manifest.products, description.products]) {
+        const products = namedInventory(inventory, "runtime product");
+        if (products.size !== libraries.length || libraries.some(name => {
+            const product = products.get(name);
+            return !product?.type?.library || JSON.stringify(product.targets) !== JSON.stringify([name]);
+        })) { throw new Error("Runtime must expose exactly its four production libraries"); }
+    }
+    const targets = namedInventory(manifest.targets, "runtime target");
+    if (targets.get("WalletRuntimeTestSupport")?.type !== "regular") {
+        throw new Error("WalletRuntimeTestSupport must be a regular target");
+    }
+    const descriptions = namedInventory(description.targets, "described runtime target");
+    if (targets.size !== descriptions.size || [...targets.keys()].some(name => !descriptions.has(name))) {
+        throw new Error("Runtime target descriptions do not match the evaluated manifest");
+    }
+    for (const [name, target] of targets) {
+        if (!productionTargets.includes(name) && target.type !== "test" && name !== "WalletRuntimeTestSupport") {
+            throw new Error(`Unexpected runtime target: ${name}`);
         }
-    }
-    if (/\.package\s*\(/.test(maskNonCode(text))) { throw new Error("Runtime production package may not depend on another package"); }
-    const calls = manifestCalls(text, ["target", "testTarget", "executableTarget", "binaryTarget", "systemLibrary", "plugin"]);
-    const found = new Map;
-    for (const call of calls) {
-        const name = /\bname\s*:\s*"([^"]+)"/.exec(call.body)?.[1];
-        if (!name || found.has(name)) { throw new Error("Duplicate or unnamed runtime target"); }
-        found.set(name, call);
+        if (target.packageAccess === false || /-package-name/.test(JSON.stringify(target.settings ?? []))) {
+            throw new Error("Runtime compiler package identity may not be overridden");
+        }
     }
     for (const name of productionTargets) {
-        const call = found.get(name);
-        if (call?.kind !== "target") { throw new Error(`Missing ordinary production target: ${name}`); }
-        const match = /\bdependencies\s*:\s*\[/.exec(call.body);
-        if (/\bdependencies\s*:/.test(call.body) && !match) { throw new Error(`Dynamic dependencies are not allowed in ${name}`); }
-        const dependencies = match ? balanced(call.body, match.index + match[0].lastIndexOf("["), "[", "]").body : "";
-        const values = dependencies.split(",").map(value => value.trim()).filter(Boolean);
-        if (values.some(value => !/^"[A-Za-z0-9_]+"$/.test(value))) { throw new Error(`Unsupported dependency expression in ${name}`); }
-        const names = values.map(value => JSON.parse(value)).sort();
-        if (JSON.stringify(names) !== JSON.stringify(expectedDependencies[name])) { throw new Error(`Forbidden runtime dependencies in ${name}: ${names.join(", ")}`); }
-        const path = /\bpath\s*:\s*"([^"]+)"/.exec(call.body)?.[1];
-        if (/\bpath\s*:/.test(call.body) && !path || path && path !== `Sources/${name}`) { throw new Error(`Production target ${name} has unexpected source membership`); }
-        if (/\b(?:resources|plugins)\s*:/.test(maskNonCode(call.body)) || /BW_SAFARI_VM_TESTING|enable-testing|WalletRuntimeHarness|WalletUpgradeHarness|ShippedWalletProducer/.test(call.body)) {
-            throw new Error(`Production target ${name} has fixture or test build settings`);
+        const target = targets.get(name);
+        const described = descriptions.get(name);
+        if (target?.type !== "regular") { throw new Error(`Missing ordinary production target: ${name}`); }
+        const dependencies = dependencyRecords(target);
+        if (dependencies.some(value => value.kind === "product") ||
+            target.dependencies.some(value => Object.values(value)[0].slice(1).some(condition => condition != null)) ||
+            JSON.stringify(dependencies.map(value => value.name).sort()) !== JSON.stringify(expectedDependencies[name])) {
+            throw new Error(`Forbidden or conditional runtime dependencies in ${name}`);
         }
-    }
-    for (const [name, target] of found) {
-        if (!productionTargets.includes(name) && target.kind !== "testTarget" && name !== "WalletRuntimeTestSupport") {
-            throw new Error(`Unexpected runtime target: ${name}`);
+        const directory = join(packageRoot, "Sources", name);
+        if (typeof described?.path !== "string" || resolve(packageRoot, described.path) !== directory ||
+            target.path != null && (typeof target.path !== "string" || resolve(packageRoot, target.path) !== directory) ||
+            !Array.isArray(described.sources) || !described.sources.length ||
+            described.sources.some(path => !containedPath(directory, path)) || new Set(described.sources).size !== described.sources.length) {
+            throw new Error(`Production target ${name} has unexpected source membership`);
+        }
+        if (target.resources?.length || described.resources?.length || target.pluginUsages?.length || target.plugins?.length ||
+            /BW_SAFARI_VM_TESTING|enable-testing|WalletRuntimeHarness|WalletUpgradeHarness|ShippedWalletProducer|WalletRuntimeTestSupport/.test(JSON.stringify(target.settings ?? []))) {
+            throw new Error(`Production target ${name} has fixture or test build settings, resources or plugins`);
         }
     }
     return true;
@@ -199,7 +194,7 @@ export function validateRuntimeSource(path, source, {module, application = false
     const foreignSymbols = [...literalCode.matchAll(/@_silgen_name\s*\(\s*"([^"\n]+)"\s*\)/g)].map(match => match[1]);
     if (module !== "WalletAuthority" && (imports.includes("CWalletCrypto") || foreignSymbols.some(symbol => module !== "WalletStorageSupport" || symbol !== "flock"))) { fail("Direct private crypto linkage belongs inside Authority"); }
     if (application && (imports.includes("WalletStorageSupport") || privateTypes.test(literalCode))) { fail("Application code reaches private authority or storage implementation"); }
-    if (nativeExtension && /\b(?:ApplicationServices|WalletAuthoritySystem|AuthorityRuntime|SafariVMApplicationServices|SafariVMMutations|Networks|ReviewRequester)\b/.test(code)) {
+    if (nativeExtension && /\b(?:ApplicationServices|AuthorityRuntime|SafariVMApplicationServices|SafariVMMutations|Networks|ReviewRequester)\b/.test(code)) {
         fail("Safari extension source reaches application or native-helper composition");
     }
     if (module === "WalletDomain") {
@@ -234,28 +229,37 @@ export function validateRuntimeSource(path, source, {module, application = false
     return true;
 }
 
-export function parseProject(source) {
-    const text = maskNonCode(source, {strings: false});
-    const tokens = text.match(/"(?:\\.|[^"\\])*"|[{}()=;,]|[^\s{}()=;,]+/g) ?? [];
-    let index = 0;
-    const take = expected => { const value = tokens[index++]; if (expected && value !== expected) { throw new Error(`Expected ${expected} in project, received ${value}`); } return value; };
-    const scalar = () => { const value = take(); if (value === undefined) { throw new Error("Truncated project"); } return value.startsWith('"') ? JSON.parse(value.replace(/\\U([a-fA-F0-9]{4})/g, "\\u$1")) : value; };
-    const parse = () => {
-        if (tokens[index] === "{") {
-            take("{"); const result = {};
-            while (tokens[index] !== "}") { const key = scalar(); take("="); if (Object.hasOwn(result, key)) { throw new Error("Duplicate project key"); } result[key] = parse(); take(";"); }
-            take("}"); return result;
+function decodePlist(source) {
+    return JSON.parse(execFileSync("/usr/bin/plutil", ["-convert", "json", "-o", "-", "--", "-"], {
+        input: source, encoding: "utf8", maxBuffer: 16 * 1024 * 1024,
+    }));
+}
+
+function rejectDuplicateProjectKeys(source) {
+    const dictionaries = [new Set()];
+    let expectingKey = true;
+    const tokens = /\/\/[^\r\n\u2028\u2029]*|\/\*[\s\S]*?\*\/|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|[\w$/:.\-]+|[{};]/g;
+    for (const [token] of source.matchAll(tokens)) {
+        if (token.startsWith("//") || token.startsWith("/*")) { continue; }
+        if (token === "{") { dictionaries.push(new Set()); expectingKey = true; continue; }
+        if (token === "}") { dictionaries.pop(); expectingKey = false; continue; }
+        if (token === ";") { expectingKey = true; continue; }
+        if (!expectingKey || !dictionaries.length) { continue; }
+        const keys = dictionaries.at(-1);
+        let key = token;
+        if (token[0] === '"' || token[0] === "'") {
+            key = token.includes("\\") ? decodePlist("(" + token + ")")[0] : token.slice(1, -1);
         }
-        if (tokens[index] === "(") {
-            take("("); const result = [];
-            while (tokens[index] !== ")") { result.push(parse()); if (tokens[index] !== ")") { take(","); } }
-            take(")"); return result;
-        }
-        return scalar();
-    };
-    const project = parse();
-    if (index !== tokens.length) { throw new Error("Unexpected trailing project tokens"); }
-    return project;
+        if (keys.has(key)) { throw new Error("Duplicate Xcode project key: " + key); }
+        keys.add(key);
+        expectingKey = false;
+    }
+}
+
+export function readProject(path) {
+    const source = readFileSync(path, "utf8");
+    rejectDuplicateProjectKeys(source);
+    return decodePlist(source);
 }
 
 export function projectFilePaths(project, root) {
@@ -344,7 +348,8 @@ function filesBelow(root, extension = ".swift") {
 
 export function checkRuntimeBoundaries(root) {
     const packageRoot = join(root, "Packages/WalletRuntime");
-    validateRuntimeManifest(readFileSync(join(packageRoot, "Package.swift"), "utf8"));
+    validateRuntimeManifestSource(readFileSync(join(packageRoot, "Package.swift"), "utf8"));
+    validateRuntimePackage(inspectSwiftPackage(root, packageRoot), root);
     for (const [source, fixture] of [
         ["Shared/Ethereum/NetworkCatalog.json", "NetworkCatalog.json"],
         ["Safari Shared/Tests/fixtures/wire_protocol_contract.json", "wire_protocol_contract.json"],
@@ -371,7 +376,7 @@ export function checkRuntimeBoundaries(root) {
             count += 1;
         }
     }
-    validateProjectMembership(parseProject(readFileSync(join(root, "Wallet.xcodeproj/project.pbxproj"), "utf8")), {root,
+    validateProjectMembership(readProject(join(root, "Wallet.xcodeproj/project.pbxproj")), {root,
         validateSource: (path, {nativeExtension}) => {
             const source = readFileSync(path, "utf8");
             if (path.endsWith(".swift")) { validateRuntimeSource(relative(root, path), source, {application: true, nativeExtension, ownedSymbols}); }
@@ -384,10 +389,14 @@ export function checkRuntimeBoundaries(root) {
 }
 
 export function parseOptions(arguments_) {
-    const options = {root: resolve(dirname(fileURLToPath(import.meta.url)), ".."), configuration: "debug", checkAPI: false};
+    const options = {root: resolve(dirname(fileURLToPath(import.meta.url)), ".."), configuration: "debug", checkAPI: false, apiOnly: false};
     for (let index = 0; index < arguments_.length; index += 1) {
         const flag = arguments_[index];
-        if (flag === "--check-api") { options.checkAPI = true; continue; }
+        if (flag === "--check-api" || flag === "--api-only") {
+            options.checkAPI = true;
+            if (flag === "--api-only") { options.apiOnly = true; }
+            continue;
+        }
         const name = {"--root": "root", "--package-path": "packagePath", "--configuration": "configuration", "--modules-path": "modulesPath"}[flag];
         const value = arguments_[++index];
         if (!name || !value || value.startsWith("--")) { throw new Error(`Invalid boundary-check argument ${flag}`); }
@@ -400,8 +409,7 @@ export function parseOptions(arguments_) {
     return options;
 }
 
-export function checkOrdinaryImportAPI(options) {
-    execFileSync("/bin/sh", ["-c", '. "$1"; test_vm_require_guest_session', "runtime-boundary-validation", join(options.root, "Scripts/vm/guest_session.sh")], {cwd: options.root, stdio: "inherit"});
+function checkOrdinaryImportAPI(options) {
     const binPath = options.modulesPath ? dirname(resolve(options.modulesPath)) : execFileSync("swift", ["build", "--package-path", options.packagePath,
         "--configuration", options.configuration, "--show-bin-path"], {cwd: options.root, encoding: "utf8"}).trim();
     const modules = options.modulesPath ? resolve(options.modulesPath)
@@ -454,7 +462,10 @@ export function boundaryConsumerContexts(packageIdentity) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
     const options = parseOptions(process.argv.slice(2));
-    const count = checkRuntimeBoundaries(options.root);
-    process.stdout.write(`Runtime source boundaries checked: ${count} Swift files.\n`);
+    execFileSync("/bin/sh", ["-c", '. "$1"; test_vm_require_guest_session', "runtime-boundary-validation", join(options.root, "Scripts/vm/guest_session.sh")], {cwd: options.root, stdio: "inherit"});
+    if (!options.apiOnly) {
+        const count = checkRuntimeBoundaries(options.root);
+        process.stdout.write(`Runtime source boundaries checked: ${count} Swift files.\n`);
+    }
     if (options.checkAPI) { checkOrdinaryImportAPI(options); }
 }

@@ -51,7 +51,13 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
     private(set) var currentAuthenticationSession: WindowAuthenticationSession?
     private(set) var walletAccess: WalletAccessController?
     private var unlock: (() -> Void)?
-    private var lockPresentationID: UUID?
+    private struct LockedPresentation {
+        let generation: UInt64
+        let token: UUID
+        let controller: WalletLockedViewController
+        var isInstalling = true
+    }
+    private var lockedPresentation: LockedPresentation?
     private var lockWindowCloseObserver: NativeApprovalWindowCloseObserver?
     private var contentInstallationID: UUID?
     fileprivate var cascadesOnFirstPresentation = false
@@ -64,38 +70,64 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
     }
 
     func bindAccess(_ access: WalletAccessController?, unlock: @escaping () -> Void) {
-        walletAccess?.removeObserver(self)
-        walletAccess = access
         self.unlock = unlock
-        access?.addObserver(self)
+        if walletAccess !== access {
+            walletAccess?.removeObserver(self)
+            walletAccess = access
+            lockedPresentation = nil
+            access?.addObserver(self)
+        }
         if let window {
             lockWindowCloseObserver?.disable()
-            let observer = NativeApprovalWindowCloseObserver { [weak self] in self?.lockPresentationID = nil }
+            let observer = NativeApprovalWindowCloseObserver { [weak self] in self?.lockedPresentation = nil }
             lockWindowCloseObserver = observer
             observer.observe(window)
         }
+        reconcileLockedPresentation()
     }
 
     func walletAccessDidLock() {
+        reconcileLockedPresentation()
+    }
+
+    func reconcileLockedPresentation() {
+        guard let access = walletAccess, access.isLocked, access.hasLocked else { return }
+        let generation = access.generation
+        if let presentation = lockedPresentation, presentation.generation == generation,
+           presentation.isInstalling ||
+            (contentViewController === presentation.controller && window?.contentViewController === presentation.controller &&
+             window?.contentView === presentation.controller.viewIfLoaded) { return }
+        let token = UUID()
+        let locked = WalletLockedViewController { [weak self, weak access] in
+            guard let self, let access, walletAccess === access,
+                  access.isLocked,
+                  let presentation = lockedPresentation, presentation.token == token,
+                  contentViewController === presentation.controller else { return }
+            unlock?()
+        }
+        lockedPresentation = LockedPresentation(generation: generation, token: token, controller: locked)
+        defer {
+            if lockedPresentation?.token == token { lockedPresentation?.isInstalling = false }
+        }
+        func isCurrent() -> Bool {
+            walletAccess === access && access.isLocked && access.generation == generation && lockedPresentation?.token == token
+        }
         contentInstallationID = nil
         currentAuthenticationSession?.cancel()
+        guard isCurrent() else { return }
         (contentViewController as? any NativeWindowContentRetirement)?.retire()
+        guard isCurrent() else { return }
         Window.dismissSheets(in: window)
+        guard isCurrent() else { return }
         if let modal = NSApp.modalWindow, modal !== window, modal.sheetParent == nil {
             Window.clearText(in: modal.contentView)
             NSApp.abortModal()
             modal.orderOut(nil)
         }
+        guard isCurrent() else { return }
         window?.delegate = nil
         approvalPeer = nil
-        let presentationID = UUID()
-        lockPresentationID = presentationID
-        contentViewController = WalletLockedViewController { [weak self] in
-            guard let self, lockPresentationID == presentationID,
-                  contentViewController is WalletLockedViewController,
-                  walletAccess?.isLocked != false else { return }
-            unlock?()
-        }
+        contentViewController = locked
     }
 
     @discardableResult
@@ -112,7 +144,7 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
         }
         func discardInstallation() {
             (next as? any NativeWindowContentRetirement)?.retire()
-            if walletAccess?.isLocked == true, walletAccess?.hasLocked == true { walletAccessDidLock() }
+            reconcileLockedPresentation()
             if contentViewController !== next, let retiredView = next.viewIfLoaded,
                retiredView !== window?.contentView {
                 retiredView.isHidden = true
@@ -124,6 +156,7 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
             discardInstallation()
             return false
         }
+        lockedPresentation = nil
         _ = next.view
         guard acceptsInstallation() else {
             discardInstallation()

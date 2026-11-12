@@ -6,6 +6,8 @@ export function observeProcess(child, {
     onFailure,
     onExit,
     allowStopAfterExit = false,
+    setTimeout = globalThis.setTimeout,
+    clearTimeout = globalThis.clearTimeout,
 }) {
     const safari = policy === "safari-command";
     const finalizer = policy === "vm-finalizer";

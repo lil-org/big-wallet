@@ -38,7 +38,7 @@ private struct WalletSceneView: View {
                 await ApplicationServices.shared.wallets.start()
                 guard !Task.isCancelled else { return }
                 let backgroundTask = ApprovalBackgroundActivity.make(using: .shared)
-                await ApplicationServices.shared.authority.startVaultReconciliation(
+                await ApplicationServices.shared.startVaultReconciliation(
                     backgroundTask: backgroundTask,
                     protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification
                 )
@@ -49,7 +49,7 @@ private struct WalletSceneView: View {
                 ApplicationServices.shared.prewarm()
                 _ = await ApplicationServices.shared.wallets.reloadFromStore()
                 guard !Task.isCancelled else { return }
-                await ApplicationServices.shared.authority.reconcileVault()
+                await ApplicationServices.shared.reconcileVault()
                 await ApplicationServices.shared.requests.performMaintenance()
             }
     }

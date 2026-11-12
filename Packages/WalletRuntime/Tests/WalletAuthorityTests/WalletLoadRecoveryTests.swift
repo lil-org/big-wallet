@@ -109,6 +109,53 @@ final class WalletLoadRecoveryTests: XCTestCase {
         }
     }
 
+    func testCancellingAllSharedCallersStopsTheirReadAndANewCallerStartsAFreshRead() async throws {
+        let reader = makeReader()
+        let entered = expectation(description: "Shared enumeration started")
+        let joined = expectation(description: "Second caller joined")
+        let replacementRequested = expectation(description: "Fresh caller requested a reload")
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        let reads = Mutex((enumerations: 0, wallets: 0))
+        let manager = WalletsManager(keychain: Keychain(copyMatching: { query, result in
+            let fields = query as NSDictionary
+            if fields[kSecReturnAttributes as String] as? Bool == true {
+                let first = reads.withLock { $0.enumerations += 1; return $0.enumerations == 1 }
+                if first { entered.fulfill(); release.wait() }
+            }
+            if fields[kSecAttrAccount as String] as? String == "org.lil.wallet.wallet.wallet" {
+                reads.withLock { $0.wallets += 1 }
+            }
+            return reader.copyMatching(query, result)
+        }))
+        let first = Task { await manager.reloadFromStore() }
+        await fulfillment(of: [entered], timeout: 3)
+        let second = Task {
+            joined.fulfill()
+            return await manager.reloadFromStore()
+        }
+        await fulfillment(of: [joined], timeout: 3)
+        first.cancel()
+        second.cancel()
+        let replacement = Task {
+            replacementRequested.fulfill()
+            return await manager.reloadFromStore()
+        }
+        await fulfillment(of: [replacementRequested], timeout: 3)
+        release.signal()
+
+        let firstResult = await first.value
+        let secondResult = await second.value
+        let replacementResult = await replacement.value
+        XCTAssertFalse(firstResult)
+        XCTAssertFalse(secondResult)
+        XCTAssertTrue(replacementResult)
+        XCTAssertEqual(reads.withLock { $0.enumerations }, 2)
+        XCTAssertEqual(reads.withLock { $0.wallets }, 1)
+        XCTAssertTrue(manager.isStoreReady)
+        XCTAssertNotNil(manager.reviewCatalog())
+    }
+
     func testExternalMutationDuringEnumerationRequiresAFreshSnapshot() async throws {
         let reader = makeReader()
         let entered = expectation(description: "Old inventory is being loaded")

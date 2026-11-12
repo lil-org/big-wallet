@@ -401,7 +401,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let selection = try XCTUnwrap(accounts.accountSelection)
         let oldReview = try presentedReview(fixture.coordinator)
         XCTAssertTrue(selection.review === oldReview)
-        let windowController = try XCTUnwrap(approval.windowController as? WalletWindowController)
+        let windowController = try XCTUnwrap(approval.windowController)
         let credentials = authenticationCredentials()
         let authentication = Task {
             await windowController.authenticate(
@@ -465,7 +465,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             rejections += 1
             return .persisted
         }
-        let windowController = try XCTUnwrap(approval.windowController as? WalletWindowController)
+        let windowController = try XCTUnwrap(approval.windowController)
         var completions = [Bool]()
         let credentials = authenticationCredentials()
         let authentication = Task {
@@ -1829,7 +1829,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
         window.isReleasedWhenClosed = false
         window.contentViewController = NSViewController()
-        approval.windowController = NSWindowController(window: window)
+        approval.windowController = WalletWindowController(window: window)
         fixture.coordinator.resumeAfterAuthentication(authorization: NativeApprovalTestAuthorization.accessSession())
         await waitForState(fixture.coordinator, .reviewing)
         await waitForScheduledWait(waits, count: 1)
@@ -1879,7 +1879,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
         window.isReleasedWhenClosed = false
         window.contentViewController = NSViewController()
-        approval.windowController = NSWindowController(window: window)
+        approval.windowController = WalletWindowController(window: window)
         fixture.coordinator.resumeAfterAuthentication(authorization: NativeApprovalTestAuthorization.accessSession())
         await waitForState(fixture.coordinator, .reviewing)
         let nativeReview = try presentedReview(fixture.coordinator)

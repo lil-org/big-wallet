@@ -174,6 +174,76 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         }
     }
 
+    func testBindingLockedAccessClearsDraftAndRepeatedReconciliationKeepsItsPresentation() throws {
+        let fixture = WalletAccessTestFixture()
+        let window = makeWindow()
+        defer { window.close() }
+        let password = PasswordViewController.with(configuration: .init(mode: .enter)) { _ in }
+        window.contentViewController = password
+        _ = password.view
+        password.passwordTextField.stringValue = "secret draft"
+        window.bindAccess(fixture.access, unlock: {})
+        XCTAssertTrue(window.contentViewController === password)
+        XCTAssertEqual(password.passwordTextField.stringValue, "secret draft")
+        window.bindAccess(nil, unlock: {})
+        fixture.access.lock(reason: .systemSleep)
+
+        var unlocks = 0
+        window.bindAccess(fixture.access) { unlocks += 1 }
+
+        let locked = try XCTUnwrap(window.contentViewController as? WalletLockedViewController)
+        XCTAssertTrue(password.passwordTextField.stringValue.isEmpty)
+        XCTAssertFalse(password.passwordTextField.isEnabled)
+        XCTAssertTrue(window.window?.contentViewController === locked)
+        XCTAssertTrue(window.window?.contentView === locked.view)
+        window.reconcileLockedPresentation()
+        window.bindAccess(fixture.access) { unlocks += 10 }
+        window.walletAccessDidLock()
+        XCTAssertTrue(window.contentViewController === locked)
+        locked.unlockWallet()
+        XCTAssertEqual(unlocks, 10)
+
+        fixture.access.lock(reason: .idle)
+        let replacement = try XCTUnwrap(window.contentViewController as? WalletLockedViewController)
+        XCTAssertFalse(replacement === locked)
+        locked.unlockWallet()
+        XCTAssertEqual(unlocks, 10)
+        replacement.unlockWallet()
+        XCTAssertEqual(unlocks, 20)
+    }
+
+    func testLockedWindowCanRetryUnlockAfterCancellingAuthentication() async throws {
+        let fixture = WalletAccessTestFixture()
+        try fixture.unlock()
+        var events = [StartupCredentialCoordinator.Event]()
+        let flow = StartupCredentialCoordinator(dependencies: .init(
+            credentials: fixture.credentials, attemptBiometrics: { _, _ in nil }, access: fixture.access
+        )) { events.append($0) }
+        let window = makeWindow()
+        window.bindAccess(fixture.access) { flow.requestAccess() }
+        defer { flow.cancel(); flow.windowController?.close(); window.close() }
+        fixture.access.lock(reason: .idle)
+        let locked = try XCTUnwrap(window.contentViewController as? WalletLockedViewController)
+
+        locked.unlockWallet()
+        await waitUntil { flow.windowController?.contentViewController is PasswordViewController }
+        let first = try XCTUnwrap(flow.windowController?.contentViewController as? PasswordViewController)
+        first.cancelButtonTapped(first.cancelButton)
+        XCTAssertNil(flow.windowController)
+        XCTAssertTrue(window.contentViewController === locked)
+        XCTAssertTrue(fixture.access.isLocked)
+
+        locked.unlockWallet()
+        await waitUntil { flow.windowController?.contentViewController is PasswordViewController }
+        let retry = try XCTUnwrap(flow.windowController?.contentViewController as? PasswordViewController)
+        XCTAssertFalse(retry === first)
+        retry.passwordTextField.stringValue = "password"
+        retry.actionButtonTapped(retry.okButton as Any)
+        XCTAssertTrue(fixture.access.validateCurrentAccess())
+        locked.unlockWallet()
+        XCTAssertEqual(events, [.cancelled, .authenticated])
+    }
+
     func testRejectedInstallationRetiresUnloadedOnboardingActions() {
         let window = makeWindow()
         defer { window.close() }
@@ -402,6 +472,8 @@ final class WindowAuthenticationSessionTests: XCTestCase {
 
         fixture.access.lock(reason: .protectedDataUnavailable)
 
+        XCTAssertTrue(form.passwordTextField.stringValue.isEmpty)
+        XCTAssertThrowsError(try fixture.credentials.verify(password: "password", challenge: challenge))
         await assertResult(authentication, equals: false)
         let locked = try XCTUnwrap(controller.contentViewController as? WalletLockedViewController)
         XCTAssertTrue(form.passwordTextField.stringValue.isEmpty)

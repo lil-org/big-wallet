@@ -106,7 +106,7 @@ class Agent: NSObject, WalletAccessObserver {
         private(set) var isDismissed = false
         private var lastRenderedRevision: UInt64?
         private(set) var isRetired = false
-        var windowController: NSWindowController? {
+        var windowController: WalletWindowController? {
             didSet {
                 guard !isRetired else { return }
                 if let window = windowController?.window {
@@ -166,13 +166,9 @@ class Agent: NSObject, WalletAccessObserver {
             windowCloseObserver.disable()
         }
 
-        func detachForWalletLock() -> NSWindowController? {
+        func detachForWalletLock() -> WalletWindowController? {
             retire()
             let controller = windowController
-            (controller?.contentViewController as? any NativeWindowContentRetirement)?.retire()
-            (controller as? WalletWindowController)?.currentAuthenticationSession?.cancel()
-            Window.dismissSheets(in: controller?.window)
-            controller?.window?.delegate = nil
             windowController = nil
             return controller
         }
@@ -210,8 +206,8 @@ class Agent: NSObject, WalletAccessObserver {
             pendingWalletOpenIntent.cancel()
         }
     }
-    private var walletWindowController: NSWindowController?
-    private var lockedApprovalWindows = [NSWindowController]()
+    private var walletWindowController: WalletWindowController?
+    private var lockedApprovalWindows = [WalletWindowController]()
     private var pendingWalletOpenIntent = PendingWalletOpenIntent()
     private var nativeDeliveryOwner: NativeDeliveryOwner?
     private var approvalInbox = ApprovalInbox<ActiveApproval>()
@@ -336,7 +332,7 @@ class Agent: NSObject, WalletAccessObserver {
     isolated deinit { access?.removeObserver(self) }
 
     private static func liveApprovalCoordinator(handle: RequestHandle, nonce: NativeDeliveryNonce) -> NativeApprovalCoordinator {
-        ApplicationServices.shared.authority.makeNativeApprovalCoordinator(handle: handle, nativeDeliveryNonce: nonce)
+        ApplicationServices.shared.makeNativeApprovalCoordinator(handle: handle, nativeDeliveryNonce: nonce)
     }
 
     private var requiresExplicitUnlock: Bool {
@@ -483,14 +479,11 @@ class Agent: NSObject, WalletAccessObserver {
 
     func walletAccessDidLock() {
         pendingWalletOpenIntent.cancel()
-        startupCredentials.lock()
-        (walletWindowController as? WalletWindowController)?.walletAccessDidLock()
         let coordinators = approvalInbox.coordinators
         for coordinator in coordinators {
             let key = ApprovalRouteKey(handle: coordinator.handle, nativeDeliveryNonce: coordinator.nativeDeliveryNonce)
             if let controller = approvalInbox.active(for: key)?.detachForWalletLock(),
                let window = controller.window, Window.isVisibleContentWindow(window) {
-                configureLockedWindow(controller)
                 if walletWindowController?.window.map(Window.isVisibleContentWindow) != true {
                     walletWindowController = controller
                 } else {
@@ -501,21 +494,15 @@ class Agent: NSObject, WalletAccessObserver {
         }
     }
 
-    private func configureLockedWindow(_ controller: NSWindowController) {
-        guard let controller = controller as? WalletWindowController else { return }
-        controller.bindAccess(access) { [weak self] in self?.unlockWallet() }
-        controller.walletAccessDidLock()
-    }
-
     private func showLockedWallet() {
-        let controller: NSWindowController
+        let controller: WalletWindowController
         if let existing = walletWindowController {
             controller = existing
         } else {
             controller = Window.showNew(closeOthers: false, activates: false)
             walletWindowController = controller
         }
-        configureLockedWindow(controller)
+        controller.bindAccess(access) { [weak self] in self?.unlockWallet() }
         Window.reactivateWindow(controller)
     }
 
@@ -543,7 +530,7 @@ class Agent: NSObject, WalletAccessObserver {
             if walletWindowController.contentViewController is WalletLockedViewController {
                 let accounts = AccountsListViewController()
                 accounts.walletAccess = NativeWalletAccess(access)
-                guard (walletWindowController as? WalletWindowController)?.installProtectedContent(
+                guard walletWindowController.installProtectedContent(
                     accounts, access: accounts.walletAccess
                 ) == true else { return }
             }
@@ -716,11 +703,11 @@ extension Agent.ActiveApproval {
         }
     }
 
-    private func approvalWindow(peer: PeerMeta? = nil) -> NSWindowController? {
+    private func approvalWindow(peer: PeerMeta? = nil) -> WalletWindowController? {
         guard walletAccess.validateCurrentAccess(), !isRetired else { return nil }
         if let windowController {
             if let peer {
-                (windowController as? WalletWindowController)?.approvalPeer = peer
+                windowController.approvalPeer = peer
             }
             return windowController
         }
@@ -736,15 +723,8 @@ extension Agent.ActiveApproval {
     }
 
     @discardableResult
-    private func installProtectedContent(_ content: NSViewController, in controller: NSWindowController) -> Bool {
-        if let walletWindow = controller as? WalletWindowController {
-            return walletWindow.installProtectedContent(content, access: walletAccess) && !isRetired
-        }
-        guard walletAccess.validateCurrentAccess(), !isRetired else { return false }
-        _ = content.view
-        guard walletAccess.validateCurrentAccess(), !isRetired else { return false }
-        controller.contentViewController = content
-        return walletAccess.validateCurrentAccess() && !isRetired
+    private func installProtectedContent(_ content: NSViewController, in controller: WalletWindowController) -> Bool {
+        controller.installProtectedContent(content, access: walletAccess) && !isRetired
     }
 
     private func presentAddEthereumChain(
@@ -873,7 +853,7 @@ extension Agent.ActiveApproval {
     @discardableResult
     private func installWaitingSurface(
         reason: String,
-        in windowController: NSWindowController,
+        in windowController: WalletWindowController,
         isWorking: Bool = true,
         retryAction: (() -> Void)? = nil
     ) -> Bool {

@@ -240,10 +240,5 @@
     "path": "Negative/ApplicationPopupAccess.swift",
     "succeeds": false,
     "diagnostic": "has no member 'makePopupApprovalAuthority'"
-  },
-  {
-    "path": "Negative/SystemRuntimeAccess.swift",
-    "succeeds": false,
-    "diagnostic": "runtime.*inaccessible"
   }
 ]

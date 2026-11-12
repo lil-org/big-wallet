@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import {readFileSync} from "node:fs";
+import {mkdtemp, rm, writeFile} from "node:fs/promises";
+import {tmpdir} from "node:os";
 import {fileURLToPath} from "node:url";
 import {join} from "node:path";
 import test from "node:test";
-import {parseProject} from "../../check_runtime_boundaries.mjs";
+import {readProject} from "../../check_runtime_boundaries.mjs";
 import {validateAppTestMembership, validatePackageTestMembership} from "../test_membership.mjs";
-import {RUNTIME_TEST_TARGETS} from "../test_policy.mjs";
+import {APP_TEST_CLASS_PLATFORMS, APP_TEST_TARGETS, RUNTIME_TEST_TARGETS} from "../test_policy.mjs";
 
 const root = "/fixture";
 const targets = () => RUNTIME_TEST_TARGETS.map(name => ({name, type: "test", path: `Tests/${name}`,
@@ -35,12 +36,44 @@ test("evaluated package targets must include all regular test sources and testab
 });
 
 test("critical app test source membership is checked independently of test enumeration", () => {
-    const root = fileURLToPath(new URL("../../../", import.meta.url));
-    const source = readFileSync(new URL("../../../Wallet.xcodeproj/project.pbxproj", import.meta.url), "utf8");
-    const project = parseProject(source);
+    const suites = Object.keys(APP_TEST_CLASS_PLATFORMS);
+    const objects = {
+        project: {isa: "PBXProject", mainGroup: "tests"},
+        tests: {isa: "PBXGroup", path: "Tests", children: suites},
+    };
+    for (const suite of suites) {
+        objects[suite] = {isa: "PBXFileReference", path: `${suite}.swift`};
+        objects[`build-${suite}`] = {isa: "PBXBuildFile", fileRef: suite};
+    }
+    for (const [platform, name] of Object.entries(APP_TEST_TARGETS)) {
+        const phase = `sources-${platform}`;
+        objects[platform] = {isa: "PBXNativeTarget", name, buildPhases: [phase]};
+        objects[phase] = {isa: "PBXSourcesBuildPhase", files: suites
+            .filter(suite => APP_TEST_CLASS_PLATFORMS[suite].includes(platform)).map(suite => `build-${suite}`)};
+    }
+    const project = {rootObject: "project", objects};
     assert.doesNotThrow(() => validateAppTestMembership(project, root));
-    const target = Object.values(project.objects).find(value => value.isa === "PBXNativeTarget" && value.name === "Tests macOS");
-    const phase = target.buildPhases.map(id => project.objects[id]).find(value => value.isa === "PBXSourcesBuildPhase");
-    phase.files = [];
-    assert.throws(() => validateAppTestMembership(project, root), /must compile the critical suite/);
+    objects["sources-macos"].files = objects["sources-macos"].files.filter(id => id !== "build-WindowAuthenticationSessionTests");
+    assert.throws(() => validateAppTestMembership(project, root), /Tests macOS must compile the critical suite WindowAuthenticationSessionTests/);
+});
+
+const macOS = {skip: process.platform !== "darwin"};
+
+test("the Xcode project includes every required app test suite", macOS, () => {
+    const root = fileURLToPath(new URL("../../../", import.meta.url));
+    validateAppTestMembership(readProject(join(root, "Wallet.xcodeproj/project.pbxproj")), root);
+});
+
+test("project decoding rejects duplicate keys in the same dictionary", macOS, async t => {
+    const directory = await mkdtemp(join(tmpdir(), "pbx-keys-"));
+    t.after(() => rm(directory, {recursive: true, force: true}));
+    const path = join(directory, "project.pbxproj");
+    await writeFile(path, '{ objects = { ID /* A */ = { isa = A; }; "ID" /* B */ = { isa = B; }; }; }');
+    assert.throws(() => readProject(path), /Duplicate Xcode project key: ID/);
+    await writeFile(path, "rootObject = old; rootObject = current;");
+    assert.throws(() => readProject(path), /Duplicate Xcode project key: rootObject/);
+    await writeFile(path, String.raw`{ groups = ({ name = a; "na\U006de" = b; }); }`);
+    assert.throws(() => readProject(path), /Duplicate Xcode project key: name/);
+    await writeFile(path, '{ groups = ({ name = "text; /* { x = y; } */"; }, /* } */ { "name" = b; }); }');
+    assert.deepEqual(readProject(path).groups.map(group => group.name), ["text; /* { x = y; } */", "b"]);
 });

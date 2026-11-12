@@ -231,7 +231,7 @@ export function createManifest(job) {
     add("protocol.check", "repository", "node", ["Scripts/generate_wire_protocol.mjs", "--check"]);
     add("pins.check", "repository", "python3", ["Scripts/vm/environment_pins.py", "--check"], {requirements: ["python"]});
     add("runtime.test-membership", "repository", "node", ["Scripts/vm/test_membership.mjs"], {requirements: ["node", "xcode"]});
-    add("runtime.boundaries", "repository", "node", ["Scripts/check_runtime_boundaries.mjs"]);
+    add("runtime.boundaries", "repository", "node", ["Scripts/check_runtime_boundaries.mjs"], {requirements: ["node", "xcode"]});
     add("runtime.boundary-tests", "repository", "node", ["--test", "Scripts/tests/runtime_boundaries.test.mjs"]);
     add("provider.bundle", "repository", "npm", ["run", "build"], {cwd: provider, dependencies: ["provider.install", "protocol.check"], unchanged: ["Safari Shared/Resources/inpage.js"]});
     add("provider.test", "test", "node", ["--test", "--test-concurrency=1", "--test-reporter=tap", "../Tests/*.test.mjs"], {
@@ -312,7 +312,7 @@ export function createManifest(job) {
             ], {requirements: ["xcode"], timeoutSeconds: 1800});
         }
         if (apiValidation) {
-            add(`runtime.api.${configuration.toLowerCase()}`, "build", "node", ["Scripts/check_runtime_boundaries.mjs", "--check-api",
+            add(`runtime.api.${configuration.toLowerCase()}`, "build", "node", ["Scripts/check_runtime_boundaries.mjs", "--api-only",
                 "--package-path", "Packages/WalletRuntime", "--configuration", configuration], {
                 dependencies: ["runtime.boundaries", ...RUNTIME_MODULES.map(target => `runtime.${target}.${configuration.toLowerCase()}`)],
                 requirements: ["node", "xcode"], timeoutSeconds: 1800,

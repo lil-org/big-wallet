@@ -1,30 +1,26 @@
 import assert from "node:assert/strict";
 import {EventEmitter} from "node:events";
-import {readFile} from "node:fs/promises";
 import {PassThrough} from "node:stream";
 import test from "node:test";
-import vm from "node:vm";
-
-const source = await readFile(new URL("../../process_lifecycle.mjs", import.meta.url), "utf8");
+import {observeProcess} from "../../process_lifecycle.mjs";
 
 function fixture(policy, signalFailure) {
     let now = 0;
     let serial = 0;
     const timers = new Map();
-    const observe = vm.runInNewContext(source.replace("export function", "function") + "\nobserveProcess", {
+    const child = new EventEmitter();
+    child.pid = 123;
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    const signals = [], stops = [], failures = [], exits = [];
+    const lifecycle = observeProcess(child, {
         setTimeout(callback, milliseconds) {
             const id = ++serial;
             timers.set(id, {callback, deadline: now + milliseconds});
             return id;
         },
         clearTimeout(id) { timers.delete(id); },
-    });
-    const child = new EventEmitter();
-    child.pid = 123;
-    child.stdout = new PassThrough();
-    child.stderr = new PassThrough();
-    const signals = [], stops = [], failures = [], exits = [];
-    const lifecycle = observe(child, {
+
         policy, terminationGraceMilliseconds: 10,
         signalGroup(pid, signal) {
             assert.equal(pid, child.pid);

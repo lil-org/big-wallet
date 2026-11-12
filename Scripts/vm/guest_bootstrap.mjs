@@ -349,24 +349,37 @@ export async function acquireRunLock(filename, runId, {publishOwner = publishLoc
     };
 }
 
-export async function verifySession(args, {environment = process.env, verify = verifyGuest} = {}) {
-    const exchange = args.length === 1 ? EXCHANGE_PATH : args.length === 3 && args[1] === "--exchange" ? args[2] : null;
-    if (args[0] !== "--verify-session" || exchange !== EXCHANGE_PATH || environment.BW_TEST_VM_EXCHANGE !== EXCHANGE_PATH ||
+const liveBootstrapOperations = Object.freeze({
+    exchangePath: EXCHANGE_PATH,
+    environment: process.env,
+    homeDirectory: () => userInfo().homedir,
+    verifyExchangeDirectory, verifyGuest, bootstrapToolsEvidence, acquireRunLock,
+    readGuestProvision, verifyBuildVolume, materializeSource,
+    loadHarness: url => import(url),
+    writeJSON: atomicJSON,
+});
+
+export async function verifySession(args, dependencies = {}) {
+    const operations = {...liveBootstrapOperations, ...dependencies};
+    const {environment, exchangePath} = operations;
+    const exchange = args.length === 1 ? exchangePath : args.length === 3 && args[1] === "--exchange" ? args[2] : null;
+    if (args[0] !== "--verify-session" || exchange !== exchangePath || environment.BW_TEST_VM_EXCHANGE !== exchangePath ||
         typeof environment.BW_TEST_VM_RUN_ID !== "string") { throw new Error("A current guest run is required"); }
-    await verifyExchangeDirectory();
+    await operations.verifyExchangeDirectory();
     const job = validateJobEnvelope(JSON.parse(await regularFile(join(exchange, "job.json"), 65536)));
     if (job.kind !== "run" || job.runId !== environment.BW_TEST_VM_RUN_ID) { throw new Error("Guest run identity is stale"); }
-    await verify(job.vmId);
+    await operations.verifyGuest(job.vmId);
     return {runId: job.runId, status: "passed"};
 }
 
-export async function main(args = process.argv.slice(2)) {
-    if (args[0] === "--verify-session") { return verifySession(args); }
-    if (args.length !== 2 || args[0] !== "--exchange" || args[1] !== EXCHANGE_PATH) { throw new Error("Guest execution requires the fixed local exchange"); }
-    const exchange = await verifyExchangeDirectory();
+export async function main(args = process.argv.slice(2), dependencies = {}) {
+    const operations = {...liveBootstrapOperations, ...dependencies};
+    if (args[0] === "--verify-session") { return verifySession(args, operations); }
+    if (args.length !== 2 || args[0] !== "--exchange" || args[1] !== operations.exchangePath) { throw new Error("Guest execution requires the fixed local exchange"); }
+    const exchange = await operations.verifyExchangeDirectory();
     const job = validateJobEnvelope(JSON.parse(await regularFile(join(exchange, "job.json"), 65536)));
-    const identity = await verifyGuest(job.vmId);
-    const bootstrapEvidence = await bootstrapToolsEvidence(job.bootstrapTools);
+    const identity = await operations.verifyGuest(job.vmId);
+    const bootstrapEvidence = await operations.bootstrapToolsEvidence(job.bootstrapTools);
     const artifacts = join(exchange, "artifacts");
     await mkdir(artifacts, {recursive: true, mode: 0o700});
     if (await realpath(artifacts) !== artifacts) { throw new Error("Artifact directory may not traverse symlinks"); }
@@ -379,21 +392,21 @@ export async function main(args = process.argv.slice(2)) {
         catch (error) { return error.code !== "ENOENT"; }
     };
     const startedAt = new Date().toISOString();
-    const release = await acquireRunLock(join(userInfo().homedir, "Library/Application Support/BigWalletTestVM/run.lock"), job.runId);
+    const release = await operations.acquireRunLock(join(operations.homeDirectory(), "Library/Application Support/BigWalletTestVM/run.lock"), job.runId);
     try {
         if (!bootstrapEvidence.available) { throw new Error("Installed guest bootstrap does not match this job; run setup before testing"); }
-        const provision = await readGuestProvision(identity);
+        const provision = await operations.readGuestProvision(identity);
         const workspace = provision.workspacePath;
-        const buildVolume = await verifyBuildVolume({vmId: job.vmId, stopRequested});
-        const source = await materializeSource(exchange, job, workspace, {stopRequested});
+        const buildVolume = await operations.verifyBuildVolume({vmId: job.vmId, stopRequested});
+        const source = await operations.materializeSource(exchange, job, workspace, {stopRequested});
         if (await stopRequested()) { throw new Error("Run cancelled"); }
         const entry = join(workspace, "Scripts/vm/guest.mjs");
         await regularFile(entry);
         if (await realpath(entry) !== entry) { throw new Error("Guest harness entry may not traverse symlinks"); }
-        const {runJob} = await import(pathToFileURL(entry).href);
+        const {runJob} = await operations.loadHarness(pathToFileURL(entry).href);
         if (typeof runJob !== "function") { throw new Error("The snapshotted guest harness has no runJob entry"); }
         return await runJob({job, identity, provision, workspace, exchange, artifacts, source, buildVolume, bootstrapEvidence,
-            stopRequested, writeJSON: atomicJSON, readSnapshotFile: regularFile, hashFile});
+            stopRequested, writeJSON: operations.writeJSON, readSnapshotFile: regularFile, hashFile});
     } catch (error) {
         let report = {version: 1, runId: job.runId, vmId: job.vmId, kind: job.kind, profile: job.profile,
             identity, source: job.source, startedAt, stages: []};
@@ -420,7 +433,7 @@ export async function main(args = process.argv.slice(2)) {
             issues: [...(Array.isArray(report.summary?.issues) ? report.summary.issues : []), error.message]};
         report.coverage = {...report.coverage, status: "partial", fullSuiteVerified: false,
             incompleteStages: report.stages.filter(stage => stage.status !== "passed").map(stage => ({id: stage.id, status: stage.status}))};
-        await atomicJSON(join(artifacts, "result.json"), report);
+        await operations.writeJSON(join(artifacts, "result.json"), report);
         return report;
     } finally { await release(); }
 }

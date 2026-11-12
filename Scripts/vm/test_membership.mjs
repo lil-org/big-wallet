@@ -2,7 +2,7 @@ import {execFileSync} from "node:child_process";
 import {readFileSync, readdirSync} from "node:fs";
 import {dirname, join, resolve} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
-import {parseProject, projectFilePaths} from "../check_runtime_boundaries.mjs";
+import {readProject, projectFilePaths} from "../check_runtime_boundaries.mjs";
 import {APP_TEST_CLASS_PLATFORMS, APP_TEST_TARGETS, RUNTIME_TEST_TARGETS} from "./test_policy.mjs";
 
 export function validatePackageTestMembership(description, {root, listSources, readSource}) {
@@ -59,6 +59,6 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
     const description = JSON.parse(execFileSync("swift", ["package", "--package-path", "Packages/WalletRuntime", "describe", "--type", "json"],
         {cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024}));
     validatePackageTestMembership(description, {root, listSources: sources, readSource: path => readFileSync(path, "utf8")});
-    validateAppTestMembership(parseProject(readFileSync(join(root, "Wallet.xcodeproj/project.pbxproj"), "utf8")), root);
+    validateAppTestMembership(readProject(join(root, "Wallet.xcodeproj/project.pbxproj")), root);
     process.stdout.write("Package and critical app test sources are included in their required targets.\n");
 }

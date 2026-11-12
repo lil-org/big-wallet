@@ -4,10 +4,10 @@ import WalletAuthority
 import WalletFlows
 
 @MainActor
-func authorityContract(system: WalletAuthoritySystem, wallet: WalletSnapshot, review: NativeApprovalReview,
+func authorityContract(runtime: AuthorityRuntime, wallet: WalletSnapshot, review: NativeApprovalReview,
     handle: RequestHandle, nonce: NativeDeliveryNonce, transaction: Transaction, network: ResolvedEthereumNetwork,
     grant: WalletAuthenticationGrant, access: WalletAccessSession) async throws {
-    let credentials = system.credentials
+    let credentials = runtime.credentials
     let challenge = credentials.makeWalletAccessChallenge()
     _ = try credentials.verify(password: "fixture", challenge: challenge)
     _ = credentials.accessSession(authorization: grant)
@@ -16,7 +16,7 @@ func authorityContract(system: WalletAuthoritySystem, wallet: WalletSnapshot, re
     let _: Duration? = credentials.recordInteraction(access)
     _ = credentials.remainingAccessLifetime(access)
 #if os(macOS)
-    let coordinator = system.makeNativeApprovalCoordinator(handle: handle, nativeDeliveryNonce: nonce)
+    let coordinator = NativeApprovalCoordinator(authority: runtime.makeNativeApprovalAuthority(handle: handle, nativeDeliveryNonce: nonce))
     coordinator.resumeAfterAuthentication(authorization: access)
 #endif
     _ = review.makeMessageAuthenticationChallenge(solanaCluster: nil)
@@ -25,14 +25,14 @@ func authorityContract(system: WalletAuthoritySystem, wallet: WalletSnapshot, re
     coordinator.approveMessage(solanaCluster: nil, review: review, authorization: grant)
     coordinator.approveTransaction(transaction, reviewedNetwork: network, review: review, authorization: grant)
 #endif
-    _ = try await system.wallets.makeExportChallenge(wallet: wallet, kind: .mnemonic)
-    _ = try await system.wallets.exportMnemonic(wallet: wallet, authorization: grant)
-    _ = try await system.wallets.exportPrivateKey(wallet: wallet, authorization: grant)
-    _ = try await system.wallets.createWallet(access: access)
-    _ = try await system.wallets.addWallet(input: "fixture", inputPassword: nil, access: access)
-    try await system.wallets.update(wallet: wallet, enabledAccounts: wallet.accounts, access: access)
-    try await system.wallets.delete(wallet: wallet, access: access)
-    let preview = try await system.wallets.previewSession(wallet: wallet, access: access)
+    _ = try await runtime.wallets.makeExportChallenge(wallet: wallet, kind: .mnemonic)
+    _ = try await runtime.wallets.exportMnemonic(wallet: wallet, authorization: grant)
+    _ = try await runtime.wallets.exportPrivateKey(wallet: wallet, authorization: grant)
+    _ = try await runtime.wallets.createWallet(access: access)
+    _ = try await runtime.wallets.addWallet(input: "fixture", inputPassword: nil, access: access)
+    try await runtime.wallets.update(wallet: wallet, enabledAccounts: wallet.accounts, access: access)
+    try await runtime.wallets.delete(wallet: wallet, access: access)
+    let preview = try await runtime.wallets.previewSession(wallet: wallet, access: access)
     _ = try await preview.previewAccounts(page: 0)
     preview.invalidate()
     challenge.invalidate()

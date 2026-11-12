@@ -24,7 +24,7 @@ struct ReviewRequster {
     }
     
     private static func didRequestReview() {
-        ApplicationServices.shared.authority.recordReviewRequest(at: Date())
+        ApplicationServices.shared.recordReviewRequest(at: Date())
     }
     
 }

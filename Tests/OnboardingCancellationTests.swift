@@ -97,6 +97,15 @@ final class OnboardingCancellationTests: XCTestCase {
         XCTAssertTrue(events.isEmpty)
         XCTAssertTrue(window.contentViewController === locked)
 
+        let controller = try XCTUnwrap(flow.windowController)
+        for windowFirst in [true, false] {
+            if windowFirst { controller.walletAccessDidLock() }
+            flow.walletAccessDidLock()
+            if !windowFirst { controller.walletAccessDidLock() }
+            XCTAssertTrue(window.contentViewController === locked)
+            XCTAssertTrue(window.contentView === locked.view)
+        }
+
         locked.unlockWallet()
         XCTAssertEqual(events, [.unlockRequested])
         await waitUntil { window.contentViewController is PasswordViewController }
@@ -108,6 +117,35 @@ final class OnboardingCancellationTests: XCTestCase {
         locked.unlockWallet()
         XCTAssertEqual(attempts, 2)
         XCTAssertNil(flow.windowController)
+    }
+
+    func testRejectedAccessCompletionShowsLockedPresentationAndRequiresExplicitUnlock() async throws {
+        let credentials = WalletAccessTestFixture()
+        let owner = WalletAccessTestFixture()
+        var events = [StartupCredentialCoordinator.Event]()
+        let flow = StartupCredentialCoordinator(dependencies: .init(
+            credentials: credentials.credentials, attemptBiometrics: { _, _ in nil }, access: owner.access
+        )) { events.append($0) }
+        defer { flow.windowController?.close(); flow.cancel() }
+        flow.requestAccess()
+        await waitUntil { flow.windowController?.contentViewController is PasswordViewController }
+        let form = try XCTUnwrap(flow.windowController?.contentViewController as? PasswordViewController)
+        form.passwordTextField.stringValue = "password"
+
+        form.actionButtonTapped(form.okButton as Any)
+
+        XCTAssertTrue(owner.access.isLocked)
+        XCTAssertTrue(owner.access.hasLocked)
+        XCTAssertTrue(form.passwordTextField.stringValue.isEmpty)
+        XCTAssertFalse(form.passwordTextField.isEnabled)
+        let locked = try XCTUnwrap(flow.windowController?.contentViewController as? WalletLockedViewController)
+        flow.refresh()
+        XCTAssertTrue(events.isEmpty)
+        XCTAssertTrue(flow.windowController?.contentViewController === locked)
+        locked.unlockWallet()
+        XCTAssertEqual(events, [.unlockRequested])
+        await waitUntil { flow.windowController?.contentViewController is PasswordViewController }
+        XCTAssertFalse(flow.windowController?.contentViewController === form)
     }
 
     func testExplicitStartupUnlockOpensAccountsAfterTheOriginalOpenWasCanceledByLock() async throws {
@@ -303,7 +341,7 @@ final class OnboardingCancellationTests: XCTestCase {
         XCTAssertTrue(fixture.access.isLocked)
         XCTAssertTrue(fixture.access.hasLocked)
 
-        flow.lock()
+        fixture.access.lock(reason: .idle)
 
         await fulfillment(of: [cancelled], timeout: 2)
         let grant = try XCTUnwrap(returnedGrant)

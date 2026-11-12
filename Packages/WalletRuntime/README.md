@@ -14,8 +14,8 @@ inside the existing processes and uses the existing entitlements.
 `WalletStorageSupport` holds the shared file-lock implementation. It has no library
 product. `CWalletCrypto` is reachable only through Authority. Authority and
 Networking cannot import one another. Flows cannot import Networking, private storage support, Security, LocalAuthentication or private crypto.
-`ApplicationServices` composes application services through `WalletAuthoritySystem`
-in Flows and `AuthorityRuntime` in Authority. `SafariExtensionServices` constructs
+`ApplicationServices` privately owns `AuthorityRuntime` and constructs native
+approval coordinators from its authority services. `SafariExtensionServices` constructs
 the extension's narrower runtime directly. App-owned extensions format values for UI.
 
 | Composition | Consumers | Constructed authority services |

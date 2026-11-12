@@ -2503,7 +2503,7 @@ extension PopupRequestSessionsTests {
                 catalogReads += 1
                 return catalog
             },
-            messages: ApplicationServices.shared.authority.messages
+            messages: ApplicationServices.shared.messages
         )
         let disposition = await admission.materialize(handle: snapshot.handle)
         XCTAssertEqual(disposition, .responseReady)
@@ -2539,7 +2539,7 @@ extension PopupRequestSessionsTests {
                     catalogReads += 1
                     return catalog
                 },
-                messages: ApplicationServices.shared.authority.messages
+                messages: ApplicationServices.shared.messages
             )
             let disposition = await admission.materialize(handle: snapshot.handle)
             XCTAssertEqual(disposition, .approvalRequired, testCase.name)
@@ -2619,7 +2619,7 @@ extension PopupRequestSessionsTests {
                 XCTFail("Wallet-independent rejection must not read the catalog")
                 return nil
             },
-            messages: ApplicationServices.shared.authority.messages
+            messages: ApplicationServices.shared.messages
         )
         let disposition = await admission.materialize(handle: snapshot.handle)
         XCTAssertEqual(disposition, .responseReady)
@@ -2650,7 +2650,7 @@ extension PopupRequestSessionsTests {
                 XCTFail("Receipt-owned work must not read the catalog")
                 return nil
             },
-            messages: ApplicationServices.shared.authority.messages
+            messages: ApplicationServices.shared.messages
         )
         let disposition = await admission.materialize(handle: snapshot.handle)
 
@@ -2670,7 +2670,7 @@ extension PopupRequestSessionsTests {
                 preparations += 1
                 return .immediate(.failure(.internalError))
             },
-            messages: ApplicationServices.shared.authority.messages
+            messages: ApplicationServices.shared.messages
         )
         let disposition = await admission.materialize(handle: snapshot.handle)
         XCTAssertEqual(disposition, .approvalRequired)
@@ -2696,7 +2696,7 @@ extension PopupRequestSessionsTests {
                 )
                 let admission = DappRequestAdmission(
                     store: store, requestProcessor: requestProcessorForTesting(), reviewCatalog: { catalog },
-                    messages: ApplicationServices.shared.authority.messages
+                    messages: ApplicationServices.shared.messages
                 )
                 guard case .snapshot(let before) = await store.bridge.configurationSnapshot(
                     configurationKey: snapshot.configurationKey, profileIdentifier: snapshot.handle.profileIdentifier
@@ -2753,7 +2753,7 @@ extension PopupRequestSessionsTests {
                 catalogReads += 1
                 return catalog
             },
-            messages: ApplicationServices.shared.authority.messages
+            messages: ApplicationServices.shared.messages
         )
         let disposition = await admission.materialize(handle: snapshot.handle)
         XCTAssertEqual(disposition, .responseReady)
@@ -2779,7 +2779,7 @@ extension PopupRequestSessionsTests {
                 return .immediate(.failure(.internalError))
             },
             reviewCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
-            messages: ApplicationServices.shared.authority.messages
+            messages: ApplicationServices.shared.messages
         )
 
         let disposition = await admission.materialize(handle: snapshot.handle)
@@ -3731,7 +3731,7 @@ extension PopupRequestSessionsTests {
             XCTAssertEqual(presentedDraft.selectedAccounts, reviewed.selectedAccounts)
             XCTAssertEqual(presentedDraft.network, reviewed.network)
             XCTAssertEqual(presentation.reviewToken, token)
-            let state = PopupApprovalStatePresenter(environment: popupPresentationEnvironment(), messages: ApplicationServices.shared.authority.messages).state(id: session.handle.id, presentation: session.publicPresentation)
+            let state = PopupApprovalStatePresenter(environment: popupPresentationEnvironment(), messages: ApplicationServices.shared.messages).state(id: session.handle.id, presentation: session.publicPresentation)
             guard case .review(let rendered, _, _) = state.content,
                   case .accountSelection(let selection) = rendered.content else {
                 return XCTFail("Expected rendered selection")
@@ -3812,7 +3812,7 @@ extension PopupRequestSessionsTests {
             (.ethereum, "signTransaction", popupTransactionAction(), Strings.sendTransaction),
             (.ethereum, "addEthereumChain", .addEthereumChain(.init(chainToAdd: popupTestNetwork())), Strings.addNetwork),
         ]
-        let presenter = PopupApprovalStatePresenter(environment: popupPresentationEnvironment(), messages: ApplicationServices.shared.authority.messages)
+        let presenter = PopupApprovalStatePresenter(environment: popupPresentationEnvironment(), messages: ApplicationServices.shared.messages)
         for (index, item) in cases.enumerated() {
             let raw = try popupSnapshot(id: 430 + index, provider: item.0, method: item.1)
             let binding = try requestBindingForTesting(XCTUnwrap(raw.request))
@@ -6040,7 +6040,7 @@ extension PopupRequestSessionsTests {
                 resolver.approvalResolution(chainId: chainID, freshCustomSnapshot: { cache.refreshSnapshot() })
             }
             let processor = requestProcessorForTesting(ethereumNetworkResolver: resolve)
-            let admission = DappRequestAdmission(store: store, requestProcessor: processor, messages: ApplicationServices.shared.authority.messages)
+            let admission = DappRequestAdmission(store: store, requestProcessor: processor, messages: ApplicationServices.shared.messages)
             let catalog = WalletReviewCatalog(account: popupTestAccount())
             let signingAccess = PopupSigningProbe()
             let controller = makePopupSessionsForTesting(
@@ -11029,8 +11029,8 @@ private func makePopupSessionsForTesting(
         invalidateNetworkCache: invalidateNetworkCache, selectionNetworkResolver: selectionNetworkResolver,
         approvalNetworkResolver: approvalNetworkResolver, executionEnvironment: executionEnvironment,
         approvalSubjectTitle: presentation.approvalSubjectTitle,
-        customDefinitionResult: customDefinitionResult, messages: ApplicationServices.shared.authority.messages)
-    return PopupRequestSessions(authority: authority, presentation: presentation, messages: ApplicationServices.shared.authority.messages)
+        customDefinitionResult: customDefinitionResult, messages: ApplicationServices.shared.messages)
+    return PopupRequestSessions(authority: authority, presentation: presentation, messages: ApplicationServices.shared.messages)
 }
 
 @MainActor

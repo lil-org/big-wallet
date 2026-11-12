@@ -103,21 +103,11 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
         onEvent(.cancelled)
     }
 
-    func lock() {
-        if !access.isLocked || !access.hasLocked {
-            access.lock(reason: .idle)
-        } else {
-            walletAccessDidLock()
-        }
-    }
-
     func walletAccessDidLock() {
         let previous = authenticationAttempt
         authenticationAttempt = nil
         previous?.cancel()
-        transition(to: .locked)
-        windowController?.bindAccess(access) { [weak self] in self?.unlock() }
-        windowController?.walletAccessDidLock()
+        transition(to: .locked, retiringPresentation: false)
     }
 
     private func unlock() {
@@ -177,7 +167,7 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
     }
 
     @discardableResult
-    private func transition(to state: State) -> UInt64 {
+    private func transition(to state: State, retiringPresentation: Bool = true) -> UInt64 {
         presentationGeneration &+= 1
         let generation = presentationGeneration
         self.state = state
@@ -186,7 +176,7 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
         authenticationAttempt?.cancelOperation()
         previousTask?.cancel()
         guard presentationGeneration == generation else { return generation }
-        retirePresentation()
+        if retiringPresentation { retirePresentation() }
         return generation
     }
 
@@ -352,7 +342,7 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
         guard operation.complete(session) else {
             if authenticationAttempt === attempt {
                 cancelAccessAuthentication()
-                walletAccessDidLock()
+                access.lock(reason: .idle)
             }
             return
         }

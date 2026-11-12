@@ -190,13 +190,10 @@ public final class WalletsManager: NSObject {
         return loadState == .ready && current.status == .valid && repositoryRevision == current.revision &&
             publishedExternalChangeRevision == current.externalChangeRevision
     }
-    private final class ReloadWaiter: Sendable {
-        let cancelled = Mutex(false)
-    }
     @MainActor
     private final class ReloadAttempt {
         var task: Task<Bool, Never>!
-        var waiters = [ReloadWaiter]()
+        nonisolated let uncancelledWaiterCount = Mutex(0)
     }
     private var reloadAttempt: ReloadAttempt?
     private var publishedExternalChangeRevision: UInt64 = 0
@@ -252,13 +249,12 @@ public final class WalletsManager: NSObject {
         guard !Task.isCancelled else { return false }
         if let pending = reloadAttempt { cancelReloadIfUnobserved(pending) }
         let attempt: ReloadAttempt
-        let waiter = ReloadWaiter()
         if let pending = reloadAttempt, !pending.task.isCancelled {
             attempt = pending
-            attempt.waiters.append(waiter)
+            attempt.uncancelledWaiterCount.withLock { $0 += 1 }
         } else {
             attempt = ReloadAttempt()
-            attempt.waiters.append(waiter)
+            attempt.uncancelledWaiterCount.withLock { $0 += 1 }
             reloadAttempt = attempt
             attempt.task = Task { [weak self] in
                 guard let self else { return false }
@@ -268,9 +264,9 @@ public final class WalletsManager: NSObject {
         }
         return await withTaskCancellationHandler {
             let result = await attempt.task.value
-            return !Task.isCancelled && !waiter.cancelled.withLock({ $0 }) && result && hasCurrentPublishedSnapshot
+            return !Task.isCancelled && result && hasCurrentPublishedSnapshot
         } onCancel: {
-            waiter.cancelled.withLock { $0 = true }
+            attempt.uncancelledWaiterCount.withLock { $0 -= 1 }
             Task { @MainActor [weak self] in self?.cancelReloadIfUnobserved(attempt) }
         }
     }
@@ -307,7 +303,7 @@ public final class WalletsManager: NSObject {
 
     private func cancelReloadIfUnobserved(_ attempt: ReloadAttempt) {
         guard reloadAttempt === attempt,
-              attempt.waiters.allSatisfy({ $0.cancelled.withLock { $0 } }) else { return }
+              attempt.uncancelledWaiterCount.withLock({ $0 == 0 }) else { return }
         attempt.task.cancel()
     }
 

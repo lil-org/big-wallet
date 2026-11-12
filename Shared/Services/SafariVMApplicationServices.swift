@@ -9,7 +9,6 @@ import Foundation
 
 @MainActor
 struct SafariVMApplicationServices {
-    let authority: WalletAuthoritySystem
     let runtime: AuthorityRuntime
     let authorization: any AlchemyAuthorizationProviding
     let prices: PriceService
@@ -45,7 +44,7 @@ struct SafariVMApplicationServices {
         let runtime = AuthorityRuntime(composition: environment.composition, management: management,
             solanaEndpoints: SolanaRPCClient.RPCConfiguration.bundled,
             broadcaster: SignedBroadcastClient(ethereum: EthereumBroadcastClient(rpc: rpc), solana: solana))
-        return SafariVMApplicationServices(authority: WalletAuthoritySystem(runtime: runtime), runtime: runtime,
+        return SafariVMApplicationServices(runtime: runtime,
             authorization: authorization, prices: prices, ethereum: ethereum)
 #else
         management.makeVault = { _, _ in environment.vault() }
@@ -55,13 +54,12 @@ struct SafariVMApplicationServices {
         }
         management.vaultHostDefaults = fixtures.isLocal ? environment.preferences : UserDefaultsPreferenceStorage.standard
         let runtime = AuthorityRuntime(composition: environment.composition, management: management)
-        return SafariVMApplicationServices(authority: WalletAuthoritySystem(runtime: runtime), runtime: runtime,
+        return SafariVMApplicationServices(runtime: runtime,
             authorization: authorization, prices: prices)
 #endif
     }
 
-    static func restoreWallet(system: WalletAuthoritySystem, fixtures: SafariVMFixtures) async throws {
-        let wallets = system.wallets
+    static func restoreWallet(wallets: WalletsManager, fixtures: SafariVMFixtures) async throws {
         guard !wallets.wallets.contains(where: { $0.id == "fixture-ethereum" }) else { return }
         let prepared = WalletRepository.PreparedCreation(walletID: "fixture-ethereum",
             data: try fixtures.originalWalletData(id: "fixture-ethereum"),
@@ -81,7 +79,7 @@ struct SafariVMApplicationServices {
     }
 
 #if os(iOS)
-    static func replaceVaultGeneration(system: WalletAuthoritySystem, runtime: AuthorityRuntime, fixtures: SafariVMFixtures) async throws -> (previous: String, current: String) {
+    static func replaceVaultGeneration(services: ApplicationServices, fixtures: SafariVMFixtures) async throws -> (previous: String, current: String) {
         let preferences: any SharedPreferenceStorage = fixtures.isLocal ? SafariVMRuntimeEnvironment.preferenceStorage(fixtures) : UserDefaultsPreferenceStorage.standard
         let key = "SafariApprovalVault.hostPublicationMetadata.v1"
         func generation() throws -> UUID {
@@ -92,20 +90,20 @@ struct SafariVMApplicationServices {
             }
             return generation
         }
-        await system.waitForVaultReconciliation()
+        await services.waitForVaultReconciliation()
         let previous = try generation()
-        try await runtime.invalidateVaultForTesting()
+        try await services.invalidateVaultForTesting()
         let current = try generation()
         guard current != previous else { throw SafariVMFixtures.Failure.unavailable }
         return (previous.uuidString.lowercased(), current.uuidString.lowercased())
     }
 #endif
 
-    static func replaceCustomNetwork(chainID: Int, rpcURL: URL, system: WalletAuthoritySystem, fixtures: SafariVMFixtures) throws {
+    static func replaceCustomNetwork(chainID: Int, rpcURL: URL, services: ApplicationServices, fixtures: SafariVMFixtures) throws {
         let container = fixtures.isLocal ? fixtures.root : AuthorityStorageConfiguration.application.containerURL
         let storage = SafariVMCustomNetworks(preferences: SafariVMRuntimeEnvironment.preferenceStorage(fixtures), containerURL: container)
         try storage.replace(chainID: chainID, rpcURL: rpcURL)
-        system.invalidateNetworkCache()
+        services.invalidateNetworkCache()
         CustomNetworkChangeNotification.post()
     }
 
@@ -149,10 +147,10 @@ final class SafariVMMutations {
             defer { access.invalidate() }
             try await wallets.delete(wallet: wallet, access: access)
         case .restoreEthereumAccount:
-            try await SafariVMApplicationServices.restoreWallet(system: ApplicationServices.shared.authority, fixtures: fixtures)
+            try await SafariVMApplicationServices.restoreWallet(wallets: wallets, fixtures: fixtures)
         case .replaceVaultGeneration:
 #if os(iOS)
-            let generations = try await SafariVMApplicationServices.replaceVaultGeneration(system: ApplicationServices.shared.authority, runtime: ApplicationServices.shared.fixtureRuntime, fixtures: fixtures)
+            let generations = try await SafariVMApplicationServices.replaceVaultGeneration(services: ApplicationServices.shared, fixtures: fixtures)
             return ["previousGeneration": generations.previous, "generation": generations.current]
 #else
             throw SafariVMFixtures.Failure.invalidFixture
@@ -161,10 +159,10 @@ final class SafariVMMutations {
             guard let chainID = mutation.chainId, let rawURL = mutation.rpcURL else { throw SafariVMFixtures.Failure.invalidFixture }
             let rpcURL = try fixtures.validateMutationRPCURL(rawURL)
             try SafariVMApplicationServices.replaceCustomNetwork(chainID: chainID, rpcURL: rpcURL,
-                system: ApplicationServices.shared.authority, fixtures: fixtures)
+                services: ApplicationServices.shared, fixtures: fixtures)
         }
 #if os(iOS)
-        await ApplicationServices.shared.authority.waitForVaultReconciliation()
+        await ApplicationServices.shared.waitForVaultReconciliation()
 #endif
         return [:]
     }

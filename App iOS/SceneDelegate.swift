@@ -47,9 +47,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         foregroundTask = Task {
             _ = await ApplicationServices.shared.wallets.reloadFromStore()
             guard !Task.isCancelled else { return }
-            await ApplicationServices.shared.authority.reconcileVault()
+            await ApplicationServices.shared.reconcileVault()
 #if BW_SAFARI_VM_TESTING
-            await ApplicationServices.shared.authority.waitForVaultReconciliation()
+            await ApplicationServices.shared.waitForVaultReconciliation()
             await SafariVMMutations.shared.processPending()
 #endif
             await ApplicationServices.shared.requests.performMaintenance()

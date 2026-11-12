@@ -4,17 +4,13 @@ import {createHash} from "node:crypto";
 import {mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {dirname, join} from "node:path";
-import {fileURLToPath, pathToFileURL} from "node:url";
+import {fileURLToPath} from "node:url";
 import test from "node:test";
-import vm from "node:vm";
-import {atomicJSON, BOOTSTRAP_TOOL_NAMES, hashFile, materializeSource, regularFile, validateJobEnvelope} from "../guest_bootstrap.mjs";
+import {atomicJSON, BOOTSTRAP_TOOL_NAMES, hashFile, main, materializeSource, validateJobEnvelope, verifySession} from "../guest_bootstrap.mjs";
 import {BOOTSTRAP_TOOL_NAMES as MANIFEST_BOOTSTRAP_TOOLS, validateJob} from "../test_manifest.mjs";
 
 const digest = data => createHash("sha256").update(data).digest("hex");
 const bootstrapSource = await readFile(new URL("../guest_bootstrap.mjs", import.meta.url), "utf8");
-const mainDefinition = bootstrapSource.match(/^export async function main\([^]*?^}/m)[0]
-    .replace(/^export /, "").replace("import(pathToFileURL(entry).href)", "loadHarness(pathToFileURL(entry).href)");
-const verifyDefinition = bootstrapSource.match(/^export async function verifySession\([^]*?^}/m)[0].replace(/^export /, "");
 const job = ({payload, ...overrides} = {}) => ({version: 1, runId: "bootstrap-fixture", vmId: "fixture-vm", kind: "run", profile: "all", payload: {stages: [], onlyTesting: [], ...payload},
     bootstrapTools: Object.fromEntries(BOOTSTRAP_TOOL_NAMES.map(name => [name, "a".repeat(64)])),
     source: {sha256: "b".repeat(64), commit: "c".repeat(40)}, ...overrides});
@@ -25,17 +21,16 @@ async function fixture(operation) {
     const workspace = join(root, "workspace");
     await mkdir(exchange);
     const events = [];
-    const globals = {
-        process, EXCHANGE_PATH: exchange, realpath, regularFile, validateJobEnvelope, join, mkdir, pathToFileURL,
+    const dependencies = {
+        exchangePath: exchange,
         verifyExchangeDirectory: async () => { events.push("exchange"); return exchange; },
         verifyGuest: async () => { events.push("identity"); return {vmId: "fixture-vm", consoleUser: "tester"}; },
         bootstrapToolsEvidence: async () => { events.push("bootstrap"); return {available: true}; },
-        userInfo: () => ({homedir: root}),
+        homeDirectory: () => root,
         acquireRunLock: async () => { events.push("lock"); return async () => { events.push("release"); }; },
         readGuestProvision: async () => { events.push("provision"); return {workspacePath: workspace}; },
         verifyBuildVolume: async () => { events.push("volume"); return {vmId: "fixture-vm"}; },
         materializeSource: async (...args) => { events.push("materialize"); return materializeSource(...args); },
-        atomicJSON, hashFile,
         loadHarness: async url => { events.push("import"); return import(url); },
     };
     const stage = async (files, overrides = {}) => {
@@ -58,8 +53,8 @@ async function fixture(operation) {
         await atomicJSON(join(exchange, "job.json"), selected);
         return selected;
     };
-    const run = overrides => vm.runInNewContext(`(${mainDefinition})`, {...globals, ...overrides})(["--exchange", exchange]);
-    try { await operation({root, exchange, workspace, events, globals, stage, run}); }
+    const run = overrides => main(["--exchange", exchange], {...dependencies, ...overrides});
+    try { await operation({root, exchange, workspace, events, dependencies, stage, run}); }
     finally { await rm(root, {recursive: true, force: true}); }
 }
 
@@ -277,18 +272,18 @@ for (const cancelled of [false, true]) {
     }));
 }
 
-test("session verification uses the existing run identity without importing the harness or acquiring its lock", async () => fixture(async ({exchange, stage}) => {
+test("session verification uses the existing run identity without importing the harness or acquiring its lock", async () => fixture(async ({exchange, stage, dependencies, events}) => {
     await stage(sources);
     let verifications = 0;
-    const verifySession = vm.runInNewContext(`(${verifyDefinition})`, {
-        EXCHANGE_PATH: exchange, verifyExchangeDirectory: async () => exchange, validateJobEnvelope,
-        regularFile, join,
-    });
     const environment = {BW_TEST_VM_EXCHANGE: exchange, BW_TEST_VM_RUN_ID: job().runId};
-    const verify = async vmId => { assert.equal(vmId, job().vmId); verifications++; };
-    assert.equal((await verifySession(["--verify-session"], {environment, verify})).status, "passed");
-    await assert.rejects(verifySession(["--verify-session"], {environment: {...environment, BW_TEST_VM_RUN_ID: "other"}, verify}), /identity is stale/);
-    assert.equal(verifications, 1);
+    const verifyGuest = async vmId => { assert.equal(vmId, job().vmId); verifications++; };
+    const operations = {...dependencies, environment, verifyGuest};
+    assert.equal((await verifySession(["--verify-session"], operations)).status, "passed");
+    assert.equal((await main(["--verify-session"], operations)).status, "passed");
+    await assert.rejects(verifySession(["--verify-session"], {...operations,
+        environment: {...environment, BW_TEST_VM_RUN_ID: "other"}}), /identity is stale/);
+    assert.equal(verifications, 2);
+    assert.deepEqual(events, ["exchange", "exchange", "exchange"]);
 }));
 
 test("direct harness invocations never dispatch a job, including the previous CLI forms", () => {

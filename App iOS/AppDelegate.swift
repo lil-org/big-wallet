@@ -22,9 +22,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         let backgroundTask = ApprovalBackgroundActivity.make(using: application)
         startupTask = Task { [walletsManager] in
             await walletsManager.start()
-            await ApplicationServices.shared.authority.startVaultReconciliation(backgroundTask: backgroundTask, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
+            await ApplicationServices.shared.startVaultReconciliation(backgroundTask: backgroundTask, protectedDataDidBecomeAvailable: UIApplication.protectedDataDidBecomeAvailableNotification)
 #if BW_SAFARI_VM_TESTING
-            await ApplicationServices.shared.authority.waitForVaultReconciliation()
+            await ApplicationServices.shared.waitForVaultReconciliation()
             await SafariVMMutations.shared.processPending()
 #endif
         }
