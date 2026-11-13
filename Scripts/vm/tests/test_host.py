@@ -19,6 +19,16 @@ host = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(host)
 
 
+class HostServicesTests(unittest.TestCase):
+    def test_operation_services_capture_current_dependencies_without_ambient_modules(self):
+        with patch.object(host, 'run_tests') as run_tests:
+            services = host.host_services()
+        self.assertIs(services.run_tests, run_tests)
+        self.assertIs(services.RunnerError, host.RunnerError)
+        for name in ('os', 'subprocess', 'shutil', 'datetime', 'main'):
+            self.assertFalse(hasattr(services, name))
+
+
 class SnapshotTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

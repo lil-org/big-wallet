@@ -94,7 +94,10 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
 
     func cancel() {
         switch state {
-        case .idle, .authenticated, .locked: return
+        case .idle, .authenticated: return
+        case .locked:
+            closeWindow()
+            return
         default: break
         }
         transition(to: .idle)
@@ -238,7 +241,8 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
         }
         let generation = transition(to: state)
         let controller = PasswordViewController.with(
-            configuration: .init(mode: mode, reason: .start)
+            configuration: .init(mode: mode, reason: .start),
+            beginAction: { [weak self] in self?.accepts(generation) == true }
         ) { [weak self] action in
             guard let self, accepts(generation) else { return }
             handle(action, generation: generation)

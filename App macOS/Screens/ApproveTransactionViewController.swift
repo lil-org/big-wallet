@@ -7,7 +7,14 @@ import Cocoa
 
 class ApproveTransactionViewController: NSViewController, NativeWalletProtectedContent {
 
-    var walletAccess = NativeWalletAccess()
+    let walletAccess: NativeWalletAccess
+
+    init?(coder: NSCoder, access: NativeWalletAccess) {
+        walletAccess = access
+        super.init(coder: coder)
+    }
+
+    required init?(coder: NSCoder) { return nil }
     var authenticate: @MainActor (NSWindow?, WalletAuthenticationChallenge, NativeApprovalReview) async -> WalletAuthenticationResult = {
         await Window.authenticate(in: $0, reason: .sendTransaction, challenge: $1, review: $2)
     }
@@ -92,10 +99,11 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
     static func with(
         transaction: Transaction, chain: EthereumNetwork, account: WalletAccount, walletId: String,
         review: NativeApprovalReview,
+        access: NativeWalletAccess,
         operations: TransactionApprovalOperations = ApplicationServices.shared.ethereum.makePreparationOperations(),
         completion: @escaping (ApprovedTransaction?) -> Void
     ) -> ApproveTransactionViewController {
-        let new = instantiate(ApproveTransactionViewController.self)
+        let new = instantiate(ApproveTransactionViewController.self) { ApproveTransactionViewController(coder: $0, access: access) }
         new.walletId = walletId
         new.review = review
         new.account = account
@@ -495,7 +503,7 @@ class ApproveTransactionViewController: NSViewController, NativeWalletProtectedC
     
     @IBAction func sliderValueChanged(_ sender: NSSlider) {
         guard validateReview() else { return }
-        walletAccess.controller?.recordContinuousInteraction()
+        walletAccess.controller.recordContinuousInteraction()
         guard acceptsReview, approvalSnapshot.allowsMutation,
               approvalSnapshot.hasGasSpeedInfo else {
             finishGasSliderInteraction(cancelled: true)

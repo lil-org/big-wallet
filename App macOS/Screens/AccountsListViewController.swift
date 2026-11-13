@@ -12,7 +12,7 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
     var authenticate: @MainActor (NSWindow?, AuthenticationReason, WalletAuthenticationChallenge) async -> WalletAuthenticationGrant? = {
         await Window.authenticate(in: $0, reason: $1, challenge: $2).grant
     }
-    var walletAccess = NativeWalletAccess()
+    let walletAccess: NativeWalletAccess
     private var cellModels = [CellModel]()
     private var preferencesButton: NSButton?
     private var loadTask: Task<Void, Never>?
@@ -24,6 +24,13 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
     private var isClosed = false
     var newWalletId: String?
     var getBackToRect: CGRect?
+
+    init(access: NativeWalletAccess) {
+        walletAccess = access
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { return nil }
     
     private enum CellModel: Equatable {
         case wallet(WalletAccountListRow)
@@ -144,8 +151,6 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
         startLoadingIfNeeded()
         getBackToRectIfNeeded()
         blinkNewWalletCellIfNeeded()
-        view.window?.delegate = self
-        
     }
 
     override func viewWillDisappear() {
@@ -312,15 +317,9 @@ class AccountsListViewController: NSViewController, NativeWalletProtectedContent
     
     @objc private func didClickImportAccount() {
         guard hasReadyStorePresentation, walletAccess.beginAction() else { return }
-        guard let destination = viewIfLoaded?.window else { return }
-        let importViewController = instantiate(ImportViewController.self)
-        importViewController.walletAccess = walletAccess
-        if let window = destination.windowController as? WalletWindowController {
-            window.installProtectedContent(importViewController, access: walletAccess)
-        } else {
-            destination.contentViewController = importViewController
-        }
-        retireManagement()
+        guard let window = viewIfLoaded?.window?.windowController as? WalletWindowController else { return }
+        let importViewController = ImportViewController.with(access: walletAccess)
+        window.installProtectedContent(importViewController, access: walletAccess)
     }
 
     private func walletForRow(_ row: Int) -> WalletSnapshot? {
@@ -766,20 +765,14 @@ extension AccountsListViewController: AccountsHeaderDelegate {
     
     func didClickEditAccounts(sender: NSTableRowView) {
         guard hasReadyStorePresentation, walletAccess.beginAction() else { return }
-        guard let destination = viewIfLoaded?.window else { return }
+        guard let window = viewIfLoaded?.window?.windowController as? WalletWindowController else { return }
         let row = tableView.row(for: sender)
         guard let wallet = walletForRow(row) else { return }
         
-        let editAccountsViewController = instantiate(EditAccountsViewController.self)
-        editAccountsViewController.walletAccess = walletAccess
+        let editAccountsViewController = EditAccountsViewController.with(access: walletAccess)
         editAccountsViewController.wallet = wallet
         editAccountsViewController.getBackToRect = tableView.visibleRect
-        if let window = destination.windowController as? WalletWindowController {
-            window.installProtectedContent(editAccountsViewController, access: walletAccess)
-        } else {
-            destination.contentViewController = editAccountsViewController
-        }
-        retireManagement()
+        window.installProtectedContent(editAccountsViewController, access: walletAccess)
     }
     
     func didClickShowSecretWords(sender: NSTableRowView) {
@@ -883,14 +876,6 @@ extension AccountsListViewController: NSMenuDelegate {
         } else if menu === tableView.menu {
             tableView.deselectAll(nil)
         }
-    }
-    
-}
-
-extension AccountsListViewController: NSWindowDelegate {
-    
-    func windowWillClose(_ notification: Notification) {
-        retireManagement()
     }
     
 }

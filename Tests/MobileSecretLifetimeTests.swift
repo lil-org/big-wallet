@@ -10,6 +10,73 @@ import WalletDomain
 final class MobileSecretLifetimeTests: XCTestCase {
     private enum Failure: Error { case failed }
 
+    func testImportSubmissionIsExclusiveAndCancellationTracksCommitPhase() async throws {
+        let controller = try makeImportController()
+        let preparation = TestGate<Bool>()
+        let result = TestDeferred<WalletSnapshot>()
+        let preparing = expectation(description: "preparing store")
+        let importing = expectation(description: "importing wallet")
+        var imports = 0
+        controller.prepareStore = {
+            preparing.fulfill()
+            return await preparation.wait()
+        }
+        controller.importWallet = { _, _, _ in
+            imports += 1
+            importing.fulfill()
+            return try await result.value()
+        }
+        controller.textView.text = "exclusive import"
+        controller.textViewDidChange(controller.textView)
+        await expectEventually { controller.okButton.isEnabled }
+
+        controller.okButtonTapped(controller.okButton as Any)
+        controller.okButtonTapped(controller.okButton as Any)
+        await fulfillment(of: [preparing], timeout: 2)
+        XCTAssertFalse(controller.okButton.isEnabled)
+        XCTAssertFalse(controller.view.isUserInteractionEnabled)
+        XCTAssertTrue(controller.navigationItem.leftBarButtonItem?.isEnabled == true)
+
+        preparation.resolve(true)
+        await fulfillment(of: [importing], timeout: 2)
+        XCTAssertFalse(controller.navigationItem.leftBarButtonItem?.isEnabled == true)
+        controller.okButtonTapped(controller.okButton as Any)
+        result.resolve(.failure(Failure.failed))
+        await expectEventually { !controller.presentedAlerts.isEmpty }
+
+        XCTAssertEqual(imports, 1)
+        XCTAssertTrue(controller.okButton.isEnabled)
+        XCTAssertTrue(controller.view.isUserInteractionEnabled)
+        XCTAssertTrue(controller.navigationItem.leftBarButtonItem?.isEnabled == true)
+        controller.cancelImport()
+    }
+
+    func testCancellingKeystorePromptRestoresEditableDraftWithoutImporting() async throws {
+        let controller = try makeImportController()
+        let shown = expectation(description: "keystore prompt shown")
+        let prompt = LocalAuthentication.AlertRequest(show: { _, _ in shown.fulfill() },
+            dismiss: { _, _, completion in completion() })
+        controller.makePasswordPrompt = { prompt }
+        controller.validateWalletInput = { _ in .requiresPassword }
+        var imports = 0
+        controller.importWallet = { _, _, _ in imports += 1; return self.wallet() }
+        controller.textView.text = "encrypted import"
+        controller.textViewDidChange(controller.textView)
+        await expectEventually { controller.okButton.isEnabled }
+        controller.okButtonTapped(controller.okButton as Any)
+        await fulfillment(of: [shown], timeout: 2)
+        XCTAssertFalse(controller.okButton.isEnabled)
+
+        prompt.finish(nil)
+        await expectEventually { controller.okButton.isEnabled }
+
+        XCTAssertEqual(imports, 0)
+        XCTAssertEqual(controller.textView.text, "encrypted import")
+        XCTAssertTrue(controller.pasteButton.isEnabled)
+        XCTAssertFalse(controller.isRetired)
+        controller.cancelImport()
+    }
+
     func testImportRetriesFailedStoreWithoutDiscardingItsDraft() async throws {
         let reader = KeychainCopyMatchingStub()
         reader.attributesStatus = errSecInteractionNotAllowed

@@ -6,7 +6,7 @@ import WalletNetworking
 import Cocoa
 
 final class PasswordViewController: NSViewController, NativeWindowContentRetirement {
-    var walletAccess = NativeWalletAccess()
+    private var beginAction: (() -> Bool)?
     enum Mode {
         case create, repeatAfterCreate, enter
     }
@@ -41,10 +41,12 @@ final class PasswordViewController: NSViewController, NativeWindowContentRetirem
 
     static func with(
         configuration: Configuration,
+        beginAction: @escaping () -> Bool,
         onAction: @escaping (Action) -> Void
     ) -> PasswordViewController {
         let controller = instantiate(PasswordViewController.self)
         controller.configuration = configuration
+        controller.beginAction = beginAction
         controller.onAction = onAction
         return controller
     }
@@ -71,6 +73,7 @@ final class PasswordViewController: NSViewController, NativeWindowContentRetirem
 
     func retire() {
         onAction = nil
+        beginAction = nil
         guard isViewLoaded else { return }
         Window.clearSecretInput(passwordTextField)
         passwordTextField.isEnabled = false
@@ -117,7 +120,7 @@ final class PasswordViewController: NSViewController, NativeWindowContentRetirem
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        guard onAction != nil, walletAccess.beginAction() else { return }
+        guard onAction != nil, beginAction?() == true else { return }
         guard let onAction else { return }
         switch configuration.availability {
         case .unavailable: onAction(.retry)
@@ -130,7 +133,7 @@ final class PasswordViewController: NSViewController, NativeWindowContentRetirem
     }
 
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
-        guard onAction != nil, walletAccess.beginAction() else { return }
+        guard onAction != nil, beginAction?() == true else { return }
         guard configuration.availability != .saving else { return }
         onAction?(.cancel)
     }
@@ -138,7 +141,7 @@ final class PasswordViewController: NSViewController, NativeWindowContentRetirem
 
 extension PasswordViewController: NSTextFieldDelegate {
     func controlTextDidChange(_ obj: Notification) {
-        guard onAction != nil, walletAccess.beginAction() else { return }
+        guard onAction != nil, beginAction?() == true else { return }
         updateSubmitButton()
     }
 }

@@ -39,6 +39,7 @@ func accountSelectionController(
     mode: NativeAccountSelectionMode,
     selectedAccounts: Set<SpecificWalletAccount>,
     coinType: WalletCoin? = nil,
+    access: NativeWalletAccess? = nil,
     completion: @escaping ([SpecificWalletAccount]?, EthereumNetwork?) -> Void = { _, _ in }
 ) throws -> NativeAccountSelectionViewController {
     let session = NativeAccountSelectionSession(
@@ -46,14 +47,16 @@ func accountSelectionController(
             initiallyConnectedProviders: [], network: ApplicationServices.shared.networks.network(chainId: 1)),
         mode: mode, review: try nativeReviewForTesting(), completion: completion
     )
-    let controller = NativeAccountSelectionViewController(accountSelection: session, walletsManager: manager)
+    let access = try access ?? NativeWalletAccess(unlockedWalletAccessForTesting())
+    let controller = NativeAccountSelectionViewController(accountSelection: session, access: access, walletsManager: manager)
     _ = controller.view
     return controller
 }
 
 @MainActor
-func managementController(manager: WalletsManager) -> AccountsListViewController {
-    let controller = AccountsListViewController()
+func managementController(manager: WalletsManager, access: NativeWalletAccess? = nil) throws -> AccountsListViewController {
+    let access = try access ?? NativeWalletAccess(unlockedWalletAccessForTesting())
+    let controller = AccountsListViewController(access: access)
     controller.walletsManager = manager
     _ = controller.view
     return controller
@@ -61,17 +64,34 @@ func managementController(manager: WalletsManager) -> AccountsListViewController
 
 @MainActor
 func accountSelectionWindow(controller: NSViewController) -> NSWindow {
-    let window = NSPanel(
+    let window = AccountSelectionWindow(
         contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 400),
         styleMask: [.borderless, .nonactivatingPanel],
         backing: .buffered,
         defer: false
     )
     window.isReleasedWhenClosed = false
-    window.contentViewController = controller
+    let owner = WalletWindowController(window: window)
+    window.owner = owner
+    if let protected = controller as? any NativeWalletProtectedContent {
+        owner.bindAccess(protected.walletAccess.controller, unlock: {})
+        XCTAssertTrue(owner.installProtectedContent(controller, access: protected.walletAccess))
+    } else {
+        owner.contentViewController = controller
+    }
     window.orderFront(nil)
     controller.view.layoutSubtreeIfNeeded()
     return window
+}
+
+@MainActor
+private final class AccountSelectionWindow: NSPanel {
+    var owner: WalletWindowController?
+
+    override func close() {
+        super.close()
+        owner = nil
+    }
 }
 
 @MainActor

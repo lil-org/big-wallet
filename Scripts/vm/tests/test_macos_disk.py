@@ -20,6 +20,10 @@ specification = importlib.util.spec_from_file_location('macos_disk', Path(__file
 disk = importlib.util.module_from_spec(specification)
 specification.loader.exec_module(disk)
 
+specification = importlib.util.spec_from_file_location('vm_host_services', Path(__file__).resolve().parents[1] / 'host.py')
+host = importlib.util.module_from_spec(specification)
+specification.loader.exec_module(host)
+
 
 def fixture_image(size=4 * 1024 ** 2, recovery_sectors=512):
     sectors = size // 512
@@ -80,7 +84,7 @@ class DiskGrowthTests(unittest.TestCase):
         self.receipt = self.state / 'system-disk-growth.json'
         self.tools = self.state / 'tools'
         self.tools.mkdir()
-        self.host = SimpleNamespace(TOOLS=self.tools, RunnerError=RuntimeError, HOST_RESERVE_BYTES=4096,
+        self.host = Mock(spec_set=host.host_services(), TOOLS=self.tools, RunnerError=RuntimeError, HOST_RESERVE_BYTES=4096,
             read_json=lambda path: json.loads(path.read_text()),
             atomic_json=lambda path, value: path.write_text(json.dumps(value)),
             private_directory=self.private_directory, ensure_disk_idle=Mock(), validate_vm=self.validate_vm)

@@ -18,6 +18,7 @@ async function fixture(run, phase = "build") {
     const fixtureBytes = await readFile(FIXTURES_PATH);
     const sources = [...Array.from({length: 9}, (_, index) => ({path: `Packages/WalletRuntime/Sources/WalletDomain/${index}.swift`, sha256: "b".repeat(64)})),
         {path: "Scripts/harness_package.mjs", sha256: "d".repeat(64)},
+        {path: "Scripts/runtime_policy.mjs", sha256: "e".repeat(64)},
         {path: "Packages/WalletParserFuzzHarness/Sources/WalletParserFuzzWorker/Resources/fixtures.json", sha256: sha256(fixtureBytes)}].sort((a, b) => a.path.localeCompare(b.path));
     const manifest = JSON.stringify({version: 1, files: sources.map(value => ({...value, type: "file", mode: 0o644}))});
     policy.sourceSHA256 = sha256(manifest);
@@ -124,6 +125,11 @@ for (const [name, change] of [
     ["missing build log", value => { delete value.files["build.log"]; }],
     ["source inventory differs from staged manifest", value => { const entries = JSON.parse(value.files["source-inventory.json"]); entries[0].sha256 = "d".repeat(64);
         value.files["source-inventory.json"] = JSON.stringify(entries); value.report.build.sourceInventorySHA256 = sha256(JSON.stringify(entries)); }],
+    ["shared validation policy omitted from source inventory", value => {
+        const entries = JSON.parse(value.files["source-inventory.json"]).filter(entry => entry.path !== "Scripts/runtime_policy.mjs");
+        value.files["source-inventory.json"] = JSON.stringify(entries);
+        value.report.build.sourceInventorySHA256 = sha256(JSON.stringify(entries));
+    }],
     ["workspace marker differs from job identity", value => { const marker = JSON.parse(value.files["workspace-marker.json"]); marker.runId = "other"; value.files["workspace-marker.json"] = JSON.stringify(marker); }],
 ]) {
     test(`auditor rejects ${name}`, async () => fixture(async value => {

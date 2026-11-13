@@ -279,7 +279,7 @@ class XcodeUpgradeTests(unittest.TestCase):
                 'coverage': {'fullSuiteVerified': not args.stage and not args.only_testing}})
             return 0
         with patch.object(host, 'setup', side_effect=setup), patch.object(host, 'run_tests', side_effect=run):
-            self.assertEqual(upgrade.upgrade(host, self.args, self.state), 0)
+            self.assertEqual(upgrade.upgrade(host.host_services(), self.args, self.state), 0)
         self.assertEqual(commands, [('setup', 'setup'), (['test'], ['Tests iOS/BWSafariSynchronizationTests'], 'Debug'),
             (['safari'], ['SafariLifecycleTests/testInstallAndNativeRoundtrip'], 'Debug'), ([], [], None)])
         result = self.report()

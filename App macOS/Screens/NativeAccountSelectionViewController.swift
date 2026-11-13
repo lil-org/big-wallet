@@ -4,7 +4,7 @@ import WalletNetworking
 import Cocoa
 
 final class NativeAccountSelectionViewController: NSViewController, NativeWalletProtectedContent {
-    var walletAccess = NativeWalletAccess()
+    let walletAccess: NativeWalletAccess
     private var isRetired = false
     let accountSelection: NativeAccountSelectionSession
     let walletsManager: WalletsManager
@@ -34,10 +34,12 @@ final class NativeAccountSelectionViewController: NSViewController, NativeWallet
 
     init(
         accountSelection: NativeAccountSelectionSession,
+        access: NativeWalletAccess,
         walletsManager: WalletsManager = ApplicationServices.shared.wallets,
         openWalletManagement: @escaping @MainActor () async -> Bool = DockAppLauncher.openDockApp
     ) {
         self.accountSelection = accountSelection
+        walletAccess = access
         self.walletsManager = walletsManager
         self.openWalletManagement = openWalletManagement
         super.init(nibName: nil, bundle: nil)

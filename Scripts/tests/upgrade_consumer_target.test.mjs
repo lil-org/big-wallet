@@ -106,15 +106,15 @@ for (const [name, mutate, expected] of [
     ["a test consumer target", value => { consumer(value).type = "test"; }, /exactly one WalletUpgradeConsumer/],
     ["duplicate runtime targets", value => { value.runtime.manifest.targets.push(runtimeTarget(value)); }, /Invalid runtime target inventory/],
     ["duplicate described consumer targets", value => { value.harness.description.targets.push(source(value)); }, /Invalid described consumer target inventory/],
-    ["missing consumer sources", value => { source(value).sources = []; }, /Unsafe upgrade consumer/],
-    ["missing runtime source descriptions", value => { value.runtime.description.targets = value.runtime.description.targets.filter(target => target.name !== "WalletAuthority"); }, /Unsafe upgrade consumer/],
-    ["consumer source directories outside the package", value => { source(value).path = "../../App macOS"; }, /Unsafe upgrade consumer/],
-    ["runtime source directories outside the package", value => { runtimeSource(value).path = "/outside/Authority"; }, /Unsafe upgrade consumer/],
-    ["archived fixtures selected as the consumer source directory", value => { source(value).path = "Sources/ShippedMain/1.0.98-147"; }, /Unsafe upgrade consumer/],
-    ["archived fixtures selected as a runtime source directory", value => { runtimeSource(value).path = "Sources/ShippedMain/1.0.98-147"; }, /Unsafe upgrade consumer/],
-    ["source traversal", value => { source(value).sources.push("../../outside.swift"); }, /Unsafe upgrade consumer/],
-    ["absolute source escape", value => { runtimeSource(value).sources.push("/outside/Authority.swift"); }, /Unsafe upgrade consumer/],
-    ["a source equal to its source directory", value => { source(value).sources.push("."); }, /Unsafe upgrade consumer/],
+    ["missing consumer sources", value => { source(value).sources = []; }, /Unsafe target sources or build settings/],
+    ["missing runtime source descriptions", value => { value.runtime.description.targets = value.runtime.description.targets.filter(target => target.name !== "WalletAuthority"); }, /Unsafe target sources or build settings/],
+    ["consumer source directories outside the package", value => { source(value).path = "../../App macOS"; }, /Unsafe target sources or build settings/],
+    ["runtime source directories outside the package", value => { runtimeSource(value).path = "/outside/Authority"; }, /Unsafe target sources or build settings/],
+    ["archived fixtures selected as the consumer source directory", value => { source(value).path = "Sources/ShippedMain/1.0.98-147"; }, /Unsafe target sources or build settings/],
+    ["archived fixtures selected as a runtime source directory", value => { runtimeSource(value).path = "Sources/ShippedMain/1.0.98-147"; }, /Unsafe target sources or build settings/],
+    ["source traversal", value => { source(value).sources.push("../../outside.swift"); }, /Unsafe target sources or build settings/],
+    ["absolute source escape", value => { runtimeSource(value).sources.push("/outside/Authority.swift"); }, /Unsafe target sources or build settings/],
+    ["a source equal to its source directory", value => { source(value).sources.push("."); }, /Unsafe target sources or build settings/],
 ]) {
     test(`rejects ${name} before building`, () => {
         const value = graph();
@@ -133,7 +133,7 @@ for (const file of [
         test(`rejects ${file} in ${location} sources`, () => {
             const value = graph();
             select(value).sources.push(file);
-            assert.throws(() => validateUpgradeConsumerTarget(value), /Unsafe upgrade consumer/);
+            assert.throws(() => validateUpgradeConsumerTarget(value), /Unsafe target sources or build settings/);
         });
     }
 }
@@ -151,7 +151,7 @@ for (const [name, mutate] of [
     test(`rejects ${name}`, () => {
         const value = graph();
         mutate(value);
-        assert.throws(() => validateUpgradeConsumerTarget(value), /Unsafe upgrade consumer/);
+        assert.throws(() => validateUpgradeConsumerTarget(value), /Unsafe target sources or build settings/);
     });
 }
 
@@ -163,7 +163,7 @@ for (const flags of [
         test(`rejects ${flags.join(" ")} in ${location} build settings`, () => {
             const value = graph();
             select(value).settings = [{unsafeFlags: flags}];
-            assert.throws(() => validateUpgradeConsumerTarget(value), /Unsafe upgrade consumer/);
+            assert.throws(() => validateUpgradeConsumerTarget(value), /Unsafe target sources or build settings/);
         });
     }
 }

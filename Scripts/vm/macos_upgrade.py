@@ -15,7 +15,6 @@ import subprocess
 import sys
 import tempfile
 import time
-from types import SimpleNamespace
 import uuid
 
 
@@ -1055,7 +1054,7 @@ def execute(host, state, directory, result, save):
 
 def worker(state, identifier, launch_token):
     loaded = module('host')
-    host = SimpleNamespace(**vars(loaded))
+    host = loaded.host_services()
     state = canonical(host, Path(state), directory=True)
     directory, result = load_result(host, state, identifier)
     os.umask(0o077)

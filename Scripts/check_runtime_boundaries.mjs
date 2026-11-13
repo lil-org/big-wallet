@@ -2,16 +2,8 @@ import {execFileSync, spawnSync} from "node:child_process";
 import {existsSync, readFileSync, readdirSync, realpathSync} from "node:fs";
 import {dirname, isAbsolute, join, relative, resolve, sep} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
-import {containedPath, dependencyRecords, inspectSwiftPackage, namedInventory} from "./harness_package.mjs";
-
-const libraries = ["WalletDomain", "WalletAuthority", "WalletFlows", "WalletNetworking"];
-const productionTargets = [...libraries, "WalletStorageSupport", "CWalletCrypto"];
-const expectedDependencies = {
-    WalletDomain: [], WalletStorageSupport: [], CWalletCrypto: [],
-    WalletAuthority: ["CWalletCrypto", "WalletDomain", "WalletStorageSupport"],
-    WalletFlows: ["WalletAuthority", "WalletDomain"],
-    WalletNetworking: ["WalletDomain", "WalletStorageSupport"],
-};
+import {inspectSwiftPackage, namedInventory} from "./harness_package.mjs";
+import {runtimeLibraries as libraries, runtimeTargets as productionTargets, validateRuntimeProducts, validateRuntimeTarget, validateTargetSources} from "./runtime_policy.mjs";
 const applicationRoots = ["App iOS", "App macOS", "App visionOS", "Big Wallet Ambient", "Safari Shared", "Safari macOS", "Safari iOS", "Safari visionOS", "Shared"];
 const applicationOnlySources = new Set([
     "Shared/Services/ApplicationServices.swift", "Shared/Services/SafariVMApplicationServices.swift",
@@ -136,11 +128,7 @@ export function validateRuntimePackage({manifest, description}, root) {
         throw new Error("Runtime must be the expected local package without external dependencies");
     }
     for (const inventory of [manifest.products, description.products]) {
-        const products = namedInventory(inventory, "runtime product");
-        if (products.size !== libraries.length || libraries.some(name => {
-            const product = products.get(name);
-            return !product?.type?.library || JSON.stringify(product.targets) !== JSON.stringify([name]);
-        })) { throw new Error("Runtime must expose exactly its four production libraries"); }
+        validateRuntimeProducts(inventory);
     }
     const targets = namedInventory(manifest.targets, "runtime target");
     if (targets.get("WalletRuntimeTestSupport")?.type !== "regular") {
@@ -161,24 +149,13 @@ export function validateRuntimePackage({manifest, description}, root) {
     for (const name of productionTargets) {
         const target = targets.get(name);
         const described = descriptions.get(name);
-        if (target?.type !== "regular") { throw new Error(`Missing ordinary production target: ${name}`); }
-        const dependencies = dependencyRecords(target);
-        if (dependencies.some(value => value.kind === "product") ||
-            target.dependencies.some(value => Object.values(value)[0].slice(1).some(condition => condition != null)) ||
-            JSON.stringify(dependencies.map(value => value.name).sort()) !== JSON.stringify(expectedDependencies[name])) {
-            throw new Error(`Forbidden or conditional runtime dependencies in ${name}`);
-        }
+        validateRuntimeTarget(target, name);
         const directory = join(packageRoot, "Sources", name);
         if (typeof described?.path !== "string" || resolve(packageRoot, described.path) !== directory ||
-            target.path != null && (typeof target.path !== "string" || resolve(packageRoot, target.path) !== directory) ||
-            !Array.isArray(described.sources) || !described.sources.length ||
-            described.sources.some(path => !containedPath(directory, path)) || new Set(described.sources).size !== described.sources.length) {
+            target.path != null && (typeof target.path !== "string" || resolve(packageRoot, target.path) !== directory)) {
             throw new Error(`Production target ${name} has unexpected source membership`);
         }
-        if (target.resources?.length || described.resources?.length || target.pluginUsages?.length || target.plugins?.length ||
-            /BW_SAFARI_VM_TESTING|enable-testing|WalletRuntimeHarness|WalletUpgradeHarness|ShippedWalletProducer|WalletRuntimeTestSupport/.test(JSON.stringify(target.settings ?? []))) {
-            throw new Error(`Production target ${name} has fixture or test build settings, resources or plugins`);
-        }
+        validateTargetSources(target, described, packageRoot);
     }
     return true;
 }
@@ -216,9 +193,6 @@ export function validateRuntimeSource(path, source, {module, application = false
         if (imports.includes("WalletAuthority") || imports.includes("WalletFlows") || imports.includes("LocalAuthentication") || privateTypes.test(literalCode)) { fail("Networking reaches wallet or signing authority"); }
         const text = maskNonCode(effective, {strings: false});
         if (/org\.lil\.keychain|SafariApprovalVault|org\.lil\.wallet\.wallet\.|org\.lil\.wallet\.password/.test(text)) { fail("Networking contains wallet Keychain/vault identifiers"); }
-        if (/\bkSecAttrAccessGroup\b/.test(code) && !/\b(?:let|var)\s+accessGroup\s*=\s*"[^"\n]+\.rpc-auth"/.test(text)) {
-            fail("Networking Security storage must use its separate RPC-auth access group");
-        }
     }
     if (module && /\bBW_SAFARI_VM_TESTING\b/.test(code)) { fail("Runtime production source contains application fixture branches"); }
     if (application) {

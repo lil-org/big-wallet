@@ -464,7 +464,7 @@ class RecoveryTests(RecoveryFixture, unittest.TestCase):
                 patch.object(recovery, 'check_capacity') as free_capacity, patch.object(recovery, 'RecoverySession', Session), \
                 patch.object(recovery.subprocess, 'Popen', return_value=vm) as launch, \
                 patch.object(host, 'stop_owned_process', side_effect=stop):
-            code = recovery.recover(host, args, self.state)
+            code = recovery.recover(host.host_services(), args, self.state)
         self.host_capacity.assert_called_once_with(self.state, 10_000_000_000)
         self.assertGreaterEqual(free_capacity.call_count, 2)
         for call in free_capacity.call_args_list:

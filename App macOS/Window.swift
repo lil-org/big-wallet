@@ -7,31 +7,28 @@ import Cocoa
 
 @MainActor
 struct NativeWalletAccess {
-    let controller: WalletAccessController?
-    let generation: UInt64?
+    let controller: WalletAccessController
+    let generation: UInt64
 
-    init(_ controller: WalletAccessController? = nil) {
+    init(_ controller: WalletAccessController) {
         self.controller = controller
-        generation = controller?.generation
+        generation = controller.generation
     }
 
     @discardableResult
     func validateCurrentAccess() -> Bool {
-        guard let controller, let generation else { return true }
         return controller.validateCurrentAccess(expectedGeneration: generation)
     }
 
     var hasCurrentPresentation: Bool {
-        guard let controller, let generation else { return true }
         return controller.matchesPresentation(generation)
     }
 
     func beginAction() -> Bool {
-        controller?.recordInteraction(expectedGeneration: generation) ?? true
+        controller.recordInteraction(expectedGeneration: generation)
     }
 
     func requireCurrentAccess() throws -> WalletAccessSession {
-        guard let controller else { throw WalletCredentialError.authorizationUnavailable }
         return try controller.requireCurrentAccess(expectedGeneration: generation)
     }
 }
@@ -43,7 +40,7 @@ protocol NativeWindowContentRetirement: AnyObject {
 
 @MainActor
 protocol NativeWalletProtectedContent: NativeWindowContentRetirement {
-    var walletAccess: NativeWalletAccess { get set }
+    var walletAccess: NativeWalletAccess { get }
 }
 
 final class WalletWindowController: NSWindowController, WalletAccessObserver {
@@ -60,6 +57,8 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
     private var lockedPresentation: LockedPresentation?
     private var lockWindowCloseObserver: NativeApprovalWindowCloseObserver?
     private var contentInstallationID: UUID?
+    private enum State { case active, closing, closed }
+    private var state = State.active
     fileprivate var cascadesOnFirstPresentation = false
 
     override func showWindow(_ sender: Any?) {
@@ -79,7 +78,16 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
         }
         if let window {
             lockWindowCloseObserver?.disable()
-            let observer = NativeApprovalWindowCloseObserver { [weak self] in self?.lockedPresentation = nil }
+            let observer = NativeApprovalWindowCloseObserver { [weak self] in
+                guard let self else { return }
+                guard state == .active else { return }
+                state = .closing
+                defer { state = .closed }
+                contentInstallationID = nil
+                lockedPresentation = nil
+                currentAuthenticationSession?.cancel()
+                (contentViewController as? any NativeWalletProtectedContent)?.retire()
+            }
             lockWindowCloseObserver = observer
             observer.observe(window)
         }
@@ -91,7 +99,7 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
     }
 
     func reconcileLockedPresentation() {
-        guard let access = walletAccess, access.isLocked, access.hasLocked else { return }
+        guard state == .active, let access = walletAccess, access.isLocked, access.hasLocked else { return }
         let generation = access.generation
         if let presentation = lockedPresentation, presentation.generation == generation,
            presentation.isInstalling ||
@@ -131,8 +139,15 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
     }
 
     @discardableResult
+    func prepareToReopen(access: NativeWalletAccess) -> Bool {
+        guard state != .closing, walletAccess === access.controller, access.validateCurrentAccess() else { return false }
+        state = .active
+        return true
+    }
+
+    @discardableResult
     func installProtectedContent(_ next: NSViewController, access: NativeWalletAccess) -> Bool {
-        installContent(next) { access.validateCurrentAccess() }
+        installContent(next) { self.walletAccess === access.controller && access.validateCurrentAccess() }
     }
 
     @discardableResult
@@ -140,7 +155,7 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
         let installationID = UUID()
         contentInstallationID = installationID
         func acceptsInstallation() -> Bool {
-            isCurrent() && contentInstallationID == installationID
+            state == .active && isCurrent() && contentInstallationID == installationID
         }
         func discardInstallation() {
             (next as? any NativeWindowContentRetirement)?.retire()
@@ -161,6 +176,19 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
         guard acceptsInstallation() else {
             discardInstallation()
             return false
+        }
+        if contentViewController !== next {
+            let previous = contentViewController
+            currentAuthenticationSession?.cancel()
+            guard acceptsInstallation() else {
+                discardInstallation()
+                return false
+            }
+            (previous as? any NativeWindowContentRetirement)?.retire()
+            guard acceptsInstallation() else {
+                discardInstallation()
+                return false
+            }
         }
         contentViewController = next
         guard acceptsInstallation() else {
@@ -185,15 +213,14 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
     ) async -> WalletAuthenticationResult {
         guard currentAuthenticationSession == nil, !Task.isCancelled,
               review?.isActive != false,
+              let walletAccess, walletAccess.validateCurrentAccess(),
               let window, Window.isVisibleContentWindow(window) else {
             challenge.invalidate()
             return .interactionUnavailable
         }
-        var dependencies = dependencies
-        if dependencies.access == nil { dependencies.access = walletAccess }
         let session = WindowAuthenticationSession(
             owner: window, reason: reason, challenge: challenge, review: review,
-            dependencies: dependencies
+            access: NativeWalletAccess(walletAccess), dependencies: dependencies
         )
         currentAuthenticationSession = session
         defer {
@@ -487,4 +514,11 @@ extension NSStoryboard {
 @MainActor
 func instantiate<ViewController: NSViewController>(_ type: ViewController.Type) -> ViewController {
     return NSStoryboard.main.instantiateController(withIdentifier: String(describing: type)) as! ViewController
+}
+
+@MainActor
+func instantiate<ViewController: NSViewController>(
+    _ type: ViewController.Type, creator: @escaping (NSCoder) -> ViewController?
+) -> ViewController {
+    NSStoryboard.main.instantiateController(identifier: String(describing: type), creator: creator)
 }

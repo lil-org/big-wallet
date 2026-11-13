@@ -3,17 +3,13 @@ import {lstatSync, readFileSync, realpathSync} from "node:fs";
 import {dirname, isAbsolute, resolve} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 import {containedPath, dependencyRecords, inspectSwiftPackage, namedInventory} from "./harness_package.mjs";
+import {validateRuntimeClosure, validateTargetSources} from "./runtime_policy.mjs";
 
-const graph = {WalletDomain: [], WalletStorageSupport: [], CWalletCrypto: [], WalletAuthority: ["WalletDomain", "WalletStorageSupport", "CWalletCrypto"]};
 const harnessSources = {WalletParserFuzzWorker: null, ParserFuzzCanaries: ["Canaries.c"]};
-const forbidden = /(?:^|\/)(?:AppDelegate|SceneDelegate|SafariWebExtensionHandler|SafariVMFixtures)\.swift$|\.entitlements$|AlchemyJWTRequestProofKey|PrivacyInfo\.xcprivacy|ShippedMain/;
+const sourcePolicy = {extraForbiddenSource: /ShippedMain/};
 
 function checkSourceInventory(target, description, root, expected) {
-    if (!description || !containedPath(root, description.path) || !Array.isArray(description.sources) || !description.sources.length ||
-        description.sources.some(path => !containedPath(resolve(root, description.path), path) || forbidden.test(path)) ||
-        target.pluginUsages?.length || target.plugins?.length || /entitlements|BW_SAFARI_VM_TESTING|enable-testing/.test(JSON.stringify(target.settings ?? []))) {
-        throw new Error(`Unsafe fuzz dependency sources or settings: ${target.name}`);
-    }
+    validateTargetSources(target, description, root, {...sourcePolicy, allowResources: true});
     if (expected && JSON.stringify([...description.sources].sort()) !== JSON.stringify([...expected].sort())) {
         throw new Error(`Unexpected harness sources in ${target.name}`);
     }
@@ -41,19 +37,7 @@ export function validateParserFuzzTarget({harness, runtime}) {
         resolve(packages[0].path ?? "") !== runtime.description.path || packages[0].identity?.toLowerCase() !== "walletruntime" || harness.manifest.dependencies?.length !== 1) {
         throw new Error("Parser harness may depend only on local WalletRuntime");
     }
-    const products = namedInventory(runtime.manifest.products);
-    const expectedProducts = ["WalletDomain", "WalletAuthority", "WalletFlows", "WalletNetworking"];
-    if (products.size !== expectedProducts.length || expectedProducts.some(name => !products.get(name)?.type?.library ||
-        JSON.stringify(products.get(name).targets) !== JSON.stringify([name]))) { throw new Error("Runtime public products changed"); }
-    const targets = namedInventory(runtime.manifest.targets), descriptions = namedInventory(runtime.description.targets);
-    for (const [name, expected] of Object.entries(graph)) {
-        const target = targets.get(name);
-        if (target?.type !== "regular" || target.resources?.length) { throw new Error(`Invalid production dependency ${name}`); }
-        checkSourceInventory(target, descriptions.get(name), runtime.description.path);
-        const actual = dependencyRecords(target);
-        if (actual.some(value => value.kind === "product") || actual.length !== expected.length || new Set(actual.map(value => value.name)).size !== expected.length ||
-            expected.some(value => !actual.some(item => item.name === value))) { throw new Error(`Forbidden parser dependency edge in ${name}`); }
-    }
+    validateRuntimeClosure(runtime, ["WalletDomain", "WalletAuthority"], sourcePolicy);
     const ownProducts = namedInventory(harness.manifest.products), product = ownProducts.get("WalletParserFuzzWorker");
     if (ownProducts.size !== 1 || !Object.hasOwn(product?.type ?? {}, "executable") || JSON.stringify(product.targets) !== '["WalletParserFuzzWorker"]') {
         throw new Error("Harness must expose only its parser worker");

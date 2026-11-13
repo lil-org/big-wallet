@@ -21,12 +21,21 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
         var runPasswordPrompt: @MainActor (NSAlert) -> NSApplication.ModalResponse = { $0.runModal() }
     }
 
-    var walletAccess = NativeWalletAccess()
+    let walletAccess: NativeWalletAccess
+
+    init?(coder: NSCoder, access: NativeWalletAccess) {
+        walletAccess = access
+        super.init(coder: coder)
+    }
+
+    required init?(coder: NSCoder) { return nil }
+
+    static func with(access: NativeWalletAccess) -> ImportViewController {
+        instantiate(ImportViewController.self) { ImportViewController(coder: $0, access: access) }
+    }
     var dependencies = Dependencies()
     private var validationTask: Task<Void, Never>?
     private var importTask: Task<Void, Never>?
-    private var retirementCheckTask: Task<Void, Never>?
-    private var closeObserver: NativeApprovalWindowCloseObserver?
     private var inputValidationResult = WalletsManager.InputValidationResult.invalid
     private var isImporting = false
     private var isRetired = false
@@ -48,10 +57,6 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
         validationTask = nil
         importTask?.cancel()
         importTask = nil
-        retirementCheckTask?.cancel()
-        retirementCheckTask = nil
-        closeObserver?.disable()
-        closeObserver = nil
         inputValidationResult = .invalid
         Window.clearSecretInput(passwordPrompt?.accessoryView as? NSTextField)
         if let passwordPrompt, NSApp.modalWindow === passwordPrompt.window { NSApp.abortModal() }
@@ -80,36 +85,7 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
     isolated deinit {
         validationTask?.cancel()
         importTask?.cancel()
-        retirementCheckTask?.cancel()
-        closeObserver?.disable()
         Window.clearSecretInput(textField)
-    }
-
-    override func viewWillDisappear() {
-        super.viewWillDisappear()
-        if viewIfLoaded?.window?.contentViewController !== self { retireImport() }
-    }
-
-    override func viewDidDisappear() {
-        super.viewDidDisappear()
-        retirementCheckTask?.cancel()
-        retirementCheckTask = Task { [weak self] in
-            await Task.yield()
-            guard let self, !Task.isCancelled,
-                  viewIfLoaded?.window?.contentViewController !== self else { return }
-            retireImport()
-        }
-    }
-
-    override func viewDidAppear() {
-        super.viewDidAppear()
-        retirementCheckTask?.cancel()
-        retirementCheckTask = nil
-        guard !isRetired, let window = viewIfLoaded?.window else { return }
-        closeObserver?.disable()
-        let observer = NativeApprovalWindowCloseObserver { [weak self] in self?.retireImport() }
-        closeObserver = observer
-        observer.observe(window)
     }
 
     override func viewDidLoad() {
@@ -209,18 +185,10 @@ class ImportViewController: NSViewController, NativeWalletProtectedContent {
 
     private func showAccountsList(newWalletId: String?) {
         guard validateManagementActions() else { return }
-        let destination = viewIfLoaded?.window
-        let access = walletAccess
-        retireImport()
-        let accountsListViewController = AccountsListViewController()
-        accountsListViewController.walletAccess = access
+        guard let window = viewIfLoaded?.window?.windowController as? WalletWindowController else { return }
+        let accountsListViewController = AccountsListViewController(access: walletAccess)
         accountsListViewController.newWalletId = newWalletId
-        if let window = destination?.windowController as? WalletWindowController {
-            window.installProtectedContent(accountsListViewController, access: access)
-        } else {
-            guard access.validateCurrentAccess() else { return }
-            destination?.contentViewController = accountsListViewController
-        }
+        window.installProtectedContent(accountsListViewController, access: walletAccess)
     }
     
     @IBAction func cancelButtonTapped(_ sender: NSButton) {

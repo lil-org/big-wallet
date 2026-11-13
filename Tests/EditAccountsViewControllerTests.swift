@@ -672,6 +672,7 @@ private final class AccountEditorHost {
 #if os(macOS)
     let controller: EditAccountsViewController
     private let window: AccountEditorWindow
+    private let windowController: WalletWindowController
     var departures: Int { window.departures }
 #else
     let controller = AccountEditorController()
@@ -681,22 +682,22 @@ private final class AccountEditorHost {
     init(manager: WalletsManager, access: WalletAccessController,
          configure: (EditAccountsViewController) -> Void = { _ in }) throws {
 #if os(macOS)
-        controller = instantiate(EditAccountsViewController.self)
+        controller = EditAccountsViewController.with(access: NativeWalletAccess(access))
         window = AccountEditorWindow(contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 400),
             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        windowController = WalletWindowController(window: window)
+        windowController.bindAccess(access, unlock: {})
 #endif
         controller.wallet = try XCTUnwrap(manager.wallets.first)
         controller.walletsManager = manager
 #if os(iOS) || os(visionOS)
         controller.access = access
-#else
-        controller.walletAccess = NativeWalletAccess(access)
 #endif
         configure(controller)
         _ = controller.view
 #if os(macOS)
-        window.contentViewController = controller
+        XCTAssertTrue(windowController.installProtectedContent(controller, access: controller.walletAccess))
 #endif
     }
 

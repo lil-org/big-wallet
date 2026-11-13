@@ -13,7 +13,6 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown,
         var attemptBiometrics: @MainActor (String, WalletAuthenticationChallenge) async -> WalletAuthenticationResult? = {
             await WindowAuthenticationSession.attemptBiometrics(reason: $0, challenge: $1)
         }
-        var access: WalletAccessController?
     }
 
     private enum State {
@@ -40,6 +39,7 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown,
         reason: AuthenticationReason,
         challenge: WalletAuthenticationChallenge,
         review: NativeApprovalReview?,
+        access: NativeWalletAccess,
         dependencies: Dependencies = Dependencies()
     ) {
         self.owner = owner
@@ -47,18 +47,18 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown,
         self.challenge = challenge
         self.review = review
         self.dependencies = dependencies
-        walletAccess = NativeWalletAccess(dependencies.access)
+        walletAccess = access
 #if BW_SAFARI_VM_TESTING
         fixtureOperation = review.map { SafariVMFixtures.shared.capture(handle: $0.handle) } ?? SafariVMFixtures.shared.capture()
 #endif
         super.init()
-        dependencies.access?.addObserver(self)
+        access.controller.addObserver(self)
     }
 
     isolated deinit {
         task?.cancel()
         closeObserver?.disable()
-        dependencies.access?.removeObserver(self)
+        walletAccess.controller.removeObserver(self)
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -154,9 +154,8 @@ final class WindowAuthenticationSession: NSObject, NativeApprovalReviewTeardown,
         }
         state = .password
         let controller = PasswordViewController.with(
-            configuration: .init(mode: .enter, reason: reason)
+            configuration: .init(mode: .enter, reason: reason), beginAction: walletAccess.beginAction
         ) { [weak self] action in self?.handle(action) }
-        controller.walletAccess = walletAccess
         let sheet = NSWindow(contentViewController: controller)
         sheet.styleMask = [.titled]
         sheet.isReleasedWhenClosed = false

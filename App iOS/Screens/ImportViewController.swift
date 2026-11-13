@@ -42,6 +42,14 @@ final class SecretImportTextView: UITextView {
 }
 
 class ImportViewController: WalletAccessViewController {
+    private enum Phase {
+        case editing, prompting, preparing, importing, failed, retired
+
+        var acceptsInput: Bool { self == .editing || self == .failed }
+        var isWaiting: Bool { self == .preparing || self == .importing }
+        var allowsCancellation: Bool { self != .importing && self != .retired }
+    }
+
     var completion: ((Bool) -> Void)?
     var validateWalletInput: @MainActor (String) async -> WalletsManager.InputValidationResult = {
         await ApplicationServices.shared.wallets.validateWalletInput($0)
@@ -62,9 +70,8 @@ class ImportViewController: WalletAccessViewController {
     private var passwordPrompt: LocalAuthentication.AlertRequest?
     private var validationGeneration: UInt64 = 0
     private var submissionGeneration: UInt64 = 0
-    private var isWaiting = false
-    private var hasImportFailed = false
-    private(set) var isRetired = false
+    private var phase = Phase.editing
+    var isRetired: Bool { phase == .retired }
     private var inputValidationResult = WalletsManager.InputValidationResult.invalid
 
     @IBOutlet weak var placeholderLabel: UILabel! {
@@ -116,11 +123,12 @@ class ImportViewController: WalletAccessViewController {
         configureAdaptiveLargeTitle(Strings.importWallet)
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: Strings.cancel, style: .plain, target: self, action: #selector(cancelImport))
         okButton.configurationUpdateHandler = { [weak self] button in
-            let isWaiting = self?.isWaiting == true
-            let title = self?.hasImportFailed == true ? Strings.tryAgain : Strings.ok
+            let isWaiting = self?.phase.isWaiting == true
+            let title = self?.phase == .failed ? Strings.tryAgain : Strings.ok
             button.configuration?.title = isWaiting ? "" : title
             button.configuration?.showsActivityIndicator = isWaiting
         }
+        updatePhasePresentation()
     }
 
     override func viewDidLayoutSubviews() {
@@ -141,7 +149,7 @@ class ImportViewController: WalletAccessViewController {
     }
 
     @IBAction func pasteButtonTapped(_ sender: Any) {
-        guard !isRetired, beginWalletAction() else { return }
+        guard phase.acceptsInput, beginWalletAction() else { return }
         if let text = UIPasteboard.general.string {
             textView.text = text
             validateInput(proceedIfValid: false)
@@ -154,7 +162,7 @@ class ImportViewController: WalletAccessViewController {
     }
 
     private func attemptImportWithCurrentInput() {
-        guard !isRetired, validateCurrentAccess(), !isWaiting, importTask == nil else { return }
+        guard phase.acceptsInput, validateCurrentAccess() else { return }
         validationGeneration &+= 1
         validationTask?.cancel()
         validationTask = nil
@@ -165,6 +173,7 @@ class ImportViewController: WalletAccessViewController {
         let makePrompt = makePasswordPrompt
         let prepareStore = prepareStore
         let importWallet = importWallet
+        setPhase(needsPassword ? .prompting : .preparing)
         importTask = Task { [weak self] in
             guard self?.validateSubmission(generation) == true else { return }
             let password: String?
@@ -183,18 +192,19 @@ class ImportViewController: WalletAccessViewController {
                 self?.passwordPrompt = nil
                 guard password != nil else {
                     self?.importTask = nil
+                    self?.setPhase(.editing)
                     return
                 }
             } else {
                 password = nil
             }
-            self?.setWaiting(true, allowsCancellation: true)
+            self?.setPhase(.preparing)
             let result: Result<WalletSnapshot, Error>
             do {
                 guard await prepareStore() else { throw WalletsManager.LoadFailure.unavailable }
                 guard self?.validateSubmission(generation) == true else { return }
                 guard let self else { return }
-                setWaiting(true)
+                setPhase(.importing)
                 let session = try requireCurrentAccess()
                 result = .success(try await importWallet(input, password, session))
             }
@@ -208,8 +218,7 @@ class ImportViewController: WalletAccessViewController {
                 dismiss(animated: true)
                 completion?(true)
             case .failure(let error):
-                hasImportFailed = true
-                setWaiting(false)
+                setPhase(.failed)
                 let message: String
                 if error is WalletsManager.LoadFailure { message = Strings.failedToLoad }
                 else if error as? WalletImportError == .limitExceeded { message = Strings.walletImportLimitExceeded }
@@ -231,7 +240,7 @@ class ImportViewController: WalletAccessViewController {
 
     private func retireImport() {
         guard !isRetired else { return }
-        isRetired = true
+        phase = .retired
         submissionGeneration &+= 1
         validationGeneration &+= 1
         layoutTask?.cancel()
@@ -246,34 +255,37 @@ class ImportViewController: WalletAccessViewController {
         else { textView?.text = nil }
         clearPresentedWalletInputs()
         viewIfLoaded?.endEditing(true)
-        viewIfLoaded?.isUserInteractionEnabled = false
         inputValidationResult = .invalid
         completion = nil
-        okButton?.isEnabled = false
-        pasteButton?.isEnabled = false
-        navigationItem.leftBarButtonItem?.isEnabled = false
+        updatePhasePresentation()
     }
 
-    private func setWaiting(_ waiting: Bool, allowsCancellation: Bool = false) {
+    private func setPhase(_ phase: Phase) {
         guard !isRetired else { return }
-        isWaiting = waiting
-        view.isUserInteractionEnabled = !waiting
-        isModalInPresentation = waiting
-        navigationItem.leftBarButtonItem?.isEnabled = !waiting || allowsCancellation
-        okButton.setNeedsUpdateConfiguration()
+        self.phase = phase
+        updatePhasePresentation()
+    }
+
+    private func updatePhasePresentation() {
+        guard isViewLoaded else { return }
+        view.isUserInteractionEnabled = !phase.isWaiting && !isRetired
+        isModalInPresentation = phase.isWaiting
+        navigationItem.leftBarButtonItem?.isEnabled = phase.allowsCancellation
+        okButton?.isEnabled = phase.acceptsInput && inputValidationResult != .invalid
+        pasteButton?.isEnabled = phase.acceptsInput
+        okButton?.setNeedsUpdateConfiguration()
     }
 
     private func validateInput(proceedIfValid: Bool) {
-        guard !isRetired, validateCurrentAccess() else { return }
-        hasImportFailed = false
-        okButton.setNeedsUpdateConfiguration()
+        guard phase.acceptsInput, validateCurrentAccess() else { return }
+        inputValidationResult = .invalid
+        setPhase(.editing)
         placeholderLabel.isHidden = !textView.text.isEmpty
         validationGeneration &+= 1
         let generation = validationGeneration
         validationTask?.cancel()
         let input = textView.text ?? ""
         let validate = validateWalletInput
-        okButton.isEnabled = false
         validationTask = Task { [weak self] in
             let result = await validate(input)
             guard let self, !Task.isCancelled, !isRetired, validationGeneration == generation,
@@ -281,7 +293,7 @@ class ImportViewController: WalletAccessViewController {
             validationTask = nil
             inputValidationResult = result
             let isValid = result != .invalid
-            okButton.isEnabled = isValid && !isWaiting
+            updatePhasePresentation()
             if isValid && proceedIfValid { attemptImportWithCurrentInput() }
         }
     }
@@ -294,7 +306,7 @@ class ImportViewController: WalletAccessViewController {
 
 extension ImportViewController: UITextViewDelegate {
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-        guard !isRetired, beginWalletAction() else { return false }
+        guard phase.acceptsInput, beginWalletAction() else { return false }
         if text == "\n" {
             validateInput(proceedIfValid: true)
             return false
@@ -303,7 +315,7 @@ extension ImportViewController: UITextViewDelegate {
     }
 
     func textViewDidChange(_ textView: UITextView) {
-        guard !isRetired, beginWalletAction() else { return }
+        guard phase.acceptsInput, beginWalletAction() else { return }
         validateInput(proceedIfValid: false)
     }
 }

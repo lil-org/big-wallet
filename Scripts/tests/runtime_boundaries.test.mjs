@@ -127,8 +127,13 @@ test("source boundaries reject implementation dependencies while allowing RPC-au
     for (const source of ["import WalletAuthority", "import LocalAuthentication", "let key: WalletPrivateKey", 'let group = "8DXC3N7E7P.org.lil.keychain"', 'let key = "org.lil.wallet.password"']) {
         assert.throws(() => validateRuntimeSource("Networking/Client.swift", source, {module: "WalletNetworking"}));
     }
-    assert.doesNotThrow(() => validateRuntimeSource("Networking/TokenStore.swift", `import Security\nlet accessGroup = "8DXC3N7E7P.org.lil.wallet.rpc-auth"\nlet field = kSecAttrAccessGroup`, {module: "WalletNetworking"}));
-    assert.throws(() => validateRuntimeSource("Networking/TokenStore.swift", "import Security\nlet field = kSecAttrAccessGroup", {module: "WalletNetworking"}));
+    for (const declaration of [
+        'let accessGroup = "8DXC3N7E7P.org.lil.wallet.rpc-auth"',
+        'let accessGroup: String = "8DXC3N7E7P.org.lil.wallet.rpc-auth"',
+        'static let tokenGroup = "8DXC3N7E7P.org.lil.wallet.rpc-auth"',
+    ]) {
+        assert.doesNotThrow(() => validateRuntimeSource("Networking/TokenStore.swift", `import Security\n${declaration}\nlet field = kSecAttrAccessGroup`, {module: "WalletNetworking"}));
+    }
     assert.doesNotThrow(() => validateRuntimeSource("Domain/Value.swift", "import Foundation\n// URLSession is not used here\nstruct Value {}", {module: "WalletDomain"}));
     assert.throws(() => validateRuntimeSource("App/Adapter.swift", "import CWalletCrypto", {application: true}));
     assert.throws(() => validateRuntimeSource("App/Adapter.swift", '@_silgen_name("hidden") func bypass()', {application: true}));

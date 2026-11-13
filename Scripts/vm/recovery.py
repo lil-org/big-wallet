@@ -1,3 +1,4 @@
+import datetime
 import fcntl
 import hashlib
 import importlib.util
@@ -559,7 +560,7 @@ def recover(host, args, state):
     result = {'version': 1, 'runId': recovery_id, 'kind': 'artifact-recovery', 'sourceRunId': plan['runId'],
               'vmId': plan['vmId'], 'retainedVM': str(plan['vm']), 'originalRunStatus': plan['originalStatus'],
               'originalFilesSHA256': plan['protected'], 'status': 'running',
-              'startedAt': host.datetime.datetime.now(host.datetime.timezone.utc).isoformat(),
+              'startedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
               'coverage': {'status': 'partial', 'fullSuiteVerified': False}, 'testsExecuted': False}
     cancelled = False
     process, session = None, None
@@ -616,7 +617,7 @@ def recover(host, args, state):
                 signal.signal(number, handler)
             if result['status'] == 'running':
                 result.update(status='failed', error='Artifact recovery did not complete')
-            result.update(finishedAt=host.datetime.datetime.now(host.datetime.timezone.utc).isoformat(),
+            result.update(finishedAt=datetime.datetime.now(datetime.timezone.utc).isoformat(),
                           phase='collected' if result['status'] == 'passed' else 'incomplete', vmRetained=True)
             host.atomic_json(result_path, result)
             if stopped and not any(attempt.glob('.recovery-*')):

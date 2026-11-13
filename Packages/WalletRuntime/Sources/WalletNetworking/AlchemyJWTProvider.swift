@@ -2303,13 +2303,28 @@ private actor AlchemyJWTPersistenceRepairCoordinator {
 
 }
 
-private final class AlchemyJWTKeychainStore:
+final class AlchemyJWTKeychainStore:
     Sendable,
     AlchemyJWTStoring {
 
+    typealias CopyMatching = @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
+    typealias Update = @Sendable (CFDictionary, CFDictionary) -> OSStatus
+    typealias Add = @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
+
+    private let copyMatching: CopyMatching
+    private let update: Update
+    private let add: Add
     private let accessGroup = "8DXC3N7E7P.org.lil.wallet.rpc-auth"
     private let service = "org.lil.wallet.alchemy-jwt"
     private let account = "shared-token-v1"
+
+    init(copyMatching: @escaping CopyMatching = SecItemCopyMatching,
+         update: @escaping Update = SecItemUpdate,
+         add: @escaping Add = SecItemAdd) {
+        self.copyMatching = copyMatching
+        self.update = update
+        self.add = add
+    }
 
     func load() throws -> AlchemyJWTPersistedState? {
         var query = baseQuery
@@ -2317,7 +2332,7 @@ private final class AlchemyJWTKeychainStore:
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
         var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        let status = copyMatching(query as CFDictionary, &item)
         if status == errSecItemNotFound {
             return nil
         }
@@ -2337,7 +2352,7 @@ private final class AlchemyJWTKeychainStore:
         let updateAttributes: [String: Any] = [
             kSecValueData as String: data,
         ]
-        let updateStatus = SecItemUpdate(
+        let updateStatus = update(
             baseQuery as CFDictionary,
             updateAttributes as CFDictionary
         )
@@ -2352,9 +2367,9 @@ private final class AlchemyJWTKeychainStore:
         addQuery[kSecValueData as String] = data
         addQuery[kSecAttrAccessible as String] =
             kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        let addStatus = add(addQuery as CFDictionary, nil)
         if addStatus == errSecDuplicateItem {
-            let retryStatus = SecItemUpdate(
+            let retryStatus = update(
                 baseQuery as CFDictionary,
                 updateAttributes as CFDictionary
             )

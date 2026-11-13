@@ -1,24 +1,8 @@
 import {execFileSync} from "node:child_process";
 import {fileURLToPath, pathToFileURL} from "node:url";
-import {containedPath, dependencyRecords, inspectSwiftPackage, namedInventory} from "./harness_package.mjs";
+import {dependencyRecords, inspectSwiftPackage, namedInventory} from "./harness_package.mjs";
+import {runtimeLibraries as libraries, validateRuntimeClosure, validateTargetSources} from "./runtime_policy.mjs";
 import {dirname, isAbsolute, resolve} from "node:path";
-
-const libraries = ["WalletDomain", "WalletAuthority", "WalletFlows", "WalletNetworking"];
-const allowedTargets = new Set([...libraries, "WalletStorageSupport", "CWalletCrypto"]);
-const forbiddenSource = /(?:^|\/)(?:AppDelegate|SceneDelegate|SafariWebExtensionHandler|SafariVMFixtures)\.swift$|\.entitlements$|AlchemyJWTRequestProofKey|PrivacyInfo\.xcprivacy/;
-
-function sources(target, described, root) {
-    if (!described || !containedPath(root, described.path) || !Array.isArray(described.sources) || !described.sources.length ||
-        described.sources.some(path => !containedPath(resolve(root, described.path), path) || forbiddenSource.test(path))) {
-        throw new Error(`Unsafe source inventory for ${target.name}`);
-    }
-    if (target.resources?.length || described.resources?.length || target.pluginUsages?.length || target.plugins?.length || ["plugin", "binary", "system"].includes(target.type)) {
-        throw new Error(`Approval worker dependency ${target.name} may not execute plugins or include resources`);
-    }
-    if (/entitlements|enable-testing|BW_SAFARI_VM_TESTING/.test(JSON.stringify(target.settings ?? []))) {
-        throw new Error(`Approval worker dependency ${target.name} has unsafe production build settings`);
-    }
-}
 
 export function validateApprovalWorkerTarget({harness, runtime}) {
     if (!harness || !runtime || harness.description?.name !== "WalletRuntimeHarness" || runtime.description?.name !== "WalletRuntime" ||
@@ -32,29 +16,7 @@ export function validateApprovalWorkerTarget({harness, runtime}) {
         runtime.manifest?.dependencies?.length || harness.manifest?.dependencies?.length !== 1) {
         throw new Error("Approval worker may depend only on the local WalletRuntime package");
     }
-    const products = namedInventory(runtime.manifest.products, "runtime product");
-    if (products.size !== libraries.length || libraries.some(name => !products.get(name)?.type?.library || JSON.stringify(products.get(name).targets) !== JSON.stringify([name]))) {
-        throw new Error("WalletRuntime must expose only its four production libraries");
-    }
-    const targets = namedInventory(runtime.manifest.targets, "runtime target");
-    const descriptions = namedInventory(runtime.description.targets, "described runtime target");
-    const active = new Set();
-    const visited = new Set();
-    const visit = name => {
-        if (active.has(name)) { throw new Error("Runtime dependency graph contains a cycle"); }
-        if (visited.has(name)) { return; }
-        if (!allowedTargets.has(name)) { throw new Error(`Production library reaches a test or application target: ${name}`); }
-        const target = targets.get(name);
-        if (!target || target.type !== "regular") { throw new Error(`Invalid production target: ${name}`); }
-        sources(target, descriptions.get(name), root);
-        active.add(name);
-        for (const dependency of dependencyRecords(target)) {
-            if (dependency.kind === "product") { throw new Error(`Runtime target has an external product dependency: ${name}`); }
-            visit(dependency.name);
-        }
-        active.delete(name); visited.add(name);
-    };
-    libraries.forEach(visit);
+    validateRuntimeClosure(runtime);
     const workerProducts = namedInventory(harness.manifest.products, "harness product");
     const product = workerProducts.get("ApprovalCrashWorker");
     if (workerProducts.size !== 1 || !product || !Object.hasOwn(product.type ?? {}, "executable") || JSON.stringify(product.targets) !== JSON.stringify(["ApprovalCrashWorker"])) {
@@ -63,7 +25,7 @@ export function validateApprovalWorkerTarget({harness, runtime}) {
     const workers = namedInventory(harness.manifest.targets, "harness target");
     const worker = workers.get("ApprovalCrashWorker");
     if (workers.size !== 1 || worker?.type !== "executable") { throw new Error("Harness may not include app, extension, or helper targets"); }
-    sources(worker, namedInventory(harness.description.targets, "described harness target").get(worker.name), harness.description.path);
+    validateTargetSources(worker, namedInventory(harness.description.targets, "described harness target").get(worker.name), harness.description.path);
     const inputs = dependencyRecords(worker);
     if (inputs.length !== libraries.length || new Set(inputs.map(value => value.name)).size !== libraries.length || inputs.some(value =>
         value.kind !== "product" || value.package?.toLowerCase() !== "walletruntime" || !libraries.includes(value.name))) {

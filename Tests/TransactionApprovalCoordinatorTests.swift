@@ -27,7 +27,7 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         let stub = ApprovalOperationsStub()
         var approvals = 0
         let controller = ApproveTransactionViewController.with(transaction: transaction, chain: network,
-            account: account.account, walletId: account.walletID, review: review, operations: stub.operations) { result in
+            account: account.account, walletId: account.walletID, review: review, access: NativeWalletAccess(try unlockedWalletAccessForTesting()), operations: stub.operations) { result in
                 XCTAssertNotNil(result)
                 approvals += 1
             }
@@ -89,8 +89,7 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         let account = WalletAccount(address: transaction.from, coin: .ethereum, derivation: .default,
             derivationPath: "m/44'/60'/0'/0/0", publicKey: "", extendedPublicKey: "")
         let controller = ApproveTransactionViewController.with(transaction: transaction, chain: Self.makeNetwork(),
-            account: account, walletId: "expired-review", review: review) { _ in XCTFail("Unexpected approval") }
-        controller.walletAccess = NativeWalletAccess(access.access)
+            account: account, walletId: "expired-review", review: review, access: NativeWalletAccess(access.access)) { _ in XCTFail("Unexpected approval") }
         _ = controller.view
         controller.invalidateNativeApprovalReview()
         coordinator.onSnapshot = { controller.render($0) }
@@ -117,7 +116,7 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         )
         let controller = ApproveTransactionViewController.with(
             transaction: transaction, chain: Self.makeNetwork(), account: account,
-            walletId: "notice-scroll-test", review: review
+            walletId: "notice-scroll-test", review: review, access: NativeWalletAccess(try unlockedWalletAccessForTesting())
         ) { _ in XCTFail("Displaying a notice must not approve") }
         _ = controller.view
         controller.invalidateNativeApprovalReview()

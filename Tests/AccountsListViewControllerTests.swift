@@ -292,7 +292,7 @@ final class AccountsListViewControllerTests: XCTestCase {
         reader.attributesStatus = errSecInteractionNotAllowed
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
         await assertWalletReload(manager, succeeds: false)
-        let controller = managementController(manager: manager)
+        let controller = try managementController(manager: manager)
         let window = accountSelectionWindow(controller: controller)
         defer { window.close() }
 
@@ -318,7 +318,7 @@ final class AccountsListViewControllerTests: XCTestCase {
         reader.walletData = Dictionary(uniqueKeysWithValues: ids.map { ($0, data) })
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
         await assertWalletReload(manager)
-        let controller = managementController(manager: manager)
+        let controller = try managementController(manager: manager)
         let window = accountSelectionWindow(controller: controller)
         defer { window.close() }
         let rows = controller.tableView.numberOfRows
@@ -349,7 +349,7 @@ final class AccountsListViewControllerTests: XCTestCase {
         reader.attributesStatus = errSecInteractionNotAllowed
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
         await assertWalletReload(manager, succeeds: false)
-        let controller = managementController(manager: manager)
+        let controller = try managementController(manager: manager)
         controller.retire()
         reader.attributesStatus = errSecSuccess
         controller.content.loadRetryButton?.performClick(nil)
@@ -360,7 +360,7 @@ final class AccountsListViewControllerTests: XCTestCase {
     }
 
     func testOrdinaryWalletCloseStillFencesRetainedActions() async throws {
-        let controller = managementController(manager: try await accountSelectionWalletsManager())
+        let controller = try managementController(manager: try await accountSelectionWalletsManager())
         let window = accountSelectionWindow(controller: controller)
         defer { window.close() }
         let menu = TrackingMenu()
@@ -375,8 +375,8 @@ final class AccountsListViewControllerTests: XCTestCase {
         XCTAssertEqual(menu.cancellationCount, 1)
     }
 
-    func testWalletListHidesApprovalControls() async {
-        let controller = AccountsListViewController()
+    func testWalletListHidesApprovalControls() async throws {
+        let controller = AccountsListViewController(access: NativeWalletAccess(try unlockedWalletAccessForTesting()))
         _ = controller.view
 
         XCTAssertTrue(controller.content.bottomButtonsStackView.isHidden)
@@ -385,7 +385,7 @@ final class AccountsListViewControllerTests: XCTestCase {
     }
 
     func testWalletListKeyboardSelectionOpensMenuAndAllowsNextClick() async throws {
-        let controller = AccountsListViewController()
+        let controller = AccountsListViewController(access: NativeWalletAccess(try unlockedWalletAccessForTesting()))
         controller.walletsManager = try await accountSelectionWalletsManager()
         _ = controller.view
         let window = accountSelectionWindow(controller: controller)
@@ -421,7 +421,7 @@ final class AccountsListViewControllerTests: XCTestCase {
     }
 
     func testWalletListPendingMenuDoesNotOpenAfterSelectionClears() async throws {
-        let controller = AccountsListViewController()
+        let controller = AccountsListViewController(access: NativeWalletAccess(try unlockedWalletAccessForTesting()))
         controller.walletsManager = try await accountSelectionWalletsManager()
         _ = controller.view
         let window = accountSelectionWindow(controller: controller)
@@ -448,7 +448,7 @@ final class AccountsListViewControllerTests: XCTestCase {
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
         await assertWalletReload(manager)
         for useKeyboard in [true, false] {
-            let controller = managementController(manager: manager)
+            let controller = try managementController(manager: manager)
             let window = accountSelectionWindow(controller: controller)
             defer { window.close() }
             let table = try XCTUnwrap(controller.tableView)
@@ -478,9 +478,9 @@ final class AccountsListViewControllerTests: XCTestCase {
         let reader = KeychainCopyMatchingStub()
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching))
         await assertWalletReload(manager)
-        let controller = managementController(manager: manager)
+        let controller = try managementController(manager: manager)
         let window = accountSelectionWindow(controller: controller)
-        let windowController = WalletWindowController(window: window)
+        let windowController = try XCTUnwrap(window.windowController as? WalletWindowController)
         windowController.approvalPeer = PeerMeta(title: "wallet.example")
         defer { windowController.close() }
         let table = try XCTUnwrap(controller.tableView)
@@ -496,7 +496,7 @@ final class AccountsListViewControllerTests: XCTestCase {
     }
 
     func testWalletListCancelledDragClearsSelectionAndAllowsNextClick() async throws {
-        let controller = AccountsListViewController()
+        let controller = AccountsListViewController(access: NativeWalletAccess(try unlockedWalletAccessForTesting()))
         controller.walletsManager = try await accountSelectionWalletsManager()
         _ = controller.view
         let window = accountSelectionWindow(controller: controller)
@@ -548,7 +548,7 @@ private final class WalletOperationRecoveryHost {
     let inventory = HeldWalletInventory()
     let authentication = HeldWalletAuthentication()
     let manager: WalletsManager
-    private var retainedController: AccountsListViewController? = AccountsListViewController()
+    private var retainedController: AccountsListViewController?
     var controller: AccountsListViewController { retainedController! }
     let window: NSWindow
     private let windowController: WalletWindowController
@@ -603,9 +603,9 @@ private final class WalletOperationRecoveryHost {
         window.isReleasedWhenClosed = false
         windowController = WalletWindowController(window: window)
         previousActivationPolicy = NSApp.activationPolicy()
+        retainedController = AccountsListViewController(access: NativeWalletAccess(access.access))
         await assertWalletReload(manager)
         controller.walletsManager = manager
-        controller.walletAccess = NativeWalletAccess(access.access)
         controller.authenticate = { [authentication] _, _, challenge in await authentication.run(challenge) }
         windowController.bindAccess(access.access, unlock: {})
         window.contentViewController = controller

@@ -15,6 +15,10 @@ specification = importlib.util.spec_from_file_location('macos_vm', Path(__file__
 vm = importlib.util.module_from_spec(specification)
 specification.loader.exec_module(vm)
 
+specification = importlib.util.spec_from_file_location('vm_host_services', Path(__file__).resolve().parents[1] / 'host.py')
+host = importlib.util.module_from_spec(specification)
+specification.loader.exec_module(host)
+
 
 class RunnerError(RuntimeError):
     pass
@@ -39,7 +43,7 @@ class MacOSVMLifecycleTests(unittest.TestCase):
         self.launches = 0
         self.alive = False
         self.native = None
-        self.host = SimpleNamespace(RunnerError=RunnerError, private_directory=self.directory,
+        self.host = Mock(spec_set=host.host_services(), RunnerError=RunnerError, private_directory=self.directory,
             atomic_json=lambda path, value: path.write_text(json.dumps(value)),
             read_json=lambda path: json.loads(path.read_text()), build_tools=Mock(return_value=self.state / 'tools'),
             ensure_disk_idle=Mock(), validate_vm=Mock())
@@ -764,7 +768,7 @@ class MacOSVMOwnershipTests(unittest.TestCase):
         self.executable = self.state / 'tools/fixture/VMHost'
         self.executable.parent.mkdir(parents=True)
         self.executable.write_bytes(b'fixture executable')
-        self.host = SimpleNamespace(RunnerError=RunnerError,
+        self.host = Mock(spec_set=host.host_services(), RunnerError=RunnerError,
             read_json=lambda path: json.loads(path.read_text()),
             hash_regular_file=lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest())
         self.process = {'pid': 101, 'start': [1000, 20], 'executable': str(self.executable)}

@@ -8,6 +8,62 @@ import XCTest
 
 @MainActor
 final class WindowAuthenticationSessionTests: XCTestCase {
+    func testReplacementRetiresContentOnceAndPreservesAReentrantInstallation() throws {
+        let access = NativeWalletAccess(try unlockedWalletAccessForTesting())
+        let window = try makeWindow()
+        window.bindAccess(access.controller, unlock: {})
+        defer { window.close() }
+        let outgoing = ReentrantProtectedViewController(access: access)
+        let superseded = ReentrantProtectedViewController(access: access)
+        let replacement = ReentrantProtectedViewController(access: access)
+        XCTAssertTrue(window.installProtectedContent(outgoing, access: access))
+        outgoing.onRetire = {
+            XCTAssertTrue(window.contentViewController === outgoing)
+            XCTAssertTrue(window.installProtectedContent(replacement, access: access))
+        }
+
+        XCTAssertFalse(window.installProtectedContent(superseded, access: access))
+
+        XCTAssertEqual(outgoing.retirementCount, 1)
+        XCTAssertTrue(superseded.retired)
+        XCTAssertFalse(replacement.retired)
+        XCTAssertTrue(window.contentViewController === replacement)
+        let late = ReentrantProtectedViewController(access: access)
+        replacement.onRetire = {
+            XCTAssertFalse(window.prepareToReopen(access: access))
+            XCTAssertFalse(window.installProtectedContent(late, access: access))
+        }
+        window.close()
+        window.close()
+        XCTAssertEqual(replacement.retirementCount, 1)
+        XCTAssertTrue(late.retired)
+        XCTAssertTrue(window.contentViewController === replacement)
+        let reopened = ReentrantProtectedViewController(access: access)
+        XCTAssertTrue(window.prepareToReopen(access: access))
+        XCTAssertTrue(window.installProtectedContent(reopened, access: access))
+        XCTAssertFalse(reopened.retired)
+    }
+
+    func testUnboundWindowCannotStartProtectedAuthentication() async throws {
+        let window = try makeWindow()
+        defer { window.close() }
+        window.bindAccess(nil, unlock: {})
+        let fixture = AuthenticationKeychainFixture(password: "password")
+        var dependencies = dependencies(fixture)
+        dependencies.attemptBiometrics = { _, _ in
+            XCTFail("Unbound windows cannot request authentication")
+            return .failed
+        }
+        let challenge = fixture.credentials.makeWalletAccessChallenge()
+
+        let result = await window.authenticate(reason: .showPrivateKey, challenge: challenge, dependencies: dependencies)
+
+        XCTAssertNil(result.grant)
+        XCTAssertNil(window.currentAuthenticationSession)
+        XCTAssertNil(window.window?.attachedSheet)
+        XCTAssertFalse(challenge.isPending(for: challenge.authorityID))
+    }
+
     func testDeferredApprovalWindowsCascadeAfterContentInstallationOnlyOnce() async throws {
         let fixture = WalletAccessTestFixture()
         try fixture.unlock()
@@ -23,8 +79,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
             controller.bindAccess(fixture.access, unlock: {})
             let review = try nativeReviewForTesting()
             let content = ApproveViewController.with(subject: .signMessage, meta: "Cascade fixture",
-                account: account, walletId: wallet.id, review: review, completion: { _, _ in })
-            content.walletAccess = NativeWalletAccess(fixture.access)
+                account: account, walletId: wallet.id, review: review, access: NativeWalletAccess(fixture.access), completion: { _, _ in })
             XCTAssertTrue(controller.installProtectedContent(content, access: content.walletAccess))
             XCTAssertFalse(controller.window?.isVisible == true)
             controller.showWindow(nil)
@@ -105,10 +160,9 @@ final class WindowAuthenticationSessionTests: XCTestCase {
     func testManagementScrollerRetainsItsOriginatingAccessGeneration() async throws {
         let fixture = WalletAccessTestFixture()
         let session = try fixture.unlock()
-        let controller = AccountsListViewController()
+        let controller = AccountsListViewController(access: NativeWalletAccess(fixture.access))
         controller.walletsManager = try await accountSelectionWalletsManager()
-        controller.walletAccess = NativeWalletAccess(fixture.access)
-        let window = makeWindow()
+        let window = try makeWindow()
         window.bindAccess(fixture.access, unlock: {})
         XCTAssertTrue(window.installProtectedContent(controller, access: controller.walletAccess))
         defer { window.close() }
@@ -128,8 +182,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         let accountsView: AccountsListView = AccountsListView.load()
         XCTAssertTrue(accountsView.tableView.enclosingScrollView?.verticalScroller is WalletActivityScroller)
         let fixture = WalletAccessTestFixture()
-        let editor = instantiate(EditAccountsViewController.self)
-        editor.walletAccess = NativeWalletAccess(fixture.access)
+        let editor = EditAccountsViewController.with(access: NativeWalletAccess(fixture.access))
         _ = editor.view
         XCTAssertTrue(editor.tableView.enclosingScrollView?.verticalScroller is WalletActivityScroller)
         let manager = try await accountSelectionWalletsManager()
@@ -138,13 +191,13 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         let review = try nativeReviewForTesting()
         review.invalidate()
         let message = ApproveViewController.with(subject: .signMessage, meta: "fixture", account: account,
-            walletId: wallet.id, review: review, completion: { _, _ in })
+            walletId: wallet.id, review: review, access: NativeWalletAccess(fixture.access), completion: { _, _ in })
         _ = message.view
         XCTAssertTrue(message.metaTextView.enclosingScrollView?.verticalScroller is WalletActivityScroller)
         let transaction = ApproveTransactionViewController.with(
             transaction: Transaction(from: account.address, to: account.address, value: "0x0", data: "0x"),
             chain: try XCTUnwrap(ApplicationServices.shared.networks.network(chainId: 1)),
-            account: account, walletId: wallet.id, review: review, completion: { _ in })
+            account: account, walletId: wallet.id, review: review, access: NativeWalletAccess(fixture.access), completion: { _ in })
         _ = transaction.view
         XCTAssertTrue(transaction.metaTextView.enclosingScrollView?.verticalScroller is WalletActivityScroller)
     }
@@ -153,11 +206,10 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         for locksOnAppearance in [false, true] {
             let fixture = WalletAccessTestFixture()
             try fixture.unlock()
-            let window = makeWindow()
+            let window = try makeWindow()
             window.bindAccess(fixture.access, unlock: {})
             defer { window.close() }
-            let next = ReentrantProtectedViewController()
-            next.walletAccess = NativeWalletAccess(fixture.access)
+            let next = ReentrantProtectedViewController(access: NativeWalletAccess(fixture.access))
             if locksOnAppearance { next.onAppear = { fixture.access.lock(reason: .idle) } }
             else { next.onLoad = { fixture.access.lock(reason: .idle) } }
 
@@ -176,9 +228,9 @@ final class WindowAuthenticationSessionTests: XCTestCase {
 
     func testBindingLockedAccessClearsDraftAndRepeatedReconciliationKeepsItsPresentation() throws {
         let fixture = WalletAccessTestFixture()
-        let window = makeWindow()
+        let window = try makeWindow()
         defer { window.close() }
-        let password = PasswordViewController.with(configuration: .init(mode: .enter)) { _ in }
+        let password = PasswordViewController.with(configuration: .init(mode: .enter), beginAction: { true }) { _ in }
         window.contentViewController = password
         _ = password.view
         password.passwordTextField.stringValue = "secret draft"
@@ -219,7 +271,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         let flow = StartupCredentialCoordinator(dependencies: .init(
             credentials: fixture.credentials, attemptBiometrics: { _, _ in nil }, access: fixture.access
         )) { events.append($0) }
-        let window = makeWindow()
+        let window = try makeWindow()
         window.bindAccess(fixture.access) { flow.requestAccess() }
         defer { flow.cancel(); flow.windowController?.close(); window.close() }
         fixture.access.lock(reason: .idle)
@@ -244,8 +296,37 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         XCTAssertEqual(events, [.cancelled, .authenticated])
     }
 
-    func testRejectedInstallationRetiresUnloadedOnboardingActions() {
-        let window = makeWindow()
+    func testClosingLockedStartupWindowAllowsFreshPasswordAuthentication() async throws {
+        let fixture = WalletAccessTestFixture()
+        var events = [StartupCredentialCoordinator.Event]()
+        let flow = StartupCredentialCoordinator(dependencies: .init(
+            credentials: fixture.credentials, attemptBiometrics: { _, _ in nil }, access: fixture.access
+        )) { events.append($0) }
+        defer { flow.cancel() }
+        flow.requestAccess()
+        await waitUntil { flow.windowController?.contentViewController is PasswordViewController }
+        let original = try XCTUnwrap(flow.windowController)
+        let first = try XCTUnwrap(original.contentViewController as? PasswordViewController)
+        fixture.access.lock(reason: .systemSleep)
+        XCTAssertTrue(original.contentViewController is WalletLockedViewController)
+
+        original.close()
+
+        XCTAssertNil(flow.windowController)
+        XCTAssertTrue(fixture.access.isLocked)
+        flow.requestAccess()
+        await waitUntil { flow.windowController?.contentViewController is PasswordViewController }
+        let reopened = try XCTUnwrap(flow.windowController)
+        let password = try XCTUnwrap(reopened.contentViewController as? PasswordViewController)
+        XCTAssertFalse(reopened === original)
+        XCTAssertFalse(password === first)
+        submit("password", to: password)
+        XCTAssertTrue(fixture.access.validateCurrentAccess())
+        XCTAssertEqual(events, [.authenticated])
+    }
+
+    func testRejectedInstallationRetiresUnloadedOnboardingActions() throws {
+        let window = try makeWindow()
         defer { window.close() }
         let original = window.contentViewController
         for kind in 0..<3 {
@@ -257,7 +338,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
                 let action = { withExtendedLifetime(owner) { callbackCalls += 1 } }
                 switch kind {
                 case 0:
-                    return PasswordViewController.with(configuration: .init(mode: .enter, availability: .unavailable)) { _ in action() }
+                    return PasswordViewController.with(configuration: .init(mode: .enter, availability: .unavailable), beginAction: { true }) { _ in action() }
                 case 1:
                     return WelcomeViewController.new(onGetStarted: action)
                 default:
@@ -289,9 +370,8 @@ final class WindowAuthenticationSessionTests: XCTestCase {
     func testManagementRowRenderingCannotReentrantlyLockAndReloadTheTable() async throws {
         let fixture = WalletAccessTestFixture()
         try fixture.unlock()
-        let controller = managementController(manager: try await accountSelectionWalletsManager())
-        controller.walletAccess = NativeWalletAccess(fixture.access)
-        let window = makeWindow()
+        let controller = try managementController(manager: try await accountSelectionWalletsManager(), access: NativeWalletAccess(fixture.access))
+        let window = try makeWindow()
         window.bindAccess(fixture.access, unlock: {})
         window.contentViewController = controller
         defer { window.close() }
@@ -316,9 +396,8 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         let fixture = WalletAccessTestFixture()
         try fixture.unlock()
         let controller = try accountSelectionController(manager: try await accountSelectionWalletsManager(),
-            mode: .selectAccount, selectedAccounts: [])
-        controller.walletAccess = NativeWalletAccess(fixture.access)
-        let window = makeWindow()
+            mode: .selectAccount, selectedAccounts: [], access: NativeWalletAccess(fixture.access))
+        let window = try makeWindow()
         window.bindAccess(fixture.access, unlock: {})
         window.contentViewController = controller
         defer { window.close() }
@@ -350,11 +429,10 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         let manager = WalletsManager(keychain: Keychain(copyMatching: reader.copyMatching), authorityID: fixture.authorityID)
         await assertWalletReload(manager)
         try fixture.unlock()
-        let controller = instantiate(EditAccountsViewController.self)
+        let controller = EditAccountsViewController.with(access: NativeWalletAccess(fixture.access))
         controller.wallet = try XCTUnwrap(manager.wallets.first)
         controller.walletsManager = manager
-        controller.walletAccess = NativeWalletAccess(fixture.access)
-        let window = makeWindow()
+        let window = try makeWindow()
         window.bindAccess(fixture.access, unlock: {})
         window.contentViewController = controller
         defer { window.close() }
@@ -459,7 +537,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
     func testWalletLockCancelsActionAuthenticationAndKeepsTheLockedSurface() async throws {
         let fixture = WalletAccessTestFixture()
         try fixture.unlock()
-        let controller = makeWindow()
+        let controller = try makeWindow()
         controller.bindAccess(fixture.access, unlock: {})
         defer { controller.close() }
         let challenge = fixture.credentials.makeWalletAccessChallenge()
@@ -490,7 +568,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
     func testExpiredAccessBlocksAuthenticationBeforeOpeningASheet() async throws {
         let fixture = WalletAccessTestFixture()
         try fixture.unlock()
-        let controller = makeWindow()
+        let controller = try makeWindow()
         controller.bindAccess(fixture.access, unlock: {})
         defer { controller.close() }
         fixture.advance(by: .seconds(900))
@@ -510,7 +588,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
 
     func testPasswordSheetPreservesOwnerAndCompletesOnlyAfterDismissal() async throws {
         let fixture = AuthenticationKeychainFixture(password: "x")
-        let controller = makeWindow()
+        let controller = try makeWindow()
         defer { controller.close() }
         let original = controller.contentViewController
         let authentication = begin(controller, fixture: fixture)
@@ -538,7 +616,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         let fixture = AuthenticationKeychainFixture(password: "password")
         let dependencies = dependencies(fixture)
         let challenge = dependencies.credentials.makeWalletAccessChallenge()
-        let controller = makeWindow()
+        let controller = try makeWindow()
         defer { controller.close() }
         let authentication = Task {
             await controller.authenticate(reason: .showPrivateKey, challenge: challenge, dependencies: dependencies).grant
@@ -557,7 +635,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         let initialActivationPolicy = NSApp.activationPolicy()
         defer { _ = NSApp.setActivationPolicy(initialActivationPolicy) }
         let fixture = AuthenticationKeychainFixture(password: "password")
-        let controller = makeWindow()
+        let controller = try makeWindow()
         let owner = try XCTUnwrap(controller.window)
         defer { controller.close() }
         try await requireActiveKeyWindow(owner)
@@ -588,9 +666,9 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         let initialActivationPolicy = NSApp.activationPolicy()
         defer { _ = NSApp.setActivationPolicy(initialActivationPolicy) }
         let fixture = AuthenticationKeychainFixture(password: "password")
-        let controller = makeWindow()
+        let controller = try makeWindow()
         let owner = try XCTUnwrap(controller.window)
-        let otherController = makeWindow()
+        let otherController = try makeWindow()
         let other = try XCTUnwrap(otherController.window)
         defer { controller.close(); otherController.close() }
         try await requireActiveKeyWindow(owner)
@@ -624,8 +702,8 @@ final class WindowAuthenticationSessionTests: XCTestCase {
 
     func testSeparateWindowsAuthenticateIndependently() async throws {
         let fixture = AuthenticationKeychainFixture(password: "password")
-        let first = makeWindow()
-        let second = makeWindow()
+        let first = try makeWindow()
+        let second = try makeWindow()
         defer { first.close(); second.close() }
         let firstTask = begin(first, fixture: fixture)
         let secondTask = begin(second, fixture: fixture)
@@ -642,7 +720,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
 
     func testSameWindowDuplicateFailsWithoutChangingOriginalSession() async throws {
         let fixture = AuthenticationKeychainFixture(password: "password")
-        let controller = makeWindow()
+        let controller = try makeWindow()
         defer { controller.close() }
         let first = begin(controller, fixture: fixture)
         let (sheet, form) = try await passwordSheet(in: controller)
@@ -662,7 +740,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
 
     func testQueuedAuthenticationCancellationPreservesExistingEditorSheet() async throws {
         let fixture = AuthenticationKeychainFixture(password: "password")
-        let controller = makeWindow()
+        let controller = try makeWindow()
         let window = try XCTUnwrap(controller.window)
         defer { controller.close() }
         let editorContent = NSViewController()
@@ -692,9 +770,9 @@ final class WindowAuthenticationSessionTests: XCTestCase {
 
     func testClosingOwnerCancelsQueuedSheetAndRetiresItsForm() async throws {
         let fixture = AuthenticationKeychainFixture(password: "password")
-        let controller = makeWindow()
+        let controller = try makeWindow()
         let window = try XCTUnwrap(controller.window)
-        let other = makeWindow()
+        let other = try makeWindow()
         defer { controller.close(); other.close() }
         let editorContent = NSViewController()
         editorContent.view = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 120))
@@ -717,7 +795,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
 
     func testExternalSheetDismissalClearsDraftAndFencesRetainedActions() async throws {
         let fixture = AuthenticationKeychainFixture(password: "password")
-        let controller = makeWindow()
+        let controller = try makeWindow()
         defer { controller.close() }
         let authentication = begin(controller, fixture: fixture)
         let (sheet, form) = try await passwordSheet(in: controller)
@@ -736,7 +814,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
 
     func testCancellingDuringSuccessfulSheetDismissalCannotAuthenticate() async throws {
         let fixture = AuthenticationKeychainFixture(password: "password")
-        let controller = makeWindow()
+        let controller = try makeWindow()
         defer { controller.close() }
         let authentication = begin(controller, fixture: fixture)
         let (sheet, form) = try await passwordSheet(in: controller)
@@ -749,8 +827,8 @@ final class WindowAuthenticationSessionTests: XCTestCase {
 
     func testReviewInvalidationDismissesOnlyItsAuthenticationSheet() async throws {
         let fixture = AuthenticationKeychainFixture(password: "password")
-        let first = makeWindow()
-        let second = makeWindow()
+        let first = try makeWindow()
+        let second = try makeWindow()
         defer { first.close(); second.close() }
         let review = try nativeReviewForTesting()
         let firstTask = begin(first, fixture: fixture, review: review)
@@ -771,7 +849,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
     func testLateBiometricSuccessCannotSurviveOwnerCloseOrReviewInvalidation() async throws {
         for invalidatesReview in [false, true] {
             let fixture = AuthenticationKeychainFixture(password: "password")
-            let controller = makeWindow()
+            let controller = try makeWindow()
             defer { controller.close() }
             let review = try nativeReviewForTesting()
             let gate = BiometricGate()
@@ -798,7 +876,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
     func testUnavailablePasswordStaysAnEntryFormAndRetryUsesCurrentStorage() async throws {
         let fixture = AuthenticationKeychainFixture(password: "密碼x")
         fixture.status = errSecInteractionNotAllowed
-        let controller = makeWindow()
+        let controller = try makeWindow()
         defer { controller.close() }
         let authentication = begin(controller, fixture: fixture)
         let (_, form) = try await passwordSheet(in: controller)
@@ -814,7 +892,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
 
     func testMissingPasswordNeverOffersCreationFromActionSheet() async throws {
         let fixture = AuthenticationKeychainFixture(password: nil)
-        let controller = makeWindow()
+        let controller = try makeWindow()
         defer { controller.close() }
         let authentication = begin(controller, fixture: fixture)
         let (_, form) = try await passwordSheet(in: controller)
@@ -828,7 +906,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
     func testActionBiometricsNeverFallBackAfterFailedAvailableAttempt() async throws {
         let fixture = AuthenticationKeychainFixture(password: "password")
         for outcome in [WalletAuthenticationOutcome.cancelled, .failed, .interactionUnavailable, .succeeded] {
-            let controller = makeWindow()
+            let controller = try makeWindow()
             defer { controller.close() }
             let original = controller.contentViewController
             var dependencies = dependencies(fixture)
@@ -845,7 +923,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
     }
 
     func testAbsentClosedOrRetiredOwnerNeverStartsAuthentication() async throws {
-        let controller = makeWindow()
+        let controller = try makeWindow()
         controller.close()
         let review = try nativeReviewForTesting()
         review.invalidate()
@@ -854,7 +932,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         dependencies.attemptBiometrics = { _, _ in calls += 1; return .failed }
         let absent = await Window.authenticate(in: nil, reason: .removeWallet, challenge: dependencies.credentials.makeWalletAccessChallenge()).grant
         let closed = await controller.authenticate(reason: .removeWallet, challenge: dependencies.credentials.makeWalletAccessChallenge(), dependencies: dependencies).grant
-        let other = makeWindow()
+        let other = try makeWindow()
         defer { other.close() }
         let retired = await other.authenticate(reason: .sendTransaction, challenge: dependencies.credentials.makeWalletAccessChallenge(), review: review, dependencies: dependencies).grant
         XCTAssertNil(absent)
@@ -940,7 +1018,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         ].joined(separator: ", ")
     }
 
-    private func makeWindow() -> WalletWindowController {
+    private func makeWindow() throws -> WalletWindowController {
         let window = NSWindow(
             contentRect: NSRect(x: -10_000, y: -10_000, width: 300, height: 350),
             styleMask: [.titled, .closable], backing: .buffered, defer: false
@@ -950,6 +1028,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         content.view = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 350))
         window.contentViewController = content
         let controller = WalletWindowController(window: window)
+        controller.bindAccess(try unlockedWalletAccessForTesting(), unlock: {})
         window.orderFront(nil)
         return controller
     }
@@ -998,10 +1077,19 @@ private final class ProtectedDataAvailability {
 
 @MainActor
 private final class ReentrantProtectedViewController: NSViewController, NativeWalletProtectedContent {
-    var walletAccess = NativeWalletAccess()
+    let walletAccess: NativeWalletAccess
+
+    init(access: NativeWalletAccess) {
+        walletAccess = access
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { return nil }
     var onLoad: (() -> Void)?
     var onAppear: (() -> Void)?
+    var onRetire: (() -> Void)?
     private(set) var retired = false
+    private(set) var retirementCount = 0
 
     override func loadView() { view = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 350)) }
 
@@ -1015,7 +1103,14 @@ private final class ReentrantProtectedViewController: NSViewController, NativeWa
         onAppear?()
     }
 
-    func retire() { retired = true }
+    func retire() {
+        guard !retired else { return }
+        retired = true
+        retirementCount += 1
+        let action = onRetire
+        onRetire = nil
+        action?()
+    }
 }
 
 private struct WindowFocusFailure: Error, CustomStringConvertible {

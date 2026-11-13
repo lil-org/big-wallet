@@ -187,6 +187,12 @@ privileged operation boundaries. Lock publishes its state before synchronously
 invalidating sessions, authentication, and presented secrets. Timer registration
 cannot call back synchronously; delivered callbacks still check their generation.
 
+Protected macOS controllers receive their captured access at construction. The
+window controller retires outgoing content before replacement and protected content
+on close. Recovery explicitly reopens a closed window before installing its current
+presentation; callbacks during close cannot reopen it. Onboarding forms use their
+flow's action validation without an unlocked wallet access requirement.
+
 ### Account editing
 
 Healthy wallet refreshes retain the ready presentation and do not revoke in-flight

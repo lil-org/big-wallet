@@ -41,9 +41,8 @@ final class MacSecretLifetimeTests: XCTestCase {
             ), authorityID: fixture.authorityID)
             await assertWalletReload(manager)
             XCTAssertEqual(manager.wallets.first?.accounts.count, 2)
-            var controller: AccountsListViewController? = AccountsListViewController()
+            var controller: AccountsListViewController? = AccountsListViewController(access: NativeWalletAccess(fixture.access))
             controller?.walletsManager = manager
-            controller?.walletAccess = NativeWalletAccess(fixture.access)
             weak var retiredController = controller
             let window = SecretLifetimeWindow(contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 400),
                 styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -301,7 +300,7 @@ final class MacSecretLifetimeTests: XCTestCase {
             let replacement = NSViewController()
             replacement.view = NSView(frame: host.controller.view.frame)
             switch end {
-            case .removal: host.window.contentViewController = replacement
+            case .removal: XCTAssertTrue(host.windowController.installContent(replacement, while: { true }))
             case .windowClose: host.window.close()
             case .lock: host.fixture.access.lock(reason: .idle)
             }
@@ -463,7 +462,7 @@ final class MacSecretLifetimeTests: XCTestCase {
 
     func testRetiredPasswordClearsItsRealFieldEditorWithoutUndo() throws {
         var submissions = 0
-        let controller = PasswordViewController.with(configuration: .init(mode: .enter)) { _ in submissions += 1 }
+        let controller = PasswordViewController.with(configuration: .init(mode: .enter), beginAction: { true }) { _ in submissions += 1 }
         let window = SecretLifetimeWindow(contentRect: NSRect(x: -10_000, y: -10_000, width: 300, height: 350),
             styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
@@ -542,8 +541,7 @@ private final class ImportHost {
 
     init() throws {
         try fixture.unlock()
-        controller = instantiate(ImportViewController.self)
-        controller.walletAccess = NativeWalletAccess(fixture.access)
+        controller = ImportViewController.with(access: NativeWalletAccess(fixture.access))
         controller.dependencies.validate = { _ in .valid }
         controller.dependencies.prepareStore = { true }
         controller.dependencies.importWallet = { _, _, _ in throw CancellationError() }

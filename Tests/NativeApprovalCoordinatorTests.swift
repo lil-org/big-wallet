@@ -309,6 +309,41 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
     }
 
+    func testReopeningClosedWalletAfterLockCreatesAWorkingLockedPresentation() throws {
+        let fixture = WalletAccessTestFixture()
+        try fixture.unlock()
+        var authenticationAttempts = 0
+        let agent = Agent(approvalInbox: ApprovalInbox(), credentialDependencies: .init(
+            credentials: fixture.credentials,
+            attemptBiometrics: { _, _ in authenticationAttempts += 1; return nil },
+            access: fixture.access
+        ))
+        let priorWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
+        defer {
+            NSApp.windows.filter { !priorWindows.contains(ObjectIdentifier($0)) }.forEach { $0.close() }
+        }
+        agent.process(route: .showWallet(workflowVersion: ExtensionBridge.workflowVersion))
+        let original = try XCTUnwrap(NSApp.windows.first {
+            !priorWindows.contains(ObjectIdentifier($0)) && $0.contentViewController is AccountsListViewController
+        })
+        original.close()
+        fixture.access.lock(reason: .idle)
+
+        agent.process(route: .showWallet(workflowVersion: ExtensionBridge.workflowVersion))
+
+        let reopened = try XCTUnwrap(NSApp.windows.first {
+            !priorWindows.contains(ObjectIdentifier($0)) && $0.isVisible && $0.contentViewController is WalletLockedViewController
+        })
+        XCTAssertFalse(reopened === original)
+        XCTAssertTrue(fixture.access.isLocked)
+        XCTAssertEqual(authenticationAttempts, 0)
+        reopened.close()
+        agent.process(route: .showWallet(workflowVersion: ExtensionBridge.workflowVersion))
+        XCTAssertTrue(NSApp.windows.contains {
+            $0 !== reopened && !priorWindows.contains(ObjectIdentifier($0)) && $0.isVisible && $0.contentViewController is WalletLockedViewController
+        })
+    }
+
     func testExplicitWalletRouteShowsLockedSurfaceWithoutStartingAuthentication() throws {
         let fixture = WalletAccessTestFixture()
         try fixture.unlock()
@@ -508,6 +543,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let originalController = NSViewController()
         window.contentViewController = originalController
         let windowController = WalletWindowController(window: window)
+        windowController.bindAccess(try unlockedWalletAccessForTesting(), unlock: {})
         window.orderFront(nil)
         let credentials = authenticationCredentials()
         let authentication = Task {
@@ -556,6 +592,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let originalController = NSViewController()
         window.contentViewController = originalController
         let windowController = WalletWindowController(window: window)
+        windowController.bindAccess(try unlockedWalletAccessForTesting(), unlock: {})
         window.orderFront(nil)
         defer { window.close() }
         for outcome in [WalletAuthenticationOutcome.failed, .succeeded] {
@@ -699,7 +736,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let fixture = try makeFixture()
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
-        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator)
+        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator, access: try unlockedWalletAccessForTesting())
         var inbox = ApprovalInbox<Agent.ActiveApproval>()
         XCTAssertTrue(inbox.register(fixture.coordinator))
         XCTAssertTrue(inbox.activate(approval, for: fixture.key))
@@ -930,7 +967,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
                 withIdentifier: "initial"
             ) as? WalletWindowController
         )
-        let controller = instantiate(ImportViewController.self)
+        let controller = ImportViewController.with(access: NativeWalletAccess(try unlockedWalletAccessForTesting()))
         windowController.contentViewController = controller
         controller.viewWillAppear()
         controller.view.layoutSubtreeIfNeeded()
@@ -955,7 +992,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         )
         windowController.approvalPeer = PeerMeta(title: "wallet.example")
         let controller = PasswordViewController.with(
-            configuration: .init(mode: .enter, reason: .approveTransaction)
+            configuration: .init(mode: .enter, reason: .approveTransaction), beginAction: { true }
         ) { _ in }
         windowController.contentViewController = controller
         controller.viewWillAppear()
@@ -1005,6 +1042,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             account: account,
             walletId: "appearance-test",
             review: try nativeReviewForTesting(),
+            access: NativeWalletAccess(try unlockedWalletAccessForTesting()),
             completion: { _, _ in XCTFail("Appearance does not approve a request") }
         )
         windowController.contentViewController = controller
@@ -1142,7 +1180,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         var selections = [Solana.Cluster?]()
         var rejections = 0
         let controller = ApproveViewController.with(subject: .approveTransaction, meta: "Cluster review",
-            account: account, walletId: "cluster", solanaClusterOptions: .init(suggestedCluster: .devnet), review: review) { _, decision in
+            account: account, walletId: "cluster", solanaClusterOptions: .init(suggestedCluster: .devnet), review: review, access: NativeWalletAccess(try unlockedWalletAccessForTesting())) { _, decision in
                 switch decision {
                 case .approved(let cluster): selections.append(cluster)
                 case .rejected: rejections += 1
@@ -1459,11 +1497,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let fixture = try makeFixture()
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
-        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator)
+        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator, access: try unlockedWalletAccessForTesting())
         var inbox = ApprovalInbox<Agent.ActiveApproval>()
         XCTAssertTrue(inbox.register(fixture.coordinator))
         XCTAssertTrue(inbox.activate(approval, for: fixture.key))
-        let agent = Agent(approvalInbox: inbox)
+        let agent = Agent(approvalInbox: inbox, credentialDependencies: .init(access: approval.walletAccess.controller))
         fixture.coordinator.onEvent = { [weak agent, weak coordinator = fixture.coordinator] event in
             if case .presentationChanged = event, let coordinator {
                 agent?.renderCurrentPresentation(for: coordinator.handle, coordinator: coordinator)
@@ -1539,11 +1577,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
-        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator)
+        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator, access: try unlockedWalletAccessForTesting())
         var inbox = ApprovalInbox<Agent.ActiveApproval>()
         XCTAssertTrue(inbox.register(fixture.coordinator))
         XCTAssertTrue(inbox.activate(approval, for: fixture.key))
-        let agent = Agent(approvalInbox: inbox)
+        let agent = Agent(approvalInbox: inbox, credentialDependencies: .init(access: approval.walletAccess.controller))
         fixture.coordinator.onEvent = { [weak agent, weak coordinator = fixture.coordinator] event in
             if case .presentationChanged = event, let coordinator {
                 agent?.renderCurrentPresentation(for: coordinator.handle, coordinator: coordinator)
@@ -1613,11 +1651,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         }
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
-        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator)
+        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator, access: try unlockedWalletAccessForTesting())
         var inbox = ApprovalInbox<Agent.ActiveApproval>()
         XCTAssertTrue(inbox.register(fixture.coordinator))
         XCTAssertTrue(inbox.activate(approval, for: fixture.key))
-        let agent = Agent(approvalInbox: inbox)
+        let agent = Agent(approvalInbox: inbox, credentialDependencies: .init(access: approval.walletAccess.controller))
         fixture.coordinator.onEvent = { [weak agent, weak coordinator = fixture.coordinator] event in
             if case .presentationChanged = event, let coordinator {
                 agent?.renderCurrentPresentation(for: coordinator.handle, coordinator: coordinator)
@@ -1730,11 +1768,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         let fixture = try makeFixture()
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
-        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator)
+        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator, access: try unlockedWalletAccessForTesting())
         var inbox = ApprovalInbox<Agent.ActiveApproval>()
         XCTAssertTrue(inbox.register(fixture.coordinator))
         XCTAssertTrue(inbox.activate(approval, for: fixture.key))
-        let agent = Agent(approvalInbox: inbox)
+        let agent = Agent(approvalInbox: inbox, credentialDependencies: .init(access: approval.walletAccess.controller))
         let window = TrackingWindow(
             contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 320),
             styleMask: [.titled, .closable], backing: .buffered, defer: false
@@ -1818,11 +1856,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         defer { waits.resumeAll() }
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
-        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator)
+        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator, access: try unlockedWalletAccessForTesting())
         var inbox = ApprovalInbox<Agent.ActiveApproval>()
         XCTAssertTrue(inbox.register(fixture.coordinator))
         XCTAssertTrue(inbox.activate(approval, for: fixture.key))
-        let agent = Agent(approvalInbox: inbox)
+        let agent = Agent(approvalInbox: inbox, credentialDependencies: .init(access: approval.walletAccess.controller))
         let window = TrackingWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 300),
             styleMask: [.titled, .closable], backing: .buffered, defer: false
@@ -1868,11 +1906,11 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         })
         start(fixture)
         await waitForState(fixture.coordinator, .awaitingAuthentication)
-        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator)
+        let approval = Agent.ActiveApproval(coordinator: fixture.coordinator, access: try unlockedWalletAccessForTesting())
         var inbox = ApprovalInbox<Agent.ActiveApproval>()
         XCTAssertTrue(inbox.register(fixture.coordinator))
         XCTAssertTrue(inbox.activate(approval, for: fixture.key))
-        let agent = Agent(approvalInbox: inbox)
+        let agent = Agent(approvalInbox: inbox, credentialDependencies: .init(access: approval.walletAccess.controller))
         let window = TrackingWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 300),
             styleMask: [.titled, .closable], backing: .buffered, defer: false
@@ -1968,6 +2006,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
     }
 
     func attachApprovalWindow(to fixture: Fixture, access: WalletAccessController? = nil, credentials: WalletCredentials? = nil, authenticate: Agent.ActiveApproval.Authentication? = nil) throws -> (Agent, Agent.ActiveApproval, TrackingWindow) {
+        let access = try access ?? unlockedWalletAccessForTesting()
         let approval: Agent.ActiveApproval
         if let authenticate { approval = Agent.ActiveApproval(coordinator: fixture.coordinator, access: access, authenticate: authenticate) }
         else { approval = Agent.ActiveApproval(coordinator: fixture.coordinator, access: access) }

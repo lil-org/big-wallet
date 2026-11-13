@@ -85,7 +85,7 @@ final class NativeAccountSelectionViewControllerTests: XCTestCase {
     func testControllersLoadIndependentInstancesOfTheSharedAccountView() async throws {
         let manager = try await accountSelectionWalletsManager()
         let selection = try accountSelectionController(manager: manager, mode: .selectAccount, selectedAccounts: [])
-        let management = managementController(manager: manager)
+        let management = try managementController(manager: manager)
         XCTAssertFalse(selection.content === management.content)
         XCTAssertFalse(selection.tableView === management.tableView)
         XCTAssertEqual(selection.content.frame.size, management.content.frame.size)
@@ -104,7 +104,7 @@ final class NativeAccountSelectionViewControllerTests: XCTestCase {
                 manager: manager, mode: mode, selectedAccounts: [selected]
             )
             let window = accountSelectionWindow(controller: controller)
-            let windowController = WalletWindowController(window: window)
+            let windowController = try XCTUnwrap(window.windowController as? WalletWindowController)
             windowController.approvalPeer = PeerMeta(title: "wallet.example")
             defer { windowController.close() }
             let table = try XCTUnwrap(controller.tableView)
@@ -190,7 +190,7 @@ final class NativeAccountSelectionViewControllerTests: XCTestCase {
             selectedAccounts: []
         )
         let window = accountSelectionWindow(controller: controller)
-        let windowController = WalletWindowController(window: window)
+        let windowController = try XCTUnwrap(window.windowController as? WalletWindowController)
         windowController.approvalPeer = PeerMeta(title: "wallet.example")
         defer { windowController.close() }
         let session = try XCTUnwrap(controller.accountSelection)
@@ -249,7 +249,7 @@ final class NativeAccountSelectionViewControllerTests: XCTestCase {
         for mode in [NativeAccountSelectionMode.selectAccount, .switchAccount] {
             let controller = try accountSelectionController(manager: manager, mode: mode, selectedAccounts: [])
             let window = accountSelectionWindow(controller: controller)
-            let windowController = WalletWindowController(window: window)
+            let windowController = try XCTUnwrap(window.windowController as? WalletWindowController)
             windowController.approvalPeer = PeerMeta(title: "wallet.example")
             defer { windowController.close() }
             controller.viewDidAppear()
@@ -355,7 +355,7 @@ final class NativeAccountSelectionViewControllerTests: XCTestCase {
             completion: { _, _ in }
         )
 
-        let controller = NativeAccountSelectionViewController(accountSelection: session)
+        let controller = NativeAccountSelectionViewController(accountSelection: session, access: NativeWalletAccess(try unlockedWalletAccessForTesting()))
         _ = controller.view
         XCTAssertEqual(controller.titleLabel.stringValue, Strings.switchAccount.replacingOccurrences(of: " ", with: "\n"))
     }
@@ -406,7 +406,7 @@ final class NativeAccountSelectionViewControllerTests: XCTestCase {
             review: try nativeReviewForTesting(),
             completion: { _, _ in }
         )
-        let controller = NativeAccountSelectionViewController(accountSelection: session)
+        let controller = NativeAccountSelectionViewController(accountSelection: session, access: NativeWalletAccess(try unlockedWalletAccessForTesting()))
         _ = controller.view
         controller.view.layoutSubtreeIfNeeded()
 
@@ -441,7 +441,7 @@ final class NativeAccountSelectionViewControllerTests: XCTestCase {
             review: try nativeReviewForTesting(),
             completion: { _, _ in completionCount += 1 }
         )
-        let controller = NativeAccountSelectionViewController(accountSelection: session)
+        let controller = NativeAccountSelectionViewController(accountSelection: session, access: NativeWalletAccess(try unlockedWalletAccessForTesting()))
         _ = controller.view
 
         controller.didClickSecondaryButton(controller.secondaryButton as Any)

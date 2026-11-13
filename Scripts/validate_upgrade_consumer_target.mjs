@@ -1,23 +1,14 @@
 import {execFileSync} from "node:child_process";
 import {dirname, isAbsolute, resolve} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
-import {containedPath, dependencyRecords, inspectSwiftPackage, namedInventory} from "./harness_package.mjs";
+import {dependencyRecords, inspectSwiftPackage, namedInventory} from "./harness_package.mjs";
+import {validateRuntimeClosure, validateTargetSources} from "./runtime_policy.mjs";
 
-const products = ["WalletDomain", "WalletAuthority", "WalletFlows", "WalletNetworking"];
 const inputs = ["WalletDomain", "WalletAuthority", "WalletFlows"];
-const graph = {WalletDomain: [], WalletStorageSupport: [], CWalletCrypto: [],
-    WalletAuthority: ["WalletDomain", "WalletStorageSupport", "CWalletCrypto"],
-    WalletFlows: ["WalletDomain", "WalletAuthority"]};
-const forbidden = /(?:^|\/)(?:AppDelegate|SceneDelegate|SafariWebExtensionHandler|SafariVMFixtures|ProducerDriver|IsolatedStorageAdapters)\.swift$|\.entitlements$|AlchemyJWTRequestProofKey|PrivacyInfo\.xcprivacy|ShippedMain|source\.tar/;
-
-function validateSources(target, description, root) {
-    if (!description || !containedPath(root, description.path) || forbidden.test(description.path) || !Array.isArray(description.sources) || !description.sources.length ||
-        description.sources.some(path => !containedPath(resolve(root, description.path), path) || forbidden.test(path)) ||
-        target.resources?.length || description.resources?.length || target.pluginUsages?.length || target.plugins?.length ||
-        /entitlements|enable-testing|BW_SAFARI_VM_TESTING|ShippedMain|ProducerDriver/.test(JSON.stringify(target.settings ?? []))) {
-        throw new Error(`Unsafe upgrade consumer source or build settings: ${target.name}`);
-    }
-}
+const sourcePolicy = {
+    extraForbiddenSource: /(?:^|\/)(?:ProducerDriver|IsolatedStorageAdapters)\.swift$|ShippedMain|source\.tar/,
+    extraForbiddenSettings: /ShippedMain|ProducerDriver/,
+};
 
 export function validateUpgradeConsumerTarget({harness, runtime}) {
     if (harness?.description?.name !== "WalletUpgradeHarness" || runtime?.description?.name !== "WalletRuntime" ||
@@ -31,23 +22,7 @@ export function validateUpgradeConsumerTarget({harness, runtime}) {
         packages[0].identity?.toLowerCase() !== "walletruntime" || harness.manifest?.dependencies?.length !== 1) {
         throw new Error("Upgrade consumer may depend only on the local WalletRuntime package");
     }
-    const runtimeProducts = namedInventory(runtime.manifest.products, "runtime product");
-    if (runtimeProducts.size !== products.length || products.some(name => !runtimeProducts.get(name)?.type?.library ||
-        JSON.stringify(runtimeProducts.get(name).targets) !== JSON.stringify([name]))) {
-        throw new Error("Unexpected runtime product inventory");
-    }
-    const targets = namedInventory(runtime.manifest.targets, "runtime target");
-    const descriptions = namedInventory(runtime.description.targets, "described runtime target");
-    for (const [name, expected] of Object.entries(graph)) {
-        const target = targets.get(name);
-        if (target?.type !== "regular") { throw new Error(`Missing ordinary runtime dependency: ${name}`); }
-        validateSources(target, descriptions.get(name), root);
-        const actual = dependencyRecords(target);
-        if (actual.some(value => value.kind === "product") || actual.length !== expected.length ||
-            new Set(actual.map(value => value.name)).size !== expected.length || expected.some(value => !actual.some(item => item.name === value))) {
-            throw new Error(`Upgrade consumer reaches an unexpected runtime dependency: ${name}`);
-        }
-    }
+    validateRuntimeClosure(runtime, inputs, sourcePolicy);
     const consumerProducts = namedInventory(harness.manifest.products, "consumer product");
     const product = consumerProducts.get("WalletUpgradeConsumer");
     const consumers = namedInventory(harness.manifest.targets, "consumer target");
@@ -56,7 +31,7 @@ export function validateUpgradeConsumerTarget({harness, runtime}) {
         JSON.stringify(product.targets) !== JSON.stringify(["WalletUpgradeConsumer"]) || consumers.size !== 1 || consumer?.type !== "executable") {
         throw new Error("Upgrade harness must contain exactly one WalletUpgradeConsumer executable");
     }
-    validateSources(consumer, namedInventory(harness.description.targets, "described consumer target").get(consumer.name), harness.description.path);
+    validateTargetSources(consumer, namedInventory(harness.description.targets, "described consumer target").get(consumer.name), harness.description.path, sourcePolicy);
     const actual = dependencyRecords(consumer);
     if (actual.length !== inputs.length || new Set(actual.map(value => value.name)).size !== inputs.length || actual.some(value =>
         value.kind !== "product" || value.package?.toLowerCase() !== "walletruntime" || !inputs.includes(value.name))) {

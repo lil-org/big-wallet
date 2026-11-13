@@ -2716,6 +2716,54 @@ def parser():
     return parser
 
 
+def host_services():
+    return SimpleNamespace(
+        ROOT=ROOT,
+        TOOLS=TOOLS,
+        HOST_RESERVE_BYTES=HOST_RESERVE_BYTES,
+        RunnerError=RunnerError,
+        atomic_json=atomic_json,
+        bootstrap_source_digest=bootstrap_source_digest,
+        bounded_json_bytes=bounded_json_bytes,
+        build_tools=build_tools,
+        check_capacity=check_capacity,
+        checked=checked,
+        clear_owned_operation=clear_owned_operation,
+        clone_cow=clone_cow,
+        clone_vm=clone_vm,
+        completed_baseline_record=completed_baseline_record,
+        configure_guest_hardware=configure_guest_hardware,
+        ensure_disk_idle=ensure_disk_idle,
+        environment_attested=environment_attested,
+        execution_lock=execution_lock,
+        finish_baseline_promotion=finish_baseline_promotion,
+        guest_access_module=guest_access_module,
+        guest_setup_password=guest_setup_password,
+        hash_regular_file=hash_regular_file,
+        inherited_safari_preparation=inherited_safari_preparation,
+        macos_identity=macos_identity,
+        manifest_node=manifest_node,
+        matches_source_vm=matches_source_vm,
+        new_exchange=new_exchange,
+        open_regular=open_regular,
+        operation_stop_requested=operation_stop_requested,
+        parser=parser,
+        private_directory=private_directory,
+        publish_stop=publish_stop,
+        read_json=read_json,
+        reconcile_interrupted_operation=reconcile_interrupted_operation,
+        register_operation=register_operation,
+        require_candidate_runtime_pins=require_candidate_runtime_pins,
+        run_tests=run_tests,
+        setup=setup,
+        setup_viewer_binary=setup_viewer_binary,
+        snapshot_source=snapshot_source,
+        stop_owned_process=stop_owned_process,
+        validate_vm=validate_vm,
+        xcode_upgrade_module=xcode_upgrade_module,
+    )
+
+
 def main(argv=None):
     args = parser().parse_args(argv)
     os.umask(0o077)
@@ -2731,10 +2779,10 @@ def main(argv=None):
             if os.path.lexists(path):
                 check_owned_directory(path)
             upgrade = macos_upgrade_module() if args.command == 'upgrade-macos' else xcode_upgrade_module()
-            return upgrade.upgrade(SimpleNamespace(**globals()), args, path.resolve())
+            return upgrade.upgrade(host_services(), args, path.resolve())
         state = private_directory(path).resolve()
         if args.command == 'upgrade-macos':
-            return macos_upgrade_module().upgrade(SimpleNamespace(**globals()), args, state)
+            return macos_upgrade_module().upgrade(host_services(), args, state)
         environment = read_json(TOOLS / 'environment.json')
         if args.command == 'doctor':
             report = host_doctor(args, state, environment)
@@ -2742,7 +2790,7 @@ def main(argv=None):
             return 0 if report['status'] == 'passed' else 2
         if args.command in ('status', 'stop'):
             if (state / 'macos-upgrade-active.json').exists():
-                controlled = macos_upgrade_module().control(SimpleNamespace(**globals()), args, state)
+                controlled = macos_upgrade_module().control(host_services(), args, state)
                 if controlled is not None:
                     return controlled
             if getattr(args, 'diagnose', False):
@@ -2765,17 +2813,17 @@ def main(argv=None):
             return 0
         with execution_lock(state):
             if (state / 'macos-upgrade-active.json').exists():
-                macos_upgrade_module().ensure_no_supervisor(SimpleNamespace(**globals()), state)
+                macos_upgrade_module().ensure_no_supervisor(host_services(), state)
             if args.command == 'recover-artifacts':
                 active = read_json(state / 'active.json') if (state / 'active.json').exists() else {}
                 if is_recovery_operation(state, active):
                     reconcile_interrupted_operation(state)
-                return recovery_module().recover(SimpleNamespace(**globals()), args, state)
+                return recovery_module().recover(host_services(), args, state)
             reconcile_interrupted_operation(state)
             if args.command == 'setup':
                 return setup(args, state, environment)
             if args.command == 'upgrade-xcode':
-                return xcode_upgrade_module().upgrade(SimpleNamespace(**globals()), args, state)
+                return xcode_upgrade_module().upgrade(host_services(), args, state)
             return run_tests(args, state, environment)
     except (RunnerError, OSError, ValueError, KeyError, RuntimeError) as error:
         print(f'VM testing blocked: {error}', file=sys.stderr)

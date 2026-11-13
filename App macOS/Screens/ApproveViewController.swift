@@ -7,7 +7,14 @@ import Cocoa
 
 class ApproveViewController: NSViewController, NativeWalletProtectedContent {
 
-    var walletAccess = NativeWalletAccess()
+    let walletAccess: NativeWalletAccess
+
+    init?(coder: NSCoder, access: NativeWalletAccess) {
+        walletAccess = access
+        super.init(coder: coder)
+    }
+
+    required init?(coder: NSCoder) { return nil }
 
     enum Decision {
         case rejected
@@ -54,8 +61,9 @@ class ApproveViewController: NSViewController, NativeWalletProtectedContent {
                      walletId: String,
                      solanaClusterOptions: SolanaClusterOptions? = nil,
                      review: NativeApprovalReview,
+                     access: NativeWalletAccess,
                      completion: @escaping (ApproveViewController, Decision) -> Void) -> ApproveViewController {
-        let new = instantiate(ApproveViewController.self)
+        let new = instantiate(ApproveViewController.self) { ApproveViewController(coder: $0, access: access) }
         new.walletId = walletId
         new.review = review
         new.completion = completion

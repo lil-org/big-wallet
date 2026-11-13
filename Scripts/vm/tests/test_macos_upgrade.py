@@ -645,7 +645,7 @@ class MacOSUpgradeTests(unittest.TestCase):
     def test_success_orders_fresh_setup_roundtrips_full_suite_promotion_and_default_verification(self):
         stack, installer = self.execution_fixture()
         with stack:
-            upgrade.execute(host, self.state, self.directory, self.result, self.save)
+            upgrade.execute(host.host_services(), self.state, self.directory, self.result, self.save)
         self.assertEqual(self.calls, [('setup', self.staged), ('run', self.staged, ['safari']),
                                      ('run', self.staged, []), ('run', self.state, ['test'])])
         self.assertEqual(self.result['status'], 'passed')
