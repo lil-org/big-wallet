@@ -331,7 +331,8 @@ async function terminalPopupRecoverySession({queuedSuccessor = false} = {}) {
                 kind: current === terminal ? "signMessage" : "accountSelection", title: "Review",
                 reviewToken: "00000000-0000-0000-0000-000000000101",
                 ...(current === terminal ? {meta: "0x010203", account: {name: "Account", croppedAddress: "1234"}} :
-                    {allowsEmptySelection: false, canSelectNetwork: false, accounts: []}),
+                    {allowsEmptySelection: false, canSelectNetwork: false, accounts: [],
+                        accountPage: 0, accountPageCount: 1, selectedAccounts: []}),
             }}};
         }
         throw new Error(`Unexpected popup command ${message.subject}`);
@@ -687,6 +688,7 @@ test("popup recovery reopens an idle empty queue after a delayed admission outli
             if (message.subject === "getApprovalState") {
                 return {status: "ok", approval: {id: request.handle.id, host: "one.example", state: "review", actions: ["approve", "reject"],
                     review: {kind: "accountSelection", title: "Connect", allowsEmptySelection: false, canSelectNetwork: false, accounts: [],
+                        accountPage: 0, accountPageCount: 1, selectedAccounts: [],
                         reviewToken: "00000000-0000-0000-0000-000000000101"}}};
             }
             assert.equal(message.subject, "rejectRequest");
@@ -1277,6 +1279,8 @@ async function popupSession({approve = () => new Promise(() => {}), transformSta
         allowsEmptySelection: false, canSelectNetwork: true, networks: [{chainId: "0x1", name: "Ethereum", isSelected: true}],
         accounts: [{walletId: "chosen-wallet", coin: "ethereum", address: "0x" + "1".repeat(40), derivationPath: "path",
             name: "Selected", croppedAddress: "1111", isSelected: true}],
+        accountPage: 0, accountPageCount: 1,
+        selectedAccounts: [{walletId: "chosen-wallet", coin: "ethereum", address: "0x" + "1".repeat(40), derivationPath: "path"}],
     }});
     session.oracle.register(request);
     session.browser = new BrowserLifecycle({scheduler: session.scheduler, mode: "popup", onNative: event => session.observeNativeMessage(event), native: async message => {

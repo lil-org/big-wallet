@@ -374,7 +374,7 @@ class PopupRequestController {
         this.owner = owner;
         this.request = request;
         this.presentation = {
-            accounts: null, chainId: null, networksKey: null, cluster: null,
+            accounts: null, accountReviewToken: null, chainId: null, networksKey: null, cluster: null,
             lastStateJSON: null,
         };
         this.nativeState = null;
@@ -416,6 +416,9 @@ class PopupRequestController {
 
     async sendCommand({subject, payload, reviewToken}) {
         if (!this.isActive) { return null; }
+        if (subject === "getApprovalState" && payload === undefined && this.state?.review?.accountPage > 0) {
+            payload = {accountPage: this.state.review.accountPage};
+        }
         try {
             const response = await settleNativeMessage(Promise.resolve(nativeMessage(
                 subject, this.request.id, payload, this.request.requestToken,
@@ -607,6 +610,10 @@ class PopupRequestController {
             document.getElementById(field).disabled = busy;
         }
         document.getElementById("network-select").disabled = busy;
+        const selection = this.state?.review;
+        const pagingDisabled = busy || this.interaction.kind !== "viewing" || selection?.kind !== "accountSelection";
+        document.getElementById("accounts-previous").disabled = pagingDisabled || selection.accountPage === 0;
+        document.getElementById("accounts-next").disabled = pagingDisabled || selection.accountPage + 1 >= selection.accountPageCount;
         for (const id of ["accounts-list", "clusters"]) {
             for (const row of document.getElementById(id).children) { row.disabled = busy; }
         }
@@ -708,24 +715,38 @@ class PopupRequestController {
 
         setOptionalText("accounts-empty", "accounts-empty", review.emptyMessage);
 
-        this.renderCheckedList("accounts-list", review.accounts || [], "account-row",
+        const pageAccounts = review.accounts || [];
+        const offPageSelections = this.presentation.accounts
+            .filter(selected => !pageAccounts.some(account => sameAccount(selected, account)))
+            .map(selected => ({...selected,
+                name: selected.coin === "ethereum" ? "Ethereum" : "Solana",
+                croppedAddress: selected.address,
+            }));
+        this.renderCheckedList("accounts-list", [...offPageSelections, ...pageAccounts], "account-row",
                           (row, account) => { fillAccountRow(row, account, true); },
                           account => this.isSelectedAccount(account),
-                          account => this.toggleAccount(account));
+                          account => this.toggleAccount(account),
+                          BigWalletPopupWire.accountIdentityKey);
+        setHidden("accounts-pages", review.accountPageCount <= 1);
+        setText("accounts-page", formatted(localized("queuePosition", "%1$@ of %2$@"),
+            String(review.accountPage + 1), String(review.accountPageCount)));
+    }
+
+    async changeAccountPage(offset) {
+        const review = this.state?.review;
+        if (!this.isActive || this.isSubmitting || this.interaction.kind !== "viewing" || review?.kind !== "accountSelection") { return; }
+        const accountPage = review.accountPage + offset;
+        if (accountPage < 0 || accountPage >= review.accountPageCount) { return; }
+        const operation = this.beginCommand("accountPage");
+        const outcome = await this.sendCommand({subject: "getApprovalState", payload: {accountPage}});
+        this.completeCommand(operation, outcome);
     }
 
     reconcileAccountSelection(state) {
         const review = state.review;
-        const availableAccounts = review.accounts || [];
-        if (this.presentation.accounts === null) {
-            this.presentation.accounts = availableAccounts
-                .filter(account => account.isSelected)
-                .map(accountIdentity);
-        } else {
-            this.presentation.accounts = this.presentation.accounts
-                .map(selected => availableAccounts.find(account => sameAccount(selected, account)))
-                .filter(account => typeof account !== "undefined")
-                .map(accountIdentity);
+        if (this.presentation.accountReviewToken !== review.reviewToken) {
+            this.presentation.accountReviewToken = review.reviewToken;
+            this.presentation.accounts = review.selectedAccounts.map(accountIdentity);
         }
 
         if (!review.canSelectNetwork || !Array.isArray(review.networks)) {
@@ -738,7 +759,7 @@ class PopupRequestController {
         this.presentation.chainId = selectedNetwork ? selectedNetwork.chainId : null;
     }
 
-    renderCheckedList(containerId, items, rowClass, fillRow, isSelected, select) {
+    renderCheckedList(containerId, items, rowClass, fillRow, isSelected, select, itemKey) {
         const container = document.getElementById(containerId);
         container.innerHTML = "";
         for (const [index, item] of items.entries()) {
@@ -746,6 +767,8 @@ class PopupRequestController {
             const selected = isSelected(item);
             row.type = "button";
             row.id = `${containerId}-${index}`;
+            const key = itemKey(item);
+            row.dataset.selectionKey = key;
             if (containerId === "accounts-list") {
                 row.setAttribute("aria-label", `${item.name} ${item.address}`);
             }
@@ -761,7 +784,9 @@ class PopupRequestController {
                 if (!this.isActive || this.isSubmitting || this.interaction.kind !== "viewing") { return; }
                 select(item);
                 this.adoptState(this.state);
-                const replacement = document.getElementById(containerId).children[index];
+                const rows = [...document.getElementById(containerId).children];
+                const replacement = rows.find(row => row.dataset.selectionKey === key)
+                    ?? rows[Math.min(index, rows.length - 1)];
                 if (replacement && typeof replacement.focus === "function") {
                     replacement.focus();
                 }
@@ -857,7 +882,8 @@ class PopupRequestController {
                                   row.appendChild(label);
                               },
                               cluster => cluster.value === this.presentation.cluster,
-                              cluster => { this.presentation.cluster = cluster.value; });
+                              cluster => { this.presentation.cluster = cluster.value; },
+                              cluster => cluster.value);
         } else {
             this.presentation.cluster = null;
         }
@@ -1503,6 +1529,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     document.getElementById("button-approve").addEventListener("click", () => popupQueue.currentRequest?.approveCurrent());
     document.getElementById("button-reject").addEventListener("click", () => popupQueue.currentRequest?.rejectCurrent());
+    document.getElementById("accounts-previous").addEventListener("click", () => popupQueue.currentRequest?.changeAccountPage(-1));
+    document.getElementById("accounts-next").addEventListener("click", () => popupQueue.currentRequest?.changeAccountPage(1));
     document.getElementById("idle-switch-account").addEventListener("click", () => popupQueue.switchAccountFromIdle());
     document.getElementById("idle-check-status").addEventListener("click", () => popupQueue.refreshIdleStatus());
     document.getElementById("editor-apply").addEventListener("click", () => popupQueue.currentRequest?.applyEdits());

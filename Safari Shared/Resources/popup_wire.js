@@ -27,8 +27,12 @@
     }
 
     function validSelection(review) {
-        return hasUniqueValues(review.accounts, accountIdentityKey) &&
+        return review.accountPage < review.accountPageCount &&
+            hasUniqueValues(review.selectedAccounts, account => account.coin) &&
+            hasUniqueValues(review.accounts, accountIdentityKey) &&
             hasUniqueValues(review.accounts.filter(account => account.isSelected), account => account.coin) &&
+            review.accounts.every(account => account.isSelected ===
+                review.selectedAccounts.some(selected => accountIdentityKey(selected) === accountIdentityKey(account))) &&
             (review.canSelectNetwork || !review.accounts.some(account => account.coin === "ethereum")) &&
             (!review.canSelectNetwork || review.networks !== undefined) &&
             (!review.networks || hasUniqueValues(review.networks, network => network.chainId) &&

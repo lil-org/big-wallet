@@ -135,6 +135,18 @@ select, input[type="text"] {
     background: var(--fill);
 }
 
+.account-pages {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.account-pages span {
+    flex: 1;
+    text-align: center;
+}
+
 .idle-pending-spinner {
     margin: 12px auto;
 }
@@ -191,6 +203,7 @@ button.account-row {
     display: block;
     font-size: 13px;
     color: var(--fg-secondary);
+    overflow-wrap: anywhere;
 }
 
 .account-check {

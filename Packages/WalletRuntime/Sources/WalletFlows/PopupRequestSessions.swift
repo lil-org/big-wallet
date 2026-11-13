@@ -23,10 +23,13 @@ public final class PopupRequestSessions {
 
     public func dispatch(request: InternalSafariRequest, profileIdentifier: UUID?) async -> PopupResponse {
         let response = await authority.dispatch(request: request, profileIdentifier: profileIdentifier)
-        return render(response)
+        let accountPage: Int
+        if case .popup(.getApprovalState(_, let page)) = request.command { accountPage = page }
+        else { accountPage = 0 }
+        return render(response, accountPage: accountPage)
     }
 
-    private func render(_ response: PopupAuthorityResponse) -> PopupResponse {
+    private func render(_ response: PopupAuthorityResponse, accountPage: Int) -> PopupResponse {
         switch response {
         case .queue(let pending, let completed):
             return .queue(presenter.pendingResponse(requests: pending.map(presenter.pendingRequest),
@@ -35,7 +38,7 @@ public final class PopupRequestSessions {
         case .command(let status, let state):
             let presentation = state.map {
                 presenter.state(id: $0.id, host: $0.host, presentation: $0.content,
-                    transactionMutationAllowed: $0.transactionMutationAllowed)
+                    transactionMutationAllowed: $0.transactionMutationAllowed, accountPage: accountPage)
             }
             return .command(.init(status: status, approvalState: presentation))
         }

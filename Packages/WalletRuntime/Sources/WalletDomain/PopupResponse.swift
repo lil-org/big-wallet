@@ -307,6 +307,9 @@ public struct PopupNetworkOption: Encodable, Sendable {
 
 public struct PopupSelectionReview: Encodable, Sendable {
     public var accounts: [PopupSelectableAccount]
+    public let accountPage: Int
+    public let accountPageCount: Int
+    public let selectedAccounts: [InternalSafariRequest.SelectedAccount]
     public let networks: [PopupNetworkOption]?
     public let canSelectNetwork: Bool
     public let allowsEmptySelection: Bool
@@ -317,8 +320,13 @@ public struct PopupSelectionReview: Encodable, Sendable {
         for index in accounts.indices { accounts[index].display.icon = nil }
     }
 
-    public init(accounts: [PopupSelectableAccount], networks: [PopupNetworkOption]?, canSelectNetwork: Bool, allowsEmptySelection: Bool, emptyMessage: String?, primaryTitle: String?) {
+    public init(accounts: [PopupSelectableAccount], accountPage: Int = 0, accountPageCount: Int = 1,
+                selectedAccounts: [InternalSafariRequest.SelectedAccount] = [], networks: [PopupNetworkOption]?,
+                canSelectNetwork: Bool, allowsEmptySelection: Bool, emptyMessage: String?, primaryTitle: String?) {
         self.accounts = accounts
+        self.accountPage = accountPage
+        self.accountPageCount = accountPageCount
+        self.selectedAccounts = selectedAccounts
         self.networks = networks
         self.canSelectNetwork = canSelectNetwork
         self.allowsEmptySelection = allowsEmptySelection

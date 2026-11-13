@@ -3991,7 +3991,17 @@
               "isCustom": false
             }
           ],
-          "primaryTitle": "Connect"
+          "primaryTitle": "Connect",
+          "accountPage": 0,
+          "accountPageCount": 1,
+          "selectedAccounts": [
+            {
+              "walletId": "wallet-1",
+              "address": "0x1111111111111111111111111111111111111111",
+              "coin": "ethereum",
+              "derivationPath": "m/44'/60'/0'/0/0"
+            }
+          ]
         }
       }
     }
@@ -4035,7 +4045,17 @@
               "isCustom": false
             }
           ],
-          "primaryTitle": "Connect"
+          "primaryTitle": "Connect",
+          "accountPage": 0,
+          "accountPageCount": 1,
+          "selectedAccounts": [
+            {
+              "walletId": "wallet-1",
+              "address": "0x1111111111111111111111111111111111111111",
+              "coin": "ethereum",
+              "derivationPath": "m/44'/60'/0'/0/0"
+            }
+          ]
         }
       }
     }
@@ -4077,7 +4097,17 @@
             "isCustom": false
           }
         ],
-        "primaryTitle": "Connect"
+        "primaryTitle": "Connect",
+        "accountPage": 0,
+        "accountPageCount": 1,
+        "selectedAccounts": [
+          {
+            "walletId": "wallet-1",
+            "address": "0x1111111111111111111111111111111111111111",
+            "coin": "ethereum",
+            "derivationPath": "m/44'/60'/0'/0/0"
+          }
+        ]
       }
     }
   },
@@ -4110,7 +4140,17 @@
           "isCustom": false
         }
       ],
-      "primaryTitle": "Connect"
+      "primaryTitle": "Connect",
+      "accountPage": 0,
+      "accountPageCount": 1,
+      "selectedAccounts": [
+        {
+          "walletId": "wallet-1",
+          "address": "0x1111111111111111111111111111111111111111",
+          "coin": "ethereum",
+          "derivationPath": "m/44'/60'/0'/0/0"
+        }
+      ]
     }
   },
   {
@@ -4159,7 +4199,10 @@
           "accounts": [],
           "canSelectNetwork": false,
           "allowsEmptySelection": true,
-          "emptyMessage": "No accounts"
+          "emptyMessage": "No accounts",
+          "accountPage": 0,
+          "accountPageCount": 1,
+          "selectedAccounts": []
         }
       }
     }
@@ -4185,7 +4228,10 @@
           "accounts": [],
           "canSelectNetwork": false,
           "allowsEmptySelection": true,
-          "emptyMessage": "No accounts"
+          "emptyMessage": "No accounts",
+          "accountPage": 0,
+          "accountPageCount": 1,
+          "selectedAccounts": []
         }
       }
     }
@@ -4209,7 +4255,10 @@
         "accounts": [],
         "canSelectNetwork": false,
         "allowsEmptySelection": true,
-        "emptyMessage": "No accounts"
+        "emptyMessage": "No accounts",
+        "accountPage": 0,
+        "accountPageCount": 1,
+        "selectedAccounts": []
       }
     }
   },
@@ -4224,7 +4273,10 @@
       "accounts": [],
       "canSelectNetwork": false,
       "allowsEmptySelection": true,
-      "emptyMessage": "No accounts"
+      "emptyMessage": "No accounts",
+      "accountPage": 0,
+      "accountPageCount": 1,
+      "selectedAccounts": []
     }
   },
   {

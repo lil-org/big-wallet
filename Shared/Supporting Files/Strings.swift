@@ -141,6 +141,8 @@ struct Strings {
     static let connectWallet = loc("Connect Wallet")
     static let addAccountToConnect = loc("Add %@ account to connect")
     static let queuePosition = loc("%1$@ of %2$@")
+    static let previous = loc("Previous")
+    static let next = loc("Next")
 
     static let viewOnGithub = "GitHub"
     static let viewOnX = "𝕏"
@@ -178,6 +180,8 @@ struct Strings {
             "refresh": refresh,
             "calculating": calculating.withEllipsis,
             "queuePosition": queuePosition,
+            "previous": previous,
+            "next": next,
         ]
     }
     

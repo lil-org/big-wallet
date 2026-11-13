@@ -128,6 +128,7 @@ test("popup queue and command replies retain their exact identity contracts", ()
 test("popup selection identities fold Ethereum address case and retain distinct derivation paths", () => {
     const source = structuredClone(fixtures.selectAccount);
     source.review.accounts[0].address = `0x${"ab".repeat(20)}`;
+    source.review.selectedAccounts[0].address = source.review.accounts[0].address;
     source.review.accounts.push({
         ...source.review.accounts[0],
         address: `0x${"AB".repeat(20)}`,
@@ -137,6 +138,26 @@ test("popup selection identities fold Ethereum address case and retain distinct 
 
     source.review.accounts[1].derivationPath = "m/44'/60'/0'/0/1";
     assert.deepEqual(wire.decodeApprovalState(source, source.id), source);
+});
+
+test("popup selection pages validate bounds and include off-page selections", () => {
+    const source = structuredClone(fixtures.selectAccount);
+    source.review.accountPageCount = 2;
+    source.review.accounts = [];
+    assert.deepEqual(wire.decodeApprovalState(source, source.id), source);
+    for (const edit of [
+        review => { review.accountPage = -1; },
+        review => { review.accountPage = review.accountPageCount; },
+        review => { review.accountPageCount = 0; },
+        review => { review.selectedAccounts.push({...review.selectedAccounts[0], derivationPath: "another"}); },
+        review => { review.accounts = Array.from({length: 33}, (_, index) => ({
+            ...fixtures.selectAccount.review.accounts[0], derivationPath: String(index), isSelected: false,
+        })); },
+    ]) {
+        const invalid = structuredClone(source);
+        edit(invalid.review);
+        assert.equal(wire.decodeApprovalState(invalid, invalid.id), null);
+    }
 });
 
 test("popup editors validate and preserve fee fields outside the active fee model", () => {

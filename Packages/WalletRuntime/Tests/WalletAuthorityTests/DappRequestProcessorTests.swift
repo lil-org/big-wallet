@@ -3732,8 +3732,9 @@ final class DappRequestProcessorTests: XCTestCase {
             let request = try decodeInternalRequest(message)
             XCTAssertEqual(request.id, 42)
             switch request.command {
-            case .popup(.getApprovalState(let identity)):
+            case .popup(.getApprovalState(let identity, let accountPage)):
                 XCTAssertEqual(subject, "getApprovalState")
+                XCTAssertEqual(accountPage, 0)
                 XCTAssertNil(identity.reviewToken)
             case .popup(.retryApproval(let identity)):
                 XCTAssertEqual(subject, "retryApproval")
@@ -3757,6 +3758,24 @@ final class DappRequestProcessorTests: XCTestCase {
                 invalid["requestToken"] = token
                 XCTAssertThrowsError(try decodeInternalRequest(invalid))
             }
+        }
+    }
+
+    func testApprovalReadDecodesBoundedAccountPages() throws {
+        var message: [String: Any] = [
+            "id": 42, "workflowVersion": ExtensionBridge.workflowVersion, "subject": "getApprovalState",
+            "requestToken": "00000000-0000-0000-0000-000000000001",
+        ]
+        for page in [0, 1, 16_383] {
+            message["payload"] = ["accountPage": page]
+            guard case .popup(.getApprovalState(_, let decodedPage)) = try decodeInternalRequest(message).command else {
+                return XCTFail("Expected account page request")
+            }
+            XCTAssertEqual(decodedPage, page)
+        }
+        for page: Any in [-1, 16_384, 0.5, true, "1", NSNull()] {
+            message["payload"] = ["accountPage": page]
+            XCTAssertThrowsError(try decodeInternalRequest(message))
         }
     }
 

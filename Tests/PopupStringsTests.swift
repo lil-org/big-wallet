@@ -70,7 +70,8 @@ final class PopupStringsTests: XCTestCase {
     private func selectionResponse(
         count: Int,
         name: (Int) -> String,
-        icon: String? = nil
+        icon: String? = nil,
+        networkCount: Int? = nil
     ) -> PopupResponse {
         reviewResponse(.accountSelection(PopupSelectionReview(
             accounts: (0..<count).map { index in
@@ -83,7 +84,7 @@ final class PopupStringsTests: XCTestCase {
                     isSelected: false
                 )
             },
-            networks: (0..<count).map { index in
+            networks: (0..<(networkCount ?? count)).map { index in
                 .init(chainId: "0x" + String(index + 1, radix: 16), name: name(index),
                       isCustom: true, isSelected: index == count - 1)
             },
@@ -125,9 +126,11 @@ final class PopupStringsTests: XCTestCase {
     }
 
     @MainActor
-    private func presentationEnvironment() -> PopupApprovalStatePresenter.Environment {
+    private func presentationEnvironment(
+        accountName: @escaping @MainActor @Sendable (String, WalletAccount) -> String = { _, account in account.croppedAddress }
+    ) -> PopupApprovalStatePresenter.Environment {
         .init(networks: { [] }, customNetworks: { [] }, price: { _ in nil },
-            accountName: { _, account in account.croppedAddress }, icon: { _ in nil },
+            accountName: accountName, icon: { _ in nil },
             transactionValue: { $0.valueWithSymbol(chain: $1, price: $2, withLabel: true) },
             transactionFeeLines: { $0.feeSummaryLines(chain: $1, price: $2) },
             transactionDataInterpretation: { $0.diplayDataInterpretation },
@@ -194,6 +197,8 @@ final class PopupStringsTests: XCTestCase {
         XCTAssertFalse(supportedLocales.isEmpty)
 
         for key in [
+            "Next",
+            "Previous",
             "Manage Wallets",
             "Manage wallets in Big Wallet, then return here to connect.",
             "Approval interrupted. Please try again from the website.",
@@ -357,22 +362,22 @@ final class PopupStringsTests: XCTestCase {
         }
     }
 
-    func testMoreThan256AccountAndNetworkChoicesRemainExactWhenTheyFit() throws {
+    func testAccountPageAndMoreThan256NetworkChoicesRemainExactWhenTheyFit() throws {
         let bounded = try boundedResponse(
-            selectionResponse(count: 300, name: { "Choice \($0)" }),
+            selectionResponse(count: 32, name: { "Choice \($0)" }, networkCount: 300),
             for: approvalStateRequest()
         )
         let review = try XCTUnwrap(bounded["review"] as? [String: Any])
         let accounts = try XCTUnwrap(review["accounts"] as? [[String: Any]])
         let networks = try XCTUnwrap(review["networks"] as? [[String: Any]])
-        XCTAssertEqual(accounts.count, 300)
+        XCTAssertEqual(accounts.count, 32)
         XCTAssertEqual(networks.count, 300)
-        XCTAssertEqual(accounts.last?["name"] as? String, "Choice 299")
+        XCTAssertEqual(accounts.last?["name"] as? String, "Choice 31")
         XCTAssertEqual(networks.last?["name"] as? String, "Choice 299")
     }
 
     func testControlHeavySelectionBecomesAtomicFallbackWithoutShorteningLabels() throws {
-        let response = selectionResponse(count: 256, name: { _ in String(repeating: "\u{0000}", count: 256) })
+        let response = selectionResponse(count: 32, name: { _ in String(repeating: "\u{0000}", count: 5_000) })
         let bounded = try boundedResponse(response, for: approvalStateRequest())
         XCTAssertEqual(bounded["state"] as? String, "error")
         XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
@@ -388,6 +393,84 @@ final class PopupStringsTests: XCTestCase {
         XCTAssertEqual(bounded["state"] as? String, "error")
         XCTAssertEqual(bounded["actions"] as? [String], ["reject"])
         XCTAssertNil(bounded["review"])
+    }
+
+    @MainActor
+    func testLargeAccountCatalogRemainsSelectableAcrossBoundedPages() throws {
+        let accounts = (0..<4_001).map { index in
+            SpecificWalletAccount(walletId: "wallet", account: WalletAccount(
+                address: "0x" + String(format: "%040x", index), coin: .ethereum,
+                derivation: .custom, derivationPath: "m/44'/60'/0'/0/\(index)",
+                publicKey: "", extendedPublicKey: ""
+            ))
+        }
+        let solana = SpecificWalletAccount(walletId: "solana", account: WalletAccount(
+            address: String(repeating: "1", count: 32), coin: .solana,
+            derivation: .custom, derivationPath: "m/44'/501'/0'/0'", publicKey: "", extendedPublicKey: ""
+        ))
+        let allAccounts = [solana] + accounts
+        let catalog = WalletAccountCatalog(accounts: allAccounts.map {
+            WalletAccountDescriptor(walletID: $0.walletId, account: $0.account)
+        })
+        XCTAssertTrue(catalog.isValid)
+        let selected = try XCTUnwrap(accounts.last)
+        let review = PopupReviewSnapshot(
+            reviewToken: UUID(uuidString: reviewToken)!,
+            content: .selectAccount(action: .init(
+                coinType: .ethereum, selectedAccounts: [selected], initiallyConnectedProviders: [], network: nil
+            ), draft: .init(selectedAccounts: [selected], network: nil)),
+            reviewCatalog: WalletReviewCatalog(
+                identity: .init(generation: nil, catalogData: try catalog.canonicalData()), orderedAccounts: allAccounts
+            ), feedback: nil
+        )
+        let longName = "A" + String(repeating: "\u{0301}", count: 300_000)
+        let presenter = PopupApprovalStatePresenter(
+            environment: presentationEnvironment(accountName: { _, _ in longName }), messages: messages
+        )
+        var presentedAddresses = [String]()
+        for page in 0..<126 {
+            let state = presenter.state(id: 91, host: "wallet.example", presentation: .review(review), accountPage: page)
+            let response = try boundedResponse(.command(.init(status: .ok(), approvalState: state)),
+                for: approvalStateRequest())
+            let rendered = try XCTUnwrap(response["review"] as? [String: Any])
+            let rows = try XCTUnwrap(rendered["accounts"] as? [[String: Any]])
+            let selectedAccounts = try XCTUnwrap(rendered["selectedAccounts"] as? [[String: Any]])
+            XCTAssertEqual(rendered["accountPage"] as? Int, page)
+            XCTAssertEqual(rendered["accountPageCount"] as? Int, 126)
+            XCTAssertEqual(selectedAccounts.map { $0["address"] as? String }, [selected.account.address])
+            XCTAssertEqual(rows.count, page == 125 ? 1 : 32)
+            for row in rows {
+                let name = try XCTUnwrap(row["name"] as? String)
+                XCTAssertEqual(name.unicodeScalars.count, 256)
+                presentedAddresses.append(try XCTUnwrap(row["address"] as? String))
+            }
+        }
+        XCTAssertEqual(presentedAddresses, accounts.map(\.account.address))
+        let clamped = popupApprovalJSON(presenter.state(id: 91, host: "wallet.example", presentation: .review(review), accountPage: 16_383))
+        XCTAssertEqual((clamped["review"] as? [String: Any])?["accountPage"] as? Int, 125)
+    }
+
+    @MainActor
+    func testAccountPagingKeepsNetworkSelectionWhenEthereumIsOnAnotherPage() throws {
+        let accounts = (0..<33).map { index in
+            SpecificWalletAccount(walletId: "wallet", account: WalletAccount(
+                address: index == 0 ? "0x" + String(repeating: "1", count: 40) : String(repeating: "1", count: 32),
+                coin: index == 0 ? .ethereum : .solana, derivation: .custom,
+                derivationPath: "m/44'/\(index)'/0'", publicKey: "", extendedPublicKey: ""
+            ))
+        }
+        let review = PopupReviewSnapshot(
+            reviewToken: UUID(), content: .switchAccount(action: .init(
+                coinType: nil, selectedAccounts: [], initiallyConnectedProviders: [], network: nil
+            ), draft: .init(selectedAccounts: [], network: nil)),
+            reviewCatalog: .init(identity: .init(generation: nil, catalogData: Data()), orderedAccounts: accounts),
+            feedback: nil
+        )
+        let presenter = PopupApprovalStatePresenter(environment: presentationEnvironment(), messages: messages)
+        let state = popupApprovalJSON(presenter.state(id: 91, host: "wallet.example", presentation: .review(review), accountPage: 1))
+        let rendered = try XCTUnwrap(state["review"] as? [String: Any])
+        XCTAssertEqual(rendered["canSelectNetwork"] as? Bool, true)
+        XCTAssertEqual((rendered["accounts"] as? [[String: Any]])?.count, 1)
     }
 
     func testNonFiniteTransactionJSONUsesGenericFallback() throws {
@@ -585,6 +668,10 @@ final class PopupStringsTests: XCTestCase {
                     walletId: "wallet-1", address: "0x" + String(repeating: "1", count: 40), coin: .ethereum,
                     derivationPath: "m/44'/60'/0'/0/0", isSelected: true
                 )],
+                selectedAccounts: [.init(SpecificWalletAccount(walletId: "wallet-1", account: WalletAccount(
+                    address: "0x" + String(repeating: "1", count: 40), coin: .ethereum,
+                    derivation: .custom, derivationPath: "m/44'/60'/0'/0/0", publicKey: "", extendedPublicKey: ""
+                )))],
                 networks: [.init(chainId: "0x1", name: "Ethereum", isCustom: false, isSelected: true)],
                 canSelectNetwork: true, allowsEmptySelection: false, emptyMessage: nil, primaryTitle: "Connect"
             )), title: "Connect Wallet"),

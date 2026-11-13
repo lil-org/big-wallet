@@ -3,11 +3,18 @@
 import Foundation
 
 public struct InternalSafariRequest: Decodable, Sendable {
-    public struct SelectedAccount: Decodable, Sendable {
+    public struct SelectedAccount: Codable, Sendable {
         public let walletId: String
         public let address: String
         public let coin: InpageProvider
         public let derivationPath: String
+
+        public init(_ account: SpecificWalletAccount) {
+            walletId = account.walletId
+            address = account.account.address
+            coin = account.account.coin.correspondingInpageProvider
+            derivationPath = account.account.derivationPath
+        }
 
         public init(from decoder: Decoder) throws {
             try self.init(validatedJSON: WireProtocol.object(.selectedAccount, from: decoder).json)
@@ -164,7 +171,7 @@ public struct InternalSafariRequest: Decodable, Sendable {
 
     public enum PopupCommand: Sendable {
         case getPendingRequests
-        case getApprovalState(PopupIdentity)
+        case getApprovalState(PopupIdentity, accountPage: Int = 0)
         case retryApproval(PopupIdentity)
         case approveRequest(PopupIdentity, ApprovalPayload)
         case rejectRequest(PopupIdentity)
@@ -176,7 +183,7 @@ public struct InternalSafariRequest: Decodable, Sendable {
             switch self {
             case .getPendingRequests:
                 return nil
-            case .getApprovalState(let identity), .retryApproval(let identity),
+            case .getApprovalState(let identity, _), .retryApproval(let identity),
                  .approveRequest(let identity, _), .rejectRequest(let identity),
                  .setTransactionSpeed(let identity, _), .applyTransactionEdits(let identity, _),
                  .retryTransaction(let identity):
@@ -244,7 +251,9 @@ public struct InternalSafariRequest: Decodable, Sendable {
         case "rejectRequest":
             command = .popup(.rejectRequest(try fields.popupIdentity()))
         case "getApprovalState":
-            command = .popup(.getApprovalState(try fields.popupIdentity()))
+            let payload: [String: Any]? = try fields.optional("payload")
+            let page: Int = try payload.map { try NativeRequestFields($0).value("accountPage") } ?? 0
+            command = .popup(.getApprovalState(try fields.popupIdentity(), accountPage: page))
         case "retryApproval":
             command = .popup(.retryApproval(try fields.popupIdentity()))
         case "approveRequest":

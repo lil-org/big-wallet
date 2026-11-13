@@ -52,7 +52,7 @@ public final class PopupApprovalStatePresenter {
         }
     }
 
-    private static let maximumSelectableAccountIcons = 32
+    private static let accountsPerPage = 32
     private let iconDataURLs = NSCache<NSString, NSString>()
     private let environment: Environment
     private let messages: AuthorityMessages
@@ -115,7 +115,8 @@ public final class PopupApprovalStatePresenter {
         id: Int,
         host: String? = nil,
         presentation: PopupAuthorityState.Content,
-        transactionMutationAllowed: Bool = false
+        transactionMutationAllowed: Bool = false,
+        accountPage: Int = 0
     ) -> PopupApprovalState {
         let content: PopupApprovalState.Content
         switch presentation {
@@ -124,7 +125,8 @@ public final class PopupApprovalStatePresenter {
                 id: id,
                 host: host,
                 review: review,
-                transactionMutationAllowed: transactionMutationAllowed
+                transactionMutationAllowed: transactionMutationAllowed,
+                accountPage: accountPage
             )
         case .authenticating: content = .authenticating
         case .working: content = .working
@@ -148,13 +150,15 @@ public final class PopupApprovalStatePresenter {
         id: Int,
         host: String?,
         review: PopupReviewSnapshot,
-        transactionMutationAllowed: Bool
+        transactionMutationAllowed: Bool,
+        accountPage: Int
     ) -> PopupApprovalState {
         let content: PopupReview.Content
         var actions: [PopupApprovalState.Action] = [.approve, .reject]
         switch review.content {
         case .selectAccount(let action, let draft), .switchAccount(let action, let draft):
-            content = .accountSelection(selectionReview(action: action, draft: draft, reviewCatalog: review.reviewCatalog))
+            content = .accountSelection(selectionReview(action: action, draft: draft,
+                reviewCatalog: review.reviewCatalog, requestedPage: accountPage))
         case .approveMessage(let action):
             content = .signMessage(messageReview(action: action))
         case .approveTransaction(let action, let transaction):
@@ -202,19 +206,21 @@ public final class PopupApprovalStatePresenter {
     private func selectionReview(
         action: SelectAccountAction,
         draft: PopupReviewSnapshot.Selection,
-        reviewCatalog: WalletReviewCatalog?
+        reviewCatalog: WalletReviewCatalog?,
+        requestedPage: Int
     ) -> PopupSelectionReview {
+        let candidates = (reviewCatalog?.orderedAccounts ?? []).filter {
+            action.coinType == nil || $0.account.coin == action.coinType
+        }
+        let pageCount = max(1, (candidates.count + Self.accountsPerPage - 1) / Self.accountsPerPage)
+        let page = min(max(0, requestedPage), pageCount - 1)
         var accounts = [PopupSelectableAccount]()
-        var hasEthereumCandidates = false
-        for specific in reviewCatalog?.orderedAccounts ?? [] {
+        for specific in candidates.dropFirst(page * Self.accountsPerPage).prefix(Self.accountsPerPage) {
             let account = specific.account
-            if let coinType = action.coinType, account.coin != coinType { continue }
-            if account.coin == .ethereum { hasEthereumCandidates = true }
             accounts.append(PopupSelectableAccount(
                 display: accountModel(
                     walletId: specific.walletId,
-                    account: account,
-                    includesIcon: accounts.count < Self.maximumSelectableAccountIcons
+                    account: account
                 ),
                 walletId: specific.walletId,
                 address: account.address,
@@ -226,10 +232,14 @@ public final class PopupApprovalStatePresenter {
         let canSelectNetwork = action.coinType.map { $0 == .ethereum } ?? (
             action.initiallyConnectedProviders.contains(.ethereum) ||
                 draft.selectedAccounts.contains { $0.account.coin == .ethereum } ||
-                hasEthereumCandidates
+                candidates.contains { $0.account.coin == .ethereum }
         )
         return PopupSelectionReview(
             accounts: accounts,
+            accountPage: page,
+            accountPageCount: pageCount,
+            selectedAccounts: candidates.filter { draft.selectedAccounts.contains($0) }
+                .map(InternalSafariRequest.SelectedAccount.init),
             networks: canSelectNetwork ? networksList(selected: draft.network) : nil,
             canSelectNetwork: canSelectNetwork,
             allowsEmptySelection: !action.initiallyConnectedProviders.isEmpty,
@@ -320,13 +330,12 @@ public final class PopupApprovalStatePresenter {
 
     private func accountModel(
         walletId: String,
-        account: WalletAccount,
-        includesIcon: Bool = true
+        account: WalletAccount
     ) -> PopupDisplayAccount {
         PopupDisplayAccount(
-            name: environment.accountName(walletId, account),
+            name: String(String.UnicodeScalarView(environment.accountName(walletId, account).unicodeScalars.prefix(256))),
             croppedAddress: account.croppedAddress,
-            icon: includesIcon ? iconDataURL(for: account) : nil
+            icon: iconDataURL(for: account)
         )
     }
 

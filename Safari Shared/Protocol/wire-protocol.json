@@ -499,7 +499,19 @@
               "ref": "RequestToken"
             }
           },
-          "optional": {}
+          "optional": {
+            "payload": {
+              "type": "object",
+              "required": {
+                "accountPage": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 16383
+                }
+              },
+              "optional": {}
+            }
+          }
         },
         {
           "type": "object",
@@ -1750,13 +1762,31 @@
               "type": "array",
               "items": {
                 "ref": "PopupSelectableAccount"
-              }
+              },
+              "maxItems": 32
             },
             "canSelectNetwork": {
               "type": "boolean"
             },
             "allowsEmptySelection": {
               "type": "boolean"
+            },
+            "accountPage": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 16383
+            },
+            "accountPageCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            "selectedAccounts": {
+              "type": "array",
+              "items": {
+                "ref": "SelectedAccount"
+              },
+              "maxItems": 2
             }
           },
           "optional": {

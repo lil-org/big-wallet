@@ -1052,22 +1052,31 @@ function messageState(request = pendingRequest(), overrides = {}, envelope = {})
     };
 }
 
+function selectedIdentity(account) {
+    const {walletId, address, coin, derivationPath} = account;
+    return {walletId, address, coin, derivationPath};
+}
+
 function selectionState(request = pendingRequest(), overrides = {}, envelope = {}) {
+    const accounts = overrides.accounts ?? [{
+        name: "Primary",
+        croppedAddress: "1111…1111",
+        walletId: "wallet",
+        address: "11111111111111111111111111111111",
+        coin: "solana",
+        derivationPath: "m/44'/501'/0'",
+        isSelected: true,
+    }];
     return {
         host: request.host,
         id: request.id,
         state: "review",
         actions: ["approve", "reject"],
         review: {
-            accounts: [{
-                name: "Primary",
-                croppedAddress: "1111…1111",
-                walletId: "wallet",
-                address: "11111111111111111111111111111111",
-                coin: "solana",
-                derivationPath: "m/44'/501'/0'",
-                isSelected: true,
-            }],
+            accounts,
+            accountPage: 0,
+            accountPageCount: 1,
+            selectedAccounts: accounts.filter(account => account.isSelected).map(selectedIdentity),
             allowsEmptySelection: false,
             canSelectNetwork: false,
             kind: "accountSelection",
@@ -2436,6 +2445,9 @@ test("account selection belongs to one controller and old rows cannot change its
             title: "Switch account",
             reviewToken: requestToken(101),
             accounts: accounts.map(account => ({...account, isSelected: account.coin === selected})),
+            accountPage: 0,
+            accountPageCount: 1,
+            selectedAccounts: accounts.filter(account => account.coin === selected).map(selectedIdentity),
             allowsEmptySelection: false,
             canSelectNetwork: true,
             networks: [{chainId: "0x1", name: "Ethereum", isSelected: true}],
@@ -2467,6 +2479,129 @@ test("account selection belongs to one controller and old rows cannot change its
             walletId: "wallet",
         }],
     });
+});
+
+test("account paging preserves off-page selections and replaces only the selected coin", async () => {
+    const solana = {...selectionState().review.accounts[0], isSelected: false};
+    const ethereum = {name: "Ethereum", croppedAddress: "1111…1111", walletId: "wallet",
+        coin: "ethereum", address: "0x" + "1".repeat(40), derivationPath: "m/44'/60'/0'/0/0", isSelected: true};
+    const replacement = {...ethereum, name: "Second Ethereum", address: "0x" + "2".repeat(40),
+        derivationPath: "m/44'/60'/0'/0/1", isSelected: false};
+    const stateFor = (request, accountPage = 0) => selectionState(request, {
+        accounts: accountPage === 0 ? [solana] : [ethereum, replacement],
+        accountPage, accountPageCount: 2, selectedAccounts: [selectedIdentity(ethereum)],
+        canSelectNetwork: true, networks: [{chainId: "0x1", name: "Ethereum", isSelected: true}],
+    });
+    const harness = await reviewedPopup(stateFor);
+    harness.handlers.native = (message, fallback) => message.subject === "getApprovalState"
+        ? commandReply(stateFor(harness.controller.request, message.payload?.accountPage ?? 0)) : fallback(message);
+    assert.equal(harness.get("accounts-page").textContent, "1 of 2");
+    assert.equal(harness.get("accounts-previous").disabled, true);
+    assert.equal(harness.get("accounts-list").children[0]["aria-pressed"], "true");
+    assert.equal(harness.get("accounts-list").children[0].children[0].children[1].textContent, ethereum.address);
+    await harness.get("accounts-list").children[1].click();
+    await harness.get("accounts-next").click();
+    assert.equal(harness.get("accounts-list").children[0].children[0].children[1].textContent, solana.address);
+    assert.equal(harness.get("accounts-list").children[1]["aria-pressed"], "true");
+    assert.equal(harness.get("accounts-page").textContent, "2 of 2");
+    assert.equal(harness.get("accounts-next").disabled, true);
+    await harness.get("accounts-list").children[2].click();
+    await harness.get("accounts-previous").click();
+    assert.equal(harness.get("accounts-list").children[1]["aria-pressed"], "true");
+    assert.deepEqual(harness.nativeMessages.map(message => message.payload), [{accountPage: 1}, {accountPage: 0}]);
+    assert.equal(approvalMessages(harness).length, 0);
+    await harness.get("button-approve").click();
+    assert.deepEqual(approvalMessages(harness)[0].payload, {
+        chainId: "0x1", selectedAccounts: [selectedIdentity(solana), selectedIdentity(replacement)],
+    });
+});
+
+test("an off-page default is visible and removable before connecting", async () => {
+    const solana = {...selectionState().review.accounts[0], isSelected: false};
+    const ethereum = {walletId: "wallet", coin: "ethereum", address: "0x" + "1".repeat(40),
+        derivationPath: "m/44'/60'/0'/0/0"};
+    const harness = await reviewedPopup(request => selectionState(request, {
+        accounts: [solana], accountPageCount: 2, selectedAccounts: [ethereum],
+        canSelectNetwork: true, networks: [{chainId: "0x1", name: "Ethereum", isSelected: true}],
+    }));
+    const selectedRow = harness.get("accounts-list").children[0];
+    assert.equal(selectedRow["aria-pressed"], "true");
+    assert.equal(selectedRow["aria-label"], `Ethereum ${ethereum.address}`);
+    assert.equal(selectedRow.children[0].children[1].textContent, ethereum.address);
+    await selectedRow.click();
+    assert.equal(harness.get("accounts-list").children.length, 1);
+    assert.equal(harness.document.activeElement, harness.get("accounts-list").children[0]);
+    assert.equal(harness.get("button-approve").disabled, true);
+    await harness.get("accounts-list").children[0].click();
+    await harness.get("button-approve").click();
+    assert.deepEqual(approvalMessages(harness)[0].payload.selectedAccounts, [selectedIdentity(solana)]);
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["approveRequest"]);
+});
+
+test("account focus follows the chosen identity when a pinned row disappears", async () => {
+    const accounts = [1, 2, 3].map(index => ({
+        name: `Account ${index}`, croppedAddress: String(index), walletId: "wallet", coin: "ethereum",
+        address: "0x" + String(index).repeat(40), derivationPath: `m/44'/60'/0'/0/${index}`, isSelected: false,
+    }));
+    for (const index of [0, 1]) {
+        const harness = await reviewedPopup(request => selectionState(request, {
+            accounts: accounts.slice(1), accountPageCount: 2, selectedAccounts: [selectedIdentity(accounts[0])],
+            canSelectNetwork: true, networks: [{chainId: "0x1", name: "Ethereum", isSelected: true}],
+        }));
+        const chosen = harness.get("accounts-list").children[index + 1];
+        chosen.focus();
+        await chosen.click();
+        assert.equal(harness.get("accounts-list").children.length, 2);
+        assert.equal(harness.document.activeElement, harness.get("accounts-list").children[index]);
+        assert.equal(harness.document.activeElement["aria-pressed"], "true");
+        assert.deepEqual(normalized(harness.controller.presentation.accounts), [selectedIdentity(accounts[index + 1])]);
+        await harness.document.activeElement.click();
+        assert.equal(harness.document.activeElement, harness.get("accounts-list").children[index]);
+        assert.equal(harness.document.activeElement["aria-pressed"], "false");
+        assert.deepEqual(normalized(harness.controller.presentation.accounts), []);
+        assert.equal(harness.get("button-approve").disabled, true);
+        assert.equal(approvalMessages(harness).length, 0);
+    }
+});
+
+test("account paging blocks duplicate actions and resets selection when the review changes", async () => {
+    const harness = await reviewedPopup(request => selectionState(request, {accountPageCount: 2}));
+    const controller = harness.controller;
+    const gate = deferred();
+    harness.handlers.native = (message, fallback) => message.subject === "getApprovalState" ? gate.promise : fallback(message);
+    const navigation = harness.get("accounts-next").click();
+    await flushPopup();
+    assert.equal(harness.get("accounts-next").disabled, true);
+    assert.equal(harness.get("button-approve").disabled, true);
+    await harness.get("accounts-next").emit("click");
+    await harness.get("button-approve").emit("click");
+    assert.equal(harness.nativeMessages.length, 1);
+    gate.resolve(commandReply(selectionState(controller.request, {
+        accounts: [], selectedAccounts: [], reviewToken: requestToken(102),
+    })));
+    await navigation;
+    assert.deepEqual(normalized(controller.presentation.accounts), []);
+    assert.equal(harness.get("accounts-pages").classList.contains("hidden"), true);
+    assert.equal(harness.get("button-approve").textContent, "Refresh");
+});
+
+test("a late account page cannot replace the next request", async () => {
+    const harness = await reviewedPopup(request => selectionState(request, {accountPageCount: 2}));
+    const original = harness.controller.request;
+    const gate = deferred();
+    harness.handlers.native = (message, fallback) => message.subject === "getApprovalState" && message.requestToken === original.requestToken
+        ? gate.promise : fallback(message);
+    const navigation = harness.get("accounts-next").click();
+    await flushPopup();
+    const replacement = pendingRequest(original.id, 2);
+    harness.setState(replacement, messageState(replacement));
+    await harness.show([replacement]);
+    const current = harness.controller;
+    gate.resolve(commandReply(selectionState(original, {accountPage: 1, accountPageCount: 2})));
+    await navigation;
+    assert.equal(harness.controller, current);
+    assert.equal(harness.get("request-title").textContent, "Sign message");
+    assert.equal(harness.get("section-accounts").classList.contains("hidden"), true);
 });
 
 test("approval reads have one token-only shape for refresh and polling", async () => {
