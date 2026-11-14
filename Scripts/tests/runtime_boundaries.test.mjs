@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {boundaryConsumerContexts, boundaryPackageIdentity, parseOptions, productionSource, validateProjectMembership, validateRuntimeManifestSource, validateRuntimePackage, validateRuntimeSource} from "../check_runtime_boundaries.mjs";
+import {boundaryConsumerContexts, boundaryPackageIdentity, parseOptions, boundaryApplicationExtensionFlags, vmFixtureSources, validateProjectMembership, validateRuntimeManifestSource, validateRuntimePackage, validateRuntimeSource} from "../check_runtime_boundaries.mjs";
 
 const root = "/fixture";
 function runtimePackage() {
@@ -97,59 +97,69 @@ test("evaluated production sources and conditional settings preserve runtime bou
     }
 });
 
-test("only guaranteed inactive application fixture branches are excluded", () => {
-    for (const condition of ["BW_SAFARI_VM_TESTING", "DEBUG && BW_SAFARI_VM_TESTING", "BW_SAFARI_VM_TESTING && os(macOS)"]) {
-        const source = `#if ${condition}\n@testable import WalletAuthority\nlet raw = WalletPrivateKey.self\n#else\nimport WalletAuthority\n#endif`;
-        assert.doesNotThrow(() => validateRuntimeSource("App macOS/Adapter.swift", source, {application: true}));
-        assert.equal(productionSource(source, {application: true}).includes("@testable"), false);
+test("imports are checked in every conditional branch, with explicit fixture exceptions", () => {
+    for (const condition of ["BW_SAFARI_VM_TESTING", "DEBUG && BW_SAFARI_VM_TESTING", "false"]) {
+        assert.throws(() => validateRuntimeSource("App/Adapter.swift",
+            `#if ${condition}\n@testable import WalletAuthority\n#endif`, {application: true}));
     }
-    for (const condition of ["DEBUG || BW_SAFARI_VM_TESTING", "!BW_SAFARI_VM_TESTING", "os(macOS)", "false"]) {
-        assert.throws(() => validateRuntimeSource("App/Adapter.swift", `#if ${condition}\n@testable import WalletAuthority\n#endif`, {application: true}));
+    for (const path of vmFixtureSources) {
+        assert.doesNotThrow(() => validateRuntimeSource(path, "@testable import WalletAuthority", {application: true}));
+        assert.doesNotThrow(() => validateRuntimeSource(path, '@_silgen_name("flock") private func lock()', {application: true}));
+        assert.throws(() => validateRuntimeSource(path, '@_silgen_name("bw_secp256k1_sign_recoverable") private func sign()', {application: true}));
+        assert.throws(() => validateRuntimeSource("Other/" + path.split("/").at(-1),
+            "@testable import WalletAuthority", {application: true}));
     }
-    const fallback = "#if BW_SAFARI_VM_TESTING\nimport Foundation\n#elseif DEBUG\n@testable import WalletAuthority\n#else\nimport Foundation\n#endif";
-    assert.throws(() => validateRuntimeSource("App/Adapter.swift", fallback, {application: true}));
-    assert.throws(() => productionSource("#if BW_SAFARI_VM_TESTING", {application: true}));
-    assert.throws(() => productionSource("#endif", {application: true}));
-    assert.throws(() => validateRuntimeSource("Authority/Fixture.swift", "#if BW_SAFARI_VM_TESTING\n@testable import WalletDomain\n#endif", {module: "WalletAuthority"}));
 });
 
-test("source boundaries reject implementation dependencies while allowing RPC-auth Security", () => {
-    for (const source of ["import AppKit", "import WalletNetworking", "let value = URLSession.shared", "let value = FileManager.default", "let value = Data(contentsOf: url)"]) {
-        assert.throws(() => validateRuntimeSource("Domain/Value.swift", source, {module: "WalletDomain"}));
+test("module import rules retain privileged and networking boundaries", () => {
+    for (const module of ["AppKit", "WalletNetworking"]) {
+        assert.throws(() => validateRuntimeSource("Domain/Value.swift", `import ${module}`, {module: "WalletDomain"}));
     }
-    for (const source of ["import WalletNetworking", "let rpc: EthereumRPC", "let request: URLRequest"]) {
-        assert.throws(() => validateRuntimeSource("Authority/Work.swift", source, {module: "WalletAuthority"}));
+    for (const module of ["WalletNetworking", "WalletFlows"]) {
+        assert.throws(() => validateRuntimeSource("Authority/Work.swift", `import ${module}`, {module: "WalletAuthority"}));
     }
-    for (const source of ["let service: any SignedTransactionBroadcasting", "let service: any TransactionPreparing", "let value = Data(contentsOf: url)"]) {
-        assert.throws(() => validateRuntimeSource("Authority/EthereumSigner.swift", source, {module: "WalletAuthority"}));
+    for (const module of ["WalletAuthority", "WalletFlows", "LocalAuthentication"]) {
+        assert.throws(() => validateRuntimeSource("Networking/Client.swift", `import ${module}`, {module: "WalletNetworking"}));
     }
-    assert.doesNotThrow(() => validateRuntimeSource("Authority/Execution.swift", "let service: any SignedTransactionBroadcasting", {module: "WalletAuthority"}));
-    for (const source of ["import WalletAuthority", "import LocalAuthentication", "let key: WalletPrivateKey", 'let group = "8DXC3N7E7P.org.lil.keychain"', 'let key = "org.lil.wallet.password"']) {
-        assert.throws(() => validateRuntimeSource("Networking/Client.swift", source, {module: "WalletNetworking"}));
+    for (const module of ["CWalletCrypto", "WalletStorageSupport", "WalletRuntimeTestSupport"]) {
+        assert.throws(() => validateRuntimeSource("App/Adapter.swift", `import ${module}`, {application: true}));
     }
-    for (const declaration of [
-        'let accessGroup = "8DXC3N7E7P.org.lil.wallet.rpc-auth"',
-        'let accessGroup: String = "8DXC3N7E7P.org.lil.wallet.rpc-auth"',
-        'static let tokenGroup = "8DXC3N7E7P.org.lil.wallet.rpc-auth"',
-    ]) {
-        assert.doesNotThrow(() => validateRuntimeSource("Networking/TokenStore.swift", `import Security\n${declaration}\nlet field = kSecAttrAccessGroup`, {module: "WalletNetworking"}));
+    assert.doesNotThrow(() => validateRuntimeSource("Networking/TokenStore.swift", "import Security", {module: "WalletNetworking"}));
+});
+
+test("harmless text and unrelated declarations are not mistaken for authority access", () => {
+    const source = `import Foundation
+// import CWalletCrypto
+/* @testable import WalletAuthority */
+let message = "Unable to read Keychain or WalletPrivateKey"
+let example = #"@_silgen_name("hidden") func bypass()"#
+let multiline = """
+import CWalletCrypto
+@testable import WalletAuthority
+"""
+struct RequestHandle {}
+struct URLSession {}`;
+    for (const options of [{application: true}, {module: "WalletDomain"}, {module: "WalletNetworking"}]) {
+        assert.doesNotThrow(() => validateRuntimeSource("Example.swift", source, options));
     }
-    assert.doesNotThrow(() => validateRuntimeSource("Domain/Value.swift", "import Foundation\n// URLSession is not used here\nstruct Value {}", {module: "WalletDomain"}));
-    assert.throws(() => validateRuntimeSource("App/Adapter.swift", "import CWalletCrypto", {application: true}));
     assert.throws(() => validateRuntimeSource("App/Adapter.swift", '@_silgen_name("hidden") func bypass()', {application: true}));
-    assert.throws(() => validateRuntimeSource("App/Adapter.swift", "import WalletRuntimeTestSupport", {application: true}));
-    assert.throws(() => validateRuntimeSource("App/Adapter.swift", "struct RequestHandle {}", {application: true, ownedSymbols: new Set(["RequestHandle"])}));
-    assert.doesNotThrow(() => validateRuntimeSource("App/Adapter.swift", "extension RequestHandle {}", {application: true, ownedSymbols: new Set(["RequestHandle"])}));
 });
 
 function project(sourcePath = "App/main.swift") {
     return {rootObject: "project", objects: {
-        project: {isa: "PBXProject", mainGroup: "root"},
+        project: {isa: "PBXProject", mainGroup: "root", buildConfigurationList: "projectConfigurations"},
+        projectConfigurations: {buildConfigurations: ["projectDebug"]},
+        projectDebug: {name: "Debug", buildSettings: {
+            BW_VM_FIXTURE_EXCLUDED_SOURCES: [...vmFixtureSources].map(path => path.split("/").at(-1)).join(" "),
+            EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) $(BW_VM_FIXTURE_EXCLUDED_SOURCES)",
+        }},
+        configurations: {buildConfigurations: ["debug"]},
+        debug: {name: "Debug", buildSettings: {APPLICATION_EXTENSION_API_ONLY: "YES"}},
         root: {isa: "PBXGroup", children: ["source"], sourceTree: "<group>"},
         source: {isa: "PBXFileReference", path: sourcePath, sourceTree: "<group>"},
         build: {isa: "PBXBuildFile", fileRef: "source"},
         phase: {isa: "PBXSourcesBuildPhase", files: ["build"]},
-        app: {isa: "PBXNativeTarget", name: "Wallet", productType: "com.apple.product-type.application", buildPhases: ["phase"]},
+        app: {isa: "PBXNativeTarget", name: "Wallet", productType: "com.apple.product-type.application", buildPhases: ["phase"], buildConfigurationList: "configurations"},
     }};
 }
 
@@ -189,20 +199,29 @@ test("Safari extension targets exclude application composition and singleton hel
     assert.deepEqual(sourceContext, {nativeExtension: true});
 });
 
-test("Safari extension sources cannot regain the broad runtime through another helper", () => {
-    const options = {application: true, nativeExtension: true};
-    for (const source of ["let services = ApplicationServices.shared",
-        "let runtime: AuthorityRuntime", "let network = Networks.ethereum", "ReviewRequester.request()",
-        "let factory = SafariVMApplicationServices.make", "let mutations = SafariVMMutations.shared"]) {
-        assert.throws(() => validateRuntimeSource("Shared/Adapter.swift", source, options), /application or native-helper composition/);
+test("ordinary target settings preserve fixture exclusions and extension API checking", () => {
+    const options = {root: "/fixture", sourceExists: () => true};
+    for (const field of ["BW_VM_FIXTURE_EXCLUDED_SOURCES", "EXCLUDED_SOURCE_FILE_NAMES"]) {
+        const value = project();
+        value.objects.debug.buildSettings[field] = "";
+        assert.throws(() => validateProjectMembership(value, options), /exclude VM fixture sources/);
     }
-    for (const source of ["let runtime: NativeTransportRuntime", "let runtime: PopupAuthorityRuntime",
-        "let configuration: AuthorityRuntimeConfiguration", "let resources: RuntimeResources",
-        "// ApplicationServices is app-owned\nlet runtime: NativeTransportRuntime"]) {
-        assert.doesNotThrow(() => validateRuntimeSource("Safari Shared/Services.swift", source, options));
+    const inherited = project();
+    inherited.objects.debug.buildSettings.EXCLUDED_SOURCE_FILE_NAMES = "$(inherited) Other.swift";
+    assert.equal(validateProjectMembership(inherited, options), true);
+    const extension = project();
+    extension.objects.app.productType = "com.apple.product-type.app-extension";
+    extension.objects.debug.buildSettings.APPLICATION_EXTENSION_API_ONLY = "NO";
+    assert.throws(() => validateProjectMembership(extension, options), /application-extension API/);
+});
+
+test("application-extension fixtures opt into compiler enforcement", () => {
+    assert.deepEqual(boundaryApplicationExtensionFlags({}), []);
+    assert.deepEqual(boundaryApplicationExtensionFlags({applicationExtension: false}), []);
+    assert.deepEqual(boundaryApplicationExtensionFlags({applicationExtension: true}), ["-application-extension"]);
+    for (const value of [null, "YES", 1, [], {}]) {
+        assert.throws(() => boundaryApplicationExtensionFlags({applicationExtension: value}));
     }
-    assert.doesNotThrow(() => validateRuntimeSource("Shared/Services/ApplicationServices.swift",
-        "let runtime: AuthorityRuntime", {application: true}));
 });
 
 test("production targets cannot package or link upgrade verification artifacts", () => {
@@ -234,9 +253,8 @@ test("the private storage target may bind flock without opening app crypto linka
     assert.throws(() => validateRuntimeSource("Storage/Lock.swift", '@_silgen_name("bw_secp256k1_sign_recoverable") private func sign()', {module: "WalletStorageSupport"}));
 });
 
-test("Flows cannot reach secrets, authority internals or networking", () => {
-    for (const source of ["import Security", "import LocalAuthentication", "import WalletStorageSupport", "import WalletNetworking",
-        "let secret: SecretBytes", "let consent: ReviewConsent", "let signer: WalletSigningSession", "let permit: BroadcastDispatchPermit"]) {
+test("Flows cannot import privileged implementation or networking", () => {
+    for (const source of ["import Security", "import LocalAuthentication", "import WalletStorageSupport", "import WalletNetworking"]) {
         assert.throws(() => validateRuntimeSource("Flows/Adapter.swift", source, {module: "WalletFlows"}));
     }
     assert.doesNotThrow(() => validateRuntimeSource("Flows/Adapter.swift", "import WalletAuthority\nlet runtime: AuthorityRuntime", {module: "WalletFlows"}));

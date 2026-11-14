@@ -19,7 +19,7 @@ spec.loader.exec_module(host)
 
 
 class RunSnapshotBindingTests(unittest.TestCase):
-    sources = ('VMGuestAgent.swift', 'guest_runner', 'guest_bootstrap.mjs', 'provision_guest.sh', 'environment.json')
+    sources = ('VMGuestAgent.swift', 'guest_runner', 'guest_bootstrap.mjs', 'provision_guest.sh', 'provision_guest.mjs', 'environment.json')
     harness = ('guest.mjs', 'test_manifest.mjs', 'result_audit.mjs', 'test_policy.mjs', 'test_discovery.mjs')
 
     def setUp(self):

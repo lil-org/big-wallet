@@ -590,7 +590,7 @@ def bootstrap_tool_hashes(binaries):
 def bootstrap_source_digest(directory=None):
     directory = TOOLS if directory is None else Path(directory)
     names = ('VMGuestAgent.swift', 'guest_runner', 'guest_bootstrap.mjs',
-             'provision_guest.sh', 'environment.json')
+             'provision_guest.sh', 'provision_guest.mjs', 'environment.json')
     return hashlib.sha256(b''.join(name.encode() + b'\0' + (directory / name).read_bytes() for name in names)).hexdigest()
 
 
@@ -630,7 +630,7 @@ def verify_setup_sources(exchange, expected, environment, configuration=None, bo
     staged_environment['runtimes'] = [runtime_pin(runtime) for runtime in staged.get('runtimes', [])]
     if staged != configuration or staged_environment != environment:
         raise RunnerError('The staged setup configuration does not match the requested guest environment')
-    for name in ('guest_runner', 'guest_bootstrap.mjs', 'provision_guest.sh'):
+    for name in ('guest_runner', 'guest_bootstrap.mjs', 'provision_guest.sh', 'provision_guest.mjs'):
         digest = hash_regular_file(snapshot / name)
         if hash_regular_file(provision / name) != digest or name in bootstrap_tools and bootstrap_tools[name] != digest:
             raise RunnerError('The staged guest installer does not match the captured setup source')
@@ -843,7 +843,8 @@ def stage_provisioning(args, state, exchange, environment, record, binaries):
         if 'runtimes' in staged_environment:
             staged_environment['runtimes'] = [runtime_pin(runtime) for runtime in previous_runtimes]
         expected_tools = bootstrap_tool_hashes(binaries)
-        expected_tools['provision_guest.sh'] = hash_regular_file(TOOLS / 'provision_guest.sh')
+        for name in ('provision_guest.sh', 'provision_guest.mjs'):
+            expected_tools[name] = hash_regular_file(TOOLS / name)
         if (staged_environment == environment and all((input_directory / name).is_file() and
                 hash_regular_file(input_directory / name) == digest for name, digest in expected_tools.items())):
             for item in input_directory.iterdir():
@@ -895,7 +896,7 @@ def stage_provisioning(args, state, exchange, environment, record, binaries):
         (destination / 'proof-key').write_bytes(proof)
         (destination / 'proof-key').chmod(0o600)
         configuration.setdefault('signing', {})['proofKeyFile'] = 'proof-key'
-    for name in ('provision_guest.sh', 'guest_runner', 'guest_bootstrap.mjs'):
+    for name in ('provision_guest.sh', 'provision_guest.mjs', 'guest_runner', 'guest_bootstrap.mjs'):
         shutil.copyfile(TOOLS / name, destination / name)
     shutil.copyfile(binaries / 'VMGuestAgent', destination / 'VMGuestAgent')
     shutil.copyfile(ROOT / 'Scripts/alchemy_jwt_request_proof_key.sha256',

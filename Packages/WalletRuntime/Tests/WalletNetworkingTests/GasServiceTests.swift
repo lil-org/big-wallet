@@ -3118,19 +3118,23 @@ final class GasServiceTests: XCTestCase {
                 terminalSuccess.fulfill()
             }
             do {
-                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(
-                    Transaction(
+                var observedTransaction = Transaction(
                         from: "0x0",
                         to: "",
                         value: nil,
                         data: "0x"
-                    ), forceGasCheck: false, network: makeNetwork(chainID: EthereumNetwork.ethMainnetChainId))
+                    )
+                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(observedTransaction, forceGasCheck: false, network: makeNetwork(chainID: EthereumNetwork.ethMainnetChainId))
                 {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -3184,22 +3188,25 @@ final class GasServiceTests: XCTestCase {
                 terminalSuccess.fulfill()
             }
             do {
-                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(
-                    Transaction(
+                var observedTransaction = Transaction(
                         from: "0x0",
                         to: "",
                         value: nil,
                         data: "0x"
-                    ), forceGasCheck: false,
-                    network: makeNetwork(
+                    )
+                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(observedTransaction, forceGasCheck: false, network: makeNetwork(
                         chainID: EthereumNetwork.ethMainnetChainId
                     ))
                 {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -3271,17 +3278,20 @@ final class GasServiceTests: XCTestCase {
                 unexpectedCompletion.fulfill()
             }
             do {
-                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(
-                    transaction, forceGasCheck: true,
-                    network: makeNetwork(
+                var observedTransaction = transaction
+                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(observedTransaction, forceGasCheck: true, network: makeNetwork(
                         chainID: EthereumNetwork.ethMainnetChainId
                     ))
                 {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -3380,17 +3390,20 @@ final class GasServiceTests: XCTestCase {
                 terminalSuccess.fulfill()
             }
             do {
-                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(
-                    transaction, forceGasCheck: false,
-                    network: makeNetwork(
+                var observedTransaction = transaction
+                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(observedTransaction, forceGasCheck: false, network: makeNetwork(
                         chainID: EthereumNetwork.ethMainnetChainId
                     ))
                 {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -3458,17 +3471,20 @@ final class GasServiceTests: XCTestCase {
                 terminalSuccess.fulfill()
             }
             do {
-                for try await event in ethereum.prepareTransaction(
-                    transaction, forceGasCheck: false,
-                    network: makeNetwork(
+                var observedTransaction = transaction
+                for try await event in ethereum.prepareTransaction(observedTransaction, forceGasCheck: false, network: makeNetwork(
                         chainID: EthereumNetwork.ethMainnetChainId
                     ))
                 {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -3517,17 +3533,20 @@ final class GasServiceTests: XCTestCase {
                 terminalSuccess.fulfill()
             }
             do {
-                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(
-                    transaction, forceGasCheck: true,
-                    network: makeNetwork(
+                var observedTransaction = transaction
+                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(observedTransaction, forceGasCheck: true, network: makeNetwork(
                         chainID: EthereumNetwork.ethMainnetChainId
                     ))
                 {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -4024,15 +4043,20 @@ final class GasServiceTests: XCTestCase {
                 completed.fulfill()
             }
             do {
+                var observedTransaction = transaction(gasPrice: "0x6d")
                 for try await event in EthereumTransactionPreparation(
                     rpc: makeEIP1559RPCStub(chainID: chainID),
                     interpretTransaction: { _ in nil }
-                ).prepareTransaction(transaction(gasPrice: "0x6d"), forceGasCheck: false, network: network) {
+                ).prepareTransaction(observedTransaction, forceGasCheck: false, network: network) {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -4134,14 +4158,18 @@ final class GasServiceTests: XCTestCase {
                 completed.fulfill()
             }
             do {
-                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(
-                    transaction, forceGasCheck: false, network: network)
+                var observedTransaction = transaction
+                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(observedTransaction, forceGasCheck: false, network: network)
                 {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -4209,14 +4237,18 @@ final class GasServiceTests: XCTestCase {
                 completed.fulfill()
             }
             do {
-                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(
-                    transaction, forceGasCheck: false, network: network)
+                var observedTransaction = transaction
+                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(observedTransaction, forceGasCheck: false, network: network)
                 {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -4279,13 +4311,18 @@ final class GasServiceTests: XCTestCase {
                 completed.fulfill()
             }
             do {
-                for try await event in ethereum.prepareTransaction(transaction, forceGasCheck: false, network: network)
+                var observedTransaction = transaction
+                for try await event in ethereum.prepareTransaction(observedTransaction, forceGasCheck: false, network: network)
                 {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -4310,11 +4347,7 @@ final class GasServiceTests: XCTestCase {
             return
         }
         switch await preflight(prepared, using: ethereum, network: network) {
-        case .safe(let preflightTransaction, let estimate):
-            XCTAssertEqual(
-                preflightTransaction.preparedFee,
-                .legacy(gasPrice: 10)
-            )
+        case .safe(let estimate):
             XCTAssertEqual(
                 estimate.suggestedFee(for: prepared.feeIntent),
                 .legacy(gasPrice: 70)
@@ -4482,8 +4515,7 @@ final class GasServiceTests: XCTestCase {
                 completed.fulfill()
             }
             do {
-                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(
-                    Transaction(
+                var observedTransaction = Transaction(
                         from: "0x0000000000000000000000000000000000000001",
                         to: "0x0000000000000000000000000000000000000002",
                         nonce: "0x0",
@@ -4491,13 +4523,18 @@ final class GasServiceTests: XCTestCase {
                         value: "0x0",
                         data: "0x",
                         feeIntent: .automatic
-                    ), forceGasCheck: false, network: network)
+                    )
+                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(observedTransaction, forceGasCheck: false, network: network)
                 {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -4580,11 +4617,7 @@ final class GasServiceTests: XCTestCase {
                 completed.fulfill()
             }
             do {
-                for try await event in EthereumTransactionPreparation(
-                    rpc: rpc,
-                    interpretTransaction: { _ in nil }
-                ).prepareTransaction(
-                    Transaction(
+                var observedTransaction = Transaction(
                         from: "0x0000000000000000000000000000000000000001",
                         to: "0x0000000000000000000000000000000000000002",
                         nonce: "0x0",
@@ -4596,17 +4629,25 @@ final class GasServiceTests: XCTestCase {
                             maxFeePerGas: 110
                         ),
                         feeSource: .dapp
-                    ), forceGasCheck: false,
-                    network: makeNetwork(
+                    )
+                for try await event in EthereumTransactionPreparation(
+                    rpc: rpc,
+                    interpretTransaction: { _ in nil }
+                ).prepareTransaction(observedTransaction, forceGasCheck: false, network: makeNetwork(
                         chainID: chainID,
                         rpcURL: rpcURL + "/low-cap-without-curve"
                     ))
                 {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        latestUpdate = observedTransaction
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -4676,21 +4717,24 @@ final class GasServiceTests: XCTestCase {
                 completed.fulfill()
             }
             do {
+                var observedTransaction = transaction
                 for try await event in EthereumTransactionPreparation(
                     rpc: rpc,
                     interpretTransaction: { _ in nil }
-                ).prepareTransaction(
-                    transaction, forceGasCheck: false,
-                    network: makeNetwork(
+                ).prepareTransaction(observedTransaction, forceGasCheck: false, network: makeNetwork(
                         chainID: 100,
                         rpcURL: rpcURL + "/zero-tip-dapp-type-2"
                     ))
                 {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -4741,11 +4785,7 @@ final class GasServiceTests: XCTestCase {
                 completed.fulfill()
             }
             do {
-                for try await event in EthereumTransactionPreparation(
-                    rpc: rpc,
-                    interpretTransaction: { _ in nil }
-                ).prepareTransaction(
-                    Transaction(
+                var observedTransaction = Transaction(
                         from: "0x0000000000000000000000000000000000000001",
                         to: "0x0000000000000000000000000000000000000002",
                         nonce: "0x0",
@@ -4757,17 +4797,25 @@ final class GasServiceTests: XCTestCase {
                             maxFeePerGas: nil
                         ),
                         feeSource: .dapp
-                    ), forceGasCheck: false,
-                    network: makeNetwork(
+                    )
+                for try await event in EthereumTransactionPreparation(
+                    rpc: rpc,
+                    interpretTransaction: { _ in nil }
+                ).prepareTransaction(observedTransaction, forceGasCheck: false, network: makeNetwork(
                         chainID: chainID,
                         rpcURL: rpcURL + "/lone-zero-tip"
                     ))
                 {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        latestUpdate = observedTransaction
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -4824,21 +4872,24 @@ final class GasServiceTests: XCTestCase {
                 completed.fulfill()
             }
             do {
+                var observedTransaction = transaction
                 for try await event in EthereumTransactionPreparation(
                     rpc: rpc,
                     interpretTransaction: { _ in nil }
-                ).prepareTransaction(
-                    transaction, forceGasCheck: false,
-                    network: makeNetwork(
+                ).prepareTransaction(observedTransaction, forceGasCheck: false, network: makeNetwork(
                         chainID: 9_006,
                         rpcURL: rpcURL + "/provenance-only"
                     ))
                 {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -4932,18 +4983,21 @@ final class GasServiceTests: XCTestCase {
                 completed.fulfill()
             }
             do {
-                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(
-                    transaction, forceGasCheck: false,
-                    network: makeNetwork(
+                var observedTransaction = transaction
+                for try await event in EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }).prepareTransaction(observedTransaction, forceGasCheck: false, network: makeNetwork(
                         chainID: 1,
                         rpcURL: rpcURL + "/wrong-chain-preparation"
                     ))
                 {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -4988,11 +5042,7 @@ final class GasServiceTests: XCTestCase {
             currentBaseFeePerGas: 100
         )
         switch await preflight(safe, using: ethereum, network: network) {
-        case .safe(let transaction, let estimate):
-            XCTAssertEqual(transaction.preparedFee, safeFee)
-            XCTAssertEqual(transaction.feeSource, .dapp)
-            XCTAssertEqual(transaction.currentBaseFeePerGas, 100)
-            XCTAssertEqual(transaction.nextBaseFeePerGas, 110)
+        case .safe(let estimate):
             XCTAssertEqual(estimate.endpointChainID, 9_003)
         case .walletManagedUpdated, .userControlledUnsafe, .unavailable:
             XCTFail("Expected safe dapp fee")
@@ -5015,7 +5065,6 @@ final class GasServiceTests: XCTestCase {
         )
         switch await preflight(automatic, using: ethereum, network: network) {
         case .walletManagedUpdated(let transaction, let estimate):
-            XCTAssertEqual(transaction.id, automatic.id)
             XCTAssertEqual(
                 transaction.preparedFee,
                 .eip1559(
@@ -5023,9 +5072,9 @@ final class GasServiceTests: XCTestCase {
                     maxFeePerGas: 222
                 )
             )
-            XCTAssertEqual(transaction.feeSource, .automatic)
-            XCTAssertEqual(transaction.currentBaseFeePerGas, 100)
-            XCTAssertEqual(transaction.nextBaseFeePerGas, 110)
+            XCTAssertEqual(transaction.provenance.dominantSource(for: transaction.preparedFee), .automatic)
+            XCTAssertEqual(estimate.currentBaseFee, 100)
+            XCTAssertEqual(estimate.nextBaseFee, 110)
             XCTAssertEqual(estimate.endpointChainID, 9_003)
         case .safe, .userControlledUnsafe, .unavailable:
             XCTFail("Expected wallet-owned fee refresh")
@@ -5043,11 +5092,7 @@ final class GasServiceTests: XCTestCase {
             currentBaseFeePerGas: 50
         )
         switch await preflight(manual, using: ethereum, network: network) {
-        case .userControlledUnsafe(let transaction, let estimate):
-            XCTAssertEqual(transaction.preparedFee, staleWalletFee)
-            XCTAssertEqual(transaction.feeSource, .manual)
-            XCTAssertEqual(transaction.currentBaseFeePerGas, 100)
-            XCTAssertEqual(transaction.nextBaseFeePerGas, 110)
+        case .userControlledUnsafe(let estimate):
             XCTAssertEqual(estimate.endpointChainID, 9_003)
         case .safe, .walletManagedUpdated, .unavailable:
             XCTFail("Expected unsafe manual fee to be blocked")
@@ -5087,7 +5132,6 @@ final class GasServiceTests: XCTestCase {
             network: network
         ) {
         case .walletManagedUpdated(let updated, let estimate):
-            XCTAssertEqual(updated.id, transaction.id)
             XCTAssertEqual(
                 updated.preparedFee,
                 .eip1559(
@@ -5097,7 +5141,7 @@ final class GasServiceTests: XCTestCase {
             )
             XCTAssertEqual(estimate.endpointChainID, 9_004)
             XCTAssertEqual(
-                updated.feeProvenance,
+                updated.provenance,
                 TransactionFeeProvenance(
                     maxPriorityFeePerGas: .dapp,
                     maxFeePerGas: .automatic
@@ -5136,8 +5180,7 @@ final class GasServiceTests: XCTestCase {
             using: EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }),
             network: network
         ) {
-        case .unavailable(let candidate, let estimate):
-            XCTAssertEqual(candidate.id, transaction.id)
+        case .unavailable(let estimate):
             XCTAssertEqual(estimate.endpointChainID, 2)
             XCTAssertEqual(estimate.support, .unknown)
         case .safe, .walletManagedUpdated, .userControlledUnsafe:
@@ -5181,10 +5224,7 @@ final class GasServiceTests: XCTestCase {
             using: EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }),
             network: network
         ) {
-        case .unavailable(let candidate, let estimate):
-            XCTAssertEqual(candidate.id, transaction.id)
-            XCTAssertEqual(candidate.currentBaseFeePerGas, 100)
-            XCTAssertNil(candidate.nextBaseFeePerGas)
+        case .unavailable(let estimate):
             XCTAssertEqual(estimate.endpointChainID, 9_008)
             XCTAssertEqual(estimate.support, .unknown)
         case .safe, .walletManagedUpdated, .userControlledUnsafe:
@@ -5238,9 +5278,7 @@ final class GasServiceTests: XCTestCase {
             using: EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }),
             network: network
         ) {
-        case .safe(let candidate, let estimate):
-            XCTAssertEqual(candidate.preparedFee, fee)
-            XCTAssertEqual(candidate.feeSource, .manual)
+        case .safe(let estimate):
             XCTAssertEqual(estimate.support, .eip1559)
             XCTAssertEqual(estimate.nextBaseFee, 306)
         case .walletManagedUpdated, .userControlledUnsafe, .unavailable:
@@ -5321,8 +5359,7 @@ final class GasServiceTests: XCTestCase {
             using: EthereumTransactionPreparation(rpc: makeContradictoryRPC(), interpretTransaction: { _ in nil }),
             network: network
         ) {
-        case .safe(let candidate, let estimate):
-            XCTAssertEqual(candidate.preparedFee, prepared.preparedFee)
+        case .safe(let estimate):
             XCTAssertEqual(estimate.support, .unknown)
         case .walletManagedUpdated, .userControlledUnsafe, .unavailable:
             XCTFail("A complete dapp pair is the user's call on an unknown market")
@@ -5485,14 +5522,19 @@ final class GasServiceTests: XCTestCase {
                 failed.fulfill()
             }
             do {
+                var observedTransaction = transaction
                 for try await event in EthereumTransactionPreparation(rpc: makeAnchorMismatchRPC(chainID: chainID), interpretTransaction: { _ in nil })
-                    .prepareTransaction(transaction, forceGasCheck: false, network: network)
+                    .prepareTransaction(observedTransaction, forceGasCheck: false, network: network)
                 {
                     try Task.checkCancellation()
                     switch event {
-                    case .transactionUpdated(let value): onUpdate(value)
-                    case .feeEstimate(let value): onFeeEstimate(value)
-                    case .ready(let value): completion(.success(value))
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        self.applyPreparationUpdate(event, to: &observedTransaction)
+                        onUpdate(observedTransaction)
+                    case .feeEstimate(let value):
+                        value.applyBaseFeeContext(to: &observedTransaction)
+                        onFeeEstimate(value)
+                    case .ready: completion(.success(observedTransaction))
                     }
                 }
             } catch is CancellationError {
@@ -5530,10 +5572,7 @@ final class GasServiceTests: XCTestCase {
             using: EthereumTransactionPreparation(rpc: makeAnchorMismatchRPC(chainID: chainID), interpretTransaction: { _ in nil }),
             network: network
         ) {
-        case .safe(let candidate, let estimate):
-            XCTAssertEqual(candidate.preparedFee, .legacy(gasPrice: 150))
-            XCTAssertEqual(candidate.currentBaseFeePerGas, 101)
-            XCTAssertNil(candidate.nextBaseFeePerGas)
+        case .safe(let estimate):
             XCTAssertEqual(estimate.support, .unknown)
         case .walletManagedUpdated, .userControlledUnsafe, .unavailable:
             XCTFail("A user fee covering the observed basis is safe")
@@ -5544,16 +5583,14 @@ final class GasServiceTests: XCTestCase {
             using: EthereumTransactionPreparation(rpc: makeAnchorMismatchRPC(chainID: chainID), interpretTransaction: { _ in nil }),
             network: network
         ) {
-        case .userControlledUnsafe(let candidate, let estimate):
-            XCTAssertEqual(candidate.preparedFee, .legacy(gasPrice: 50))
-            XCTAssertEqual(candidate.currentBaseFeePerGas, 101)
+        case .userControlledUnsafe(let estimate):
             XCTAssertEqual(estimate.support, .unknown)
         case .safe, .walletManagedUpdated, .unavailable:
             XCTFail("A user fee below the observed basis stays editable")
         }
     }
 
-    func testPreflightUnknownEstimateWithoutDataPreservesCandidateBaseFees() async {
+    func testPreflightUnknownEstimateWithoutDataEvaluatesExistingBaseFees() async {
         let rpc = EthereumCoreRPCStub(
             chainIDResult: .success(String.hex(9_034, withPrefix: true)),
             feeHistoryResult: .failure(StubError.expected),
@@ -5586,10 +5623,7 @@ final class GasServiceTests: XCTestCase {
             using: EthereumTransactionPreparation(rpc: rpc, interpretTransaction: { _ in nil }),
             network: network
         ) {
-        case .safe(let candidate, let estimate):
-            XCTAssertEqual(candidate.preparedFee, .legacy(gasPrice: 150))
-            XCTAssertEqual(candidate.currentBaseFeePerGas, 100)
-            XCTAssertNil(candidate.nextBaseFeePerGas)
+        case .safe(let estimate):
             XCTAssertEqual(estimate.support, .unknown)
         case .walletManagedUpdated, .userControlledUnsafe, .unavailable:
             XCTFail("A probe that learned nothing keeps the user fee safe")
@@ -5620,8 +5654,7 @@ final class GasServiceTests: XCTestCase {
             currentBaseFeePerGas: 100
         )
         switch await preflight(safe, using: ethereum, network: network) {
-        case .safe(let candidate, let estimate):
-            XCTAssertEqual(candidate.preparedFee, safe.preparedFee)
+        case .safe(let estimate):
             XCTAssertNil(estimate.info)
         case .walletManagedUpdated, .userControlledUnsafe, .unavailable:
             XCTFail("An already-safe fee does not need a fresh curve")
@@ -5646,8 +5679,7 @@ final class GasServiceTests: XCTestCase {
             using: ethereum,
             network: network
         ) {
-        case .unavailable(let candidate, let estimate):
-            XCTAssertEqual(candidate.preparedFee, unsafeAutomatic.preparedFee)
+        case .unavailable(let estimate):
             XCTAssertNil(estimate.info)
         case .safe, .walletManagedUpdated, .userControlledUnsafe:
             XCTFail("An unsafe automatic fee needs a real priority curve")
@@ -5680,7 +5712,7 @@ final class GasServiceTests: XCTestCase {
                     maxFeePerGas: 227
                 )
             )
-            XCTAssertEqual(candidate.feeSource, .slider)
+            XCTAssertEqual(candidate.provenance.dominantSource(for: candidate.preparedFee), .slider)
             XCTAssertNil(estimate.info)
         case .safe, .userControlledUnsafe, .unavailable:
             XCTFail("Slider priority remains authoritative without a curve")
@@ -5707,8 +5739,7 @@ final class GasServiceTests: XCTestCase {
             currentBaseFeePerGas: 50
         )
         switch await preflight(lowUserCap, using: ethereum, network: network) {
-        case .userControlledUnsafe(let candidate, let estimate):
-            XCTAssertEqual(candidate.preparedFee, lowUserCap.preparedFee)
+        case .userControlledUnsafe(let estimate):
             XCTAssertNil(estimate.info)
         case .safe, .walletManagedUpdated, .unavailable:
             XCTFail("A provably low user cap must remain editable")
@@ -5746,7 +5777,7 @@ final class GasServiceTests: XCTestCase {
                 candidate.preparedFee,
                 .legacy(gasPrice: 117)
             )
-            XCTAssertEqual(candidate.feeSource, .slider)
+            XCTAssertEqual(candidate.provenance.dominantSource(for: candidate.preparedFee), .slider)
             XCTAssertNil(estimate.info)
         case .safe, .userControlledUnsafe, .unavailable:
             XCTFail("The slider's known priority should be reusable")
@@ -5778,7 +5809,7 @@ final class GasServiceTests: XCTestCase {
         case .walletManagedUpdated(let candidate, _):
             XCTAssertEqual(candidate.preparedFee, .legacy(gasPrice: 125))
             XCTAssertEqual(
-                candidate.feeProvenance,
+                candidate.provenance,
                 TransactionFeeProvenance(gasPrice: .automatic)
             )
         case .safe, .userControlledUnsafe, .unavailable:
@@ -5801,7 +5832,7 @@ final class GasServiceTests: XCTestCase {
         switch await preflight(slider, using: ethereum, network: network) {
         case .walletManagedUpdated(let candidate, _):
             XCTAssertEqual(candidate.preparedFee, .legacy(gasPrice: 112))
-            XCTAssertEqual(candidate.feeSource, .slider)
+            XCTAssertEqual(candidate.provenance.dominantSource(for: candidate.preparedFee), .slider)
         case .safe, .userControlledUnsafe, .unavailable:
             XCTFail("A stale slider legacy fee refreshes without headroom")
         }
@@ -5835,8 +5866,8 @@ final class GasServiceTests: XCTestCase {
                 using: ethereum,
                 network: network
             ) {
-            case .unavailable(let candidate, _):
-                XCTAssertEqual(candidate.gas, gas)
+            case .unavailable:
+                break
             case .safe, .walletManagedUpdated, .userControlledUnsafe:
                 XCTFail("Invalid gas unexpectedly passed preflight: \(gas ?? "nil")")
             }
@@ -5921,10 +5952,8 @@ final class GasServiceTests: XCTestCase {
         )
 
         switch await preflight(transaction, using: ethereum, network: network) {
-        case .userControlledUnsafe(let candidate, _):
-            XCTAssertEqual(candidate.id, transaction.id)
-            XCTAssertEqual(candidate.preparedFee, fee)
-            XCTAssertEqual(candidate.feeSource, .dapp)
+        case .userControlledUnsafe:
+            break
         case .safe, .walletManagedUpdated, .unavailable:
             XCTFail("An overflowing dapp fee should remain editable")
         }
@@ -5949,10 +5978,8 @@ final class GasServiceTests: XCTestCase {
             using: ethereum,
             network: network
         ) {
-        case .userControlledUnsafe(let candidate, _):
-            XCTAssertEqual(candidate.id, mixedTransaction.id)
-            XCTAssertEqual(candidate.preparedFee, fee)
-            XCTAssertEqual(candidate.feeProvenance, mixedProvenance)
+        case .userControlledUnsafe:
+            break
         case .safe, .walletManagedUpdated, .unavailable:
             XCTFail("A manual priority with a wallet cap should remain editable")
         }
@@ -6013,9 +6040,8 @@ final class GasServiceTests: XCTestCase {
             using: ethereum,
             network: network
         ) {
-        case .unavailable(let candidate, _):
-            XCTAssertEqual(candidate.id, overflowing.id)
-            XCTAssertEqual(candidate.preparedFee, staleFee)
+        case .unavailable:
+            break
         case .safe, .walletManagedUpdated, .userControlledUnsafe:
             XCTFail("An overflowing refreshed cap was accepted")
         }
@@ -8091,6 +8117,21 @@ final class GasServiceTests: XCTestCase {
         )
     }
 
+    private func applyPreparationUpdate(_ event: TransactionPreparationEvent, to transaction: inout Transaction) {
+        switch event {
+        case .nonce(let value): transaction.nonce = value
+        case .gasLimit(let value): transaction.gas = value
+        case .resolvedFee(let update):
+            if transaction.preparedFee == update.preparedFee {
+                transaction.replaceFeeProvenance(update.provenance)
+            } else {
+                transaction.replacePreparedFee(update.preparedFee, provenance: update.provenance)
+            }
+        case .interpretation(let value): transaction.interpretation = value
+        case .feeEstimate, .ready: XCTFail("Expected a prepared field update")
+        }
+    }
+
     private func prepare(
         _ transaction: Transaction,
         using ethereum: EthereumTransactionPreparation,
@@ -8100,8 +8141,13 @@ final class GasServiceTests: XCTestCase {
         line: UInt = #line
     ) async -> Transaction? {
         do {
+            var prepared = transaction
             for try await event in ethereum.prepareTransaction(transaction, forceGasCheck: false, network: network) {
-                if case .ready(let prepared) = event { return prepared }
+                switch event {
+                case .ready: return prepared
+                case .feeEstimate(let estimate): estimate.applyBaseFeeContext(to: &prepared)
+                case .nonce, .gasLimit, .resolvedFee, .interpretation: applyPreparationUpdate(event, to: &prepared)
+                }
             }
             XCTFail("Preparation ended without a ready transaction: \(description)", file: file, line: line)
         } catch {
@@ -8119,7 +8165,7 @@ final class GasServiceTests: XCTestCase {
     ) async -> TransactionFeePreflightResult {
         do { return try await ethereum.preflightTransactionFee(transaction, network: network) } catch {
             XCTFail("Unexpected preflight failure: \(error)", file: file, line: line)
-            return .unavailable(transaction, GasEstimate(info: nil, nextBaseFee: nil))
+            return .unavailable(GasEstimate(info: nil, nextBaseFee: nil))
         }
     }
 

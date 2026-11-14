@@ -6,77 +6,53 @@ import XCTest
 
 @MainActor
 final class TransactionPreflightBoundaryTests: XCTestCase {
-    private enum Mutation: CaseIterable, Sendable {
-        case from, to, nonce, gas, value, data, accessList, chain, fee, provenance
-    }
-
-    func testSafePreflightCannotReplaceAnyReviewedSigningField() async throws {
-        for mutation in Mutation.allCases {
-            let coordinator = await makeCoordinator { transaction, _ in
-                var candidate = Self.mutating(transaction, mutation: mutation)
-                var estimate = Self.estimate
-                if mutation == .chain {
-                    estimate = GasEstimate(info: nil, nextBaseFee: nil, support: .legacy, endpointChainID: 2)
-                }
-                if mutation == .fee {
-                    candidate.replacePreparedFee(.legacy(gasPrice: 11), provenance: transaction.feeProvenance)
-                }
-                if mutation == .provenance {
-                    candidate.replaceFeeProvenance(.init(gasPrice: .manual))
-                }
-                return .safe(candidate, estimate)
-            }
+    func testPreflightDecisionsPreserveReviewedSigningFields() async throws {
+        for result in [TransactionFeePreflightResult.safe(Self.estimate), .userControlledUnsafe(Self.estimate), .unavailable(Self.estimate)] {
+            let coordinator = await makeCoordinator { _, _ in result }
             let reviewed = coordinator.snapshot.transaction
             let reservation = try XCTUnwrap(coordinator.reserveForPreflight())
-            guard case .reviewRequired = await coordinator.preflight(reservation) else {
-                return XCTFail("Altered \(mutation) must require a new review")
-            }
-            XCTAssertEqual(coordinator.snapshot.phase, .failed, "\(mutation)")
-            XCTAssertEqual(coordinator.snapshot.notice, .feesUnavailable, "\(mutation)")
-            XCTAssertFalse(coordinator.snapshot.canApprove, "\(mutation)")
+            _ = await coordinator.preflight(reservation)
             assertSameSigningFields(coordinator.snapshot.transaction, reviewed)
         }
     }
 
-    func testFeeUpdateMayOnlyChangeFeesAndRequiresAnotherApproval() async throws {
-        let coordinator = await makeCoordinator { transaction, _ in
-            var candidate = transaction
-            candidate.replacePreparedFee(.legacy(gasPrice: 11), provenance: transaction.feeProvenance)
-            return .walletManagedUpdated(candidate, Self.estimate)
+    func testEveryPreflightDecisionRejectsAMismatchedEndpoint() async throws {
+        let wrongEndpoint = GasEstimate(info: nil, nextBaseFee: nil, support: .legacy, endpointChainID: 2)
+        let update = TransactionFeeUpdate(preparedFee: .legacy(gasPrice: 11), provenance: .init(gasPrice: .automatic))
+        for result in [TransactionFeePreflightResult.safe(wrongEndpoint), .walletManagedUpdated(update, wrongEndpoint),
+                       .userControlledUnsafe(wrongEndpoint), .unavailable(wrongEndpoint)] {
+            let coordinator = await makeCoordinator { _, _ in result }
+            let reviewed = coordinator.snapshot.transaction
+            let reservation = try XCTUnwrap(coordinator.reserveForPreflight())
+            guard case .reviewRequired = await coordinator.preflight(reservation) else {
+                return XCTFail("A different endpoint chain must require review")
+            }
+            XCTAssertEqual(coordinator.snapshot.phase, .failed)
+            XCTAssertEqual(coordinator.snapshot.notice, .feesUnavailable)
+            XCTAssertFalse(coordinator.snapshot.canApprove)
+            assertSameSigningFields(coordinator.snapshot.transaction, reviewed)
         }
+    }
+
+    func testFeeUpdateOnlyChangesFeesAndRequiresAnotherApproval() async throws {
+        let coordinator = await makeCoordinator { transaction, _ in
+            .walletManagedUpdated(.init(preparedFee: .legacy(gasPrice: 11), provenance: transaction.feeProvenance), Self.estimate)
+        }
+        var expected = coordinator.snapshot.transaction
+        expected.replacePreparedFee(.legacy(gasPrice: 11), provenance: expected.feeProvenance)
         let reservation = try XCTUnwrap(coordinator.reserveForPreflight())
         guard case .reviewRequired = await coordinator.preflight(reservation) else {
             return XCTFail("Updated fees require a new approval")
         }
         XCTAssertEqual(coordinator.snapshot.phase, .ready)
         XCTAssertEqual(coordinator.snapshot.notice, .feesUpdated)
-        XCTAssertEqual(coordinator.snapshot.transaction.preparedFee, .legacy(gasPrice: 11))
-
-        for mutation in [Mutation.nonce, .gas, .from, .to, .value, .data, .accessList, .chain] {
-            let altered = await makeCoordinator { transaction, _ in
-                let estimate = mutation == .chain
-                    ? GasEstimate(info: nil, nextBaseFee: nil, support: .legacy, endpointChainID: 2)
-                    : Self.estimate
-                return .walletManagedUpdated(Self.mutating(transaction, mutation: mutation), estimate)
-            }
-            let reviewed = altered.snapshot.transaction
-            let claim = try XCTUnwrap(altered.reserveForPreflight())
-            guard case .reviewRequired = await altered.preflight(claim) else {
-                return XCTFail("Unexpected \(mutation) change must fail the preflight")
-            }
-            XCTAssertEqual(altered.snapshot.phase, .failed)
-            assertSameSigningFields(altered.snapshot.transaction, reviewed)
-        }
+        assertSameSigningFields(coordinator.snapshot.transaction, expected)
+        XCTAssertNotNil(coordinator.reserveForPreflight())
     }
 
-    func testSafePreflightMayRefreshBaseFeeAndDisplayContext() async throws {
-        let coordinator = await makeCoordinator { transaction, _ in
-            var candidate = transaction
-            candidate.interpretation = "Updated interpretation"
-            candidate.currentBaseFeePerGas = 1
-            candidate.nextBaseFeePerGas = 2
-            return .safe(candidate, GasEstimate(info: nil, nextBaseFee: 2, currentBaseFee: 1,
-                support: .eip1559, endpointChainID: 1))
+    func testSafePreflightRefreshesOnlyFeeContext() async throws {
+        let coordinator = await makeCoordinator { _, _ in
+            .safe(GasEstimate(info: nil, nextBaseFee: 2, currentBaseFee: 1, support: .eip1559, endpointChainID: 1))
         }
         let reviewed = coordinator.snapshot.transaction
         let reservation = try XCTUnwrap(coordinator.reserveForPreflight())
@@ -86,7 +62,7 @@ final class TransactionPreflightBoundaryTests: XCTestCase {
         assertSameSigningFields(transaction, reviewed)
         XCTAssertEqual(transaction.currentBaseFeePerGas, 1)
         XCTAssertEqual(transaction.nextBaseFeePerGas, 2)
-        XCTAssertEqual(transaction.interpretation, "Updated interpretation")
+        XCTAssertEqual(transaction.interpretation, reviewed.interpretation)
     }
 
     private func makeCoordinator(preflight: @escaping TransactionApprovalOperations.Preflight) async -> TransactionApprovalCoordinator {
@@ -94,8 +70,7 @@ final class TransactionPreflightBoundaryTests: XCTestCase {
         let operations = TransactionApprovalOperations(
             prepare: { transaction, _, _ in
                 AsyncThrowingStream { continuation in
-                    continuation.yield(.transactionUpdated(transaction))
-                    continuation.yield(.ready(transaction))
+                    continuation.yield(.ready)
                     continuation.finish()
                 }
             },
@@ -123,22 +98,6 @@ final class TransactionPreflightBoundaryTests: XCTestCase {
 
     private static var estimate: GasEstimate {
         GasEstimate(info: nil, nextBaseFee: nil, support: .legacy, endpointChainID: 1)
-    }
-
-    private static func mutating(_ transaction: Transaction, mutation: Mutation) -> Transaction {
-        var result = Transaction(id: transaction.id,
-            from: mutation == .from ? "0x0000000000000000000000000000000000000003" : transaction.from,
-            to: mutation == .to ? "0x0000000000000000000000000000000000000003" : transaction.to,
-            nonce: mutation == .nonce ? "0x1" : transaction.nonce,
-            gas: mutation == .gas ? "0xffff" : transaction.gas,
-            value: mutation == .value ? "0x1" : transaction.value,
-            data: mutation == .data ? "0x01" : transaction.data,
-            feeIntent: transaction.feeIntent, preparedFee: transaction.preparedFee,
-            feeProvenance: transaction.feeProvenance, accessList: transaction.accessList)
-        if mutation == .accessList {
-            result.accessList = [EthereumAccessListEntry(address: transaction.to, storageKeys: [])!]
-        }
-        return result
     }
 
     private func assertSameSigningFields(_ actual: Transaction, _ expected: Transaction,

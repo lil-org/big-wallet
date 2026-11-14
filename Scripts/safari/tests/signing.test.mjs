@@ -570,7 +570,7 @@ test("unsigned Safari recovery rebuilds the containing app before replacing and 
     const installation = safariMacInstallation(fixture.descriptor, stageId, fixture.home);
     const products = await installSafariMacProducts({products: fixture.sourceProducts, descriptor: fixture.descriptor, installation}, fixture.command);
     const calls = [];
-    const buildArgs = ["-project", "Wallet.xcodeproj", "-scheme", "Safari UI Tests macOS", "-configuration", "Release", "BW_SAFARI_VM_TESTING=YES"];
+    const buildArgs = ["-project", "Wallet.xcodeproj", "-scheme", "Safari UI Tests macOS", "-configuration", "Release", "BW_SAFARI_VM_TESTING=YES", "BW_VM_FIXTURE_EXCLUDED_SOURCES="];
     const result = await rebuildSafariMacProducts({...fixture, products, installation, stageId, buildArgs,
         beforeReplace: async () => {
             assert.ok(calls.some(call => call[0] === "xcodebuild"));
@@ -579,7 +579,7 @@ test("unsigned Safari recovery rebuilds the containing app before replacing and 
         }}, async (executable, args, options) => {
         calls.push([executable, ...args]);
         if (executable === "xcodebuild") {
-            assert.deepEqual(args, ["-jobs", "2", "build", "-project", "Wallet.xcodeproj", "-scheme", "Wallet", "-configuration", "Release", "BW_SAFARI_VM_TESTING=YES", "ENABLE_TESTABILITY=YES"]);
+            assert.deepEqual(args, ["-jobs", "2", "build", "-project", "Wallet.xcodeproj", "-scheme", "Wallet", "-configuration", "Release", "BW_SAFARI_VM_TESTING=YES", "BW_VM_FIXTURE_EXCLUDED_SOURCES=", "ENABLE_TESTABILITY=YES"]);
             assert.equal(options.timeoutSeconds, 120);
             await writeFile(join(fixture.sourceProducts.app, "signed-payload.bin"), "rebuilt after unsigned permission");
             return "";

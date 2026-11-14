@@ -572,6 +572,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 /usr/bin/tar --no-same-owner -xpf - -C "$destination"
 [ -f "$destination/provision_guest.sh" ] && [ ! -L "$destination/provision_guest.sh" ] || exit 75
+[ -f "$destination/provision_guest.mjs" ] && [ ! -L "$destination/provision_guest.mjs" ] || exit 75
 /bin/sh "$destination/provision_guest.sh" "$destination/config.json"{arguments}
 '''
     return (f'case "$(/usr/sbin/sysctl -n hw.model)" in VirtualMac*) ;; *) exit 71 ;; esac; '
@@ -601,7 +602,7 @@ def _payload_files(directory, user, host_key_alias):
         if configuration['consoleUser'] != user or _alias(configuration['vmId']) != host_key_alias:
             raise ValueError()
         large_names = {'Xcode.tar'} | {runtime['dmgPath'] for runtime in configuration.get('runtimes', []) if runtime.get('dmgPath')}
-        if any(name not in files for name in large_names) or 'provision_guest.sh' not in files:
+        if any(name not in files for name in large_names) or any(name not in files for name in ('provision_guest.sh', 'provision_guest.mjs')):
             raise ValueError()
     except (KeyError, TypeError, ValueError):
         raise GuestAccessError('The provisioning payload does not match this VM, account, or required inputs') from None

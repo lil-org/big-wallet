@@ -148,6 +148,31 @@ final class OnboardingCancellationTests: XCTestCase {
         XCTAssertFalse(flow.windowController?.contentViewController === form)
     }
 
+    func testExpiredStartupGrantCancelsWithoutReplacingTheFlowWithALockedWindow() async throws {
+        let fixture = WalletAccessTestFixture()
+        var events = [StartupCredentialCoordinator.Event]()
+        var attempts = 0
+        let flow = StartupCredentialCoordinator(dependencies: .init(
+            credentials: fixture.credentials,
+            attemptBiometrics: { _, challenge in
+                attempts += 1
+                guard let grant = try? fixture.credentials.verify(password: "password", challenge: challenge) else { return .failed }
+                fixture.advance(by: .seconds(150))
+                return .granted(grant)
+            },
+            access: fixture.access
+        )) { events.append($0) }
+        defer { flow.windowController?.close(); flow.cancel() }
+        flow.requestAccess()
+        await waitUntil { events == [.cancelled] }
+        XCTAssertTrue(fixture.access.isLocked)
+        XCTAssertFalse(fixture.access.hasLocked)
+        XCTAssertNil(flow.windowController)
+        flow.refresh()
+        XCTAssertEqual(attempts, 1)
+        XCTAssertEqual(events, [.cancelled])
+    }
+
     func testExplicitStartupUnlockOpensAccountsAfterTheOriginalOpenWasCanceledByLock() async throws {
         let fixture = WalletAccessTestFixture()
         let agent = Agent(approvalInbox: ApprovalInbox(), credentialDependencies: .init(

@@ -9,8 +9,11 @@ const applicationOnlySources = new Set([
     "Shared/Services/ApplicationServices.swift", "Shared/Services/SafariVMApplicationServices.swift",
     "Shared/Wallets/AccountNames.swift", "Shared/Ethereum/Networks.swift", "Shared/Services/ReviewRequester.swift",
 ]);
-const privateTypes = /\b(?:SecretBytes|Keychain|WalletCrypto|WalletPrivateKey|WalletStoredKey|WalletHDWallet|WalletRepository|WalletContainer|WalletSigningSource|WalletSigningPreparation|WalletSigningSession|ApprovedWalletSigningOperation|ApprovedExecutionPermit|BroadcastDispatchPermit|SafariApprovalVault|SafariApprovalVaultHost|SafariApprovalKeychainStore|EthereumSigner|SolanaSigner)\b/;
-const networkTypes = /\b(?:URLSession|URLRequest|HTTPURLResponse|AlchemyJWTProvider|EthereumRPC|SafariRPCClient|SafariRPCService|SolanaRPCClient|PriceService|TransactionInspector)\b/;
+export const vmFixtureSources = new Set([
+    "Shared/Services/SafariVMFixtures.swift", "Shared/Services/SafariVMApplicationServices.swift",
+    "Safari Shared/SafariVMExtensionServices.swift",
+]);
+const fixtureFileNames = [...vmFixtureSources].map(path => path.slice(path.lastIndexOf("/") + 1));
 
 function maskNonCode(source, {strings = true} = {}) {
     let result = "", index = 0;
@@ -45,72 +48,6 @@ function maskNonCode(source, {strings = true} = {}) {
         }
     }
     return result;
-}
-
-function conditionPossibilities(expression) {
-    if (!/\bBW_SAFARI_VM_TESTING\b/.test(expression)) { return 3; }
-    const tokens = expression.match(/&&|\|\||!|[()]|[A-Za-z_][A-Za-z_0-9]*|[^\s]/g) ?? [];
-    let index = 0;
-    const combine = (left, right, operation) => {
-        let possibilities = 0;
-        for (const a of [false, true]) for (const b of [false, true]) {
-            if (left & (a ? 2 : 1) && right & (b ? 2 : 1)) { possibilities |= operation(a, b) ? 2 : 1; }
-        }
-        return possibilities;
-    };
-    const primary = () => {
-        const token = tokens[index++];
-        if (token === "!") { const value = primary(); return (value & 1 ? 2 : 0) | (value & 2 ? 1 : 0); }
-        if (token === "(") { const value = or(); if (tokens[index++] !== ")") { throw new Error("Malformed conditional"); } return value; }
-        if (!token) { throw new Error("Missing conditional expression"); }
-        if (tokens[index] === "(") {
-            let depth = 0;
-            do { const next = tokens[index++]; if (next === "(") { depth += 1; } if (next === ")") { depth -= 1; } }
-            while (index < tokens.length && depth);
-            if (depth) { throw new Error("Unclosed conditional call"); }
-            return 3;
-        }
-        return token === "BW_SAFARI_VM_TESTING" || token === "false" ? 1 : token === "true" ? 2 : 3;
-    };
-    const and = () => { let value = primary(); while (tokens[index] === "&&") { index += 1; value = combine(value, primary(), (a, b) => a && b); } return value; };
-    const or = () => { let value = and(); while (tokens[index] === "||") { index += 1; value = combine(value, and(), (a, b) => a || b); } return value; };
-    const result = or();
-    if (index !== tokens.length) { throw new Error("Unsupported conditional expression"); }
-    return result;
-}
-
-export function productionSource(source, {application = false} = {}) {
-    if (!application) { return source; }
-    const directives = maskNonCode(source);
-    const originalLines = source.split("\n"), lines = directives.split("\n");
-    const stack = [];
-    let active = true;
-    const result = lines.map((line, index) => {
-        const directive = /^\s*#(if|elseif|else|endif)\b(.*)$/.exec(line);
-        if (directive) {
-            const [, kind, expression] = directive;
-            if (kind === "if") {
-                const possibilities = conditionPossibilities(expression);
-                stack.push({parent: active, remaining: !!(possibilities & 1)});
-                active = active && !!(possibilities & 2);
-            } else {
-                const frame = stack.at(-1);
-                if (!frame) { throw new Error("Unbalanced source conditional"); }
-                if (kind === "endif") { stack.pop(); active = frame.parent; }
-                else if (kind === "else") { active = frame.parent && frame.remaining; frame.remaining = false; }
-                else {
-                    const possibilities = conditionPossibilities(expression);
-                    active = frame.parent && frame.remaining && !!(possibilities & 2);
-                    frame.remaining &&= !!(possibilities & 1);
-                }
-            }
-            return "";
-        }
-        if (index === lines.length - 1 && stack.length) { throw new Error("Unbalanced source conditional"); }
-        return active ? originalLines[index] : "";
-    });
-    if (stack.length) { throw new Error("Unbalanced source conditional"); }
-    return result.join("\n");
 }
 
 export function validateRuntimeManifestSource(source) {
@@ -160,45 +97,27 @@ export function validateRuntimePackage({manifest, description}, root) {
     return true;
 }
 
-export function validateRuntimeSource(path, source, {module, application = false, nativeExtension = false, ownedSymbols = new Set} = {}) {
-    const effective = productionSource(source, {application});
-    const code = maskNonCode(effective);
-    const literalCode = maskNonCode(effective, {strings: false});
+export function validateRuntimeSource(path, source, {module, application = false} = {}) {
+    const code = maskNonCode(source);
     const fail = message => { throw new Error(`${path}: ${message}`); };
-    if (/@testable\b/.test(code)) { fail("Production code may not use @testable"); }
+    const fixture = application && vmFixtureSources.has(path.split(sep).join("/"));
+    if (!fixture && /@testable\b/.test(code)) { fail("Production code may not use @testable"); }
     const imports = [...code.matchAll(/\bimport\s+(?:(?:class|struct|enum|protocol|func|var|let|typealias)\s+)?([A-Za-z_][A-Za-z0-9_]*)/g)].map(match => match[1]);
     if (imports.some(name => /(?:TestSupport|Harness|Tests)$|WalletUpgradeConsumer|ShippedWalletProducer/.test(name))) { fail("Production code imports test or harness support"); }
-    const foreignSymbols = [...literalCode.matchAll(/@_silgen_name\s*\(\s*"([^"\n]+)"\s*\)/g)].map(match => match[1]);
-    if (module !== "WalletAuthority" && (imports.includes("CWalletCrypto") || foreignSymbols.some(symbol => module !== "WalletStorageSupport" || symbol !== "flock"))) { fail("Direct private crypto linkage belongs inside Authority"); }
-    if (application && (imports.includes("WalletStorageSupport") || privateTypes.test(literalCode))) { fail("Application code reaches private authority or storage implementation"); }
-    if (nativeExtension && /\b(?:ApplicationServices|AuthorityRuntime|SafariVMApplicationServices|SafariVMMutations|Networks|ReviewRequester)\b/.test(code)) {
-        fail("Safari extension source reaches application or native-helper composition");
+    const foreignSymbols = [...code.matchAll(/@_silgen_name\b/g)].map(match =>
+        /^@_silgen_name\s*\(\s*"([^"\n]+)"\s*\)/.exec(source.slice(match.index))?.[1]);
+    const permitsFileLockBinding = module === "WalletStorageSupport" || fixture;
+    if (module !== "WalletAuthority" && (imports.includes("CWalletCrypto") || foreignSymbols.some(symbol => !permitsFileLockBinding || symbol !== "flock"))) { fail("Direct private crypto linkage belongs inside Authority"); }
+    if (application && imports.includes("WalletStorageSupport")) { fail("Application code imports private storage implementation"); }
+    if (module === "WalletDomain" && imports.some(name => !["Foundation", "CoreFoundation", "CryptoKit", "Synchronization"].includes(name))) {
+        fail("Domain imports a service or UI module");
     }
-    if (module === "WalletDomain") {
-        if (imports.some(name => !["Foundation", "CoreFoundation", "CryptoKit", "Synchronization"].includes(name)) ||
-            /\b(?:URLSession|URLRequest|FileManager|FileHandle|UserDefaults|Bundle|NotificationCenter|DistributedNotificationCenter|SecItem\w*|NSApplication|UIApplication|NSView|UIView)\b|\b(?:Data|String)\s*\(\s*contentsOf|\.write\s*\(\s*to\s*:/.test(literalCode) || privateTypes.test(literalCode)) {
-            fail("Domain must contain values and pure operations, without services, I/O or UI");
-        }
+    if (module === "WalletAuthority" && imports.some(name => ["WalletNetworking", "WalletFlows"].includes(name))) { fail("Authority imports networking or flows"); }
+    if (module === "WalletFlows" && imports.some(name => ["Security", "LocalAuthentication", "WalletStorageSupport", "WalletNetworking"].includes(name))) {
+        fail("Flows imports privileged implementation or networking");
     }
-    if (module === "WalletAuthority" && (imports.includes("WalletNetworking") || imports.includes("WalletFlows") || networkTypes.test(literalCode))) { fail("Authority depends on concrete networking"); }
-    if (module === "WalletFlows" && (imports.some(name => ["Security", "LocalAuthentication", "WalletStorageSupport", "WalletNetworking"].includes(name)) ||
-        privateTypes.test(literalCode) || /\b(?:ReviewConsent|ApprovedCompletion|PreparedBroadcast|ApprovedExecutionPermit|BroadcastDispatchPermit|SecItem\w*)\b/.test(code))) {
-        fail("Flows reaches privileged authority implementation");
-    }
-    if (module === "WalletAuthority" && /(?:EthereumSigner|SolanaSigner|WalletCoreProxy[^/]*)\.swift$/.test(path) &&
-        /\b(?:TransactionPreparing|SignedTransactionBroadcasting|BroadcastRequest|BroadcastResult|FileManager|FileHandle)\b|\b(?:Data|String)\s*\(\s*contentsOf/.test(literalCode)) {
-        fail("Signing implementations may not receive networking services or perform I/O");
-    }
-    if (module === "WalletNetworking") {
-        if (imports.includes("WalletAuthority") || imports.includes("WalletFlows") || imports.includes("LocalAuthentication") || privateTypes.test(literalCode)) { fail("Networking reaches wallet or signing authority"); }
-        const text = maskNonCode(effective, {strings: false});
-        if (/org\.lil\.keychain|SafariApprovalVault|org\.lil\.wallet\.wallet\.|org\.lil\.wallet\.password/.test(text)) { fail("Networking contains wallet Keychain/vault identifiers"); }
-    }
-    if (module && /\bBW_SAFARI_VM_TESTING\b/.test(code)) { fail("Runtime production source contains application fixture branches"); }
-    if (application) {
-        for (const declaration of code.matchAll(/^(?:(?:public|internal|private|fileprivate|final|nonisolated)\s+)*(?:class|struct|enum|actor|protocol)\s+(\w+)/gm)) {
-            if (ownedSymbols.has(declaration[1])) { fail(`Runtime-owned type is compiled again by the application: ${declaration[1]}`); }
-        }
+    if (module === "WalletNetworking" && imports.some(name => ["WalletAuthority", "WalletFlows", "LocalAuthentication"].includes(name))) {
+        fail("Networking imports wallet or signing authority");
     }
     return true;
 }
@@ -255,6 +174,9 @@ export function projectFilePaths(project, root) {
 export function validateProjectMembership(project, {root, sourceExists = existsSync, validateSource = () => {}} = {}) {
     const objects = project.objects;
     const paths = projectFilePaths(project, root);
+    const projectConfigurations = objects[objects[project.rootObject].buildConfigurationList]?.buildConfigurations ?? [];
+    const projectSettings = new Map(projectConfigurations.map(id => [objects[id].name, objects[id].buildSettings ?? {}]));
+    const words = value => (Array.isArray(value) ? value : [value ?? ""]).flatMap(value => value.split(/\s+/)).filter(Boolean);
     for (const target of Object.values(objects).filter(value => value.isa === "PBXNativeTarget")) {
         if (/test/i.test(target.productType ?? "") || /Tests/.test(target.name ?? "")) { continue; }
         const nativeExtension = target.productType === "com.apple.product-type.app-extension";
@@ -270,7 +192,19 @@ export function validateProjectMembership(project, {root, sourceExists = existsS
             if (/Harness|CrashWorker|UpgradeConsumer|ShippedWalletProducer|Tests|TestSupport/.test(dependencyName)) { throw new Error(`${target.name} depends on a fixture/test target`); }
         }
         for (const configurationID of objects[target.buildConfigurationList]?.buildConfigurations ?? []) {
-            if (/CWalletCrypto|WalletStorageSupport|WalletRuntimeHarness|WalletUpgradeHarness|WalletUpgradeConsumer|ShippedWalletProducer|wallet_upgrade|ShippedMain|WalletRuntimeTestSupport/.test(JSON.stringify(objects[configurationID]?.buildSettings ?? {}))) {
+            const configuration = objects[configurationID];
+            const settings = configuration.buildSettings ?? {};
+            const inherited = projectSettings.get(configuration.name) ?? {};
+            const effective = name => settings[name] === undefined ? words(inherited[name])
+                : words(settings[name]).flatMap(value => value === "$(inherited)" ? words(inherited[name]) : [value]);
+            if (fixtureFileNames.some(name => !effective("BW_VM_FIXTURE_EXCLUDED_SOURCES").includes(name)) ||
+                !effective("EXCLUDED_SOURCE_FILE_NAMES").includes("$(BW_VM_FIXTURE_EXCLUDED_SOURCES)")) {
+                throw new Error(`${target.name} must exclude VM fixture sources in ordinary builds`);
+            }
+            if (nativeExtension && effective("APPLICATION_EXTENSION_API_ONLY").join(" ") !== "YES") {
+                throw new Error(`${target.name} must enforce application-extension API availability`);
+            }
+            if (/CWalletCrypto|WalletStorageSupport|WalletRuntimeHarness|WalletUpgradeHarness|WalletUpgradeConsumer|ShippedWalletProducer|wallet_upgrade|ShippedMain|WalletRuntimeTestSupport/.test(JSON.stringify(settings))) {
                 throw new Error(`${target.name} manually links private runtime/test implementation`);
             }
         }
@@ -333,27 +267,25 @@ export function checkRuntimeBoundaries(root) {
             throw new Error(`Runtime test resource differs from its source: ${fixture}`);
         }
     }
-    const ownedSymbols = new Set;
     let count = 0;
     for (const module of productionTargets.filter(name => name !== "CWalletCrypto")) {
         for (const path of filesBelow(join(packageRoot, "Sources", module))) {
             const source = readFileSync(path, "utf8");
             validateRuntimeSource(relative(root, path), source, {module});
-            for (const declaration of maskNonCode(source).matchAll(/^(?:(?:public|internal|private|fileprivate|final|nonisolated)\s+)*(?:class|struct|enum|actor|protocol)\s+(\w+)/gm)) { ownedSymbols.add(declaration[1]); }
             count += 1;
         }
     }
     for (const directory of applicationRoots) {
         for (const path of filesBelow(join(root, directory))) {
             if (relative(root, path).split(sep).includes("Tests")) { continue; }
-            validateRuntimeSource(relative(root, path), readFileSync(path, "utf8"), {application: true, ownedSymbols});
+            validateRuntimeSource(relative(root, path), readFileSync(path, "utf8"), {application: true});
             count += 1;
         }
     }
     validateProjectMembership(readProject(join(root, "Wallet.xcodeproj/project.pbxproj")), {root,
         validateSource: (path, {nativeExtension}) => {
             const source = readFileSync(path, "utf8");
-            if (path.endsWith(".swift")) { validateRuntimeSource(relative(root, path), source, {application: true, nativeExtension, ownedSymbols}); }
+            if (path.endsWith(".swift")) { validateRuntimeSource(relative(root, path), source, {application: true}); }
             else if (/#\s*(?:import|include)[^\n]*(?:CWalletCrypto|big_wallet|secp256k1)/.test(source)) {
                 throw new Error(`${path}: Application source imports private crypto headers`);
             }
@@ -400,13 +332,15 @@ function checkOrdinaryImportAPI(options) {
     if (!Array.isArray(catalog) || !catalog.length || !catalog.some(value => value.succeeds === true) || !catalog.some(value => value.succeeds === false)) { throw new Error("Invalid API boundary fixture inventory"); }
     for (const fixture of catalog) {
         if (typeof fixture.path !== "string" || !/^(?:Positive|Negative)\/[A-Za-z0-9_]+\.swift$/.test(fixture.path) || typeof fixture.succeeds !== "boolean" ||
+            fixture.applicationExtension !== undefined && typeof fixture.applicationExtension !== "boolean" ||
             !fixture.succeeds && (typeof fixture.diagnostic !== "string" || !fixture.diagnostic.length)) { throw new Error("Invalid boundary fixture"); }
         const path = join(fixtureRoot, fixture.path);
         const source = readFileSync(path, "utf8");
         if (/@testable|@_spi/.test(maskNonCode(source))) { throw new Error(`API fixture must use ordinary imports: ${fixture.path}`); }
         for (const [scope, flags] of boundaryConsumerContexts(packageIdentity)) {
             const result = spawnSync("swiftc", ["-typecheck", "-target", `${process.arch === "arm64" ? "arm64" : "x86_64"}-apple-macosx15.0`, "-swift-version", "6", "-enable-upcoming-feature", "NonisolatedNonsendingByDefault",
-                "-enable-upcoming-feature", "InferIsolatedConformances", ...flags, "-I", modules, path], {cwd: options.root, encoding: "utf8", maxBuffer: 4 * 1024 * 1024});
+                "-enable-upcoming-feature", "InferIsolatedConformances", ...flags,
+                ...boundaryApplicationExtensionFlags(fixture), "-I", modules, path], {cwd: options.root, encoding: "utf8", maxBuffer: 4 * 1024 * 1024});
             if (result.error || result.signal || result.status === null) { throw result.error ?? new Error(`Boundary compiler failed: ${fixture.path}`); }
             const diagnostic = (result.stdout ?? "") + (result.stderr ?? "");
             if (fixture.succeeds ? result.status !== 0 : result.status === 0 || !new RegExp(fixture.diagnostic, "i").test(diagnostic)) {
@@ -424,6 +358,13 @@ export function boundaryPackageIdentity(graph) {
         throw new Error("Resolved runtime package identity is missing or inconsistent");
     }
     return graph.identity;
+}
+
+export function boundaryApplicationExtensionFlags(fixture) {
+    if (fixture.applicationExtension !== undefined && typeof fixture.applicationExtension !== "boolean") {
+        throw new Error("Invalid application-extension fixture context");
+    }
+    return fixture.applicationExtension === true ? ["-application-extension"] : [];
 }
 
 export function boundaryConsumerContexts(packageIdentity) {

@@ -16,25 +16,23 @@ final class TransactionPreparationRaceTests: XCTestCase {
             defer { coordinator.invalidate(); probe.finishAll() }
             coordinator.startPreparation(forceGasCheck: false)
             let old = try XCTUnwrap(probe.requests.first)
-            old.continuation.yield(.ready(original))
+            old.continuation.yield(.ready)
             await expectEventually { coordinator.snapshot.canApprove }
             var editedID: UUID?
             for step in schedule {
                 switch (step.actor, step.index) {
                 case (.first, 0), (.first, 1):
-                    var late = original
-                    late.nonce = step.index == 0 ? "0x3" : "0x4"
-                    late.replacePreparedFee(
-                        .legacy(gasPrice: step.index == 0 ? 11 : 12),
-                        provenance: original.feeProvenance
-                    )
-                    old.continuation.yield(.transactionUpdated(late))
+                    old.continuation.yield(.nonce(step.index == 0 ? "0x3" : "0x4"))
+                    old.continuation.yield(.resolvedFee(.init(preparedFee: .legacy(gasPrice: 12), provenance: original.feeProvenance)))
                     if editedID == nil {
-                        await expectEventually { coordinator.snapshot.transaction.nonce == late.nonce }
+                        old.continuation.yield(.interpretation("late \(step.index)"))
+                        await expectEventually { coordinator.snapshot.transaction.interpretation == "late \(step.index)" }
+                        XCTAssertEqual(coordinator.snapshot.transaction.nonce, original.nonce)
+                        XCTAssertEqual(coordinator.snapshot.transaction.preparedFee, original.preparedFee)
                     }
                 case (.first, 2):
                     old.continuation.yield(.feeEstimate(estimate(price: 99)))
-                    old.continuation.yield(.ready(original))
+                    old.continuation.yield(.ready)
                 case (.second, 0):
                     XCTAssertTrue(coordinator.apply(edits: .init(gasPrice: 40, nonce: 7)))
                     editedID = coordinator.snapshot.transaction.id
@@ -44,9 +42,8 @@ final class TransactionPreparationRaceTests: XCTestCase {
                     XCTAssertEqual(probe.requests.count, 2)
                 case (.second, 2):
                     let current = try XCTUnwrap(probe.requests.last)
-                    current.continuation.yield(.transactionUpdated(current.transaction))
                     current.continuation.yield(.feeEstimate(estimate(price: 40)))
-                    current.continuation.yield(.ready(current.transaction))
+                    current.continuation.yield(.ready)
                     await expectEventually { coordinator.snapshot.canApprove }
                 default: XCTFail("Unexpected schedule step")
                 }
@@ -84,13 +81,13 @@ final class TransactionPreparationRaceTests: XCTestCase {
                     case 0:
                         var updated = initial
                         updated.nonce = "0x5"
-                        request.continuation.yield(.transactionUpdated(updated))
+                        request.continuation.yield(.nonce(updated.nonce!))
                         if !cancelled { await expectEventually { coordinator.snapshot.transaction.nonce == "0x5" } }
                     case 1:
                         request.continuation.yield(.feeEstimate(estimate(price: 20)))
                         if !cancelled { await expectEventually { coordinator.snapshot.hasVerifiedFeeEstimate } }
                     case 2:
-                        request.continuation.yield(.ready(coordinator.snapshot.transaction))
+                        request.continuation.yield(.ready)
                         if !cancelled { await expectEventually { coordinator.snapshot.canApprove } }
                     default: XCTFail("Unexpected preparation step")
                     }
@@ -127,7 +124,7 @@ final class TransactionPreparationRaceTests: XCTestCase {
                     case 0:
                         var updated = initial
                         updated.nonce = "0x3"
-                        old.continuation.yield(.transactionUpdated(updated))
+                        old.continuation.yield(.nonce(updated.nonce!))
                         await expectEventually { coordinator.snapshot.transaction.nonce == "0x3" }
                     case 1:
                         old.continuation.yield(.feeEstimate(estimate(price: 20)))
@@ -144,13 +141,13 @@ final class TransactionPreparationRaceTests: XCTestCase {
                 let current = try XCTUnwrap(probe.requests.last)
                 XCTAssertEqual(probe.requests.count, 2)
                 let attempt = coordinator.snapshot.attemptID
-                old.continuation.yield(.transactionUpdated(initial))
+                old.continuation.yield(.nonce(initial.nonce!))
                 old.continuation.yield(.feeEstimate(estimate(price: 99)))
                 var replacement = current.transaction
                 replacement.nonce = "0x9"
-                current.continuation.yield(.transactionUpdated(replacement))
+                current.continuation.yield(.nonce(replacement.nonce!))
                 current.continuation.yield(.feeEstimate(estimate(price: 40)))
-                current.continuation.yield(.ready(replacement))
+                current.continuation.yield(.ready)
                 await expectEventually { coordinator.snapshot.canApprove }
                 XCTAssertEqual(coordinator.snapshot.attemptID, attempt)
                 XCTAssertEqual(coordinator.snapshot.transaction.nonce, "0x9")
@@ -170,11 +167,11 @@ final class TransactionPreparationRaceTests: XCTestCase {
             let coordinator = TransactionApprovalCoordinator(transaction: initial, network: network(), operations: probe.operations)
             defer { coordinator.invalidate(); probe.finishAll() }
             coordinator.startPreparation(forceGasCheck: false)
-            try XCTUnwrap(probe.requests.first).continuation.yield(.ready(initial))
+            try XCTUnwrap(probe.requests.first).continuation.yield(.ready)
             await expectEventually { coordinator.snapshot.canApprove }
             let reservation = try XCTUnwrap(coordinator.reserveForPreflight())
             let pending = Task { await coordinator.preflight(reservation) }
-            defer { pending.cancel(); probe.preflightResult.resolve(.safe(initial, estimate(price: 10))) }
+            defer { pending.cancel(); probe.preflightResult.resolve(.safe(estimate(price: 10))) }
             await probe.preflightEntered.wait()
             var cancelled = false
             for step in schedule {
@@ -182,7 +179,7 @@ final class TransactionPreparationRaceTests: XCTestCase {
                     pending.cancel()
                     cancelled = true
                 } else {
-                    probe.preflightResult.resolve(.safe(initial, estimate(price: 10)))
+                    probe.preflightResult.resolve(.safe(estimate(price: 10)))
                     let result = await pending.value
                     if cancelled {
                         guard case .invalidated = result else { return XCTFail("Late preflight must not approve after cancellation") }

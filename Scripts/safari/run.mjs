@@ -196,7 +196,7 @@ export function safariXcodeCommands(options, descriptorPath, runID) {
     const destination = options.platform === "ios" && options.phase === "build"
         ? "generic/platform=iOS Simulator" : options.destination;
     const base = ["-project", "Wallet.xcodeproj", "-scheme", scheme, "-configuration", options.configuration, "-destination", destination,
-        ...signingSettings(options), "BW_SAFARI_VM_TESTING=YES", `BW_SAFARI_VM_CONFIGURATION=${descriptorPath}`,
+        ...signingSettings(options), "BW_SAFARI_VM_TESTING=YES", "BW_VM_FIXTURE_EXCLUDED_SOURCES=", `BW_SAFARI_VM_CONFIGURATION=${descriptorPath}`,
         `BW_TEST_VM_RUN_ID=${runID}`, "BW_TEST_VM_EXCHANGE=/Volumes/BigWalletBuild/Exchange",
         `SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) BW_SAFARI_VM_TESTING${options.configuration === "Debug" ? " DEBUG" : ""}`];
     const settings = [...base];

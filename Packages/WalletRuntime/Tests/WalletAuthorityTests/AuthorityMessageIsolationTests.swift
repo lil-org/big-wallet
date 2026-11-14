@@ -193,7 +193,7 @@ final class AuthorityMessageIsolationTests: XCTestCase {
         dependencies.makeMetadata = { WalletsMetadataService(storage: fixture.preferences) }
         let preparation = TransactionApprovalOperations(
             prepare: { _, _, _ in AsyncThrowingStream { $0.finish() } },
-            preflight: { transaction, _ in .unavailable(transaction, .init(info: nil, nextBaseFee: nil)) }
+            preflight: { _, _ in .unavailable(.init(info: nil, nextBaseFee: nil)) }
         )
         let system = PopupAuthorityRuntime(composition: fixture.composition,
             solanaEndpoints: AuthorityTestSolanaEndpoints(), broadcaster: RejectingBroadcastForTesting(),

@@ -12,6 +12,19 @@ case " ${SWIFT_ACTIVE_COMPILATION_CONDITIONS:-} " in *' BW_SAFARI_VM_TESTING '*)
     echo 'error: Safari VM compilation and resource modes must agree' >&2
     exit 1
 }
+if [ "$safari_compiled" = YES ]; then
+    [ -z "${BW_VM_FIXTURE_EXCLUDED_SOURCES:-}" ] || {
+        echo 'error: Safari VM builds must include fixture sources' >&2
+        exit 1
+    }
+else
+    for safari_fixture in SafariVMFixtures.swift SafariVMApplicationServices.swift SafariVMExtensionServices.swift; do
+        case " ${BW_VM_FIXTURE_EXCLUDED_SOURCES:-} " in
+            *" $safari_fixture "*) ;;
+            *) echo 'error: ordinary builds must exclude Safari VM fixture sources' >&2; exit 1 ;;
+        esac
+    done
+fi
 if [ "$safari_compiled" = NO ]; then
     /bin/rm -f "$safari_output"
     if [ -f "$safari_resources/popup.js" ]; then

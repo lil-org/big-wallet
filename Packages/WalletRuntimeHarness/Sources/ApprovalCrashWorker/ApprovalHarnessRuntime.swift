@@ -796,12 +796,14 @@ final class HarnessRuntime {
                 continuation.yield(.feeEstimate(.init(info: nil, nextBaseFee: nil, support: .legacy, gasPrice: 10,
                     endpointChainID: BigUInt(UInt64(network.chainId)))))
                 let prepared = Self.preparedTransaction(transaction)
-                continuation.yield(.transactionUpdated(prepared))
-                continuation.yield(.ready(prepared))
+                continuation.yield(.nonce(prepared.nonce!))
+                continuation.yield(.gasLimit(prepared.gas!))
+                continuation.yield(.resolvedFee(.init(preparedFee: prepared.preparedFee!, provenance: prepared.feeProvenance)))
+                continuation.yield(.ready)
                 continuation.finish()
             }
         }, preflight: { transaction, network in
-            .safe(Self.preparedTransaction(transaction), .init(info: nil, nextBaseFee: nil, support: .legacy,
+            .safe(.init(info: nil, nextBaseFee: nil, support: .legacy,
                 gasPrice: 10, endpointChainID: BigUInt(UInt64(network.chainId))))
         })
     }

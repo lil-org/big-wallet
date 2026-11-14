@@ -3943,6 +3943,7 @@
 		2C09CBBA273979C1009AD39B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
 				CODE_SIGN_ENTITLEMENTS = "Safari macOS/Safari.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -3979,6 +3980,7 @@
 		2C09CBBB273979C1009AD39B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
 				CODE_SIGN_ENTITLEMENTS = "Safari macOS/Safari.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -4088,6 +4090,8 @@
 		2C19954A2674C4BA00A8E370 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BW_VM_FIXTURE_EXCLUDED_SOURCES = "SafariVMFixtures.swift SafariVMApplicationServices.swift SafariVMExtensionServices.swift";
+				EXCLUDED_SOURCE_FILE_NAMES = "$(inherited) $(BW_VM_FIXTURE_EXCLUDED_SOURCES)";
 				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				SWIFT_UPCOMING_FEATURE_INFER_ISOLATED_CONFORMANCES = YES;
 				SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT = YES;
@@ -4159,6 +4163,8 @@
 		2C19954B2674C4BA00A8E370 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BW_VM_FIXTURE_EXCLUDED_SOURCES = "SafariVMFixtures.swift SafariVMApplicationServices.swift SafariVMExtensionServices.swift";
+				EXCLUDED_SOURCE_FILE_NAMES = "$(inherited) $(BW_VM_FIXTURE_EXCLUDED_SOURCES)";
 				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				SWIFT_UPCOMING_FEATURE_INFER_ISOLATED_CONFORMANCES = YES;
 				SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT = YES;
@@ -4357,6 +4363,7 @@
 		2C6054892D529A9A00779570 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CODE_SIGN_ENTITLEMENTS = "Safari visionOS/Safari visionOS.entitlements";
@@ -4396,6 +4403,7 @@
 		2C60548A2D529A9A00779570 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CODE_SIGN_ENTITLEMENTS = "Safari visionOS/Safari visionOS.entitlements";
@@ -4582,6 +4590,7 @@
 		2CCEB84727594E2A00768473 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
 				CODE_SIGN_ENTITLEMENTS = "Safari iOS/Safari iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
@@ -4620,6 +4629,7 @@
 		2CCEB84827594E2A00768473 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
 				CODE_SIGN_ENTITLEMENTS = "Safari iOS/Safari iOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";

@@ -338,11 +338,6 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
             if operation.isCurrent { cancel() }
             return
         }
-        guard dependencies.credentials.validateAccess(session) else {
-            session.invalidate()
-            if operation.isCurrent { cancel() }
-            return
-        }
         guard operation.complete(session) else {
             if authenticationAttempt === attempt {
                 cancelAccessAuthentication()

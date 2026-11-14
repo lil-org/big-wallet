@@ -225,7 +225,6 @@ public final class TransactionApprovalCoordinator {
 
     private struct State {
         var transaction: Transaction
-        let originalTransaction: Transaction
         let network: EthereumNetwork
         var preparation = TransactionPreparationState()
         var hasPendingSliderPreparation = false
@@ -304,7 +303,7 @@ public final class TransactionApprovalCoordinator {
         operations: TransactionApprovalOperations,
         onSnapshot: @escaping (TransactionApprovalSnapshot) -> Void = { _ in }
     ) {
-        state = State(transaction: transaction, originalTransaction: transaction, network: network)
+        state = State(transaction: transaction, network: network)
         self.operations = operations
         self.onSnapshot = onSnapshot
     }
@@ -566,15 +565,28 @@ public final class TransactionApprovalCoordinator {
         invalidate()
     }
 
-    private func receivePreparationUpdate(_ transaction: Transaction, token: RequestToken) {
+    private func receivePreparationUpdate(_ event: TransactionPreparationEvent, token: RequestToken) {
         guard acceptsPreparationUpdate(token) else { return }
-        guard transaction.id == token.transactionID,
-              TransactionReviewBinding.preservesPayload(transaction, reviewed: state.originalTransaction) else {
-            rejectPreparation(token)
-            return
+        if case .interpretation(let interpretation) = event {
+            state.transaction.interpretation = interpretation
+        } else {
+            guard isCurrent(token) else { return }
+            switch event {
+            case .nonce(let nonce):
+                state.transaction.nonce = nonce
+            case .gasLimit(let gas):
+                state.transaction.gas = gas
+            case .resolvedFee(let update):
+                if state.transaction.preparedFee == update.preparedFee {
+                    state.transaction.replaceFeeProvenance(update.provenance)
+                } else {
+                    state.transaction.replacePreparedFee(update.preparedFee, provenance: update.provenance)
+                }
+            case .interpretation, .feeEstimate, .ready:
+                return
+            }
         }
-        state.transaction = transaction
-        state.suggestedNonce = state.suggestedNonce ?? transaction.decimalNonceString
+        state.suggestedNonce = state.suggestedNonce ?? state.transaction.decimalNonceString
         publishSnapshot()
     }
 
@@ -590,24 +602,17 @@ public final class TransactionApprovalCoordinator {
     }
 
     private func receivePreparationResult(
-        _ result: Result<Transaction, TransactionPreparationFailure>, token: RequestToken
+        _ result: Result<Void, TransactionPreparationFailure>, token: RequestToken
     ) {
         guard token.kind == .preparation, isCurrent(token) else { return }
         switch result {
-        case .success(let prepared):
-            guard prepared.id == token.transactionID,
-                  TransactionReviewBinding.preservesPayload(prepared, reviewed: state.originalTransaction),
-                  prepared.nonce == state.transaction.nonce,
-                  prepared.gas == state.transaction.gas,
-                  prepared.preparedFee == state.transaction.preparedFee,
-                  prepared.feeProvenance == state.transaction.feeProvenance else {
+        case .success:
+            guard state.transaction.isReadyForApproval(on: state.network) else {
                 rejectPreparation(token)
                 return
             }
-            guard prepared.id == token.transactionID,
-                state.preparation.markReady(attemptID: token.attemptID, transactionID: token.transactionID)
-            else { return }
-            state.suggestedNonce = state.suggestedNonce ?? prepared.decimalNonceString
+            guard state.preparation.markReady(attemptID: token.attemptID, transactionID: token.transactionID) else { return }
+            state.suggestedNonce = state.suggestedNonce ?? state.transaction.decimalNonceString
         case .failure(let failure):
             guard state.preparation.markFailed(attemptID: token.attemptID, transactionID: token.transactionID) else {
                 return
@@ -630,16 +635,6 @@ public final class TransactionApprovalCoordinator {
         state.transaction.nextBaseFeePerGas = nil
         cancelActiveRequest()
         publishSnapshot()
-    }
-
-    private func install(
-        _ transaction: Transaction,
-        estimate: GasEstimate
-    ) {
-        state.transaction = transaction
-        state.suggestedNonce =
-            state.suggestedNonce ?? transaction.decimalNonceString
-        install(estimate)
     }
 
     private func install(_ estimate: GasEstimate) {
@@ -672,12 +667,12 @@ public final class TransactionApprovalCoordinator {
                     try Task.checkCancellation()
                     guard let self else { return }
                     switch event {
-                    case .transactionUpdated(let value):
-                        receivePreparationUpdate(value, token: token)
+                    case .nonce, .gasLimit, .resolvedFee, .interpretation:
+                        receivePreparationUpdate(event, token: token)
                     case .feeEstimate(let estimate):
                         receivePreparationEstimate(estimate, token: token)
-                    case .ready(let value):
-                        receivePreparationResult(.success(value), token: token)
+                    case .ready:
+                        receivePreparationResult(.success(()), token: token)
                     }
                 }
             } catch is CancellationError {
@@ -705,7 +700,7 @@ public final class TransactionApprovalCoordinator {
                 result = fetched
             } catch {
                 guard !Task.isCancelled else { return }
-                result = .unavailable(transaction, GasEstimate(info: nil, nextBaseFee: nil))
+                result = .unavailable(GasEstimate(info: nil, nextBaseFee: nil))
             }
             guard let self, let request else { return }
             completePreflight(request, result: result)
@@ -719,7 +714,7 @@ public final class TransactionApprovalCoordinator {
             clearActiveRequest(token)
             return
         }
-        guard preflightPreservesReview(result) else {
+        guard preflightMatchesNetwork(result) else {
             guard state.preparation.markFailed(attemptID: token.attemptID, transactionID: token.transactionID) else {
                 clearActiveRequest(token)
                 return
@@ -734,38 +729,35 @@ public final class TransactionApprovalCoordinator {
         }
         let outcome: TransactionPreflightOutcome
         switch result {
-        case .safe(let transaction, let estimate):
-            guard transaction.id == token.transactionID else { clearActiveRequest(token); return }
-            install(transaction, estimate: estimate)
+        case .safe(let estimate):
+            install(estimate)
             state.notice = nil
             state.hasPendingSliderPreparation = false
             state.preparation.finish()
             outcome = .approved(state.transaction)
-        case .walletManagedUpdated(let transaction, let estimate):
-            guard transaction.id == token.transactionID,
-                state.preparation.returnToReview(
+        case .walletManagedUpdated(let update, let estimate):
+            guard state.preparation.returnToReview(
                     attemptID: token.attemptID, transactionID: token.transactionID
                 )
             else { clearActiveRequest(token); return }
-            install(transaction, estimate: estimate)
+            state.transaction.replacePreparedFee(update.preparedFee, provenance: update.provenance)
+            install(estimate)
             state.notice = .feesUpdated
             outcome = .reviewRequired
-        case .userControlledUnsafe(let transaction, let estimate):
-            guard transaction.id == token.transactionID,
-                state.preparation.beginUnsafeFeeEditing(
+        case .userControlledUnsafe(let estimate):
+            guard state.preparation.beginUnsafeFeeEditing(
                     attemptID: token.attemptID, transactionID: token.transactionID
                 )
             else { clearActiveRequest(token); return }
-            install(transaction, estimate: estimate)
+            install(estimate)
             state.notice = .unsafeFees
             outcome = .reviewRequired
-        case .unavailable(let transaction, let estimate):
-            guard transaction.id == token.transactionID,
-                state.preparation.markFailed(
+        case .unavailable(let estimate):
+            guard state.preparation.markFailed(
                     attemptID: token.attemptID, transactionID: token.transactionID
                 )
             else { clearActiveRequest(token); return }
-            install(transaction, estimate: estimate)
+            install(estimate)
             state.notice = .feesUnavailable
             outcome = .reviewRequired
         }
@@ -776,25 +768,15 @@ public final class TransactionApprovalCoordinator {
         request.resolve(resolution)
     }
 
-    private func preflightPreservesReview(_ result: TransactionFeePreflightResult) -> Bool {
-        let candidate: Transaction
+    private func preflightMatchesNetwork(_ result: TransactionFeePreflightResult) -> Bool {
         let estimate: GasEstimate
         switch result {
-        case .safe(let transaction, let value), .walletManagedUpdated(let transaction, let value),
-             .userControlledUnsafe(let transaction, let value), .unavailable(let transaction, let value):
-            candidate = transaction
+        case .safe(let value), .walletManagedUpdated(_, let value),
+             .userControlledUnsafe(let value), .unavailable(let value):
             estimate = value
         }
-        let reviewed = state.transaction
-        guard state.network.chainId > 0, candidate.id == reviewed.id,
-              TransactionReviewBinding.preservesPayload(candidate, reviewed: state.originalTransaction),
-              candidate.nonce == reviewed.nonce, candidate.gas == reviewed.gas,
-              estimate.endpointChainID.map({ $0 == BigUInt(UInt64(state.network.chainId)) }) != false else { return false }
-        if case .safe = result {
-            return candidate.preparedFee == reviewed.preparedFee &&
-                candidate.feeProvenance == reviewed.feeProvenance
-        }
-        return true
+        return state.network.chainId > 0 &&
+            estimate.endpointChainID.map({ $0 == BigUInt(UInt64(state.network.chainId)) }) != false
     }
 
     private func isActive(_ request: PreflightRequest) -> Bool {

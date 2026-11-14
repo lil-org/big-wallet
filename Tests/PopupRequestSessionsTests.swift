@@ -32,14 +32,19 @@ private final class PopupPreparationSource: Sendable {
     private let continuation: AsyncThrowingStream<TransactionPreparationEvent, Error>.Continuation
 
     init() { (stream, continuation) = AsyncThrowingStream.makeStream() }
-    func update(_ transaction: Transaction) { continuation.yield(.transactionUpdated(transaction)) }
-    func estimate(_ estimate: GasEstimate) { continuation.yield(.feeEstimate(estimate)) }
-    func resolve(_ result: Result<Transaction, TransactionPreparationFailure>) {
-        switch result {
-        case .success(let transaction): continuation.yield(.ready(transaction))
-        case .failure(let error): continuation.finish(throwing: error)
+    func yield(_ event: TransactionPreparationEvent) { continuation.yield(event) }
+    func yieldPreparedFields(_ transaction: Transaction) {
+        if let nonce = transaction.nonce { yield(.nonce(nonce)) }
+        if let gas = transaction.gas { yield(.gasLimit(gas)) }
+        if let fee = transaction.preparedFee {
+            yield(.resolvedFee(.init(preparedFee: fee, provenance: transaction.feeProvenance)))
         }
+        if let interpretation = transaction.interpretation { yield(.interpretation(interpretation)) }
     }
+    func estimate(_ estimate: GasEstimate) { yield(.feeEstimate(estimate)) }
+    func ready() { yield(.ready) }
+    func fail(_ error: TransactionPreparationFailure) { continuation.finish(throwing: error) }
+
 }
 
 private final class PopupCancellationRecorder: Sendable {
@@ -161,7 +166,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             resolvedNetwork: ResolvedEthereumNetwork(network: popupTransactionNetwork(), source: .custom),
             walletId: "wallet", account: popupTestAccount()
         )
-        var finishPreparation: ((Result<Transaction, TransactionPreparationFailure>) -> Void)?
+        var finishPreparation: (() -> Void)?
         var preparationInput: Transaction?
         var preparationUpdate: ((Transaction) -> Void)?
         let controller = makePopupSessionsForTesting(
@@ -172,8 +177,8 @@ final class PopupRequestSessionsTests: XCTestCase {
                 prepare: { incoming, _, _ in
                     let source = PopupPreparationSource()
                     preparationInput = incoming
-                    preparationUpdate = source.update
-                    finishPreparation = source.resolve
+                    preparationUpdate = source.yieldPreparedFields
+                    finishPreparation = source.ready
                     return source.stream
                 },
                 preflight: { _, _ in
@@ -198,7 +203,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         let complete = try XCTUnwrap(finishPreparation)
         let prepared = popupPreparedTransaction(try XCTUnwrap(preparationInput))
         preparationUpdate?(prepared)
-        complete(.success(prepared))
+        complete()
         let ready = try await controller.dispatchPreparedJSON(request: read, profileIdentifier: nil)
         let readyReview = try XCTUnwrap(ready["review"] as? [String: Any])
         XCTAssertNil(readyReview["phase"])
@@ -256,7 +261,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                 },
                 preflight: { transaction, _ in
                     XCTFail("A stale approval must not preflight")
-                    return .unavailable(transaction, .init(info: nil, nextBaseFee: nil))
+                    return .unavailable(.init(info: nil, nextBaseFee: nil))
                 }
             ),
             executionEnvironment: popupExecutionEnvironment(requestProcessor: CompactPopupProcessor { _ in
@@ -274,8 +279,8 @@ final class PopupRequestSessionsTests: XCTestCase {
         await fulfillment(of: [catalogStarted], timeout: 2)
 
         let prepared = popupPreparedTransaction(try XCTUnwrap(preparationInput))
-        source.update(prepared)
-        source.resolve(.success(prepared))
+        source.yieldPreparedFields(prepared)
+        source.ready()
         let updated = try await controller.dispatchPreparedJSON(request: read, profileIdentifier: nil)
         let updatedToken = try XCTUnwrap((updated["review"] as? [String: Any])?["reviewToken"] as? String)
         XCTAssertNotEqual(updatedToken, initialToken)
@@ -429,12 +434,12 @@ final class PopupRequestSessionsTests: XCTestCase {
                     prepare: { _, _, _ in
                         preparations += 1
                         let source = PopupPreparationSource()
-                        source.resolve(.failure(.gasPriceUnavailable))
+                        source.fail(.gasPriceUnavailable)
                         return source.stream
                     },
                     preflight: { transaction, _ in
                         XCTFail("A mutation must not preflight")
-                        return .unavailable(transaction, popupTransactionEstimate())
+                        return .unavailable(popupTransactionEstimate())
                     }
                 ),
                 executionEnvironment: popupExecutionEnvironment(requestProcessor: CompactPopupProcessor { _ in
@@ -1087,8 +1092,8 @@ final class PopupRequestSessionsTests: XCTestCase {
                 transactionApprovalOperations: .init(prepare: { transaction, _, _ in
                     let source = PopupPreparationSource()
                     let prepared = popupPreparedTransaction(transaction)
-                    source.update(prepared)
-                    source.resolve(.success(prepared))
+                    source.yieldPreparedFields(prepared)
+                    source.ready()
                     return source.stream
                 }, preflight: { transaction, _ in
                     switch change {
@@ -1111,7 +1116,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                     }
                     var updated = transaction
                     updated.replacePreparedFee(.legacy(gasPrice: 25), provenance: .init(gasPrice: .automatic))
-                    return .walletManagedUpdated(updated, popupTransactionEstimate())
+                    return .walletManagedUpdated(.init(preparedFee: updated.preparedFee!, provenance: updated.feeProvenance), popupTransactionEstimate())
                 }),
                 approvalNetworkResolver: { _ in currentNetwork },
                 executionEnvironment: popupExecutionEnvironment(requestProcessor: CompactPopupProcessor(execute: { _, _, _, _ in
@@ -1706,8 +1711,8 @@ final class PopupRequestSessionsTests: XCTestCase {
     func testTransactionSessionCompletesSynchronousPreflightOnce() async throws {
         let session = await makeTransactionApprovalSession { transaction, _ in
             let source = PopupPreflightSource()
-            source.resolve(.safe(transaction, popupTransactionEstimate()))
-            source.resolve(.safe(transaction, popupTransactionEstimate()))
+            source.resolve(.safe(popupTransactionEstimate()))
+            source.resolve(.safe(popupTransactionEstimate()))
             return try await source.value(cancellation: nil)
         }
         let token = try XCTUnwrap(session.reserveForPreflight())
@@ -1728,8 +1733,8 @@ final class PopupRequestSessionsTests: XCTestCase {
         let session = await makeTransactionApprovalSession(
             prepare: { transaction, _, _ in
                 let source = PopupPreparationSource()
-                preparationUpdate = source.update
-                source.resolve(.success(transaction))
+                preparationUpdate = source.yieldPreparedFields
+                source.ready()
                 return source.stream
             },
             preflight: { transaction, _ in
@@ -1757,7 +1762,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         guard case .invalidated = duplicate else { return XCTFail("Expected duplicate rejection") }
         XCTAssertEqual(session.snapshot.phase, .preflighting)
         XCTAssertEqual(preflightTransaction?.interpretation, reviewedTransaction.interpretation)
-        preflightCompletion?(.safe(reviewedTransaction, popupTransactionEstimate()))
+        preflightCompletion?(.safe(popupTransactionEstimate()))
         guard case .approved = await approvalTask.value else { return XCTFail("Expected approval") }
     }
 
@@ -1765,7 +1770,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         var session: PopupTransactionSession!
         session = await makeTransactionApprovalSession { transaction, _ in
             let source = PopupPreflightSource()
-            source.resolve(.safe(transaction, popupTransactionEstimate()))
+            source.resolve(.safe(popupTransactionEstimate()))
             session.invalidate()
             return try await source.value(cancellation: nil)
         }
@@ -1782,7 +1787,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         let session = await makeTransactionApprovalSession { transaction, _ in
             let source = PopupPreflightSource()
             preflightCount += 1
-            source.resolve(.safe(transaction, popupTransactionEstimate()))
+            source.resolve(.safe(popupTransactionEstimate()))
             return try await source.value(cancellation: nil)
         }
         let firstToken = try XCTUnwrap(session.reserveForPreflight())
@@ -1802,15 +1807,15 @@ final class PopupRequestSessionsTests: XCTestCase {
             TransactionReviewNotice,
             (Transaction, GasEstimate) -> TransactionFeePreflightResult
         )] = [
-            (.feesUpdated, { .walletManagedUpdated($0, $1) }),
-            (.unsafeFees, { .userControlledUnsafe($0, $1) }),
-            (.feesUnavailable, { .unavailable($0, $1) }),
+            (.feesUpdated, { .walletManagedUpdated(.init(preparedFee: $0.preparedFee!, provenance: $0.feeProvenance), $1) }),
+            (.unsafeFees, { .userControlledUnsafe($1) }),
+            (.feesUnavailable, { .unavailable($1) }),
         ]
         for (kind, makeResult) in cases {
             let session = await makeTransactionApprovalSession { transaction, _ in
                 let source = PopupPreflightSource()
                 source.resolve(makeResult(transaction, popupTransactionEstimate()))
-                source.resolve(.safe(transaction, popupTransactionEstimate()))
+                source.resolve(.safe(popupTransactionEstimate()))
                 return try await source.value(cancellation: nil)
             }
             let token = try XCTUnwrap(session.reserveForPreflight())
@@ -1862,8 +1867,8 @@ final class PopupRequestSessionsTests: XCTestCase {
         try await waitForCondition { approvalCompleted }
         guard case .invalidated = await approvalTask.value else { return XCTFail("Expected invalidation") }
         XCTAssertTrue(cancellation.isCancelled)
-        preflightCompletion?(.safe(transaction, popupTransactionEstimate()))
-        preflightCompletion?(.unavailable(transaction, popupTransactionEstimate()))
+        preflightCompletion?(.safe(popupTransactionEstimate()))
+        preflightCompletion?(.unavailable(popupTransactionEstimate()))
         XCTAssertEqual(session.snapshot.phase, .finished)
         XCTAssertNil(session.snapshot.notice)
         XCTAssertFalse(session.snapshot.canApprove)
@@ -1889,7 +1894,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         transaction: Transaction = popupReadyTransaction(),
         prepare: @escaping TransactionApprovalOperations.Prepare = { transaction, _, _ in
             let source = PopupPreparationSource()
-            source.resolve(.success(transaction))
+            source.ready()
             return source.stream
         },
         preflight: @escaping TransactionApprovalOperations.Preflight
@@ -2012,7 +2017,7 @@ final class PopupRequestSessionsTests: XCTestCase {
                 let source = PopupPreparationSource()
                 preparationCount += 1
                 source.estimate(estimate)
-                source.resolve(.success(transaction))
+                source.ready()
                 return source.stream
             },
             preflight: { _, _ in
@@ -2181,7 +2186,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             prepare: { _, _, _ in
                 let source = PopupPreparationSource()
                 preparationCount += 1
-                source.resolve(.failure(.gasPriceUnavailable))
+                source.fail(.gasPriceUnavailable)
                 return source.stream
             },
             preflight: { _, _ in
@@ -2220,7 +2225,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             prepare: { transaction, _, _ in
                 let source = PopupPreparationSource()
                 source.estimate(popupTransactionEstimate())
-                source.resolve(.success(transaction))
+                source.ready()
                 return source.stream
             },
             preflight: { _, _ in
@@ -2255,7 +2260,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             prepare: { transaction, _, _ in
                 let source = PopupPreparationSource()
                 preparationCount += 1
-                source.resolve(.success(transaction))
+                source.ready()
                 return source.stream
             },
             preflight: { _, _ in
@@ -2321,7 +2326,7 @@ final class PopupRequestSessionsTests: XCTestCase {
             operations: TransactionApprovalOperations(
                 prepare: { transaction, _, _ in
                     let source = PopupPreparationSource()
-                    source.resolve(.success(transaction))
+                    source.ready()
                     return source.stream
                 },
                 preflight: { _, _ in
@@ -4486,7 +4491,7 @@ extension PopupRequestSessionsTests {
                     prepare: popupImmediateTransactionOperations().prepare,
                     preflight: { transaction, _ in
                         XCTFail("Canceled authentication must not preflight")
-                        return .safe(transaction, popupTransactionEstimate())
+                        return .safe(popupTransactionEstimate())
                     }
                 ),
                 approvalNetworkResolver: { networkAvailable ? popupApprovalNetwork(chainID: $0) : .unavailable },
@@ -4736,8 +4741,8 @@ extension PopupRequestSessionsTests {
                 prepare: { incoming, _, _ in
                     let source = PopupPreparationSource()
                     transaction = popupPreparedTransaction(incoming)
-                    source.update(transaction)
-                    source.resolve(.success(transaction))
+                    source.yieldPreparedFields(transaction)
+                    source.ready()
                     return source.stream
                 },
                 preflight: { _, _ in
@@ -4771,7 +4776,7 @@ extension PopupRequestSessionsTests {
         authenticationGate.resolve(())
         try await waitForCondition { deadlines.count == 2 && preflightCompletion != nil }
         clock.setDate(deadline.addingTimeInterval(-5))
-        preflightCompletion?(.safe(transaction, popupTransactionEstimate()))
+        preflightCompletion?(.safe(popupTransactionEstimate()))
         try await waitForCondition { deadlines.count == 4 && executionStarted }
         XCTAssertEqual(deadlines, [deadline, deadline, deadline, deadline])
         executionGate.resolve(())
@@ -4806,15 +4811,15 @@ extension PopupRequestSessionsTests {
                 prepare: { transaction, _, _ in
                     let source = PopupPreparationSource()
                     let prepared = popupPreparedTransaction(transaction)
-                    source.update(prepared)
-                    source.resolve(.success(prepared))
+                    source.yieldPreparedFields(prepared)
+                    source.ready()
                     return source.stream
                 },
                 preflight: { transaction, _ in
                     let source = PopupPreflightSource()
                     var updated = transaction
                     updated.replacePreparedFee(.legacy(gasPrice: 25), provenance: .init(gasPrice: .automatic))
-                    source.resolve(.walletManagedUpdated(updated, popupTransactionEstimate()))
+                    source.resolve(.walletManagedUpdated(.init(preparedFee: updated.preparedFee!, provenance: updated.feeProvenance), popupTransactionEstimate()))
                     clock.setDate(deadline)
                     return try await source.value(cancellation: nil)
                 }
@@ -5079,14 +5084,14 @@ extension PopupRequestSessionsTests {
                     prepare: { transaction, _, _ in
                         let source = PopupPreparationSource()
                         let prepared = popupPreparedTransaction(transaction)
-                        source.update(prepared)
-                        source.resolve(.success(prepared))
+                        source.yieldPreparedFields(prepared)
+                        source.ready()
                         return source.stream
                     },
                     preflight: { transaction, _ in
                         let source = PopupPreflightSource()
                         XCTFail("A mismatched signer must not reach transaction preflight")
-                        source.resolve(.unavailable(transaction, popupTransactionEstimate()))
+                        source.resolve(.unavailable(popupTransactionEstimate()))
                         return try await source.value(cancellation: nil)
                     }
                 ),
@@ -5780,13 +5785,13 @@ extension PopupRequestSessionsTests {
                     if forceGasCheck { prepared.gas = "0x10000" }
                     preparedGasLimits.append(prepared.gas)
                     source.estimate(popupTransactionEstimate())
-                    source.update(prepared)
-                    source.resolve(.success(prepared))
+                    source.yieldPreparedFields(prepared)
+                    source.ready()
                     return source.stream
                 },
                 preflight: { transaction, _ in
                     preflights += 1
-                    return .safe(transaction, popupTransactionEstimate())
+                    return .safe(popupTransactionEstimate())
                 }
             ),
             approvalNetworkResolver: popupApprovalNetwork,
@@ -5890,8 +5895,8 @@ extension PopupRequestSessionsTests {
                 var prepared = transaction
                 prepared.nonce = prepared.nonce ?? pendingNonce
                 source.estimate(popupTransactionEstimate())
-                source.update(prepared)
-                source.resolve(.success(prepared))
+                source.yieldPreparedFields(prepared)
+                source.ready()
                 return source.stream
             },
             preflight: { _, _ in
@@ -6214,8 +6219,8 @@ extension PopupRequestSessionsTests {
                 prepare: { transaction, _, _ in
                     let source = PopupPreparationSource()
                     let prepared = popupPreparedTransaction(transaction)
-                    source.update(prepared)
-                    source.resolve(.success(prepared))
+                    source.yieldPreparedFields(prepared)
+                    source.ready()
                     return source.stream
                 },
                 preflight: { transaction, _ in
@@ -6224,9 +6229,9 @@ extension PopupRequestSessionsTests {
                     if preflights == 1 {
                         var updated = transaction
                         updated.replacePreparedFee(.legacy(gasPrice: 25), provenance: .init(gasPrice: .automatic))
-                        source.resolve(.walletManagedUpdated(updated, popupTransactionEstimate()))
+                        source.resolve(.walletManagedUpdated(.init(preparedFee: updated.preparedFee!, provenance: updated.feeProvenance), popupTransactionEstimate()))
                     } else {
-                        source.resolve(.safe(transaction, popupTransactionEstimate()))
+                        source.resolve(.safe(popupTransactionEstimate()))
                     }
                     return try await source.value(cancellation: nil)
                 }
@@ -6308,15 +6313,15 @@ extension PopupRequestSessionsTests {
                     let source = PopupPreparationSource()
                     var prepared = popupPreparedTransaction(transaction)
                     prepared.nonce = nextNonce.value
-                    source.update(prepared)
-                    source.resolve(.success(prepared))
+                    source.yieldPreparedFields(prepared)
+                    source.ready()
                     return source.stream
                 },
                 preflight: { transaction, _ in
                     preflights += 1
                     var updated = transaction
                     updated.replacePreparedFee(.legacy(gasPrice: 25), provenance: .init(gasPrice: .automatic))
-                    return .walletManagedUpdated(updated, popupTransactionEstimate())
+                    return .walletManagedUpdated(.init(preparedFee: updated.preparedFee!, provenance: updated.feeProvenance), popupTransactionEstimate())
                 }
             ),
             approvalNetworkResolver: popupApprovalNetwork,
@@ -7031,8 +7036,8 @@ extension PopupRequestSessionsTests {
             prepare: { incoming, _, _ in
                 let source = PopupPreparationSource()
                 transaction = popupPreparedTransaction(incoming)
-                source.update(transaction)
-                source.resolve(.success(transaction))
+                source.yieldPreparedFields(transaction)
+                source.ready()
                 return source.stream
             },
             preflight: { _, _ in
@@ -7105,7 +7110,7 @@ extension PopupRequestSessionsTests {
         try await waitForCondition { preflightCompletion != nil }
         XCTAssertFalse(dispatchCompleted)
 
-        preflightCompletion?(.safe(transaction, popupTransactionEstimate()))
+        preflightCompletion?(.safe(popupTransactionEstimate()))
         let response = await dispatch.value
         let events = await store.events()
         XCTAssertEqual(response["status"] as? String, "ok")
@@ -7134,8 +7139,8 @@ extension PopupRequestSessionsTests {
                 let source = PopupPreparationSource()
                 var prepared = popupPreparedTransaction(transaction)
                 if forceGasCheck { prepared.gas = approvedTransaction.gas }
-                source.update(prepared)
-                source.resolve(.success(prepared))
+                source.yieldPreparedFields(prepared)
+                source.ready()
                 return source.stream
             },
             preflight: { canonical, _ in
@@ -7144,7 +7149,7 @@ extension PopupRequestSessionsTests {
                 XCTAssertEqual(canonical.gas, approvedTransaction.gas)
                 XCTAssertEqual(canonical.preparedFee, approvedTransaction.preparedFee)
                 XCTAssertEqual(canonical.feeProvenance, approvedTransaction.feeProvenance)
-                source.resolve(.safe(canonical, popupTransactionEstimate()))
+                source.resolve(.safe(popupTransactionEstimate()))
                 return try await source.value(cancellation: nil)
             }
         )
@@ -7248,41 +7253,30 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(backingAccess.retirementCount, 1)
     }
 
-    func testTransactionApprovalPreservesReviewedPayloadDespiteChangedPreflightOutput() async throws {
+    func testTransactionApprovalPreservesReviewedPayloadAfterPreflightEndpointMismatch() async throws {
         let store = try makeStore()
         let snapshot = try await enqueue(popupSnapshot(id: 63, provider: .ethereum, method: "signTransaction"), in: store)
         let reviewedTransaction = popupReadyTransaction()
-        let changedTransaction = Transaction(
-            id: reviewedTransaction.id,
-            from: "0x0000000000000000000000000000000000000088",
-            to: "0x0000000000000000000000000000000000000099",
-            nonce: reviewedTransaction.nonce,
-            gas: reviewedTransaction.gas,
-            value: "0x99",
-            data: "0xabcd",
-            feeIntent: .legacy(gasPrice: 10),
-            preparedFee: .legacy(gasPrice: 10),
-            feeSource: .automatic
-        )
         let network = popupTransactionNetwork()
         var preparations = 0
         var authenticationCount = 0
         var resolveCount = 0
-        var replacesPayload = true
+        var mismatchedEndpoint = true
         let signing = PopupSigningProbe()
         let operations = TransactionApprovalOperations(
             prepare: { transaction, _, _ in
                 let source = PopupPreparationSource()
                 let prepared = popupPreparedTransaction(transaction)
-                source.update(prepared)
-                source.resolve(.success(prepared))
+                source.yieldPreparedFields(prepared)
+                source.ready()
                 return source.stream
             },
             preflight: { canonical, _ in
                 let source = PopupPreflightSource()
-                var changed = replacesPayload ? changedTransaction : canonical
-                changed.id = canonical.id
-                source.resolve(.safe(changed, popupTransactionEstimate()))
+                let estimate = mismatchedEndpoint
+                    ? GasEstimate(info: nil, nextBaseFee: nil, support: .legacy, endpointChainID: 99)
+                    : popupTransactionEstimate()
+                source.resolve(.safe(estimate))
                 return try await source.value(cancellation: nil)
             }
         )
@@ -7375,7 +7369,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(stale["status"] as? String, "ignored")
         XCTAssertEqual(authenticationCount, 1)
 
-        replacesPayload = false
+        mismatchedEndpoint = false
         let retry = try await controller.dispatchPreparedJSON(request: try popupCommand(
             subject: "retryTransaction", id: snapshot.handle.id,
             requestToken: snapshot.handle.requestToken, reviewToken: retryToken
@@ -7419,13 +7413,13 @@ extension PopupRequestSessionsTests {
             prepare: { transaction, _, _ in
                 let source = PopupPreparationSource()
                 let prepared = popupPreparedTransaction(transaction)
-                source.update(prepared)
-                source.resolve(.success(prepared))
+                source.yieldPreparedFields(prepared)
+                source.ready()
                 return source.stream
             },
             preflight: { transaction, _ in
                 let source = PopupPreflightSource()
-                source.resolve(.safe(transaction, popupTransactionEstimate()))
+                source.resolve(.safe(popupTransactionEstimate()))
                 return try await source.value(cancellation: nil)
             }
         )
@@ -7501,13 +7495,13 @@ extension PopupRequestSessionsTests {
             prepare: { transaction, _, _ in
                 let source = PopupPreparationSource()
                 let prepared = popupPreparedTransaction(transaction)
-                source.update(prepared)
-                source.resolve(.success(prepared))
+                source.yieldPreparedFields(prepared)
+                source.ready()
                 return source.stream
             },
             preflight: { transaction, _ in
                 let source = PopupPreflightSource()
-                source.resolve(.safe(transaction, popupTransactionEstimate()))
+                source.resolve(.safe(popupTransactionEstimate()))
                 return try await source.value(cancellation: nil)
             }
         )
@@ -7632,15 +7626,15 @@ extension PopupRequestSessionsTests {
             prepare: { incoming, _, _ in
                 let source = PopupPreparationSource()
                 transaction = popupPreparedTransaction(incoming)
-                preparationUpdate = source.update
-                source.update(transaction)
-                source.resolve(.success(transaction))
+                preparationUpdate = source.yieldPreparedFields
+                source.yieldPreparedFields(transaction)
+                source.ready()
                 return source.stream
             },
             preflight: { transaction, _ in
                 let source = PopupPreflightSource()
                 preflightCount += 1
-                source.resolve(.safe(transaction, popupTransactionEstimate()))
+                source.resolve(.safe(popupTransactionEstimate()))
                 return try await source.value(cancellation: nil)
             }
         )
@@ -7764,8 +7758,8 @@ extension PopupRequestSessionsTests {
                 prepare: { incoming, _, _ in
                     let source = PopupPreparationSource()
                     transaction = popupPreparedTransaction(incoming)
-                    source.update(transaction)
-                    source.resolve(.success(transaction))
+                    source.yieldPreparedFields(transaction)
+                    source.ready()
                     return source.stream
                 },
                 preflight: { _, _ in
@@ -7820,7 +7814,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(response["status"] as? String, "ok")
         XCTAssertTrue(cancellation.isCancelled)
         XCTAssertFalse(access.validateCurrent())
-        preflightCompletion?(.safe(transaction, popupTransactionEstimate()))
+        preflightCompletion?(.safe(popupTransactionEstimate()))
         XCTAssertEqual(executionCount, 0)
         let events = await store.events()
         XCTAssertEqual(events, ["claim", "complete", "abandon"])
@@ -7854,8 +7848,8 @@ extension PopupRequestSessionsTests {
                     prepare: { incoming, _, _ in
                         let source = PopupPreparationSource()
                         transaction = popupPreparedTransaction(incoming)
-                        source.update(transaction)
-                        source.resolve(.success(transaction))
+                        source.yieldPreparedFields(transaction)
+                        source.ready()
                         return source.stream
                     },
                     preflight: { _, _ in
@@ -7892,7 +7886,7 @@ extension PopupRequestSessionsTests {
                 return response
             }
             defer {
-                preflightCompletion?(.unavailable(transaction, popupTransactionEstimate()))
+                preflightCompletion?(.unavailable(popupTransactionEstimate()))
             }
 
             try await waitForCondition { dispatchCompleted }
@@ -7903,7 +7897,7 @@ extension PopupRequestSessionsTests {
             XCTAssertFalse(access.validateCurrent())
             XCTAssertEqual(preflightCompletion != nil, remainingAfterAuthentication > 0)
             if preflightCompletion != nil { XCTAssertTrue(cancellation.isCancelled) }
-            preflightCompletion?(.safe(transaction, popupTransactionEstimate()))
+            preflightCompletion?(.safe(popupTransactionEstimate()))
             XCTAssertEqual(executionCount, 0)
             let events = await store.events()
             XCTAssertEqual(events, ["claim", "abandon"])
@@ -7926,8 +7920,8 @@ extension PopupRequestSessionsTests {
                     preparationCount += 1
                     let source = PopupPreparationSource()
                     transaction = popupPreparedTransaction(incoming)
-                    source.update(transaction)
-                    source.resolve(.success(transaction))
+                    source.yieldPreparedFields(transaction)
+                    source.ready()
                     return source.stream
                 },
                 preflight: { _, _ in
@@ -7987,7 +7981,7 @@ extension PopupRequestSessionsTests {
             }
 
             try await waitForCondition { preflightCompletion != nil }
-            preflightCompletion?(.unavailable(transaction, popupTransactionEstimate()))
+            preflightCompletion?(.unavailable(popupTransactionEstimate()))
             let response = await dispatch.value
             let events = await store.events()
             XCTAssertEqual(response["status"] as? String, "ok")
@@ -10652,13 +10646,13 @@ private func popupImmediateTransactionOperations() -> TransactionApprovalOperati
         prepare: { transaction, _, _ in
             let source = PopupPreparationSource()
             let prepared = popupPreparedTransaction(transaction)
-            source.update(prepared)
-            source.resolve(.success(prepared))
+            source.yieldPreparedFields(prepared)
+            source.ready()
             return source.stream
         },
         preflight: { transaction, _ in
             let source = PopupPreflightSource()
-            source.resolve(.safe(transaction, popupTransactionEstimate()))
+            source.resolve(.safe(popupTransactionEstimate()))
             return try await source.value(cancellation: nil)
         }
     )

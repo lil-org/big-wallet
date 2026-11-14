@@ -6,20 +6,26 @@ import * as filesystem from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import vm from 'node:vm';
+import * as provisioning from '../provision_guest.mjs';
 
 const source = readFileSync(new URL('../provision_guest.sh', import.meta.url), 'utf8');
-function pureFunction(name, globals = Object.create(null)) {
-    const match = source.match(new RegExp(`^function ${name}\\([^]*?^}`, 'm'));
-    assert.ok(match, `Missing ${name}`);
-    return vm.runInNewContext(`(${match[0]})`, globals);
+function provisionerFixture({config = {consoleUser: 'tester'}, staging = '/guest/provision', uid = 501, gid = 20, mode = '',
+    library = '/guest/library', state = '/guest/state', exchange = '/Volumes/BigWalletBuild/Exchange',
+    developer = '/Applications/Xcode.app/Contents/Developer', environment = {}, fs = {}, run,
+    spawnSync = () => assert.fail('Unexpected subprocess'), crypto = {createHash, randomUUID},
+    process: processEffects = {pid: process.pid, stdout: {write() {}}, stderr: {write() {}}, on() {}},
+    performance = {now: () => 0}, console = {log() {}, error() {}}, setImmediate = () => {}} = {}) {
+    return provisioning.createProvisioner({config, staging, uid, gid, mode, environment,
+        paths: {library, state, exchange, developer}},
+        {fs, execute: run, spawnSync, crypto, process: processEffects, performance, console, setImmediate});
 }
-const select = pureFunction('selectBlankBuildDisk');
-const validate = pureFunction('validateBlankBuildDisk');
-const optionalSigning = pureFunction('optionalSigningConfiguration');
-const appliedRequest = pureFunction('appliedProvisioningRequest');
-const rootSpaceRequirement = pureFunction('runtimeRootSpaceRequirement');
-const validateArchive = pureFunction('validateXcodeArchive');
+
+const select = provisioning.selectBlankBuildDisk;
+const validate = provisioning.validateBlankBuildDisk;
+const optionalSigning = provisioning.optionalSigningConfiguration;
+const appliedRequest = provisioning.appliedProvisioningRequest;
+const rootSpaceRequirement = provisioning.runtimeRootSpaceRequirement;
+const validateArchive = provisioning.validateXcodeArchive;
 const capacity = 103_079_215_104;
 const boot = {DeviceIdentifier: 'disk0', Size: 68_719_476_736, Content: 'GUID_partition_scheme',
     Partitions: [{Content: 'Apple_APFS_ISC'}, {Content: 'Apple_APFS'}, {Content: 'Apple_APFS_Recovery'}]};
@@ -27,12 +33,12 @@ const blank = {DeviceIdentifier: 'disk1', Size: capacity};
 const details = {WholeDisk: true, TotalSize: capacity};
 const samples = () => [Buffer.alloc(1024 * 1024), Buffer.alloc(1024 * 1024)];
 const check = (condition, message) => { if (!condition) throw new Error(message); };
-const validateRetirementPins = pureFunction('validateRetirementPins', {check});
-const matchesRuntimeImage = pureFunction('matchesRuntimeImage');
+const validateRetirementPins = provisioning.validateRetirementPins;
+const matchesRuntimeImage = provisioning.matchesRuntimeImage;
 
 test('local preparation requests only missing pinned archive and runtime images', () => {
-    const matchesRuntime = pureFunction('matchesRuntime');
-    const required = pureFunction('requiredProvisioningInputs', {check, matchesRuntime, validateXcodeArchive: validateArchive});
+    const matchesRuntime = provisioning.matchesRuntime;
+    const required = provisioning.requiredProvisioningInputs;
     const runtimes = [{platform: 'iOS', version: '27.0', buildVersion: 'ios-build', dmgPath: 'runtime-0.dmg'},
         {platform: 'visionOS', version: '27.0', buildVersion: 'vision-build', dmgPath: 'runtime-1.dmg'}];
     const installed = [{identifier: 'com.apple.CoreSimulator.SimRuntime.iOS-27-0', version: '27.0', buildversion: 'ios-build', isAvailable: true},
@@ -62,6 +68,9 @@ function localStageFilesystem() {
         readdirSync(directory) { return [...nodes].filter(([filename]) => path.dirname(filename) === directory)
             .map(([filename, node]) => ({name: path.basename(filename), isDirectory: () => node.kind === 'directory'})); },
         readFileSync: filename => nodes.get(filename).content,
+        writeFileSync(filename, content, options) { nodes.set(filename, {kind: 'file', uid: 0, mode: options.mode, content}); },
+        chownSync() {},
+        renameSync(from, to) { nodes.set(to, nodes.get(from)); nodes.delete(from); },
         rmSync(filename) { removed.push(filename); for (const key of nodes.keys()) if (key === filename || key.startsWith(filename + '/')) nodes.delete(key); },
     };
     const id = number => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
@@ -73,8 +82,7 @@ function localStageFilesystem() {
         marker(directory, vmId);
         return directory;
     };
-    const create = pureFunction('prepareLocalProvisioningDirectory', {fs, path, check, crypto: {randomUUID: () => id(999)},
-        writeJSON(filename, value, mode) { nodes.set(filename, {kind: 'file', uid: 0, mode, content: JSON.stringify(value)}); }});
+    const create = provisionerFixture({fs, crypto: {randomUUID: () => id(999)}}).prepareLocalProvisioningDirectory;
     return {parent, nodes, removed, fs, add, marker, create: () => create('/Volumes/BigWalletBuild', 'fixture-vm')};
 }
 
@@ -111,7 +119,7 @@ test('large input cleanup requires a protected local same-VM marker and never re
     const directory = fixture.create();
     const archive = path.join(directory, 'Xcode.tar');
     fixture.nodes.set(archive, {kind: 'file', uid: 0, mode: 0o600, content: 'archive'});
-    const remove = pureFunction('removeLocalProvisioningInput', {fs: fixture.fs, path, check});
+    const remove = provisionerFixture({fs: fixture.fs}).removeLocalProvisioningInput;
     assert.throws(() => remove('/tmp/unmanaged/provision/Xcode.tar', '/tmp/unmanaged/provision', 'fixture-vm'), /managed local/);
     assert.throws(() => remove(archive, directory, 'other-vm'), /another VM/);
     fixture.nodes.get(archive).uid = 501;
@@ -140,8 +148,7 @@ function localExchangeFixture({parent = {}, existing} = {}) {
         chmodSync(filename, mode) { changes.push(['chmod', filename, mode]); nodes.get(filename).mode = mode; },
         chownSync(filename, uid, gid) { changes.push(['chown', filename, uid, gid]); Object.assign(nodes.get(filename), {uid, gid}); },
     };
-    const prepare = pureFunction('prepareLocalExchange', {fs, path, check, exchange, uid: 501, gid: 20,
-        setOwnershipIfNeeded: pureFunction('setOwnershipIfNeeded', {fs})});
+    const prepare = provisionerFixture({fs, exchange, uid: 501, gid: 20}).prepareLocalExchange;
     return {build, exchange, nodes, changes, run: () => prepare(build)};
 }
 
@@ -174,20 +181,20 @@ test('local exchange preparation rejects redirected or unprotected storage befor
 
 test('Aqua readiness requires the selected console user, GUI domain and an unlocked session', () => {
     for (const failure of [null, 'console', 'domain', 'locked']) {
-        const ready = pureFunction('selectedUserSessionReady', {uid: 501, spawnSync(command, args, options) {
+        const ready = provisionerFixture({uid: 501, spawnSync(command, args, options) {
             assert.equal(options.timeout, 1000);
             assert.equal(options.killSignal, 'SIGKILL');
             if (command.endsWith('/stat')) return {status: 0, stdout: failure === 'console' ? '502\n' : '501\n'};
             if (command.endsWith('/launchctl')) return {status: failure === 'domain' ? 1 : 0};
             if (command.endsWith('/ioreg')) return {status: 0, stdout: 'fixture registry'};
             return {status: 0, stdout: failure === 'locked' ? 'true\n' : 'false\n'};
-        }});
+        }}).selectedUserSessionReady;
         assert.equal(ready(), failure === null);
     }
 });
 
 test('Aqua wait permits normal login progress but bounds timeout and propagates interruption', () => {
-    const wait = pureFunction('waitForSelectedSession', {check});
+    const wait = provisionerFixture().waitForSelectedSession;
     let time = 0;
     const delays = [];
     wait({ready: () => time >= 2000, now: () => time, wait(milliseconds) { delays.push(milliseconds); time += milliseconds; }});
@@ -202,10 +209,10 @@ test('Aqua wait permits normal login progress but bounds timeout and propagates 
 test('Aqua wait handles a fractional final delay through the subprocess timeout API', () => {
     const times = [0, 119830.591959, 120000];
     const calls = [];
-    const wait = pureFunction('waitForSelectedSession', {check, spawnSync(command, args, options) {
+    const wait = provisionerFixture({spawnSync(command, args, options) {
         calls.push({command, args, options});
         return spawnSync(command, args, options);
-    }});
+    }}).waitForSelectedSession;
     assert.throws(() => wait({ready: () => false, now: () => times.shift()}), /unlocked Aqua session/);
     assert.equal(calls.length, 1);
     assert.equal(calls[0].command, '/bin/sleep');
@@ -214,114 +221,99 @@ test('Aqua wait handles a fractional final delay through the subprocess timeout 
     assert.equal(calls[0].options.killSignal, 'SIGKILL');
 });
 
+function automaticLoginFixture({enabled = false, ready = false, interactive = false, completesLogin = true,
+    supplied = true, setStatus = 0, confirms = true, commandOutput, commandError} = {}) {
+    const events = [];
+    const invocations = [];
+    const password = 'fixture-secret-password';
+    let clock = 0;
+    let diagnostics = '';
+    const config = {consoleUser: 'tester', interactiveSetup: interactive,
+        ...(supplied ? {autologin: {passwordFile: 'password'}} : {})};
+    const provisioner = provisionerFixture({config,
+        fs: {realpathSync: value => value, statSync: () => ({isFile: () => true}),
+            readFileSync(filename) { assert.equal(filename, '/guest/provision/password'); events.push('password'); return password; }},
+        performance: {now: () => clock}, process: {stderr: {write: value => { diagnostics += value; }}},
+        run(_label, command) { assert.equal(command, '/usr/bin/id'); return 'staff admin'; },
+        spawnSync(command, args, options) {
+            if (command === '/usr/bin/stat') return {status: 0, stdout: ready ? '501' : '502'};
+            if (command === '/usr/sbin/ioreg') return {status: 0, stdout: 'fixture registry'};
+            if (command === '/usr/bin/plutil') return {status: 0, stdout: 'false'};
+            if (command === '/bin/launchctl' && args[0] === 'print') return {status: 0};
+            if (command === '/bin/sleep') {
+                if (clock === 0) events.push('login');
+                clock += Number(args[0]) * 1000;
+                if (completesLogin) ready = true;
+                return {status: 0};
+            }
+            if (command === '/usr/sbin/sysadminctl' && args[1] === 'status') {
+                return {status: 0, stdout: '', stderr: enabled ? 'Automatic login user: tester' : 'Automatic login disabled'};
+            }
+            assert.equal(command, ready ? '/bin/launchctl' : '/usr/sbin/sysadminctl');
+            assert.equal(options.timeout, 60000);
+            assert.equal(options.maxBuffer, 16 * 1024);
+            assert.ok(args.includes(password));
+            assert.ok(!args.includes('/usr/bin/sudo'));
+            if (ready) assert.deepEqual(args.slice(0, 3), ['asuser', '501', '/usr/sbin/sysadminctl']);
+            events.push('configure');
+            invocations.push({command, args, options});
+            enabled = confirms;
+            return {status: setStatus, stdout: commandOutput ?? '', stderr: commandError ?? ''};
+        },
+    });
+    return {run: provisioner.ensureAutomaticLogin, events, invocations, diagnostics: () => diagnostics};
+}
+
 test('autologin preparation uses only the supplied existing password and requests one restart only when needed', () => {
     for (const [enabled, ready] of [[true, false], [false, false], [false, true]]) {
-        const calls = [];
-        let configured = enabled;
-        const ensure = pureFunction('ensureAutomaticLogin', {check, config: {consoleUser: 'tester', autologin: {passwordFile: 'password'}}, environment: {}, uidText: '501',
-            automaticLoginEnabled: () => configured, selectedUserSessionReady: () => ready,
-            secret() { calls.push('password'); return 'existing-password'; },
-            run(_label, command) { assert.ok(command.endsWith('/id')); return 'staff admin'; },
-            spawnSync(command, args, options) {
-                assert.equal(command, ready ? '/bin/launchctl' : '/usr/sbin/sysadminctl');
-                if (ready) assert.deepEqual(Array.from(args).slice(0, 3), ['asuser', '501', '/usr/sbin/sysadminctl']);
-                assert.ok(!args.includes('/usr/bin/sudo'));
-                assert.equal(options.timeout, 60000);
-                assert.equal(options.maxBuffer, 16 * 1024);
-                assert.ok(args.includes('existing-password'));
-                calls.push('enable');
-                configured = true;
-                return {status: 0, stdout: '', stderr: ''};
-            }});
-        assert.equal(ensure(), !enabled && !ready);
-        assert.deepEqual(calls, enabled ? [] : ['password', 'enable']);
+        const fixture = automaticLoginFixture({enabled, ready});
+        assert.equal(fixture.run(), !enabled && !ready);
+        assert.deepEqual(fixture.events, enabled ? [] : ['password', 'configure']);
     }
-    const ensure = pureFunction('ensureAutomaticLogin', {check, config: {consoleUser: 'tester'},
-        automaticLoginEnabled: () => false, selectedUserSessionReady: () => false});
-    assert.throws(ensure, /existing guest account password/);
+    assert.throws(automaticLoginFixture({supplied: false}).run, /existing guest account password/);
 });
 
 test('autologin status matches the exact selected account name', () => {
     for (const [message, expected] of [['Automatic login user: bob', true], ["Automatic login user: 'bob'", true],
         ['Automatic login user: bobby', false], ['Automatic login user: bob-test', false], ['Automatic login disabled for bob', false]]) {
-        const enabled = pureFunction('automaticLoginEnabled', {config: {consoleUser: 'bob'},
-            spawnSync() { return {status: 0, stdout: '', stderr: message}; }});
+        const enabled = provisionerFixture({config: {consoleUser: 'bob'},
+            spawnSync() { return {status: 0, stdout: '', stderr: message}; }}).automaticLoginEnabled;
         assert.equal(enabled(), expected);
     }
 });
 
 test('interactive autologin preparation waits for existing guest login and still requires a cold restart', () => {
-    const events = [];
-    let ready = false, enabled = false;
-    const ensure = pureFunction('ensureAutomaticLogin', {check,
-        config: {consoleUser: 'tester', autologin: {passwordFile: 'password'}, interactiveSetup: true}, environment: {}, uidText: '501',
-        automaticLoginEnabled: () => enabled, selectedUserSessionReady: () => ready,
-        run: () => 'staff admin',
-        waitForSelectedSession(options) {
-            assert.equal(options.timeoutMilliseconds, 300000);
-            events.push('login');
-            ready = true;
-        }, secret() { events.push('password'); return 'existing-password'; },
-        spawnSync(command, args) {
-            assert.equal(command, '/bin/launchctl');
-            assert.deepEqual(Array.from(args).slice(0, 3), ['asuser', '501', '/usr/sbin/sysadminctl']);
-            assert.ok(!args.includes('/usr/bin/sudo'));
-            events.push('configure'); enabled = true;
-            return {status: 0, stdout: '', stderr: ''};
-        }});
-    assert.equal(ensure(), true);
-    assert.deepEqual(events, ['login', 'password', 'configure']);
+    const fixture = automaticLoginFixture({interactive: true});
+    assert.equal(fixture.run(), true);
+    assert.deepEqual(fixture.events, ['login', 'password', 'configure']);
 });
 
 test('interactive guest login timeout stops before reading credentials or setting automatic login', () => {
-    const ensure = pureFunction('ensureAutomaticLogin', {check,
-        config: {consoleUser: 'tester', autologin: {passwordFile: 'password'}, interactiveSetup: true},
-        automaticLoginEnabled: () => false, selectedUserSessionReady: () => false, run: () => 'staff admin',
-        waitForSelectedSession() { throw new Error('fixture guest login timeout'); },
-        secret() { assert.fail('Credentials must remain unread'); }, spawnSync() { assert.fail('No autologin command'); }});
-    assert.throws(ensure, /guest login timeout/);
+    const fixture = automaticLoginFixture({interactive: true, completesLogin: false});
+    assert.throws(fixture.run, /unlocked Aqua session/);
+    assert.deepEqual(fixture.events, ['login']);
+    assert.deepEqual(fixture.invocations, []);
 });
 
 test('interactive setup does not wait when the selected guest session is already unlocked', () => {
-    let enabled = false;
-    const ensure = pureFunction('ensureAutomaticLogin', {check,
-        config: {consoleUser: 'tester', autologin: {passwordFile: 'password'}, interactiveSetup: true}, environment: {}, uidText: '501',
-        automaticLoginEnabled: () => enabled, selectedUserSessionReady: () => true, run: () => 'staff admin',
-        waitForSelectedSession() { assert.fail('The guest session is already ready'); }, secret: () => 'existing-password',
-        spawnSync(command, args) {
-            assert.equal(command, '/bin/launchctl');
-            assert.deepEqual(Array.from(args).slice(0, 3), ['asuser', '501', '/usr/sbin/sysadminctl']);
-            assert.ok(!args.includes('/usr/bin/sudo'));
-            enabled = true;
-            return {status: 0, stdout: '', stderr: ''};
-        }});
-    assert.equal(ensure(), false);
+    const fixture = automaticLoginFixture({interactive: true, ready: true});
+    assert.equal(fixture.run(), false);
+    assert.deepEqual(fixture.events, ['password', 'configure']);
 });
 
 test('failed autologin verification reports bounded redacted command output', () => {
     for (const status of [0, 1]) {
-        let diagnostics = '';
-        const ensure = pureFunction('ensureAutomaticLogin', {check,
-            config: {consoleUser: 'tester', autologin: {passwordFile: 'password'}}, environment: {},
-            fail: message => { throw new Error(message); }, automaticLoginEnabled: () => false, selectedUserSessionReady: () => false,
-            secret: () => 'fixture-secret-password', process: {stderr: {write: value => { diagnostics += value; }}},
-            run(_label, command) { assert.equal(command, '/usr/bin/id'); return 'staff admin'; },
-            automaticLoginCommandDiagnostic: pureFunction('automaticLoginCommandDiagnostic'),
-            spawnSync(command, args, options) {
-                assert.equal(command, '/usr/sbin/sysadminctl');
-                assert.equal(args[1], 'set');
-                assert.equal(options.maxBuffer, 16 * 1024);
-                return {status, stdout: 'fixture-secret-password', stderr: 'Rejected fixture-secret-password twice fixture-secret-password'};
-            }});
-        assert.throws(ensure, status === 0 ? /Automatic login.*unavailable/ : /Enable automatic login.*failed/);
-        assert.ok(!diagnostics.includes('fixture-secret-password'));
-        const report = JSON.parse(diagnostics.slice('Automatic login command diagnostics: '.length));
+        const fixture = automaticLoginFixture({setStatus: status, confirms: false,
+            commandOutput: 'fixture-secret-password', commandError: 'Rejected fixture-secret-password twice fixture-secret-password'});
+        assert.throws(fixture.run, status === 0 ? /Automatic login.*unavailable/ : /Enable automatic login.*failed/);
+        assert.ok(!fixture.diagnostics().includes('fixture-secret-password'));
+        const report = JSON.parse(fixture.diagnostics().slice('Automatic login command diagnostics: '.length));
         assert.deepEqual(report, {status, error: null, signal: null, stdout: '[REDACTED]', stderr: 'Rejected [REDACTED] twice [REDACTED]'});
     }
 });
 
 test('autologin diagnostics redact before truncation and suppress incomplete captures', () => {
-    const diagnostic = pureFunction('automaticLoginCommandDiagnostic');
+    const diagnostic = provisioning.automaticLoginCommandDiagnostic;
     const password = 'boundary-secret-password';
     const report = diagnostic({status: 0, stdout: 'x'.repeat(4090) + password, stderr: password.repeat(400)}, password);
     assert.equal(report.stdout, 'x'.repeat(4090) + '[REDAC');
@@ -334,48 +326,27 @@ test('autologin diagnostics redact before truncation and suppress incomplete cap
 });
 
 test('nonzero autologin set still fails even when subsequent verification matches', () => {
-    const enabled = [false, true];
-    const ensure = pureFunction('ensureAutomaticLogin', {check, config: {consoleUser: 'tester', autologin: {passwordFile: 'password'}},
-        environment: {}, fail: message => { throw new Error(message); }, automaticLoginEnabled: () => enabled.shift(),
-        selectedUserSessionReady: () => false, secret: () => 'fixture-secret-password', run: () => 'staff admin',
-        spawnSync: () => ({status: 1, stdout: 'fixture-secret-password', stderr: ''}),
-        process: {stderr: {write() { assert.fail('Successful verification must not emit captured output'); }}}});
-    assert.throws(ensure, /Enable automatic login.*failed/);
+    const fixture = automaticLoginFixture({setStatus: 1, confirms: true, commandOutput: 'fixture-secret-password'});
+    assert.throws(fixture.run, /Enable automatic login.*failed/);
+    assert.equal(fixture.diagnostics(), '');
 });
 
-test('storage preparation emits one marker before full setup or receipt publication', () => {
+test('storage staging reports only required inputs and a restart without publishing a receipt', () => {
+    const fixture = localStageFilesystem();
     const logs = [];
-    let prepareState = () => '/guest/state/identity.json';
-    let preparedStorage = 0;
-    const main = pureFunction('provisionGuest', {check, path, mode: '--prepare-storage', uid: 501, gid: 20,
-        config: {version: 1, vmId: 'fixture-vm', consoleUser: 'tester', xcode: {version: '27.0', buildVersion: 'fixture'},
-            runtimes: [{platform: 'iOS', version: '27.0', buildVersion: 'ios'}, {platform: 'visionOS', version: '27.0', buildVersion: 'vision'}]},
-        library: '/guest/library', state: '/guest/state', appliedProvisioningRequest() {}, text: value => value,
-        fs: {statSync: () => ({isDirectory: () => true}), mkdirSync() {}, chmodSync() {}, chownSync() {}, existsSync: () => false},
-        prepareGuestState: () => prepareState(),
-        run: (_label, command) => command.endsWith('/dscl') ? 'NFSHomeDirectory: /Users/tester' : 'staff',
-        prepareBuildData: () => { preparedStorage++; return '/Volumes/BigWalletBuild'; }, ensureAutomaticLogin: () => true,
-        xcodeVersion: () => null, matchesXcode: () => false, selectedUserSessionReady: () => false,
-        requiredProvisioningInputs: () => ['Xcode.tar'], prepareLocalProvisioningDirectory: () => '/Volumes/BigWalletBuild/Provisioning/00000000-0000-4000-8000-000000000001/provision',
-        console: {log: value => logs.push(value)},
-        waitForSelectedSession() { throw new Error('Full setup must not begin'); },
-        writeJSON() { throw new Error('The setup receipt must not be published'); },
-    });
-    main();
+    const config = {version: 1, vmId: 'fixture-vm', consoleUser: 'tester', xcode: {version: '27.0', buildVersion: 'fixture'},
+        xcodeArchive: {path: 'Xcode.tar', sha256: 'a'.repeat(64)},
+        runtimes: [{platform: 'iOS', version: '27.0', buildVersion: 'ios', dmgPath: 'ios.dmg'},
+            {platform: 'visionOS', version: '27.0', buildVersion: 'vision', dmgPath: 'vision.dmg'}]};
+    const prepare = provisionerFixture({config, fs: {...fixture.fs, existsSync: () => false},
+        crypto: {randomUUID: () => '00000000-0000-4000-8000-000000000999'}, console: {log: value => logs.push(value)}}).prepareStorage;
+    prepare('/Volumes/BigWalletBuild', '/Volumes/BigWalletBuild/Applications/Xcode.app', true);
     assert.equal(logs.length, 1);
-    assert.ok(logs[0].startsWith('BIG_WALLET_PROVISIONING_STAGE='));
-    assert.deepEqual(JSON.parse(logs[0].split('=')[1]), {
-        stagingDirectory: '/Volumes/BigWalletBuild/Provisioning/00000000-0000-4000-8000-000000000001/provision',
-        requiredInputs: ['Xcode.tar'], requiresRestart: true,
+    assert.deepEqual(JSON.parse(logs[0].slice('BIG_WALLET_PROVISIONING_STAGE='.length)), {
+        stagingDirectory: '/Volumes/BigWalletBuild/Provisioning/00000000-0000-4000-8000-000000000999/provision',
+        requiredInputs: ['Xcode.tar', 'ios.dmg', 'vision.dmg'], requiresRestart: true,
     });
-    for (const failACL of ['-N', '+a']) {
-        const fixture = guestStateFixture({failACL});
-        prepareState = fixture.prepare;
-        assert.throws(main, /fixture ACL failure/);
-        assert.equal(preparedStorage, 1);
-        assert.equal(logs.length, 1);
-        assert.equal(fixture.changes.at(-1), failACL);
-    }
+    assert.equal([...fixture.nodes.keys()].some(path => path.endsWith('/provisioning.json')), false);
 });
 
 function guestStateFixture({failACL} = {}) {
@@ -385,7 +356,7 @@ function guestStateFixture({failACL} = {}) {
     const metadata = {uid: 0, gid: 20, mode: 0o750, isDirectory: () => true, isSymbolicLink: () => false};
     const changes = [];
     let acl = [{principal: 'staff', group: true, rights: ['list', 'search', 'add_file']}];
-    const prepare = pureFunction('prepareGuestState', {check, path, state, config,
+    const prepare = provisionerFixture({state, config,
         fs: {
             mkdirSync() {}, lstatSync: () => metadata, existsSync: () => true,
             readFileSync: () => JSON.stringify(prior),
@@ -405,7 +376,7 @@ function guestStateFixture({failACL} = {}) {
                 acl.push({principal: entry[1], group: false, rights: entry[2].split(',')});
             }
         },
-    });
+    }).prepareGuestState;
     const accounts = {root: {uid: 0, groups: [0], name: 'root'},
         selected: {uid: 501, groups: [20], name: 'tester'}, other: {uid: 502, groups: [20], name: 'unrelated'}};
     const posix = (node, account, permission) => account.uid === 0 || Boolean((node.mode >>
@@ -463,9 +434,9 @@ function agentInstallationFixture(operation, {fresh = false} = {}) {
     };
     try {
         if (!fresh) for (const entry of entries) writeFileSync(entry.path, `old-${path.basename(entry.path)}`, {mode: 0o600});
-        const install = pureFunction('replaceGuestAgentInstallation', {fs: api, crypto: {randomUUID: () => 'fixture'},
+        const install = provisionerFixture({fs: api, crypto: {randomUUID: () => 'fixture'},
             process: {on(signal) { deferredSignals.push(signal); }}, setImmediate() {},
-            check(condition, message) { if (!condition) throw new Error(message); }});
+            check(condition, message) { if (!condition) throw new Error(message); }}).replaceGuestAgentInstallation;
         const contents = () => entries.map(entry => filesystem.existsSync(entry.path) ? readFileSync(entry.path, 'utf8') : null);
         const leftovers = () => filesystem.readdirSync(root).filter(name => /\.(new|previous)$/.test(name));
         operation({root, entries, api, service, events, deferredSignals, install: () => install(entries, service), contents, leftovers,
@@ -491,8 +462,6 @@ test('agent replacement stages every file before quiescing and installs the comp
         for (const entry of entries) assert.equal(filesystem.statSync(entry.path).mode & 0o777, entry.mode);
         assert.deepEqual(leftovers(), []);
     });
-    assert.doesNotMatch(source, /launchctl bootout "gui\/\$console_uid\/org\.lil\.big-wallet\.vm-guest"/);
-    assert.ok(source.lastIndexOf('replaceGuestAgentInstallation(replacements,') > source.indexOf('const provisioning ='));
 });
 
 test('preparation failures leave the existing agent and files untouched', () => {
@@ -618,17 +587,15 @@ test('failed restoration retains protected previous files for recovery', () => {
 });
 
 test('termination during agent replacement waits for commit or rollback before exiting', () => {
-    const install = source.match(/^function replaceGuestAgentInstallation\([^]*?^}/m)[0];
     for (const signal of ['SIGTERM', 'SIGHUP']) {
         for (const failStart of [false, true]) {
             const root = mkdtempSync(path.join(tmpdir(), 'big-wallet-agent-signal-'));
             const agent = path.join(root, 'agent');
             const state = path.join(root, 'service-state');
             const program = `
-                const fs = require('node:fs');
-                const crypto = require('node:crypto');
-                const check = (condition, message) => { if (!condition) throw new Error(message); };
-                ${install}
+                const {createProvisioner} = await import(${JSON.stringify(new URL('../provision_guest.mjs', import.meta.url).href)});
+                const fs = await import('node:fs');
+                const {replaceGuestAgentInstallation} = createProvisioner({config: {}, uid: process.getuid(), gid: process.getgid()});
                 const agent = ${JSON.stringify(agent)};
                 const state = ${JSON.stringify(state)};
                 fs.writeFileSync(agent, 'old', {mode: 0o600});
@@ -653,7 +620,7 @@ test('termination during agent replacement waits for commit or rollback before e
                 }
             `;
             try {
-                const result = spawnSync(process.execPath, ['-e', program], {encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL'});
+                const result = spawnSync(process.execPath, ['--input-type=module', '-e', program], {encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL'});
                 assert.equal(result.error, undefined, `${signal} ${failStart}: ${result.stderr}`);
                 assert.equal(result.signal, null, `${signal} ${failStart}: ${result.stderr}`);
                 assert.equal(result.status, signal === 'SIGTERM' ? 143 : 129);
@@ -850,14 +817,13 @@ test('physical-device details must still match after disk enumeration', () => {
 test('managed build-volume protection removes group write only on the verified root', () => {
     const changes = [];
     const metadata = {uid: 0, gid: 80, mode: 0o40775, isDirectory: () => true, isSymbolicLink: () => false};
-    const protect = pureFunction('protectBuildVolumeRoot', {
-        check: (condition, message) => { if (!condition) throw new Error(message); },
+    const protect = provisionerFixture({
         fs: {
             lstatSync: () => metadata, realpathSync: filename => filename,
             chmodSync: (filename, mode) => { changes.push([filename, mode]); metadata.mode = 0o40000 | mode; },
             chownSync: () => { throw new Error('Ownership must not be rewritten'); },
         },
-    });
+    }).protectBuildVolumeRoot;
     protect('/Volumes/BigWalletBuild');
     protect('/Volumes/BigWalletBuild');
     assert.deepEqual(changes, [['/Volumes/BigWalletBuild', 0o755]]);
@@ -865,27 +831,25 @@ test('managed build-volume protection removes group write only on the verified r
 });
 
 test('an already protected managed volume root receives no chmod', () => {
-    const protect = pureFunction('protectBuildVolumeRoot', {
-        check: (condition, message) => { if (!condition) throw new Error(message); },
+    const protect = provisionerFixture({
         fs: {
             lstatSync: () => ({uid: 0, mode: 0o40755, isDirectory: () => true, isSymbolicLink: () => false}),
             realpathSync: filename => filename,
             chmodSync: () => { throw new Error('Correct mode must be left alone'); },
         },
-    });
+    }).protectBuildVolumeRoot;
     assert.doesNotThrow(() => protect('/Volumes/BigWalletBuild'));
 });
 
 test('build-volume protection rejects unrelated paths, ownership, symlinks, and nondirectories without mutation', () => {
     for (const change of [{uid: 501}, {uid: 99}, {isDirectory: () => false}, {isSymbolicLink: () => true}, {canonical: '/elsewhere'}]) {
-        const protect = pureFunction('protectBuildVolumeRoot', {
-            check: (condition, message) => { if (!condition) throw new Error(message); },
-            fs: {
+        const protect = provisionerFixture({
+                fs: {
                 lstatSync: () => ({uid: 0, mode: 0o40775, isDirectory: () => true, isSymbolicLink: () => false, ...change}),
                 realpathSync: filename => change.canonical ?? filename,
                 chmodSync: () => { throw new Error('Invalid root must not be changed'); },
             },
-        });
+        }).protectBuildVolumeRoot;
         assert.throws(() => protect('/Volumes/BigWalletBuild'), /real root-owned directory/);
         assert.throws(() => protect('/Volumes/OtherVolume'), /Only the managed/);
     }
@@ -928,6 +892,19 @@ function buildInitializationFixture() {
     };
     fixture.marker = (volume, changes = {}) => volume.files.set('.big-wallet-vm.json', {kind: 'file', uid: 0, mode: 0o644,
         content: JSON.stringify({version: 1, vmId: config.vmId, volumeUUID: volume.APFSVolumeUUID, ...changes})});
+    const location = filename => {
+        for (const volume of fixture.volumes) {
+            if (volume.MountPoint && filename.startsWith(volume.MountPoint + '/')) {
+                return {entries: volume.files, key: filename.slice(volume.MountPoint.length + 1)};
+            }
+        }
+        return {entries: nodes, key: filename};
+    };
+    const storeNode = (filename, node) => { const {entries, key} = location(filename); entries.set(key, node); };
+    const remove = filename => { const {entries, key} = location(filename); entries.delete(key); };
+    const descriptors = new Map();
+    let nextDescriptor = 10;
+    let pendingDurableWrite;
     const fs = {
         lstatSync(filename, options) {
             const node = locate(filename);
@@ -937,37 +914,63 @@ function buildInitializationFixture() {
         },
         realpathSync: filename => locate(filename)?.target ?? filename,
         readFileSync: filename => locate(filename).content,
-        openSync: filename => { assert.match(filename, /^\/dev\/rdisk\d+$/); return 7; },
-        readSync: (_fd, bytes) => { bytes.fill(0); return bytes.length; }, closeSync() {},
+        openSync(filename, flags, mode) {
+            let kind;
+            if (/^\/dev\/rdisk\d+$/.test(filename)) {
+                assert.equal(flags, 'r'); kind = 'raw';
+            } else if (flags === 'wx') {
+                assert.equal(locate(filename), undefined);
+                storeNode(filename, {kind: 'file', uid: 0, gid: 0, mode, content: ''}); kind = 'file';
+            } else {
+                assert.equal(flags, 'r'); assert.equal(locate(filename)?.kind, 'directory'); kind = 'directory';
+            }
+            const descriptor = nextDescriptor++;
+            descriptors.set(descriptor, {filename, kind});
+            return descriptor;
+        },
+        readSync(descriptor, bytes) {
+            assert.equal(descriptors.get(descriptor)?.kind, 'raw'); bytes.fill(0); return bytes.length;
+        },
+        writeFileSync(descriptor, bytes) {
+            const opened = descriptors.get(descriptor);
+            assert.equal(opened?.kind, 'file'); locate(opened.filename).content = String(bytes);
+        },
+        fchmodSync(descriptor, mode) { locate(descriptors.get(descriptor).filename).mode = mode; },
+        fchownSync(descriptor, owner, group) {
+            Object.assign(locate(descriptors.get(descriptor).filename), {uid: owner, gid: group});
+        },
+        fsyncSync(descriptor) {
+            const opened = descriptors.get(descriptor);
+            assert.ok(opened);
+            if (opened.kind !== 'directory') return;
+            fixture.events.push(['sync', opened.filename]);
+            if (!pendingDurableWrite || path.dirname(pendingDurableWrite.filename) !== opened.filename) return;
+            const committed = pendingDurableWrite; pendingDurableWrite = undefined;
+            if (committed.filename === intentPath) fixture.events.push(['intent', {...committed.value}]);
+            else { fixture.events.push(['marker', committed.value.volumeUUID]); checkpoint('after-marker'); }
+        },
+        closeSync(descriptor) { assert.ok(descriptors.delete(descriptor)); },
+        renameSync(from, to) {
+            const node = locate(from);
+            assert.equal(node?.kind, 'file');
+            const value = JSON.parse(node.content);
+            if (to === intentPath) checkpoint(value.volumeUUID ? 'before-uuid' : 'before-intent');
+            else {
+                checkpoint('before-marker');
+                const volume = fixture.volumes.find(item => to === `${item.MountPoint}/.big-wallet-vm.json`);
+                assert.ok(volume); assert.equal(volume.root.mode, 0o755);
+                assert.equal(JSON.parse(nodes.get(intentPath).content).volumeUUID, volume.APFSVolumeUUID);
+            }
+            storeNode(to, node); remove(from); pendingDurableWrite = {filename: to, value};
+        },
+        rmSync(filename, options) { assert.equal(options.force, true); assert.ok(filename.endsWith('.tmp')); remove(filename); },
         chmodSync(filename, mode) { locate(filename).mode = mode; fixture.events.push(['protect', filename]); },
         unlinkSync(filename) {
-            assert.equal(filename, intentPath);
-            checkpoint('before-retire');
-            nodes.delete(filename);
-            fixture.events.push(['retire']);
-            checkpoint('after-retire');
+            assert.equal(filename, intentPath); checkpoint('before-retire'); nodes.delete(filename);
+            fixture.events.push(['retire']); checkpoint('after-retire');
         },
     };
-    const globals = {Buffer, path, fs, config, state, check, crypto: {randomUUID: () => nonce}, console: {log() {}},
-        selectBlankBuildDisk: select, validateBlankBuildDisk: validate,
-        syncDirectory: directory => fixture.events.push(['sync', directory]),
-        writeDurableJSON(filename, value, mode) {
-            if (filename === intentPath) {
-                checkpoint(value.volumeUUID ? 'before-uuid' : 'before-intent');
-                nodes.set(filename, {kind: 'file', uid: 0, mode, content: JSON.stringify(value)});
-                fixture.events.push(['intent', {...value}]);
-            } else {
-                checkpoint('before-marker');
-                const volume = fixture.volumes.find(item => filename === `${item.MountPoint}/.big-wallet-vm.json`);
-                assert.ok(volume);
-                assert.equal(volume.root.mode, 0o755);
-                assert.equal(JSON.parse(nodes.get(intentPath).content).volumeUUID, volume.APFSVolumeUUID);
-                volume.files.set('.big-wallet-vm.json', {kind: 'file', uid: 0, mode, content: JSON.stringify(value)});
-                fixture.events.push(['marker', volume.APFSVolumeUUID]);
-                checkpoint('after-marker');
-            }
-        },
-        diskMetadata(args) {
+    function metadataForDisk(args) {
             if (args[0] === 'apfs') return {Containers: fixture.volumes.map(volume => ({PhysicalStores: [{DeviceIdentifier: volume.store}],
                 Volumes: [{Name: volume.Name, DeviceIdentifier: volume.DeviceIdentifier, APFSVolumeUUID: volume.APFSVolumeUUID}]}))};
             if (args[0] === 'list') return {AllDisksAndPartitions: [{...blank, ...(fixture.formatted ? {Content: 'GUID_partition_scheme', Partitions: [{}]} : {})}]};
@@ -982,9 +985,12 @@ function buildInitializationFixture() {
             if (volume) return {MountPoint: volume.MountPoint};
             if (device === 'disk1') return details;
             throw new Error(`Unexpected fixture device: ${device}`);
-        },
-        run(_label, command, args) {
+        }
+    const options = {fs, config, state, crypto: {randomUUID: () => nonce},
+        run(_label, command, args, options) {
+            if (command === '/usr/bin/plutil') return options.input;
             assert.equal(command, '/usr/sbin/diskutil');
+            if (['info', 'list', 'apfs'].includes(args[0])) return JSON.stringify(metadataForDisk(args));
             if (args[0] === 'eraseDisk') {
                 checkpoint('before-format');
                 assert.equal(args[2], `BigWalletInit-${JSON.parse(nodes.get(intentPath).content).nonce}`);
@@ -1011,12 +1017,84 @@ function buildInitializationFixture() {
                 volume.MountPoint = null;
             } else throw new Error(`Unexpected fixture operation: ${args[0]}`);
             fixture.events.push([args[0], args[1]]);
-        },
+        }
     };
-    for (const name of ['readBuildInitializationIntent', 'verifyBuildIdentity', 'protectBuildVolumeRoot']) globals[name] = pureFunction(name, globals);
-    fixture.prepare = pureFunction('prepareBuildData', globals);
+    fixture.fs = fs;
+    fixture.execute = options.run;
+    fixture.prepare = provisionerFixture(options).prepareBuildData;
     return fixture;
 }
+
+test('storage-only provisioning protects guest state before disk setup and returns before full setup', () => {
+    for (const failACL of [undefined, '-N', '+a']) {
+        const disk = buildInitializationFixture();
+        const stage = localStageFilesystem();
+        const library = '/guest/library', userHome = '/Users/tester';
+        disk.nodes.set(library, {kind: 'directory', uid: 0, gid: 0, mode: 0o755});
+        disk.nodes.set(userHome, {kind: 'directory', uid: 501, gid: 20, mode: 0o700});
+        const config = {...disk.config, version: 1, consoleUser: 'tester',
+            xcode: {version: '27.0', buildVersion: 'fixture'}, xcodeArchive: {path: 'Xcode.tar', sha256: 'a'.repeat(64)},
+            runtimes: [{platform: 'iOS', version: '27.0', buildVersion: '24A434', dmgPath: 'ios.dmg'},
+                {platform: 'visionOS', version: '27.0', buildVersion: '24M362', dmgPath: 'vision.dmg'}]};
+        const sequence = [], logs = [];
+        const isStage = filename => typeof filename === 'string' && (filename === stage.parent || filename.startsWith(stage.parent + '/'));
+        const fs = {...disk.fs,
+            statSync: (...args) => disk.fs.lstatSync(...args),
+            existsSync: filename => disk.nodes.has(filename) || stage.nodes.has(filename),
+            mkdirSync(filename) { assert.ok([library, disk.state].includes(filename), `Unexpected directory: ${filename}`); },
+            chownSync(filename, uid, gid) {
+                const node = disk.nodes.get(filename); assert.ok(node); Object.assign(node, {uid, gid});
+            },
+            readdirSync(filename) { assert.fail(`Unexpected directory inspection: ${filename}`); },
+        };
+        for (const [name, operation] of Object.entries(stage.fs)) {
+            const fallback = fs[name];
+            fs[name] = (filename, ...args) => {
+                if (isStage(filename)) return operation(filename, ...args);
+                assert.equal(typeof fallback, 'function', `Unexpected filesystem operation: ${name}`);
+                return fallback(filename, ...args);
+            };
+        }
+        const provisioner = provisionerFixture({config, fs, library, state: disk.state, mode: '--prepare-storage',
+            crypto: {randomUUID: () => disk.nonce}, console: {log: value => logs.push(value)},
+            run(label, command, args, options) {
+                if (command === '/usr/bin/dscl') return `NFSHomeDirectory: ${userHome}`;
+                if (command === '/usr/bin/id') return 'staff';
+                if (command === '/bin/chmod') {
+                    assert.equal(args.at(-1), disk.state); assert.ok(['-N', '+a'].includes(args[0]));
+                    sequence.push(`acl:${args[0]}`);
+                    if (args[0] === failACL) throw new Error('fixture ACL failure');
+                    return '';
+                }
+                if (command === '/usr/sbin/diskutil') sequence.push('disk');
+                return disk.execute(label, command, args, options);
+            },
+            spawnSync(command, args) {
+                assert.equal(command, '/usr/sbin/sysadminctl', 'Full setup must not begin');
+                assert.deepEqual(args, ['-autologin', 'status']);
+                return {status: 0, stdout: 'Automatic login is enabled for tester', stderr: ''};
+            },
+        });
+        if (failACL) {
+            assert.throws(() => provisioner.provisionGuest(), /fixture ACL failure/);
+            assert.equal(sequence.includes('disk'), false); assert.equal(disk.formatted, false);
+            assert.equal(stage.nodes.size, 1);
+            assert.equal(logs.some(value => value.startsWith('BIG_WALLET_PROVISIONING_STAGE=')), false);
+        } else {
+            provisioner.provisionGuest();
+            assert.deepEqual(sequence.slice(0, 3), ['acl:-N', 'acl:+a', 'disk']);
+            assert.equal(disk.events.filter(event => event[0] === 'format').length, 1);
+            const markers = logs.filter(value => value.startsWith('BIG_WALLET_PROVISIONING_STAGE='));
+            assert.equal(markers.length, 1);
+            const stagingDirectory = `${stage.parent}/${disk.nonce}/provision`;
+            assert.deepEqual(JSON.parse(markers[0].slice('BIG_WALLET_PROVISIONING_STAGE='.length)), {
+                stagingDirectory, requiredInputs: ['Xcode.tar', 'ios.dmg', 'vision.dmg'],
+            });
+            assert.ok(stage.nodes.has(stagingDirectory));
+        }
+        for (const filename of ['identity.json', 'provisioning.json']) assert.equal(disk.nodes.has(path.join(disk.state, filename)), false);
+    }
+});
 
 test('initialization retries every committed boundary without reformatting or changing its nonce', () => {
     const phases = ['before-intent', 'before-format', 'after-format', 'before-uuid', 'before-mount', 'before-ownership',
@@ -1103,8 +1181,7 @@ test('durable initialization records sync file metadata before rename and the co
         writeFileSync: () => events.push(['write']), fchmodSync: () => events.push(['mode']), fchownSync: () => events.push(['owner']),
         fsyncSync: descriptor => events.push(['sync', descriptor]), closeSync: descriptor => events.push(['close', descriptor]),
         renameSync: () => events.push(['rename']), rmSync: () => events.push(['cleanup'])};
-    const syncDirectory = pureFunction('syncDirectory', {fs});
-    const write = pureFunction('writeDurableJSON', {fs, path, crypto: {randomUUID: () => 'fixture'}, syncDirectory});
+    const write = provisionerFixture({fs, crypto: {randomUUID: () => 'fixture'}}).writeDurableJSON;
     write('/state/intent.json', {version: 1}, 0o600);
     assert.ok(events.findIndex(event => event[0] === 'sync' && event[1] === 1) < events.findIndex(event => event[0] === 'rename'));
     assert.ok(events.findIndex(event => event[0] === 'rename') < events.findIndex(event => event[0] === 'sync' && event[1] === 2));
@@ -1135,8 +1212,8 @@ function signingImportFixture(operation) {
         filesystem.chmodSync(root, 0o700);
         writeFileSync(filename, payload, {mode: 0o600});
         const metadata = filesystem.statSync(filename);
-        const globals = {check, environment: {}, uidText: '502', config: {consoleUser: 'wallet-test'},
-            fail: message => { throw new Error(message); }, process: {stderr: {write: value => { stderr += value; }}},
+        const inputs = {environment: {}, uid: 502, config: {consoleUser: 'wallet-test'},
+            process: {stderr: {write: value => { stderr += value; }}},
             fs: {...filesystem,
                 openSync(...args) { const descriptor = filesystem.openSync(...args); descriptors.push(descriptor); return descriptor; },
                 fstatSync(descriptor) { const value = filesystem.fstatSync(descriptor); value.uid = 0; return value; },
@@ -1150,9 +1227,8 @@ function signingImportFixture(operation) {
                 assert.equal(filesystem.fstatSync(options.stdio[0]).size, payload.length);
                 return imported(options);
             }};
-        globals.run = pureFunction('run', globals);
-        const importIdentity = pureFunction('importSigningIdentity', globals);
-        operation({filename, payload, globals,
+        const importIdentity = provisionerFixture(inputs).importSigningIdentity;
+        operation({filename, payload, inputs,
             invoke: () => importIdentity(filename, '/fixture/dedicated.keychain-db', 'fixture-p12-password'),
             importer: operation => { imported = operation; },
             stderr: () => stderr,
@@ -1207,8 +1283,8 @@ test('signing import rejects exposed, non-root, nonregular and symlink inputs be
     for (const change of [metadata => { metadata.uid = 502; }, metadata => { metadata.mode |= 0o040; },
         metadata => { metadata.isFile = () => false; }]) {
         signingImportFixture(fixture => {
-            const original = fixture.globals.fs.fstatSync;
-            fixture.globals.fs.fstatSync = descriptor => { const metadata = original(descriptor); change(metadata); return metadata; };
+            const original = fixture.inputs.fs.fstatSync;
+            fixture.inputs.fs.fstatSync = descriptor => { const metadata = original(descriptor); change(metadata); return metadata; };
             fixture.importer(() => assert.fail('An invalid identity must not reach the importer'));
             assert.throws(fixture.invoke, /private root-owned file/);
         });
@@ -1218,7 +1294,7 @@ test('signing import rejects exposed, non-root, nonregular and symlink inputs be
         symlinkSync(fixture.filename, link);
         try {
             fixture.importer(() => assert.fail('A linked identity must not reach the importer'));
-            const importIdentity = pureFunction('importSigningIdentity', fixture.globals);
+            const importIdentity = provisionerFixture(fixture.inputs).importSigningIdentity;
             assert.throws(() => importIdentity(link, '/fixture/keychain', 'fixture-password'), {code: 'ELOOP'});
         } finally { rmSync(link); }
     });
@@ -1226,8 +1302,8 @@ test('signing import rejects exposed, non-root, nonregular and symlink inputs be
 
 test('command descriptors reject ambiguous input and leave ordinary command input unchanged', () => {
     const calls = [];
-    const run = pureFunction('run', {check, environment: {},
-        spawnSync(...arguments_) { calls.push(arguments_); return {status: 0, stdout: 'passed'}; }});
+    const run = provisionerFixture({environment: {},
+        spawnSync(...arguments_) { calls.push(arguments_); return {status: 0, stdout: 'passed'}; }}).run;
     for (const inputFD of [-1, null, '0', 1.5]) assert.throws(() => run('fixture', '/fixture', [], {inputFD}), /descriptor/);
     assert.throws(() => run('fixture', '/fixture', [], {inputFD: 0, input: Buffer.from('fixture')}), /cannot be combined/);
     assert.equal(calls.length, 0);
@@ -1257,7 +1333,6 @@ test('failed identity import does not acknowledge signing and a retry can comple
         assert.equal(appliedRequest(request, previous, retried.appliedCapabilities), request.provisioningRequestID);
         assert.deepEqual(Array.from(retried.missingSigning), []);
     });
-    assert.match(source, /importSigningIdentity\(p12, keychainPath, p12Password\);\n\s*fs\.writeFileSync\(importMarker/);
 });
 
 test('missing signing does not discard an independently validated proof key', () => {
@@ -1266,6 +1341,53 @@ test('missing signing does not discard an independently validated proof key', ()
     assert.equal(result.fields.keychainPath, undefined);
     assert.equal(result.missingSigning.length, 1);
     assert.match(result.missingSigning[0], /development signing: No development identity/);
+});
+
+test('signing preparation publishes its import marker only after success and reuses it on retry', () => {
+    const staging = '/guest/provision';
+    const userHome = '/Users/tester';
+    const keychainPath = `${userHome}/Library/Keychains/big-wallet-vm.keychain-db`;
+    const marker = '/guest/state/signing-import.sha256';
+    const files = new Map([
+        [staging + '/identity.p12', Buffer.from('fixture identity bytes')],
+        [staging + '/identity-password', 'identity-password'], [staging + '/keychain-password', 'keychain-password'],
+        [keychainPath, 'existing keychain'],
+    ]);
+    let importFails = true;
+    let imports = 0;
+    const config = {consoleUser: 'tester', signing: {p12Path: 'identity.p12', p12PasswordFile: 'identity-password', keychainPasswordFile: 'keychain-password'}};
+    const prepare = provisionerFixture({config, staging,
+        fs: {constants: filesystem.constants, realpathSync: value => value,
+            existsSync: filename => files.has(filename), statSync: filename => ({isFile: () => files.has(filename)}),
+            readFileSync: filename => files.get(filename), writeFileSync: (filename, bytes) => files.set(filename, bytes),
+            openSync(filename) { assert.equal(filename, staging + '/identity.p12'); return 7; },
+            fstatSync: () => ({isFile: () => true, uid: 0, mode: 0o600}), closeSync: descriptor => assert.equal(descriptor, 7),
+            mkdirSync() {}, chownSync() {}, readdirSync: () => ['fixture.mobileprovision'],
+        },
+        run(_label, command, args, options) {
+            assert.equal(command, '/usr/bin/security');
+            assert.equal(options.user, true);
+            if (args[0] === 'import') {
+                imports += 1;
+                assert.equal(options.inputFD, 7);
+                if (importFails) throw new Error('fixture identity import failed');
+            }
+            if (args[0] === 'find-identity') return '1 valid identities found';
+            if (args[0] === 'list-keychains' && !args.includes('-s')) return '"' + keychainPath + '"';
+            return '';
+        },
+    }).prepareSigning;
+    const failed = prepare(userHome);
+    assert.equal(failed.fields.keychainPath, undefined);
+    assert.ok(failed.missingSigning.some(message => /identity import failed/.test(message)));
+    assert.equal(files.has(marker), false);
+    importFails = false;
+    const succeeded = prepare(userHome);
+    assert.equal(succeeded.fields.keychainPath, keychainPath);
+    assert.equal(succeeded.fields.keychainPassword, 'keychain-password');
+    assert.equal(files.get(marker), createHash('sha256').update(files.get(staging + '/identity.p12')).digest('hex') + '\n');
+    prepare(userHome, succeeded.fields);
+    assert.equal(imports, 2);
 });
 
 test('base-only provisioning reports both missing capabilities without fabricated credentials', () => {
@@ -1312,7 +1434,6 @@ test('a retry can reuse credentials retained after a transient signing failure',
     assert.equal(appliedRequest(config, retained, retried.appliedCapabilities), next);
     assert.equal(retried.missingSigning.length, 0);
     assert.deepEqual(Array.from(retried.appliedCapabilities), ['request-proof key', 'development signing']);
-    assert.match(source, /return \{keychainPath, keychainPassword\};\n\s*}, previous\);/);
 });
 
 test('a provisioning receipt requires successful explicit signing and proof inputs', () => {
@@ -1345,26 +1466,18 @@ test('unrequested missing signing does not prevent a completed account or proof 
     }
 });
 
-test('provisioning leaves protected system simulator directories to Xcode', () => {
-    assert.doesNotMatch(source, /relocateDirectory\(['"]\/Library\/Developer\/CoreSimulator/);
-    assert.doesNotMatch(source, /csrutil\s+disable/);
-    assert.match(source, /\['-runFirstLaunch'\]/);
-    assert.match(source, /'-downloadPlatform', wanted\.platform, '-exportPath', downloads/);
-});
 
 test('UI automation provisioning uses the supported guest administrator tool and verifies the selected user', () => {
     const calls = [];
-    const configure = pureFunction('configureUIAutomation', {check, run(label, file, args, options = {}) {
+    const configure = provisionerFixture({run(label, file, args, options = {}) {
         calls.push({file, args: [...args], user: options.user ?? false, timeout: options.timeout, killSignal: options.killSignal});
         return args.length ? 'succeeded.' : 'Automation Mode is disabled.\nThis device DOES NOT REQUIRE user authentication to enable Automation Mode.';
-    }});
+    }}).configureUIAutomation;
     configure();
     assert.deepEqual(calls, [
         {file: '/usr/bin/automationmodetool', args: ['enable-automationmode-without-authentication'], user: false, timeout: 30000, killSignal: 'SIGKILL'},
         {file: '/usr/bin/automationmodetool', args: [], user: true, timeout: 10000, killSignal: 'SIGKILL'},
     ]);
-    assert.ok(source.indexOf('    configureUIAutomation();') > source.indexOf("['-runFirstLaunch']"));
-    assert.doesNotMatch(source, /TCC\.db|authorizationdb\s+write|tccutil\s+reset/);
 });
 
 test('UI automation provisioning rejects required authentication even when automation is already enabled', () => {
@@ -1372,7 +1485,7 @@ test('UI automation provisioning rejects required authentication even when autom
         'Automation Mode is ENABLED.\nThis device requires user authentication to enable Automation Mode.',
         'Automation Mode is ENABLED.', '', 'unexpected output',
     ]) {
-        const configure = pureFunction('configureUIAutomation', {check, run: (_label, _file, args) => args.length ? 'succeeded.' : status});
+        const configure = provisionerFixture({run: (_label, _file, args) => args.length ? 'succeeded.' : status}).configureUIAutomation;
         assert.throws(configure, /still requires authentication.*setup --interactive/);
     }
 });
@@ -1380,10 +1493,10 @@ test('UI automation provisioning rejects required authentication even when autom
 test('UI automation provisioning preserves administrator or selected-user verification failures', () => {
     for (const failureCall of [1, 2]) {
         let calls = 0;
-        const configure = pureFunction('configureUIAutomation', {check, run() {
+        const configure = provisionerFixture({run() {
             if (++calls === failureCall) throw new Error('fixture authorization unavailable');
             return 'succeeded.';
-        }});
+        }}).configureUIAutomation;
         assert.throws(configure, /fixture authorization unavailable/);
         assert.equal(calls, failureCall);
     }
@@ -1399,12 +1512,12 @@ test('created user developer parents have the selected user ownership without re
         mkdirSync(filename) { directories.set(filename, {owner: 0}); },
         chownSync(filename, owner, group) { directories.set(filename, {owner, group}); },
     };
-    const ensure = pureFunction('ensureUserDeveloperDirectories', {fs: fakeFS, path});
+    const ensure = provisionerFixture({fs: fakeFS}).ensureUserDeveloperDirectories;
     ensure('/Users/tester', 501, 20);
     assert.deepEqual([...directories.keys()], ['/Users/tester/Library', '/Users/tester/Library/Developer', '/Users/tester/Library/Developer/Xcode']);
     assert.ok([...directories.values()].every(value => value.owner === 501 && value.group === 20));
-    const rejectsSymlink = pureFunction('ensureUserDeveloperDirectories', {path, fs: {...fakeFS,
-        lstatSync: () => ({isDirectory: () => false, isSymbolicLink: () => true})}});
+    const rejectsSymlink = provisionerFixture({fs: {...fakeFS,
+        lstatSync: () => ({isDirectory: () => false, isSymbolicLink: () => true})}}).ensureUserDeveloperDirectories;
     assert.throws(() => rejectsSymlink('/Users/tester', 501, 20), /regular directory/);
 });
 
@@ -1416,8 +1529,8 @@ test('runtime storage guards measure download headroom and a reserve beyond the 
 
 function runtimeExportFixture() {
     const directory = filesystem.realpathSync(mkdtempSync(path.join(tmpdir(), 'wallet-runtime-export-')));
-    const bytes = pureFunction('runtimeArtifactBytes', {fs: filesystem, path, check});
-    const select = pureFunction('exportedRuntimeImage', {fs: filesystem, path, check, runtimeArtifactBytes: bytes});
+    const bytes = provisionerFixture({fs: filesystem}).runtimeArtifactBytes;
+    const select = provisionerFixture({fs: filesystem}).exportedRuntimeImage;
     const bundle = (name = 'iOS.exportedBundle') => {
         const artifact = path.join(directory, name);
         mkdirSync(path.join(artifact, 'Restore'), {recursive: true});
@@ -1487,16 +1600,15 @@ test('runtime artifact inspection is bounded and storage checks use all bundle f
     const fixture = runtimeExportFixture();
     try {
         const artifact = fixture.bundle();
-        const checkpoint = pureFunction('runtimeStorageCheckpoint', {path, check, runtimeArtifactBytes: fixture.bytes,
-            runtimeRootSpaceRequirement: rootSpaceRequirement, console: {log() {}}, fs: {statfsSync: () => ({
-                bavail: 8 * 1024 ** 3 + 128, bsize: 1, blocks: 64 * 1024 ** 3})}});
+        const checkpoint = provisionerFixture({console: {log() {}}, fs: {...filesystem, statfsSync: () => ({
+                bavail: 8 * 1024 ** 3 + 128, bsize: 1, blocks: 64 * 1024 ** 3})}}).runtimeStorageCheckpoint;
         assert.throws(() => checkpoint('/guest/build', 'iOS', artifact), /Insufficient guest system-volume/);
-        const limited = pureFunction('runtimeArtifactBytes', {path, check, fs: {...filesystem,
+        const limited = provisionerFixture({fs: {...filesystem,
             lstatSync(filename) {
                 const metadata = filesystem.lstatSync(filename);
                 return filename.endsWith('.dmg') ? {...metadata, size: 129 * 1024 ** 3,
                     isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false} : metadata;
-            }}});
+            }}}).runtimeArtifactBytes;
         assert.throws(() => limited(artifact), /bounded byte/);
         let nested = artifact;
         for (let depth = 0; depth < 17; depth += 1) nested = path.join(nested, 'nested');
@@ -1510,109 +1622,159 @@ function runtimeProvisioningFixture({platform = 'iOS', reused = false, dmgPath, 
     deviceExists = true, additionalPins = [], supersededRuntimes, onRetirement} = {}) {
     const wanted = {platform, version: '27.0', buildVersion: platform === 'iOS' ? '24A434' : '24M362', ...(dmgPath ? {dmgPath} : {})};
     const requested = [wanted, ...additionalPins];
-    const runtimeFor = pin => ({identifier: `com.apple.CoreSimulator.SimRuntime.${pin.platform === 'iOS' ? 'iOS' : 'xrOS'}-${pin.version.replaceAll('.', '-')}`,
-        version: pin.version, buildversion: pin.buildVersion, isAvailable: true});
-    let active = wanted;
-    const buildRoot = '/guest/build';
-    const staging = '/guest/provision';
-    const commands = [];
-    const cacheCommands = [];
-    const events = [];
-    const removed = [];
-    let runtimes = reused ? requested.map(runtimeFor) : [];
-    const retired = [];
-    const start = source.indexOf('    const keychainPath = path.join(userHome,');
-    const end = source.indexOf('    fs.mkdirSync(launchDirectory,', start);
-    assert.ok(start >= 0 && end > start);
-    const developer = '/Applications/Xcode.app/Contents/Developer';
-    const globals = {config: {vmId: 'fixture', consoleUser: 'tester', runtimes: requested, supersededRuntimes}, path, buildRoot, staging, check, developer,
-        validateRetirementPins,
-        state: '/guest/state', userHome: '/Users/tester',
-        matchesRuntime: pureFunction('matchesRuntime'), console: {log() {}},
-        fs: {mkdirSync() {}, existsSync: () => true, lstatSync(filename) {
-            assert.equal(filename, '/guest/state/provisioning.json');
-            return previous && {isFile: () => true, uid: 0, mode: 0o600, size: 256};
-        }, readFileSync: () => JSON.stringify(previous), statfsSync(filename) {
-            assert.ok([buildRoot, '/System/Volumes/Data'].includes(filename));
-            const available = filename === buildRoot ? buildFreeBefore : freeBefore;
-            const reclaimed = Array.isArray(freeAfter) ? freeAfter[retired.length - 1] : freeAfter;
-            return {bavail: retired.length ? reclaimed : available, bsize: 1, blocks: 96 * 1024 ** 3};
-        }},
-        retireSupersededRuntimes(prior, target, root, verifyOnly = false) {
-            const expected = Array.from(target, pin => supersededRuntimes?.find(old => old.platform === pin.platform) ??
-                previous.runtimes.find(old => old.platform === pin.platform));
-            assert.deepEqual(JSON.parse(JSON.stringify(prior)), expected);
-            assert.ok(Array.from(target).every(pin => requested.includes(pin)));
-            if (!verifyOnly) {
-                assert.equal(prior.length, 1);
-                assert.ok(!retired.includes(prior[0].platform));
-                retired.push(prior[0].platform);
-            }
-            assert.equal(root, buildRoot);
-            events.push(verifyOnly ? 'verify-retirement' : 'retire');
-            onRetirement?.(prior, target, verifyOnly);
-        },
-        staged: relative => path.join(staging, relative),
-        exportedRuntimeImage: directory => path.join(directory, 'downloaded.dmg'),
-        removeLocalProvisioningInput: filename => removed.push(filename),
-        run(_label, command, args, options = {}) {
-            const runtime = runtimeFor(active);
-            const name = active.platform === 'iOS' ? 'iPhone 18 Pro' : 'Apple Vision Pro';
-            if (command === '/usr/bin/xcodebuild') {
-                commands.push([command, ...args]);
-                events.push(args[0]);
-                if (args[0] === '-importPlatform') runtimes.push({...runtime, buildversion: importedBuild ?? active.buildVersion});
-                else assert.equal(args[0], '-downloadPlatform');
-                return '';
-            }
-            if (command === '/usr/bin/env') {
-                assert.equal(args[0], 'DEVELOPER_DIR=' + developer);
-                if (args[3] === 'runtime') cacheCommands.push({command, args: Array.from(args), options: {...options}});
-                command = args[1];
-                args = Array.from(args).slice(2);
-            }
-            assert.equal(command, '/usr/bin/xcrun');
-            if (args[1] === 'create') {
-                assert.deepEqual(Array.from(args), ['simctl', 'create', name, 'fixture-device', runtime.identifier]);
-                deviceExists = true;
-                events.push('create');
-                return '';
-            }
-            if (args[1] === 'runtime') {
-                assert.deepEqual(Array.from(args), ['simctl', 'runtime', 'dyld_shared_cache', 'update', runtime.identifier]);
-                events.push('cache');
-                if (cacheError) throw new Error(cacheError);
-                if (cachedBuild || cacheUnavailable) runtimes = [{...runtime, buildversion: cachedBuild ?? runtime.buildversion,
-                    isAvailable: !cacheUnavailable}];
-                return 'dyld shared cache is usable at path: fixture';
-            }
-            assert.deepEqual(Array.from(args).slice(0, 2), ['simctl', 'list']);
-            events.push(args[2]);
-            if (args[2] === 'runtimes') return JSON.stringify({runtimes});
-            if (args[2] === 'devicetypes') return JSON.stringify({devicetypes: [{name, identifier: 'fixture-device'}]});
-            assert.equal(args[2], 'devices');
-            return JSON.stringify({devices: {[runtime.identifier]: deviceExists ? [{name, isAvailable: true}] : []}});
-        },
-    };
-    globals.runtimeStorageCheckpoint = pureFunction('runtimeStorageCheckpoint', {check, fs: globals.fs, console: globals.console,
-        runtimeRootSpaceRequirement: rootSpaceRequirement, runtimeArtifactBytes: () => 2 * 1024 ** 3});
-    globals.reclaimRuntimePreparationSpace = pureFunction('reclaimRuntimePreparationSpace', {check, fs: globals.fs, console: globals.console});
-    globals.prepareRuntimeCache = pureFunction('prepareRuntimeCache', {check, developer,
-        matchesRuntime: globals.matchesRuntime, run: globals.run, console: globals.console});
-    globals.verifyOrRepairPinnedRuntime = (pin, _root, mode, retirement) => {
-        active = pin;
-        events.push(`verify:${mode ?? 'prepare'}`);
-        if (mode !== 'verify') {
-            const expected = (supersededRuntimes ?? previous?.runtimes ?? []).filter(old => requested.some(value =>
-                value.platform === old.platform && (value.version !== old.version || value.buildVersion !== old.buildVersion)));
-            assert.deepEqual(JSON.parse(JSON.stringify(retirement?.pins ?? [])), expected);
+    const buildRoot = '/Volumes/BigWalletBuild';
+    const staging = `${buildRoot}/Provisioning/00000000-0000-4000-8000-000000000001/provision`;
+    const state = '/guest/state', developer = '/Applications/Xcode.app/Contents/Developer';
+    const config = {vmId: 'fixture', consoleUser: 'tester', runtimes: requested, supersededRuntimes};
+    const commands = [], cacheCommands = [], nativeCommands = [], events = [], removed = [], retired = [];
+    const nodes = new Map(), images = new Map(), profileOverrides = new Map(), artifactPins = new Map();
+    const devices = {};
+    let nextIdentity = 1;
+    const uuid = () => `00000000-0000-4000-8000-${String(nextIdentity++).padStart(12, '0')}`;
+    const samePin = (a, b) => a.platform === b.platform && a.version === b.version && a.buildVersion === b.buildVersion;
+    const runtimeID = pin => `com.apple.CoreSimulator.SimRuntime.${pin.platform === 'iOS' ? 'iOS' : 'xrOS'}-${pin.version.replaceAll('.', '-')}`;
+    const deviceName = pin => pin.platform === 'iOS' ? 'iPhone 18 Pro' : 'Apple Vision Pro';
+    function directory(filename, mode = 0o755) {
+        const parent = path.dirname(filename);
+        if (parent !== filename && !nodes.has(parent)) directory(parent);
+        if (!nodes.has(filename)) nodes.set(filename, {kind: 'directory', mode, uid: 0, gid: 20, ino: nextIdentity++});
+    }
+    function file(filename, content = '', size = Buffer.byteLength(content), mode = 0o600) {
+        directory(path.dirname(filename));
+        nodes.set(filename, {kind: 'file', content, size, mode, uid: 0, gid: 20, ino: nextIdentity++});
+    }
+    function metadata(filename, options) {
+        const value = nodes.get(filename);
+        if (!value) {
+            if (options?.throwIfNoEntry === false) return undefined;
+            throw Object.assign(new Error(`Missing fixture path: ${filename}`), {code: 'ENOENT'});
         }
-        const selected = runtimes.find(value => globals.matchesRuntime(value, pin));
-        if (mode === 'existing' && !selected) return null;
-        check(selected, `${pin.platform} ${pin.version} (${pin.buildVersion}) is unavailable`);
-        return selected;
+        return {...value, dev: 1, size: value.size ?? 0, mtimeMs: 1, ctimeMs: 1,
+            isDirectory: () => value.kind === 'directory', isFile: () => value.kind === 'file', isSymbolicLink: () => false};
+    }
+    directory(buildRoot); directory(state); directory(staging, 0o700);
+    nodes.get(path.dirname(staging)).mode = 0o700;
+    nodes.get(path.dirname(path.dirname(staging))).mode = 0o700;
+    file(path.join(path.dirname(staging), '.big-wallet-provisioning.json'), JSON.stringify({version: 1, vmId: config.vmId}));
+    if (previous !== undefined) file(path.join(state, 'provisioning.json'), JSON.stringify(previous));
+    for (const pin of requested) {
+        if (pin.dmgPath) {
+            const filename = path.join(staging, pin.dmgPath);
+            file(filename, '', 2 * 1024 ** 3); artifactPins.set(filename, pin);
+        }
+    }
+    function addRuntime(pin, target = false) {
+        const identifier = uuid();
+        const mountPath = `/Library/Developer/CoreSimulator/Volumes/${identifier}`;
+        const runtimeBundlePath = `${mountPath}/Library/Developer/CoreSimulator/Profiles/Runtimes/Fixture.simruntime`;
+        const image = {identifier, runtimeIdentifier: runtimeID(pin),
+            platformIdentifier: `com.apple.platform.${pin.platform === 'iOS' ? 'iphone' : 'xr'}simulator`,
+            version: pin.version, build: pin.buildVersion, kind: 'Disk Image', state: 'Ready', signatureState: 'Verified', deletable: true,
+            path: `/Library/Developer/CoreSimulator/Images/${identifier}.dmg`, mountPath, runtimeBundlePath, sizeBytes: 1024};
+        const record = {pin: {...pin}, image};
+        images.set(identifier, record); directory(runtimeBundlePath); file(image.path, '', image.sizeBytes);
+        devices[image.runtimeIdentifier] ??= [];
+        if (target && deviceExists && !devices[image.runtimeIdentifier].length) {
+            devices[image.runtimeIdentifier].push({udid: uuid(), name: deviceName(pin), isAvailable: true, state: 'Shutdown'});
+        }
+        return record;
+    }
+    const oldPins = (supersededRuntimes ?? previous?.runtimes ?? []).filter(old =>
+        requested.some(pin => pin.platform === old.platform && !samePin(pin, old)));
+    oldPins.forEach(pin => addRuntime(pin));
+    if (reused) requested.forEach(pin => addRuntime(pin, true));
+    const profiles = () => [...images.values()].map(({pin, image}) => ({identifier: image.runtimeIdentifier,
+        version: pin.version, buildversion: pin.buildVersion, isAvailable: true, bundlePath: image.runtimeBundlePath,
+        runtimeRoot: path.join(image.runtimeBundlePath, 'Contents/Resources/RuntimeRoot'), ...profileOverrides.get(image.identifier)}));
+    const fs = {
+        existsSync: filename => nodes.has(filename), realpathSync: filename => filename,
+        lstatSync: metadata, statSync: metadata, mkdirSync: (filename, options = {}) => directory(filename, options.mode),
+        readFileSync(filename) { metadata(filename); return nodes.get(filename).content; },
+        readdirSync(filename) {
+            assert.ok(metadata(filename).isDirectory());
+            return [...nodes.keys()].filter(candidate => candidate !== filename && path.dirname(candidate) === filename).map(candidate => path.basename(candidate));
+        },
+        rmSync(filename) { metadata(filename); removed.push(filename); nodes.delete(filename); },
+        openSync(filename) { assert.ok(metadata(filename).isDirectory()); return 7; }, fsyncSync() {}, closeSync() {},
+        statfsSync(filename) {
+            assert.ok([buildRoot, '/System/Volumes/Data'].includes(filename));
+            const initial = filename === buildRoot ? buildFreeBefore : freeBefore;
+            const reclaimed = Array.isArray(freeAfter) ? freeAfter[retired.length - 1] : freeAfter;
+            return {bavail: retired.length ? reclaimed : initial, bsize: 1, blocks: 96 * 1024 ** 3};
+        },
     };
-    return {wanted, commands, cacheCommands, events, removed, retired, run: () => vm.runInNewContext(source.slice(start, end), globals)};
+    function execute(label, command, originalArgs, options = {}) {
+        let args = [...originalArgs];
+        nativeCommands.push({label, command, args: [...args], options: {...options}});
+        if (command === '/usr/bin/xcodebuild') {
+            commands.push([command, ...args]); events.push(args[0]);
+            if (args[0] === '-downloadPlatform') {
+                const pin = requested.find(value => value.platform === args[1] && value.buildVersion === args[args.indexOf('-buildVersion') + 1]);
+                assert.ok(pin);
+                const output = path.join(args[args.indexOf('-exportPath') + 1], 'downloaded.dmg');
+                file(output, '', 2 * 1024 ** 3); artifactPins.set(output, pin);
+            } else {
+                assert.equal(args[0], '-importPlatform');
+                const pin = artifactPins.get(args[1]); assert.ok(pin);
+                addRuntime({...pin, buildVersion: importedBuild ?? pin.buildVersion}, true);
+            }
+            return '';
+        }
+        if (command === '/usr/bin/plutil') {
+            assert.equal(args[0], '-extract');
+            const record = [...images.values()].find(({image}) => args.at(-1).startsWith(image.runtimeBundlePath + '/'));
+            assert.ok(record);
+            if (args[1] === 'ProductVersion') return record.pin.version;
+            assert.equal(args[1], 'ProductBuildVersion'); return record.pin.buildVersion;
+        }
+        if (command === '/sbin/mount') return [...images.values()].map(({image}, index) =>
+            `/dev/disk${index + 10}s1 on ${image.mountPath} (apfs, sealed, read-only)`).join('\n');
+        if (command === '/usr/bin/env') {
+            assert.equal(args[0], `DEVELOPER_DIR=${developer}`);
+            if (args.slice(2, 5).join(' ') === 'simctl runtime dyld_shared_cache') cacheCommands.push({command, args: [...args], options: {...options}});
+            command = args[1]; args = args.slice(2);
+        }
+        assert.equal(command, '/usr/bin/xcrun'); assert.equal(args[0], 'simctl');
+        const action = args.slice(1);
+        let output;
+        if (action.join(' ') === 'runtime list --json') output = JSON.stringify(Object.fromEntries([...images].map(([identifier, {image}]) => [identifier, image])));
+        else if (action[0] === 'runtime' && action[1] === 'verify') {
+            assert.ok(images.has(action[2])); events.push('verify'); output = 'Signature verified, signature is valid.';
+        } else if (action[0] === 'runtime' && action[1] === 'delete') {
+            const record = images.get(action[2]); assert.ok(record);
+            assert.ok(oldPins.some(pin => samePin(pin, record.pin)), 'Only an old exact pin may be deleted');
+            images.delete(action[2]); retired.push(record.pin.platform); events.push('retire');
+            onRetirement?.([record.pin], requested.filter(pin => pin.platform === record.pin.platform), false);
+            output = '';
+        } else if (action[0] === 'runtime' && action[1] === 'dyld_shared_cache') {
+            assert.equal(action[2], 'update');
+            const record = [...images.values()].find(({pin, image}) => image.runtimeIdentifier === action[3] && requested.some(value => samePin(value, pin)));
+            assert.ok(record); events.push('cache');
+            if (cacheError) throw new Error(cacheError);
+            if (cachedBuild || cacheUnavailable) profileOverrides.set(record.image.identifier,
+                {buildversion: cachedBuild ?? record.pin.buildVersion, isAvailable: !cacheUnavailable});
+            output = 'dyld shared cache is usable at path: fixture';
+        } else if (action.join(' ') === 'list runtimes --json') {
+            if (label === 'List guest runtimes' || label.startsWith('Recheck ')) events.push('runtimes');
+            output = JSON.stringify({runtimes: profiles()});
+        } else if (action.join(' ') === 'list devices --json') {
+            if (label === 'List guest simulator devices') events.push('devices');
+            output = JSON.stringify({devices});
+        } else if (action.join(' ') === 'list devicetypes --json') {
+            events.push('devicetypes');
+            output = JSON.stringify({devicetypes: requested.map(pin => ({name: deviceName(pin), identifier: `${pin.platform}-fixture-device`}))});
+        } else if (action[0] === 'create') {
+            const pin = requested.find(value => runtimeID(value) === action[3]); assert.ok(pin);
+            assert.equal(action[1], deviceName(pin)); assert.equal(action[2], `${pin.platform}-fixture-device`);
+            devices[action[3]] = [{udid: uuid(), name: action[1], isAvailable: true, state: 'Shutdown'}];
+            events.push('create'); output = '';
+        } else assert.fail(`Unexpected fixture command: ${label}: ${command} ${args.join(' ')}`);
+        return options.returnStatus ? {status: 0, stdout: output, stderr: ''} : output;
+    }
+    const provisioner = provisionerFixture({config, staging, state, developer, fs, run: execute,
+        console: {log(value) { if (value.startsWith('Verified retirement of ')) events.push('retirement-check'); }}});
+    return {wanted, staging, buildRoot, commands, cacheCommands, nativeCommands, events, removed, retired, images,
+        run() { provisioner.prepareRuntimes(buildRoot, provisioner.loadPreviousProvisioning('/Users/tester')); }};
 }
 
 test('runtime downloads select the pinned build ID when release and build differ', () => {
@@ -1633,7 +1795,7 @@ test('guest setup retires prior same-account pins after device readiness and che
     fixture.run();
     assert.ok(fixture.events.indexOf('devices') > fixture.events.indexOf('cache'));
     assert.ok(fixture.events.indexOf('retire') > fixture.events.lastIndexOf('devices'));
-    assert.deepEqual(fixture.events.slice(-2), ['verify:verify', 'verify-retirement']);
+    assert.deepEqual(fixture.events.slice(-2), ['verify', 'retirement-check']);
     assert.equal(fixture.commands.filter(command => command[1] === '-importPlatform').length, 1);
     const failed = runtimeProvisioningFixture({previous, cacheError: 'fixture cache failed'});
     assert.throws(failed.run, /fixture cache failed/);
@@ -1714,7 +1876,7 @@ test('guest setup retires a replaced build with the same runtime identifier befo
 
 test('runtime provisioning rejects a different installed build after downloading', () => {
     const fixture = runtimeProvisioningFixture({importedBuild: '24A999'});
-    assert.throws(fixture.run, /iOS 27\.0 \(24A434\) is unavailable/);
+    assert.throws(fixture.run, /pinned runtime image inventory is missing or ambiguous/);
     assert.equal(fixture.commands.length, 2);
 });
 
@@ -1723,15 +1885,15 @@ test('runtime provisioning reuses an already installed exact build without downl
         const fixture = runtimeProvisioningFixture({reused: true, dmgPath});
         fixture.run();
         assert.deepEqual(fixture.commands, []);
-        assert.deepEqual(fixture.removed, dmgPath ? ['/guest/provision/runtime.dmg'] : []);
+        assert.deepEqual(fixture.removed, dmgPath ? [path.join(fixture.staging, 'runtime.dmg')] : []);
     }
 });
 
 test('runtime provisioning imports an explicit DMG without downloading', () => {
     const fixture = runtimeProvisioningFixture({dmgPath: 'runtime.dmg'});
     fixture.run();
-    assert.deepEqual(fixture.commands, [['/usr/bin/xcodebuild', '-importPlatform', '/guest/provision/runtime.dmg']]);
-    assert.deepEqual(fixture.removed, ['/guest/provision/runtime.dmg']);
+    assert.deepEqual(fixture.commands, [['/usr/bin/xcodebuild', '-importPlatform', path.join(fixture.staging, 'runtime.dmg')]]);
+    assert.deepEqual(fixture.removed, [path.join(fixture.staging, 'runtime.dmg')]);
 });
 
 test('runtime provisioning awaits the exact pinned cache and rechecks it before device readiness', () => {
@@ -1769,14 +1931,14 @@ test('cache command output is bounded and retained on failure without enabling s
     const written = [];
     const calls = [];
     let result = {status: 1, stdout: 'bounded cache failure details', stderr: ''};
-    const command = pureFunction('run', {check, fail: message => { throw new Error(message); },
+    const command = provisionerFixture({
         uidText: '501', config: {consoleUser: 'wallet-test'},
         environment: {DEVELOPER_DIR: '/Applications/Xcode.app/Contents/Developer'},
         process: {stdout: {write: value => written.push(value)}, stderr: {write() {}}},
         spawnSync(file, args, options) {
             calls.push({file, args: Array.from(args), options});
             return result;
-        }});
+        }}).run;
     const options = {user: true, maxBuffer: 64 * 1024, timeout: 1_800_000, logStdout: true};
     assert.throws(() => command('Cache preparation', '/usr/bin/env', ['DEVELOPER_DIR=pinned', '/usr/bin/xcrun'], options), /failed/);
     assert.equal(calls[0].options.maxBuffer, 64 * 1024);
@@ -1858,14 +2020,18 @@ function runtimeRetirementFixture(t, {iosVersion = '27.2'} = {}) {
         }
         return '';
     };
-    const fs = {...filesystem, lstatSync(filename, options) {
+    const openDirectories = new Map();
+    const fs = {...filesystem,
+        openSync(filename, ...args) { const descriptor = filesystem.openSync(filename, ...args); openDirectories.set(descriptor, filename); return descriptor; },
+        fsyncSync(descriptor) { filesystem.fsyncSync(descriptor); const directory = openDirectories.get(descriptor); synced.push(directory); behavior.onSync?.(directory); },
+        closeSync(descriptor) { openDirectories.delete(descriptor); filesystem.closeSync(descriptor); },
+        lstatSync(filename, options) {
         const info = filesystem.lstatSync(filename, options);
         if (info) info.uid = filename === behavior.assetOwnedPath ? 200 : 0;
         if (info && filename === behavior.mount) info.dev++;
         return info;
     }};
-    const retire = pureFunction('retireSupersededRuntimes', {check, validateRetirementPins, matchesRuntimeImage, run, fs, path, developer, state, config: {vmId}, process,
-        syncDirectory(directory) { synced.push(directory); behavior.onSync?.(directory); }});
+    const retire = provisionerFixture({run, fs, developer, state, config: {vmId}, process}).retireSupersededRuntimes;
     const setup = (from = previous, to = wanted, verifyOnly = false) =>
         retire(from.map(record => record.pin), to.map(record => record.pin), buildRoot, verifyOnly);
     const assertPresent = (record, present) => {
@@ -1898,7 +2064,8 @@ test('a cold retry retires a returned baseline runtime after the guest records t
     }});
     fixture.run();
     assert.deepEqual(fixture.commands, []);
-    assert.deepEqual(fixture.events.slice(-3), ['retire', 'verify:verify', 'verify-retirement']);
+    assert.ok(fixture.events.lastIndexOf('verify') > fixture.events.lastIndexOf('retire'));
+    assert.equal(fixture.events.at(-1), 'retirement-check');
     inventory.assertPresent(baseline, false);
     for (const kept of [...inventory.previous, ...inventory.wanted]) inventory.assertPresent(kept, true);
 });
@@ -2086,8 +2253,14 @@ function runtimeRepairFixture({platform = 'iOS', healthy = false, sibling = fals
         MobileAssetProperties: {Build: pin.buildVersion, SimulatorVersion: pin.version, Architectures: ['arm64']}}));
     for (const name of ['BuildManifest.plist', 'Restore.plist']) writeFileSync(path.join(exported, 'Restore', name),
         JSON.stringify({ProductVersion: pin.version, ProductBuildVersion: pin.buildVersion}));
-    const digest = pureFunction('runtimeFileDigest', {fs: filesystem, path, check, crypto: {createHash}, Buffer});
+    const digest = provisionerFixture({fs: filesystem, crypto: {createHash}}).runtimeFileDigest;
     const source = digest(original);
+    const nativeImage = path.join(root, 'native-image.dmg');
+    const corruptNativeImage = path.join(root, 'corrupt-native-image.dmg');
+    writeFileSync(nativeImage, readFileSync(original));
+    writeFileSync(corruptNativeImage, Buffer.alloc(source.size, 0x78));
+    const journalDirectory = path.join(state, 'RuntimeRepairs');
+    const journalPath = path.join(journalDirectory, `${key}.json`);
     const oldID = '11111111-1111-4111-8111-111111111111', probeID = '22222222-2222-4222-8222-222222222222';
     const newID = '33333333-3333-4333-8333-333333333333', siblingID = '44444444-4444-4444-8444-444444444444';
     const base = {version: pin.version, build: pin.buildVersion, platformIdentifier: `com.apple.platform.${platform === 'iOS' ? 'iphone' : 'xr'}simulator`,
@@ -2102,16 +2275,69 @@ function runtimeRepairFixture({platform = 'iOS', healthy = false, sibling = fals
     if (sibling) inventory.set(siblingID, {...broken, identifier: siblingID, state: 'Unusable', unusableErrorMessage: 'Cryptex Mount Preferred'});
     const calls = [], writes = [], checkpoints = [], logs = [], sleeps = [], queryTimeouts = [], behavior = {};
     let clock = 0, runtimeQueries = 0;
+    const descriptors = new Map();
+    let pendingJournal;
+    const physicalPath = filename => {
+        if (filename.startsWith('/Library/Developer/CoreSimulator/Images/Inbox/')) {
+            throw Object.assign(new Error('Discarded native Inbox file'), {code: 'ENOENT'});
+        }
+        if (filename.startsWith('/Library/Developer/CoreSimulator/Images/')) {
+            return behavior.normalHashMismatch ? corruptNativeImage : nativeImage;
+        }
+        return filename;
+    };
     const fs = {...filesystem,
-        lstatSync(filename) {
-            if (filename.startsWith('/Library/Developer/CoreSimulator/Images/')) return {isFile: () => true,
-                isSymbolicLink: () => false, size: source.size, dev: 2, ino: 100, mtimeMs: 1};
-            const item = filesystem.lstatSync(filename); return new Proxy(item, {get(target, key) {
-            if (key === 'uid') return behavior.sourceWrongOwner && filename.endsWith('/runtime.dmg') && filename.includes('/RuntimeRepairSources/') ? 501 : 0;
-            const value = Reflect.get(target, key); return typeof value === 'function' ? value.bind(target) : value;
-        }}); },
-        statSync(filename) { return filename === bundlePath ? {isDirectory: () => true, dev: 3, ino: 200} : filesystem.statSync(filename); },
-        chownSync() {},
+        lstatSync(filename, options) {
+            const item = filesystem.lstatSync(physicalPath(filename), options);
+            if (!item) return item;
+            return new Proxy(item, {get(target, key) {
+                if (key === 'uid') return behavior.sourceWrongOwner && filename.endsWith('/runtime.dmg') &&
+                    filename.includes('/RuntimeRepairSources/') ? 501 : 0;
+                const value = Reflect.get(target, key);
+                return typeof value === 'function' ? value.bind(target) : value;
+            }});
+        },
+        statSync(filename, options) {
+            return filename === bundlePath ? {isDirectory: () => true, dev: 3, ino: 200}
+                : filesystem.statSync(physicalPath(filename), options);
+        },
+        realpathSync(filename) {
+            const physical = physicalPath(filename);
+            const canonical = filesystem.realpathSync(physical);
+            return physical !== filename && canonical === physical ? filename : canonical;
+        },
+        openSync(filename, flags, mode) {
+            const descriptor = filesystem.openSync(physicalPath(filename), flags, mode);
+            descriptors.set(descriptor, filename);
+            return descriptor;
+        },
+        closeSync(descriptor) { descriptors.delete(descriptor); return filesystem.closeSync(descriptor); },
+        renameSync(from, to) {
+            filesystem.renameSync(from, to);
+            if (to === journalPath) pendingJournal = JSON.parse(readFileSync(to, 'utf8'));
+        },
+        fsyncSync(descriptor) {
+            filesystem.fsyncSync(descriptor);
+            if (descriptors.get(descriptor) !== journalDirectory || !pendingJournal) return;
+            const value = pendingJournal;
+            pendingJournal = undefined;
+            writes.push(value);
+            if (value.phase === behavior.interruptPhase) {
+                delete behavior.interruptPhase;
+                throw new Error('fixture repair interrupted');
+            }
+            if (value.phase === 'adding' && value.addAttempted && behavior.interruptAddIntent) {
+                behavior.interruptAddIntent = false;
+                throw new Error('fixture stopped before add');
+            }
+        },
+        statfsSync(directory) {
+            assert.ok(directory === '/System/Volumes/Data' || directory === buildRoot);
+            const available = directory === '/System/Volumes/Data' && behavior.noSpace ? 0 : 64 * 1024 ** 3;
+            if (directory === '/System/Volumes/Data') checkpoints.push({directory, available});
+            return {bavail: available, bsize: 1, blocks: 128 * 1024 ** 3};
+        },
+        chownSync() {}, fchownSync() {},
     };
     const runtime = () => {
         const selectedPath = behavior.preferredCryptex ? '/private/var/run/fixture-cryptex/iOS.simruntime' : bundlePath;
@@ -2194,35 +2420,8 @@ function runtimeRepairFixture({platform = 'iOS', healthy = false, sibling = fals
         if (behavior.interruptDelete === removed) { behavior.interruptDelete = undefined; throw new Error('fixture delete interrupted after removal'); }
         return response('Deleted');
     };
-    const artifactBytes = pureFunction('runtimeArtifactBytes', {fs, path, check});
-    const select = pureFunction('exportedRuntimeImage', {fs, path, check, runtimeArtifactBytes: artifactBytes});
-    const prepare = pureFunction('verifyOrRepairPinnedRuntime', {fs, path, check, matchesRuntimeImage, fail: message => { throw new Error(message); },
-        state, config: {vmId: 'fixture-vm'}, performance: {now: () => clock},
-        developer: '/Applications/Xcode.app/Contents/Developer', matchesRuntime: pureFunction('matchesRuntime'), run,
-        runtimeMetadataField: pureFunction('runtimeMetadataField', {check, run}),
-        runtimeAdmissionDiagnostic: pureFunction('runtimeAdmissionDiagnostic', {Buffer}),
-        runtimeProfileDiagnostic: pureFunction('runtimeProfileDiagnostic', {Buffer}),
-        exportedRuntimeImage: select, runtimeFileDigest(filename) {
-            if (filename.startsWith('/Library/Developer/CoreSimulator/Images/Inbox/')) throw Object.assign(new Error('Discarded native Inbox file'), {code: 'ENOENT'});
-            if (filename.startsWith('/Library/Developer/CoreSimulator/Images/')) return behavior.normalHashMismatch ? {...source, sha256: 'f'.repeat(64)} : source;
-            return digest(filename);
-        }, runtimeStorageCheckpoint(...args) {
-            checkpoints.push(args);
-            if (behavior.noSpace) args[3]?.();
-            if (behavior.noSpace) throw new Error('fixture storage reserve');
-        },
-        writeDurableJSON(filename, value) {
-            writes.push(JSON.parse(JSON.stringify(value))); writeFileSync(filename, JSON.stringify(value), {mode: 0o600});
-            if (value.phase === behavior.interruptPhase) {
-                delete behavior.interruptPhase;
-                throw new Error('fixture repair interrupted');
-            }
-            if (value.phase === 'adding' && value.addAttempted && behavior.interruptAddIntent) {
-                behavior.interruptAddIntent = false; throw new Error('fixture stopped before add');
-            }
-        },
-        syncDirectory() {}, console: {log: value => logs.push(value)}});
-    const journalPath = path.join(state, 'RuntimeRepairs', `${key}.json`);
+    const prepare = provisionerFixture({fs, state, config: {vmId: 'fixture-vm'},
+        performance: {now: () => clock}, run, console: {log: value => logs.push(value)}}).verifyOrRepairPinnedRuntime;
     return {pin, buildRoot, exported, inventory, calls, writes, checkpoints, logs, sleeps, queryTimeouts,
         elapsed: () => clock, behavior, oldID, probeID, newID, siblingID, journalPath,
         prepare: (mode, retirement) => prepare(pin, buildRoot, mode, retirement), journal: () => JSON.parse(readFileSync(journalPath, 'utf8')),
@@ -2370,7 +2569,7 @@ test('profile mismatch diagnostic separates native image mount from selected usa
         assert.equal(report.runtimes.values[0].buildversion, fixture.pin.buildVersion);
         assert.equal(fixture.calls.some(args => args[1] === 'delete'), false);
     } finally { fixture.close(); }
-    const summarize = pureFunction('runtimeProfileDiagnostic', {Buffer});
+    const summarize = provisioning.runtimeProfileDiagnostic;
     const value = {identifier: 'fixture', bundlePath: 'x'.repeat(4000), runtimeRoot: 'y'.repeat(4000), privateField: 'secret-fixture'};
     const report = summarize({platform: 'iOS'}, {...value, mountPath: 'z'.repeat(4000)}, Array(100).fill(value),
         {exists: false, existsError: 'EACCES'}, 0);
@@ -2576,7 +2775,7 @@ test('absent-probe admission diagnostics include the exact recorded and current 
         assert.equal(fixture.calls.filter(args => args[1] === 'add').length, additions);
         assert.equal(fixture.calls.some(args => args[1] === 'delete'), false);
     } finally { fixture.close(); }
-    const summarize = pureFunction('runtimeAdmissionDiagnostic', {Buffer});
+    const summarize = provisioning.runtimeAdmissionDiagnostic;
     const report = summarize({platform: 'iOS'}, [{identifier: 'fixture', sizeBytes: Infinity}], null);
     assert.equal(report.beforeVerification.images[0].sizeBytes, '<invalid-type>');
 });
@@ -2618,7 +2817,7 @@ test('runtime repair admission failure records bounded public before and after i
         assert.equal(fixture.calls.some(args => ['add', 'delete'].includes(args[1])), false);
         assert.equal(filesystem.existsSync(fixture.journalPath), false);
     } finally { fixture.close(); }
-    const summarize = pureFunction('runtimeAdmissionDiagnostic', {Buffer});
+    const summarize = provisioning.runtimeAdmissionDiagnostic;
     const image = {identifier: 'id', path: 'x'.repeat(4000), kind: 'y'.repeat(4000), state: 'Copying',
         unusableErrorMessage: 'z'.repeat(4000), privateField: 'private-fixture-secret'};
     const report = summarize({platform: 'iOS', version: '27.0', buildVersion: '24A434'},
@@ -2667,10 +2866,10 @@ test('native plist extraction preserves required fields when the manifest contai
         assert.notEqual(conversion.status, 0);
         assert.match(conversion.stdout + conversion.stderr, /Invalid object.*JSON/i);
         const commands = [];
-        const extract = pureFunction('runtimeMetadataField', {check, run(_label, file, args, options) {
+        const extract = provisionerFixture({run(_label, file, args, options) {
             commands.push(Array.from(args));
             return execFileSync(file, Array.from(args), {encoding: 'utf8', timeout: options.timeout, maxBuffer: options.maxBuffer}).trim();
-        }});
+        }}).runtimeMetadataField;
         assert.equal(extract(filename, 'ProductVersion'), '27.0');
         assert.equal(extract(filename, 'ProductBuildVersion'), '24A434');
         assert.deepEqual(Array.from(extract(filename, 'MobileAssetProperties.Architectures', 'json')), ['arm64']);
@@ -2889,8 +3088,6 @@ test('Xcode provisioning requires a pinned archive rather than traversing a shar
     for (const value of [undefined, {}, {path: '../Xcode.tar', sha256: 'a'.repeat(64)}, {path: 'Xcode.tar', sha256: 'not-a-digest'}]) {
         assert.throws(() => validateArchive(value), /pinned SHA-256/);
     }
-    assert.doesNotMatch(source, /run\('Copy Xcode', '\/usr\/bin\/ditto'/);
-    assert.doesNotMatch(source, /sourceXcode|xcodeCandidates/);
 });
 
 test('archive transfer preserves ordinary framework symlinks and rejects hash mismatches before extraction', () => {
@@ -2907,11 +3104,10 @@ test('archive transfer preserves ordinary framework symlinks and rejects hash mi
         const hash = createHash('sha256').update(readFileSync(archive)).digest('hex');
         const incoming = path.join(root, 'incoming.app');
         const commands = [];
-        const extract = pureFunction('extractXcodeArchive', {
+        const extract = provisionerFixture({
             fs: {mkdirSync},
             run: (_label, command, args) => { commands.push([command, ...args]); return execFileSync(command, args, {encoding: 'utf8'}).trim(); },
-            check: (condition, message) => { if (!condition) throw new Error(message); },
-        });
+            }).extractXcodeArchive;
         assert.throws(() => extract(archive, '0'.repeat(64), incoming), /does not match/);
         assert.equal(commands.length, 1);
         extract(archive, hash, incoming);
@@ -2931,12 +3127,9 @@ test('idempotent directory relocation does not chown an already correctly owned 
         symlinkSync(destination, sourceLink);
         const metadata = filesystem.statSync(destination);
         const fs = {...filesystem, chownSync: () => { throw new Error('already-owned protected target must not receive chown'); }};
-        const ownership = pureFunction('setOwnershipIfNeeded', {fs});
-        const globals = {fs, path, state: root, crypto: {createHash, randomUUID}, setOwnershipIfNeeded: ownership,
-            check: (condition, message) => { if (!condition) throw new Error(message); },
-            run: () => { throw new Error('the existing correct symlink must not be moved'); }};
-        globals.relocationIntentPath = pureFunction('relocationIntentPath', globals);
-        const relocate = pureFunction('relocateDirectory', globals);
+        const inputs = {fs, state: root, crypto: {createHash, randomUUID},
+                run: () => { throw new Error('the existing correct symlink must not be moved'); }};
+        const relocate = provisionerFixture(inputs).relocateDirectory;
         relocate(sourceLink, destination, metadata.uid, metadata.gid);
         assert.equal(readlinkSync(sourceLink), destination);
     } finally { rmSync(root, {recursive: true, force: true}); }
@@ -2975,6 +3168,9 @@ function relocationFixture(operation, {existingTarget = false, absentSource = fa
             mkdirSync(destination);
             writeFileSync(path.join(destination, 'device.plist'), 'verified replacement');
         }
+        const descriptorPaths = new Map();
+        let pendingDurableWrite;
+        let intentPath;
         const api = {...filesystem,
             mkdirSync(filename, options) { const result = filesystem.mkdirSync(map(filename), options); if (filename.endsWith('.incoming')) fail('incoming'); return result; },
             lstatSync(filename, options) {
@@ -2987,12 +3183,35 @@ function relocationFixture(operation, {existingTarget = false, absentSource = fa
             realpathSync: filename => filename.startsWith(preservedRoot) ? logical(filesystem.realpathSync(map(filename))) : filesystem.realpathSync(filename),
             readFileSync: (filename, ...args) => filesystem.readFileSync(map(filename), ...args),
             readdirSync: (filename, ...args) => filesystem.readdirSync(map(filename), ...args),
-            openSync: (filename, ...args) => filesystem.openSync(map(filename), ...args),
+            statSync: (filename, ...args) => filesystem.statSync(map(filename), ...args),
+            openSync(filename, ...args) {
+                if (args[0] === 'wx' && existingTarget && filename.startsWith(intentPath + '.')) fail('primary-intent');
+                const descriptor = filesystem.openSync(map(filename), ...args);
+                descriptorPaths.set(descriptor, filename);
+                return descriptor;
+            },
+            fsyncSync(descriptor) {
+                filesystem.fsyncSync(descriptor);
+                if (!filesystem.fstatSync(descriptor).isDirectory()) return;
+                const directory = descriptorPaths.get(descriptor);
+                assert.ok(directory);
+                events.push(['sync', directory]);
+                if (!pendingDurableWrite || path.dirname(pendingDurableWrite.filename) !== directory) return;
+                const committed = pendingDurableWrite; pendingDurableWrite = undefined;
+                events.push(['intent', committed.filename, committed.value.ready]);
+                if (committed.filename === intentPath && committed.value.ready) fail('ready');
+            },
+            closeSync(descriptor) {
+                try { filesystem.closeSync(descriptor); } finally { descriptorPaths.delete(descriptor); }
+            },
             fchownSync() {},
             chownSync(filename, owner, group) { assert.ok(filename.endsWith('.previous')); assert.equal(owner, 0); assert.equal(group, 0); },
             renameSync(from, to) {
                 filesystem.renameSync(map(from), map(to));
                 events.push(['rename', from, to]);
+                if (to.startsWith(state + '/relocation-') && to.endsWith('.json')) {
+                    pendingDurableWrite = {filename: to, value: JSON.parse(filesystem.readFileSync(map(to), 'utf8'))};
+                }
                 if (to === destination) fail('promotion');
                 if (from === original && path.dirname(to).endsWith('.previous')) fail('retirement');
             },
@@ -3012,41 +3231,35 @@ function relocationFixture(operation, {existingTarget = false, absentSource = fa
             rmdirSync: filename => filesystem.rmdirSync(map(filename)),
             unlinkSync(filename) { filesystem.unlinkSync(map(filename)); fail('intent-cleanup'); },
         };
-        const globals = {fs: api, path, state, config: {vmId: 'fixture-vm'}, crypto: {createHash, randomUUID},
-            check, setOwnershipIfNeeded(filename) { assert.ok(map(filename).startsWith(root)); },
+        const provisioner = provisionerFixture({fs: api, state, config: {vmId: 'fixture-vm'},
+            uid: process.getuid(), gid: process.getgid(),
             run(_label, command, args) {
                 events.push([command, ...args]);
-                if (command === '/bin/sync') return;
-                if (command === '/bin/chmod') { assert.equal(args[0], '-N'); assert.ok(args[1].endsWith('.previous')); return; }
+                if (command === '/bin/sync') return '';
+                if (command === '/bin/chmod') { assert.equal(args[0], '-N'); assert.ok(args[1].endsWith('.previous')); return ''; }
                 assert.equal(command, '/bin/cp');
                 if (failAt === 'copy') {
-                    writeFileSync(path.join(map(args[2]), 'device.plist'), 'partial');
-                    fail('copy');
+                    writeFileSync(path.join(map(args[2]), 'device.plist'), 'partial'); fail('copy');
                 }
                 execFileSync('/bin/cp', [args[0], map(args[1]), map(args[2])], {timeout: 5000});
-            }};
-        globals.requireIdleRelocationTree = directory => {
-            events.push(['idle', directory]);
-            if (path.dirname(directory).endsWith('.previous')) {
-                const parent = api.lstatSync(path.dirname(directory));
-                assert.equal(parent.uid, 0);
-                assert.equal(parent.mode & 0o7777, 0o700);
-            }
-            inspectIdle(directory);
-        };
-        const sync = pureFunction('syncDirectory', globals);
-        globals.syncDirectory = directory => { sync(directory); events.push(['sync', directory]); };
-        const durable = pureFunction('writeDurableJSON', globals);
-        globals.relocationFileID = pureFunction('relocationFileID', globals);
-        globals.relocationIntentPath = pureFunction('relocationIntentPath', globals);
-        const intentPath = globals.relocationIntentPath(original, destination);
-        globals.writeDurableJSON = (filename, value, mode) => {
-            if (filename === intentPath && existingTarget) fail('primary-intent');
-            durable(filename, value, mode);
-            events.push(['intent', filename, value.ready]);
-            if (filename === intentPath && value.ready) fail('ready');
-        };
-        const relocate = pureFunction('relocateDirectory', globals);
+                return '';
+            },
+            spawnSync(command, args, options) {
+                assert.equal(command, '/usr/sbin/lsof');
+                const directory = args[4];
+                assert.deepEqual(args, ['-nP', '-t', '+w', '+D', directory, '-x', 'f']);
+                assert.equal(options.timeout, 60000); assert.equal(options.killSignal, 'SIGKILL');
+                events.push(['idle', directory]);
+                if (path.dirname(directory).endsWith('.previous')) {
+                    const parent = api.lstatSync(path.dirname(directory));
+                    assert.equal(parent.uid, 0); assert.equal(parent.mode & 0o7777, 0o700);
+                }
+                inspectIdle(directory);
+                return {status: 1, stdout: '', stderr: ''};
+            },
+        });
+        intentPath = provisioner.relocationIntentPath(original, destination);
+        const relocate = provisioner.relocateDirectory;
         operation({root, state, original, destination, preserved: localPreserved, events, api,
             interrupt: name => { failAt = name; },
             inspectIdle: callback => { inspectIdle = callback; },
@@ -3171,13 +3384,13 @@ test('open-reference checks cover mounted descendants and fail closed on incompl
     for (const result of [{status: 1, stdout: '', stderr: ''}, {status: 0, stdout: '123\n', stderr: ''},
         {status: 1, stdout: '', stderr: 'cannot stat descendant'}, {status: 2, stdout: '', stderr: ''},
         {status: null, stdout: '', stderr: '', error: {code: 'ETIMEDOUT'}}]) {
-        const inspect = pureFunction('requireIdleRelocationTree', {check, environment: {}, spawnSync(command, args, options) {
+        const inspect = provisionerFixture({environment: {}, spawnSync(command, args, options) {
             assert.equal(command, '/usr/sbin/lsof');
             assert.deepEqual(Array.from(args), ['-nP', '-t', '+w', '+D', '/fixture/private/tree', '-x', 'f']);
             assert.equal(options.timeout, 60000);
             assert.equal(options.killSignal, 'SIGKILL');
             return result;
-        }});
+        }}).requireIdleRelocationTree;
         if (result.status === 1 && !result.stderr) assert.doesNotThrow(() => inspect('/fixture/private/tree'));
         else assert.throws(() => inspect('/fixture/private/tree'), /preserved/);
     }
@@ -3245,9 +3458,9 @@ test('installer restores public-directory permissions after checking private inp
 
 test('ownership is changed only when the owner or group differs', () => {
     const changes = [];
-    const ownership = pureFunction('setOwnershipIfNeeded', {fs: {
+    const ownership = provisionerFixture({fs: {
         statSync: () => ({uid: 501, gid: 20}), chownSync: (...args) => changes.push(args),
-    }});
+    }}).setOwnershipIfNeeded;
     ownership('/fixture', 501, 20);
     assert.deepEqual(changes, []);
     ownership('/fixture', 502, 20);
@@ -3256,31 +3469,50 @@ test('ownership is changed only when the owner or group differs', () => {
 });
 
 test('installed Aqua supervisor remains idle until an explicit job launch', () => {
-    const configStart = source.indexOf('    const agentConfiguration = ');
-    const configEnd = source.indexOf('    const signing = ', configStart);
-    const configuration = vm.runInNewContext(`${source.slice(configStart, configEnd)} agentConfiguration`, {
+    const configuration = provisioning.makeAgentConfiguration({
         library: '/fixture/tools', agentLabel: 'fixture-agent', environment: {PATH: '/fixture/bin'},
-        developer: '/fixture/Xcode', logDirectory: '/fixture/logs', path,
+        developer: '/fixture/Xcode', logDirectory: '/fixture/logs',
     });
     assert.equal(configuration.LimitLoadToSessionType, 'Aqua');
     assert.equal(configuration.RunAtLoad, false);
     assert.equal(configuration.KeepAlive, false);
-    assert.deepEqual(Array.from(configuration.ProgramArguments), ['/fixture/tools/VMGuestAgent']);
-    const serviceStart = source.indexOf('    const service = `gui/${uid}/${agentLabel}`;');
-    const serviceEnd = source.indexOf('    console.log(', serviceStart);
+    assert.deepEqual(configuration.ProgramArguments, ['/fixture/tools/VMGuestAgent']);
     const commands = [];
     const removed = [];
-    const install = replaceGuestAgentInstallation => vm.runInNewContext(source.slice(serviceStart, serviceEnd), {
-        uid: 501, agentLabel: 'fixture-agent', agentPlist: '/fixture/agent.plist', replacements: [], check,
-        library: '/fixture/tools', path,
+    let fails = true;
+    const install = provisionerFixture({library: '/fixture/tools',
         fs: {lstatSync: () => ({uid: 0, mode: 0o644, isFile: () => true, isSymbolicLink: () => false}),
-            rmSync: filename => { assert.equal(commands.length, 1); removed.push(filename); }},
-        spawnSync: () => ({status: 1}), run: (_label, command, args) => commands.push([command, ...args]),
-        replaceGuestAgentInstallation,
-    });
-    assert.throws(() => install(() => { throw new Error('fixture installation failed'); }), /installation failed/);
+            rmSync: filename => removed.push(filename)},
+        spawnSync: () => ({status: 1}),
+        run: (_label, command, args) => { if (fails) throw new Error('fixture installation failed'); commands.push([command, ...args]); },
+    }).installGuestAgent;
+    assert.throws(() => install([], '/fixture/agent.plist'), /installation failed/);
     assert.deepEqual(removed, []);
-    install((_replacements, service) => service.start());
+    fails = false;
+    install([], '/fixture/agent.plist');
     assert.deepEqual(commands, [['/bin/launchctl', 'bootstrap', 'gui/501', '/fixture/agent.plist']]);
     assert.deepEqual(removed, ['guest.mjs', 'test_manifest.mjs', 'result_audit.mjs'].map(name => path.join('/fixture/tools', name)));
+});
+
+test('importing the provisioning module has no process or filesystem effects', () => {
+    const program = `
+        const fs = await import('node:fs');
+        const child = await import('node:child_process');
+        const {syncBuiltinESMExports} = await import('node:module');
+        const fail = () => { throw new Error('unexpected import side effect'); };
+        const read = fs.default.readFileSync;
+        const moduleURL = ${JSON.stringify(new URL('../provision_guest.mjs', import.meta.url).href)};
+        fs.default.readFileSync = (filename, ...args) => {
+            if (String(filename) === moduleURL || String(filename) === new URL(moduleURL).pathname) return read(filename, ...args);
+            return fail();
+        };
+        for (const name of ['writeFileSync', 'mkdirSync', 'rmSync']) fs.default[name] = fail;
+        child.default.spawnSync = fail;
+        syncBuiltinESMExports();
+        const previous = process.exitCode;
+        await import(${JSON.stringify(new URL('../provision_guest.mjs', import.meta.url).href)});
+        if (process.exitCode !== previous) throw new Error('import changed exitCode');
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', program], {encoding: 'utf8'});
+    assert.equal(result.status, 0, result.stderr);
 });

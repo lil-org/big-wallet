@@ -10,54 +10,63 @@ final class TransactionPreparationBoundaryTests: XCTestCase {
         case from, to, value, data, accessList, feeIntent
     }
 
-    func testPreparationUpdatesCannotReplaceTheDisplayedImmutablePayload() async throws {
-        for mutation in Mutation.allCases {
-            let fixture = makeCoordinator()
+    func testReadinessRejectsIncompleteAndInvalidPreparedFields() async {
+        for field in 0..<6 {
+            var input = Self.transaction
+            switch field {
+            case 0: input.nonce = nil
+            case 1: input.nonce = "invalid"
+            case 2: input.gas = nil
+            case 3: input.gas = "0x0"
+            case 4: input.replacePreparedFee(.legacy(gasPrice: Transaction.maximumUInt256), provenance: .init(gasPrice: .automatic))
+            default:
+                input = Transaction(from: input.from, to: input.to, nonce: input.nonce, gas: input.gas,
+                    value: input.value, data: input.data, feeIntent: .automatic)
+            }
+            let fixture = makeCoordinator(transaction: input)
             defer { fixture.coordinator.invalidate(); fixture.continuation.finish() }
-            let original = fixture.coordinator.snapshot.transaction
             fixture.coordinator.startPreparation(forceGasCheck: false)
-            fixture.continuation.yield(.transactionUpdated(mutating(original, mutation: mutation)))
-            fixture.continuation.yield(.ready(original))
+            fixture.continuation.yield(.ready)
             await expectEventually { fixture.coordinator.snapshot.phase == .failed }
-            assertImmutableFields(fixture.coordinator.snapshot.transaction, original)
-            XCTAssertEqual(fixture.coordinator.snapshot.notice, .preparationFailed(.invalidTransaction), "\(mutation)")
+            XCTAssertEqual(fixture.coordinator.snapshot.notice, .preparationFailed(.invalidTransaction))
             XCTAssertFalse(fixture.coordinator.snapshot.canApprove)
             XCTAssertNil(fixture.coordinator.reserveForPreflight())
             XCTAssertEqual(fixture.preflightCalls.count, 0)
         }
     }
 
-    func testTerminalReadyCannotBypassImmutablePreparationValidation() async throws {
-        for mutation in Mutation.allCases {
-            let fixture = makeCoordinator()
-            defer { fixture.coordinator.invalidate(); fixture.continuation.finish() }
-            let original = fixture.coordinator.snapshot.transaction
-            fixture.coordinator.startPreparation(forceGasCheck: false)
-            fixture.continuation.yield(.transactionUpdated(original))
-            fixture.continuation.yield(.ready(mutating(original, mutation: mutation)))
-            await expectEventually { fixture.coordinator.snapshot.phase == .failed }
-            assertImmutableFields(fixture.coordinator.snapshot.transaction, original)
-            XCTAssertFalse(fixture.coordinator.snapshot.canApprove)
-            XCTAssertNil(fixture.coordinator.reserveForPreflight())
-            XCTAssertEqual(fixture.preflightCalls.count, 0)
-        }
+    func testSameFeeUpdatePreservesLegacyQuantitySpelling() async {
+        let input = Transaction(from: Self.transaction.from, to: Self.transaction.to, nonce: "0x0",
+            gasPrice: "0X000A", gas: "0x5208", value: "0x0", data: "0x")
+        let fixture = makeCoordinator(transaction: input)
+        defer { fixture.coordinator.invalidate(); fixture.continuation.finish() }
+        fixture.coordinator.startPreparation(forceGasCheck: false)
+        fixture.continuation.yield(.resolvedFee(.init(preparedFee: .legacy(gasPrice: 10), provenance: .init(gasPrice: .manual))))
+        fixture.continuation.yield(.ready)
+        await expectEventually { fixture.coordinator.snapshot.canApprove }
+        XCTAssertEqual(fixture.coordinator.snapshot.transaction.gasPrice, "0X000A")
+        XCTAssertEqual(fixture.coordinator.snapshot.transaction.feeProvenance, .init(gasPrice: .manual))
     }
 
-    func testLateInterpretationUpdateCannotReplaceAnAlreadyReviewablePayload() async throws {
+    func testLateInterpretationPreservesReviewAndLateSigningFieldsAreIgnored() async throws {
         let fixture = makeCoordinator()
         defer { fixture.coordinator.invalidate(); fixture.continuation.finish() }
         let original = fixture.coordinator.snapshot.transaction
         fixture.coordinator.startPreparation(forceGasCheck: false)
-        fixture.continuation.yield(.ready(original))
+        fixture.continuation.yield(.ready)
         await expectEventually { fixture.coordinator.snapshot.canApprove }
-        var changed = mutating(original, mutation: .data)
-        changed.interpretation = "Late decoded interpretation"
-        fixture.continuation.yield(.transactionUpdated(changed))
-        await expectEventually { fixture.coordinator.snapshot.phase == .failed }
+        fixture.continuation.yield(.nonce("0x9"))
+        fixture.continuation.yield(.gasLimit("0x9999"))
+        fixture.continuation.yield(.resolvedFee(.init(preparedFee: .legacy(gasPrice: 99), provenance: .init(gasPrice: .manual))))
+        fixture.continuation.yield(.interpretation("Late decoded interpretation"))
+        await expectEventually { fixture.coordinator.snapshot.transaction.interpretation != nil }
         assertImmutableFields(fixture.coordinator.snapshot.transaction, original)
-        XCTAssertNil(fixture.coordinator.snapshot.transaction.interpretation)
-        XCTAssertNil(fixture.coordinator.reserveForPreflight())
-        XCTAssertEqual(fixture.preflightCalls.count, 0)
+        XCTAssertEqual(fixture.coordinator.snapshot.transaction.nonce, original.nonce)
+        XCTAssertEqual(fixture.coordinator.snapshot.transaction.gas, original.gas)
+        XCTAssertEqual(fixture.coordinator.snapshot.transaction.preparedFee, original.preparedFee)
+        XCTAssertEqual(fixture.coordinator.snapshot.transaction.feeProvenance, original.feeProvenance)
+        XCTAssertTrue(fixture.coordinator.snapshot.canApprove)
+        XCTAssertNotNil(fixture.coordinator.reserveForPreflight())
     }
 
     func testPreparationMayUpdateNonceGasFeesAndInterpretationBeforeApproval() async throws {
@@ -70,9 +79,12 @@ final class TransactionPreparationBoundaryTests: XCTestCase {
         updated.replacePreparedFee(.legacy(gasPrice: 20), provenance: .init(gasPrice: .automatic))
         updated.interpretation = "Decoded immutable call"
         fixture.coordinator.startPreparation(forceGasCheck: false)
-        fixture.continuation.yield(.transactionUpdated(updated))
+        fixture.continuation.yield(.nonce("0x7"))
+        fixture.continuation.yield(.gasLimit("0x6000"))
+        fixture.continuation.yield(.resolvedFee(.init(preparedFee: .legacy(gasPrice: 20), provenance: .init(gasPrice: .automatic))))
+        fixture.continuation.yield(.interpretation("Decoded immutable call"))
         fixture.continuation.yield(.feeEstimate(Self.estimate))
-        fixture.continuation.yield(.ready(updated))
+        fixture.continuation.yield(.ready)
         await expectEventually { fixture.coordinator.snapshot.canApprove }
         assertImmutableFields(fixture.coordinator.snapshot.transaction, original)
         XCTAssertEqual(fixture.coordinator.snapshot.transaction.nonce, "0x7")
@@ -96,13 +108,12 @@ final class TransactionPreparationBoundaryTests: XCTestCase {
         let coordinator = TransactionApprovalCoordinator(transaction: original, network: Self.network, operations: .init(
             prepare: { transaction, _, _ in
                 AsyncThrowingStream { continuation in
-                    continuation.yield(.transactionUpdated(transaction))
                     continuation.yield(.feeEstimate(Self.estimate))
-                    continuation.yield(.ready(transaction))
+                    continuation.yield(.ready)
                     continuation.finish()
                 }
             },
-            preflight: { transaction, _ in .safe(transaction, Self.estimate) }
+            preflight: { transaction, _ in .safe(Self.estimate) }
         ))
         defer { coordinator.invalidate() }
         coordinator.startPreparation(forceGasCheck: false)
@@ -166,13 +177,13 @@ final class TransactionPreparationBoundaryTests: XCTestCase {
         let preflightCalls: PreflightCalls
     }
 
-    private func makeCoordinator() -> Fixture {
+    private func makeCoordinator(transaction: Transaction? = nil) -> Fixture {
         let pair = AsyncThrowingStream<TransactionPreparationEvent, Error>.makeStream()
         let calls = PreflightCalls()
-        let coordinator = TransactionApprovalCoordinator(transaction: Self.transaction, network: Self.network,
+        let coordinator = TransactionApprovalCoordinator(transaction: transaction ?? Self.transaction, network: Self.network,
             operations: .init(prepare: { _, _, _ in pair.stream }, preflight: { transaction, _ in
                 calls.count += 1
-                return .safe(transaction, Self.estimate)
+                return .safe(Self.estimate)
             }))
         return Fixture(coordinator: coordinator, continuation: pair.continuation, preflightCalls: calls)
     }

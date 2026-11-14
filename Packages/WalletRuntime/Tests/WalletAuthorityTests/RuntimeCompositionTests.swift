@@ -43,7 +43,7 @@ final class RuntimeCompositionTests: XCTestCase {
         let runtime = PopupAuthorityRuntime(composition: fixture.composition,
             solanaEndpoints: AuthorityTestSolanaEndpoints(), broadcaster: RejectingBroadcastForTesting(),
             preparation: .init(prepare: { _, _, _ in AsyncThrowingStream { $0.finish() } },
-                preflight: { transaction, _ in .unavailable(transaction, .init(info: nil, nextBaseFee: nil)) }),
+                preflight: { _, _ in .unavailable(.init(info: nil, nextBaseFee: nil)) }),
             dependencies: dependencies)
         let first = runtime.makePopupApprovalAuthority(approvalSubjectTitle: { _ in "Approve" }, loadTransactionContext: { _ in nil })
         let second = runtime.makePopupApprovalAuthority(approvalSubjectTitle: { _ in "Approve" }, loadTransactionContext: { _ in nil })

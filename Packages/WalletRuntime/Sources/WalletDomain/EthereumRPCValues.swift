@@ -115,16 +115,29 @@ public enum EthereumSendFailure: Swift.Error, Equatable, Sendable {
     case transport
 }
 
+public struct TransactionFeeUpdate: Equatable, Sendable {
+    public let preparedFee: PreparedTransactionFee
+    public let provenance: TransactionFeeProvenance
+
+    public init(preparedFee: PreparedTransactionFee, provenance: TransactionFeeProvenance) {
+        self.preparedFee = preparedFee
+        self.provenance = provenance
+    }
+}
+
 public enum TransactionFeePreflightResult: Sendable {
-    case safe(Transaction, GasEstimate)
-    case walletManagedUpdated(Transaction, GasEstimate)
-    case userControlledUnsafe(Transaction, GasEstimate)
-    case unavailable(Transaction, GasEstimate)
+    case safe(GasEstimate)
+    case walletManagedUpdated(TransactionFeeUpdate, GasEstimate)
+    case userControlledUnsafe(GasEstimate)
+    case unavailable(GasEstimate)
 }
 
 public enum TransactionPreparationEvent: Sendable {
-    case transactionUpdated(Transaction)
+    case nonce(String)
+    case gasLimit(String)
+    case resolvedFee(TransactionFeeUpdate)
     case feeEstimate(GasEstimate)
-    case ready(Transaction)
+    case interpretation(String)
+    case ready
 }
 

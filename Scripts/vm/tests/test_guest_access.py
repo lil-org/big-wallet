@@ -56,10 +56,16 @@ class GuestAccessTests(unittest.TestCase):
         (self.payload / 'config.json').write_text(json.dumps({'vmId': 'fixture', 'consoleUser': 'guest',
             'runtimes': [{'dmgPath': 'runtime-0.dmg'}, {'dmgPath': 'runtime-1.dmg'}]}))
         (self.payload / 'provision_guest.sh').write_text('#!/bin/sh\nexit 0\n')
+        (self.payload / 'provision_guest.mjs').write_text('export {};\n')
         (self.payload / 'autologin-passwordFile').write_bytes(b'fixture-secret-with-spaces')
         (self.payload / 'Xcode.tar').write_bytes(b'xcode archive fixture')
         (self.payload / 'runtime-0.dmg').write_bytes(b'first runtime fixture')
         (self.payload / 'runtime-1.dmg').write_bytes(b'second runtime fixture')
+
+    def test_provisioning_payload_requires_the_installer_module(self):
+        (self.payload / 'provision_guest.mjs').unlink()
+        with self.assertRaisesRegex(access.GuestAccessError, 'required inputs'):
+            access._payload_files(self.payload, 'guest', 'big-wallet-vm-fixture')
 
     def test_candidate_mac_requires_exact_fixed_network_and_real_paths(self):
         self.assertEqual(access.candidate_mac(self.candidate), MAC)
@@ -885,7 +891,7 @@ class GuestAccessTests(unittest.TestCase):
         environment = launch.call_args.kwargs['env']
         self.assertTrue(child.stdin.sent.startswith(b'fixture-secret-with-spaces\nBIG_WALLET_PAYLOAD_'))
         with tarfile.open(fileobj=io.BytesIO(child.stdin.sent.split(b'\n', 2)[2])) as archive:
-            self.assertEqual(set(archive.getnames()), {'config.json', 'provision_guest.sh', 'autologin-passwordFile'})
+            self.assertEqual(set(archive.getnames()), {'config.json', 'provision_guest.sh', 'provision_guest.mjs', 'autologin-passwordFile'})
             self.assertTrue(all(entry.uid == 0 and entry.gid == 0 for entry in archive.getmembers()))
         for visible in (repr(command), repr(environment), installer.askpass.read_text()):
             self.assertNotIn('fixture-secret-with-spaces', visible)
@@ -996,7 +1002,7 @@ class GuestAccessTests(unittest.TestCase):
             self.assertTrue(installer.askpass.exists())
             installer.producer.join()
             with tarfile.open(fileobj=io.BytesIO(second.stdin.sent.split(b'\n', 2)[2])) as archive:
-                self.assertEqual(set(archive.getnames()), {'config.json', 'provision_guest.sh', 'autologin-passwordFile',
+                self.assertEqual(set(archive.getnames()), {'config.json', 'provision_guest.sh', 'provision_guest.mjs', 'autologin-passwordFile',
                                                           'Xcode.tar', 'runtime-1.dmg'})
             self.assertIsNone(installer.poll())
             second.code = 0

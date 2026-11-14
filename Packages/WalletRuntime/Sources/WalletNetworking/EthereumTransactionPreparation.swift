@@ -83,7 +83,7 @@ public struct EthereumTransactionPreparation: TransactionPreparing {
                             case .nonce(let nonce):
                                 current.nonce = nonce
                                 nonceIsReady = true
-                                continuation.yield(.transactionUpdated(current))
+                                continuation.yield(.nonce(nonce))
                             case .estimate(let estimate):
                                 if network.chainId > 0,
                                     estimate.endpointChainID == nil
@@ -102,13 +102,13 @@ public struct EthereumTransactionPreparation: TransactionPreparing {
                                 let didChange =
                                     current.preparedFee != resolved.preparedFee
                                     || current.feeProvenance != resolved.feeProvenance
-                                    || current.currentBaseFeePerGas != resolved.currentBaseFeePerGas
-                                    || current.nextBaseFeePerGas != resolved.nextBaseFeePerGas
                                 current.copyFeeState(from: resolved)
                                 current.currentBaseFeePerGas = resolved.currentBaseFeePerGas
                                 current.nextBaseFeePerGas = resolved.nextBaseFeePerGas
                                 feeIsReady = true
-                                if didChange { continuation.yield(.transactionUpdated(current)) }
+                                if didChange, let fee = current.preparedFee {
+                                    continuation.yield(.resolvedFee(.init(preparedFee: fee, provenance: current.feeProvenance)))
+                                }
                                 if case .unsafeUserFee = outcome { throw TransactionPreparationFailure.unsafeFees }
                                 if requiresGasEstimate {
                                     let candidate = current
@@ -121,11 +121,11 @@ public struct EthereumTransactionPreparation: TransactionPreparing {
                             case .gas(let gas):
                                 current.gas = gas
                                 gasIsReady = true
-                                continuation.yield(.transactionUpdated(current))
+                                continuation.yield(.gasLimit(gas))
                             case .interpretation(let interpretation):
                                 if let interpretation {
                                     current.interpretation = interpretation
-                                    continuation.yield(.transactionUpdated(current))
+                                    continuation.yield(.interpretation(interpretation))
                                 }
                             }
                             if !didBecomeReady, nonceIsReady, feeIsReady, gasIsReady {
@@ -133,7 +133,7 @@ public struct EthereumTransactionPreparation: TransactionPreparing {
                                     throw TransactionPreparationFailure.invalidTransaction
                                 }
                                 didBecomeReady = true
-                                continuation.yield(.ready(current))
+                                continuation.yield(.ready)
                             }
                         }
                         continuation.finish()
@@ -163,31 +163,31 @@ public struct EthereumTransactionPreparation: TransactionPreparing {
         estimate.applyBaseFeeContext(to: &candidate)
 
         guard network.chainId > 0 else {
-            return .unavailable(candidate, estimate)
+            return .unavailable(estimate)
         }
         if let endpointChainID = estimate.endpointChainID,
             endpointChainID != BigUInt(UInt64(network.chainId))
         {
-            return .unavailable(candidate, estimate)
+            return .unavailable(estimate)
         }
         guard let preparedFee = candidate.preparedFee,
             preparedFee.isStructurallyValid
         else {
-            return .unavailable(candidate, estimate)
+            return .unavailable(estimate)
         }
         guard let gasLimit = candidate.gasLimitValue,
             !gasLimit.isZero
         else {
-            return .unavailable(candidate, estimate)
+            return .unavailable(estimate)
         }
 
         guard preparedFee.maximumNetworkFee(gasLimit: gasLimit) != nil else {
             if candidate.feeProvenance.containsUserControlledValue(
                 for: preparedFee
             ) {
-                return .userControlledUnsafe(candidate, estimate)
+                return .userControlledUnsafe(estimate)
             } else {
-                return .unavailable(candidate, estimate)
+                return .unavailable(estimate)
             }
         }
 
@@ -216,7 +216,7 @@ public struct EthereumTransactionPreparation: TransactionPreparing {
         }
 
         guard !isSafe else {
-            return .safe(candidate, estimate)
+            return .safe(estimate)
         }
         guard estimate.support == .eip1559,
             let baseFee
@@ -226,9 +226,9 @@ public struct EthereumTransactionPreparation: TransactionPreparing {
                     for: preparedFee
                 )
             {
-                return .userControlledUnsafe(candidate, estimate)
+                return .userControlledUnsafe(estimate)
             } else {
-                return .unavailable(candidate, estimate)
+                return .unavailable(estimate)
             }
         }
 
@@ -240,7 +240,7 @@ public struct EthereumTransactionPreparation: TransactionPreparing {
                 candidate.feeProvenance.gasPrice
                 ?? candidate.feeSource
             guard source.isWalletManaged else {
-                return .userControlledUnsafe(candidate, estimate)
+                return .userControlledUnsafe(estimate)
             }
             let priority: BigUInt
             if source == .slider {
@@ -252,7 +252,7 @@ public struct EthereumTransactionPreparation: TransactionPreparing {
                 } else {
                     guard let recommendedPriority =
                         estimate.info?.recommendedPriorityFee else {
-                        return .unavailable(candidate, estimate)
+                        return .unavailable(estimate)
                     }
                     priority = recommendedPriority
                 }
@@ -261,7 +261,7 @@ public struct EthereumTransactionPreparation: TransactionPreparing {
                     let recommendedPriority =
                         estimate.info?.recommendedPriorityFee
                 else {
-                    return .unavailable(candidate, estimate)
+                    return .unavailable(estimate)
                 }
                 priority = recommendedPriority
             }
@@ -299,13 +299,13 @@ public struct EthereumTransactionPreparation: TransactionPreparing {
                 if maxFeeSource.isUserControlled,
                     existingMaxFee <= baseFee
                 {
-                    return .userControlledUnsafe(candidate, estimate)
+                    return .userControlledUnsafe(estimate)
                 }
                 guard
                     let recommendedPriority =
                         estimate.info?.recommendedPriorityFee
                 else {
-                    return .unavailable(candidate, estimate)
+                    return .unavailable(estimate)
                 }
                 priority = recommendedPriority
             }
@@ -323,9 +323,9 @@ public struct EthereumTransactionPreparation: TransactionPreparing {
                         )
                 else {
                     if prioritySource.isUserControlled {
-                        return .userControlledUnsafe(candidate, estimate)
+                        return .userControlledUnsafe(estimate)
                     } else {
-                        return .unavailable(candidate, estimate)
+                        return .unavailable(estimate)
                     }
                 }
                 maxFee = recommended.feeCapPerGas
@@ -347,19 +347,17 @@ public struct EthereumTransactionPreparation: TransactionPreparing {
             updatedFee.isStructurallyValid
         else {
             if candidate.feeProvenance.containsUserControlledValue {
-                return .userControlledUnsafe(candidate, estimate)
+                return .userControlledUnsafe(estimate)
             } else {
-                return .unavailable(candidate, estimate)
+                return .unavailable(estimate)
             }
         }
         guard updatedFee.maximumNetworkFee(gasLimit: gasLimit) != nil else {
-            return .unavailable(candidate, estimate)
+            return .unavailable(estimate)
         }
-        candidate.replacePreparedFee(
-            updatedFee,
-            provenance: updatedProvenance
+        return .walletManagedUpdated(
+            TransactionFeeUpdate(preparedFee: updatedFee, provenance: updatedProvenance), estimate
         )
-        return .walletManagedUpdated(candidate, estimate)
     }
 
 

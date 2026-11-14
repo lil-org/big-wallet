@@ -68,6 +68,9 @@ struct WalletManagementServices {
 }
 
 @MainActor
+@available(iOSApplicationExtension, unavailable)
+@available(macOSApplicationExtension, unavailable)
+@available(visionOSApplicationExtension, unavailable)
 public final class AuthorityRuntime {
     public enum ErrorKind: Sendable {
         case userRejected, internalError, approvalInterrupted, privateBrowsingUnsupported

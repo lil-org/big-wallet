@@ -34,7 +34,7 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         let window = accountSelectionWindow(controller: controller)
         defer { controller.retire(); window.close() }
         let preparation = try XCTUnwrap(stub.preparationCalls.last)
-        preparation.completion(.success(transaction))
+        preparation.ready()
         guard await expectEventually({ controller.okButton.isEnabled }) else { return }
 
         var challenges = [WalletAuthenticationChallenge]()
@@ -74,7 +74,7 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(stub.preparationCalls.count, 1)
         XCTAssertEqual(approvals, 0)
         let preflight = try XCTUnwrap(stub.preflightCalls.first)
-        preflight.completion(.safe(preflight.transaction, Self.makeLegacyEstimate()))
+        preflight.completion(.safe(Self.makeLegacyEstimate()))
         await expectEventually { approvals == 1 }
     }
 
@@ -97,7 +97,7 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
         let call = try XCTUnwrap(stub.preparationCalls.last)
         XCTAssertFalse(controller.okButton.isEnabled)
         access.advance(by: .seconds(900))
-        call.completion(.success(transaction))
+        call.ready()
         await waitForSnapshot(coordinator) { $0.phase == .ready }
         XCTAssertTrue(access.access.isLocked)
         XCTAssertFalse(controller.okButton.isEnabled)
@@ -148,7 +148,7 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             let call = stub.preflightCalls[index]
             var updated = call.transaction
             updated.replacePreparedFee(.legacy(gasPrice: BigUInt(UInt64(200 + index))), provenance: .init(gasPrice: .automatic))
-            call.completion(.walletManagedUpdated(updated, Self.makeEstimate()))
+            call.completion(.walletManagedUpdated(.init(preparedFee: updated.preparedFee!, provenance: updated.feeProvenance), Self.makeEstimate()))
             guard case .reviewRequired = await task.value else { return XCTFail("Expected a fee notice") }
             layout.ensureLayout(for: container)
             let range = (textView.string as NSString).range(of: Strings.feesUpdated)
@@ -171,10 +171,10 @@ final class TransactionApprovalCoordinatorTests: XCTestCase {
             (.feesUpdated, .approve, { transaction, estimate in
                 var updated = transaction
                 updated.replacePreparedFee(.legacy(gasPrice: 200), provenance: .init(gasPrice: .automatic))
-                return .walletManagedUpdated(updated, estimate)
+                return .walletManagedUpdated(.init(preparedFee: updated.preparedFee!, provenance: updated.feeProvenance), estimate)
             }),
-            (.unsafeFees, .edit, { .userControlledUnsafe($0, $1) }),
-            (.feesUnavailable, .retry, { .unavailable($0, $1) }),
+            (.unsafeFees, .edit, { .userControlledUnsafe($1) }),
+            (.feesUnavailable, .retry, { .unavailable($1) }),
         ]
         for (notice, primaryAction, result) in cases {
             let stub = ApprovalOperationsStub()

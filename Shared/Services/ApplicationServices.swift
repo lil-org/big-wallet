@@ -1,10 +1,6 @@
 import Foundation
 import WalletDomain
-#if BW_SAFARI_VM_TESTING
-@testable import WalletAuthority
-#else
 import WalletAuthority
-#endif
 import WalletFlows
 import WalletNetworking
 
@@ -83,7 +79,7 @@ final class ApplicationServices {
     func waitForVaultReconciliation() async { await runtime.waitForVaultReconciliation() }
 
 #if BW_SAFARI_VM_TESTING
-    func invalidateVaultForTesting() async throws { try await runtime.invalidateVaultForTesting() }
+    func invalidateVaultForTesting() async throws { try await SafariVMApplicationServices.invalidateVault(runtime) }
 #endif
 #endif
 }

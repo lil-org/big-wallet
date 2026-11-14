@@ -240,5 +240,16 @@
     "path": "Negative/ApplicationPopupAccess.swift",
     "succeeds": false,
     "diagnostic": "has no member 'makePopupApprovalAuthority'"
+  },
+  {
+    "path": "Positive/ExtensionCompositions.swift",
+    "succeeds": true,
+    "applicationExtension": true
+  },
+  {
+    "path": "Negative/ExtensionApplicationRuntime.swift",
+    "succeeds": false,
+    "applicationExtension": true,
+    "diagnostic": "unavailable.*application extensions|unavailable.*extension|not available.*extension"
   }
 ]

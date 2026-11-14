@@ -989,6 +989,12 @@ invocations are rejected; submit jobs through `Scripts/test_vm.sh`.
 Changes to the installed bootstrap, its installer, or environment pins require
 setup again. Setup applies the update headlessly using the retained guest account
 access, then checks installed bootstrap hashes before tests and baseline promotion.
+The installer consists of `provision_guest.sh` and `provision_guest.mjs`. Both
+files travel in each provisioning upload and participate in setup source identity;
+the JavaScript module is not part of the permanently installed guest agent.
+The shell owns VM admission and tool bootstrap. The module exposes provisioning
+operations without performing I/O on import, so orchestration tests exercise the
+same operations with fixture filesystem and process dependencies.
 Producers and consumers use the current job format together without accepting
 earlier development formats. Interrupted promotion resumes from its recorded
 state on the next setup attempt.

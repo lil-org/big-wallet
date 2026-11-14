@@ -38,9 +38,8 @@ extension TransactionApprovalCoordinatorTests {
     ) async {
         coordinator.startPreparation(forceGasCheck: false)
         let call = stub.preparationCalls.last!
-        call.onUpdate(call.transaction)
         if let estimate { call.onFeeEstimate(estimate) }
-        call.completion(.success(call.transaction))
+        call.ready()
         await waitForSnapshot(coordinator) { ($0.phase) == (.ready) }
         XCTAssertEqual(coordinator.snapshot.phase, .ready)
     }
@@ -222,14 +221,18 @@ final class ApprovalOperationsStub {
             }
         }
 
-        func onUpdate(_ transaction: Transaction) { continuation.yield(.transactionUpdated(transaction)) }
-        func onFeeEstimate(_ estimate: GasEstimate) { continuation.yield(.feeEstimate(estimate)) }
-        func completion(_ result: Result<Transaction, TransactionPreparationFailure>) {
-            switch result {
-            case .success(let value): continuation.yield(.ready(value))
-            case .failure(let error): continuation.finish(throwing: error)
+        func yield(_ event: TransactionPreparationEvent) { continuation.yield(event) }
+        func yieldPreparedFields(_ transaction: Transaction) {
+            if let nonce = transaction.nonce { yield(.nonce(nonce)) }
+            if let gas = transaction.gas { yield(.gasLimit(gas)) }
+            if let fee = transaction.preparedFee {
+                yield(.resolvedFee(.init(preparedFee: fee, provenance: transaction.feeProvenance)))
             }
+            if let interpretation = transaction.interpretation { yield(.interpretation(interpretation)) }
         }
+        func onFeeEstimate(_ estimate: GasEstimate) { yield(.feeEstimate(estimate)) }
+        func ready() { yield(.ready) }
+        func fail(_ error: TransactionPreparationFailure) { continuation.finish(throwing: error) }
     }
 
     final class PreflightCall {

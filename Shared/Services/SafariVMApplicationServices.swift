@@ -12,6 +12,11 @@ struct SafariVMApplicationServices {
     let runtime: AuthorityRuntime
     let authorization: any AlchemyAuthorizationProviding
     let prices: PriceService
+#if os(iOS) || os(visionOS)
+    static func invalidateVault(_ runtime: AuthorityRuntime) async throws {
+        try await runtime.invalidateVaultForTesting()
+    }
+#endif
 #if os(macOS)
     let ethereum: EthereumTransactionPreparation
 #endif

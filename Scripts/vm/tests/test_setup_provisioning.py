@@ -87,7 +87,7 @@ class ProvisioningPackageTests(unittest.TestCase):
         self.assertEqual(reused['provisioningRequestID'], requested['provisioningRequestID'])
 
     def test_source_binding_rejects_snapshot_staging_configuration_and_tool_drift(self):
-        for change in ('snapshot', 'installer', 'runner', 'agent', 'configuration', 'tools'):
+        for change in ('snapshot', 'installer', 'module', 'runner', 'agent', 'configuration', 'tools'):
             with self.subTest(change=change):
                 exchange, configuration = self.stage(self.args(), 'setup-binding-' + change)
                 snapshot = self.source_snapshot(exchange)
@@ -95,8 +95,8 @@ class ProvisioningPackageTests(unittest.TestCase):
                 tools = host.bootstrap_tool_hashes(self.binaries)
                 if change == 'snapshot':
                     (snapshot / 'provision_guest.sh').write_text('changed during snapshot')
-                elif change in ('installer', 'runner', 'agent'):
-                    filename = {'installer': 'provision_guest.sh', 'runner': 'guest_bootstrap.mjs', 'agent': 'VMGuestAgent'}[change]
+                elif change in ('installer', 'module', 'runner', 'agent'):
+                    filename = {'installer': 'provision_guest.sh', 'module': 'provision_guest.mjs', 'runner': 'guest_bootstrap.mjs', 'agent': 'VMGuestAgent'}[change]
                     (exchange / 'provision' / filename).write_text('changed during staging')
                 elif change == 'configuration':
                     staged = host.read_json(exchange / 'provision/config.json')
@@ -106,6 +106,21 @@ class ProvisioningPackageTests(unittest.TestCase):
                     tools['guest_bootstrap.mjs'] = '0' * 64
                 with self.assertRaisesRegex(host.RunnerError, 'does not match'):
                     host.verify_setup_sources(exchange, captured, self.environment, configuration, tools)
+
+    def test_pending_packages_refresh_missing_or_stale_provisioning_modules(self):
+        for missing in (False, True):
+            with self.subTest(missing=missing):
+                original, requested = self.explicit_package()
+                module = original / 'provision/provision_guest.mjs'
+                if missing:
+                    module.unlink()
+                else:
+                    module.write_text('stale installer module')
+                retry, configuration = self.stage(self.args(), 'setup-module-' + str(missing))
+                self.assertEqual((retry / 'provision/provision_guest.mjs').read_bytes(),
+                                 (host.TOOLS / 'provision_guest.mjs').read_bytes())
+                self.assertEqual((retry / 'provision/autologin-passwordFile').read_bytes(), b'fixture password')
+                self.assertEqual(configuration['consoleUser'], requested['consoleUser'])
 
     def test_source_binding_rejects_environment_changed_since_host_loading(self):
         exchange, configuration = self.stage(self.args(), 'setup-binding-environment')
@@ -192,13 +207,11 @@ class ProvisioningPackageTests(unittest.TestCase):
         self.assertNotIn('profiles', configuration['signing'])
         script = r'''
 import {readFileSync} from 'node:fs';
-const source = readFileSync(process.argv[1], 'utf8');
-const functionSource = source.match(/^function appliedProvisioningRequest\([^]*?^}/m)[0];
-const receipt = (0, eval)(`(${functionSource})`);
+const {appliedProvisioningRequest: receipt} = await import(process.argv[1]);
 const configuration = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 process.stdout.write(receipt(configuration, undefined, ['request-proof key']));
 '''
-        result = subprocess.run(['node', '--input-type=module', '-e', script, str(host.TOOLS / 'provision_guest.sh'),
+        result = subprocess.run(['node', '--input-type=module', '-e', script, (host.TOOLS / 'provision_guest.mjs').as_uri(),
                                  str(exchange / 'provision/config.json')], check=True, capture_output=True, text=True)
         self.assertEqual(result.stdout, configuration['provisioningRequestID'])
 

@@ -21,6 +21,7 @@ async function fixture(context) {
     const run = overrides => execute("/bin/sh", [bundler], {env: {
         PATH: "/usr/bin:/bin:/usr/sbin:/sbin", TARGET_BUILD_DIR: root,
         UNLOCALIZED_RESOURCES_FOLDER_PATH: resources, SRCROOT: root,
+        BW_VM_FIXTURE_EXCLUDED_SOURCES: "SafariVMFixtures.swift SafariVMApplicationServices.swift SafariVMExtensionServices.swift",
         ...overrides,
     }});
     return {root, marker, run};
@@ -84,7 +85,15 @@ test("fixture builds reject distribution actions before accessing guest resource
         {DEPLOYMENT_LOCATION: "YES"},
         {ARCHIVE_PATH: "/fixture/Wallet.xcarchive"},
     ]) {
-        await assert.rejects(run({BW_SAFARI_VM_TESTING: "YES", SWIFT_ACTIVE_COMPILATION_CONDITIONS: "BW_SAFARI_VM_TESTING", ...action}),
+        await assert.rejects(run({BW_SAFARI_VM_TESTING: "YES", SWIFT_ACTIVE_COMPILATION_CONDITIONS: "BW_SAFARI_VM_TESTING", BW_VM_FIXTURE_EXCLUDED_SOURCES: "", ...action}),
             error => /cannot be archived or installed for distribution/.test(error.stderr));
     }
+});
+
+test("fixture source selection must agree with the build mode", async context => {
+    const {run} = await fixture(context);
+    await assert.rejects(run({BW_VM_FIXTURE_EXCLUDED_SOURCES: ""}),
+        error => /ordinary builds must exclude/.test(error.stderr));
+    await assert.rejects(run({BW_SAFARI_VM_TESTING: "YES", SWIFT_ACTIVE_COMPILATION_CONDITIONS: "BW_SAFARI_VM_TESTING"}),
+        error => /VM builds must include/.test(error.stderr));
 });

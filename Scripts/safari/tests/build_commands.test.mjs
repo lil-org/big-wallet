@@ -26,6 +26,7 @@ for (const configuration of ["Debug", "Release"]) {
             assert.deepEqual(commands.settings.slice(0, 2), ["-showBuildSettings", "-json"]);
             assert.deepEqual(commands.build.slice(0, 3), ["-jobs", "2", "build-for-testing"]);
             for (const args of [commands.settings, commands.build]) {
+                assert.ok(args.includes("BW_VM_FIXTURE_EXCLUDED_SOURCES="));
                 assert.equal(option(args, "-destination"), "generic/platform=iOS Simulator");
                 assert.equal(option(args, "-configuration"), configuration);
                 assert.equal(args.some(value => value.includes("457B858E-62B8-4870-A30E-520F60D4D276")), false);
@@ -43,6 +44,7 @@ for (const configuration of ["Debug", "Release"]) {
         test(`iOS ${configuration} ${signing} execution retains the exact pinned simulator and existing test limits`, () => {
             const options = configurationOptions("ios", configuration, signing, "test");
             const commands = safariXcodeCommands(options, descriptor("ios", configuration), runID);
+            assert.ok(commands.test.args.includes("BW_VM_FIXTURE_EXCLUDED_SOURCES="));
             assert.deepEqual(commands.test.args.slice(0, 3), ["-jobs", "2", "test-without-building"]);
             assert.equal(option(commands.test.args, "-destination"), iosDestination);
             assert.equal(option(commands.test.args, "-scheme"), "Safari UI Tests iOS");
@@ -68,6 +70,9 @@ for (const configuration of ["Debug", "Release"]) {
                 assert.equal(args.includes("CODE_SIGN_IDENTITY=-"), signing === "local");
             }
             assert.equal(option(build.settings, "-scheme"), "Wallet");
+            for (const args of [build.base, build.settings, build.build, runtime.test.args]) {
+                assert.ok(args.includes("BW_VM_FIXTURE_EXCLUDED_SOURCES="));
+            }
             assert.equal(option(build.build, "-scheme"), "Safari UI Tests macOS");
             assert.equal(option(runtime.test.args, "-scheme"), "Safari UI Tests macOS");
             if (configuration === "Debug" && signing === "local") {

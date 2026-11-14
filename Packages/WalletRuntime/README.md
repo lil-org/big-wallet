@@ -74,10 +74,13 @@ steps and 8 MiB of processed bytes. Invalid or over-budget data follows the norm
 request failure path without opening a signing prompt. Existing supported values
 within the limits retain their signing semantics.
 
-Transaction edits are applied to the existing review. Authority validates
-preflight output against that review before accepting it. A fee change requiring
-new consent returns to review; preparation cannot replace immutable signing
-fields.
+Transaction edits are applied to the existing review. Preparation emits nonce,
+gas, fee, estimate, and interpretation updates; Authority keeps the transaction
+payload and validates readiness before approval. Once ready, only late
+interpretation updates are accepted. Preflight returns a fee decision and estimate,
+with replacement fee values only when another review is required. It cannot
+replace the signing payload, nonce, or gas. Endpoint checks and final signing
+validation remain at the authority boundary.
 
 ### Execution and recovery
 
@@ -298,13 +301,20 @@ Application test targets retain UI and composition coverage. `Tests/Support`
 contains fixture utilities and resources; no production target depends on it.
 The macOS crash worker is a separate `../WalletRuntimeHarness` package, with
 explicit validation-only testability. Safari VM composition uses app-owned
-fixture adapters behind `BW_SAFARI_VM_TESTING`; runtime source has no fixture
-conditional or implicit fixture singleton.
+fixture adapters behind `BW_SAFARI_VM_TESTING`. Ordinary Xcode builds exclude the
+three fixture source files through `BW_VM_FIXTURE_EXCLUDED_SOURCES`; Safari VM
+builds clear that setting. Runtime source has no fixture conditional or implicit
+fixture singleton.
 
 `Scripts/check_runtime_boundaries.mjs` checks dependencies, source ownership,
-private APIs, test-only imports, and Xcode compilation membership. Its compiler
+restricted imports and compiler attributes, and Xcode compilation membership. Its compiler
 fixtures use ordinary imports: positive fixtures must compile and negative
-fixtures must fail for the expected access-control reason. VM discovery binds the
+fixtures must fail for the expected access-control reason. Extension-context
+fixtures also verify that Safari cannot construct `AuthorityRuntime`; Safari
+targets enforce application-extension API availability. Import checks inspect
+all conditional branches without interpreting Swift conditions. Domain purity
+and signer implementation conventions are reviewed in code, rather than inferred
+from identifier or string matches. VM discovery binds the
 expected test inventory to the built products and rejects missing, duplicate,
 skipped, unexpected, and zero-test results.
 
