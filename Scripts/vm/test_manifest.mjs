@@ -220,6 +220,8 @@ export function safariTestsForPlatform(selectors, platform) {
 export function createManifest(job) {
     validateJob(job);
     const options = job.payload;
+    const focusedTestOnly = options.stages.length === 1 && options.stages[0] === "test" && options.onlyTesting.length > 0;
+    const nativeTestChecks = ["runtime.test-membership", ...(focusedTestOnly ? ["runtime.boundaries"] : [])];
     const stages = [];
     const makeStage = (id, group, command, args, extra = {}) => ({
         id, group, command, args, cwd: ".", dependencies: [], requirements: ["node"], timeoutSeconds: 900, ...extra,
@@ -234,9 +236,11 @@ export function createManifest(job) {
     add("runtime.boundaries", "repository", "node", ["Scripts/check_runtime_boundaries.mjs"], {requirements: ["node", "xcode"]});
     add("runtime.boundary-tests", "repository", "node", ["--test", "Scripts/tests/runtime_boundaries.test.mjs"]);
     add("provider.bundle", "repository", "npm", ["run", "build"], {cwd: provider, dependencies: ["provider.install", "protocol.check"], unchanged: ["Safari Shared/Resources/inpage.js"]});
-    add("provider.test", "test", "node", ["--test", "--test-concurrency=1", "--test-reporter=tap", "../Tests/*.test.mjs"], {
-        cwd: provider, dependencies: ["provider.install", "protocol.check"],
-    });
+    if (!focusedTestOnly) {
+        add("provider.test", "test", "node", ["--test", "--test-concurrency=1", "--test-reporter=tap", "../Tests/*.test.mjs"], {
+            cwd: provider, dependencies: ["provider.install", "protocol.check"],
+        });
+    }
     for (const file of SHELL_TESTS) {
         add(`scripts.${file.slice(5, -3)}`, "repository", file.includes("asc_alchemy") ? "/bin/bash" : "/bin/sh", [`Scripts/tests/${file}`], {dependencies: ["provider.install"], requirements: ["node", "jq"]});
     }
@@ -259,8 +263,8 @@ export function createManifest(job) {
     const configurations = options.configuration ? [options.configuration] : ["Debug", "Release"];
     const runtimeSelected = platform => (!options.runtimePlatforms?.length || options.runtimePlatforms.includes(platform)) &&
         candidateTargets(options.onlyTesting, platform, true).length > 0;
-    const apiValidation = !options.stages.length || ["build", "performance", "tsan"].some(group => options.stages.includes(group)) ||
-        options.stages.includes("test") && PLATFORMS.some(platform => runtimeSelected(platform.id));
+    const apiValidation = !focusedTestOnly && (!options.stages.length || ["build", "performance", "tsan"].some(group => options.stages.includes(group)) ||
+        options.stages.includes("test") && PLATFORMS.some(platform => runtimeSelected(platform.id)));
     const nativeStages = (id, group, args, policy, extra = {}) => {
         const buildID = policy.kind === "full"
             ? `${policy.runtime ? "build-runtime-tests" : "build-tests"}.${policy.platform}.${policy.configuration.toLowerCase()}`
@@ -328,7 +332,7 @@ export function createManifest(job) {
                         ...(configuration === "Debug" && platform.id === "macos" ? {
                             mutationWitnesses: mutationManifest.mutants.filter(mutant => mutant.family === "runtime").map(mutant => mutant.witness.selector),
                         } : {})}, {
-                        cwd: "Packages/WalletRuntime", dependencies: ["runtime.test-membership", ...(apiValidation ? [`runtime.api.${configuration.toLowerCase()}`] : [])],
+                        cwd: "Packages/WalletRuntime", dependencies: [...nativeTestChecks, ...(apiValidation ? [`runtime.api.${configuration.toLowerCase()}`] : [])],
                         requirements: ["xcode", platform.requirement], timeoutSeconds: 7200,
                         env: configuration === "Release" ? PERFORMANCE_ENV : {},
                     });
@@ -342,7 +346,7 @@ export function createManifest(job) {
                 addNative(`test.${slug}`, "test", ["-jobs", "2", "-enableCodeCoverage", "NO", "-project", "Wallet.xcodeproj", "-scheme", platform.target,
                     "-configuration", configuration, "-destination", `$destination:${platform.id}`],
                     {configuration, platform: platform.id, kind: "full"}, {
-                        dependencies: ["provider.install", "protocol.check", "runtime.test-membership"],
+                        dependencies: ["provider.install", "protocol.check", ...nativeTestChecks],
                         requirements: ["node", "xcode", "proofKey", platform.requirement, ...signing], proofKey: true, timeoutSeconds: 7200,
                         env: configuration === "Release" ? PERFORMANCE_ENV : {},
                     });
@@ -352,7 +356,7 @@ export function createManifest(job) {
     const nativeBase = ["-jobs", "2", "-enableCodeCoverage", "NO", "-project", "Wallet.xcodeproj", "-scheme", "Tests macOS"];
     const nativeRequirements = ["node", "xcode", "proofKey", "macos", "signing"];
     const nativeDependencies = ["provider.install", "protocol.check", "runtime.test-membership"];
-    const runtimeChecks = ["runtime.test-membership", ...(apiValidation ? [`runtime.api.${configurations.includes("Release") ? "release" : "debug"}`] : [])];
+    const runtimeChecks = [...nativeTestChecks, ...(apiValidation ? [`runtime.api.${configurations.includes("Release") ? "release" : "debug"}`] : [])];
     const runtimePerformanceTests = PERFORMANCE_TESTS.map(name => `WalletAuthorityTests/WalletCoreProxyPerformanceGateTests/${name}`);
     const runtimeNativeBase = ["-jobs", "2", "-enableCodeCoverage", "NO", "-scheme", "WalletRuntime-Package",
         "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "CODE_SIGNING_ALLOWED=YES"];

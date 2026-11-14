@@ -23,6 +23,7 @@ import uuid
 DETACH_CLEANUP_SECONDS = 60
 DETACH_COMMAND_SECONDS = 10
 DETACH_RETRY_DELAYS = (5, 10)
+PROVISIONING_SOURCE_NAMES = ('provision_guest.sh', 'provision_guest.mjs', 'runtime_verification.mjs', 'runtime_repair.mjs')
 
 
 class GuestAccessError(Exception):
@@ -517,7 +518,18 @@ def ssh_command(address, user, known_hosts, host_key_alias):
     return ['/usr/bin/ssh', '-F', '/dev/null', '-T', *[item for option in options for item in ('-o', option)], '-l', user, '--', address]
 
 
-def installer_command(user, marker, staging_directory=None, vm_id=None):
+def runtime_repair_platforms(value):
+    if (not isinstance(value, (list, tuple)) or len(value) > 2 or
+            any(not isinstance(platform, str) or platform not in ('ios', 'visionos') for platform in value) or
+            len(set(value)) != len(value)):
+        raise GuestAccessError('Invalid explicit runtime repair selection')
+    return tuple(value)
+
+
+def installer_command(user, marker, staging_directory=None, vm_id=None, *, repair_platforms=()):
+    repair_platforms = runtime_repair_platforms(repair_platforms)
+    if repair_platforms and staging_directory is None:
+        raise GuestAccessError('Runtime repair requires the full managed installation phase')
     if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', user):
         raise GuestAccessError('The guest account is invalid')
     if not re.fullmatch(r'BIG_WALLET_PAYLOAD_[a-f0-9]{32}', marker):
@@ -548,7 +560,7 @@ cleanup_stage() {{
 }}
 trap cleanup_stage EXIT
 '''
-        arguments = ''
+        arguments = ''.join(' --repair-runtime ' + platform for platform in repair_platforms)
     else:
         destination_setup = '''temporary=$(/usr/bin/mktemp -d /private/tmp/big-wallet-provision.XXXXXXXX)
 trap '/bin/rm -rf "$temporary"' EXIT
@@ -573,6 +585,8 @@ trap 'exit 143' TERM
 /usr/bin/tar --no-same-owner -xpf - -C "$destination"
 [ -f "$destination/provision_guest.sh" ] && [ ! -L "$destination/provision_guest.sh" ] || exit 75
 [ -f "$destination/provision_guest.mjs" ] && [ ! -L "$destination/provision_guest.mjs" ] || exit 75
+[ -f "$destination/runtime_verification.mjs" ] && [ ! -L "$destination/runtime_verification.mjs" ] || exit 75
+[ -f "$destination/runtime_repair.mjs" ] && [ ! -L "$destination/runtime_repair.mjs" ] || exit 75
 /bin/sh "$destination/provision_guest.sh" "$destination/config.json"{arguments}
 '''
     return (f'case "$(/usr/sbin/sysctl -n hw.model)" in VirtualMac*) ;; *) exit 71 ;; esac; '
@@ -602,7 +616,7 @@ def _payload_files(directory, user, host_key_alias):
         if configuration['consoleUser'] != user or _alias(configuration['vmId']) != host_key_alias:
             raise ValueError()
         large_names = {'Xcode.tar'} | {runtime['dmgPath'] for runtime in configuration.get('runtimes', []) if runtime.get('dmgPath')}
-        if any(name not in files for name in large_names) or any(name not in files for name in ('provision_guest.sh', 'provision_guest.mjs')):
+        if any(name not in files for name in large_names) or any(name not in files for name in PROVISIONING_SOURCE_NAMES):
             raise ValueError()
     except (KeyError, TypeError, ValueError):
         raise GuestAccessError('The provisioning payload does not match this VM, account, or required inputs') from None
@@ -748,12 +762,36 @@ class SSHBannerProbe:
         self.result = self.result or {'status': 'failed', 'reason': 'guest_ssh_probe_cancelled'}
 
 
+def runtime_repair_diagnostic(contents, pins):
+    prefix = b'BIG_WALLET_RUNTIME_REPAIR_REQUIRED='
+    lines = [line[len(prefix):] for line in contents.splitlines() if line.startswith(prefix)]
+    if len(lines) != 1 or len(lines[0]) > 1024:
+        return None
+    try:
+        details = json.loads(lines[0])
+        if (not isinstance(details, dict) or set(details) != {'platform', 'version', 'buildVersion', 'phase'} or
+                details['platform'] not in ('ios', 'visionos') or
+                not isinstance(details['version'], str) or re.fullmatch(r'\d+(?:\.\d+){1,2}', details['version']) is None or
+                not isinstance(details['buildVersion'], str) or re.fullmatch(r'\d+[A-Z]\d+[a-z]?', details['buildVersion']) is None or
+                details['phase'] not in (None, 'source', 'probe', 'probe-verified', 'deleting', 'adding')):
+            return None
+        platform = {'ios': 'iOS', 'visionos': 'visionOS'}[details['platform']]
+        if not any(pin.get('platform') == platform and pin.get('version') == details['version'] and
+                   pin.get('buildVersion') == details['buildVersion'] for pin in pins):
+            return None
+        return details
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return None
+
+
 class GuestInstaller:
     def __init__(self, address, user, password_file, known_hosts, host_key_alias, private_workdir,
-                 log_path=None, *, provision_directory):
+                 log_path=None, *, provision_directory, repair_platforms=()):
+        self.repair_platforms = runtime_repair_platforms(repair_platforms)
         work = _private_directory(private_workdir)
         self.command = ssh_command(address, user, known_hosts, host_key_alias)
         self.small_files, self.large_files = _payload_files(provision_directory, user, host_key_alias)
+        self.runtime_pins = json.loads(_read(self.small_files['config.json'])[0]).get('runtimes', [])
         self.user = user
         self.vm_id = host_key_alias.removeprefix('big-wallet-vm-')
         self.password = read_private_password(password_file)
@@ -784,7 +822,8 @@ class GuestInstaller:
         self.output.seek(0, os.SEEK_END)
         self.phase_offset = self.output.tell()
         marker = 'BIG_WALLET_PAYLOAD_' + uuid.uuid4().hex
-        command = self.command + [installer_command(self.user, marker, staging_directory, self.vm_id)]
+        command = self.command + [installer_command(self.user, marker, staging_directory, self.vm_id,
+            repair_platforms=self.repair_platforms if phase == 'install' else ())]
         self.child = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=self.output, stderr=subprocess.STDOUT,
                                       env=self.environment, start_new_session=True)
         self.producer = _PayloadProducer(self.child.stdin, self.password, marker, files)
@@ -795,6 +834,17 @@ class GuestInstaller:
             if self.producer:
                 self.producer.cancel()
                 self.producer.join()
+            self.output.seek(0, os.SEEK_END)
+            offset = max(self.phase_offset, self.output.tell() - 4 * 1024 * 1024)
+            self.output.seek(offset)
+            if offset > self.phase_offset:
+                self.output.readline()
+            phase_contents = self.output.read()
+            if (self.phase == 'install' and result.get('reason') == 'guest_install_failed' and
+                    isinstance(result.get('returnCode'), int) and 0 < result['returnCode'] < 255):
+                details = runtime_repair_diagnostic(phase_contents, self.runtime_pins)
+                if details is not None:
+                    result.update({'reason': 'simulator_runtime_repair_required', 'runtimeRepairRequired': details})
             if self.log_path:
                 if self.log_path.is_symlink() or self.log_path.parent.resolve() != self.log_path.parent.absolute():
                     raise GuestAccessError('The guest installer log must not traverse symlinks')

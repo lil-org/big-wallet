@@ -14,6 +14,7 @@ from pathlib import Path, PurePosixPath
 import plistlib
 import re
 import secrets
+import shlex
 import shutil
 import signal
 import stat
@@ -26,6 +27,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS = Path(__file__).resolve().parent
+PROVISIONING_SOURCE_NAMES = ('provision_guest.sh', 'provision_guest.mjs', 'runtime_verification.mjs', 'runtime_repair.mjs')
 DEFAULT_VM = Path.home() / 'Library/Application Support/VirtualBuddy/tests machine.vbvm'
 DEFAULT_STATE = Path.home() / 'Library/Application Support/Big Wallet Test VM'
 STAGES = ('build', 'test', 'performance', 'tsan', 'asan', 'fuzz', 'parser-fuzz', 'mutation', 'approval', 'upgrade', 'safari', 'repository', 'worker', 'runtime')
@@ -589,8 +591,7 @@ def bootstrap_tool_hashes(binaries):
 
 def bootstrap_source_digest(directory=None):
     directory = TOOLS if directory is None else Path(directory)
-    names = ('VMGuestAgent.swift', 'guest_runner', 'guest_bootstrap.mjs',
-             'provision_guest.sh', 'provision_guest.mjs', 'environment.json')
+    names = ('VMGuestAgent.swift', 'guest_runner', 'guest_bootstrap.mjs', *PROVISIONING_SOURCE_NAMES, 'environment.json')
     return hashlib.sha256(b''.join(name.encode() + b'\0' + (directory / name).read_bytes() for name in names)).hexdigest()
 
 
@@ -630,7 +631,7 @@ def verify_setup_sources(exchange, expected, environment, configuration=None, bo
     staged_environment['runtimes'] = [runtime_pin(runtime) for runtime in staged.get('runtimes', [])]
     if staged != configuration or staged_environment != environment:
         raise RunnerError('The staged setup configuration does not match the requested guest environment')
-    for name in ('guest_runner', 'guest_bootstrap.mjs', 'provision_guest.sh', 'provision_guest.mjs'):
+    for name in ('guest_runner', 'guest_bootstrap.mjs', *PROVISIONING_SOURCE_NAMES):
         digest = hash_regular_file(snapshot / name)
         if hash_regular_file(provision / name) != digest or name in bootstrap_tools and bootstrap_tools[name] != digest:
             raise RunnerError('The staged guest installer does not match the captured setup source')
@@ -662,7 +663,7 @@ def verified_manifest_path(exchange, job):
         raise RunnerError('The staged source snapshot does not match the planned job')
     snapshot = read_json(exchange / 'snapshot-manifest.json')
     for relative in ('Scripts/vm/test_manifest.mjs', 'Scripts/safari/scenarios.mjs', 'Scripts/safari/synchronization.mjs',
-                     'Scripts/vm/environment.json', 'Scripts/vm/test_policy.mjs', 'Scripts/vm/test_discovery.mjs',
+                     'Scripts/vm/environment.json', 'Scripts/vm/test_policy.mjs', 'Scripts/vm/test_discovery.mjs', 'Scripts/vm/test_products.mjs',
                      'Scripts/vm/verify_discovery.mjs', 'Scripts/vm/result_audit.mjs', 'Scripts/vm/guest_bootstrap.mjs',
                      'Scripts/approval_lifecycle/source_identity.mjs',
                      'Scripts/security_mutations/products.mjs', 'Scripts/security_mutations/manifest.json',
@@ -843,7 +844,7 @@ def stage_provisioning(args, state, exchange, environment, record, binaries):
         if 'runtimes' in staged_environment:
             staged_environment['runtimes'] = [runtime_pin(runtime) for runtime in previous_runtimes]
         expected_tools = bootstrap_tool_hashes(binaries)
-        for name in ('provision_guest.sh', 'provision_guest.mjs'):
+        for name in PROVISIONING_SOURCE_NAMES:
             expected_tools[name] = hash_regular_file(TOOLS / name)
         if (staged_environment == environment and all((input_directory / name).is_file() and
                 hash_regular_file(input_directory / name) == digest for name, digest in expected_tools.items())):
@@ -896,7 +897,7 @@ def stage_provisioning(args, state, exchange, environment, record, binaries):
         (destination / 'proof-key').write_bytes(proof)
         (destination / 'proof-key').chmod(0o600)
         configuration.setdefault('signing', {})['proofKeyFile'] = 'proof-key'
-    for name in ('provision_guest.sh', 'provision_guest.mjs', 'guest_runner', 'guest_bootstrap.mjs'):
+    for name in (*PROVISIONING_SOURCE_NAMES, 'guest_runner', 'guest_bootstrap.mjs'):
         shutil.copyfile(TOOLS / name, destination / name)
     shutil.copyfile(binaries / 'VMGuestAgent', destination / 'VMGuestAgent')
     shutil.copyfile(ROOT / 'Scripts/alchemy_jwt_request_proof_key.sha256',
@@ -1278,7 +1279,8 @@ def monitor_owned_vm(args, state, vm, exchange, run_id, binaries, environment, t
                         prepared = setup_hook.poll()
                         if prepared is not None and prepared['status'] != 'passed':
                             reason = prepared.get('reason') if prepared.get('reason') in (
-                                'guest_launch_failed', 'guest_exited_without_result') else 'guest_exchange_failed'
+                                'guest_launch_failed', 'guest_exited_without_result',
+                                'simulator_runtime_repair_required') else 'guest_exchange_failed'
                             guest_failure = prepared
                             break
                         if prepared is not None:
@@ -1766,7 +1768,7 @@ def guest_exchange_module():
 
 
 class GuestSetupHook:
-    def __init__(self, module, access, user, password, directory, exchange, job=None, *, install=True):
+    def __init__(self, module, access, user, password, directory, exchange, job=None, *, install=True, repair_platforms=()):
         self.module = module
         self.access = access
         self.user = user
@@ -1775,6 +1777,7 @@ class GuestSetupHook:
         self.exchange = exchange
         self.job = job
         self.install = install
+        self.repair_platforms = tuple(repair_platforms)
         self.child = None
         self.transport = None
         self.exchange_complete = False
@@ -1828,7 +1831,7 @@ class GuestSetupHook:
                 self.child = self.module.GuestInstaller(self.address, self.user, self.password,
                     self.access['knownHosts'], self.access['hostKeyAlias'], self.directory,
                     provision_directory=self.exchange / 'provision',
-                    log_path=self.exchange / 'artifacts/provisioning.log')
+                    log_path=self.exchange / 'artifacts/provisioning.log', repair_platforms=self.repair_platforms)
                 return None
             code = outcome.get('returnCode')
             self.remote_uncertain = isinstance(code, int) and (code == 255 or code < 0)
@@ -1896,6 +1899,7 @@ def run_setup_doctor(args, state, candidate, environment, operation, record, con
                      binaries, bootstrap_tools, source, initial_password, source_digest):
     run_id, exchange = operation['runId'], operation['exchange']
     needs_install = (operation.get('forceVerification', False) or configuration.get('provisioningRequestID') is not None or
+                     bool(getattr(args, 'repair_runtime', [])) or
                      record.get('bootstrapTools') != bootstrap_tools or
                      record.get('bootstrapSourceDigest') != source_digest or
                      not record.get('baseVerifiedAt'))
@@ -1937,7 +1941,7 @@ def run_setup_doctor(args, state, candidate, environment, operation, record, con
                 print('If the guest shows a login screen, sign in to the selected account in the Big Wallet Test VM — Setup window. '
                       'Setup waits up to five minutes for an unlocked session.', flush=True)
         hook = GuestSetupHook(module, access, configuration['consoleUser'], password, directory, exchange, job,
-                              install=needs_install)
+                              install=needs_install, repair_platforms=getattr(args, 'repair_runtime', []))
         operation['monitorCalled'] = True
         result = monitor_vm(args, state, candidate, exchange, run_id, binaries, environment,
             args.timeout or (14400 if needs_install else 600), initial_password, keep_operation=True,
@@ -1954,6 +1958,11 @@ def run_setup_doctor(args, state, candidate, environment, operation, record, con
 
 
 def setup(args, state, environment, *, result_callback=None, force_verification=False):
+    repair_platforms = getattr(args, 'repair_runtime', [])
+    if len(repair_platforms) != len(set(repair_platforms)):
+        raise RunnerError('Select each runtime repair platform only once')
+    if repair_platforms and (args.stage_only or getattr(args, 'safari_activation', False)):
+        raise RunnerError('--repair-runtime cannot be combined with --stage-only or --safari-activation')
     if getattr(args, 'safari_activation', False) and not args.interactive:
         raise RunnerError('Safari activation setup requires --interactive for the genuine user activation step')
     validate_vm(args.vm)
@@ -2333,7 +2342,7 @@ def prepare_setup(args, state, environment, operation, *, force_verification=Fal
     check_setup_stop(operation)
     candidate = state / 'candidate.vbvm'
     if (not force_verification and (state / 'baseline.json').exists() and not record_path.exists() and not candidate.exists() and not args.provision_config and
-            not args.proof_key_bundle and not args.provision_new_account and not args.interactive):
+            not args.proof_key_bundle and not args.provision_new_account and not args.interactive and not getattr(args, 'repair_runtime', [])):
         existing = read_json(state / 'baseline.json')
         if (matches_source_vm(existing, args.vm) and existing.get('environment') == environment and
                 existing.get('bootstrapTools') == bootstrap_tools and existing.get('bootstrapSourceDigest') == source_digest and
@@ -2543,11 +2552,35 @@ def prepare_setup(args, state, environment, operation, *, force_verification=Fal
     print(f'Results: {exchange / "artifacts/result.json"}')
     if result['status'] != 'passed':
         print('Full setup validation is incomplete; see the report and provisioning log for missing prerequisites or failures.')
-        print('Rerunning setup reuses retained inputs. Use --candidate for diagnostic runs after base prerequisites are verified.')
+        repair_command = runtime_repair_command(args, state, environment, result)
+        if repair_command:
+            print(f'Explicit simulator runtime repair is required. Run: {repair_command}')
+        else:
+            print('Rerunning setup reuses retained inputs. Use --candidate for diagnostic runs after base prerequisites are verified.')
         print('The original VirtualBuddy VM was not modified.')
         return 2
     print('Prepared baseline verified with local signing. Run Scripts/test_vm.sh run all; Apple signing is checked only with --signing apple.')
     return 0
+
+
+def runtime_repair_command(args, state, environment, result):
+    if result.get('reason') != 'simulator_runtime_repair_required':
+        return None
+    failure = result.get('guestFailure')
+    details = failure.get('runtimeRepairRequired') if isinstance(failure, dict) else None
+    if (not isinstance(details, dict) or set(details) != {'platform', 'version', 'buildVersion', 'phase'} or
+            not isinstance(details['platform'], str) or details['platform'] not in ('ios', 'visionos') or
+            not isinstance(details['version'], str) or not isinstance(details['buildVersion'], str) or
+            details['phase'] not in (None, 'source', 'probe', 'probe-verified', 'deleting', 'adding')):
+        return None
+    platform = {'ios': 'iOS', 'visionos': 'visionOS'}[details['platform']]
+    if not platform or not any(pin.get('platform') == platform and
+                               pin.get('version') == details.get('version') and
+                               pin.get('buildVersion') == details.get('buildVersion')
+                               for pin in environment.get('runtimes', [])):
+        return None
+    return shlex.join([str(ROOT / 'Scripts/test_vm.sh'), '--vm', str(args.vm), '--state-dir', str(state),
+                       '--xcode', str(args.xcode), 'setup', '--repair-runtime', details['platform']])
 
 
 def run_tests(args, state, environment, *, result_callback=None):
@@ -2692,6 +2725,8 @@ def parser():
     setup_parser.add_argument('--provision-config', type=Path)
     setup_parser.add_argument('--proof-key-bundle', type=Path)
     setup_parser.add_argument('--provision-new-account', action='store_true')
+    setup_parser.add_argument('--repair-runtime', choices=('ios', 'visionos'), action='append', default=[],
+                              help='Explicitly repair or resume the selected pinned simulator runtime in this setup invocation')
     setup_parser.add_argument('--safari-activation', action='store_true',
                               help='Prepare genuine Safari extension activation in a current baseline; requires --interactive')
     setup_mode = setup_parser.add_mutually_exclusive_group()

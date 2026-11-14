@@ -502,7 +502,8 @@ test("narrow test selection expands required builds but does not schedule unrela
     assert.ok(ids.includes("test.macos.debug"));
     assert.ok(ids.includes("build-tests.macos.debug"));
     assert.ok(ids.includes("provider.install"));
-    assert.ok(ids.includes("provider.test"));
+    assert.ok(!ids.includes("provider.test"));
+    assert.ok(ids.includes("runtime.boundaries"));
     assert.ok(!ids.includes("test.ios.debug"));
     assert.ok(!ids.includes("build-tests.ios.debug"));
     assert.ok(!ids.includes("worker.test"));

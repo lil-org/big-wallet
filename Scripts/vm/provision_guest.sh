@@ -8,14 +8,35 @@ case "$(/usr/sbin/sysctl -n hw.model)" in
     *) fail 'Refusing to provision outside a macOS virtual machine.' ;;
 esac
 [ "$(/usr/bin/id -u)" -eq 0 ] || fail 'Run this one-time setup as root inside the guest.'
-[ "$#" -ge 1 ] && [ "$#" -le 2 ] || fail 'Usage: sudo sh provision_guest.sh /local/provision/config.json [--prepare-storage]'
-mode=${2:-}
-case "$mode" in ''|--prepare-storage) ;; *) fail 'Unknown provisioning mode.' ;; esac
+[ "$#" -ge 1 ] || fail 'Usage: sudo sh provision_guest.sh /local/provision/config.json [--prepare-storage | --repair-runtime ios|visionos]'
 [ -f "$1" ] && [ ! -L "$1" ] || fail 'A regular provisioning config.json is required.'
 provision_directory=$(CDPATH= cd -- "$(dirname -- "$1")" && pwd -P)
 provision_config="$provision_directory/$(basename -- "$1")"
+shift
+mode=
+repair_platforms=
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --prepare-storage)
+            [ -z "$mode" ] || fail 'Duplicate provisioning mode.'
+            mode=--prepare-storage
+            shift
+            ;;
+        --repair-runtime)
+            [ "$#" -ge 2 ] || fail 'A runtime repair platform is required.'
+            case "$2" in ios|visionos) ;; *) fail 'Unknown runtime repair platform.' ;; esac
+            case " $repair_platforms " in *" $2 "*) fail 'Duplicate runtime repair platform.' ;; esac
+            repair_platforms="${repair_platforms:+$repair_platforms }$2"
+            shift 2
+            ;;
+        *) fail 'Unknown provisioning option.' ;;
+    esac
+done
+[ -z "$mode" ] || [ -z "$repair_platforms" ] || fail 'Storage preparation cannot repair runtimes.'
 provision_module="$provision_directory/provision_guest.mjs"
-[ -f "$provision_module" ] && [ ! -L "$provision_module" ] || fail 'A regular provisioning module is required.'
+for module in provision_guest.mjs runtime_verification.mjs runtime_repair.mjs; do
+    [ -f "$provision_directory/$module" ] && [ ! -L "$provision_directory/$module" ] || fail 'A regular provisioning module is required.'
+done
 case "$provision_directory" in
     /private/tmp/big-wallet-provision.*/provision) [ "$mode" = --prepare-storage ] || fail 'Full provisioning requires the managed local staging directory.' ;;
     /Volumes/BigWalletBuild/Provisioning/*/provision) ;;
@@ -83,4 +104,5 @@ if [ ! -x /usr/local/bin/jq ] || [ "$(/usr/bin/shasum -a 256 /usr/local/bin/jq |
 fi
 [ "$(/usr/local/bin/jq --version)" = "jq-$jq_version" ] || fail 'jq version verification failed.'
 
-/usr/local/bin/node "$provision_module" "$provision_config" "$provision_directory" "$console_uid" "$console_gid" "$mode"
+set -- $repair_platforms
+/usr/local/bin/node "$provision_module" "$provision_config" "$provision_directory" "$console_uid" "$console_gid" "$mode" "$@"

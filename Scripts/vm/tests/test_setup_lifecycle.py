@@ -341,6 +341,20 @@ class SetupPreparationTests(unittest.TestCase):
             validation_path = Path(baseline['validationResult'])
             self.assertEqual(observed, [(validation_path, host.read_json(validation_path))] * 2)
 
+    def test_explicit_repair_bypasses_unchanged_baseline_reuse_and_still_requires_validation(self):
+        with SetupFixture(self) as fixture:
+            self.assertEqual(fixture.run(), 0)
+            original = host.read_json(fixture.state / 'baseline.json')
+            fixture.launches.clear()
+            fixture.args.repair_runtime = ['ios']
+            fixture.validation_outcome = {'status': 'failed', 'reason': 'fixture failed smoke test'}
+            self.assertEqual(host.setup(fixture.args, fixture.state, fixture.environment), 2)
+            self.assertEqual(fixture.launches, ['doctor', 'run'])
+            self.assertEqual(host.read_json(fixture.state / 'baseline.json'), original)
+            candidate = host.read_json(fixture.state / 'candidate.json')
+            self.assertNotIn('promotionPending', candidate)
+            self.assertNotIn('repair_runtime', candidate)
+
     def test_forced_setup_reverifies_an_unchanged_baseline_and_pins_every_job_to_its_os(self):
         with SetupFixture(self) as fixture:
             self.assertEqual(fixture.run(), 0)

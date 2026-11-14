@@ -266,7 +266,7 @@ test("recorded scheduling decisions cannot be skipped or reordered", () => {
 function recoverySession(requests, available = true) {
     const session = new LifecycleSession({seed: 1, mode: "native"});
     session.browser = {faults: [], operations: new Map(), snapshot: () => [], wake() {},
-        popupQueueRefreshAvailable: () => false, popupQueueIdleAndEmpty: () => false};
+        popupQueueRefreshAvailable: () => false, popupQueueIdleAndEmpty: () => false, popupPrimaryAction: () => null};
     session.pump = async () => {};
     session.inspect = async () => { session.lastInspectionAvailable = available; return requests; };
     session.decide = async () => false;
@@ -451,6 +451,71 @@ test("popup recovery refreshes a failed queue through Check Status before reject
             assert.equal(messages.filter(message => message.subject === "rejectRequest").length, 1);
             assert.equal(messages.some(message => ["approveRequest", "retryTransaction"].includes(message.subject)), false);
             assert.equal(session.oracle.approvals.size, 0);
+            assert.equal(session.background.size, 0);
+            assert.equal(session.scheduler.pending({kind: "message"}).length, 0);
+            session.check();
+        } finally { session.browser.close(); }
+    }
+});
+
+test("popup recovery observes an initially busy review through Refresh before draining its queue", async () => {
+    for (const rejectReviews of [false, true]) {
+        const session = new LifecycleSession({seed: 28, mode: "popup", timeout: 1000});
+        const profileIdentifier = "00000000-0000-0000-0000-000000000001";
+        const request = {phase: "queued", provider: "ethereum", name: "signPersonalMessage", configurationKey: "https://one.example",
+            handle: {id: 3, token: "00000000-0000-0000-0000-000000000003", profileIdentifier}};
+        let reads = 0, refreshes = 0;
+        const commands = [];
+        session.browser = new BrowserLifecycle({scheduler: session.scheduler, mode: "popup", native: async (message, profile) => {
+            if (message.subject === "getLatestConfiguration") { return {id: message.id, state: disconnected}; }
+            if (message.subject === "getRecoveryRequests") { return {id: message.id, requests: []}; }
+            if (message.subject === "getPendingRequests") {
+                return {requests: profile === profileIdentifier && request.phase === "queued" ? [{
+                    id: request.handle.id, requestToken: request.handle.token, provider: request.provider,
+                    configurationKey: request.configurationKey, host: "one.example", receivedAt: session.scheduler.now, sequence: 1,
+                }] : [], completedResponses: []};
+            }
+            commands.push(message.subject);
+            assert.equal(message.id, request.handle.id);
+            assert.equal(message.requestToken, request.handle.token);
+            assert.equal(profile, profileIdentifier);
+            if (message.subject === "getApprovalState") {
+                if (++reads === 1) {
+                    return {id: message.id, workflowVersion: 4, nativeAdmissionRejected: true,
+                        reason: "busy", code: -32005, dispatched: false, retryAfterMilliseconds: 500};
+                }
+                return {status: "ok", approval: {id: request.handle.id, host: "one.example", state: "review", actions: ["approve", "reject"],
+                    review: {kind: "signMessage", title: "Sign Message", meta: "0x010203", account: {name: "Account", croppedAddress: "1234"},
+                        reviewToken: "00000000-0000-0000-0000-000000000101"}}};
+            }
+            assert.equal(message.subject, "rejectRequest");
+            request.phase = "responded";
+            return {status: "ok", approval: {id: request.handle.id, state: "missing", actions: []}};
+        }});
+        const click = session.browser.clickPopup.bind(session.browser);
+        session.browser.clickPopup = (profile, button) => {
+            if (button === "button-approve") {
+                assert.equal(profile, profileIdentifier);
+                assert.equal(session.browser.popupState(profile), null, "The first rejected read has no native review state");
+                assert.equal(session.browser.popupPrimaryAction(profile), "observe");
+                assert.equal(session.browser.profile(profile).popup.harness.get(button).disabled, false);
+                refreshes += 1;
+            }
+            return click(profile, button);
+        };
+        session.inspect = async () => { session.lastInspectionAvailable = true; return [request]; };
+        try {
+            const tab = session.browser.openTab({profileIdentifier, url: "https://one.example/page"});
+            const other = session.browser.openTab({profileIdentifier: "00000000-0000-0000-0000-000000000002", url: "https://other.example/page"});
+            await session.pumpUntil(() => session.browser.configurationReady(tab.id, disconnected) &&
+                session.browser.configurationReady(other.id, disconnected));
+            await session.quiesce({rejectReviews});
+            assert.equal(refreshes, 1);
+            assert.deepEqual(commands, ["getApprovalState", "getApprovalState", ...(rejectReviews ? ["rejectRequest"] : [])]);
+            assert.equal(request.phase, rejectReviews ? "responded" : "queued");
+            assert.equal(session.browser.profile(profileIdentifier).popupSerial, 1, "Recovery must use Refresh without replacing the popup");
+            assert.equal(session.oracle.approvals.size, 0);
+            assert.equal(session.popupApprovals.size, 0);
             assert.equal(session.background.size, 0);
             assert.equal(session.scheduler.pending({kind: "message"}).length, 0);
             session.check();

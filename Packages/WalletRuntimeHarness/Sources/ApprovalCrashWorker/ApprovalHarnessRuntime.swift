@@ -94,6 +94,7 @@ final class HarnessRuntime {
     private var consentLabels = [RequestHandle: String]()
     private var reviewedRevisions = [RequestHandle: UInt64]()
     private var configurationKeys = Set<String>()
+    private let ingressGate = NativeIngressGate()
     private var heldClaims = [String: ExtensionBridge.ApprovalClaim]()
     private var activeCommands = Set<String>()
     private var activeWalletMutations = 0
@@ -441,12 +442,19 @@ final class HarnessRuntime {
     private func command(_ operation: String, payload: HarnessValue) async throws -> HarnessValue {
         switch operation {
         case "native":
-            guard let ingress = NativeRequestContext.extract(from: payload["message"].foundation,
-                profileIdentifier: payload["profileIdentifier"].string.flatMap(UUID.init(uuidString:))) else {
+            let ingress: NativeIngressGate.Admission
+            do {
+                ingress = try ingressGate.admit(payload["message"].foundation,
+                    profileIdentifier: payload["profileIdentifier"].string.flatMap(UUID.init(uuidString:)))
+            } catch NativeIngressGate.Failure.rejected(let rejection) {
+                guard let response = rejection.response else { throw HarnessError.invalid("Invalid native message") }
+                return try HarnessValue.convert(response.json)
+            } catch {
                 throw HarnessError.invalid("Invalid native transport context")
             }
+            defer { ingress.finish() }
             if let key = payload["message"]["configurationKey"].string { configurationKeys.insert(key) }
-            let reply = try await dispatcher.dispatch(message: ingress.message, context: ingress.context)
+            let reply = try await dispatcher.dispatch(ingress)
             return try HarnessValue.convert(reply.json)
         case "inspect": return try await inspect(profile: payload["profileIdentifier"].string.flatMap(UUID.init(uuidString:)))
         case "route":

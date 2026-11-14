@@ -204,7 +204,7 @@ public actor ExtensionBridge {
     }
 
     public struct Ingress: Sendable {
-        let request: SafariRequest
+        public let request: SafariRequest
         let canonicalData: Data
         let fingerprint: Data
         let authority: RequestAuthorityVersion
@@ -393,15 +393,6 @@ public actor ExtensionBridge {
             return false
         }
         return configurationKey[separator.upperBound...] == host
-    }
-
-    public static func isInternalPayloadAllowed(
-        command: InternalSafariRequest.Command,
-        byteCount: Int
-    ) -> Bool {
-        guard byteCount >= 0 else { return false }
-        if case .page(.rpc) = command { return byteCount <= WireProtocol.rpcMaximumRequestBytes }
-        return byteCount <= maximumPayloadBytes
     }
 
     public static func isValidEnqueueAttempt(_ value: String) -> Bool {

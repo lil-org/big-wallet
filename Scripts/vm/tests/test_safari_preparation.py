@@ -80,7 +80,8 @@ class SafariPreparationTests(unittest.TestCase):
     def snapshot(self, repository, exchange):
         paths = []
         for relative in ['Scripts/vm/test_manifest.mjs', 'Scripts/safari/scenarios.mjs', 'Scripts/safari/synchronization.mjs',
-                         'Scripts/vm/environment.json', 'Scripts/vm/test_policy.mjs', 'Scripts/vm/test_discovery.mjs', 'Scripts/vm/verify_discovery.mjs',
+                         'Scripts/vm/environment.json', 'Scripts/vm/test_policy.mjs', 'Scripts/vm/test_discovery.mjs', 'Scripts/vm/test_products.mjs',
+                         'Scripts/vm/verify_discovery.mjs',
                          'Scripts/vm/result_audit.mjs', 'Scripts/vm/guest_bootstrap.mjs', 'Scripts/approval_lifecycle/source_identity.mjs',
                          'Scripts/security_mutations/products.mjs', 'Scripts/security_mutations/manifest.json',
                          'Scripts/wallet_upgrade/contract.mjs']:

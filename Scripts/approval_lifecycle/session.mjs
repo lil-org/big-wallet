@@ -677,7 +677,8 @@ export class LifecycleSession {
                 if (index >= 0) { await popup.harness.get("clusters").children[index].click(); state = this.browser.popupState(profileIdentifier); }
             }
             const primaryAction = this.browser.popupPrimaryAction(profileIdentifier);
-            const retrySubject = {retryApproval: "retryApproval", retryTransaction: "retryTransaction", refresh: "getApprovalState"}[primaryAction];
+            const retrySubject = {retryApproval: "retryApproval", retryTransaction: "retryTransaction",
+                refresh: "getApprovalState", observe: "getApprovalState"}[primaryAction];
             if (decision === "approve" && (primaryAction !== "approve" || !state?.actions.includes("approve"))) { return false; }
             if (decision === "reject" && !state?.actions.includes("reject")) { return false; }
             if (decision === "retry" && !retrySubject) { return false; }
@@ -1044,7 +1045,10 @@ export class LifecycleSession {
                         __bwContext: {source: "worker", privateBrowsing: false}}, request.handle.profileIdentifier);
                     continue;
                 }
-                if (!["responded", "completed"].includes(request.phase)) { await this.decide({}, "reject", request); }
+                if (!["responded", "completed"].includes(request.phase)) {
+                    const observing = this.mode === "popup" && this.browser.popupPrimaryAction(request.handle.profileIdentifier) === "observe";
+                    await this.decide({}, observing ? "retry" : "reject", request);
+                }
             }
             if (this.background.size === 0) {
                 for (const profileIdentifier of profiles) { this.browser.wake(profileIdentifier); }

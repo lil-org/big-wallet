@@ -94,48 +94,24 @@ public struct NativeMessageDispatcher: Sendable {
     private var userRejected: ProviderResponseError { .init(message: messages[.canceled], code: ProviderResponseError.userRejectedCode) }
     private var privateBrowsingUnsupported: ProviderResponseError { .init(message: messages[.privateBrowsingUnsupported], code: 4200) }
 
-    public func dispatch(
-        message: WireProtocol.JSONObject,
-        context: NativeRequestContext,
-        rpcAdmissionDecision: @escaping @Sendable () -> Void = {}
-    ) async throws -> WireProtocol.ValidatedObject {
-        try await dispatchMessage(message: message, context: context, rpcAdmissionDecision: rpcAdmissionDecision)
-    }
-
-    private func dispatchMessage(
-        message: WireProtocol.JSONObject,
-        context: NativeRequestContext,
-        rpcAdmissionDecision: @escaping @Sendable () -> Void
-    ) async throws -> WireProtocol.ValidatedObject {
-        if message["subject"] != nil {
+    public func dispatch(_ admission: NativeIngressGate.Admission) async throws -> WireProtocol.ValidatedObject {
+        switch admission.request {
+        case .command(let request):
             return try await handleInternal(
-                message: message,
-                context: context,
-                rpcAdmissionDecision: rpcAdmissionDecision
+                request: request,
+                context: admission.context,
+                rpcAdmissionDecision: { admission.rpcAdmissionDecided() }
             )
+        case .dapp(let ingress):
+            return try await handleDapp(ingress: ingress, context: admission.context)
         }
-        return try await handleDapp(
-            message: message,
-            context: context
-        )
     }
 
     private func handleInternal(
-        message: WireProtocol.JSONObject,
+        request: InternalSafariRequest,
         context: NativeRequestContext,
         rpcAdmissionDecision: @escaping @Sendable () -> Void
     ) async throws -> WireProtocol.ValidatedObject {
-        guard let wire = WireProtocol.object(.nativeCommand, snapshot: message),
-              let request = try? InternalSafariRequest(wire: wire),
-              context.authorizes(request)
-        else { throw Error.invalidMessage }
-        switch request.command {
-        case .page(.rpc): break
-        default:
-            guard let data = ExtensionBridge.payloadData(message.json),
-                  ExtensionBridge.isInternalPayloadAllowed(command: request.command, byteCount: data.count)
-            else { throw Error.invalidMessage }
-        }
         switch request.command {
         case .openApp:
             guard policy == .native else { throw Error.unsupportedOperation }
@@ -197,19 +173,10 @@ public struct NativeMessageDispatcher: Sendable {
     }
 
     private func handleDapp(
-        message: WireProtocol.JSONObject,
+        ingress: ExtensionBridge.Ingress,
         context: NativeRequestContext
     ) async throws -> WireProtocol.ValidatedObject {
-        guard let wire = WireProtocol.object(.dappRequest, snapshot: message),
-              let request = SafariRequest(wire: wire),
-              context.authorizes(request) else { throw Error.invalidMessage }
-        let ingress: ExtensionBridge.Ingress
-        switch ExtensionBridge.admittedIngress(wire: wire, context: context) {
-        case .accepted(let value): ingress = value
-        case .payloadTooLarge:
-            return try response(.init(for: request, error: internalError), for: request)
-        case .invalid: throw Error.invalidMessage
-        }
+        let request = ingress.request
         if context.privateBrowsing {
             return try response(.init(for: request, error: privateBrowsingUnsupported), for: request)
         }

@@ -33,6 +33,50 @@ test("host planning requires unfiltered build and discovery before any exact XCT
     assert.ok(!compilation.some(stage => stage.nativeDiscovery || stage.nativeAudit));
 });
 
+test("focused package tests retain native checks without unrelated provider or standalone builds", () => {
+    for (const profile of ["all", "extended"]) {
+        const selected = {...job({stages: ["test"], onlyTesting: ["WalletNetworkingTests/SafariRPCServiceTests"],
+            configuration: "Debug", runtimePlatforms: ["macos"]}), profile};
+        const manifest = createManifest(selected);
+        const ids = manifest.map(stage => stage.id);
+        assert.deepEqual(ids, ["runtime.test-membership", "runtime.boundaries", "clean-test-runtime.macos.debug",
+            "build-runtime-tests.macos.debug", "discover.test-runtime.macos.debug"]);
+        const clean = manifest.find(stage => stage.id === "clean-test-runtime.macos.debug");
+        assert.deepEqual(clean.dependencies, ["runtime.test-membership", "runtime.boundaries"]);
+        const discovery = manifest.find(stage => stage.nativeDiscovery);
+        assert.deepEqual([...discovery.nativeDiscovery.targets].sort(),
+            ["WalletAuthorityTests", "WalletDomainTests", "WalletFlowsTests", "WalletNetworkingTests"]);
+        assert.ok(discovery.releaseStages.every(stage => !stage.dependencies.some(id => id.startsWith("runtime.api."))));
+    }
+});
+
+test("focused app tests retain provider build inputs but omit the provider test suite", () => {
+    const manifest = createManifest(job({stages: ["test"], onlyTesting: ["Tests macOS/NativeMessageDispatcherTests"],
+        configuration: "Debug"}));
+    const ids = new Set(manifest.map(stage => stage.id));
+    for (const id of ["provider.install", "protocol.check", "runtime.test-membership", "runtime.boundaries",
+        "clean-test.macos.debug", "build-tests.macos.debug", "discover.test.macos.debug"]) {
+        assert.ok(ids.has(id), id);
+    }
+    assert.ok(!ids.has("provider.test"));
+    assert.ok(![...ids].some(id => id.startsWith("runtime.api.") || id.startsWith("runtime.Wallet")));
+});
+
+test("unfiltered and mixed stages preserve their broader verification work", () => {
+    for (const payload of [
+        {stages: [], onlyTesting: ["WalletNetworkingTests"]},
+        {stages: ["test"], onlyTesting: []},
+        {stages: ["test", "build"], onlyTesting: ["WalletNetworkingTests"]},
+        {stages: ["runtime", "test"], onlyTesting: ["WalletNetworkingTests"]},
+    ]) {
+        const ids = new Set(createManifest(job({...payload, configuration: "Debug", runtimePlatforms: ["macos"]})).map(stage => stage.id));
+        for (const id of ["provider.test", "runtime.api.debug", "runtime.WalletDomain.debug", "runtime.WalletNetworking.debug",
+            "runtime.WalletAuthority.debug", "runtime.WalletFlows.debug"]) {
+            assert.ok(ids.has(id), `${JSON.stringify(payload)}: ${id}`);
+        }
+    }
+});
+
 test("every native discovery requires a fresh build through the correct container clean", () => {
     const manifest = createManifest(job());
     for (const discovery of manifest.filter(stage => stage.nativeDiscovery)) {

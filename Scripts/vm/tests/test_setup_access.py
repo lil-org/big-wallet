@@ -289,6 +289,30 @@ class SetupAccessTests(unittest.TestCase):
             password, self.keys, self.access['hostKeyAlias'], directory, self.exchange)
         self.assertEqual(self.record['bootstrapTools'], self.tools)
 
+    def test_explicit_repair_forces_installer_and_stays_out_of_retained_configuration(self):
+        self.record.update({'bootstrapTools': self.tools, 'bootstrapSourceDigest': host.bootstrap_source_digest(),
+                            'baseVerifiedAt': 'verified'})
+        host.guest_setup_password(self.module, self.state, self.record, self.config, self.exchange, None)
+        self.config.pop('autologin')
+        self.config.pop('provisioningRequestID')
+        self.args.repair_runtime = ['ios', 'visionos']
+        original_config = dict(self.config)
+        result, _ = self.run_doctor()
+        self.assertEqual(result['status'], 'passed')
+        self.module.GuestInstaller.assert_called_once()
+        self.assertEqual(self.module.GuestInstaller.call_args.kwargs['repair_platforms'], ('ios', 'visionos'))
+        self.assertEqual(self.config, original_config)
+        self.assertNotIn('repairPlatforms', self.record)
+        self.assertNotIn('repair_runtime', self.record)
+
+    def test_setup_rejects_repair_combined_with_storage_or_safari_modes_before_vm_access(self):
+        for options in (['--stage-only'], ['--safari-activation', '--interactive'], ['--repair-runtime', 'ios']):
+            with self.subTest(options=options), patch.object(host, 'validate_vm') as validate:
+                args = host.parser().parse_args(['setup', '--repair-runtime', 'ios', *options])
+                with self.assertRaises(host.RunnerError):
+                    host.setup(args, self.state, {})
+                validate.assert_not_called()
+
     def test_no_install_waits_for_banner_and_complete_export_before_readiness(self):
         transfer = Mock(poll=Mock(side_effect=[None, {'status': 'passed'}]))
         self.exchange_module.GuestExchange.side_effect = None
@@ -425,6 +449,41 @@ class SetupAccessTests(unittest.TestCase):
         self.assertEqual(result['guestFailure']['reason'], 'fixture install failure')
         hook.cancel.assert_called_once()
         self.assertFalse((self.state / 'active.json').exists())
+
+    def test_monitor_preserves_repair_prerequisite_through_existing_failure_result(self):
+        process = Mock()
+        process.poll.return_value = None
+        details = {'platform': 'ios', 'version': '27.2', 'buildVersion': '24B8117', 'phase': 'adding'}
+        hook = Mock(poll=Mock(return_value={'status': 'failed', 'reason': 'simulator_runtime_repair_required',
+                                          'returnCode': 1, 'runtimeRepairRequired': details}))
+        def stopped(*_):
+            process.poll.return_value = 0
+        with patch.object(host.subprocess, 'Popen', return_value=process), \
+                patch.object(host, 'stop_owned_process', side_effect=stopped), \
+                patch.object(host.time, 'monotonic', side_effect=itertools.count()), patch.object(host.time, 'sleep'):
+            result = host.monitor_vm(self.args, self.state, self.vm, self.exchange, self.run_id,
+                self.state / 'tools', {'minimumHostFreeBytes': 1}, 30, setup_hook=hook)
+        self.assertEqual(result['status'], 'blocked')
+        self.assertEqual(result['reason'], 'simulator_runtime_repair_required')
+        self.assertEqual(result['guestFailure']['runtimeRepairRequired'], details)
+        hook.cancel.assert_called_once()
+        self.assertFalse((self.state / 'active.json').exists())
+
+    def test_repair_retry_command_is_bound_to_requested_pins_and_quotes_actual_host_paths(self):
+        self.args.vm = self.state / "VM's source.vbvm"
+        self.args.xcode = self.state / 'Xcode $release.app'
+        state = self.state / 'state with spaces'
+        environment = {'runtimes': [{'platform': 'iOS', 'version': '27.2', 'buildVersion': '24B8117'}]}
+        details = {'platform': 'ios', 'version': '27.2', 'buildVersion': '24B8117', 'phase': None}
+        result = {'reason': 'simulator_runtime_repair_required', 'guestFailure': {'runtimeRepairRequired': details}}
+        command = host.runtime_repair_command(self.args, state, environment, result)
+        self.assertEqual(host.shlex.split(command), [str(host.ROOT / 'Scripts/test_vm.sh'), '--vm', str(self.args.vm),
+            '--state-dir', str(state), '--xcode', str(self.args.xcode), 'setup', '--repair-runtime', 'ios'])
+        for field, value in (('platform', 'macos'), ('platform', []), ('platform', {}),
+                             ('version', '27.3'), ('buildVersion', '24B9999'), ('phase', []), ('phase', 'complete')):
+            changed = {**result, 'guestFailure': {'runtimeRepairRequired': {**details, field: value}}}
+            self.assertIsNone(host.runtime_repair_command(self.args, state, environment, changed))
+        self.assertIsNone(host.runtime_repair_command(self.args, state, environment, {**result, 'reason': 'cancelled'}))
 
     def test_candidate_network_identity_is_stable_and_distinct_from_source(self):
         (self.vm / '.vbdata').mkdir()

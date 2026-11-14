@@ -24,7 +24,7 @@ final class NativeToolbarRoutingTests: XCTestCase {
         do {
             _ = try await fixture.dispatch(fixture.message(manual: false, id: 2), source: "worker")
             XCTFail("Worker transport admitted a page request")
-        } catch NativeMessageDispatcher.Error.invalidMessage {
+        } catch NativeIngressGate.Failure.invalidMessage {
         }
         XCTAssertEqual(fixture.log.values.withLock { $0.count }, 1)
     }
@@ -118,7 +118,7 @@ final class NativeToolbarRoutingTests: XCTestCase {
         do {
             _ = try await fixture.dispatch(message, source: "site")
             XCTFail("Page payload supplied trusted toolbar intent")
-        } catch NativeMessageDispatcher.Error.invalidMessage {
+        } catch NativeIngressGate.Failure.invalidMessage {
         }
         XCTAssertTrue(fixture.log.values.withLock { $0.isEmpty })
     }
@@ -182,6 +182,7 @@ final class NativeToolbarRoutingTests: XCTestCase {
     private final class Fixture {
         let root: URL
         let origin = "https://wallet.example"
+        let ingressGate = NativeIngressGate()
         let bridge: ExtensionBridge
         let log = ReconciliationLog()
         var completesDuringMaterialization = false
@@ -249,8 +250,9 @@ final class NativeToolbarRoutingTests: XCTestCase {
             }
             var transport = message
             transport[WireProtocol.nativeContextKey] = context
-            let ingress = try XCTUnwrap(NativeRequestContext.extract(from: transport, profileIdentifier: nil))
-            return try await dispatcher.dispatch(message: ingress.message, context: ingress.context).json
+            let ingress = try ingressGate.admit(transport, profileIdentifier: nil)
+            defer { ingress.finish() }
+            return try await dispatcher.dispatch(ingress).json
         }
     }
 }

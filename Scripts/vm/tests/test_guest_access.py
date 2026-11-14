@@ -54,18 +54,25 @@ class GuestAccessTests(unittest.TestCase):
         self.payload = self.root / 'provision'
         self.payload.mkdir(mode=0o700)
         (self.payload / 'config.json').write_text(json.dumps({'vmId': 'fixture', 'consoleUser': 'guest',
-            'runtimes': [{'dmgPath': 'runtime-0.dmg'}, {'dmgPath': 'runtime-1.dmg'}]}))
+            'runtimes': [{'platform': 'iOS', 'version': '27.2', 'buildVersion': '24B8117', 'dmgPath': 'runtime-0.dmg'},
+                         {'platform': 'visionOS', 'version': '27.2', 'buildVersion': '24N120', 'dmgPath': 'runtime-1.dmg'}]}))
         (self.payload / 'provision_guest.sh').write_text('#!/bin/sh\nexit 0\n')
-        (self.payload / 'provision_guest.mjs').write_text('export {};\n')
+        for name in ('provision_guest.mjs', 'runtime_verification.mjs', 'runtime_repair.mjs'):
+            (self.payload / name).write_text('export {};\n')
         (self.payload / 'autologin-passwordFile').write_bytes(b'fixture-secret-with-spaces')
         (self.payload / 'Xcode.tar').write_bytes(b'xcode archive fixture')
         (self.payload / 'runtime-0.dmg').write_bytes(b'first runtime fixture')
         (self.payload / 'runtime-1.dmg').write_bytes(b'second runtime fixture')
 
     def test_provisioning_payload_requires_the_installer_module(self):
-        (self.payload / 'provision_guest.mjs').unlink()
-        with self.assertRaisesRegex(access.GuestAccessError, 'required inputs'):
-            access._payload_files(self.payload, 'guest', 'big-wallet-vm-fixture')
+        for name in ('provision_guest.mjs', 'runtime_verification.mjs', 'runtime_repair.mjs'):
+            with self.subTest(name=name):
+                module = self.payload / name
+                contents = module.read_bytes()
+                module.unlink()
+                with self.assertRaisesRegex(access.GuestAccessError, 'required inputs'):
+                    access._payload_files(self.payload, 'guest', 'big-wallet-vm-fixture')
+                module.write_bytes(contents)
 
     def test_candidate_mac_requires_exact_fixed_network_and_real_paths(self):
         self.assertEqual(access.candidate_mac(self.candidate), MAC)
@@ -819,6 +826,19 @@ class GuestAccessTests(unittest.TestCase):
             subprocess.run(['/bin/sh', '-n'], input=command.encode(), check=True, capture_output=True)
             subprocess.run(['/bin/sh', '-n'], input=access.shlex.split(command)[-1].encode(), check=True, capture_output=True)
 
+    def test_runtime_repair_arguments_are_validated_and_apply_only_to_full_install(self):
+        marker = 'BIG_WALLET_PAYLOAD_' + 'a' * 32
+        stage = '/Volumes/BigWalletBuild/Provisioning/12345678-1234-1234-1234-123456789abc/provision'
+        command = access.installer_command('guest', marker, stage, 'fixture', repair_platforms=['ios', 'visionos'])
+        self.assertIn('--repair-runtime ios --repair-runtime visionos', command)
+        self.assertNotIn('--repair-runtime', access.installer_command('guest', marker, stage, 'fixture'))
+        for platforms in (['ios'], ['ios', 'ios'], ['macos'], ['ios; bad'], 'ios'):
+            with self.subTest(platforms=platforms), self.assertRaises(access.GuestAccessError):
+                access.installer_command('guest', marker, repair_platforms=platforms)
+        for platforms in (['ios', 'ios'], ['macos'], ['ios; bad'], 'ios'):
+            with self.subTest(platforms=platforms), self.assertRaises(access.GuestAccessError):
+                access.installer_command('guest', marker, stage, 'fixture', repair_platforms=platforms)
+
     def test_payload_framing_keeps_tar_aligned_with_or_without_sudo_consuming_password(self):
         marker = 'BIG_WALLET_PAYLOAD_' + 'c' * 32
         root_script = access.shlex.split(access.installer_command('guest', marker))[-1]
@@ -891,7 +911,7 @@ class GuestAccessTests(unittest.TestCase):
         environment = launch.call_args.kwargs['env']
         self.assertTrue(child.stdin.sent.startswith(b'fixture-secret-with-spaces\nBIG_WALLET_PAYLOAD_'))
         with tarfile.open(fileobj=io.BytesIO(child.stdin.sent.split(b'\n', 2)[2])) as archive:
-            self.assertEqual(set(archive.getnames()), {'config.json', 'provision_guest.sh', 'provision_guest.mjs', 'autologin-passwordFile'})
+            self.assertEqual(set(archive.getnames()), {'config.json', *access.PROVISIONING_SOURCE_NAMES, 'autologin-passwordFile'})
             self.assertTrue(all(entry.uid == 0 and entry.gid == 0 for entry in archive.getmembers()))
         for visible in (repr(command), repr(environment), installer.askpass.read_text()):
             self.assertNotIn('fixture-secret-with-spaces', visible)
@@ -987,6 +1007,56 @@ class GuestAccessTests(unittest.TestCase):
         return {'stagingDirectory': '/Volumes/BigWalletBuild/Provisioning/12345678-1234-1234-1234-123456789abc/provision',
                 'requiredInputs': required or [], **extra}
 
+    def test_typed_repair_failure_is_bound_to_current_install_and_is_not_success(self):
+        first, second = self.fake_child(), self.fake_child()
+        details = {'platform': 'ios', 'version': '27.2', 'buildVersion': '24B8117', 'phase': 'adding'}
+        with patch.object(access.subprocess, 'Popen', side_effect=[first, second]) as launch:
+            installer = access.GuestInstaller('192.168.64.3', 'guest', self.password, self.known, 'big-wallet-vm-fixture', self.work,
+                                              provision_directory=self.payload, repair_platforms=['ios'])
+            installer.producer.join()
+            installer.output.write(b'BIG_WALLET_PROVISIONING_STAGE=' + json.dumps(self.preparation_receipt()).encode() + b'\n')
+            first.code = 0
+            self.assertIsNone(installer.poll())
+            installer.producer.join()
+            installer.output.write(b'BIG_WALLET_RUNTIME_REPAIR_REQUIRED=' + json.dumps(details).encode() + b'\n')
+            second.code = 1
+            self.assertEqual(installer.poll(), {'status': 'failed', 'reason': 'simulator_runtime_repair_required',
+                                              'returnCode': 1, 'runtimeRepairRequired': details})
+        self.assertNotIn('--repair-runtime', launch.call_args_list[0].args[0][-1])
+        self.assertIn('--repair-runtime ios', launch.call_args_list[1].args[0][-1])
+        self.assertNotIn('repair', (self.payload / 'config.json').read_text())
+
+    def test_repair_markers_cannot_override_prepare_failure_uncertain_ssh_or_cancellation(self):
+        details = {'platform': 'ios', 'version': '27.2', 'buildVersion': '24B8117', 'phase': None}
+        marker = b'BIG_WALLET_RUNTIME_REPAIR_REQUIRED=' + json.dumps(details).encode() + b'\n'
+        for phase, code, cancel in [('prepare', 1, False), ('install', 255, False), ('install', -15, False), ('install', None, True)]:
+            with self.subTest(phase=phase, code=code, cancel=cancel):
+                child = self.fake_child()
+                with patch.object(access.subprocess, 'Popen', return_value=child), patch.object(access.os, 'killpg'):
+                    installer = access.GuestInstaller('192.168.64.3', 'guest', self.password, self.known, 'big-wallet-vm-fixture', self.work,
+                                                      provision_directory=self.payload)
+                    installer.producer.join()
+                    installer.phase = phase
+                    installer.output.write(marker)
+                    child.code = code
+                    if cancel:
+                        installer.cancel()
+                    result = installer.poll()
+                self.assertEqual(result['reason'], 'guest_install_cancelled' if cancel else 'guest_install_failed')
+                self.assertNotIn('runtimeRepairRequired', result)
+
+    def test_runtime_repair_diagnostics_reject_invalid_duplicate_and_unbound_markers(self):
+        pins = json.loads((self.payload / 'config.json').read_text())['runtimes']
+        details = {'platform': 'ios', 'version': '27.2', 'buildVersion': '24B8117', 'phase': None}
+        encode = lambda value: b'BIG_WALLET_RUNTIME_REPAIR_REQUIRED=' + json.dumps(value).encode() + b'\n'
+        self.assertEqual(access.runtime_repair_diagnostic(encode(details), pins), details)
+        invalid = [encode(details) * 2, b'BIG_WALLET_RUNTIME_REPAIR_REQUIRED={\n',
+                   encode({**details, 'buildVersion': '24B9999'}), encode({**details, 'platform': 'macos'}),
+                   encode({**details, 'phase': 'complete'}), encode({**details, 'command': 'do something'}),
+                   encode({**details, 'version': 'x' * 1024})]
+        for output in invalid:
+            self.assertIsNone(access.runtime_repair_diagnostic(output, pins))
+
     def test_prepare_success_starts_full_phase_with_only_requested_large_inputs(self):
         first, second = self.fake_child(), self.fake_child()
         with patch.object(access.subprocess, 'Popen', side_effect=[first, second]) as launch:
@@ -1002,7 +1072,7 @@ class GuestAccessTests(unittest.TestCase):
             self.assertTrue(installer.askpass.exists())
             installer.producer.join()
             with tarfile.open(fileobj=io.BytesIO(second.stdin.sent.split(b'\n', 2)[2])) as archive:
-                self.assertEqual(set(archive.getnames()), {'config.json', 'provision_guest.sh', 'provision_guest.mjs', 'autologin-passwordFile',
+                self.assertEqual(set(archive.getnames()), {'config.json', *access.PROVISIONING_SOURCE_NAMES, 'autologin-passwordFile',
                                                           'Xcode.tar', 'runtime-1.dmg'})
             self.assertIsNone(installer.poll())
             second.code = 0

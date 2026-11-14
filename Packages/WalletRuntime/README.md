@@ -321,6 +321,9 @@ skipped, unexpected, and zero-test results.
 Run native validation only through `Scripts/test_vm.sh`; see
 [`Scripts/vm/README.md`](../../Scripts/vm/README.md). Focused package compilation is
 available through `--stage runtime`; executing XCTest requires `--stage test`.
+An explicitly filtered test-only run retains static boundaries and membership
+checks but omits standalone module and ordinary-import API compilation. Add
+`--stage build` when compiler-boundary verification is required.
 The complete acceptance run includes builds, tests, thread and address sanitizers, lifecycle
 exploration, wire fuzzing, and Safari integration in the VM.
 

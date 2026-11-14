@@ -5,8 +5,9 @@ import {open, readdir, realpath, writeFile} from "node:fs/promises";
 import {homedir} from "node:os";
 import {basename, dirname, isAbsolute, join, resolve} from "node:path";
 import {isDeepStrictEqual} from "node:util";
-import {bindTestPlan, bundleExecutable, derivedDataLocation} from "../security_mutations/products.mjs";
-import {EXCHANGE_PATH} from "./guest_bootstrap.mjs";
+import {bindTestPlan} from "../security_mutations/products.mjs";
+import {buildWorkspaceIdentity, captureDerivedDataRoots, captureProductInventory, discoveryProductsDirectory, recordedProductInventory} from "./test_products.mjs";
+import {BUILD_VOLUME, EXCHANGE_PATH} from "./guest_bootstrap.mjs";
 import {auditASanLog, auditNativeResult, resultBundleInventory} from "./result_audit.mjs";
 import {commandForStage} from "./test_manifest.mjs";
 import {APP_TEST_CLASS_PLATFORMS, APP_TEST_TARGETS, isCompileOnlyTarget, matchesTestSelector} from "./test_policy.mjs";
@@ -14,49 +15,7 @@ import {APP_TEST_CLASS_PLATFORMS, APP_TEST_TARGETS, isCompileOnlyTarget, matches
 const maximumBytes = 16 * 1024 * 1024;
 const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 
-export function discoveryProductsDirectory(log, {directory, canonicalDirectory}) {
-    if (!isAbsolute(canonicalDirectory ?? "") || resolve(canonicalDirectory) !== canonicalDirectory ||
-        !canonicalDirectory.endsWith("/DerivedData")) { throw new Error("Test discovery requires default DerivedData"); }
-    const location = derivedDataLocation(log, directory);
-    return join(canonicalDirectory, basename(location.root), "Build/Products");
-}
-
-function testBundles(bindings) {
-    return bindings.flatMap(({target, bundle, host}) => [
-        {target, role: "test", bundle}, ...(host ? [{target, role: "host", bundle: host}] : []),
-    ]);
-}
-
-function linkedProducts(log, build, products, bundles, platform) {
-    const root = derivedDataLocation(log, build.directory).products;
-    const owners = new Map(bundles.map(owner => [platform === "macos" ? join(owner.bundle, "Contents/MacOS") : owner.bundle, owner]));
-    const linked = new Map();
-    for (const line of log.split(/\r?\n/)) {
-        const command = /^(Ld|Copy) ((?:\\.|[^\s])+)/.exec(line);
-        if (!command) { continue; }
-        const output = command[2].replace(/\\(.)/g, "$1");
-        if (!output.startsWith(root + "/")) { continue; }
-        const path = join(products, output.slice(root.length + 1));
-        if (!path.startsWith(products + "/")) { continue; }
-        const owner = owners.get(dirname(path));
-        if (command[1] === "Ld" && owner) {
-            if (!path.endsWith(".dylib") || path.endsWith(".debug.dylib")) {
-                linked.set(path, {target: owner.target, role: owner.role, path});
-            }
-            continue;
-        }
-        const bundle = command[1] === "Ld" ? /^(.+\.framework)\/(?:Versions\/[^/]+\/)?[^/]+$/.exec(path)?.[1] : path;
-        if (!bundle?.endsWith(".framework")) { continue; }
-        if (command[1] === "Copy" && !bundles.some(owner => bundle.startsWith(owner.bundle + "/"))) { continue; }
-        const binary = join(bundle, basename(bundle, ".framework"));
-        linked.set(binary, {role: "framework", path: binary});
-    }
-    for (const [directory, owner] of owners) {
-        const mains = [...linked.keys()].filter(path => dirname(path) === directory && !path.endsWith(".dylib"));
-        if (mains.length !== 1) { throw new Error(`Build log must identify one ${owner.role} executable for ${owner.target}`); }
-    }
-    return linked;
-}
+export {buildWorkspaceIdentity, discoveryProductsDirectory} from "./test_products.mjs";
 
 export function parseTestEnumeration(value, {targets, testPlan, platform, runtime}) {
     if (!value || typeof value !== "object" || !Array.isArray(value.errors) || value.errors.length ||
@@ -178,6 +137,17 @@ export async function verifyArchivedTestRuns(stages, report, artifacts) {
             report.preflight?.destinations?.[platform] !== destination) { throw new Error(`Missing or inconsistent XCTest destination: ${stage.id}`); }
         let command;
         if (stage.nativeDiscovery) {
+            const build = stage.dependencies.map(id => records.get(id)).find(value => value?.id.startsWith("build-"));
+            const username = report.identity?.consoleUser;
+            const checkout = typeof username === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(username)
+                ? join(BUILD_VOLUME, "Workspaces", username, "big-wallet") : null;
+            const cwd = checkout && resolve(checkout, stage.cwd ?? ".");
+            if (!build || build.exitCode !== 0 || build.signal !== null || !checkout ||
+                !(cwd === checkout || cwd.startsWith(`${checkout}/`)) ||
+                !isDeepStrictEqual(record.discovery.build?.command, build.command) || record.discovery.build.cwd !== cwd) {
+                throw new Error(`Unexpected XCTest build command or source directory: ${stage.id}`);
+            }
+            buildWorkspaceIdentity(build.command, cwd);
             const output = join(guestArtifacts, `${stage.id}.discovery.json`);
             command = ["xcodebuild", ...enumerationArguments(record.discovery.plan.path, destination, output)];
             if (!isDeepStrictEqual(record.discovery.command, command)) { throw new Error(`Unexpected XCTest enumeration command: ${stage.id}`); }
@@ -228,6 +198,7 @@ export async function readRecordedDiscovery(stage, record, artifacts) {
     const prefix = `${stage.id}.discovery`;
     if (!evidence || evidence.artifact !== `${prefix}.json` || evidence.log !== `${stage.id}.log` ||
         !stage.dependencies?.some(id => id.startsWith("build-") && evidence.build?.artifact === `${id}.log`) ||
+        evidence.roots?.artifact !== `${prefix}.roots.json` || evidence.metadata?.artifact !== `${prefix}.products.json` ||
         evidence.plan?.artifact !== `${prefix}.xctestrun` || evidence.plan.decodedArtifact !== `${prefix}.plan.json` ||
         typeof evidence.plan.path !== "string" || !isAbsolute(evidence.plan.path) || resolve(evidence.plan.path) !== evidence.plan.path ||
         !evidence.plan.path.includes("/DerivedData/") || !evidence.plan.path.endsWith(".xctestrun") ||
@@ -235,10 +206,13 @@ export async function readRecordedDiscovery(stage, record, artifacts) {
     const raw = await readDiscoveryFile(join(artifacts, evidence.artifact));
     const buildLog = await readDiscoveryFile(join(artifacts, evidence.build.artifact));
     const planBytes = await readDiscoveryFile(join(artifacts, evidence.plan.artifact));
+    const rootsBytes = await readDiscoveryFile(join(artifacts, evidence.roots.artifact));
+    const metadataBytes = await readDiscoveryFile(join(artifacts, evidence.metadata.artifact));
     if (digest(raw) !== evidence.sha256 || digest(buildLog) !== evidence.build.sha256 ||
-        digest(planBytes) !== evidence.plan.sha256) { throw new Error("XCTest discovery artifact identity changed"); }
-    if (discoveryProductsDirectory(buildLog.toString("utf8"), evidence.build) !== dirname(evidence.plan.path)) {
-        throw new Error("Archived XCTest plan does not match its build log directory");
+        digest(planBytes) !== evidence.plan.sha256 || digest(rootsBytes) !== evidence.roots.sha256 ||
+        digest(metadataBytes) !== evidence.metadata.sha256) { throw new Error("XCTest discovery artifact identity changed"); }
+    if (discoveryProductsDirectory(JSON.parse(rootsBytes), evidence.build) !== dirname(evidence.plan.path)) {
+        throw new Error("Archived XCTest plan does not match its build workspace directory");
     }
     const decoded = JSON.parse(execFileSync("/usr/bin/plutil", ["-convert", "json", "-o", "-", join(artifacts, evidence.plan.artifact)],
         {encoding: "utf8", maxBuffer: maximumBytes, timeout: 30_000}));
@@ -253,7 +227,8 @@ export async function readRecordedDiscovery(stage, record, artifacts) {
     const bindings = bindTestPlan(decoded, {family: policy.runtime ? "runtime" : policy.platform === "macos" ? "macos-app" : "ios-app",
         selectors: policy.targets, products, configuration: policy.configuration, platform: policy.platform});
     if (!bindings) { throw new Error("Archived XCTest plan does not match its configuration and platform"); }
-    const expected = linkedProducts(buildLog.toString("utf8"), evidence.build, products, testBundles(bindings), policy.platform);
+    const expected = new Map((await recordedProductInventory(products, bindings, policy, JSON.parse(metadataBytes)))
+        .map(product => [product.path, product]));
     for (const binary of evidence.products) {
         const linked = expected.get(binary?.path);
         if (!linked || binary.role !== linked.role || binary.target !== linked.target ||
@@ -262,7 +237,7 @@ export async function readRecordedDiscovery(stage, record, artifacts) {
         }
         expected.delete(binary.path);
     }
-    if (expected.size) { throw new Error(`Missing linked XCTest product: ${expected.keys().next().value}`); }
+    if (expected.size) { throw new Error(`Missing bound XCTest product: ${expected.keys().next().value}`); }
     await readDiscoveryFile(join(artifacts, evidence.log));
     return {identifiers, evidence};
 }
@@ -360,25 +335,45 @@ export async function readDiscoveryFile(path) {
     } finally { await file.close(); }
 }
 
+export async function runDiscoveryCommand(command, args, {execute, workspace, stopRequested, ...options}) {
+    const result = await execute(command, args, {cwd: workspace, timeoutSeconds: 120, stopRequested, ...options});
+    if (result.cancelled) { throw Object.assign(new Error("Test discovery cancelled"), {cancelled: true}); }
+    if (result.code !== 0 || result.timedOut || result.error) {
+        const diagnostic = value => String(value ?? "").replace(
+            /\b((?:ALCHEMY|BW_TEST_VM)[A-Z0-9_]*(?:KEY|PASSWORD|SECRET|TOKEN)[A-Z0-9_]*)\s*=\s*[^\r\n]*/gi, "$1=[redacted]"
+        ).slice(-2048).trim();
+        const details = [
+            `Test discovery command failed: ${basename(command)} ${args[0] ?? ""}`,
+            `exit=${result.code ?? "null"} signal=${result.signal ?? "none"} timedOut=${result.timedOut === true}`,
+            ...["error", "stderr", "stdout"].flatMap(key => {
+                const value = diagnostic(result[key] ?? (key === "stdout" ? result.output : ""));
+                return value ? [`${key}: ${value}`] : [];
+            }),
+        ];
+        throw new Error(details.join("\n"));
+    }
+    return result;
+}
+
 export async function captureTestDiscovery({stage, buildCommand, buildLog, artifacts, workspace, destination, execute, stopRequested}) {
     const policy = stage.nativeDiscovery;
     const targets = policy.targets;
     const family = policy.runtime ? "runtime" : policy.platform === "macos" ? "macos-app" : "ios-app";
-    const run = async (command, args, options = {}) => {
-        const result = await execute(command, args, {cwd: workspace, timeoutSeconds: 120, stopRequested, ...options});
-        if (result.cancelled) { throw Object.assign(new Error("Test discovery cancelled"), {cancelled: true}); }
-        if (result.code !== 0 || result.timedOut || result.error) { throw new Error("Test discovery command failed"); }
-        return result;
-    };
-    if (buildCommand?.[0] !== "xcodebuild" || buildCommand[1] !== "build-for-testing") {
-        throw new Error("Test discovery requires its successful test build command");
+    const run = (command, args, options = {}) => runDiscoveryCommand(command, args, {execute, workspace, stopRequested, ...options});
+    const workspaceIdentity = buildWorkspaceIdentity(buildCommand, workspace);
+    if (await realpath(workspace) !== workspace || await realpath(workspaceIdentity) !== workspaceIdentity) {
+        throw new Error("XCTest build source may not traverse symlinks");
     }
     const prefix = `${stage.id}.discovery`;
     const rawBuildLog = await readDiscoveryFile(join(artifacts, buildLog));
     const directory = join(homedir(), "Library/Developer/Xcode/DerivedData");
     const canonicalDirectory = await realpath(directory);
-    const build = {artifact: buildLog, sha256: digest(rawBuildLog), directory, canonicalDirectory};
-    const products = discoveryProductsDirectory(rawBuildLog.toString("utf8"), build);
+    const build = {artifact: buildLog, sha256: digest(rawBuildLog), directory, canonicalDirectory, command: buildCommand, cwd: workspace};
+    const roots = await captureDerivedDataRoots(build, readDiscoveryFile);
+    const rootsBytes = Buffer.from(JSON.stringify(roots, null, 2) + "\n");
+    if (rootsBytes.length > maximumBytes) { throw new Error("DerivedData root metadata exceeds the artifact limit"); }
+    await writeFile(join(artifacts, `${prefix}.roots.json`), rootsBytes, {flag: "wx", mode: 0o600});
+    const products = discoveryProductsDirectory(roots, build);
     if (await realpath(products) !== products) { throw new Error("XCTest products may not be redirected outside default DerivedData"); }
     const names = (await readdir(products)).filter(name => name.endsWith(".xctestrun")).sort();
     if (names.length > 64) { throw new Error("Too many built XCTest plans"); }
@@ -398,22 +393,23 @@ export async function captureTestDiscovery({stage, buildCommand, buildLog, artif
     const testPlan = validateDiscoveryPlan(plan.decoded, policy);
     await writeFile(join(artifacts, `${prefix}.xctestrun`), plan.raw, {flag: "wx", mode: 0o600});
     await writeFile(join(artifacts, `${prefix}.plan.json`), JSON.stringify(plan.decoded, null, 2) + "\n", {flag: "wx", mode: 0o600});
-    const bundles = testBundles(plan.binding);
-    const linked = linkedProducts(rawBuildLog.toString("utf8"), build, products, bundles, policy.platform);
-    for (const {bundle, role} of bundles) {
-        const infoPath = join(bundle, policy.platform === "macos" ? "Contents/Info.plist" : "Info.plist");
-        if (!(await realpath(infoPath)).startsWith(`${products}/`)) { throw new Error("XCTest metadata escaped the product root"); }
-        const converted = await run("/usr/bin/plutil", ["-convert", "json", "-o", "-", infoPath]);
-        const path = bundleExecutable(bundle, JSON.parse(converted.stdout ?? converted.output), policy.platform === "macos" ? "macos-app" : "ios-app");
-        if (linked.get(path)?.role !== role || path.endsWith(".dylib")) { throw new Error(`XCTest bundle executable was not linked: ${path}`); }
-    }
+    const inventory = await captureProductInventory(products, plan.binding, policy, async path => {
+        await readDiscoveryFile(path);
+        const extracted = await run("/usr/bin/plutil", ["-extract", "CFBundleExecutable", "raw", "-expect", "string", "-n", "-o", "-", path]);
+        return {CFBundleExecutable: extracted.stdout ?? extracted.output};
+    });
+    const metadataBytes = Buffer.from(JSON.stringify(inventory.metadata, null, 2) + "\n");
+    if (metadataBytes.length > maximumBytes) { throw new Error("XCTest product metadata exceeds the artifact limit"); }
+    await writeFile(join(artifacts, `${prefix}.products.json`), metadataBytes, {flag: "wx", mode: 0o600});
     const binaries = [];
-    for (const binary of linked.values()) { binaries.push({...binary, ...await hashBoundProduct(binary)}); }
+    for (const binary of inventory.products) { binaries.push({...binary, ...await hashBoundProduct(binary)}); }
     const args = enumerationArguments(plan.path, destination, join(artifacts, `${prefix}.json`));
     await run("xcodebuild", args, {timeoutSeconds: 300, logPath: join(artifacts, `${stage.id}.log`)});
     const raw = await readDiscoveryFile(join(artifacts, `${prefix}.json`));
     const identifiers = parseTestEnumeration(JSON.parse(raw), {...policy, testPlan});
     const evidence = {artifact: `${prefix}.json`, sha256: digest(raw), log: `${stage.id}.log`, command: ["xcodebuild", ...args], build,
+        roots: {artifact: `${prefix}.roots.json`, sha256: digest(rootsBytes)},
+        metadata: {artifact: `${prefix}.products.json`, sha256: digest(metadataBytes)},
         plan: {path: plan.path, artifact: `${prefix}.xctestrun`, decodedArtifact: `${prefix}.plan.json`, sha256: digest(plan.raw)},
         testPlan, targets, products: binaries, identifiers};
     await verifyDiscoveryProducts(evidence);

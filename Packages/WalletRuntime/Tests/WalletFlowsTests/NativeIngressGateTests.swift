@@ -53,21 +53,24 @@ final class NativeIngressGateTests: XCTestCase {
     }
 
     func testEncodedPayloadLimitIncludesEscapingButExcludesTheTransportContext() throws {
-        let raw = dapp(object: ["text": String(repeating: "\u{01}", count: 16)])
-        var payload = raw
-        payload.removeValue(forKey: WireProtocol.nativeContextKey)
-        let encodedBytes = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]).count
-        var limits = NativeIngressGate.Limits()
-        limits.maximumPayloadBytes = encodedBytes
-        let exact = NativeIngressGate(limits: limits)
-        let admitted = try exact.admit(raw, profileIdentifier: nil)
-        admitted.finish()
-        assertDrained(exact)
+        for replayOnly: Bool? in [nil, false, true] {
+            var raw = dapp(object: ["text": String(repeating: "\u{01}", count: 16)])
+            raw["replayOnly"] = replayOnly
+            var payload = raw
+            payload.removeValue(forKey: WireProtocol.nativeContextKey)
+            let encodedBytes = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]).count
+            var limits = NativeIngressGate.Limits()
+            limits.maximumPayloadBytes = encodedBytes
+            let exact = NativeIngressGate(limits: limits)
+            let admitted = try exact.admit(raw, profileIdentifier: nil)
+            admitted.finish()
+            assertDrained(exact)
 
-        limits.maximumPayloadBytes -= 1
-        let limited = NativeIngressGate(limits: limits)
-        assertRejected(limited, raw, reason: .requestTooLarge)
-        assertDrained(limited)
+            limits.maximumPayloadBytes -= 1
+            let limited = NativeIngressGate(limits: limits)
+            assertRejected(limited, raw, reason: .requestTooLarge)
+            assertDrained(limited)
+        }
     }
 
     func testNodeBudgetCountsKeysValuesAndContainersAtItsExactBoundary() throws {
@@ -160,9 +163,14 @@ final class NativeIngressGateTests: XCTestCase {
         let gate = NativeIngressGate()
         let admitted = try gate.admit(rpc(body: body), profileIdentifier: profile)
 
-        XCTAssertEqual(admitted.message["body"] as? String, body)
-        XCTAssertEqual(admitted.message["chainId"] as? String, "0x1")
-        XCTAssertNil(admitted.message[WireProtocol.nativeContextKey])
+        guard case .command(let request) = admitted.request,
+              case .page(.rpc(let admittedBody, let chainID)) = request.command else {
+            admitted.finish()
+            return XCTFail("Expected an admitted RPC command")
+        }
+        XCTAssertEqual(admittedBody, body)
+        XCTAssertEqual(chainID, "0x1")
+        XCTAssertEqual(admitted.id, 1)
         XCTAssertEqual(admitted.context.profileIdentifier, profile)
         XCTAssertEqual(gate.statistics.inspecting, 1)
         XCTAssertGreaterThan(gate.statistics.retainedBytes, maximum)
@@ -488,7 +496,11 @@ final class NativeIngressGateTests: XCTestCase {
 
         XCTAssertTrue(admitted.context.privateBrowsing)
         XCTAssertEqual(admitted.context.profileIdentifier, profile)
-        XCTAssertEqual(admitted.message["configurationKey"] as? String, Self.origin)
+        guard case .command(let request) = admitted.request,
+              case .page(.getLatestConfiguration(let configurationKey)) = request.command else {
+            return XCTFail("Expected the original configuration command")
+        }
+        XCTAssertEqual(configurationKey, Self.origin)
         guard case .site(let site, let document) = admitted.context.source else {
             return XCTFail("Expected the original site context")
         }

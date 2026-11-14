@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
 import {readFileSync} from "node:fs";
-import {mkdir, mkdtemp, realpath, rm, symlink, writeFile} from "node:fs/promises";
+import {mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import test from "node:test";
-import {discoveryProductsDirectory, executionStage, parseTestEnumeration, readRecordedDiscovery, resolveTestSelection, validateDiscoveryPlan, verifyArchivedTestRuns, verifyDiscoveryProducts} from "../test_discovery.mjs";
+import {executionStage, parseTestEnumeration, readRecordedDiscovery, resolveTestSelection, runDiscoveryCommand, validateDiscoveryPlan, verifyArchivedTestRuns, verifyDiscoveryProducts} from "../test_discovery.mjs";
 import {auditNativeResult} from "../result_audit.mjs";
 import {APP_TEST_CLASS_PLATFORMS, APP_TEST_TARGETS, RUNTIME_TEST_TARGETS} from "../test_policy.mjs";
 import {ASAN_RUNTIME_TESTS} from "../test_manifest.mjs";
@@ -17,7 +17,6 @@ const makeValue = identifiers => ({errors: [], values: [{testPlan: "Fixture", di
     enabledTests: identifiers.map(identifier => ({identifier}))}]});
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 const directory = "/Users/fixture/Library/Developer/Xcode/DerivedData";
-const buildLogFor = root => `Build description path: ${root}/Build/Intermediates.noindex/XCBuildData/fixture.xcbuilddata\n`;
 
 async function temporary(run) {
     const root = await realpath(await mkdtemp(join(tmpdir(), "wallet-discovery-")));
@@ -32,20 +31,37 @@ async function writeResultBundle(bundle) {
     return hash(["Data/data.fixture", "4", "Info.plist", "4", "database.sqlite3", "2", ""].join("\0"));
 }
 
-test("fresh build logs bind default DerivedData and reject unchanged builds without a product root", () => {
-    const log = buildLogFor(`${directory}/Wallet`);
-    const location = {directory, canonicalDirectory: directory};
-    assert.equal(discoveryProductsDirectory(log, location), `${directory}/Wallet/Build/Products`);
-    assert.equal(discoveryProductsDirectory(log, {...location, canonicalDirectory: "/Volumes/BigWalletBuild/Users/fixture/DerivedData"}),
-        "/Volumes/BigWalletBuild/Users/fixture/DerivedData/Wallet/Build/Products");
-    for (const invalid of ["Build succeeded", log + buildLogFor(`${directory}/Other`), buildLogFor("/tmp/Wallet"),
-        buildLogFor(`${directory}/Wallet/../Wallet`)]) {
-        assert.throws(() => discoveryProductsDirectory(invalid, location));
-    }
-    for (const changed of [{directory: "/tmp/DerivedData"}, {canonicalDirectory: "relative/DerivedData"}]) {
-        assert.throws(() => discoveryProductsDirectory(log, {...location, ...changed}), /default DerivedData/);
-    }
-});
+test("failed discovery commands retain their log and report bounded actionable diagnostics", async () => temporary(async root => {
+    const logPath = join(root, "discover.fixture.log");
+    const stderr = "xcodebuild: error: Fixture enumeration failed\n";
+    const stdout = "x".repeat(5000) + "\nALCHEMY_JWT_REQUEST_PROOF_KEY=fixture-secret\n";
+    const command = ["xcodebuild", "test-without-building", "-xctestrun", "do-not-print"];
+    await assert.rejects(runDiscoveryCommand(command[0], command.slice(1), {
+        workspace: root, logPath,
+        execute: async (name, args, options) => {
+            assert.equal(name, "xcodebuild");
+            assert.deepEqual(args, command.slice(1));
+            assert.equal(options.cwd, root);
+            assert.equal(options.timeoutSeconds, 120);
+            assert.equal(options.logPath, logPath);
+            await writeFile(options.logPath, stderr);
+            return {code: 64, signal: null, timedOut: false, error: "fixture enumeration failed", stdout, stderr};
+        },
+    }), error => {
+        assert.match(error.message, /xcodebuild test-without-building/);
+        assert.match(error.message, /exit=64 signal=none timedOut=false/);
+        assert.match(error.message, /error: fixture enumeration failed/);
+        assert.match(error.message, /stderr: xcodebuild: error: Fixture enumeration failed/);
+        assert.match(error.message, /ALCHEMY_JWT_REQUEST_PROOF_KEY=\[redacted\]/);
+        assert.ok(!error.message.includes("fixture-secret") && !error.message.includes("do-not-print"));
+        assert.ok(error.message.length < 7000);
+        return true;
+    });
+    assert.equal(await readFile(logPath, "utf8"), stderr);
+    await assert.rejects(runDiscoveryCommand("xcodebuild", ["test-without-building"], {
+        workspace: root, execute: async () => ({code: null, signal: "SIGTERM", timedOut: true, stdout: "", stderr: ""}),
+    }), /exit=null signal=SIGTERM timedOut=true/);
+}));
 
 test("Xcode 27.2 flat output yields unique target-qualified identifiers", () => {
     const identifiers = parseTestEnumeration(fixture, policy);
@@ -190,7 +206,7 @@ test("simulator sanitizer libraries must match the platform and requested instru
 test("host acceptance compares both commands and re-audits the exported XCTest results", async () => temporary(async artifacts => {
     const target = "Tests iOS";
     const selected = `${target}/Suite/testSelected`;
-    const discovery = {id: "discover.test.ios.debug", command: "xcodebuild", nativeDiscovery: {
+    const discovery = {id: "discover.test.ios.debug", command: "xcodebuild", dependencies: ["build-tests.ios.debug"], nativeDiscovery: {
         ...policy, platform: "ios", runtime: false, targets: [target], selectors: [selected], executionID: "test.ios.debug",
     }};
     const plan = "/fixture/DerivedData/Wallet/Build/Products/ios.xctestrun";
@@ -209,9 +225,11 @@ test("host acceptance compares both commands and re-audits the exported XCTest r
     const tree = {testNodes: [{nodeType: "Unit test bundle", name: target, children: [
         {nodeType: "Test Case", nodeIdentifier: "Suite/testSelected()", result: "Passed"},
     ]}]};
-    const report = {preflight: {simulators: {ios: {udid}}, destinations: {ios: destination}}, stages: [
-        {id: discovery.id, command: enumeration, exitCode: 0, discovery: {plan: {path: plan}, command: enumeration}},
+    const report = {identity: {consoleUser: "fixture"}, preflight: {simulators: {ios: {udid}}, destinations: {ios: destination}}, stages: [
+        {id: discovery.id, command: enumeration, exitCode: 0, discovery: {plan: {path: plan}, command: enumeration,
+            build: {command: ["xcodebuild", "build-for-testing", "-scheme", "Tests iOS"], cwd: "/Volumes/BigWalletBuild/Workspaces/fixture/big-wallet"}}},
         {id: execution.id, command, exitCode: 0, signal: null, resultBundle: bundle, audit: auditNativeResult(summary, tree, execution.nativeAudit)},
+        {id: "build-tests.ios.debug", command: ["xcodebuild", "build-for-testing", "-scheme", "Tests iOS"], exitCode: 0, signal: null},
     ]};
     const stages = [discovery, execution];
     const summaryPath = join(artifacts, `${execution.id}.summary.json`);
@@ -220,9 +238,18 @@ test("host acceptance compares both commands and re-audits the exported XCTest r
     await writeFile(summaryPath, JSON.stringify(summary));
     await writeFile(treePath, JSON.stringify(tree));
     await verifyArchivedTestRuns(stages, report, artifacts);
+    const digitLeadingUser = structuredClone(report);
+    digitLeadingUser.identity.consoleUser = "1fixture";
+    digitLeadingUser.stages[0].discovery.build.cwd = "/Volumes/BigWalletBuild/Workspaces/1fixture/big-wallet";
+    await verifyArchivedTestRuns(stages, digitLeadingUser, artifacts);
     for (const change of [
         r => { r.stages[0].command = ["xcodebuild"]; },
         r => { r.stages[0].discovery.command = ["xcodebuild"]; },
+        r => { r.stages[0].discovery.build.command.push("-enableThreadSanitizer", "YES"); },
+        r => { r.stages[0].discovery.build.cwd += "/another-checkout"; },
+        r => { r.identity.consoleUser = "another-user"; },
+        r => { r.stages[2].command.push("ENABLE_TESTABILITY=YES"); },
+        r => { r.stages[2].exitCode = 65; },
         r => { r.stages[0].exitCode = 65; },
         r => { delete r.stages[0].exitCode; },
         r => { r.stages[1].command[3] = "/other.xctestrun"; },
@@ -306,10 +333,34 @@ test("host verification independently binds discovery to its configuration and p
     const host = `${products}/Debug/Big Wallet.app/Contents/MacOS/Big Wallet`;
     const binaries = RUNTIME_TEST_TARGETS.map(target => ({target, role: "test", path: `${products}/Debug/${target}.xctest/Contents/MacOS/${target}`}));
     for (const path of [host, host + ".debug.dylib"]) { binaries.push({target: RUNTIME_TEST_TARGETS[0], role: "host", path}); }
-    const rawBuildLog = buildLogFor(`${directory}/Wallet`) + binaries.map(({path}) => `Ld ${path.replaceAll(" ", "\\ ")} normal\n`).join("") +
-        `Ld ${builtFramework}/Versions/A/WalletAuthority normal\nCopy ${embeddedFramework} ${builtFramework} (in target 'WalletAuthorityTests')\n`;
+    const rawBuildLog = "BUILD SUCCEEDED\n";
+    const rootPlist = readFileSync(new URL("./fixtures/xcode27_2_runtime_derived_data_info.plist", import.meta.url));
+    const roots = {directory, canonicalDirectory: directory, roots: [{name: "Wallet", path: `${directory}/Wallet`, infoPlist: {
+        path: `${directory}/Wallet/info.plist`, bytes: rootPlist.length, sha256: hash(rootPlist), base64: rootPlist.toString("base64"),
+    }}]};
+    const metadata = {directories: [
+        {path: `${products}/Debug`, entries: [...RUNTIME_TEST_TARGETS.map(target => `${target}.xctest`), "Big Wallet.app", "PackageFrameworks"]},
+        {path: `${products}/Debug/PackageFrameworks`, entries: [framework]},
+        {path: `${products}/Debug/Big Wallet.app/Contents/MacOS`, entries: ["Big Wallet", "Big Wallet.debug.dylib"]},
+        {path: `${products}/Debug/Big Wallet.app/Contents/Frameworks`, entries: null},
+    ], bundles: [{path: `${products}/Debug/Big Wallet.app`, info: {CFBundleExecutable: "Big Wallet"}}]};
+    for (const target of RUNTIME_TEST_TARGETS) {
+        const bundle = `${products}/Debug/${target}.xctest`;
+        metadata.bundles.push({path: bundle, info: {CFBundleExecutable: target}});
+        metadata.directories.push({path: `${bundle}/Contents/MacOS`, entries: [target]},
+            {path: `${bundle}/Contents/Frameworks`, entries: target === "WalletAuthorityTests" ? [framework] : null});
+    }
+    for (const bundle of [builtFramework, embeddedFramework]) {
+        metadata.bundles.push({path: bundle, info: {CFBundleExecutable: "WalletAuthority"}});
+        metadata.directories.push({path: bundle, entries: ["WalletAuthority", "Versions"]});
+    }
+    const rootsBytes = JSON.stringify(roots);
+    const metadataBytes = JSON.stringify(metadata);
     const evidence = {artifact: `${prefix}.json`, sha256: hash(raw), log: `${stage.id}.log`,
-        build: {artifact: "build-runtime-tests.macos.debug.log", sha256: hash(rawBuildLog), directory, canonicalDirectory: directory},
+        build: {artifact: "build-runtime-tests.macos.debug.log", sha256: hash(rawBuildLog), directory, canonicalDirectory: directory,
+            command: ["xcodebuild", "build-for-testing", "-scheme", "WalletRuntime-Package"], cwd: "/fixture/big-wallet/Packages/WalletRuntime"},
+        roots: {artifact: `${prefix}.roots.json`, sha256: hash(rootsBytes)},
+        metadata: {artifact: `${prefix}.products.json`, sha256: hash(metadataBytes)},
         plan: {path: `${products}/Runtime.xctestrun`, artifact: `${prefix}.xctestrun`, decodedArtifact: `${prefix}.plan.json`, sha256: hash(rawPlan)},
         targets: RUNTIME_TEST_TARGETS, testPlan: policy.testPlan, identifiers: parseTestEnumeration(fixture, policy),
         products: binaries.map(binary => ({...binary, bytes: 8, sha256: "a".repeat(64)}))};
@@ -317,7 +368,8 @@ test("host verification independently binds discovery to its configuration and p
         evidence.products.push({role: "framework", bytes: 8, sha256: "b".repeat(64), path: join(bundle, "WalletAuthority")});
     }
     await Promise.all([[evidence.artifact, raw], [evidence.log, "enumerated"], [evidence.plan.artifact, rawPlan],
-        [evidence.plan.decodedArtifact, rawPlan], [evidence.build.artifact, rawBuildLog]].map(([path, value]) => writeFile(join(artifacts, path), value)));
+        [evidence.plan.decodedArtifact, rawPlan], [evidence.build.artifact, rawBuildLog], [evidence.roots.artifact, rootsBytes],
+        [evidence.metadata.artifact, metadataBytes]].map(([path, value]) => writeFile(join(artifacts, path), value)));
     assert.equal((await readRecordedDiscovery(stage, {discovery: evidence}, artifacts)).identifiers.length, 1796);
     for (const changed of [{configuration: "Release"}, {platform: "ios"}]) {
         await assert.rejects(readRecordedDiscovery({...stage, nativeDiscovery: {...policy, ...changed}}, {discovery: evidence}, artifacts), /configuration and platform/);
@@ -327,11 +379,17 @@ test("host verification independently binds discovery to its configuration and p
     await assert.rejects(readRecordedDiscovery(stage, {discovery: moved}, artifacts), /product binding/);
     for (const omitted of [binaries[0].path, host, host + ".debug.dylib", join(embeddedFramework, "WalletAuthority")]) {
         const incomplete = {...evidence, products: evidence.products.filter(binary => binary.path !== omitted)};
-        await assert.rejects(readRecordedDiscovery(stage, {discovery: incomplete}, artifacts), /Missing linked XCTest product/);
+        await assert.rejects(readRecordedDiscovery(stage, {discovery: incomplete}, artifacts), /Missing bound XCTest product/);
     }
     const redirected = structuredClone(evidence);
     redirected.build.canonicalDirectory = "/Volumes/Other/DerivedData";
-    await assert.rejects(readRecordedDiscovery(stage, {discovery: redirected}, artifacts), /build log directory/);
+    await assert.rejects(readRecordedDiscovery(stage, {discovery: redirected}, artifacts), /root inventory/);
+    await writeFile(join(artifacts, evidence.metadata.artifact), metadataBytes + " ");
+    await assert.rejects(readRecordedDiscovery(stage, {discovery: evidence}, artifacts), /identity changed/);
+    await writeFile(join(artifacts, evidence.metadata.artifact), metadataBytes);
+    await writeFile(join(artifacts, evidence.roots.artifact), rootsBytes + " ");
+    await assert.rejects(readRecordedDiscovery(stage, {discovery: evidence}, artifacts), /identity changed/);
+    await writeFile(join(artifacts, evidence.roots.artifact), rootsBytes);
     await writeFile(join(artifacts, evidence.build.artifact), rawBuildLog + " ");
     await assert.rejects(readRecordedDiscovery(stage, {discovery: evidence}, artifacts), /identity changed/);
     await writeFile(join(artifacts, evidence.build.artifact), rawBuildLog);

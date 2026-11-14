@@ -38,6 +38,47 @@ final class NativeMessageDispatcherTests: XCTestCase {
         }
     }
 
+    func testTypedDappAdmissionPreservesCanonicalReplayIdentity() async throws {
+        try await withFixture { fixture in
+            let message = try await fixture.connectionMessage()
+            let expectedCanonical = try canonical(message)
+            var fingerprint: Data?
+            for replayOnly: Bool? in [nil, false, true] {
+                var transport = message
+                transport["replayOnly"] = replayOnly
+                transport[WireProtocol.nativeContextKey] = [
+                    "source": "site", "privateBrowsing": false,
+                    "site": ["host": "wallet.example", "configurationKey": fixture.origin],
+                    "document": ["tabId": 1, "frameId": 0, "documentSession": String(repeating: "a", count: 32)],
+                ]
+                let admission = try fixture.ingressGate.admit(transport, profileIdentifier: nil)
+                defer { admission.finish() }
+                guard case .dapp(let ingress) = admission.request else { return XCTFail("Expected a dapp admission") }
+                XCTAssertEqual(ingress.canonicalData, expectedCanonical)
+                XCTAssertEqual(ingress.replayOnly, replayOnly ?? false)
+                if let fingerprint { XCTAssertEqual(ingress.fingerprint, fingerprint) }
+                else { fingerprint = ingress.fingerprint }
+            }
+        }
+    }
+
+    func testEncodedDappPayloadRejectionPreservesCorrelationBeforeDispatch() async throws {
+        try await withFixture { fixture in
+            var message = try await fixture.connectionMessage()
+            message["body"] = ["address": "", "chainId": "0x1", "object": [
+                "note": String(repeating: "\u{01}", count: 50_000),
+            ]]
+            let response = try await fixture.dispatch(message)
+            XCTAssertEqual(response["id"] as? Int, 1)
+            XCTAssertEqual(response["nativeAdmissionRejected"] as? Bool, true)
+            XCTAssertEqual(response["reason"] as? String, "request_too_large")
+            XCTAssertEqual(response["code"] as? Int, -32_005)
+            XCTAssertEqual(response["dispatched"] as? Bool, false)
+            XCTAssertTrue(fixture.calls.value.isEmpty)
+            XCTAssertTrue(fixture.bridgeCalls.value.isEmpty)
+        }
+    }
+
     func testMalformedCommandsNeverReachDependencies() async throws {
         try await withFixture { fixture in
             for message: [String: Any] in [
@@ -639,6 +680,7 @@ final class NativeMessageDispatcherTests: XCTestCase {
         operation: () async throws -> [String: Any]
     ) async {
         do { _ = try await operation(); XCTFail("Expected dispatcher failure") }
+        catch NativeIngressGate.Failure.invalidMessage { XCTAssertEqual(expected, .invalidMessage) }
         catch { XCTAssertEqual(error as? NativeMessageDispatcher.Error, expected) }
     }
 
@@ -659,6 +701,7 @@ final class NativeMessageDispatcherTests: XCTestCase {
 
     private final class Fixture {
         let origin = "https://wallet.example"
+        let ingressGate = NativeIngressGate()
         let bridge: ExtensionBridge
         let calls = LockedTestValue([String]())
         let bridgeCalls = LockedTestValue([String]())
@@ -749,8 +792,13 @@ final class NativeMessageDispatcherTests: XCTestCase {
             }
             var transport = message
             transport[WireProtocol.nativeContextKey] = transportContext
-            let ingress = try XCTUnwrap(NativeRequestContext.extract(from: transport, profileIdentifier: profile))
-            return try await dispatcher.dispatch(message: ingress.message, context: ingress.context).json
+            do {
+                let ingress = try ingressGate.admit(transport, profileIdentifier: profile)
+                defer { ingress.finish() }
+                return try await dispatcher.dispatch(ingress).json
+            } catch NativeIngressGate.Failure.rejected(let rejection) {
+                return try XCTUnwrap(rejection.response).json
+            }
         }
     }
 

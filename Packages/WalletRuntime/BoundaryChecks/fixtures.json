@@ -12,6 +12,20 @@
     "succeeds": true
   },
   {
+    "path": "Positive/NativeAdmissionContract.swift",
+    "succeeds": true
+  },
+  {
+    "path": "Negative/NativeAdmissionConstructor.swift",
+    "succeeds": false,
+    "diagnostic": "initializer.*inaccessible|no accessible initializers"
+  },
+  {
+    "path": "Negative/DispatchWithoutAdmission.swift",
+    "succeeds": false,
+    "diagnostic": "extra argument|extraneous argument label|cannot convert value"
+  },
+  {
     "path": "Negative/RawPrivateKey.swift",
     "succeeds": false,
     "diagnostic": "cannot find 'WalletPrivateKey'|WalletPrivateKey.*inaccessible"

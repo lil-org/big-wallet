@@ -57,18 +57,30 @@ public final class NativeIngressGate: Sendable {
         case rejected(Rejection)
     }
 
+    enum Request: Sendable {
+        case command(InternalSafariRequest)
+        case dapp(ExtensionBridge.Ingress)
+    }
+
     public struct Admission: Sendable {
-        public let message: WireProtocol.JSONObject
+        let request: Request
         public let context: NativeRequestContext
         private let lease: Lease
 
-        fileprivate init(message: WireProtocol.JSONObject, context: NativeRequestContext, lease: Lease) {
-            self.message = message
+        public var id: Int {
+            switch request {
+            case .command(let request): request.id
+            case .dapp(let ingress): ingress.request.id
+            }
+        }
+
+        fileprivate init(request: Request, context: NativeRequestContext, lease: Lease) {
+            self.request = request
             self.context = context
             self.lease = lease
         }
 
-        public func rpcAdmissionDecided() { lease.handoffRPC() }
+        func rpcAdmissionDecided() { lease.handoffRPC() }
         public func finish() { lease.finish() }
     }
 
@@ -189,9 +201,10 @@ public final class NativeIngressGate: Sendable {
                 throw InspectionFailure.rejected(.busy)
             }
             guard let snapshot = WireProtocol.JSONObject(object),
-                  let ingress = NativeRequestContext.extract(from: snapshot, profileIdentifier: profileIdentifier),
-                  let lane = Self.validatedLane(message: ingress.message, context: ingress.context),
-                  lane == provisionalLane else { throw Failure.invalidMessage }
+                  let ingress = NativeRequestContext.extract(from: snapshot, profileIdentifier: profileIdentifier)
+            else { throw Failure.invalidMessage }
+            let (request, lane) = try Self.validatedRequest(message: ingress.message, context: ingress.context)
+            guard lane == provisionalLane else { throw Failure.invalidMessage }
             if lane != .rpc {
                 guard let encoded = ExtensionBridge.payloadData(ingress.message.json) else { throw Failure.invalidMessage }
                 guard encoded.count <= limits.maximumPayloadBytes else {
@@ -201,7 +214,7 @@ public final class NativeIngressGate: Sendable {
             guard reserveDispatch(lane: lane, context: ingress.context, lease: lease) else {
                 throw InspectionFailure.rejected(.busy)
             }
-            return Admission(message: ingress.message, context: ingress.context, lease: lease)
+            return Admission(request: request, context: ingress.context, lease: lease)
         } catch {
             lease.finish()
             if case InspectionFailure.rejected(let reason) = error {
@@ -288,22 +301,29 @@ public final class NativeIngressGate: Sendable {
         }
     }
 
-    private static func validatedLane(message: WireProtocol.JSONObject, context: NativeRequestContext) -> Lane? {
+    private static func validatedRequest(
+        message: WireProtocol.JSONObject,
+        context: NativeRequestContext
+    ) throws -> (Request, Lane) {
         if message["subject"] == nil {
-            guard let wire = WireProtocol.object(.dappRequest, snapshot: message),
-                  let request = SafariRequest(wire: wire), context.authorizes(request) else { return nil }
-            return .ordinary
+            guard let wire = WireProtocol.object(.dappRequest, snapshot: message) else { throw Failure.invalidMessage }
+            switch ExtensionBridge.admittedIngress(wire: wire, context: context) {
+            case .accepted(let ingress): return (.dapp(ingress), .ordinary)
+            case .payloadTooLarge: throw InspectionFailure.rejected(.requestTooLarge)
+            case .invalid: throw Failure.invalidMessage
+            }
         }
         guard let wire = WireProtocol.object(.nativeCommand, snapshot: message),
-              let request = try? InternalSafariRequest(wire: wire), context.authorizes(request) else { return nil }
-        switch request.command {
-        case .page(.rpc): return .rpc
-        case .page(.disconnect): return .revocation
-        case .page(.acknowledgeResponse), .worker(.getRecoveryRequests), .popup(.getPendingRequests): return .completion
-        case .worker(.pollResponse(let identity)) where identity.maintenance == .none: return .completion
-        case .popup(.rejectRequest): return .rejection
-        default: return .ordinary
+              let request = try? InternalSafariRequest(wire: wire), context.authorizes(request) else { throw Failure.invalidMessage }
+        let lane: Lane = switch request.command {
+        case .page(.rpc): .rpc
+        case .page(.disconnect): .revocation
+        case .page(.acknowledgeResponse), .worker(.getRecoveryRequests), .popup(.getPendingRequests): .completion
+        case .worker(.pollResponse(let identity)) where identity.maintenance == .none: .completion
+        case .popup(.rejectRequest): .rejection
+        default: .ordinary
         }
+        return (.command(request), lane)
     }
 
     private static func smallString(_ value: Any?) -> String? {

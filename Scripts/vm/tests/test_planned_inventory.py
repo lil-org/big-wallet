@@ -19,8 +19,8 @@ spec.loader.exec_module(host)
 
 
 class RunSnapshotBindingTests(unittest.TestCase):
-    sources = ('VMGuestAgent.swift', 'guest_runner', 'guest_bootstrap.mjs', 'provision_guest.sh', 'provision_guest.mjs', 'environment.json')
-    harness = ('guest.mjs', 'test_manifest.mjs', 'result_audit.mjs', 'test_policy.mjs', 'test_discovery.mjs')
+    sources = ('VMGuestAgent.swift', 'guest_runner', 'guest_bootstrap.mjs', 'provision_guest.sh', 'provision_guest.mjs', 'runtime_verification.mjs', 'runtime_repair.mjs', 'environment.json')
+    harness = ('guest.mjs', 'test_manifest.mjs', 'result_audit.mjs', 'test_policy.mjs', 'test_discovery.mjs', 'test_products.mjs')
 
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -249,6 +249,16 @@ class RunSnapshotBindingTests(unittest.TestCase):
                 self.assertRaisesRegex(host.RunnerError, 'verify_discovery.mjs'):
             host.resolved_stage_plan(exchange, job)
 
+    def test_product_inventory_helper_is_bound_to_the_snapshot_before_planning(self):
+        self.assertEqual(host.run_tests(self.args, self.state, self.environment), 0)
+        exchange = self.monitor_vm.call_args.args[3]
+        job = host.read_json(exchange / 'job.json')
+        helper = exchange / 'source/Scripts/vm/test_products.mjs'
+        helper.write_text('throw new Error("changed captured product inventory");')
+        with patch.object(host, 'manifest_node', side_effect=AssertionError('Launched Node with modified input')), \
+                self.assertRaisesRegex(host.RunnerError, 'test_products.mjs'):
+            host.stage_planned_result(exchange, job)
+
     def test_malformed_parser_replay_finalizes_without_starting_or_retaining_an_operation(self):
         replay = self.root / 'bad-replay.json'
         replay.write_text('{not json')
@@ -354,7 +364,7 @@ class PlannedInventoryTests(unittest.TestCase):
         self.manifest = self.exchange / 'source/Scripts/vm/test_manifest.mjs'
         self.manifest.parent.mkdir(parents=True)
         shutil.copyfile(host.TOOLS / 'test_manifest.mjs', self.manifest)
-        runtime_files = [self.manifest.with_name(name) for name in ('test_policy.mjs', 'test_discovery.mjs', 'verify_discovery.mjs', 'result_audit.mjs', 'guest_bootstrap.mjs')]
+        runtime_files = [self.manifest.with_name(name) for name in ('test_policy.mjs', 'test_discovery.mjs', 'test_products.mjs', 'verify_discovery.mjs', 'result_audit.mjs', 'guest_bootstrap.mjs')]
         for path in runtime_files:
             shutil.copyfile(host.TOOLS / path.name, path)
         identity = self.exchange / 'source/Scripts/approval_lifecycle/source_identity.mjs'

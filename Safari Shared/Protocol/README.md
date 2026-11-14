@@ -32,6 +32,13 @@ serializing them, allocating key lists, or bridging whole dictionaries. This bou
 application work after Safari delivers a message; it does not control Safari's own
 IPC deserialization. Existing Unicode-key validation remains authoritative.
 
+Admission retains the parsed command or opaque Authority ingress together with
+its original transport context. The dispatcher accepts only that admitted value;
+it does not reconstruct or reauthorize the same immutable message. Full encoded
+wire-size limits remain separate from Authority's canonical persistence and
+correlation-fingerprint projections. Wallet and request state are still checked
+at the point of privileged execution.
+
 Non-RPC payloads retain the 256 KiB encoded limit, with a separate 16 KiB transport
 context allowance and a preflight limit of 262,656 values plus keys. RPC bodies stay
 opaque at this boundary and retain their 4 MiB limit; remaining metadata is limited
@@ -53,7 +60,7 @@ queue/recovery listing. These paths and rejection replies cannot prepare reviews
 authenticate, refresh fees, or launch helpers. RPC transfers its input reservation
 to its existing admission service before releasing inspection capacity; its queue
 never occupies the non-RPC lanes. Leases release once when work actually exits,
-not merely when its caller times out or cancels.
+including terminal response submission, not merely when its caller times out or cancels.
 
 The gate does not queue overload. `NativeAdmissionRejection` carries the correlated
 request ID, workflow version, code `-32005`, a rejection reason, and

@@ -12,6 +12,7 @@ host playback. There is no microphone or other audio input stream.
 ```sh
 Scripts/test_vm.sh doctor
 Scripts/test_vm.sh setup
+Scripts/test_vm.sh setup --repair-runtime ios
 Scripts/test_vm.sh setup --interactive --safari-activation
 Scripts/test_vm.sh upgrade-xcode --check
 Scripts/test_vm.sh upgrade-xcode
@@ -56,6 +57,15 @@ followed by a class and method. `--runtime-platform` limits only this package
 XCTest matrix and may be repeated; omitted platforms remain unverified in a
 filtered report. App and Safari selectors keep their platform-specific targets.
 
+An invocation selecting exactly `--stage test` with one or more `--only-testing`
+filters runs the selected native tests and their build prerequisites. It omits
+the unrelated JavaScript provider test suite and standalone production-module/API
+compiler checks. Static runtime boundaries, test membership, and complete test-target
+builds remain required. App builds retain their provider installation and protocol
+checks. Unfiltered tests, full suites, and mixed stage selections keep their broader
+verification work; request `--stage build` as well when API compiler fixtures are
+needed. Filtering does not change the default platform or configuration matrix.
+
 Package test builds explicitly enable testability. Each test target must compile
 its unconditional `TestabilityContract.swift` import; production module builds
 and ordinary-import API contracts remain separate. Evaluated SwiftPM source lists
@@ -67,16 +77,24 @@ declarations. Inside the VM, each variant builds its complete test targets, then
 enumerates the exact `.xctestrun` with Xcode's JSON test-discovery output. The
 runner resolves selectors against that inventory and executes the same bound
 products before building another instrumentation variant. Every test variant is
-cleaned before its test build so its build log identifies freshly built products
-under default DerivedData. App tests clean through their containing app scheme
-to prevent inherited standalone modules from shadowing current package frameworks.
+cleaned before its test build under default DerivedData. App tests clean through
+their containing app scheme to prevent inherited standalone modules from shadowing
+current package frameworks. Discovery matches the successful build's exact project
+or package directory to `WorkspacePath` in the DerivedData root's `info.plist`,
+then requires exactly one matching `.xctestrun`. Executable paths come from that
+plan and bundle metadata. It does not infer roots from directory names or parse
+linker commands or build-description paths. The pinned Xcode's build-settings
+query returns no Swift package targets, so it is not used for discovery. Each job
+still starts in a disposable VM; filtered runs do not reuse a previous job's build cache.
 
 Every selected method must appear exactly once in the result bundle. Empty,
 omitted, duplicated, disabled, unexpected, or skipped tests fail; the existing
 Debug performance skips still require passing Release gates. The raw discovery,
-built test plan, build log, product hashes, and resolved stage plan are retained.
-The hashes cover the test and host executables and the frameworks linked or
-embedded by their build. macOS Debug package discovery also checks every runtime
+built test plan, build log, raw DerivedData root plists, bounded product metadata,
+product hashes, and resolved stage plan are retained. The hashes cover test and
+host executables, adjacent debug dylibs, and built and embedded frameworks.
+The host independently checks the root's workspace identity and reconstructs the
+complete product inventory from the archived metadata. macOS Debug package discovery also checks every runtime
 mutation witness against its full target, class, and method identifier. The host
 independently resolves the archived discovery, checks each recorded enumeration
 and execution command, and audits the guest-exported XCTest summary and test
@@ -554,8 +572,24 @@ devices and runtimes in a candidate. Setup retains the previous baseline and its
 metadata. Run `Scripts/test_vm.sh run all` and require `fullSuiteVerified: true`.
 
 Setup imports Xcode's complete runtime export, verifies the pinned image and
-mounted profile, and prepares its shared cache. Repair of a signature-rejected
-runtime requires a preserved official export. Keep the guest's
+mounted profile, and prepares its shared cache. An eligible signature rejection
+or unfinished repair stops ordinary setup with a command for explicit repair:
+
+```sh
+Scripts/test_vm.sh setup --repair-runtime ios
+Scripts/test_vm.sh setup --repair-runtime ios --repair-runtime visionos
+```
+
+Repair runs only for selected pins in the owned candidate; a healthy selected
+runtime is a verified no-op. The option cannot be combined with `--stage-only` or
+`--safari-activation`. Selection applies only to the current invocation, including
+its automatic session restart, and is never stored in a pending provisioning
+package. Repeat the option to resume an interrupted repair. Plain setup will not
+reinstall over an unfinished repair, even when its runtime registration is absent.
+Completed repairs are verified without re-entering mutable repair phases, retaining
+the source, receipt, installed-image, signature, and mounted-profile checks.
+
+Repair requires a preserved official export. Keep the guest's
 `/Library/Application Support/BigWalletTestVM/RuntimeRepairs` receipts and
 `/Volumes/BigWalletBuild/RuntimeRepairSources` images for retries.
 [Apple's import guidance](https://developer.apple.com/documentation/Xcode-Release-Notes/xcode-26_4-release-notes)

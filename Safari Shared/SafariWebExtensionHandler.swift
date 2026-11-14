@@ -121,7 +121,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         }
 #if BW_SAFARI_VM_TESTING
         let fixtures = SafariVMFixtures.shared
-        let operation = fixtures.capture(requestID: ingress.message["id"] as? Int)
+        let operation = fixtures.capture(requestID: ingress.id)
         var metadata: [String: Any] = ["profileIdentifier": ingress.context.profileIdentifier.map { $0.uuidString.lowercased() as Any } ?? NSNull(),
                                        "privateBrowsing": ingress.context.privateBrowsing,
                                        "receivedAt": receivedAt]
@@ -146,15 +146,10 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             do {
 #if BW_SAFARI_VM_TESTING
                 let response = try await SafariVMFixtures.$operation.withValue(operation) {
-                    try await Self.dispatcher.dispatch(message: ingress.message, context: ingress.context,
-                                                       rpcAdmissionDecision: { ingress.rpcAdmissionDecided() })
+                    try await Self.dispatcher.dispatch(ingress)
                 }
 #else
-                let response = try await Self.dispatcher.dispatch(
-                    message: ingress.message,
-                    context: ingress.context,
-                    rpcAdmissionDecision: { ingress.rpcAdmissionDecided() }
-                )
+                let response = try await Self.dispatcher.dispatch(ingress)
 #endif
 #if BW_SAFARI_VM_TESTING
                 await lockProbe.value

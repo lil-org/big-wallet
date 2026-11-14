@@ -24,3 +24,12 @@ captured plan, not the unrelated memory-tagging flag.
 `xcode27_2_tsan_plan.json` is the unmodified package TSan plan from VM run
 `run-20261108T143640Z-20ae1c92`; its 56 selected runtime tests passed. The separate
 app preview failures in that run do not establish an app TSan pass.
+
+`xcode27_2_app_derived_data_info.plist` and
+`xcode27_2_runtime_derived_data_info.plist` preserve the root metadata schema
+captured in VM run `run-20261114T163050Z-5d30ba49`. Workspace prefixes are
+sanitized to `/fixture/big-wallet`; the original date values and plist types are
+retained. Xcode identifies the app by its `.xcodeproj` and the package by its
+directory. These fixtures cover raw-plist identity extraction because converting
+the complete date-bearing plist to JSON fails, and Xcode's package build-settings
+query returns an empty target list.

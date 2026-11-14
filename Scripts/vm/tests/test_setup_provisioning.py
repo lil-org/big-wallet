@@ -87,7 +87,7 @@ class ProvisioningPackageTests(unittest.TestCase):
         self.assertEqual(reused['provisioningRequestID'], requested['provisioningRequestID'])
 
     def test_source_binding_rejects_snapshot_staging_configuration_and_tool_drift(self):
-        for change in ('snapshot', 'installer', 'module', 'runner', 'agent', 'configuration', 'tools'):
+        for change in ('snapshot', 'installer', 'module', 'verification', 'repair', 'runner', 'agent', 'configuration', 'tools'):
             with self.subTest(change=change):
                 exchange, configuration = self.stage(self.args(), 'setup-binding-' + change)
                 snapshot = self.source_snapshot(exchange)
@@ -95,8 +95,8 @@ class ProvisioningPackageTests(unittest.TestCase):
                 tools = host.bootstrap_tool_hashes(self.binaries)
                 if change == 'snapshot':
                     (snapshot / 'provision_guest.sh').write_text('changed during snapshot')
-                elif change in ('installer', 'module', 'runner', 'agent'):
-                    filename = {'installer': 'provision_guest.sh', 'module': 'provision_guest.mjs', 'runner': 'guest_bootstrap.mjs', 'agent': 'VMGuestAgent'}[change]
+                elif change in ('installer', 'module', 'verification', 'repair', 'runner', 'agent'):
+                    filename = {'installer': 'provision_guest.sh', 'module': 'provision_guest.mjs', 'verification': 'runtime_verification.mjs', 'repair': 'runtime_repair.mjs', 'runner': 'guest_bootstrap.mjs', 'agent': 'VMGuestAgent'}[change]
                     (exchange / 'provision' / filename).write_text('changed during staging')
                 elif change == 'configuration':
                     staged = host.read_json(exchange / 'provision/config.json')
@@ -108,19 +108,29 @@ class ProvisioningPackageTests(unittest.TestCase):
                     host.verify_setup_sources(exchange, captured, self.environment, configuration, tools)
 
     def test_pending_packages_refresh_missing_or_stale_provisioning_modules(self):
-        for missing in (False, True):
-            with self.subTest(missing=missing):
-                original, requested = self.explicit_package()
-                module = original / 'provision/provision_guest.mjs'
-                if missing:
-                    module.unlink()
-                else:
-                    module.write_text('stale installer module')
-                retry, configuration = self.stage(self.args(), 'setup-module-' + str(missing))
-                self.assertEqual((retry / 'provision/provision_guest.mjs').read_bytes(),
-                                 (host.TOOLS / 'provision_guest.mjs').read_bytes())
-                self.assertEqual((retry / 'provision/autologin-passwordFile').read_bytes(), b'fixture password')
-                self.assertEqual(configuration['consoleUser'], requested['consoleUser'])
+        for name in ('provision_guest.mjs', 'runtime_verification.mjs', 'runtime_repair.mjs'):
+            for missing in (False, True):
+                with self.subTest(name=name, missing=missing):
+                    original, requested = self.explicit_package()
+                    module = original / 'provision' / name
+                    if missing:
+                        module.unlink()
+                    else:
+                        module.write_text('stale installer module')
+                    retry, configuration = self.stage(self.args(), 'setup-module-' + name + str(missing))
+                    self.assertEqual((retry / 'provision' / name).read_bytes(), (host.TOOLS / name).read_bytes())
+                    self.assertEqual((retry / 'provision/autologin-passwordFile').read_bytes(), b'fixture password')
+                    self.assertEqual(configuration['consoleUser'], requested['consoleUser'])
+
+    def test_explicit_repair_selection_never_becomes_a_retained_provisioning_input(self):
+        original, requested = self.explicit_package()
+        repaired, configuration = self.stage(self.args('--repair-runtime', 'ios'), 'setup-explicit-repair')
+        self.assertEqual(configuration, requested)
+        for name in ('repairPlatforms', 'repair_runtime', 'repairRuntime'):
+            self.assertNotIn(name, configuration)
+        retry, plain = self.stage(self.args(), 'setup-after-repair')
+        self.assertEqual(plain, configuration)
+        self.assertEqual((retry / 'provision/autologin-passwordFile').read_bytes(), b'fixture password')
 
     def test_source_binding_rejects_environment_changed_since_host_loading(self):
         exchange, configuration = self.stage(self.args(), 'setup-binding-environment')

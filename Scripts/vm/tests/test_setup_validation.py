@@ -30,7 +30,7 @@ class SetupValidationInventoryTests(unittest.TestCase):
         manifest = exchange / 'source/Scripts/vm/test_manifest.mjs'
         manifest.parent.mkdir(parents=True)
         shutil.copyfile(host.TOOLS / 'test_manifest.mjs', manifest)
-        runtime_files = [manifest.with_name(name) for name in ('test_policy.mjs', 'test_discovery.mjs', 'verify_discovery.mjs', 'result_audit.mjs', 'guest_bootstrap.mjs')]
+        runtime_files = [manifest.with_name(name) for name in ('test_policy.mjs', 'test_discovery.mjs', 'test_products.mjs', 'verify_discovery.mjs', 'result_audit.mjs', 'guest_bootstrap.mjs')]
         for path in runtime_files:
             shutil.copyfile(host.TOOLS / path.name, path)
         identity = exchange / 'source/Scripts/approval_lifecycle/source_identity.mjs'
@@ -123,9 +123,7 @@ class SetupValidationInventoryTests(unittest.TestCase):
         self.assertEqual(result['source'], job['source'])
         self.assertEqual([stage['id'] for stage in result['stages']], [stage['id'] for stage in planned['stages']])
         self.assertEqual({stage['id'] for stage in result['stages']}, {
-            'provider.install', 'protocol.check', 'provider.test', 'runtime.test-membership', 'runtime.boundaries',
-            'runtime.WalletDomain.debug', 'runtime.WalletNetworking.debug', 'runtime.WalletAuthority.debug',
-            'runtime.WalletFlows.debug', 'runtime.api.debug',
+            'provider.install', 'protocol.check', 'runtime.test-membership', 'runtime.boundaries',
             'clean-test-runtime.macos.debug', 'build-runtime-tests.macos.debug', 'discover.test-runtime.macos.debug',
             'build-tests.macos.debug', 'discover.test.macos.debug', 'build-tests.ios.debug', 'discover.test.ios.debug',
             'build-tests.visionos.debug', 'discover.test.visionos.debug',

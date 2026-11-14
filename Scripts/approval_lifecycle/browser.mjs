@@ -533,7 +533,7 @@ export class BrowserLifecycle {
         const popup = this.profile(profileIdentifier).popup;
         return popup ? vm.runInContext(`(() => {
             const current = popupQueue?.currentRequest;
-            return current && (current.state || current.interaction.kind === "failed")
+            return current && (current.state || ["failed", "admissionRejected"].includes(current.interaction.kind))
                 ? current.primaryAction(current.state).kind : null;
         })()`, popup.harness.context) : null;
     }
