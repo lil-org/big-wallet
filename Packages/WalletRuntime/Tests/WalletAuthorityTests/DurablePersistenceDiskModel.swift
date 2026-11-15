@@ -90,22 +90,32 @@ final class DurablePersistenceDiskModel: Sendable {
     }
 
     var operations: DurableProfilePersistence.Operations {
-        .init(
-            openDirectory: { path in
-                try self.state.withLock { model in
-                    try model.event("openDirectory:\(path)")
-                    return model.allocate(.directory(path))
-                }
-            },
+        let close: @Sendable (Int32) -> Void = { descriptor in
+            self.state.withLock { model in
+                _ = model.descriptors.removeValue(forKey: descriptor)
+                _ = model.offsets.removeValue(forKey: descriptor)
+            }
+        }
+        let files = SharedFileOperations(
+            directories: .init(
+                openDirectory: { path in
+                    try self.state.withLock { model in
+                        try model.event("openDirectory:\(path)")
+                        return model.allocate(.directory(path))
+                    }
+                },
+                openDirectoryAt: { directory, name in
+                    try self.state.withLock { model in
+                        let path = try model.path(directory, name)
+                        try model.event("openDirectory:\(path)")
+                        return model.allocate(.directory(path))
+                    }
+                },
+                close: close
+            ),
             openFile: { directory, name, flags, mode in
                 try self.state.withLock { model in
                     let path = try model.path(directory, name)
-                    if flags & O_DIRECTORY != 0 {
-                        try model.event("openDirectory:\(path)")
-                        XCTAssertEqual(flags, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW)
-                        XCTAssertEqual(mode, 0)
-                        return model.allocate(.directory(path))
-                    }
                     if flags & O_CREAT != 0 {
                         try model.event("create")
                         model.createFlags = flags
@@ -122,19 +132,38 @@ final class DurablePersistenceDiskModel: Sendable {
                     return model.allocate(.file(file))
                 }
             },
-            fileKind: { descriptor in
+            metadata: { descriptor in
                 try self.state.withLock { model in
-                    try model.event("kind")
-                    guard case .file = model.descriptors[descriptor] else { return .other }
-                    return .regular
+                    try model.event("metadata")
+                    return try model.metadata(for: model.file(descriptor))
                 }
             },
-            entryKind: { directory, name in
+            entryMetadata: { directory, name in
                 try self.state.withLock { model in
-                    try model.event("entryKind")
-                    return model.entries[try model.path(directory, name)] == nil ? nil : .regular
+                    try model.event("entryMetadata")
+                    guard let file = model.entries[try model.path(directory, name)] else { throw POSIXError(.ENOENT) }
+                    return try model.metadata(for: file)
                 }
             },
+            read: { descriptor, bytes, count in
+                try self.state.withLock { model in
+                    model.reads += 1
+                    try model.event("read:\(model.reads)")
+                    let file = try model.file(descriptor)
+                    guard let contents = model.files[file]?.contents,
+                          let offset = model.offsets[descriptor] else { throw POSIXError(.EBADF) }
+                    let readCount = min(count, model.maximumRead, max(0, contents.count - offset))
+                    if readCount > 0 {
+                        contents.copyBytes(to: bytes.assumingMemoryBound(to: UInt8.self), from: offset..<(offset + readCount))
+                    }
+                    model.offsets[descriptor] = offset + readCount
+                    return readCount
+                }
+            },
+            close: close
+        )
+        return .init(
+            files: files,
             write: { descriptor, bytes, count in
                 try self.state.withLock { model in
                     model.writes += 1
@@ -178,40 +207,6 @@ final class DurablePersistenceDiskModel: Sendable {
             unlink: { directory, name in
                 _ = try self.state.withLock { model in
                     model.entries.removeValue(forKey: try model.path(directory, name))
-                }
-            },
-            close: { descriptor in
-                self.state.withLock { model in
-                    _ = model.descriptors.removeValue(forKey: descriptor)
-                    _ = model.offsets.removeValue(forKey: descriptor)
-                }
-            },
-            metadata: { descriptor in
-                try self.state.withLock { model in
-                    try model.event("metadata")
-                    return try model.metadata(for: model.file(descriptor))
-                }
-            },
-            entryMetadata: { directory, name in
-                try self.state.withLock { model in
-                    try model.event("entryMetadata")
-                    guard let file = model.entries[try model.path(directory, name)] else { throw POSIXError(.ENOENT) }
-                    return try model.metadata(for: file)
-                }
-            },
-            read: { descriptor, bytes, count in
-                try self.state.withLock { model in
-                    model.reads += 1
-                    try model.event("read:\(model.reads)")
-                    let file = try model.file(descriptor)
-                    guard let contents = model.files[file]?.contents,
-                          let offset = model.offsets[descriptor] else { throw POSIXError(.EBADF) }
-                    let readCount = min(count, model.maximumRead, max(0, contents.count - offset))
-                    if readCount > 0 {
-                        contents.copyBytes(to: bytes.assumingMemoryBound(to: UInt8.self), from: offset..<(offset + readCount))
-                    }
-                    model.offsets[descriptor] = offset + readCount
-                    return readCount
                 }
             }
         )

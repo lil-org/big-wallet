@@ -2,7 +2,6 @@
 
 import Foundation
 import WalletDomain
-import Synchronization
 
 public final class SafariRPCClient: Sendable {
     private enum AttemptResult: Sendable {
@@ -93,16 +92,17 @@ public final class SafariRPCClient: Sendable {
         authorization?.apply(to: &request)
         let lease = execution.responseBudget.acquire()
         defer { lease.release() }
-        let transfer = SafariRPCResponseTransfer(execution: execution, lease: lease)
-        let received: SafariRPCResponseTransfer.Received
+        let transfer = HTTPResponseTransfer(execution: execution, lease: lease)
+        let response: HTTPURLResponse
+        let data: Data
         do {
-            received = try await withTaskCancellationHandler {
-                try await withCheckedThrowingContinuation { continuation in
-                    transfer.start(session: urlSession, request: request, continuation: continuation)
-                }
-            } onCancel: {
-                transfer.cancel()
+            let received = try await transfer.response(for: request, session: urlSession)
+            guard let receivedResponse = received.response as? HTTPURLResponse,
+                  let receivedData = received.data else {
+                throw SafariRPCFailure.transport
             }
+            response = receivedResponse
+            data = receivedData
             try execution.checkCancellationAndDeadline()
         } catch {
             if transfer.receivedUnauthorized, let authorization {
@@ -110,7 +110,7 @@ public final class SafariRPCClient: Sendable {
             }
             throw error
         }
-        if received.response.statusCode == 401, let authorization {
+        if response.statusCode == 401, let authorization {
             if rpcRequest.allowsUnauthorizedReplay, requestAuthorization.reserveUnauthorizedRecovery() {
                 return .retryUnauthorized
             }
@@ -118,14 +118,14 @@ public final class SafariRPCClient: Sendable {
             try execution.checkCancellationAndDeadline()
         }
         // Exclude UTF-16/32 autodetection so parsing uses the encoding scanned below.
-        guard !received.data.contains(0) else { throw SafariRPCFailure.transport }
-        let jsonBytes = received.data.dropFirst(received.data.starts(with: [0xEF, 0xBB, 0xBF]) ? 3 : 0)
+        guard !data.contains(0) else { throw SafariRPCFailure.transport }
+        let jsonBytes = data.dropFirst(data.starts(with: [0xEF, 0xBB, 0xBF]) ? 3 : 0)
         try SafariRPCJSONPreflight.validate(
             jsonBytes, maximumTokens: execution.limits.maximumResponseTokens,
             tokenLimitFailure: .responseTooLarge, depthLimitFailure: .transport,
             checkCancellation: execution.checkCancellationAndDeadline
         )
-        guard let correlated = Self.responseDictionary(from: received.data, expectedResponseID: rpcRequest.id),
+        guard let correlated = Self.responseDictionary(from: data, expectedResponseID: rpcRequest.id),
               let result = RPCResponseToExtension(upstream: correlated, expectedResponseID: rpcRequest.id) else {
             throw SafariRPCFailure.transport
         }
@@ -159,145 +159,5 @@ public final class SafariRPCClient: Sendable {
         }
         if let string = value as? String { return Int(string) == expectedResponseID }
         return false
-    }
-}
-
-private final class SafariRPCResponseTransfer: NSObject, URLSessionDataDelegate, Sendable {
-    struct Received: Sendable {
-        let response: HTTPURLResponse
-        let data: Data
-    }
-
-    private struct State {
-        var task: URLSessionDataTask?
-        var continuation: CheckedContinuation<Received, Error>?
-        var response: HTTPURLResponse?
-        var receivedUnauthorized = false
-        var data = Data()
-        var failure: (any Error)?
-        var finished = false
-    }
-
-    private let state = Mutex(State())
-    private let execution: SafariRPCExecution
-    private let lease: SafariRPCResponseBudget.Lease
-
-    var receivedUnauthorized: Bool { state.withLock { $0.receivedUnauthorized } }
-
-    init(execution: SafariRPCExecution, lease: SafariRPCResponseBudget.Lease) {
-        self.execution = execution
-        self.lease = lease
-        super.init()
-    }
-
-    func start(session: URLSession, request: URLRequest, continuation: CheckedContinuation<Received, Error>) {
-        let task = session.dataTask(with: request)
-        task.delegate = self
-        do {
-            try state.withLock { state in
-                if let failure = state.failure { throw failure }
-                guard !state.finished else { throw CancellationError() }
-                try execution.markDispatched()
-                state.task = task
-                state.continuation = continuation
-            }
-            task.resume()
-        } catch {
-            state.withLock { $0.finished = true }
-            task.cancel()
-            continuation.resume(throwing: error)
-        }
-    }
-
-    func cancel() { stop(with: CancellationError()) }
-
-    private func stop(with failure: any Error) {
-        let task = state.withLock { state -> URLSessionDataTask? in
-            guard !state.finished else { return nil }
-            state.failure = state.failure ?? failure
-            state.data = Data()
-            lease.release()
-            return state.task
-        }
-        task?.cancel()
-    }
-
-    func urlSession(
-        _ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
-        completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void
-    ) {
-        do {
-            guard let response = response as? HTTPURLResponse else { throw SafariRPCFailure.transport }
-            if response.statusCode == 401 {
-                state.withLock { if !$0.finished { $0.receivedUnauthorized = true } }
-            }
-            try execution.checkCancellationAndDeadline()
-            guard response.expectedContentLength < 0 ||
-                    response.expectedContentLength <= Int64(execution.limits.maximumResponseBytes) else {
-                throw SafariRPCFailure.responseTooLarge
-            }
-            let accepted = state.withLock { state in
-                guard !state.finished, state.failure == nil else { return false }
-                state.response = response
-                return true
-            }
-            completionHandler(accepted ? .allow : .cancel)
-        } catch {
-            stop(with: error)
-            completionHandler(.cancel)
-        }
-    }
-
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        do {
-            try state.withLock { state in
-                guard !state.finished, state.failure == nil else { return }
-                try execution.checkCancellationAndDeadline()
-                guard state.response != nil else { throw SafariRPCFailure.transport }
-                guard data.count <= execution.limits.maximumResponseBytes - state.data.count else {
-                    throw SafariRPCFailure.responseTooLarge
-                }
-                try lease.reserve(data.count)
-                state.data.append(data)
-            }
-        } catch { stop(with: error) }
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
-        let completion = state.withLock { state -> (CheckedContinuation<Received, Error>, Result<Received, Error>)? in
-            guard !state.finished, let continuation = state.continuation else { return nil }
-            state.finished = true
-            let result: Result<Received, Error>
-            if let failure = state.failure ?? error {
-                result = .failure(failure)
-            } else {
-                do {
-                    try execution.checkCancellationAndDeadline()
-                    guard let response = state.response else { throw SafariRPCFailure.transport }
-                    result = .success(Received(response: response, data: state.data))
-                } catch { result = .failure(error) }
-            }
-            state.task = nil
-            state.continuation = nil
-            state.response = nil
-            state.data = Data()
-            return (continuation, result)
-        }
-        if let (continuation, result) = completion { continuation.resume(with: result) }
-    }
-
-    func urlSession(
-        _ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
-        newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void
-    ) {
-        stop(with: SafariRPCFailure.transport)
-        completionHandler(nil)
-    }
-
-    func urlSession(
-        _ session: URLSession, dataTask: URLSessionDataTask, willCacheResponse proposedResponse: CachedURLResponse,
-        completionHandler: @escaping @Sendable (CachedURLResponse?) -> Void
-    ) {
-        completionHandler(nil)
     }
 }

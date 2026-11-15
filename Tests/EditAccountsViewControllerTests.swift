@@ -83,6 +83,31 @@ final class EditAccountsViewControllerTests: XCTestCase {
         XCTAssertFalse(state.canRetry)
     }
 
+    func testVisibleEditorAutomaticallyFillsItsViewportWithSmallPages() async throws {
+        let fixture = try AccountEditorFixture()
+        addTeardownBlock { try await fixture.tearDown() }
+        await assertWalletReload(fixture.manager)
+        let source = try XCTUnwrap(fixture.manager.wallets.first?.accounts.first)
+        let accounts = (0..<32).map { index in
+            WalletAccount(address: source.address, coin: source.coin, derivation: .custom,
+                derivationPath: "m/44'/60'/0'/0/\(index)", publicKey: source.publicKey,
+                extendedPublicKey: source.extendedPublicKey)
+        }
+        let preview = SmallPageAccountEditorPreview(accounts: accounts)
+        let host = try AccountEditorHost(manager: fixture.manager, access: fixture.accessFixture.access) {
+            $0.makePreviewSession = { _, _, _ in preview }
+        }
+        defer { host.close() }
+        host.appear()
+        let state = try XCTUnwrap(host.controller.previewState)
+
+        await expectEventually(timeout: 5) { state.accounts.count >= 3 }
+
+        XCTAssertEqual(preview.requestedPages, Array(0..<preview.requestedPages.count))
+        XCTAssertEqual(state.accounts, Array(accounts.prefix(state.accounts.count)))
+        XCTAssertFalse(state.canRetry)
+    }
+
     func testSuccessfulStoreReloadPreservesPendingRecoveryAndDraft() async throws {
         let fixture = try AccountEditorFixture()
         addTeardownBlock { try await fixture.tearDown() }
@@ -282,7 +307,7 @@ final class EditAccountsViewControllerTests: XCTestCase {
     }
 
 #if os(iOS) || os(visionOS)
-    func testInitialPagingActivationSurvivesAnOverlappingSuccessfulStoreReload() async throws {
+    func testPendingViewportLayoutSurvivesAnOverlappingSuccessfulStoreReload() async throws {
         let holdRead = Mutex(false)
         let storeRead = expectation(description: "Store reload is waiting for its inventory")
         let releaseRead = DispatchSemaphore(value: 0)
@@ -300,7 +325,10 @@ final class EditAccountsViewControllerTests: XCTestCase {
         controller.wallet = try XCTUnwrap(fixture.manager.wallets.first)
         controller.walletsManager = fixture.manager
         controller.access = fixture.accessFixture.access
-        controller.waitForInitialPreviewLayout = {
+        var firstLayout = true
+        controller.waitForPreviewLayout = {
+            guard firstLayout else { await Task.yield(); return }
+            firstLayout = false
             waitingForLayout.fulfill()
             await layout.wait()
             finishedLayout.fulfill()
@@ -316,6 +344,10 @@ final class EditAccountsViewControllerTests: XCTestCase {
         let state = try XCTUnwrap(controller.previewState)
         let initialCount = state.accounts.count
         XCTAssertGreaterThan(initialCount, 0)
+        controller.view.frame.size.height = 2_000
+        controller.tableView.frame = controller.view.bounds
+        controller.beginAppearanceTransition(true, animated: false)
+        controller.endAppearanceTransition()
         holdRead.withLock { $0 = true }
         let reload = Task { await fixture.manager.reloadFromStore() }
         await fulfillment(of: [storeRead], timeout: 5)
@@ -328,9 +360,6 @@ final class EditAccountsViewControllerTests: XCTestCase {
         releaseRead.signal()
         let loaded = await reload.value
         XCTAssertTrue(loaded)
-
-        controller.tableView(controller.tableView, willDisplay: UITableViewCell(),
-            forRowAt: IndexPath(row: initialCount - 1, section: 0))
 
         await expectEventually(timeout: 5) { state.accounts.count > initialCount }
         XCTAssertFalse(state.canRetry)
@@ -366,7 +395,7 @@ final class EditAccountsViewControllerTests: XCTestCase {
         XCTAssertTrue(controller.view.bounds.contains(firstFrame))
     }
 
-    func testDisplayedThresholdRowCannotCancelPendingPagingActivation() async throws {
+    func testThresholdDemandCoalescesWithPendingInitialLayout() async throws {
         let fixture = try AccountEditorFixture()
         addTeardownBlock { try await fixture.tearDown() }
         await assertWalletReload(fixture.manager)
@@ -378,7 +407,10 @@ final class EditAccountsViewControllerTests: XCTestCase {
         controller.wallet = try XCTUnwrap(fixture.manager.wallets.first)
         controller.walletsManager = fixture.manager
         controller.access = access.access
-        controller.waitForInitialPreviewLayout = {
+        var firstLayout = true
+        controller.waitForPreviewLayout = {
+            guard firstLayout else { await Task.yield(); return }
+            firstLayout = false
             waitingForLayout.fulfill()
             await layout.wait()
         }
@@ -465,6 +497,30 @@ final class EditAccountsViewControllerTests: XCTestCase {
         XCTAssertNil(alert.presentingViewController)
     }
 #endif
+}
+
+private final class SmallPageAccountEditorPreview: AccountPreviewSession {
+    private struct State {
+        var invalidated = false
+        var requestedPages = [Int]()
+    }
+
+    private let accounts: [WalletAccount]
+    private let state = Mutex(State())
+
+    var requestedPages: [Int] { state.withLock { $0.requestedPages } }
+
+    init(accounts: [WalletAccount]) { self.accounts = accounts }
+
+    func previewAccounts(page: Int) async throws -> [WalletAccount] {
+        try state.withLock { state in
+            guard !state.invalidated else { throw CancellationError() }
+            state.requestedPages.append(page)
+        }
+        return accounts.indices.contains(page) ? [accounts[page]] : []
+    }
+
+    func invalidate() { state.withLock { $0.invalidated = true } }
 }
 
 private final class HeldAccountEditorPreviewCreation: Sendable {
@@ -705,6 +761,15 @@ private final class AccountEditorHost {
     func showWindow() { window.orderFront(nil) }
     func closeWindow() { window.close() }
 #endif
+
+    func appear() {
+#if os(macOS)
+        window.orderFront(nil)
+#else
+        controller.beginAppearanceTransition(true, animated: false)
+        controller.endAppearanceTransition()
+#endif
+    }
 
     func close() {
 #if os(macOS)

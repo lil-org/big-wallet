@@ -4,62 +4,15 @@ import Darwin
 import Foundation
 
 struct DurableProfilePersistence: Sendable {
-    enum FileKind: Sendable {
-        case regular, directory, other
-    }
-
     struct Operations: Sendable {
-        var openDirectory: @Sendable (String) throws -> Int32
-        var openFile: @Sendable (Int32, String, Int32, mode_t) throws -> Int32
-        var fileKind: @Sendable (Int32) throws -> FileKind
-        var entryKind: @Sendable (Int32, String) throws -> FileKind?
+        var files: SharedFileOperations = .live
         var write: @Sendable (Int32, UnsafeRawPointer, Int) throws -> Int
         var fullSync: @Sendable (Int32) throws -> Void
         var syncDirectory: @Sendable (Int32) throws -> Void
         var rename: @Sendable (Int32, String, String) throws -> Void
         var unlink: @Sendable (Int32, String) throws -> Void
-        var close: @Sendable (Int32) -> Void
-        var metadata = SharedFileOperations.live.metadata
-        var entryMetadata = SharedFileOperations.live.entryMetadata
-        var read = SharedFileOperations.live.read
 
         static let live = Operations(
-            openDirectory: { path in
-                let (result, errorNumber) = path.withCString { path in
-                    let result = Darwin.open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW)
-                    let errorNumber = errno
-                    return (result, errorNumber)
-                }
-                return try checked(result, errorNumber: errorNumber)
-            },
-            openFile: { directory, name, flags, mode in
-                let (result, errorNumber) = name.withCString { name in
-                    let result = Darwin.openat(directory, name, flags, mode)
-                    let errorNumber = errno
-                    return (result, errorNumber)
-                }
-                return try checked(result, errorNumber: errorNumber)
-            },
-            fileKind: { descriptor in
-                var metadata = stat()
-                let result = Darwin.fstat(descriptor, &metadata)
-                let errorNumber = errno
-                try checked(result, errorNumber: errorNumber)
-                return kind(metadata.st_mode)
-            },
-            entryKind: { directory, name in
-                var metadata = stat()
-                let (result, errorNumber) = name.withCString { name in
-                    let result = Darwin.fstatat(directory, name, &metadata, AT_SYMLINK_NOFOLLOW)
-                    let errorNumber = errno
-                    return (result, errorNumber)
-                }
-                guard result == 0 else {
-                    if errorNumber == ENOENT { return nil }
-                    throw failure(errorNumber: errorNumber)
-                }
-                return kind(metadata.st_mode)
-            },
             write: { descriptor, bytes, count in
                 let written = Darwin.write(descriptor, bytes, count)
                 let errorNumber = errno
@@ -93,8 +46,7 @@ struct DurableProfilePersistence: Sendable {
                     return (result, errorNumber)
                 }
                 try checked(result, errorNumber: errorNumber)
-            },
-            close: { _ = Darwin.close($0) }
+            }
         )
 
         @discardableResult
@@ -105,14 +57,6 @@ struct DurableProfilePersistence: Sendable {
 
         private static func failure(errorNumber: Int32) -> POSIXError {
             POSIXError(POSIXErrorCode(rawValue: errorNumber) ?? .EIO)
-        }
-
-        private static func kind(_ mode: mode_t) -> FileKind {
-            switch mode & mode_t(S_IFMT) {
-            case mode_t(S_IFREG): .regular
-            case mode_t(S_IFDIR): .directory
-            default: .other
-            }
         }
     }
 
@@ -143,22 +87,23 @@ struct DurableProfilePersistence: Sendable {
 
     func replace(_ data: Data, at url: URL) throws {
         let directories = try openDirectories(for: url)
-        defer { directories.reversed().forEach(operations.close) }
+        defer { directories.reversed().forEach(operations.files.directories.close) }
         let directory = directories[0]
         let destination = url.standardizedFileURL.lastPathComponent
-        if let kind = try retryInterrupted({ try operations.entryKind(directory, destination) }),
-           kind != .regular {
-            throw POSIXError(.EINVAL)
-        }
+        do {
+            guard try retryInterrupted({ try operations.files.entryMetadata(directory, destination) }).isRegular else {
+                throw POSIXError(.EINVAL)
+            }
+        } catch let error as POSIXError where error.code == .ENOENT {}
         let temporary = try openTemporaryFile(in: directory)
         var replaced = false
         defer {
-            operations.close(temporary.descriptor)
+            operations.files.close(temporary.descriptor)
             if !replaced {
                 try? retryInterrupted { try operations.unlink(directory, temporary.name) }
             }
         }
-        guard try retryInterrupted({ try operations.fileKind(temporary.descriptor) }) == .regular else {
+        guard try retryInterrupted({ try operations.files.metadata(temporary.descriptor) }).isRegular else {
             throw POSIXError(.EINVAL)
         }
         try data.withUnsafeBytes { bytes in
@@ -185,15 +130,15 @@ struct DurableProfilePersistence: Sendable {
 
     func synchronizePublishedFile(at url: URL) throws {
         let directories = try openDirectories(for: url)
-        defer { directories.reversed().forEach(operations.close) }
+        defer { directories.reversed().forEach(operations.files.directories.close) }
         let descriptor = try retryInterrupted {
-            try operations.openFile(
+            try operations.files.openFile(
                 directories[0], url.standardizedFileURL.lastPathComponent,
                 O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK, 0
             )
         }
-        defer { operations.close(descriptor) }
-        guard try retryInterrupted({ try operations.fileKind(descriptor) }) == .regular else {
+        defer { operations.files.close(descriptor) }
+        guard try retryInterrupted({ try operations.files.metadata(descriptor) }).isRegular else {
             throw POSIXError(.EINVAL)
         }
         try retryInterrupted { try operations.fullSync(descriptor) }
@@ -214,29 +159,11 @@ struct DurableProfilePersistence: Sendable {
     }
 
     private var snapshotReader: RegularFileSnapshotReader {
-        var readerOperations = SharedFileOperations.live
-        readerOperations.directories = directoryOperations
-        readerOperations.openFile = operations.openFile
-        readerOperations.metadata = operations.metadata
-        readerOperations.entryMetadata = operations.entryMetadata
-        readerOperations.read = operations.read
-        readerOperations.close = operations.close
-        return RegularFileSnapshotReader(directoryBoundary: directoryBoundary, operations: readerOperations)
-    }
-
-    private var directoryOperations: AnchoredDirectoryAccess.Operations {
-        let operations = operations
-        return .init(
-            openDirectory: operations.openDirectory,
-            openDirectoryAt: { directory, name in
-                try operations.openFile(directory, name, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW, 0)
-            },
-            close: operations.close
-        )
+        RegularFileSnapshotReader(directoryBoundary: directoryBoundary, operations: operations.files)
     }
 
     private func openDirectories(for url: URL) throws -> [Int32] {
-        try AnchoredDirectoryAccess.openParent(of: url, within: directoryBoundary, operations: directoryOperations)
+        try AnchoredDirectoryAccess.openParent(of: url, within: directoryBoundary, operations: operations.files.directories)
     }
 
     private func openTemporaryFile(in directory: Int32) throws -> (descriptor: Int32, name: String) {
@@ -246,7 +173,7 @@ struct DurableProfilePersistence: Sendable {
                   !name.contains("/"), !name.contains("\0") else { throw POSIXError(.EINVAL) }
             do {
                 let descriptor = try retryInterrupted {
-                    try operations.openFile(
+                    try operations.files.openFile(
                         directory, name,
                         O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
                         S_IRUSR | S_IWUSR

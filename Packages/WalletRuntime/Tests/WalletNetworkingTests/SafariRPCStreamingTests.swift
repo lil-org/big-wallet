@@ -199,6 +199,50 @@ final class SafariRPCStreamingTests: XCTestCase {
         }
     }
 
+    func testUnauthorizedTransportFailureDiscardsBodyAndInvalidatesWithoutReplay() async throws {
+        let authorization = RPCStreamingAuthorization()
+        let data = Data(#"{"id":1,"result":"must not be returned"}"#.utf8)
+        let started = expectation(description: "Response started")
+        let session = makeSession { _ in
+            .init(status: 401, chunks: [], finishes: false, started: { started.fulfill() })
+        }
+        defer { session.invalidateAndCancel(); RPCStreamingURLProtocol.reset() }
+        let budget = SafariRPCResponseBudget(maximumBytes: data.count)
+        let execution = execution(maximumResponseBytes: data.count, budget: budget)
+        let endpoint = alchemyEndpoint()
+        let request = try request()
+        let pending = Task {
+            try await SafariRPCClient(urlSession: session, authorizationProvider: authorization).send(
+                endpoint: endpoint, request: request, execution: execution
+            )
+        }
+        defer { pending.cancel() }
+        await fulfillment(of: [started], timeout: 2)
+        let tasks: [URLSessionTask] = await withCheckedContinuation { continuation in
+            session.getAllTasks { continuation.resume(returning: $0) }
+        }
+        let task = try XCTUnwrap(tasks.first as? URLSessionDataTask)
+        let delegate = try XCTUnwrap(task.delegate as? any URLSessionDataDelegate)
+        let headers = try XCTUnwrap(HTTPURLResponse(
+            url: endpoint.url, statusCode: 401, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"]
+        ))
+        let accepted = expectation(description: "Unauthorized headers accepted")
+        delegate.urlSession?(session, dataTask: task, didReceive: headers) { disposition in
+            XCTAssertEqual(disposition, .allow)
+            accepted.fulfill()
+        }
+        await fulfillment(of: [accepted], timeout: 2)
+        delegate.urlSession?(session, dataTask: task, didReceive: data)
+        XCTAssertEqual(budget.bufferedBytes, data.count)
+        delegate.urlSession?(session, task: task, didCompleteWithError: URLError(.networkConnectionLost))
+        await assertFailure(.transport) { try await pending.value }
+        XCTAssertTrue(execution.dispatched)
+        XCTAssertEqual(authorization.invalidatedTokens, ["initial"])
+        XCTAssertEqual(authorization.replacementCount, 0)
+        XCTAssertEqual(RPCStreamingURLProtocol.requestCount, 1)
+        XCTAssertEqual(budget.bufferedBytes, 0)
+    }
+
     func testRawSubmissionResponseLimitFailuresInvalidateWithoutReplay() async throws {
         let chunk = Data(repeating: 65, count: 32)
         let cases: [(headers: [String: String], chunks: [Data], occupiedBytes: Int, failure: SafariRPCFailure)] = [

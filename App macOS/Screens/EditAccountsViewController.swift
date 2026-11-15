@@ -26,10 +26,9 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
     var makePreviewSession: @Sendable (WalletsManager, WalletSnapshot, WalletAccessSession) async throws -> any AccountPreviewSession = {
         try await $0.previewSession(wallet: $1, access: $2)
     }
+    var waitForPreviewLayout: @MainActor () async -> Void = { await Task.yield() }
     private(set) var previewState: AccountPreviewState!
     private let previewAccountsPreloadThreshold = 4
-    private var previewLayoutTask: Task<Void, Never>?
-    private var previewPagingTask: Task<Void, Never>?
     private var mutationTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
     private var didAppear = false
@@ -103,6 +102,7 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
                 let session = try await walletAccess.requireCurrentAccess()
                 return try await makePreviewSession(walletsManager, $0, session)
             },
+            waitForLayout: waitForPreviewLayout,
             didChange: { [weak self] in self?.previewDidChange($0) }
         )
         if walletsManager.isStoreReady { previewState.reset() }
@@ -116,12 +116,10 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
         super.viewDidAppear()
         guard validateManagementActions() else { return }
         didAppear = true
-        previewMoreAccountsIfNeededForCurrentViewport()
+        requestPreviewPaging()
     }
 
     isolated deinit {
-        previewLayoutTask?.cancel()
-        previewPagingTask?.cancel()
         mutationTask?.cancel()
         retryTask?.cancel()
         previewState?.invalidate()
@@ -193,10 +191,6 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
     }
 
     private func invalidatePreviewAccounts() {
-        previewLayoutTask?.cancel()
-        previewLayoutTask = nil
-        previewPagingTask?.cancel()
-        previewPagingTask = nil
         previewState?.invalidate()
     }
 
@@ -209,33 +203,23 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
         switch change {
         case .reload:
             tableView.reloadData()
-        case .initialPage(let generation):
+        case .initialPage:
             tableView.reloadData()
-            enablePreviewMoreAccountsAfterCurrentLayout(for: generation)
+            requestPreviewPaging()
         case .append(let range):
             tableView.insertRows(at: IndexSet(integersIn: range))
+            requestPreviewPaging()
         case .selection, .status:
             break
         }
     }
 
-    private func enablePreviewMoreAccountsAfterCurrentLayout(for generation: UInt64) {
-        previewLayoutTask?.cancel()
-        previewLayoutTask = Task { [weak self] in
-            await Task.yield()
-            guard let self, !Task.isCancelled,
-                  validateManagementActions(),
-                  previewState.activatePaging(for: generation) else { return }
-            guard self.didAppear else { return }
-            self.previewMoreAccountsIfNeededForCurrentViewport()
+    private func requestPreviewPaging() {
+        guard hasCurrentPresentation else { return }
+        previewState?.requestPaging { [weak self] in
+            guard let self, didAppear, validateManagementActions(), walletsManager.isStoreReady else { return false }
+            return shouldPreviewMoreAccountsForCurrentViewport()
         }
-    }
-
-    private func previewMoreAccountsIfNeededForCurrentViewport() {
-        guard validateManagementActions(), walletsManager.isStoreReady, let previewState else { return }
-        guard shouldPreviewMoreAccountsForCurrentViewport(), !isRetired,
-              self.previewState === previewState else { return }
-        previewState.loadMore()
     }
 
     private func shouldPreviewMoreAccountsForCurrentViewport() -> Bool {
@@ -255,15 +239,8 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
 
     private func schedulePreviewPaging(after row: Int) {
         guard !isRetired, let previewState,
-              row >= previewState.accounts.count - previewAccountsPreloadThreshold,
-              previewPagingTask == nil else { return }
-        previewPagingTask = Task { [weak self] in
-            await Task.yield()
-            guard let self, !Task.isCancelled else { return }
-            previewPagingTask = nil
-            guard validateManagementActions(), walletsManager.isStoreReady, let previewState = self.previewState else { return }
-            previewState.loadMore()
-        }
+              row >= previewState.accounts.count - previewAccountsPreloadThreshold else { return }
+        requestPreviewPaging()
     }
 
     @objc private func walletsChanged() {
@@ -276,11 +253,6 @@ class EditAccountsViewController: NSViewController, NativeWalletProtectedContent
 
     @objc private func storeLoadStateChanged() {
         guard validateManagementActions(), let previewState else { return }
-        if case .failed = walletsManager.loadState {
-            previewLayoutTask?.cancel()
-            previewPagingTask?.cancel()
-            previewPagingTask = nil
-        }
         if case .close = previewState.reconcileStore(
             loadState: walletsManager.loadState,
             wallet: walletsManager.currentWallet(id: previewState.wallet.id)

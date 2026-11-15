@@ -16,7 +16,7 @@ final class DurableProfilePersistenceTests: XCTestCase {
 
         XCTAssertEqual(disk.events, [
             "openDirectory:/group", "openDirectory:/group/bridge", "openDirectory:/group/bridge/profiles",
-            "entryKind", "create", "kind", "write:1", "full:1", "rename",
+            "entryMetadata", "create", "metadata", "write:1", "full:1", "rename",
             "sync:/group/bridge/profiles", "sync:/group/bridge", "sync:/group", "full:2",
         ])
         XCTAssertEqual(disk.createFlags, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW)
@@ -46,7 +46,7 @@ final class DurableProfilePersistenceTests: XCTestCase {
     func testEveryFailedStageClosesDescriptorsAndPreservesTheDurableCheckpoint() throws {
         let stages = [
             "openDirectory:/group", "openDirectory:/group/bridge", "openDirectory:/group/bridge/profiles",
-            "entryKind", "create", "kind", "write:1", "full:1", "rename",
+            "entryMetadata", "create", "metadata", "write:1", "full:1", "rename",
             "sync:/group/bridge/profiles", "sync:/group/bridge", "sync:/group", "full:2",
         ]
         for stage in stages {
@@ -107,7 +107,7 @@ final class DurableProfilePersistenceTests: XCTestCase {
 
     func testPublishedFileBarrierRejectsNonregularFilesAndPropagatesFailures() throws {
         let stages = [
-            "openDirectory:/group/bridge", "openPublished", "kind", "full:1",
+            "openDirectory:/group/bridge", "openPublished", "metadata", "full:1",
             "sync:/group/bridge/profiles", "sync:/group/bridge", "sync:/group", "full:2",
         ]
         for stage in stages {
@@ -118,7 +118,12 @@ final class DurableProfilePersistenceTests: XCTestCase {
         }
         let disk = DurablePersistenceDiskModel()
         var operations = disk.operations
-        operations.fileKind = { _ in .other }
+        let metadata = operations.files.metadata
+        operations.files.metadata = { descriptor in
+            var result = try metadata(descriptor)
+            result.mode = mode_t(S_IFDIR)
+            return result
+        }
         let writer = DurableProfilePersistence(directoryBoundary: boundary, operations: operations)
         XCTAssertThrowsError(try writer.synchronizePublishedFile(at: profile))
         XCTAssertTrue(disk.openDescriptors.isEmpty)
@@ -162,20 +167,20 @@ final class DurableProfilePersistenceTests: XCTestCase {
     func testNewDirectorySynchronizationFailureCanBeRetriedThroughTheBoundary() throws {
         try withRealDirectory { boundary, profile in
             var operations = DurableProfilePersistence.Operations.live
-            let openDirectory = operations.openDirectory
-            let openFile = operations.openFile
+            let openDirectory = operations.files.directories.openDirectory
+            let openDirectoryAt = operations.files.directories.openDirectoryAt
             let syncDirectory = operations.syncDirectory
             let paths = LockedTestValue([Int32: String]())
             let synchronizedPaths = LockedTestValue([String]())
             let shouldFail = LockedTestValue(true)
             let parent = profile.deletingLastPathComponent().deletingLastPathComponent().path
-            operations.openDirectory = { path in
+            operations.files.directories.openDirectory = { path in
                 let descriptor = try openDirectory(path)
                 paths.withValue { $0[descriptor] = path }
                 return descriptor
             }
-            operations.openFile = { directory, name, flags, mode in
-                let descriptor = try openFile(directory, name, flags, mode)
+            operations.files.directories.openDirectoryAt = { directory, name in
+                let descriptor = try openDirectoryAt(directory, name)
                 let parent = try XCTUnwrap(paths.value[directory])
                 paths.withValue { $0[descriptor] = (parent as NSString).appendingPathComponent(name) }
                 return descriptor
@@ -265,10 +270,10 @@ final class DurableProfilePersistenceTests: XCTestCase {
             let linkedProfile = linkedDirectory.appendingPathComponent("profiles/profile.state")
             let openedNames = LockedTestValue([String]())
             var operations = DurableProfilePersistence.Operations.live
-            let openFile = operations.openFile
-            operations.openFile = { directory, name, flags, mode in
+            let openDirectoryAt = operations.files.directories.openDirectoryAt
+            operations.files.directories.openDirectoryAt = { directory, name in
                 openedNames.withValue { $0.append(name) }
-                return try openFile(directory, name, flags, mode)
+                return try openDirectoryAt(directory, name)
             }
             let writer = DurableProfilePersistence(directoryBoundary: boundary, operations: operations)
             let original = Data("original".utf8)
@@ -292,28 +297,37 @@ final class DurableProfilePersistenceTests: XCTestCase {
             let metadataReads = LockedTestValue(0)
             let opened = LockedTestValue(Set<Int32>())
             var operations = DurableProfilePersistence.Operations.live
-            let live = operations
-            operations.openDirectory = { path in
-                let descriptor = try live.openDirectory(path)
+            let live = operations.files
+            operations.files.directories.openDirectory = { path in
+                let descriptor = try live.directories.openDirectory(path)
                 opened.withValue { _ = $0.insert(descriptor) }
                 return descriptor
             }
-            operations.openFile = { directory, name, flags, mode in
+            operations.files.directories.openDirectoryAt = { directory, name in
+                let descriptor = try live.directories.openDirectoryAt(directory, name)
+                opened.withValue { _ = $0.insert(descriptor) }
+                return descriptor
+            }
+            operations.files.openFile = { directory, name, flags, mode in
                 let descriptor = try live.openFile(directory, name, flags, mode)
                 opened.withValue { _ = $0.insert(descriptor) }
                 return descriptor
             }
-            operations.metadata = { descriptor in
+            operations.files.metadata = { descriptor in
                 metadataReads.withValue { $0 += 1 }
                 return try live.metadata(descriptor)
             }
-            operations.read = { descriptor, bytes, count in
+            operations.files.read = { descriptor, bytes, count in
                 reads.withValue { $0 += 1 }
                 return try live.read(descriptor, bytes, min(count, 2))
             }
-            operations.close = { descriptor in
+            operations.files.close = { descriptor in
                 XCTAssertTrue(opened.withValue { $0.remove(descriptor) != nil })
                 live.close(descriptor)
+            }
+            operations.files.directories.close = { descriptor in
+                XCTAssertTrue(opened.withValue { $0.remove(descriptor) != nil })
+                live.directories.close(descriptor)
             }
             let reader = DurableProfilePersistence(directoryBoundary: boundary, operations: operations)
 

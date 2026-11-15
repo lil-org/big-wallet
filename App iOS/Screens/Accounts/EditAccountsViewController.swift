@@ -12,12 +12,10 @@ class EditAccountsViewController: WalletAccessViewController {
     var makePreviewSession: @Sendable (WalletsManager, WalletSnapshot, WalletAccessSession) async throws -> any AccountPreviewSession = {
         try await $0.previewSession(wallet: $1, access: $2)
     }
-    var waitForInitialPreviewLayout: @MainActor () async -> Void = { await Task.yield() }
+    var waitForPreviewLayout: @MainActor () async -> Void = { await Task.yield() }
     private var layoutTask: Task<Void, Never>?
     private(set) var previewState: AccountPreviewState!
     private let previewAccountsPreloadThreshold = 4
-    private var previewActivationTask: Task<Void, Never>?
-    private var previewPreloadTask: Task<Void, Never>?
     private var mutationTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
     private var didAppear = false
@@ -62,6 +60,7 @@ class EditAccountsViewController: WalletAccessViewController {
                 let session = try requireCurrentAccess()
                 return try await makePreviewSession(walletsManager, wallet, session)
             },
+            waitForLayout: waitForPreviewLayout,
             didChange: { [weak self] in self?.previewDidChange($0) }
         )
         if validateCurrentAccess(), walletsManager.isStoreReady { previewState.reset() }
@@ -77,8 +76,6 @@ class EditAccountsViewController: WalletAccessViewController {
     }
     
     isolated deinit {
-        previewActivationTask?.cancel()
-        previewPreloadTask?.cancel()
         layoutTask?.cancel()
         mutationTask?.cancel()
         retryTask?.cancel()
@@ -99,7 +96,7 @@ class EditAccountsViewController: WalletAccessViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         didAppear = true
-        if !isRetired, validateCurrentAccess() { previewMoreAccountsIfNeededForCurrentViewport() }
+        requestPreviewPaging()
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -161,10 +158,6 @@ class EditAccountsViewController: WalletAccessViewController {
     }
 
     private func invalidatePreviewAccounts() {
-        previewActivationTask?.cancel()
-        previewActivationTask = nil
-        previewPreloadTask?.cancel()
-        previewPreloadTask = nil
         previewState?.invalidate()
     }
 
@@ -195,10 +188,6 @@ class EditAccountsViewController: WalletAccessViewController {
 
     @objc private func storeLoadStateChanged() {
         guard !isRetired, validateCurrentAccess(), let previewState else { return }
-        if case .failed = walletsManager.loadState {
-            previewActivationTask?.cancel()
-            previewPreloadTask?.cancel()
-        }
         if case .close = previewState.reconcileStore(
             loadState: walletsManager.loadState,
             wallet: walletsManager.currentWallet(id: previewState.wallet.id)
@@ -291,39 +280,22 @@ class EditAccountsViewController: WalletAccessViewController {
         switch change {
         case .reload:
             tableView.reloadData()
-        case .initialPage(let generation):
+        case .initialPage:
             tableView.reloadData()
-            enablePreviewMoreAccountsAfterCurrentLayout(for: generation)
+            requestPreviewPaging()
         case .append(let range):
             tableView.insertRows(at: range.map { IndexPath(row: $0, section: 0) }, with: .none)
+            requestPreviewPaging()
         case .selection, .status:
             break
         }
     }
 
-    private func enablePreviewMoreAccountsAfterCurrentLayout(for generation: UInt64) {
-        previewActivationTask?.cancel()
-        let waitForLayout = waitForInitialPreviewLayout
-        previewActivationTask = Task { [weak self] in
-            await waitForLayout()
-            guard let self, !Task.isCancelled, !isRetired, validateCurrentAccess(),
-                  previewState.activatePaging(for: generation) else { return }
-            guard self.didAppear else { return }
-            self.previewMoreAccountsIfNeededForCurrentViewport()
-        }
-    }
-
-    private func previewMoreAccountsIfNeededForCurrentViewport() {
-        guard !isRetired, validateCurrentAccess(), walletsManager.isStoreReady, shouldPreviewMoreAccountsForCurrentViewport() else { return }
-        previewState.loadMore()
-    }
-
-    private func scheduleMoreAccountsForDisplayedRow() {
-        previewPreloadTask?.cancel()
-        previewPreloadTask = Task { [weak self] in
-            await Task.yield()
-            guard let self, !Task.isCancelled, !isRetired, validateCurrentAccess(), walletsManager.isStoreReady else { return }
-            previewState.loadMore()
+    private func requestPreviewPaging() {
+        guard !isRetired, hasCurrentWalletPresentation else { return }
+        previewState?.requestPaging { [weak self] in
+            guard let self, !isRetired, didAppear, validateCurrentAccess(), walletsManager.isStoreReady else { return false }
+            return shouldPreviewMoreAccountsForCurrentViewport()
         }
     }
 
@@ -357,7 +329,7 @@ extension EditAccountsViewController: UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
         if hasCurrentWalletPresentation, indexPath.row >= previewState.accounts.count - previewAccountsPreloadThreshold {
-            scheduleMoreAccountsForDisplayedRow()
+            requestPreviewPaging()
         }
     }
     

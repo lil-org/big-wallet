@@ -285,29 +285,36 @@ final class HarnessPersistence: Sendable {
     private func operations(directoryBoundary: URL) -> DurableProfilePersistence.Operations {
         let live = DurableProfilePersistence.Operations.live
         var operations = live
-        operations.openDirectory = { [self] path in
-            let descriptor = try live.openDirectory(path)
+        operations.files.directories.openDirectory = { [self] path in
+            let descriptor = try live.files.directories.openDirectory(path)
             descriptors.withLock { $0[descriptor] = Descriptor(path: path) }
             return descriptor
         }
-        operations.openFile = { [self] directory, name, flags, mode in
-            let descriptor = try live.openFile(directory, name, flags, mode)
+        operations.files.directories.openDirectoryAt = { [self] directory, name in
+            let descriptor = try live.files.directories.openDirectoryAt(directory, name)
             descriptors.withLock { state in
                 state[descriptor] = Descriptor(path: (state[directory]?.path ?? "") + "/" + name)
             }
             return descriptor
         }
-        operations.metadata = { [self] descriptor in
+        operations.files.openFile = { [self] directory, name, flags, mode in
+            let descriptor = try live.files.openFile(directory, name, flags, mode)
+            descriptors.withLock { state in
+                state[descriptor] = Descriptor(path: (state[directory]?.path ?? "") + "/" + name)
+            }
+            return descriptor
+        }
+        operations.files.metadata = { [self] descriptor in
             let details = details(descriptor)
             try ipc.checkpointSync("persistence.stat.before", details: details)
-            let metadata = try live.metadata(descriptor)
+            let metadata = try live.files.metadata(descriptor)
             try ipc.checkpointSync("persistence.stat.after", details: details)
             return metadata
         }
-        operations.read = { [self] descriptor, bytes, count in
+        operations.files.read = { [self] descriptor, bytes, count in
             let details = details(descriptor).merging(["requestedBytes": .number(Double(count))])
             try ipc.checkpointSync("persistence.read.before", details: details)
-            let read = try live.read(descriptor, bytes, count)
+            let read = try live.files.read(descriptor, bytes, count)
             try ipc.checkpointSync("persistence.read.after", details: details.merging(["readBytes": .number(Double(read))]))
             return read
         }
@@ -353,10 +360,11 @@ final class HarnessPersistence: Sendable {
             try live.syncDirectory(directory)
             try ipc.checkpointSync("persistence.directorySync.after", details: details(directory))
         }
-        operations.close = { [self] descriptor in
+        operations.files.close = { [self] descriptor in
             descriptors.withLock { _ = $0.removeValue(forKey: descriptor) }
-            live.close(descriptor)
+            live.files.close(descriptor)
         }
+        operations.files.directories.close = operations.files.close
         return operations
     }
 

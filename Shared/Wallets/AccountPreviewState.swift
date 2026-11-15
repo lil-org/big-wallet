@@ -26,7 +26,7 @@ final class AccountPreviewState {
 
     enum Change: Equatable {
         case reload
-        case initialPage(UInt64)
+        case initialPage
         case append(Range<Int>)
         case selection
         case status
@@ -47,12 +47,13 @@ final class AccountPreviewState {
     private var selectedKeys: Set<WalletPreviewAccountKey>
     private let makeSession: @Sendable (WalletSnapshot) async throws -> any AccountPreviewSession
     private let timing: Timing
+    private let waitForLayout: @MainActor () async -> Void
     private let didChange: (Change) -> Void
     private var session: (any AccountPreviewSession)?
     private var preparingSession: (generation: UInt64, session: any AccountPreviewSession)?
     private var loadTask: Task<Void, Never>?
+    private var pagingTask: Task<Void, Never>?
     private var generation: UInt64 = 0
-    private var isPagingEnabled = false
     private var nextPage = 0
     private var lastCompletedPageAt: ContinuousClock.Instant?
     private var hasLoadedAllPages = false
@@ -63,17 +64,20 @@ final class AccountPreviewState {
         wallet: WalletSnapshot,
         makeSession: @escaping @Sendable (WalletSnapshot) async throws -> any AccountPreviewSession,
         timing: Timing = .live,
+        waitForLayout: @escaping @MainActor () async -> Void = { await Task.yield() },
         didChange: @escaping (Change) -> Void
     ) {
         self.wallet = wallet
         selectedKeys = Set(wallet.accounts.map(\.previewAccountKey))
         self.makeSession = makeSession
         self.timing = timing
+        self.waitForLayout = waitForLayout
         self.didChange = didChange
     }
 
     isolated deinit {
         loadTask?.cancel()
+        pagingTask?.cancel()
         session?.invalidate()
         preparingSession?.session.invalidate()
     }
@@ -199,7 +203,7 @@ final class AccountPreviewState {
                 hasLoadedAllPages = reachedEnd
                 lastCompletedPageAt = timing.now()
                 status = .ready
-                didChange(.initialPage(generation))
+                didChange(.initialPage)
             } catch {
                 guard !Task.isCancelled, let self, self.generation == generation else { return }
                 loadTask = nil
@@ -209,14 +213,24 @@ final class AccountPreviewState {
         }
     }
 
-    func activatePaging(for generation: UInt64) -> Bool {
-        guard self.generation == generation, session != nil, loadTask == nil, status == .ready else { return false }
-        isPagingEnabled = true
-        return true
+    func requestPaging(afterLayout needsMoreAccounts: @escaping @MainActor () -> Bool) {
+        guard pagingTask == nil, loadTask == nil, session != nil,
+              !hasLoadedAllPages, status == .ready else { return }
+        let generation = generation
+        let waitForLayout = waitForLayout
+        pagingTask = Task { [weak self] in
+            guard !Task.isCancelled else { return }
+            await waitForLayout()
+            guard !Task.isCancelled, let self, self.generation == generation else { return }
+            let needsMore = needsMoreAccounts()
+            guard !Task.isCancelled, self.generation == generation else { return }
+            pagingTask = nil
+            if needsMore { loadMore() }
+        }
     }
 
-    func loadMore() {
-        guard isPagingEnabled, let session, loadTask == nil, !hasLoadedAllPages, status == .ready else { return }
+    private func loadMore() {
+        guard let session, loadTask == nil, !hasLoadedAllPages, status == .ready else { return }
         let generation = generation
         let page = nextPage
         let deadline = lastCompletedPageAt.map { $0 + Self.minimumPreviewInterval }
@@ -246,7 +260,6 @@ final class AccountPreviewState {
                 loadTask = nil
                 self.session?.invalidate()
                 self.session = nil
-                isPagingEnabled = false
                 status = .failed(page: page)
                 didChange(.status)
             }
@@ -310,14 +323,16 @@ final class AccountPreviewState {
     private func cancelWork() {
         generation &+= 1
         let task = loadTask
+        let paging = pagingTask
         let currentSession = session
         let initialSession = preparingSession?.session
         loadTask = nil
+        pagingTask = nil
         session = nil
         preparingSession = nil
-        isPagingEnabled = false
         currentSession?.invalidate()
         initialSession?.invalidate()
         task?.cancel()
+        paging?.cancel()
     }
 }

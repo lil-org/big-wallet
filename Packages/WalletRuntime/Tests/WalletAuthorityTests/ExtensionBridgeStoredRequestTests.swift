@@ -7113,25 +7113,23 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: library.path))
 
         var operations = DurableProfilePersistence.Operations.live
-        let openDirectory = operations.openDirectory
-        let openFile = operations.openFile
+        let openDirectory = operations.files.directories.openDirectory
+        let openDirectoryAt = operations.files.directories.openDirectoryAt
         let syncDirectory = operations.syncDirectory
         let directoryPaths = LockedTestValue([Int32: String]())
         let synchronizedPaths = LockedTestValue([String]())
         let failBoundarySynchronization = LockedTestValue(false)
-        operations.openDirectory = { path in
+        operations.files.directories.openDirectory = { path in
             XCTAssertEqual(path, container.path)
             let descriptor = try openDirectory(path)
             directoryPaths.withValue { $0[descriptor] = path }
             return descriptor
         }
-        operations.openFile = { parent, name, flags, mode in
-            let descriptor = try openFile(parent, name, flags, mode)
-            if flags & O_DIRECTORY != 0 {
-                let parentPath = try XCTUnwrap(directoryPaths.value[parent])
-                let path = URL(fileURLWithPath: parentPath).appendingPathComponent(name).path
-                directoryPaths.withValue { $0[descriptor] = path }
-            }
+        operations.files.directories.openDirectoryAt = { parent, name in
+            let descriptor = try openDirectoryAt(parent, name)
+            let parentPath = try XCTUnwrap(directoryPaths.value[parent])
+            let path = URL(fileURLWithPath: parentPath).appendingPathComponent(name).path
+            directoryPaths.withValue { $0[descriptor] = path }
             return descriptor
         }
         operations.syncDirectory = { descriptor in

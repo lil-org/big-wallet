@@ -2673,7 +2673,7 @@ final class SafariApprovalVaultTests: XCTestCase {
 
     func testTombstoneBarrierFailuresStopPublicationBeforeKeyChanges() throws {
         let source = try fixture().source
-        for stage in ["openDirectory", "entryKind", "create", "kind", "full:1", "rename", "sync", "full:2"] {
+        for stage in ["openDirectory", "entryMetadata", "create", "metadata", "full:1", "rename", "sync", "full:2"] {
             let url = temporaryURL()
             defer { try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock")) }
             let disk = DurablePersistenceDiskModel(fileURL: url, contents: nil)
@@ -2705,7 +2705,7 @@ final class SafariApprovalVaultTests: XCTestCase {
 
     func testEnvelopeBarrierFailuresDoNotPublishOrRetainKeys() throws {
         let source = try fixture().source
-        for stage in ["openDirectory", "entryKind", "create", "kind", "write:1", "full:1", "rename", "sync", "full:2"] {
+        for stage in ["openDirectory", "entryMetadata", "create", "metadata", "write:1", "full:1", "rename", "sync", "full:2"] {
             let url = temporaryURL()
             defer { try? FileManager.default.removeItem(at: url.appendingPathExtension("coordination-lock")) }
             let disk = DurablePersistenceDiskModel(fileURL: url, contents: nil)

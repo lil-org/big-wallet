@@ -210,6 +210,10 @@ the wallet checks its source and issuing epoch again.
 
 The account editor merges external account changes into its open draft. Local additions and removals are reapplied to the latest wallet; untouched accounts follow that wallet's current state. An edit already satisfied externally becomes clean, so later external changes apply normally. Existing preview pages remain available, and only removal or replacement of the wallet closes the editor. Saving still merges against current storage and cannot remove the final account.
 
+The shared preview state coalesces paging requests and waits for layout before
+asking the controller whether the viewport needs more accounts. It owns paging
+cancellation and throttling; controllers report demand and render changes.
+
 Removing the final account uses one confirmation containing both the last-account
 warning and the irreversible-removal warning, followed by fresh authentication.
 The deletion transaction checks that the confirmed account is still the wallet's
