@@ -17,10 +17,10 @@ struct SolanaDappRequestProcessor {
             case .internalError:
                 return .internalError
             case .malformedPayload:
-                return .init(message: AuthorityStrings.somethingWentWrong, code: 4200)
+                return .init(messageKey: .somethingWentWrong, code: 4200)
             case .unauthorized(let publicKey):
                 return .init(
-                    message: AuthorityStrings.providerNotReady,
+                    messageKey: .providerNotReady,
                     code: 4100,
                     context: .unauthorizedPublicKey(publicKey)
                 )
@@ -35,7 +35,8 @@ struct SolanaDappRequestProcessor {
         body: SafariRequest.Solana,
         catalog: WalletReviewCatalog?,
         solana: SolanaSigner = SolanaSigner(),
-        endpoints: any SolanaEndpointResolving
+        endpoints: any SolanaEndpointResolving,
+        labels: SolanaTransactionSummaryFormatter.Labels
     ) -> UnboundDappRequestPreparation {
         switch body.method {
         case .connect:
@@ -50,7 +51,7 @@ struct SolanaDappRequestProcessor {
                 body: body,
                 catalog: catalog,
                 solana: solana,
-                endpoints: endpoints
+                endpoints: endpoints, labels: labels
             )
         }
     }
@@ -93,7 +94,8 @@ struct SolanaDappRequestProcessor {
         body: SafariRequest.Solana,
         catalog: WalletReviewCatalog,
         solana: SolanaSigner,
-        endpoints: any SolanaEndpointResolving
+        endpoints: any SolanaEndpointResolving,
+        labels: SolanaTransactionSummaryFormatter.Labels
     ) -> UnboundDappRequestPreparation {
         let walletID: String
         let account: WalletAccount
@@ -108,7 +110,7 @@ struct SolanaDappRequestProcessor {
             return .immediate(immediateFailure(to: request, error: error))
         }
 
-        switch preparedSigningReviewContent(body: body, solana: solana) {
+        switch preparedSigningReviewContent(body: body, solana: solana, labels: labels) {
         case .success(let content):
             let capturedEndpoints: [Solana.Cluster: SolanaRPCEndpoint]
             switch content.payload {
@@ -135,15 +137,16 @@ struct SolanaDappRequestProcessor {
 
     private static func preparedSigningReviewContent(
         body: SafariRequest.Solana,
-        solana: SolanaSigner
+        solana: SolanaSigner,
+        labels: SolanaTransactionSummaryFormatter.Labels
     ) -> Result<SigningReviewContent, ProviderError> {
         switch body.method {
         case .signAllTransactions:
-            return signAllTransactionsReviewContent(body: body, solana: solana)
+            return signAllTransactionsReviewContent(body: body, solana: solana, labels: labels)
         case .signAndSendTransaction:
-            return signAndSendReviewContent(body: body, solana: solana)
+            return signAndSendReviewContent(body: body, solana: solana, labels: labels)
         case .signMessage, .signTransaction:
-            return messageReviewContent(body: body, solana: solana)
+            return messageReviewContent(body: body, solana: solana, labels: labels)
         case .connect:
             return .failure(.internalError)
         }
@@ -151,7 +154,8 @@ struct SolanaDappRequestProcessor {
 
     private static func signAllTransactionsReviewContent(
         body: SafariRequest.Solana,
-        solana: SolanaSigner
+        solana: SolanaSigner,
+        labels: SolanaTransactionSummaryFormatter.Labels
     ) -> Result<SigningReviewContent, ProviderError> {
         guard let messages = body.messages else {
             return .failure(.malformedPayload)
@@ -172,7 +176,7 @@ struct SolanaDappRequestProcessor {
             subject: .approveTransaction,
             meta: SolanaTransactionSummaryFormatter.approvalMessage(
                 encodedMessages: messages,
-                preparedMessages: preparedMessages, labels: summaryLabels
+                preparedMessages: preparedMessages, labels: labels
             ),
             payload: .signature(.solanaTransactions(preparedMessages))
         ))
@@ -180,7 +184,8 @@ struct SolanaDappRequestProcessor {
 
     private static func signAndSendReviewContent(
         body: SafariRequest.Solana,
-        solana: SolanaSigner
+        solana: SolanaSigner,
+        labels: SolanaTransactionSummaryFormatter.Labels
     ) -> Result<SigningReviewContent, ProviderError> {
         let sendOptions: Solana.PreparedSendOptions
         switch SolanaSigner.preparedSendOptions(from: body.sendOptions) {
@@ -199,7 +204,7 @@ struct SolanaDappRequestProcessor {
                     subject: .approveTransaction,
                     meta: transactionApprovalMessage(
                         message: transaction.approvalMessage,
-                        preparedMessage: transaction.preparedMessage
+                        preparedMessage: transaction.preparedMessage, labels: labels
                     ),
                     payload: .solanaSerializedBroadcast(transaction, sendOptions)
                 )
@@ -211,7 +216,7 @@ struct SolanaDappRequestProcessor {
                 subject: .approveTransaction,
                 meta: transactionApprovalMessage(
                     message: transaction.approvalMessage,
-                    preparedMessage: transaction.preparedMessage
+                    preparedMessage: transaction.preparedMessage, labels: labels
                 ),
                 payload: .solanaLegacyBroadcast(transaction, sendOptions)
             )
@@ -220,7 +225,8 @@ struct SolanaDappRequestProcessor {
 
     private static func messageReviewContent(
         body: SafariRequest.Solana,
-        solana: SolanaSigner
+        solana: SolanaSigner,
+        labels: SolanaTransactionSummaryFormatter.Labels
     ) -> Result<SigningReviewContent, ProviderError> {
         guard let canonicalMessage = body.message else {
             return .failure(.malformedPayload)
@@ -240,7 +246,7 @@ struct SolanaDappRequestProcessor {
                 meta: approvalMessage(
                     for: body,
                     canonicalMessage: canonicalMessage,
-                    decodedMessageData: messageData
+                    decodedMessageData: messageData, labels: labels
                 ),
                 payload: .signature(.solanaMessage(messageData))
             ))
@@ -254,7 +260,7 @@ struct SolanaDappRequestProcessor {
                     subject: .approveTransaction,
                     meta: transactionApprovalMessage(
                         message: canonicalMessage,
-                        preparedMessage: preparedMessage
+                        preparedMessage: preparedMessage, labels: labels
                     ),
                     payload: .signature(.solanaTransaction(preparedMessage))
                 )
@@ -291,12 +297,13 @@ struct SolanaDappRequestProcessor {
     private static func approvalMessage(
         for body: SafariRequest.Solana,
         canonicalMessage: String,
-        decodedMessageData: Data? = nil
+        decodedMessageData: Data? = nil,
+        labels: SolanaTransactionSummaryFormatter.Labels
     ) -> String {
         guard body.method == .signMessage, !body.displayHex else {
             return body.method == .signMessage
                 ? canonicalMessage
-                : SolanaTransactionSummaryFormatter.rawApprovalMessage(messages: [canonicalMessage], labels: summaryLabels)
+                : SolanaTransactionSummaryFormatter.rawApprovalMessage(messages: [canonicalMessage], labels: labels)
         }
         guard let messageData = decodedMessageData ?? WalletCrypto.hexData(string: canonicalMessage),
               let messageText = String(data: messageData, encoding: .utf8),
@@ -306,17 +313,14 @@ struct SolanaDappRequestProcessor {
         return messageText
     }
 
-    private static var summaryLabels: SolanaTransactionSummaryFormatter.Labels {
-        .init(rawTransactionWarning: AuthorityStrings.rawSolanaTransactionWarning, data: AuthorityStrings.data)
-    }
-
     private static func transactionApprovalMessage(
         message: String,
-        preparedMessage: SolanaPreparedTransactionMessage
+        preparedMessage: SolanaPreparedTransactionMessage,
+        labels: SolanaTransactionSummaryFormatter.Labels
     ) -> String {
         return SolanaTransactionSummaryFormatter.approvalMessage(
             encodedMessages: [message],
-            preparedMessages: [preparedMessage], labels: summaryLabels
+            preparedMessages: [preparedMessage], labels: labels
         )
     }
 
@@ -382,7 +386,7 @@ struct SolanaDappRequestProcessor {
         return ResponseToExtension(
             for: request,
             payload: .error(.init(
-                message: AuthorityStrings.transactionSubmissionStatusUnknown,
+                messageKey: .transactionSubmissionStatusUnknown,
                 code: ProviderResponseError.transactionSubmissionUnknownCode,
                 context: .transactionSignature(signature)
             ))
@@ -430,11 +434,11 @@ struct SolanaDappRequestProcessor {
     ) -> ProviderResponseError {
         switch error {
         case .invalidMessage:
-            return .init(message: AuthorityStrings.somethingWentWrong, code: 4200)
+            return .init(messageKey: .somethingWentWrong, code: 4200)
         case .invalidSendOptions:
-            return .init(message: AuthorityStrings.unsupportedSolanaSendOptions, code: 4200)
+            return .init(messageKey: .unsupportedSolanaSendOptions, code: 4200)
         case .blockhashNotFound:
-            return .init(message: AuthorityStrings.solanaBlockhashNotFound, code: -32003)
+            return .init(messageKey: .solanaBlockhashNotFound, code: -32003)
         case .confirmationFailed(let signature, let message, let code):
             return .init(
                 message: message,
@@ -443,23 +447,23 @@ struct SolanaDappRequestProcessor {
             )
         case .confirmationTimedOut(let signature):
             return .init(
-                message: AuthorityStrings.solanaConfirmationTimedOut,
+                messageKey: .solanaConfirmationTimedOut,
                 code: -32005,
                 context: .transactionSignature(signature)
             )
         case .unsupportedMultiSignature:
-            return .init(message: AuthorityStrings.failedToSend, code: 4200)
+            return .init(messageKey: .failedToSend, code: 4200)
         case .rpcError(let message, let code):
             return .init(message: message, code: code ?? -32003)
         case .rpcUnavailable:
             return .internalError
         case .notSubmitted:
             return .init(
-                message: AuthorityStrings.failedToSend,
+                messageKey: .failedToSend,
                 code: ProviderResponseError.internalErrorCode
             )
         case .unknown:
-            return .init(message: AuthorityStrings.failedToSend, code: -32003)
+            return .init(messageKey: .failedToSend, code: -32003)
         }
     }
 }

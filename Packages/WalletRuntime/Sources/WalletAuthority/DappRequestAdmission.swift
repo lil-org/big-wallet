@@ -14,26 +14,21 @@ public final class DappRequestAdmission {
     private let store: PopupRequestStore
     private let requestProcessor: DappRequestProcessing
     private let reviewCatalog: (() async -> WalletReviewCatalog?)?
-    private let messages: AuthorityMessages
 
     init(
         store: PopupRequestStore,
         requestProcessor: DappRequestProcessing,
-        reviewCatalog: (() async -> WalletReviewCatalog?)? = nil,
-        messages: AuthorityMessages = .testingEnglish
+        reviewCatalog: (() async -> WalletReviewCatalog?)? = nil
     ) {
         self.store = store
         self.requestProcessor = requestProcessor
         self.reviewCatalog = reviewCatalog
-        self.messages = messages
     }
 
     public func materialize(
         handle: RequestHandle
     ) async -> DappAdmissionDisposition {
-        await AuthorityMessageContext.$current.withValue(messages) {
-            await materializeScoped(handle: handle)
-        }
+        await materializeScoped(handle: handle)
     }
 
     private func materializeScoped(handle: RequestHandle) async -> DappAdmissionDisposition {

@@ -280,11 +280,18 @@ extension UIViewController {
 
 @MainActor
 final class MobileWalletRootViewController: UIViewController, WalletAccessObserver {
+    private enum Presentation {
+        case authentication, locked
+        case accounts(generation: UInt64)
+    }
+
     private let access: WalletAccessController
     private let registerWindow: (UIWindow) -> Void
     private let makeAccounts: (WalletAccessController) -> UIViewController
     private let makeAuthentication: (WalletAccessController) -> UIViewController
-    private var presentationRevision: UInt64 = 0
+    private var pendingPresentation: Presentation?
+    private var isReplacingContent = false
+    private var preparingContent: UIViewController?
     private(set) var content: UIViewController?
 
     init(
@@ -328,69 +335,93 @@ final class MobileWalletRootViewController: UIViewController, WalletAccessObserv
     isolated deinit { access.removeObserver(self) }
 
     func walletAccessDidLock() {
-        replaceContent {
-            let revision = presentationRevision
-            return MobileWalletLockedViewController { [weak self] locked in
-                guard let self, presentationRevision == revision, content === locked else { return }
-                showAuthentication()
-            }
-        }
+        replaceContent(with: .locked)
     }
 
     func walletAccessDidUnlock() {
         guard access.validateCurrentAccess() else { return }
-        replaceContent { makeAccounts(access) }
+        replaceContent(with: .accounts(generation: access.generation))
     }
 
     private func showAuthentication() {
         guard access.isLocked else { return }
-        replaceContent { makeAuthentication(access) }
+        replaceContent(with: .authentication)
     }
 
-    private func replaceContent(_ makeContent: () -> UIViewController) {
-        presentationRevision &+= 1
-        let revision = presentationRevision
-        let generation = access.generation
-        let next = makeContent()
-        guard presentationRevision == revision, access.generation == generation else { return }
+    private func replaceContent(with presentation: Presentation) {
+        let startsTransition = !isReplacingContent
+        isReplacingContent = true
+        pendingPresentation = presentation
+        if case .locked = presentation {
+            conceal(content)
+            if preparingContent !== content { conceal(preparingContent) }
+        }
+        guard startsTransition else { return }
+        defer { isReplacingContent = false }
+        while let presentation = pendingPresentation {
+            pendingPresentation = nil
+            install(presentation)
+        }
+    }
+
+    private func accepts(_ presentation: Presentation) -> Bool {
+        let valid: Bool
+        switch presentation {
+        case .authentication, .locked: valid = access.isLocked
+        case .accounts(let generation): valid = access.validateCurrentAccess(expectedGeneration: generation)
+        }
+        return valid && pendingPresentation == nil
+    }
+
+    private func install(_ presentation: Presentation) {
+        guard accepts(presentation) else { return }
+        let next: UIViewController
+        switch presentation {
+        case .authentication: next = makeAuthentication(access)
+        case .accounts: next = makeAccounts(access)
+        case .locked:
+            next = MobileWalletLockedViewController { [weak self] locked in
+                guard let self, content === locked else { return }
+                showAuthentication()
+            }
+        }
+        preparingContent = next
+        defer { preparingContent = nil }
+        guard accepts(presentation) else { discard(next); return }
         next.loadViewIfNeeded()
-        guard presentationRevision == revision, access.generation == generation,
-              let nextView = next.viewIfLoaded else { return }
-        let previous = content
-        previous?.clearPresentedWalletInputs()
-        guard presentationRevision == revision, access.generation == generation else { return }
-        previous?.viewIfLoaded?.endEditing(true)
-        guard presentationRevision == revision, access.generation == generation else { return }
-        previous?.dismissPresentedWalletContent()
-        guard presentationRevision == revision, access.generation == generation else { return }
-        previous?.willMove(toParent: nil)
-        guard presentationRevision == revision, access.generation == generation else { return }
-        previous?.viewIfLoaded?.removeFromSuperview()
-        previous?.removeFromParent()
-        guard presentationRevision == revision, access.generation == generation else { return }
+        let nextView = next.view!
+        nextView.isHidden = true
+        nextView.accessibilityElementsHidden = true
+        guard accepts(presentation) else { discard(next); return }
+
+        if let previous = content { discard(previous) }
+        guard accepts(presentation) else { discard(next); return }
         content = next
         addChild(next)
-        guard presentationRevision == revision, access.generation == generation else {
-            discardRetiredContent(next)
-            return
-        }
         nextView.frame = view.bounds
         nextView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(nextView)
-        guard presentationRevision == revision, content === next else {
-            discardRetiredContent(next)
-            return
-        }
         next.didMove(toParent: self)
-        guard presentationRevision == revision, content === next else {
-            discardRetiredContent(next)
-            return
-        }
+        guard accepts(presentation) else { discard(next); return }
+        nextView.accessibilityElementsHidden = false
+        nextView.isHidden = false
+        guard accepts(presentation) else { discard(next); return }
+        preparingContent = nil
         if let window = view.window { registerWindow(window) }
     }
 
-    private func discardRetiredContent(_ controller: UIViewController) {
-        guard content !== controller else { return }
+    private func conceal(_ controller: UIViewController?) {
+        controller?.viewIfLoaded?.isHidden = true
+        controller?.viewIfLoaded?.accessibilityElementsHidden = true
+        controller?.clearPresentedWalletInputs()
+        controller?.viewIfLoaded?.endEditing(true)
+        controller?.dismissPresentedWalletContent()
+    }
+
+    private func discard(_ controller: UIViewController) {
+        if content === controller { content = nil }
+        conceal(controller)
+        if controller.parent === self { controller.willMove(toParent: nil) }
         controller.viewIfLoaded?.removeFromSuperview()
         if controller.parent === self { controller.removeFromParent() }
     }

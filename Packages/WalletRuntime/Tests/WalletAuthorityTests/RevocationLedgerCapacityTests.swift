@@ -176,7 +176,7 @@ final class RevocationLedgerCapacityTests: XCTestCase {
         let callbacks = LockedTestValue(0)
         let sameEpoch = originalEpoch
         let store = ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL,
-            dependencies: .init(revocationEpoch: { sameEpoch }))
+            dependencies: .init(messages: .testingEnglish, revocationEpoch: { sameEpoch }))
         XCTAssertThrowsError(try store.perform(preparing: {
             PreparedWalletSourceMutation(payload: (), authorityRemovals: [.wallet(id: "new-wallet")])
         }, beforeCommit: { callbacks.increment() }, commit: { _ in callbacks.increment() }))
@@ -193,7 +193,7 @@ final class RevocationLedgerCapacityTests: XCTestCase {
         let errors = LockedTestValue([String]())
         DispatchQueue.concurrentPerform(iterations: 8) { index in
             let store = ExtensionRequestFileStore(rootURL: root, directoryBoundary: root,
-                dependencies: .init(revocationEpoch: { replacement }, crossProcessLockTimeoutNanoseconds: 30_000_000_000))
+                dependencies: .init(messages: .testingEnglish, revocationEpoch: { replacement }, crossProcessLockTimeoutNanoseconds: 30_000_000_000))
             do {
                 try store.perform(preparing: {
                     PreparedWalletSourceMutation(payload: index, authorityRemovals: [.wallet(id: "new-\(index)")])
@@ -223,7 +223,7 @@ final class RevocationLedgerCapacityTests: XCTestCase {
         configure: (inout ExtensionRequestStoreFiles.IO) -> Void = { _ in }
     ) -> ExtensionRequestFileStore {
         let replacement = replacementEpoch
-        return ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(
+        return ExtensionRequestFileStore(rootURL: rootURL, directoryBoundary: rootURL, dependencies: .init(messages: .testingEnglish,
             revocationEpoch: { replacement }, fileIO: approvalStoreIO(directoryBoundary: rootURL, configure: configure)
         ))
     }

@@ -517,7 +517,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
                 try? FileManager.default.removeItem(at: directory)
                 fixture.clearMetadata()
             }
-            let store = ExtensionRequestFileStore(rootURL: directory, directoryBoundary: directory)
+            let store = ExtensionRequestFileStore(rootURL: directory, directoryBoundary: directory, dependencies: .init(messages: .testingEnglish))
             let staleWallet = try fixture.persistedWallet()
             let retained = staleWallet.accounts[0]
             let removed = staleWallet.accounts[1]
@@ -1307,7 +1307,7 @@ final class WalletRemovalIntegrationTests: XCTestCase {
             try? FileManager.default.removeItem(at: directory)
             fixture.clearMetadata()
         }
-        let store = ExtensionRequestFileStore(rootURL: directory, directoryBoundary: directory)
+        let store = ExtensionRequestFileStore(rootURL: directory, directoryBoundary: directory, dependencies: .init(messages: .testingEnglish))
         let manager = fixture.transactionManager(store)
         await assertWalletReload(manager)
         let wallet = try XCTUnwrap(manager.wallets.first { $0.id == fixture.walletID })
@@ -2383,7 +2383,7 @@ final class WalletSigningScopeTests: XCTestCase {
             )
             let signer = try await boundWalletSigningSessionForTesting(signerPreparation, permit: permit)
             let response = try walletSigningResponseForTesting(await signer.sign().get(), permit: permit)
-            let signature = try XCTUnwrap(response.json["result"] as? String)
+            let signature = try XCTUnwrap(response.json(messages: .testingEnglish)["result"] as? String)
             XCTAssertEqual(signature, expectedSignature)
             assertUnavailable(await signer.sign())
         }
@@ -2516,7 +2516,7 @@ final class WalletSigningScopeTests: XCTestCase {
             )
             let signer = try await boundWalletSigningSessionForTesting(signerPreparation, permit: permit)
             let signatures: [String]
-            let value = try walletSigningResponseForTesting(await signer.sign().get(), permit: permit).json["result"]
+            let value = try walletSigningResponseForTesting(await signer.sign().get(), permit: permit).json(messages: .testingEnglish)["result"]
             if let single = value as? String { signatures = [single] }
             else { signatures = try XCTUnwrap(value as? [String]) }
             XCTAssertEqual(signatures.count, expectedMessages.count)
@@ -2553,8 +2553,8 @@ final class WalletSigningScopeTests: XCTestCase {
                 return XCTFail("A malformed batch must not issue a partial signing approval")
             }
             let response = try XCTUnwrap(resolution.response(for: request))
-            XCTAssertNotNil(response.json["error"])
-            XCTAssertNil(response.json["result"])
+            XCTAssertNotNil(response.json(messages: .testingEnglish)["error"])
+            XCTAssertNil(response.json(messages: .testingEnglish)["result"])
         }
     }
 

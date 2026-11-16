@@ -81,7 +81,7 @@ struct EthereumDappRequestProcessor {
             guard let walletAndAccount else {
                 return .immediate(immediateFailure(
                     to: request,
-                    error: .init(message: AuthorityStrings.providerNotReady, code: 4100)
+                    error: .init(messageKey: .providerNotReady, code: 4100)
                 ))
             }
 
@@ -101,19 +101,19 @@ struct EthereumDappRequestProcessor {
             }
             return .immediate(immediateFailure(
                 to: request,
-                error: .init(message: AuthorityStrings.failedToVerify)
+                error: .init(messageKey: .failedToVerify)
             ))
         case .switchEthereumChain:
             guard let chainId = body.switchToChainId else {
                 return .immediate(immediateFailure(
                     to: request,
-                    error: .init(message: AuthorityStrings.unrecognizedChainId, code: 4902)
+                    error: .init(messageKey: .unrecognizedChainId, code: 4902)
                 ))
             }
             switch networkResolver(chainId) {
             case .resolved: break
             case .missing:
-                return .immediate(.failure(.init(message: AuthorityStrings.unrecognizedChainId, code: 4902)))
+                return .immediate(.failure(.init(messageKey: .unrecognizedChainId, code: 4902)))
             case .unavailable: return .unavailable
             }
             if !body.address.isEmpty {
@@ -121,7 +121,7 @@ struct EthereumDappRequestProcessor {
                 guard walletAndAccount != nil else {
                     return .immediate(immediateFailure(
                         to: request,
-                        error: .init(message: AuthorityStrings.providerNotReady, code: 4100)
+                        error: .init(messageKey: .providerNotReady, code: 4100)
                     ))
                 }
             }
@@ -167,9 +167,9 @@ struct EthereumDappRequestProcessor {
     ) -> ProviderResponseError {
         switch error {
         case .invalidParameters:
-            return .init(message: AuthorityStrings.somethingWentWrong, code: -32_602)
+            return .init(messageKey: .somethingWentWrong, code: -32_602)
         case .unsupportedTransactionType:
-            return .init(message: AuthorityStrings.somethingWentWrong, code: 4200)
+            return .init(messageKey: .somethingWentWrong, code: 4200)
         }
     }
 
@@ -183,12 +183,12 @@ struct EthereumDappRequestProcessor {
             )
         case .rpc(.unknown), .transport:
             return .init(
-                message: AuthorityStrings.failedToSend,
+                messageKey: .failedToSend,
                 code: ProviderResponseError.internalErrorCode
             )
         case .rpc(.notSubmitted):
             return .init(
-                message: AuthorityStrings.failedToSend,
+                messageKey: .failedToSend,
                 code: ProviderResponseError.internalErrorCode
             )
         }
@@ -227,7 +227,7 @@ struct EthereumDappRequestProcessor {
         customDefinitionResult: @MainActor (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult
     ) -> ImmediateResolution? {
         guard let chainId = Int(hexString: chainToAdd.chainId), chainId > 0 else {
-            return .failure(.init(message: AuthorityStrings.somethingWentWrong))
+            return .failure(.init(messageKey: .somethingWentWrong))
         }
         switch networkResolver(chainId) {
         case .resolved(let resolvedNetwork):
@@ -236,14 +236,14 @@ struct EthereumDappRequestProcessor {
                 resolvedNetwork: resolvedNetwork,
                 customDefinitionResult: customDefinitionResult
             ) else {
-                return .failure(.init(message: AuthorityStrings.somethingWentWrong))
+                return .failure(.init(messageKey: .somethingWentWrong))
             }
             return .ethereumChain(String.hex(chainId, withPrefix: true))
         case .catalogOwnedButUnavailable:
-            return .failure(.init(message: AuthorityStrings.somethingWentWrong))
+            return .failure(.init(messageKey: .somethingWentWrong))
         case .unknown:
             guard chainToAdd.defaultRpcURL != nil else {
-                return .failure(.init(message: AuthorityStrings.somethingWentWrong))
+                return .failure(.init(messageKey: .somethingWentWrong))
             }
             return nil
         }
@@ -309,7 +309,7 @@ struct EthereumDappRequestProcessor {
         return response(
             to: request,
             error: .init(
-                message: AuthorityStrings.transactionSubmissionStatusUnknown,
+                messageKey: .transactionSubmissionStatusUnknown,
                 code: ProviderResponseError.transactionSubmissionUnknownCode,
                 context: .transactionHash(transactionHash)
             )
@@ -339,7 +339,7 @@ struct EthereumDappRequestProcessor {
     }
 
     private static func immediateGenericFailure(to request: SafariRequest) -> ImmediateResolution {
-        .failure(.init(message: AuthorityStrings.somethingWentWrong))
+        .failure(.init(messageKey: .somethingWentWrong))
     }
 }
 

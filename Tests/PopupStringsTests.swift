@@ -254,10 +254,8 @@ final class PopupStringsTests: XCTestCase {
 
     @MainActor
     func testSecureSetupRequiredStateAllowsRefreshAndRejection() {
-        let approval = AuthorityMessageContext.$current.withValue(messages) {
-            PopupApprovalStatePresenter(environment: presentationEnvironment(), messages: messages)
-                .secureSetupRequiredState(id: 91, host: "wallet.example")
-        }
+        let approval = PopupApprovalStatePresenter(environment: presentationEnvironment(), messages: messages)
+            .secureSetupRequiredState(id: 91, host: "wallet.example")
         let state = popupApprovalJSON(approval)
 
         XCTAssertEqual(
@@ -272,6 +270,19 @@ final class PopupStringsTests: XCTestCase {
         XCTAssertEqual(state["actions"] as? [String], ["retry", "reject"])
         XCTAssertTrue(approval.canReject)
         XCTAssertNil(state["review"])
+    }
+
+    @MainActor
+    func testAuthorityFeedbackUsesThePresentersCatalog() {
+        let content = PopupAuthorityState.Content.error(message: .failedToLoad, actions: [.retry, .reject])
+        for label in ["first", "second"] {
+            let catalog = AuthorityMessages(values: Dictionary(uniqueKeysWithValues:
+                AuthorityMessages.Key.allCases.map { ($0, "\(label).\($0.rawValue)") }))
+            let presenter = PopupApprovalStatePresenter(environment: presentationEnvironment(), messages: catalog)
+            let state = popupApprovalJSON(presenter.state(id: 91, presentation: content))
+            XCTAssertEqual(state["error"] as? String, "\(label).failedToLoad")
+            XCTAssertEqual(state["actions"] as? [String], ["retry", "reject"])
+        }
     }
 
     @MainActor
@@ -292,14 +303,12 @@ final class PopupStringsTests: XCTestCase {
         ), transactionApprovalOperations: unusedPopupTransactionOperations())
         let presenter = PopupApprovalStatePresenter(environment: presentationEnvironment(), messages: messages)
         func renderedPresentation(transactionMutationAllowed: Bool) -> [String: Any] {
-            AuthorityMessageContext.$current.withValue(messages) {
-                popupApprovalJSON(presenter.state(
-                    id: session.handle.id,
-                    host: session.request.host,
-                    presentation: session.publicPresentation,
-                    transactionMutationAllowed: transactionMutationAllowed
-                ))
-            }
+            popupApprovalJSON(presenter.state(
+                id: session.handle.id,
+                host: session.request.host,
+                presentation: session.publicPresentation,
+                transactionMutationAllowed: transactionMutationAllowed
+            ))
         }
         let review = renderedPresentation(transactionMutationAllowed: false)
         XCTAssertEqual(review["actions"] as? [String], ["approve", "reject"])
@@ -324,7 +333,7 @@ final class PopupStringsTests: XCTestCase {
         XCTAssertEqual(working["actions"] as? [String], [])
         XCTAssertNil(working["review"])
 
-        session.fail(Strings.approvalInterrupted)
+        session.fail(.approvalInterrupted)
         let error = renderedPresentation(transactionMutationAllowed: true)
         XCTAssertEqual(error["state"] as? String, "error")
         XCTAssertEqual(error["error"] as? String, Strings.approvalInterrupted)

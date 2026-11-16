@@ -880,7 +880,7 @@ func assertWalletSigningSuccessForTesting(
     line: UInt = #line
 ) throws {
     let response = try walletSigningResponseForTesting(result.get(), permit: permit)
-    let signature = try XCTUnwrap(response.json["result"] as? String, file: file, line: line)
+    let signature = try XCTUnwrap(response.json(messages: .testingEnglish)["result"] as? String, file: file, line: line)
     switch account.coin {
     case .ethereum:
         let signatureData = try XCTUnwrap(WalletCrypto.hexData(signature), file: file, line: line)

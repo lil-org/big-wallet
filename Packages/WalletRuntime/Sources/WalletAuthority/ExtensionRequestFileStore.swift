@@ -26,7 +26,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         let resolveImmediate: ResolveImmediate
 
         init(
-            messages: AuthorityMessages = .testingEnglish,
+            messages: AuthorityMessages,
             clock: @escaping @Sendable () -> Date = { Date() },
             token: @escaping @Sendable () -> UUID = { UUID() },
             revocationEpoch: @escaping @Sendable () -> UUID = { UUID() },
@@ -46,11 +46,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             self.crossProcessLockPollNanoseconds = crossProcessLockPollNanoseconds
             self.fileIO = fileIO
             self.completeChainAddition = completeChainAddition
-            self.resolveImmediate = { resolution, request in
-                AuthorityMessageContext.$current.withValue(messages) {
-                    resolveImmediate(resolution, request)
-                }
-            }
+            self.resolveImmediate = resolveImmediate
         }
     }
 
@@ -73,7 +69,8 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     private let completeChainAddition: CompleteChainAddition
     private let resolveImmediate: ResolveImmediate
     private let files: ExtensionRequestStoreFiles
-    private let codec = Mutex(ExtensionRequestProfileCodec())
+    private let responses: ExtensionResponseEncoder
+    private let codec: Mutex<ExtensionRequestProfileCodec>
 
     private typealias ProfileState = ExtensionRequestProfile.State
     private typealias Record = ExtensionRequestProfile.Record
@@ -83,7 +80,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
 
     convenience init(
         containerURL: URL?,
-        dependencies: Dependencies = .init()
+        dependencies: Dependencies
     ) {
         self.init(
             rootURL: containerURL?
@@ -98,8 +95,10 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
     init(
         rootURL: URL?,
         directoryBoundary: URL?,
-        dependencies: Dependencies = .init()
+        dependencies: Dependencies
     ) {
+        responses = ExtensionResponseEncoder(messages: dependencies.messages)
+        codec = Mutex(ExtensionRequestProfileCodec(messages: dependencies.messages))
         clock = dependencies.clock
         token = dependencies.token
         revocationEpoch = dependencies.revocationEpoch
@@ -196,7 +195,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             }
             guard profile.revokeProvider(
                 configurationKey: configurationKey, provider: provider,
-                attempt: attempt, expected: expected, now: now
+                attempt: attempt, expected: expected, now: now, responses: responses
             ), writeProfileLocked(profile, failureRecovery: .readBack) else { return .unavailable }
             return .revoked(ExtensionRequestProfile.authoritySnapshot(profile.state, configurationKey: configurationKey))
         }
@@ -460,7 +459,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                body.method == .switchEthereumChain,
                let chainId = body.switchToChainId,
                String.hex(chainId, withPrefix: true) == currentAuthority.ethereumChainId {
-                guard let response = ExtensionRequestProfileCodec.boundedResponseData(
+                guard let response = responses.boundedResponseData(
                     ResponseToExtension(for: boundRequest.request, payload: .result(.null)),
                     request: boundRequest.request
                 ) else { return .unavailable }
@@ -712,7 +711,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 }
                 if let terminal = ExtensionRequestProfileCodec.decodeResponseData(response, id: handle.id),
                    case .error(let error) = terminal.payload,
-                   error == .approvalInterrupted {
+                   error == ProviderResponseError.approvalInterrupted.rendered(using: responses.messages) {
                     return .interrupted
                 }
                 return .responseReady
@@ -727,7 +726,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             } else {
                 hasBroadcastCheckpoint = false
             }
-            guard profile.interruptNativeRecord(at: index, now: clock()),
+            guard profile.interruptNativeRecord(at: index, now: clock(), responses: responses),
                   writeProfileLocked(profile, failureRecovery: .readBack) else {
                 return .retryablePersistenceFailure
             }
@@ -762,7 +761,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                     return .ownershipLost
                 }
                 let parsedRequest: SafariRequest
-                switch profile.transitionExpiredPending(at: index, now: now) {
+                switch profile.transitionExpiredPending(at: index, now: now, responses: responses) {
                 case .active(let request):
                     parsedRequest = request
                 case .expired:
@@ -910,7 +909,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 for: request,
                 payload: .error(.userRejected)
             )
-            guard let data = ExtensionRequestProfileCodec.boundedResponseData(response, request: request) else {
+            guard let data = responses.boundedResponseData(response, request: request) else {
                 return .retryablePersistenceFailure
             }
             profile.complete(at: index, response: data, date: now)
@@ -1010,7 +1009,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             guard claim.lifecycle.hasActiveApprovedOwnership,
                   let recovery = broadcast.recoveryCompletion(for: permit),
                   let recoveryResponse = recovery.response(for: permit),
-                  let responseData = ExtensionRequestProfileCodec.exactResponseData(recoveryResponse) else {
+                  let responseData = responses.exactResponseData(recoveryResponse) else {
                 return .ownershipLost
             }
             guard case .state(var profile) = recoverProfileLocked(
@@ -1090,8 +1089,8 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                       at: now, isCancelled: Task.isCancelled
                   ),
                   let request = profile.request(for: record),
-                  let responseData = ExtensionRequestProfileCodec.boundedResponseData(response, request: request),
-                  profile.applyAuthorityEffect(response, record: record, now: now) else { return .ownershipLost }
+                  let responseData = responses.boundedResponseData(response, request: request),
+                  profile.applyAuthorityEffect(response, record: record, now: now, responses: responses) else { return .ownershipLost }
             return publishCompletionLocked(profile: &profile, index: index, responseData: responseData, completedAt: now) {
                 claim.lifecycle.closeUnapproved()
             }
@@ -1128,12 +1127,12 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             var response = response
             if response.addsEthereumChain, !completeChainAddition(permit) {
                 guard let failure = ApprovedCompletion.failure(
-                    .init(message: AuthorityStrings.somethingWentWrong), permit: permit
+                    .init(messageKey: .somethingWentWrong), permit: permit
                 )?.response(for: permit) else { return .ownershipLost }
                 response = failure
             }
-            guard let responseData = ExtensionRequestProfileCodec.boundedResponseData(response, request: request),
-                  profile.applyAuthorityEffect(response, record: record, now: now) else { return .ownershipLost }
+            guard let responseData = responses.boundedResponseData(response, request: request),
+                  profile.applyAuthorityEffect(response, record: record, now: now, responses: responses) else { return .ownershipLost }
             return publishCompletionLocked(profile: &profile, index: index, responseData: responseData, completedAt: now) {
                 claim.lifecycle.closeApproved()
             }
@@ -1141,7 +1140,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             guard claim.lifecycle.hasActiveApprovedOwnership,
                   claim.matches(handle: record.handle, value: claimID),
                   let request = profile.request(for: record),
-                  let responseData = ExtensionRequestProfileCodec.boundedResponseData(
+                  let responseData = responses.boundedResponseData(
                       response, request: request, recoveryResponseData: recoveryResponse
                   ) else { return .ownershipLost }
             return publishCompletionLocked(profile: &profile, index: index, responseData: responseData, completedAt: clock()) {
@@ -1296,7 +1295,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
             let request: SafariRequest
             switch profile.transitionExpiredPending(
                 at: index,
-                now: now
+                now: now, responses: responses
             ) {
             case .active(let activeRequest):
                 request = activeRequest
@@ -1308,11 +1307,11 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                 return .retryablePersistenceFailure
             }
             guard let response = resolveImmediate(resolution, request) else { return .ownershipLost }
-            guard let responseData = ExtensionRequestProfileCodec.boundedResponseData(response, request: request) else {
+            guard let responseData = responses.boundedResponseData(response, request: request) else {
                 return .retryablePersistenceFailure
             }
             guard ExtensionRequestProfile.authorityIsCurrent(profile.state.records[index], in: profile.state),
-                  profile.applyAuthorityEffect(response, record: profile.state.records[index], now: now) else { return .ownershipLost }
+                  profile.applyAuthorityEffect(response, record: profile.state.records[index], now: now, responses: responses) else { return .ownershipLost }
             profile.complete(at: index, response: responseData, date: now)
             return writeProfileLocked(profile, failureRecovery: .readBack)
                 ? .persisted
@@ -1419,7 +1418,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
         }
         guard let decoded else { return .corrupt }
         var profile = decoded.profile
-        guard let reconciled = profile.reconcileWalletAuthority(with: ledger, now: now) else {
+        guard let reconciled = profile.reconcileWalletAuthority(with: ledger, now: now, responses: responses) else {
             return .unavailable
         }
         let requiresReadBack = decoded.requiresAuthorityPublication || reconciled
@@ -1438,7 +1437,7 @@ final class ExtensionRequestFileStore: WalletSourceMutating {
                     return nil
                 }
             })
-            guard let maintenance = profile.maintain(now: now, abandonedHandles: abandonedHandles) else {
+            guard let maintenance = profile.maintain(now: now, abandonedHandles: abandonedHandles, responses: responses) else {
                 return .unavailable
             }
             changed = changed || maintenance.changed

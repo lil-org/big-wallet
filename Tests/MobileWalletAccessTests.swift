@@ -542,21 +542,90 @@ final class MobileWalletAccessTests: XCTestCase {
     }
 
     func testLockWhileLoadingAccountsCannotInstallItsViewAboveTheLockedScreen() throws {
+        for locksOnAttachment in [false, true] {
+            let fixture = WalletAccessTestFixture()
+            try fixture.unlock()
+            let retired = LockingViewController(locksOnAttachment: locksOnAttachment) { controller in
+                fixture.access.lock(reason: .idle)
+                XCTAssertTrue(controller.view.isHidden)
+                XCTAssertTrue(controller.view.accessibilityElementsHidden)
+            }
+            let root = MobileWalletRootViewController(access: fixture.access, registerWindow: { _ in },
+                makeAccounts: { _ in retired }, makeAuthentication: { _ in UIViewController() })
+
+            root.loadViewIfNeeded()
+
+            let locked = try XCTUnwrap(root.content as? MobileWalletLockedViewController)
+            XCTAssertEqual(root.children.count, 1)
+            XCTAssertTrue(root.children.first === locked)
+            XCTAssertEqual(root.view.subviews.count, 1)
+            XCTAssertTrue(root.view.subviews.first === locked.view)
+            XCTAssertFalse(locked.view.isHidden)
+            XCTAssertFalse(locked.view.accessibilityElementsHidden)
+            XCTAssertNil(retired.parent)
+            XCTAssertNil(retired.viewIfLoaded?.superview)
+        }
+    }
+
+    func testAuthenticationRequestsCoalesceWithoutLoadingSupersededContent() throws {
         let fixture = WalletAccessTestFixture()
-        try fixture.unlock()
-        let retired = LockingViewController { fixture.access.lock(reason: .idle) }
+        fixture.access.lock(reason: .idle)
+        let superseded = UIViewController()
+        let final = UIViewController()
+        var authenticationRequests = 0
+        var unlock: UIButton?
         let root = MobileWalletRootViewController(access: fixture.access, registerWindow: { _ in },
-            makeAccounts: { _ in retired }, makeAuthentication: { _ in UIViewController() })
-
+            makeAccounts: { _ in UIViewController() }, makeAuthentication: { _ in
+                authenticationRequests += 1
+                if authenticationRequests == 1 {
+                    unlock?.sendActions(for: .touchUpInside)
+                    unlock?.sendActions(for: .touchUpInside)
+                    XCTAssertEqual(authenticationRequests, 1)
+                    return superseded
+                }
+                return final
+            })
         root.loadViewIfNeeded()
-
         let locked = try XCTUnwrap(root.content as? MobileWalletLockedViewController)
+        unlock = try XCTUnwrap(button(in: locked.view, identifier: "wallet-unlock"))
+
+        unlock?.sendActions(for: .touchUpInside)
+
+        XCTAssertEqual(authenticationRequests, 2)
+        XCTAssertFalse(superseded.isViewLoaded)
+        XCTAssertNil(superseded.parent)
+        XCTAssertTrue(root.content === final)
         XCTAssertEqual(root.children.count, 1)
-        XCTAssertTrue(root.children.first === locked)
-        XCTAssertEqual(root.view.subviews.count, 1)
-        XCTAssertTrue(root.view.subviews.first === locked.view)
-        XCTAssertNil(retired.parent)
-        XCTAssertNil(retired.viewIfLoaded?.superview)
+        XCTAssertTrue(root.children.first === final)
+        XCTAssertFalse(final.view.isHidden)
+        XCTAssertTrue(final.view.isUserInteractionEnabled)
+        unlock?.sendActions(for: .touchUpInside)
+        XCTAssertEqual(authenticationRequests, 2)
+    }
+
+    func testLockScrubsTheRootPasswordBeforeReplacingItsPresentation() throws {
+        let fixture = WalletAccessTestFixture()
+        fixture.access.lock(reason: .idle)
+        let password = instantiate(PasswordViewController.self, from: .main)
+        password.access = fixture.access
+        password.credentials = fixture.credentials
+        let navigation = password.inNavigationController
+        let root = MobileWalletRootViewController(access: fixture.access, registerWindow: { _ in },
+            makeAccounts: { _ in UIViewController() }, makeAuthentication: { _ in navigation })
+        root.loadViewIfNeeded()
+        let locked = try XCTUnwrap(root.content as? MobileWalletLockedViewController)
+        let unlock = try XCTUnwrap(button(in: locked.view, identifier: "wallet-unlock"))
+        unlock.sendActions(for: .touchUpInside)
+        password.loadViewIfNeeded()
+        password.passwordTextField.text = "secret draft"
+
+        fixture.access.lock(reason: .background)
+
+        XCTAssertTrue(password.passwordTextField.text?.isEmpty != false)
+        XCTAssertTrue(navigation.view.isHidden)
+        XCTAssertTrue(navigation.view.accessibilityElementsHidden)
+        XCTAssertTrue(root.content is MobileWalletLockedViewController)
+        XCTAssertNil(navigation.parent)
     }
 
     func testSceneNotificationsCoverTransientInactivityAndLockOnBackground() throws {
@@ -638,10 +707,12 @@ final class MobileWalletAccessTests: XCTestCase {
     }
 
     private final class LockingViewController: UIViewController {
-        private let loaded: () -> Void
+        private let locksOnAttachment: Bool
+        private let lock: (LockingViewController) -> Void
 
-        init(loaded: @escaping () -> Void) {
-            self.loaded = loaded
+        init(locksOnAttachment: Bool, lock: @escaping (LockingViewController) -> Void) {
+            self.locksOnAttachment = locksOnAttachment
+            self.lock = lock
             super.init(nibName: nil, bundle: nil)
         }
 
@@ -649,7 +720,12 @@ final class MobileWalletAccessTests: XCTestCase {
 
         override func viewDidLoad() {
             super.viewDidLoad()
-            loaded()
+            if !locksOnAttachment { lock(self) }
+        }
+
+        override func didMove(toParent parent: UIViewController?) {
+            super.didMove(toParent: parent)
+            if parent != nil, locksOnAttachment { lock(self) }
         }
     }
 

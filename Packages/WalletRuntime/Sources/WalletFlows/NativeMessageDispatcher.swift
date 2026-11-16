@@ -376,13 +376,13 @@ public struct NativeMessageDispatcher: Sendable {
     }
 
     private func boundedDappResponse(_ response: ResponseToExtension, for request: SafariRequest) throws -> WireProtocol.ValidatedObject {
-        let json = response.json
+        let json = response.json(messages: messages)
         if ExtensionBridge.isPayloadWithinLimit(json),
            let object = WireProtocol.object(.nativeResponse, value: json) {
             return object
         }
         let fallback = ResponseToExtension(for: request, error: internalError)
-        var fallbackJSON = fallback.json
+        var fallbackJSON = fallback.json(messages: messages)
         fallbackJSON["approvalCommitted"] = response.approvalCommitted
         if ExtensionBridge.isPayloadWithinLimit(fallbackJSON) { return try Self.encode(fallbackJSON, as: .nativeResponse) }
         fallbackJSON["name"] = request.provider == .unknown ? "switchAccount" : ""

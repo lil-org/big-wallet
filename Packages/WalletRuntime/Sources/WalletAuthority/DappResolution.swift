@@ -37,7 +37,7 @@ enum ImmediateResolution: Sendable {
             return ResponseToExtension(
                 for: request,
                 payload: .error(.init(
-                    message: AuthorityStrings.providerNotReady, code: 4100,
+                    messageKey: .providerNotReady, code: 4100,
                     context: .unauthorizedPublicKey(publicKey)
                 )),
                 mutation: .revokeSolana(publicKey)

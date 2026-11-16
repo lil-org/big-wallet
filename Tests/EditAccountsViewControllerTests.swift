@@ -36,6 +36,7 @@ final class EditAccountsViewControllerTests: XCTestCase {
         await fulfillment(of: [entered], timeout: 5)
         host.closeWindow()
         XCTAssertFalse(state.canEdit, "Closing the editor should retire its decrypted preview session")
+        XCTAssertFalse(state.isSaving)
         let lateAlert = expectation(description: "No error modal should open for the closed editor")
         lateAlert.isInverted = true
         let dismissLateAlert = Timer(timeInterval: 0.05, repeats: true) { _ in
@@ -275,10 +276,14 @@ final class EditAccountsViewControllerTests: XCTestCase {
         weak var observedHost: AccountEditorHost?
         var departuresDuringPublication = [Int]()
         var cancellationDuringPublication = [Bool]()
+        var savingDuringPublication = [Bool]()
+        var saveEnabledDuringPublication = [Bool]()
         let fixture = try AccountEditorFixture(postMutation: {
             NotificationCenter.default.post(name: Notification.Name("walletsChanged"), object: nil)
             departuresDuringPublication.append(observedHost?.departures ?? -1)
             cancellationDuringPublication.append(Task.isCancelled)
+            savingDuringPublication.append(observedHost?.controller.previewState?.isSaving == true)
+            saveEnabledDuringPublication.append(observedHost?.controller.okButton.isEnabled == true)
         })
         addTeardownBlock { try await fixture.tearDown() }
         await assertWalletReload(fixture.manager)
@@ -297,6 +302,8 @@ final class EditAccountsViewControllerTests: XCTestCase {
         await expectEventually(timeout: 5) { host.departures == 1 }
         XCTAssertEqual(departuresDuringPublication, [0])
         XCTAssertEqual(cancellationDuringPublication, [false])
+        XCTAssertEqual(savingDuringPublication, [true])
+        XCTAssertEqual(saveEnabledDuringPublication, [false])
         try fixture.verifySourceMutation()
         XCTAssertEqual(Set(fixture.manager.wallets[0].accounts.map(\.previewAccountKey)), Set((original + [added]).map(\.previewAccountKey)))
         XCTAssertFalse(state.hasChanges)
@@ -753,7 +760,8 @@ private final class AccountEditorHost {
         configure(controller)
         _ = controller.view
 #if os(macOS)
-        XCTAssertTrue(windowController.installProtectedContent(controller, access: controller.walletAccess))
+        windowController.installProtectedContent(controller, access: controller.walletAccess)
+        XCTAssertTrue(windowController.contentViewController === controller)
 #endif
     }
 

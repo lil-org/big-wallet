@@ -300,7 +300,9 @@ final class MacSecretLifetimeTests: XCTestCase {
             let replacement = NSViewController()
             replacement.view = NSView(frame: host.controller.view.frame)
             switch end {
-            case .removal: XCTAssertTrue(host.windowController.installContent(replacement, while: { true }))
+            case .removal:
+                host.windowController.installContent(replacement, while: { true })
+                XCTAssertTrue(host.windowController.contentViewController === replacement)
             case .windowClose: host.window.close()
             case .lock: host.fixture.access.lock(reason: .idle)
             }

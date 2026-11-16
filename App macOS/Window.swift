@@ -50,13 +50,18 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
     private var unlock: (() -> Void)?
     private struct LockedPresentation {
         let generation: UInt64
-        let token: UUID
         let controller: WalletLockedViewController
-        var isInstalling = true
+    }
+    private struct ContentInstallation {
+        let controller: NSViewController
+        let isCurrent: () -> Bool
+        let didInstall: () -> Void
     }
     private var lockedPresentation: LockedPresentation?
     private var lockWindowCloseObserver: NativeApprovalWindowCloseObserver?
-    private var contentInstallationID: UUID?
+    private var pendingContent: ContentInstallation?
+    private var preparingContent: NSViewController?
+    private var isInstallingContent = false
     private enum State { case active, closing, closed }
     private var state = State.active
     fileprivate var cascadesOnFirstPresentation = false
@@ -83,10 +88,21 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
                 guard state == .active else { return }
                 state = .closing
                 defer { state = .closed }
-                contentInstallationID = nil
+                let pending = pendingContent
+                pendingContent = nil
                 lockedPresentation = nil
                 currentAuthenticationSession?.cancel()
-                (contentViewController as? any NativeWalletProtectedContent)?.retire()
+                if let current = contentViewController as? any NativeWalletProtectedContent,
+                   let controller = contentViewController {
+                    conceal(controller)
+                    if controller !== preparingContent {
+                        contentViewController = nil
+                        current.retire()
+                    }
+                }
+                conceal(preparingContent)
+                Window.clearText(in: preparingContent?.viewIfLoaded)
+                if let pending { discard(pending.controller) }
             }
             lockWindowCloseObserver = observer
             observer.observe(window)
@@ -102,40 +118,18 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
         guard state == .active, let access = walletAccess, access.isLocked, access.hasLocked else { return }
         let generation = access.generation
         if let presentation = lockedPresentation, presentation.generation == generation,
-           presentation.isInstalling ||
-            (contentViewController === presentation.controller && window?.contentViewController === presentation.controller &&
-             window?.contentView === presentation.controller.viewIfLoaded) { return }
-        let token = UUID()
-        let locked = WalletLockedViewController { [weak self, weak access] in
+           contentViewController === presentation.controller || pendingContent?.controller === presentation.controller { return }
+        let locked = WalletLockedViewController { [weak self, weak access] locked in
             guard let self, let access, walletAccess === access,
-                  access.isLocked,
-                  let presentation = lockedPresentation, presentation.token == token,
-                  contentViewController === presentation.controller else { return }
+                  access.isLocked, lockedPresentation?.controller === locked,
+                  contentViewController === locked else { return }
             unlock?()
         }
-        lockedPresentation = LockedPresentation(generation: generation, token: token, controller: locked)
-        defer {
-            if lockedPresentation?.token == token { lockedPresentation?.isInstalling = false }
-        }
-        func isCurrent() -> Bool {
-            walletAccess === access && access.isLocked && access.generation == generation && lockedPresentation?.token == token
-        }
-        contentInstallationID = nil
-        currentAuthenticationSession?.cancel()
-        guard isCurrent() else { return }
-        (contentViewController as? any NativeWindowContentRetirement)?.retire()
-        guard isCurrent() else { return }
-        Window.dismissSheets(in: window)
-        guard isCurrent() else { return }
-        if let modal = NSApp.modalWindow, modal !== window, modal.sheetParent == nil {
-            Window.clearText(in: modal.contentView)
-            NSApp.abortModal()
-            modal.orderOut(nil)
-        }
-        guard isCurrent() else { return }
-        window?.delegate = nil
-        approvalPeer = nil
-        contentViewController = locked
+        lockedPresentation = LockedPresentation(generation: generation, controller: locked)
+        enqueueContent(ContentInstallation(controller: locked, isCurrent: { [weak self, weak access] in
+            guard let self, let access else { return false }
+            return walletAccess === access && access.isLocked && access.generation == generation
+        }, didInstall: {}), revokingAccess: true)
     }
 
     @discardableResult
@@ -145,58 +139,100 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
         return true
     }
 
-    @discardableResult
-    func installProtectedContent(_ next: NSViewController, access: NativeWalletAccess) -> Bool {
-        installContent(next) { self.walletAccess === access.controller && access.validateCurrentAccess() }
+    func installProtectedContent(
+        _ next: NSViewController, access: NativeWalletAccess, didInstall: @escaping () -> Void = {}
+    ) {
+        installContent(next, while: { self.walletAccess === access.controller && access.validateCurrentAccess() }, didInstall: didInstall)
     }
 
-    @discardableResult
-    func installContent(_ next: NSViewController, while isCurrent: () -> Bool) -> Bool {
-        let installationID = UUID()
-        contentInstallationID = installationID
-        func acceptsInstallation() -> Bool {
-            state == .active && isCurrent() && contentInstallationID == installationID
+    func installContent(
+        _ next: NSViewController, while isCurrent: @escaping () -> Bool, didInstall: @escaping () -> Void = {}
+    ) {
+        enqueueContent(ContentInstallation(controller: next, isCurrent: isCurrent, didInstall: didInstall))
+    }
+
+    private func enqueueContent(_ installation: ContentInstallation, revokingAccess: Bool = false) {
+        let startsTransition = !isInstallingContent
+        isInstallingContent = true
+        let superseded = pendingContent
+        pendingContent = installation
+        if revokingAccess { concealProtectedContent() }
+        if let superseded, superseded.controller !== installation.controller { discard(superseded.controller) }
+        guard startsTransition else { return }
+        defer { isInstallingContent = false }
+        while let installation = pendingContent {
+            pendingContent = nil
+            install(installation)
         }
-        func discardInstallation() {
-            (next as? any NativeWindowContentRetirement)?.retire()
-            reconcileLockedPresentation()
-            if contentViewController !== next, let retiredView = next.viewIfLoaded,
-               retiredView !== window?.contentView {
-                retiredView.isHidden = true
-                retiredView.setAccessibilityHidden(true)
-                retiredView.removeFromSuperview()
-            }
-        }
-        guard acceptsInstallation() else {
-            discardInstallation()
-            return false
-        }
-        lockedPresentation = nil
-        _ = next.view
-        guard acceptsInstallation() else {
-            discardInstallation()
-            return false
-        }
+    }
+
+    private func accepts(_ installation: ContentInstallation) -> Bool {
+        let valid = state == .active && installation.isCurrent()
+        return valid && state == .active && pendingContent == nil
+    }
+
+    private func install(_ installation: ContentInstallation) {
+        let next = installation.controller
+        guard accepts(installation) else { reject(next); return }
+        preparingContent = next
+        defer { preparingContent = nil }
+        let nextView = next.view
+        nextView.isHidden = true
+        nextView.setAccessibilityHidden(true)
+        guard accepts(installation) else { reject(next); return }
         if contentViewController !== next {
             let previous = contentViewController
+            conceal(previous)
+            contentViewController = nil
             currentAuthenticationSession?.cancel()
-            guard acceptsInstallation() else {
-                discardInstallation()
-                return false
-            }
             (previous as? any NativeWindowContentRetirement)?.retire()
-            guard acceptsInstallation() else {
-                discardInstallation()
-                return false
-            }
         }
+        guard accepts(installation) else { reject(next); return }
+        if lockedPresentation?.controller !== next { lockedPresentation = nil }
         contentViewController = next
-        guard acceptsInstallation() else {
-            discardInstallation()
-            return false
+        guard accepts(installation) else { reject(next); return }
+        nextView.setAccessibilityHidden(false)
+        nextView.isHidden = false
+        guard accepts(installation) else { reject(next); return }
+        preparingContent = nil
+        installation.didInstall()
+    }
+
+    private func concealProtectedContent() {
+        let current = contentViewController
+        conceal(current)
+        Window.clearText(in: current?.viewIfLoaded)
+        if preparingContent !== current {
+            conceal(preparingContent)
+            Window.clearText(in: preparingContent?.viewIfLoaded)
         }
-        contentInstallationID = nil
-        return true
+        currentAuthenticationSession?.cancel()
+        Window.dismissSheets(in: window)
+        if let modal = NSApp.modalWindow, modal !== window, modal.sheetParent == nil {
+            Window.clearText(in: modal.contentView)
+            NSApp.abortModal()
+            modal.orderOut(nil)
+        }
+        window?.delegate = nil
+        approvalPeer = nil
+    }
+
+    private func conceal(_ controller: NSViewController?) {
+        controller?.viewIfLoaded?.isHidden = true
+        controller?.viewIfLoaded?.setAccessibilityHidden(true)
+    }
+
+    private func reject(_ controller: NSViewController) {
+        discard(controller)
+        if pendingContent == nil { reconcileLockedPresentation() }
+    }
+
+    private func discard(_ controller: NSViewController) {
+        conceal(controller)
+        if contentViewController === controller { contentViewController = nil }
+        if preparingContent === controller { preparingContent = nil }
+        (controller as? any NativeWindowContentRetirement)?.retire()
+        controller.viewIfLoaded?.removeFromSuperview()
     }
 
     isolated deinit {
@@ -232,9 +268,9 @@ final class WalletWindowController: NSWindowController, WalletAccessObserver {
 
 @MainActor
 final class WalletLockedViewController: NSViewController {
-    private let unlock: () -> Void
+    private let unlock: (WalletLockedViewController) -> Void
 
-    init(unlock: @escaping () -> Void) {
+    init(unlock: @escaping (WalletLockedViewController) -> Void) {
         self.unlock = unlock
         super.init(nibName: nil, bundle: nil)
     }
@@ -263,7 +299,7 @@ final class WalletLockedViewController: NSViewController {
         self.view = view
     }
 
-    @objc func unlockWallet() { unlock() }
+    @objc func unlockWallet() { unlock(self) }
 }
 
 @MainActor

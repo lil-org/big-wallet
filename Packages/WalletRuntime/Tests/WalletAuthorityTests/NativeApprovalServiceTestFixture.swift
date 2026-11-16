@@ -252,7 +252,7 @@ final class NativeApprovalServiceTestFixture {
                 if snapshot.nativeApproval != nil {
                     self.responses[handle] = ResponseToExtension(
                         for: request, payload: .error(.approvalInterrupted)
-                    ).json
+                    ).json(messages: .testingEnglish)
                     self.setState(.responded, for: snapshot)
                 } else {
                     self.setState(.queued(request: request, approval: .unowned), for: snapshot)

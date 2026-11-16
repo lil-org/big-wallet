@@ -355,7 +355,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         profile["origins"] = "corrupt permissions"
         let damaged = try PropertyListSerialization.data(fromPropertyList: profile, format: .binary, options: 0)
         try damaged.write(to: profileURL)
-        let restarted = ExtensionRequestFileStore(rootURL: root, directoryBoundary: root, dependencies: .init(clock: { now }))
+        let restarted = ExtensionRequestFileStore(rootURL: root, directoryBoundary: root, dependencies: .init(messages: .testingEnglish, clock: { now }))
         guard case .document(let document) = testDocumentResponseOwner else { return XCTFail("Expected document fixture") }
         let original = NativeRequestContext.ResponseAccess.document(document)
         let foreign = NativeRequestContext.ResponseAccess.document(.init(tabID: document.tabID, frameID: 0,
@@ -408,7 +408,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
         profile["records"] = records
         let damaged = try PropertyListSerialization.data(fromPropertyList: profile, format: .binary, options: 0)
         try damaged.write(to: profileURL)
-        let restarted = ExtensionRequestFileStore(rootURL: root, directoryBoundary: root, dependencies: .init(clock: { now }))
+        let restarted = ExtensionRequestFileStore(rootURL: root, directoryBoundary: root, dependencies: .init(messages: .testingEnglish, clock: { now }))
         XCTAssertEqual(restarted.authorizeResponseAccess(handle: handle, configurationKey: configurationKey, access: .worker), .unavailable)
         assertResult(restarted.prepareResponseDelivery(handle: handle, configurationKey: configurationKey, access: .worker), equals: .unavailable)
         XCTAssertEqual(restarted.acknowledgeResponse(handle: handle, configurationKey: configurationKey, access: .worker), .retryablePersistenceFailure)
@@ -529,7 +529,7 @@ final class ResponseDeliveryPollerTests: XCTestCase {
             root,
             ExtensionRequestFileStore(
                 rootURL: root, directoryBoundary: root,
-                dependencies: .init(
+                dependencies: .init(messages: .testingEnglish,
                     clock: clock, fileIO: approvalStoreIO(directoryBoundary: root, configure: configureIO)
                 ))
         )

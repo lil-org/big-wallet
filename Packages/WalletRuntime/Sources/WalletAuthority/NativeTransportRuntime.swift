@@ -20,8 +20,7 @@ public final class NativeTransportRuntime {
         messages = composition.configuration.messages
         invalidateCache = composition.dependencies.invalidateCache
         admission = DappRequestAdmission(store: composition.requests,
-            requestProcessor: composition.makeRequestProcessor(solanaEndpoints: solanaEndpoints),
-            messages: composition.configuration.messages)
+            requestProcessor: composition.makeRequestProcessor(solanaEndpoints: solanaEndpoints))
     }
 
     nonisolated public func invalidateNetworkCache() { invalidateCache() }

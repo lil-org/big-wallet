@@ -58,7 +58,7 @@ final class ConsumerServices {
         metadata = WalletsMetadataService(storage: preferences)
         let metadata = metadata
         let fileStore = ExtensionRequestFileStore(containerURL: storage.root.appendingPathComponent("authority", isDirectory: true),
-            dependencies: .init(resolveImmediate: { resolution, request in
+            dependencies: .init(messages: .testingEnglish, resolveImmediate: { resolution, request in
                 resolution.response(for: request, networkResolver: networks.resolution)
             }))
         let bridge = ExtensionBridge(store: fileStore)
@@ -74,7 +74,7 @@ final class ConsumerServices {
             }))
         let processor = DappRequestProcessor(ethereumNetworkResolver: networks.approvalResolution,
             selectionNetworkResolver: networks.network, customDefinitionResult: { _ in .unavailable },
-            solanaEndpoints: OfflineSolanaEndpoints())
+            solanaEndpoints: OfflineSolanaEndpoints(), solanaSummaryLabels: .english)
         self.processor = processor
         let wallets = wallets
         finalizer = NativeApprovalFinalizer(store: bridge,

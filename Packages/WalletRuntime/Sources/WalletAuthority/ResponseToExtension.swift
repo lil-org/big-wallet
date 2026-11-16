@@ -5,6 +5,18 @@ import Foundation
 
 public struct ProviderResponseError: Equatable, Sendable {
 
+    public enum Message: Equatable, Sendable {
+        case localized(AuthorityMessages.Key)
+        case literal(String)
+
+        public func rendered(using messages: AuthorityMessages) -> String {
+            switch self {
+            case .localized(let key): messages[key]
+            case .literal(let text): text
+            }
+        }
+    }
+
     public static let userRejectedCode = 4001
     public static let internalErrorCode = -32_603
     public static let transactionSubmissionUnknownCode = internalErrorCode
@@ -16,7 +28,7 @@ public struct ProviderResponseError: Equatable, Sendable {
         case transactionSignature(String)
     }
 
-    public let message: String
+    public let message: Message
     public let code: Int?
     public let context: Context?
 
@@ -25,28 +37,38 @@ public struct ProviderResponseError: Equatable, Sendable {
         code: Int? = nil,
         context: Context? = nil
     ) {
-        self.message = message
+        self.message = .literal(message)
         self.code = code
         self.context = context
+    }
+
+    init(messageKey: AuthorityMessages.Key, code: Int? = nil, context: Context? = nil) {
+        message = .localized(messageKey)
+        self.code = code
+        self.context = context
+    }
+
+    public func rendered(using messages: AuthorityMessages) -> ProviderResponseError {
+        ProviderResponseError(message: message.rendered(using: messages), code: code, context: context)
     }
 
     // Dapps observe a request expiring and a live rejection as the same event, so every path
     // reporting either uses the same message-code pair. 4001 is the EIP-1193 user-rejected code.
     static var userRejected: ProviderResponseError {
-        return ProviderResponseError(message: AuthorityStrings.canceled, code: userRejectedCode)
+        return ProviderResponseError(messageKey: .canceled, code: userRejectedCode)
     }
 
     static var internalError: ProviderResponseError {
-        return ProviderResponseError(message: AuthorityStrings.somethingWentWrong, code: internalErrorCode)
+        return ProviderResponseError(messageKey: .somethingWentWrong, code: internalErrorCode)
     }
 
     static var approvalInterrupted: ProviderResponseError {
-        ProviderResponseError(message: AuthorityStrings.approvalInterrupted, code: internalErrorCode)
+        ProviderResponseError(messageKey: .approvalInterrupted, code: internalErrorCode)
     }
 
     static var privateBrowsingUnsupported: ProviderResponseError {
         return ProviderResponseError(
-            message: AuthorityStrings.privateBrowsingUnsupported,
+            messageKey: .privateBrowsingUnsupported,
             code: 4200
         )
     }
@@ -156,7 +178,7 @@ public struct ResponseToExtension: Sendable {
         return true
     }
 
-    public var json: [String: Any] {
+    public func json(messages: AuthorityMessages) -> [String: Any] {
         var json: [String: Any] = [
             "id": id, "name": name, "provider": provider.rawValue,
             "approvalCommitted": approvalCommitted,
@@ -170,7 +192,7 @@ public struct ResponseToExtension: Sendable {
             json["authorizationFailure"] = authorizationFailure
             var value: [String: Any] = [
                 "code": error.code ?? ProviderResponseError.internalErrorCode,
-                "message": error.message,
+                "message": error.message.rendered(using: messages),
             ]
             switch error.context {
             case .dataJSON(let raw):

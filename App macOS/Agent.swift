@@ -534,25 +534,32 @@ class Agent: NSObject, WalletAccessObserver {
         if let walletWindowController,
            let window = walletWindowController.window,
            Window.isVisibleContentWindow(window) {
+            let didInstall = { [weak self, weak walletWindowController] in
+                guard let self, let walletWindowController,
+                      self.walletWindowController === walletWindowController,
+                      access.validateCurrentAccess() else { return }
+                Window.reactivateWindow(walletWindowController)
+                let extras = lockedApprovalWindows
+                lockedApprovalWindows.removeAll()
+                extras.forEach { $0.close() }
+            }
             if walletWindowController.contentViewController is WalletLockedViewController {
                 let accounts = AccountsListViewController(access: NativeWalletAccess(access))
-                guard walletWindowController.installProtectedContent(
-                    accounts, access: accounts.walletAccess
-                ) == true else { return }
+                walletWindowController.installProtectedContent(accounts, access: accounts.walletAccess, didInstall: didInstall)
+            } else {
+                didInstall()
             }
-            guard access.validateCurrentAccess() else { return }
-            Window.reactivateWindow(walletWindowController)
-            let extras = lockedApprovalWindows
-            lockedApprovalWindows.removeAll()
-            extras.forEach { $0.close() }
             return
         }
         let accountsList = AccountsListViewController(access: NativeWalletAccess(access))
         let windowController = Window.showNew(closeOthers: CurrentApp.isDockApp, activates: false)
         windowController.bindAccess(access) { [weak self] in self?.unlockWallet() }
         walletWindowController = windowController
-        guard windowController.installProtectedContent(accountsList, access: accountsList.walletAccess) else { return }
-        Window.reactivateWindow(windowController)
+        windowController.installProtectedContent(accountsList, access: accountsList.walletAccess) { [weak self, weak windowController] in
+            guard let self, let windowController, walletWindowController === windowController,
+                  access.validateCurrentAccess() else { return }
+            Window.reactivateWindow(windowController)
+        }
     }
 
     private func activateApproval(_ key: ApprovalRouteKey, authorization: WalletAccessSession) {
@@ -654,16 +661,11 @@ extension Agent.ActiveApproval {
             showFailureSurface()
         case .interrupted:
             if isDismissed { return close() }
-            showFailureSurface(reason: Strings.approvalInterrupted)
+            showFailureSurface(reason: Strings.approvalInterrupted, revealWindow: false)
             retire()
             return Agent.FinishedApprovalWindowAction.none
         case .finished, .superseded:
             return close()
-        }
-        if walletAccess.validateCurrentAccess(), !isRetired,
-           let windowController, let window = windowController.window,
-           !Window.isVisibleContentWindow(window) {
-            windowController.showWindow(nil)
         }
         return nil
     }
@@ -726,37 +728,44 @@ extension Agent.ActiveApproval {
         return controller
     }
 
-    @discardableResult
-    private func installProtectedContent(_ content: NSViewController, in controller: WalletWindowController) -> Bool {
-        controller.installProtectedContent(content, access: walletAccess) && !isRetired
+    private func installProtectedContent(
+        _ content: NSViewController, in controller: WalletWindowController,
+        revealWindow: Bool = true, didInstall: @escaping () -> Void = {}
+    ) {
+        controller.installProtectedContent(content, access: walletAccess) { [weak self, weak controller] in
+            guard let self, let controller, walletAccess.validateCurrentAccess(), !isRetired else { return }
+            if revealWindow, let window = controller.window, !Window.isVisibleContentWindow(window) {
+                controller.showWindow(nil)
+            }
+            didInstall()
+        }
     }
 
     private func presentAddEthereumChain(
         _ action: AddEthereumChainAction,
         review: NativeApprovalReview
     ) {
-        guard let controller = approvalWindow(),
-              installWaitingSurface(reason: Strings.loading, in: controller),
-              validateActions(for: review) else { return }
-        guard let window = controller.window else {
-            coordinator.reject(review: review)
-            return
-        }
-        controller.showWindow(nil)
-        guard validateActions(for: review) else { return }
-        let alert = NSAlert()
-        alert.messageText = Strings.addNetwork
-        alert.informativeText = action.chainToAdd.chainName + "\n\n" + action.chainToAdd.defaultRpcUrl
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: Strings.ok).setAccessibilityIdentifier("safari.approval.approve")
-        alert.addButton(withTitle: Strings.cancel).setAccessibilityIdentifier("safari.approval.reject")
-        alert.beginSheetModal(for: window) { [weak self] response in
-            guard let self, validateActions(for: review) else { return }
-            if response == .alertFirstButtonReturn {
-                guard walletAccess.beginAction() else { return }
-                coordinator.approveAddEthereumChain(review: review)
-            } else {
+        guard let controller = approvalWindow(), validateActions(for: review) else { return }
+        installWaitingSurface(reason: Strings.loading, in: controller) { [weak self, weak controller] in
+            guard let self, let controller, validateActions(for: review) else { return }
+            guard let window = controller.window else {
                 coordinator.reject(review: review)
+                return
+            }
+            let alert = NSAlert()
+            alert.messageText = Strings.addNetwork
+            alert.informativeText = action.chainToAdd.chainName + "\n\n" + action.chainToAdd.defaultRpcUrl
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: Strings.ok).setAccessibilityIdentifier("safari.approval.approve")
+            alert.addButton(withTitle: Strings.cancel).setAccessibilityIdentifier("safari.approval.reject")
+            alert.beginSheetModal(for: window) { [weak self] response in
+                guard let self, validateActions(for: review) else { return }
+                if response == .alertFirstButtonReturn {
+                    guard walletAccess.beginAction() else { return }
+                    coordinator.approveAddEthereumChain(review: review)
+                } else {
+                    coordinator.reject(review: review)
+                }
             }
         }
     }
@@ -840,12 +849,13 @@ extension Agent.ActiveApproval {
         installWaitingSurface(reason: Strings.loading, in: controller)
     }
 
-    private func showFailureSurface(retry: Bool = false, reason: String = Strings.somethingWentWrong) {
+    private func showFailureSurface(retry: Bool = false, reason: String = Strings.somethingWentWrong, revealWindow: Bool = true) {
         guard let controller = approvalWindow() else { return }
         installWaitingSurface(
             reason: reason,
             in: controller,
             isWorking: false,
+            revealWindow: revealWindow,
             retryAction: retry ? { [weak self] in
                 guard let self, !isRetired, walletAccess.beginAction() else { return }
                 coordinator.retryRecovery()
@@ -853,23 +863,25 @@ extension Agent.ActiveApproval {
         )
     }
 
-    @discardableResult
     private func installWaitingSurface(
         reason: String,
         in windowController: WalletWindowController,
         isWorking: Bool = true,
-        retryAction: (() -> Void)? = nil
-    ) -> Bool {
-        guard walletAccess.validateCurrentAccess(), !isRetired else { return false }
+        revealWindow: Bool = true,
+        retryAction: (() -> Void)? = nil,
+        didInstall: @escaping () -> Void = {}
+    ) {
+        guard walletAccess.validateCurrentAccess(), !isRetired else { return }
         let outgoing = windowController.contentViewController
         if !(outgoing is WaitingViewController) {
             windowController.window?.delegate = nil
         }
         Self.dismissApprovalSheets(in: windowController.window)
-        guard walletAccess.validateCurrentAccess(), !isRetired else { return false }
+        guard walletAccess.validateCurrentAccess(), !isRetired else { return }
         if let waiting = outgoing as? WaitingViewController {
             waiting.update(reason: reason, isWorking: isWorking, retryAction: retryAction)
-            return true
+            installProtectedContent(waiting, in: windowController, revealWindow: revealWindow, didInstall: didInstall)
+            return
         }
         let waiting = WaitingViewController.with(
             reason: reason,
@@ -878,7 +890,7 @@ extension Agent.ActiveApproval {
         ) {
             Window.activateBrowser(specific: .safari)
         }
-        return installProtectedContent(waiting, in: windowController)
+        installProtectedContent(waiting, in: windowController, revealWindow: revealWindow, didInstall: didInstall)
     }
 
     @discardableResult

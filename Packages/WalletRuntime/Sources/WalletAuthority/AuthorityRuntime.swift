@@ -20,7 +20,7 @@ struct WalletManagementServices {
         var makeMetadata: @MainActor () -> WalletsMetadataService = { .live() }
         var metadataMutations: WalletRepository.MetadataMutations?
         var notifications: WalletStoreChangeNotifications = .live
-        var credentialAuthentication: WalletCredentialAuthentication = .live
+        var credentialAuthentication: WalletCredentialAuthentication?
 #if os(iOS) || os(visionOS)
         var makeVault: @MainActor (AuthorityRuntimeConfiguration, AuthorityComposition.Dependencies) -> SafariApprovalVault = {
             SafariApprovalVault(fileURL: $0.storage.containerURL?.appendingPathComponent("SafariApprovalVault.v1"),
@@ -133,14 +133,13 @@ public final class AuthorityRuntime {
 #endif
 
     public func error(_ kind: ErrorKind) -> ProviderResponseError {
-        AuthorityMessageContext.$current.withValue(messages) {
-            switch kind {
-            case .userRejected: .userRejected
-            case .internalError: .internalError
-            case .approvalInterrupted: .approvalInterrupted
-            case .privateBrowsingUnsupported: .privateBrowsingUnsupported
-            }
+        let error: ProviderResponseError = switch kind {
+        case .userRejected: .userRejected
+        case .internalError: .internalError
+        case .approvalInterrupted: .approvalInterrupted
+        case .privateBrowsingUnsupported: .privateBrowsingUnsupported
         }
+        return error.rendered(using: messages)
     }
 
     nonisolated public func invalidateNetworkCache() { invalidateCache() }

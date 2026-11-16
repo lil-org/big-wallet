@@ -1,4 +1,5 @@
 import Foundation
+import WalletDomain
 
 enum HTTPJSONBudget {
     static func normalizedBytes(from data: Data, limits: NativeRPCResponseLimits) throws -> Data? {
@@ -7,7 +8,17 @@ enum HTTPJSONBudget {
             throw HTTPResponsePolicyError.responseTooLarge
         }
         guard let bytes = try utf8Bytes(data, limits: limits) else { return nil }
-        try validateJSONBudget(bytes, limits: limits)
+        let json = bytes.dropFirst(bytes.starts(with: [0xef, 0xbb, 0xbf]) ? 3 : 0)
+        do {
+            try JSONPreflight.validate(json, maximumDepth: limits.maximumJSONDepth, maximumTokens: limits.maximumJSONTokens)
+        } catch let failure as JSONPreflight.Failure {
+            switch failure {
+            case .tooDeep: throw HTTPResponsePolicyError.jsonTooDeep
+            case .tooManyTokens: throw HTTPResponsePolicyError.tooManyJSONTokens
+            case .unbalanced: return nil
+            }
+        }
+        try Task.checkCancellation()
         return bytes
     }
 
@@ -30,46 +41,4 @@ enum HTTPJSONBudget {
         return Data(string.utf8)
     }
 
-    private static func validateJSONBudget(_ bytes: Data, limits: NativeRPCResponseLimits) throws {
-        var tokens = 0
-        var depth = 0
-        var inString = false
-        var escaped = false
-        var inScalar = false
-        let json = bytes.dropFirst(bytes.starts(with: [0xEF, 0xBB, 0xBF]) ? 3 : 0)
-        for (offset, byte) in json.enumerated() {
-            if offset % 4096 == 0 { try Task.checkCancellation() }
-            if inString {
-                if escaped { escaped = false }
-                else if byte == 92 { escaped = true }
-                else if byte == 34 { inString = false }
-                continue
-            }
-            switch byte {
-            case 34:
-                tokens += 1
-                inString = true
-                inScalar = false
-            case 91, 123:
-                tokens += 1
-                depth += 1
-                inScalar = false
-                guard depth <= limits.maximumJSONDepth else {
-                    throw HTTPResponsePolicyError.jsonTooDeep
-                }
-            case 93, 125:
-                depth -= 1
-                inScalar = false
-            case 9, 10, 13, 32, 44, 58:
-                inScalar = false
-            default:
-                if !inScalar { tokens += 1 }
-                inScalar = true
-            }
-            guard tokens <= limits.maximumJSONTokens else {
-                throw HTTPResponsePolicyError.tooManyJSONTokens
-            }
-        }
-        try Task.checkCancellation()
-    }
 }

@@ -16,10 +16,7 @@ class EditAccountsViewController: WalletAccessViewController {
     private var layoutTask: Task<Void, Never>?
     private(set) var previewState: AccountPreviewState!
     private let previewAccountsPreloadThreshold = 4
-    private var mutationTask: Task<Void, Never>?
-    private var retryTask: Task<Void, Never>?
     private var didAppear = false
-    private var isSaving = false
     private var isRetired = false
     let previewRetryButton = UIButton(type: .system)
     private let previewStatusLabel = UILabel()
@@ -29,7 +26,7 @@ class EditAccountsViewController: WalletAccessViewController {
     private var previewStatusInset: CGFloat = 0
 
     private var canEditPreview: Bool {
-        !isRetired && hasCurrentWalletPresentation && walletsManager.isStoreReady && !isSaving && previewState?.canEdit == true
+        !isRetired && hasCurrentWalletPresentation && previewState?.canEdit == true
     }
     
     @IBOutlet weak var okButton: UIButton!
@@ -63,8 +60,9 @@ class EditAccountsViewController: WalletAccessViewController {
             waitForLayout: waitForPreviewLayout,
             didChange: { [weak self] in self?.previewDidChange($0) }
         )
-        if validateCurrentAccess(), walletsManager.isStoreReady { previewState.reset() }
-        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
+        reconcileStore()
+        guard !isRetired else { return }
+        NotificationCenter.default.addObserver(self, selector: #selector(storeLoadStateChanged), name: .walletsChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(storeLoadStateChanged), name: .walletsLoadStateChanged, object: walletsManager)
         updatePreviewStatus()
     }
@@ -77,8 +75,6 @@ class EditAccountsViewController: WalletAccessViewController {
     
     isolated deinit {
         layoutTask?.cancel()
-        mutationTask?.cancel()
-        retryTask?.cancel()
         previewState?.invalidate()
         NotificationCenter.default.removeObserver(self)
     }
@@ -102,11 +98,10 @@ class EditAccountsViewController: WalletAccessViewController {
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         layoutTask?.cancel()
-        mutationTask?.cancel()
+        previewState?.cancelSave()
 
         if isBeingDismissed || navigationController?.isBeingDismissed == true {
             isRetired = true
-            retryTask?.cancel()
             NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
             NotificationCenter.default.removeObserver(self, name: .walletsLoadStateChanged, object: walletsManager)
             invalidatePreviewAccounts()
@@ -119,42 +114,17 @@ class EditAccountsViewController: WalletAccessViewController {
     }
 
     private func updateOkButtonState() {
-        okButton.isEnabled = canEditPreview && previewState.hasEnabledAccounts
+        okButton.isEnabled = !isRetired && hasCurrentWalletPresentation && previewState?.canSave == true
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
-        guard beginWalletAction(), canEditPreview, let previewState else { return }
-        guard previewState.hasChanges else {
-            closeEditor()
-            return
-        }
-        let wallet = previewState.wallet
-        let newAccounts = previewState.enabledAccounts
-        isSaving = true
-        updateOkButtonState()
-        tableView.isUserInteractionEnabled = false
-        updatePreviewStatus()
-        mutationTask = Task { [weak self, walletsManager] in
-            guard let self, !Task.isCancelled, validateCurrentAccess() else { return }
-            do {
-                let session = try requireCurrentAccess()
-                try await walletsManager.update(wallet: wallet, enabledAccounts: newAccounts, access: session)
-                guard !Task.isCancelled, !isRetired, validateCurrentAccess() else { return }
-                finishSaving()
-                closeEditor()
-            } catch {
-                guard !Task.isCancelled, !isRetired, validateCurrentAccess() else { return }
-                finishSaving()
-                showMessageAlert(text: Strings.somethingWentWrong)
+        guard !isRetired, beginWalletAction(), let previewState else { return }
+        previewState.save { [weak self, walletsManager] wallet, accounts in
+            guard let session = try self?.requireCurrentAccess() else {
+                throw WalletCredentialError.authorizationUnavailable
             }
+            try await walletsManager.update(wallet: wallet, enabledAccounts: accounts, access: session)
         }
-    }
-
-    private func finishSaving() {
-        isSaving = false
-        updateOkButtonState()
-        tableView.isUserInteractionEnabled = true
-        updatePreviewStatus()
     }
 
     private func invalidatePreviewAccounts() {
@@ -164,8 +134,6 @@ class EditAccountsViewController: WalletAccessViewController {
     @objc private func closeEditor() {
         guard validateCurrentAccess() else { return }
         isRetired = true
-        mutationTask?.cancel()
-        retryTask?.cancel()
         NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
         NotificationCenter.default.removeObserver(self, name: .walletsLoadStateChanged, object: walletsManager)
         invalidatePreviewAccounts()
@@ -178,37 +146,23 @@ class EditAccountsViewController: WalletAccessViewController {
         closeEditor()
     }
 
-    @objc private func walletsChanged() {
-        guard !isRetired, validateCurrentAccess(), walletsManager.isStoreReady else { return }
-        let currentWallet = walletsManager.currentWallet(id: previewState.wallet.id)
-        if case .close = previewState.refresh(wallet: currentWallet) {
-            closeEditor()
-        }
+    @objc private func storeLoadStateChanged() {
+        reconcileStore()
     }
 
-    @objc private func storeLoadStateChanged() {
+    private func reconcileStore() {
         guard !isRetired, validateCurrentAccess(), let previewState else { return }
-        if case .close = previewState.reconcileStore(
+        previewState.reconcileStore(
             loadState: walletsManager.loadState,
+            isReady: walletsManager.isStoreReady,
             wallet: walletsManager.currentWallet(id: previewState.wallet.id)
-        ) {
-            closeEditor()
-            return
-        }
-        updatePreviewStatus()
+        )
     }
 
     @objc func retryPreview() {
-        guard !isRetired, beginWalletAction(), retryTask == nil, !isSaving else { return }
-        if walletsManager.isStoreReady {
-            previewState.retry()
-            return
-        }
-        retryTask = Task { [weak self, walletsManager] in
+        guard !isRetired, beginWalletAction() else { return }
+        previewState?.retry { [walletsManager] in
             _ = await walletsManager.reloadFromStore()
-            guard let self, !Task.isCancelled, !isRetired, validateCurrentAccess() else { return }
-            retryTask = nil
-            updatePreviewStatus()
         }
     }
 
@@ -246,15 +200,12 @@ class EditAccountsViewController: WalletAccessViewController {
     private func updatePreviewStatus() {
         guard !isRetired, let previewState else { return }
         updateOkButtonState()
-        let storeFailed: Bool
-        if case .failed = walletsManager.loadState { storeFailed = true } else { storeFailed = false }
-        let failed = storeFailed || (walletsManager.isStoreReady && previewState.canRetry)
-        let loading = !walletsManager.isStoreReady && !storeFailed || previewState.status == .loadingInitial || previewState.status == .recovering
+        let failed = previewState.loadPresentation == .failed
         previewStatusLabel.text = failed ? Strings.failedToLoad : Strings.loading
         previewRetryButton.isHidden = !failed
-        previewRetryButton.isEnabled = failed && retryTask == nil && !isSaving
-        let visible = failed || loading
-        previewStatusView.isHidden = !visible
+        previewRetryButton.isEnabled = previewState.canRetry
+        previewStatusView.isHidden = previewState.loadPresentation == .hidden
+        tableView.isUserInteractionEnabled = !previewState.isSaving
         statusCenterConstraint?.isActive = false
         statusBottomConstraint?.isActive = false
         if previewState.accounts.isEmpty { statusCenterConstraint?.isActive = true }
@@ -288,13 +239,17 @@ class EditAccountsViewController: WalletAccessViewController {
             requestPreviewPaging()
         case .selection, .status:
             break
+        case .close:
+            closeEditor()
+        case .saveFailed:
+            showMessageAlert(text: Strings.somethingWentWrong)
         }
     }
 
     private func requestPreviewPaging() {
         guard !isRetired, hasCurrentWalletPresentation else { return }
         previewState?.requestPaging { [weak self] in
-            guard let self, !isRetired, didAppear, validateCurrentAccess(), walletsManager.isStoreReady else { return false }
+            guard let self, !isRetired, didAppear, validateCurrentAccess() else { return false }
             return shouldPreviewMoreAccountsForCurrentViewport()
         }
     }
@@ -314,10 +269,7 @@ class EditAccountsViewController: WalletAccessViewController {
 
     override func walletAccessDidLock() {
         isRetired = true
-        retryTask?.cancel()
         super.walletAccessDidLock()
-        mutationTask?.cancel()
-        mutationTask = nil
         layoutTask?.cancel()
         invalidatePreviewAccounts()
         okButton?.isEnabled = false

@@ -1378,7 +1378,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         defer { fixture.coordinator.onEvent = nil; window.close() }
         fixture.coordinator.resumeAfterAuthentication(authorization: NativeApprovalTestAuthorization.accessSession())
         await waitForState(fixture.coordinator, .reviewing)
-        let review = window.contentViewController
+        let review = try XCTUnwrap(window.contentViewController)
         var rejections = 0
         fixture.store.rejectHandler = { _, _, _ in
             rejecting = true
@@ -1389,7 +1389,8 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         window.resetActivationCount()
         await waitForState(fixture.coordinator, .paused)
         XCTAssertTrue(approval.isDismissed)
-        XCTAssertTrue(window.contentViewController === review)
+        XCTAssertNil(window.contentViewController)
+        XCTAssertTrue(review.view.isHidden)
         XCTAssertFalse(window.isVisible)
         XCTAssertEqual(window.activationCount, 0)
         guard case .retryRequired? = fixture.coordinator.currentPresentation?.presentation else {

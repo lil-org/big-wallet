@@ -190,12 +190,7 @@ public final class WalletsManager: NSObject {
         return loadState == .ready && current.status == .valid && repositoryRevision == current.revision &&
             publishedExternalChangeRevision == current.externalChangeRevision
     }
-    @MainActor
-    private final class ReloadAttempt {
-        var task: Task<Bool, Never>!
-        nonisolated let uncancelledWaiterCount = Mutex(0)
-    }
-    private var reloadAttempt: ReloadAttempt?
+    private var reloadTask: Task<Bool, Never>?
     private var publishedExternalChangeRevision: UInt64 = 0
     private var repositoryRevision: UInt64 = 0
     private var isObservingExternalChanges = false
@@ -234,7 +229,7 @@ public final class WalletsManager: NSObject {
 
     isolated deinit {
         externalReload?.cancel()
-        reloadAttempt?.task.cancel()
+        reloadTask?.cancel()
         notifications.stopObserving(self)
     }
 
@@ -247,40 +242,30 @@ public final class WalletsManager: NSObject {
     @discardableResult
     public func reloadFromStore() async -> Bool {
         guard !Task.isCancelled else { return false }
-        if let pending = reloadAttempt { cancelReloadIfUnobserved(pending) }
-        let attempt: ReloadAttempt
-        if let pending = reloadAttempt, !pending.task.isCancelled {
-            attempt = pending
-            attempt.uncancelledWaiterCount.withLock { $0 += 1 }
+        let task: Task<Bool, Never>
+        if let pending = reloadTask {
+            task = pending
         } else {
-            attempt = ReloadAttempt()
-            attempt.uncancelledWaiterCount.withLock { $0 += 1 }
-            reloadAttempt = attempt
-            attempt.task = Task { [weak self] in
+            task = Task { [weak self] in
                 guard let self else { return false }
-                return await performReload(attempt)
+                return await performReload()
             }
+            reloadTask = task
             reconcileLoadPresentation()
         }
-        return await withTaskCancellationHandler {
-            let result = await attempt.task.value
-            return !Task.isCancelled && result && hasCurrentPublishedSnapshot
-        } onCancel: {
-            attempt.uncancelledWaiterCount.withLock { $0 -= 1 }
-            Task { @MainActor [weak self] in self?.cancelReloadIfUnobserved(attempt) }
-        }
+        let result = await task.value
+        return !Task.isCancelled && result && hasCurrentPublishedSnapshot
     }
 
-    private func performReload(_ attempt: ReloadAttempt) async -> Bool {
+    private func performReload() async -> Bool {
         while true {
             let revision = validity.snapshot.externalChangeRevision
             let result = await repository.load()
-            cancelReloadIfUnobserved(attempt)
-            if reloadAttempt === attempt, !Task.isCancelled, revision != validity.snapshot.externalChangeRevision {
+            if !Task.isCancelled, revision != validity.snapshot.externalChangeRevision {
                 if case .failed = result { setLoadStateFromValidity() }
                 continue
             }
-            if reloadAttempt === attempt { reloadAttempt = nil }
+            reloadTask = nil
             let applied: Bool
             switch result {
             case .loaded(let state):
@@ -301,12 +286,6 @@ public final class WalletsManager: NSObject {
         }
     }
 
-    private func cancelReloadIfUnobserved(_ attempt: ReloadAttempt) {
-        guard reloadAttempt === attempt,
-              attempt.uncancelledWaiterCount.withLock({ $0 == 0 }) else { return }
-        attempt.task.cancel()
-    }
-
     private func setLoadStateFromValidity() {
         switch validity.snapshot.status {
         case .valid: setLoadState(hasLoadedSnapshot ? .ready : .idle)
@@ -318,7 +297,7 @@ public final class WalletsManager: NSObject {
     private func reconcileLoadPresentation() {
         if validity.snapshot.status == .valid, hasLoadedSnapshot {
             setLoadState(.ready)
-        } else if let attempt = reloadAttempt, !attempt.task.isCancelled {
+        } else if reloadTask != nil {
             setLoadState(.loading)
         } else {
             setLoadStateFromValidity()

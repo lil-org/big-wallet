@@ -44,28 +44,23 @@ public actor ApprovalResolution<Value: Sendable> {
             resolve(timeoutValue)
             return await value()
         }
-        let messages = AuthorityMessageContext.current
         let hooks = AuthorityExecutionHooks.current
         let context = AuthorityExecutionContext.current
         let operationTask = Task.detached {
-            await AuthorityMessageContext.$current.withValue(messages) {
-                await AuthorityExecutionHooks.$current.withValue(hooks) {
-                    await AuthorityExecutionContext.$current.withValue(context) {
-                        let result = await operation()
-                        if await self.resolve(result) == false {
-                            onDiscardedValue(result)
-                        }
+            await AuthorityExecutionHooks.$current.withValue(hooks) {
+                await AuthorityExecutionContext.$current.withValue(context) {
+                    let result = await operation()
+                    if await self.resolve(result) == false {
+                        onDiscardedValue(result)
                     }
                 }
             }
         }
         let timeoutTask = waitForTimeout.map { waitForTimeout in
             Task.detached {
-                await AuthorityMessageContext.$current.withValue(messages) {
-                    await AuthorityExecutionHooks.$current.withValue(hooks) {
-                        await AuthorityExecutionContext.$current.withValue(context) {
-                            await waitForTimeout()
-                        }
+                await AuthorityExecutionHooks.$current.withValue(hooks) {
+                    await AuthorityExecutionContext.$current.withValue(context) {
+                        await waitForTimeout()
                     }
                 }
                 guard !Task.isCancelled else { return }

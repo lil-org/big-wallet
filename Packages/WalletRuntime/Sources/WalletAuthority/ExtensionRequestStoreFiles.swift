@@ -81,7 +81,6 @@ final class ExtensionRequestStoreFiles: Sendable {
     private let lockTimeout: UInt64
     private let lockPoll: UInt64
     private let io: IO
-    private let messages: AuthorityMessages
     private var fileManager: FileManager { FileManager.default }
 
     init(
@@ -91,7 +90,6 @@ final class ExtensionRequestStoreFiles: Sendable {
     ) {
         self.rootURL = rootURL
         self.directoryBoundary = directoryBoundary
-        messages = dependencies.messages
         lockTimeout = dependencies.crossProcessLockTimeoutNanoseconds
         lockPoll = dependencies.crossProcessLockPollNanoseconds
         io = dependencies.fileIO ?? .live(directoryBoundary: directoryBoundary)
@@ -315,13 +313,13 @@ final class ExtensionRequestStoreFiles: Sendable {
     func withRequiredLock<T>(_ body: () throws -> T) throws -> T {
         let lock = try acquireRequiredLock()
         defer { lock.release() }
-        return try AuthorityMessageContext.$current.withValue(messages, operation: body)
+        return try body()
     }
 
     func withLockIfAvailable<T>(_ body: () throws -> T) rethrows -> T? {
         guard let lock = try? acquireRequiredLock() else { return nil }
         defer { lock.release() }
-        return try AuthorityMessageContext.$current.withValue(messages, operation: body)
+        return try body()
     }
 
     private func acquireRequiredLock() throws -> CrossProcessFileLock {
@@ -416,7 +414,7 @@ final class ExtensionRequestStoreFiles: Sendable {
         defer { storeLock.release() }
         switch directoryStatus(at: profileDirectoryURL) {
         case .missing: return missing()
-        case .directory: return AuthorityMessageContext.$current.withValue(messages, operation: operation)
+        case .directory: return operation()
         case .unsafe, .unavailable: return unavailable
         }
     }

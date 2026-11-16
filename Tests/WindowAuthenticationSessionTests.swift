@@ -8,40 +8,140 @@ import XCTest
 
 @MainActor
 final class WindowAuthenticationSessionTests: XCTestCase {
-    func testReplacementRetiresContentOnceAndPreservesAReentrantInstallation() throws {
+    func testReplacementRequestsCoalesceUntilRetirementCompletes() throws {
         let access = NativeWalletAccess(try unlockedWalletAccessForTesting())
         let window = try makeWindow()
         window.bindAccess(access.controller, unlock: {})
         defer { window.close() }
         let outgoing = ReentrantProtectedViewController(access: access)
         let superseded = ReentrantProtectedViewController(access: access)
+        let queued = ReentrantProtectedViewController(access: access)
         let replacement = ReentrantProtectedViewController(access: access)
-        XCTAssertTrue(window.installProtectedContent(outgoing, access: access))
+        var installed = [String]()
+        window.installProtectedContent(outgoing, access: access) { installed.append("outgoing") }
         outgoing.onRetire = {
-            XCTAssertTrue(window.contentViewController === outgoing)
-            XCTAssertTrue(window.installProtectedContent(replacement, access: access))
+            XCTAssertNil(window.contentViewController)
+            XCTAssertTrue(outgoing.view.isHidden)
+            window.installProtectedContent(queued, access: access) { installed.append("queued") }
+            window.installProtectedContent(replacement, access: access) { installed.append("replacement") }
+            XCTAssertNil(window.contentViewController)
+            XCTAssertFalse(replacement.isViewLoaded)
         }
 
-        XCTAssertFalse(window.installProtectedContent(superseded, access: access))
+        window.installProtectedContent(superseded, access: access) { installed.append("superseded") }
 
+        XCTAssertEqual(installed, ["outgoing", "replacement"])
         XCTAssertEqual(outgoing.retirementCount, 1)
         XCTAssertTrue(superseded.retired)
+        XCTAssertTrue(queued.retired)
+        XCTAssertFalse(queued.isViewLoaded)
         XCTAssertFalse(replacement.retired)
         XCTAssertTrue(window.contentViewController === replacement)
+        XCTAssertFalse(replacement.view.isHidden)
         let late = ReentrantProtectedViewController(access: access)
         replacement.onRetire = {
             XCTAssertFalse(window.prepareToReopen(access: access))
-            XCTAssertFalse(window.installProtectedContent(late, access: access))
+            window.installProtectedContent(late, access: access) { XCTFail("Closed windows cannot install content") }
         }
         window.close()
         window.close()
         XCTAssertEqual(replacement.retirementCount, 1)
         XCTAssertTrue(late.retired)
-        XCTAssertTrue(window.contentViewController === replacement)
+        XCTAssertNil(window.contentViewController)
         let reopened = ReentrantProtectedViewController(access: access)
         XCTAssertTrue(window.prepareToReopen(access: access))
-        XCTAssertTrue(window.installProtectedContent(reopened, access: access))
+        window.installProtectedContent(reopened, access: access)
+        XCTAssertTrue(window.contentViewController === reopened)
         XCTAssertFalse(reopened.retired)
+    }
+
+    func testLockDiscardsQueuedContentBeforeItsInstallationCallback() throws {
+        for locksBeforeRequest in [false, true] {
+            let fixture = WalletAccessTestFixture()
+            try fixture.unlock()
+            let access = NativeWalletAccess(fixture.access)
+            let window = try makeWindow()
+            var unlocks = 0
+            window.bindAccess(fixture.access, unlock: { unlocks += 1 })
+            defer { window.close() }
+            let outgoing = ReentrantProtectedViewController(access: access)
+            let next = ReentrantProtectedViewController(access: access)
+            let queued = ReentrantProtectedViewController(access: access)
+            let secret = NSTextField(string: "secret draft")
+            outgoing.ownedSecretField = secret
+            window.installProtectedContent(outgoing, access: access)
+            outgoing.view.addSubview(secret)
+            outgoing.onRetire = {
+                if locksBeforeRequest { fixture.access.lock(reason: .idle) }
+                window.installProtectedContent(queued, access: access) { XCTFail("Revoked queued content was installed") }
+                if !locksBeforeRequest { fixture.access.lock(reason: .idle) }
+                XCTAssertTrue(outgoing.view.isHidden)
+                XCTAssertTrue(secret.stringValue.isEmpty)
+                XCTAssertTrue(next.view.isHidden)
+                XCTAssertFalse(queued.isViewLoaded)
+            }
+
+            window.installProtectedContent(next, access: access) { XCTFail("Revoked in-flight content was installed") }
+
+            let locked = try XCTUnwrap(window.contentViewController as? WalletLockedViewController)
+            XCTAssertFalse(locked.view.isHidden)
+            locked.unlockWallet()
+            XCTAssertEqual(unlocks, 1)
+            XCTAssertEqual(queued.retirementCount, 1)
+            XCTAssertEqual(next.retirementCount, 1)
+            XCTAssertEqual(outgoing.retirementCount, 1)
+            XCTAssertNil(next.viewIfLoaded?.window)
+        }
+    }
+
+    func testClosingDuringRetirementDiscardsQueuedContent() throws {
+        let access = NativeWalletAccess(try unlockedWalletAccessForTesting())
+        let window = try makeWindow()
+        window.bindAccess(access.controller, unlock: {})
+        let outgoing = ReentrantProtectedViewController(access: access)
+        let next = ReentrantProtectedViewController(access: access)
+        let queued = ReentrantProtectedViewController(access: access)
+        window.installProtectedContent(outgoing, access: access)
+        outgoing.onRetire = {
+            window.installProtectedContent(queued, access: access) { XCTFail("Closed queued content was installed") }
+            window.close()
+        }
+
+        window.installProtectedContent(next, access: access) { XCTFail("Closed in-flight content was installed") }
+
+        XCTAssertEqual(outgoing.retirementCount, 1)
+        XCTAssertTrue(next.retired)
+        XCTAssertTrue(queued.retired)
+        XCTAssertFalse(queued.isViewLoaded)
+    }
+
+    func testClosingFromInstallationCallbackRetiresTheInstalledContentOnce() throws {
+        let access = NativeWalletAccess(try unlockedWalletAccessForTesting())
+        let window = try makeWindow()
+        window.bindAccess(access.controller, unlock: {})
+        let content = ReentrantProtectedViewController(access: access)
+        let late = ReentrantProtectedViewController(access: access)
+        var installed = 0
+        content.onRetire = {
+            XCTAssertNil(window.contentViewController)
+            XCTAssertFalse(window.prepareToReopen(access: access))
+            window.installProtectedContent(late, access: access) { XCTFail("A close callback reopened the window") }
+        }
+
+        window.installProtectedContent(content, access: access) {
+            installed += 1
+            XCTAssertTrue(window.contentViewController === content)
+            window.close()
+        }
+
+        XCTAssertEqual(installed, 1)
+        XCTAssertEqual(content.retirementCount, 1)
+        XCTAssertNil(window.contentViewController)
+        XCTAssertTrue(content.view.isHidden)
+        XCTAssertEqual(late.retirementCount, 1)
+        XCTAssertFalse(late.isViewLoaded)
+        window.close()
+        XCTAssertEqual(content.retirementCount, 1)
     }
 
     func testUnboundWindowCannotStartProtectedAuthentication() async throws {
@@ -80,7 +180,8 @@ final class WindowAuthenticationSessionTests: XCTestCase {
             let review = try nativeReviewForTesting()
             let content = ApproveViewController.with(subject: .signMessage, meta: "Cascade fixture",
                 account: account, walletId: wallet.id, review: review, access: NativeWalletAccess(fixture.access), completion: { _, _ in })
-            XCTAssertTrue(controller.installProtectedContent(content, access: content.walletAccess))
+            controller.installProtectedContent(content, access: content.walletAccess)
+            XCTAssertTrue(controller.contentViewController === content)
             XCTAssertFalse(controller.window?.isVisible == true)
             controller.showWindow(nil)
             XCTAssertTrue(controller.window?.isVisible == true)
@@ -164,7 +265,8 @@ final class WindowAuthenticationSessionTests: XCTestCase {
         controller.walletsManager = try await accountSelectionWalletsManager()
         let window = try makeWindow()
         window.bindAccess(fixture.access, unlock: {})
-        XCTAssertTrue(window.installProtectedContent(controller, access: controller.walletAccess))
+        window.installProtectedContent(controller, access: controller.walletAccess)
+        XCTAssertTrue(window.contentViewController === controller)
         defer { window.close() }
         let scroller = try XCTUnwrap(controller.tableView.enclosingScrollView?.verticalScroller as? WalletActivityScroller)
         fixture.advance(by: .seconds(800))
@@ -210,10 +312,17 @@ final class WindowAuthenticationSessionTests: XCTestCase {
             window.bindAccess(fixture.access, unlock: {})
             defer { window.close() }
             let next = ReentrantProtectedViewController(access: NativeWalletAccess(fixture.access))
-            if locksOnAppearance { next.onAppear = { fixture.access.lock(reason: .idle) } }
-            else { next.onLoad = { fixture.access.lock(reason: .idle) } }
+            let lock = {
+                let secret = NSTextField(string: "secret draft")
+                next.view.addSubview(secret)
+                fixture.access.lock(reason: .idle)
+                XCTAssertTrue(next.view.isHidden)
+                XCTAssertTrue(secret.stringValue.isEmpty)
+            }
+            if locksOnAppearance { next.onAppear = lock }
+            else { next.onLoad = lock }
 
-            XCTAssertFalse(window.installProtectedContent(next, access: next.walletAccess))
+            window.installProtectedContent(next, access: next.walletAccess) { XCTFail("Revoked content was installed") }
 
             XCTAssertTrue(fixture.access.isLocked)
             XCTAssertTrue(next.retired)
@@ -347,7 +456,7 @@ final class WindowAuthenticationSessionTests: XCTestCase {
             }()
             XCTAssertNotNil(callbackOwner)
             XCTAssertFalse(content.isViewLoaded)
-            XCTAssertFalse(window.installContent(content, while: { false }))
+            window.installContent(content, while: { false }) { XCTFail("Rejected content was installed") }
             XCTAssertTrue(window.contentViewController === original)
             XCTAssertFalse(content.isViewLoaded)
             XCTAssertNil(callbackOwner)
@@ -1088,6 +1197,7 @@ private final class ReentrantProtectedViewController: NSViewController, NativeWa
     var onLoad: (() -> Void)?
     var onAppear: (() -> Void)?
     var onRetire: (() -> Void)?
+    var ownedSecretField: NSTextField?
     private(set) var retired = false
     private(set) var retirementCount = 0
 
@@ -1104,9 +1214,10 @@ private final class ReentrantProtectedViewController: NSViewController, NativeWa
     }
 
     func retire() {
+        retirementCount += 1
         guard !retired else { return }
         retired = true
-        retirementCount += 1
+        ownedSecretField?.stringValue = ""
         let action = onRetire
         onRetire = nil
         action?()

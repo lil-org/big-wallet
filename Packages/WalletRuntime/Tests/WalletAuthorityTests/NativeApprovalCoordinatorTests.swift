@@ -1421,7 +1421,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             }))
         var responses = [NSDictionary]()
         fixture.store.completeHandler = { _, _, _, response in
-            responses.append(response.response(for: fixture.store.snapshot!.request!)!.json as NSDictionary)
+            responses.append(response.response(for: fixture.store.snapshot!.request!)!.json(messages: .testingEnglish) as NSDictionary)
             if responses.count == 7 {
                 retryWrite.fulfill()
                 return await gate.wait()
@@ -1465,7 +1465,7 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
             }))
         var responses = [NSDictionary]()
         fixture.store.completeHandler = { _, _, _, response in
-            responses.append(response.response(for: fixture.store.snapshot!.request!)!.json as NSDictionary)
+            responses.append(response.response(for: fixture.store.snapshot!.request!)!.json(messages: .testingEnglish) as NSDictionary)
             return responses.count < 3 ? .ownershipLost : .persisted
         }
         fixture.store.rejectHandler = { _, _, _ in

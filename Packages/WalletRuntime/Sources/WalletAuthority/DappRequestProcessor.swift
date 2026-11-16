@@ -31,12 +31,14 @@ struct DappRequestProcessor: DappRequestProcessing {
     private let ethereumSigningContent: @Sendable (SafariRequest.Ethereum) -> SigningReviewContent?
     private let solana: SolanaSigner
     private let solanaEndpoints: any SolanaEndpointResolving
+    private let solanaSummaryLabels: SolanaTransactionSummaryFormatter.Labels
 
     nonisolated init(
         ethereumNetworkResolver: @escaping @MainActor @Sendable (Int) -> ApprovalNetworkResolution,
         selectionNetworkResolver: @escaping @MainActor @Sendable (String?) -> EthereumNetwork?,
         customDefinitionResult: @escaping @MainActor @Sendable (EthereumNetworkFromDapp) -> CustomNetworkInsertionResult,
         solanaEndpoints: any SolanaEndpointResolving,
+        solanaSummaryLabels: SolanaTransactionSummaryFormatter.Labels,
         solana: SolanaSigner = SolanaSigner(),
         ethereumSigningContent: @escaping @Sendable (SafariRequest.Ethereum) -> SigningReviewContent? = {
             EthereumDappRequestProcessor.signingReviewContent(for: $0)
@@ -48,6 +50,7 @@ struct DappRequestProcessor: DappRequestProcessing {
         self.ethereumSigningContent = ethereumSigningContent
         self.solana = solana
         self.solanaEndpoints = solanaEndpoints
+        self.solanaSummaryLabels = solanaSummaryLabels
     }
 
     func prepare(
@@ -91,7 +94,7 @@ struct DappRequestProcessor: DappRequestProcessing {
                 body: body,
                 catalog: catalog,
                 solana: solana,
-                endpoints: solanaEndpoints
+                endpoints: solanaEndpoints, labels: solanaSummaryLabels
             )
         case .unknown:
             guard let context = request.manualSwitchContext else { return .unavailable }
@@ -157,18 +160,18 @@ struct DappRequestProcessor: DappRequestProcessing {
                 return .rollback
             case .failure(.failedToSign):
                 return Self.approvedFailure(
-                    .init(message: AuthorityStrings.failedToSign, code: ProviderResponseError.internalErrorCode),
+                    .init(messageKey: .failedToSign, code: ProviderResponseError.internalErrorCode),
                     permit: permit
                 )
             case .failure(.invalidTransaction):
                 let error: ProviderResponseError = payload.coin == .solana
-                    ? .init(message: AuthorityStrings.somethingWentWrong, code: 4200)
+                    ? .init(messageKey: .somethingWentWrong, code: 4200)
                     : .internalError
                 return Self.approvedFailure(error, permit: permit)
             }
         case .addEthereumChain:
             guard let completion = ApprovedCompletion.chainAdded(permit: permit) else {
-                return Self.approvedFailure(.init(message: AuthorityStrings.somethingWentWrong), permit: permit)
+                return Self.approvedFailure(.init(messageKey: .somethingWentWrong), permit: permit)
             }
             return .completed(completion)
         }

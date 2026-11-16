@@ -190,7 +190,7 @@ final class NativeToolbarRoutingTests: XCTestCase {
         init() throws {
             root = FileManager.default.temporaryDirectory.appendingPathComponent("toolbar-routing-\(UUID())")
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-            bridge = ExtensionBridge(store: ExtensionRequestFileStore(rootURL: root, directoryBoundary: root))
+            bridge = ExtensionBridge(store: ExtensionRequestFileStore(rootURL: root, directoryBoundary: root, dependencies: .init(messages: .testingEnglish)))
         }
 
         func cleanup() { try? FileManager.default.removeItem(at: root) }

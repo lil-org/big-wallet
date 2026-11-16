@@ -297,7 +297,7 @@ final class WalletAuthorityRevocationLedgerTests: XCTestCase {
             )
             let store = ExtensionRequestFileStore(
                 rootURL: rootURL, directoryBoundary: rootURL,
-                dependencies: .init(crossProcessLockTimeoutNanoseconds: 10_000_000_000)
+                dependencies: .init(messages: .testingEnglish, crossProcessLockTimeoutNanoseconds: 10_000_000_000)
             )
             do {
                 try store.perform(preparing: {

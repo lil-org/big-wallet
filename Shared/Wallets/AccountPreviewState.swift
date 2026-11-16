@@ -30,6 +30,8 @@ final class AccountPreviewState {
         case append(Range<Int>)
         case selection
         case status
+        case close
+        case saveFailed
     }
 
     enum Status: Equatable {
@@ -37,8 +39,12 @@ final class AccountPreviewState {
         case failed(page: Int)
     }
 
-    enum RefreshOutcome: Equatable {
-        case keepEditing, close
+    enum LoadPresentation: Equatable {
+        case hidden, loading, failed
+    }
+
+    private enum Action: Equatable {
+        case saving, reloadingStore
     }
 
     private(set) var wallet: WalletSnapshot
@@ -59,6 +65,12 @@ final class AccountPreviewState {
     private var hasLoadedAllPages = false
     private var recoveryTargetPage = 0
     private var needsStoreRecovery = false
+    private var storeLoadState = WalletsManager.LoadState.ready
+    private var storeReady = true
+    private var isActive = true
+    private var action: Action?
+    private var actionTask: Task<Void, Never>?
+    private var actionGeneration: UInt64 = 0
 
     init(
         wallet: WalletSnapshot,
@@ -80,6 +92,7 @@ final class AccountPreviewState {
         pagingTask?.cancel()
         session?.invalidate()
         preparingSession?.session.invalidate()
+        actionTask?.cancel()
     }
 
     var hasChanges: Bool {
@@ -91,10 +104,28 @@ final class AccountPreviewState {
     }
 
     var canEdit: Bool {
-        session != nil && (status == .ready || status == .loadingMore)
+        isActive && storeReady && !isSaving && session != nil && (status == .ready || status == .loadingMore)
     }
 
     var canRetry: Bool {
+        isActive && action == nil && loadPresentation == .failed
+    }
+
+    var canSave: Bool {
+        canEdit && action == nil && hasEnabledAccounts
+    }
+
+    var isSaving: Bool { action == .saving }
+
+    var loadPresentation: LoadPresentation {
+        guard isActive else { return .hidden }
+        if case .failed = storeLoadState { return .failed }
+        if !storeReady { return .loading }
+        if hasPreviewFailure { return .failed }
+        return status == .loadingInitial || status == .recovering ? .loading : .hidden
+    }
+
+    private var hasPreviewFailure: Bool {
         if case .failed = status { return true }
         return false
     }
@@ -120,22 +151,97 @@ final class AccountPreviewState {
     }
 
     func reset() {
+        isActive = true
         selectedKeys = Set(wallet.accounts.map(\.previewAccountKey))
         restartInitialPreview()
     }
 
     private func restartInitialPreview() {
-        invalidate()
+        clearPreview()
         accounts.removeAll()
         status = .loadingInitial
         startFreshSession(through: 0, change: .reload)
     }
 
     @discardableResult
-    func retry() -> Bool {
-        guard case .failed(let page) = status else { return false }
-        startRecovery(through: page, change: .status)
+    func retry(reloadingStore reload: @escaping @MainActor () async -> Void) -> Bool {
+        guard canRetry else { return false }
+        if storeReady {
+            guard case .failed(let page) = status else { return false }
+            startRecovery(through: page, change: .status)
+            return true
+        }
+        let generation = beginAction(.reloadingStore)
+        guard ownsAction(generation) else { return false }
+        actionTask = Task { [weak self] in
+            guard !Task.isCancelled else { return }
+            await reload()
+            guard !Task.isCancelled, let self, ownsAction(generation) else { return }
+            actionTask = nil
+            action = nil
+            didChange(.status)
+        }
         return true
+    }
+
+    @discardableResult
+    func save(using update: @escaping @MainActor (WalletSnapshot, [WalletAccount]) async throws -> Void) -> Bool {
+        guard canSave else { return false }
+        guard hasChanges else {
+            finishEditing()
+            return true
+        }
+        let wallet = wallet
+        let accounts = enabledAccounts
+        let generation = beginAction(.saving)
+        guard ownsAction(generation) else { return false }
+        actionTask = Task { [weak self] in
+            do {
+                try Task.checkCancellation()
+                try await update(wallet, accounts)
+                guard !Task.isCancelled, let self, ownsAction(generation) else { return }
+                actionTask = nil
+                action = nil
+                finishEditing()
+            } catch {
+                guard !Task.isCancelled, let self, ownsAction(generation) else { return }
+                actionTask = nil
+                action = nil
+                didChange(.saveFailed)
+            }
+        }
+        return true
+    }
+
+    func cancelSave() {
+        guard isSaving else { return }
+        cancelAction()
+        didChange(.status)
+    }
+
+    private func beginAction(_ action: Action) -> UInt64 {
+        actionGeneration &+= 1
+        let generation = actionGeneration
+        self.action = action
+        didChange(.status)
+        return generation
+    }
+
+    private func ownsAction(_ generation: UInt64) -> Bool {
+        isActive && actionGeneration == generation && action != nil
+    }
+
+    private func cancelAction() {
+        actionGeneration &+= 1
+        let task = actionTask
+        actionTask = nil
+        action = nil
+        task?.cancel()
+    }
+
+    private func finishEditing() {
+        invalidate()
+        didChange(.close)
     }
 
     private func startRecovery(through page: Int, change: Change) {
@@ -145,7 +251,7 @@ final class AccountPreviewState {
     }
 
     func suspendForStore() {
-        guard status != .idle else { return }
+        guard status != .idle else { didChange(.status); return }
         let page: Int
         if case .failed(let failedPage) = status { page = failedPage }
         else if status == .recovering { page = recoveryTargetPage }
@@ -214,7 +320,7 @@ final class AccountPreviewState {
     }
 
     func requestPaging(afterLayout needsMoreAccounts: @escaping @MainActor () -> Bool) {
-        guard pagingTask == nil, loadTask == nil, session != nil,
+        guard isActive, storeReady, pagingTask == nil, loadTask == nil, session != nil,
               !hasLoadedAllPages, status == .ready else { return }
         let generation = generation
         let waitForLayout = waitForLayout
@@ -230,7 +336,7 @@ final class AccountPreviewState {
     }
 
     private func loadMore() {
-        guard let session, loadTask == nil, !hasLoadedAllPages, status == .ready else { return }
+        guard isActive, storeReady, let session, loadTask == nil, !hasLoadedAllPages, status == .ready else { return }
         let generation = generation
         let page = nextPage
         let deadline = lastCompletedPageAt.map { $0 + Self.minimumPreviewInterval }
@@ -266,33 +372,30 @@ final class AccountPreviewState {
         }
     }
 
-    func refresh(wallet: WalletSnapshot?) -> RefreshOutcome {
-        refresh(wallet: wallet, recoveringStore: false)
-    }
-
-    @discardableResult
-    func reconcileStore(loadState: WalletsManager.LoadState, wallet: WalletSnapshot?) -> RefreshOutcome {
+    func reconcileStore(loadState: WalletsManager.LoadState, isReady: Bool, wallet: WalletSnapshot?) {
+        guard isActive else { return }
+        storeLoadState = loadState
+        storeReady = isReady
         switch loadState {
-        case .ready:
+        case .ready where isReady:
             let recoveringStore = needsStoreRecovery
             needsStoreRecovery = false
-            return refresh(wallet: wallet, recoveringStore: recoveringStore)
+            refresh(wallet: wallet, recoveringStore: recoveringStore)
         case .failed:
             needsStoreRecovery = true
             suspendForStore()
         case .loading where status == .loadingInitial || status == .recovering:
             needsStoreRecovery = true
             suspendForStore()
-        case .idle, .loading:
-            break
+        case .idle, .loading, .ready:
+            didChange(.status)
         }
-        return .keepEditing
     }
 
-    private func refresh(wallet: WalletSnapshot?, recoveringStore: Bool) -> RefreshOutcome {
+    private func refresh(wallet: WalletSnapshot?, recoveringStore: Bool) {
         guard let wallet, wallet.id == self.wallet.id else {
-            invalidate()
-            return .close
+            finishEditing()
+            return
         }
         let unchanged = wallet.isMnemonic == self.wallet.isMnemonic && wallet.accounts == self.wallet.accounts
         let previousKeys = Set(self.wallet.accounts.map(\.previewAccountKey))
@@ -303,15 +406,20 @@ final class AccountPreviewState {
         self.wallet = wallet
         if recoveringStore, case .failed(let page) = status {
             startRecovery(through: page, change: .reload)
-        } else if session != nil || canRetry || status == .recovering || status == .loadingInitial && unchanged {
+        } else if session != nil || hasPreviewFailure || status == .recovering || status == .loadingInitial && unchanged {
             didChange(.reload)
         } else {
             restartInitialPreview()
         }
-        return .keepEditing
     }
 
     func invalidate() {
+        isActive = false
+        cancelAction()
+        clearPreview()
+    }
+
+    private func clearPreview() {
         cancelWork()
         needsStoreRecovery = false
         status = .idle

@@ -11,11 +11,11 @@ struct DeviceAuthentication {
     }
 
     @MainActor
-    static func attemptBiometrics(reason: String) async -> WalletAuthenticationOutcome {
+    static func attemptBiometrics(reason: String, cancelTitle: String) async -> WalletAuthenticationOutcome {
         guard !Task.isCancelled else { return .cancelled }
         let attempt = AuthenticationAttempt()
         return await withTaskCancellationHandler {
-            let outcome = await attempt.evaluate(reason: reason)
+            let outcome = await attempt.evaluate(reason: reason, cancelTitle: cancelTitle)
             return Task.isCancelled ? .cancelled : outcome
         } onCancel: {
             Task { @MainActor in attempt.cancel() }
@@ -26,14 +26,14 @@ struct DeviceAuthentication {
     private final class AuthenticationAttempt {
         private let context = LAContext()
 
-        func evaluate(reason: String) async -> WalletAuthenticationOutcome {
+        func evaluate(reason: String, cancelTitle: String) async -> WalletAuthenticationOutcome {
             guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil) else { return .failed }
 #if os(macOS)
             let policy = LAPolicy.deviceOwnerAuthentication
 #else
             let policy = LAPolicy.deviceOwnerAuthenticationWithBiometrics
 #endif
-            context.localizedCancelTitle = AuthorityStrings.cancel
+            context.localizedCancelTitle = cancelTitle
             return await withCheckedContinuation { continuation in
                 context.evaluatePolicy(policy, localizedReason: reason) { success, error in
                     if success {

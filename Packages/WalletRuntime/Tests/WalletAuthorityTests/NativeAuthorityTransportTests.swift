@@ -278,8 +278,8 @@ final class NativeAuthorityTransportTests: XCTestCase {
         let produced = ResponseToExtension(for: request, payload: .error(.init(
             message: "Upstream code", code: Int.max
         )))
-        XCTAssertTrue(WireProtocol.validate(.nativeResponse, value: produced.json))
-        let decoded = try XCTUnwrap(ResponseToExtension(json: produced.json))
+        XCTAssertTrue(WireProtocol.validate(.nativeResponse, value: produced.json(messages: .testingEnglish)))
+        let decoded = try XCTUnwrap(ResponseToExtension(json: produced.json(messages: .testingEnglish)))
         guard case .error(let error) = decoded.payload else { return XCTFail("Expected native error") }
         XCTAssertEqual(error.code, Int.max)
     }
@@ -323,7 +323,7 @@ final class NativeAuthorityTransportTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let bridge = ExtensionBridge(store: ExtensionRequestFileStore(
             rootURL: directory, directoryBoundary: directory
-        ))
+        , dependencies: .init(messages: .testingEnglish)))
         let origin = "https://wallet.example"
         guard case .snapshot(let initial) = await bridge.configurationSnapshot(
             configurationKey: origin, profileIdentifier: nil

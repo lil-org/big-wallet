@@ -14,11 +14,11 @@ final class PopupRequestSession {
     }
 
     private enum Lifecycle {
-        case review(feedback: String?)
+        case review(feedback: AuthorityMessages.Key?)
         case claiming
-        case working(feedback: String?)
-        case authenticating(feedback: String?)
-        case error(message: String)
+        case working(feedback: AuthorityMessages.Key?)
+        case authenticating(feedback: AuthorityMessages.Key?)
+        case error(message: AuthorityMessages.Key)
     }
 
     let reviewCatalog: WalletReviewCatalog?
@@ -134,7 +134,7 @@ final class PopupRequestSession {
         }
     }
 
-    var errorText: String? {
+    var feedback: AuthorityMessages.Key? {
         switch lifecycle {
         case .review(let feedback):
             return feedback
@@ -147,7 +147,7 @@ final class PopupRequestSession {
         }
     }
 
-    func setFeedback(_ message: String) {
+    func setFeedback(_ message: AuthorityMessages.Key) {
         switch lifecycle {
         case .review:
             lifecycle = .review(feedback: message)
@@ -214,11 +214,11 @@ final class PopupRequestSession {
         guard isCurrent(token) else { return false }
         renewApprovalReview()
         reviewToken = UUID()
-        lifecycle = .review(feedback: errorText)
+        lifecycle = .review(feedback: feedback)
         return true
     }
 
-    func fail(_ message: String, token: UUID? = nil) {
+    func fail(_ message: AuthorityMessages.Key, token: UUID? = nil) {
         guard token.map(isCurrent) ?? true else { return }
         lifecycle = .error(message: message)
     }
@@ -239,7 +239,7 @@ public final class PopupApprovalAuthority {
         case unlocked(catalog: WalletReviewCatalog, preparation: WalletSigningPreparation)
         case authenticationCancelled
         case rejected(ImmediateResolution)
-        case abandoned(feedback: String?)
+        case abandoned(feedback: AuthorityMessages.Key?)
     }
 
     private enum PreparationStop: Equatable, Sendable {
@@ -329,10 +329,8 @@ public final class PopupApprovalAuthority {
         request: InternalSafariRequest,
         profileIdentifier: UUID?
     ) async -> PopupAuthorityResponse {
-        await AuthorityMessageContext.$current.withValue(messages) {
-            await AuthorityExecutionHooks.$current.withValue(hooks) {
-                await dispatchScoped(request: request, profileIdentifier: profileIdentifier)
-            }
+        await AuthorityExecutionHooks.$current.withValue(hooks) {
+            await dispatchScoped(request: request, profileIdentifier: profileIdentifier)
         }
     }
 
@@ -687,16 +685,16 @@ public final class PopupApprovalAuthority {
         guard case .available(let session) = activeSession else {
             if case .unavailable = activeSession {
                 return PopupAuthorityState(id: handle.id, host: snapshot.host,
-                    content: .error(message: AuthorityStrings.failedToLoad, actions: [.retry, .reject]))
+                    content: .error(message: .failedToLoad, actions: [.retry, .reject]))
             }
             if case .secureSetupRequired = activeSession {
                 return PopupAuthorityState(id: handle.id, host: snapshot.host,
-                    content: .error(message: AuthorityStrings.secureApprovalSetupRequired, actions: [.retry, .reject]))
+                    content: .error(message: .secureApprovalSetupRequired, actions: [.retry, .reject]))
             }
             if case .immediateResponse(let persistenceState) = activeSession {
                 if persistenceState == .failed {
                     return PopupAuthorityState(id: handle.id, host: snapshot.host,
-                        content: .error(message: AuthorityStrings.failedToLoad, actions: [.retry]))
+                        content: .error(message: .failedToLoad, actions: [.retry]))
                 }
                 return PopupAuthorityState(id: handle.id, host: snapshot.host, content: .working)
             }
@@ -806,7 +804,7 @@ public final class PopupApprovalAuthority {
         var accounts = [WalletAccountDescriptor]()
         for selected in selectedAccounts {
             guard let coin = WalletCoin.correspondingToInpageProvider(selected.coin) else {
-                session.setFeedback(AuthorityStrings.somethingWentWrong)
+                session.setFeedback(.somethingWentWrong)
                 return true
             }
             accounts.append(WalletAccountDescriptor(
@@ -826,7 +824,7 @@ public final class PopupApprovalAuthority {
             selection: selection,
             accounts: reviewedCatalog.orderedAccounts
         ) else {
-            session.setFeedback(AuthorityStrings.somethingWentWrong)
+            session.setFeedback(.somethingWentWrong)
             return true
         }
         if !resolvedAccounts.isEmpty {
@@ -834,7 +832,7 @@ public final class PopupApprovalAuthority {
             let requiresEthereumNetwork = resolvedAccounts.contains { $0.account.coin == .ethereum }
             guard selectedChainID == nil || hasValidChainID,
                   !requiresEthereumNetwork || hasValidChainID else {
-                session.setFeedback(AuthorityStrings.somethingWentWrong)
+                session.setFeedback(.somethingWentWrong)
                 return true
             }
         }
@@ -856,7 +854,7 @@ public final class PopupApprovalAuthority {
         cluster: Solana.Cluster?
     ) async -> Bool {
         guard DappApprovalValidator.resolveMessagePayload(action.payload, cluster: cluster, endpoints: action.solanaEndpoints) != nil else {
-            session.setFeedback(AuthorityStrings.somethingWentWrong)
+            session.setFeedback(.somethingWentWrong)
             return true
         }
         return await runSigningApproval(
@@ -880,7 +878,7 @@ public final class PopupApprovalAuthority {
             transactionSession = nil
         case .approveTransaction(let transactionAction):
             guard let transaction = session.transaction else { return false }
-            reason = AuthorityStrings.sendTransaction
+            reason = messages[.sendTransaction]
             approvedAccount = WalletAccountDescriptor(walletID: transactionAction.walletId, account: transactionAction.account)
             transactionSession = transaction
         case .selectAccount, .switchAccount, .addEthereumChain:
@@ -1006,7 +1004,7 @@ public final class PopupApprovalAuthority {
         guard let catalog else { return .abandoned(feedback: nil) }
         switch DappApprovalResolver.signingAccountResolution(account, request: request, catalog: catalog) {
         case .immediate(let resolution): return .rejected(resolution)
-        case .reviewRequired: return .abandoned(feedback: AuthorityStrings.somethingWentWrong)
+        case .reviewRequired: return .abandoned(feedback: .somethingWentWrong)
         case nil: return nil
         case .approved, .abandon: return .abandoned(feedback: nil)
         }
@@ -1046,7 +1044,7 @@ public final class PopupApprovalAuthority {
         case .unavailable:
             if isCurrent(session, token: token) {
                 session.invalidate()
-                session.fail(AuthorityStrings.failedToLoad, token: token)
+                session.fail(.failedToLoad, token: token)
             }
         }
         return false
@@ -1103,7 +1101,7 @@ public final class PopupApprovalAuthority {
                 scope.approvedAccount, request: session.request,
                 catalog: catalog
             ) { return failure }
-            return .abandoned(feedback: AuthorityStrings.somethingWentWrong)
+            return .abandoned(feedback: .somethingWentWrong)
         case .unlocked(let catalog, let preparation):
             if let failure = signingAccountFailure(
                 scope.approvedAccount, request: session.request, catalog: catalog
@@ -1171,8 +1169,8 @@ public final class PopupApprovalAuthority {
             persistenceFailed = release == .retryablePersistenceFailure
         }
         guard isCurrent(session, token: token) else { return accepted }
-        if persistenceFailed { session.setFeedback(AuthorityStrings.failedToLoad) }
-        let feedback = session.errorText ?? AuthorityStrings.approvalInterrupted
+        if persistenceFailed { session.setFeedback(.failedToLoad) }
+        let feedback = session.feedback ?? .approvalInterrupted
         session.invalidate()
         session.fail(feedback, token: token)
         return accepted

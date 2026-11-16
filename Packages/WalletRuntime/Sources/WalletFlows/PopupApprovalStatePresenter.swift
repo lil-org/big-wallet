@@ -132,7 +132,7 @@ public final class PopupApprovalStatePresenter {
         case .working: content = .working
         case .missing: content = .missing
         case .error(let message, let actions):
-            content = .error(message: message, actions: actions)
+            content = .error(message: messages[message], actions: actions)
         }
         return PopupApprovalState(id: id, host: host, content: content)
     }
@@ -189,7 +189,7 @@ public final class PopupApprovalStatePresenter {
                 reviewToken: review.reviewToken,
                 title: title(for: review.content),
                 content: content
-            ), actions: actions, feedback: review.feedback)
+            ), actions: actions, feedback: review.feedback.map { messages[$0] })
         )
     }
 

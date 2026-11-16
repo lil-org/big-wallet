@@ -79,6 +79,8 @@ struct AuthorityComposition {
     func makeRequestProcessor(solanaEndpoints: any SolanaEndpointResolving) -> DappRequestProcessor {
         DappRequestProcessor(ethereumNetworkResolver: networks.approvalResolution,
             selectionNetworkResolver: networks.network, customDefinitionResult: dependencies.definitionResult,
-            solanaEndpoints: solanaEndpoints)
+            solanaEndpoints: solanaEndpoints, solanaSummaryLabels: .init(
+                rawTransactionWarning: configuration.messages[.rawSolanaTransactionWarning],
+                data: configuration.messages[.data]))
     }
 }

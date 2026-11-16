@@ -105,42 +105,20 @@ public enum SafariRPCFailure: Error, Sendable, Equatable {
 public enum SafariRPCJSONPreflight {
     public static func validate(
         _ bytes: some Sequence<UInt8>, maximumTokens: Int,
-        tokenLimitFailure: SafariRPCFailure, depthLimitFailure: SafariRPCFailure,
+        tokenLimitFailure: SafariRPCFailure, depthLimitFailure: SafariRPCFailure, invalidJSONFailure: SafariRPCFailure,
         checkCancellation: () throws -> Void
     ) throws {
-        var tokens = 0
-        var depth = 0
-        var inString = false
-        var escaped = false
-        var inScalar = false
-        for (offset, byte) in bytes.enumerated() {
-            if offset % 4096 == 0 { try checkCancellation() }
-            if inString {
-                if escaped { escaped = false }
-                else if byte == 92 { escaped = true }
-                else if byte == 34 { inString = false }
-                continue
+        do {
+            try JSONPreflight.validate(
+                bytes, maximumDepth: WireProtocol.maximumJSONDepth, maximumTokens: maximumTokens,
+                checkCancellation: checkCancellation
+            )
+        } catch let failure as JSONPreflight.Failure {
+            switch failure {
+            case .tooDeep: throw depthLimitFailure
+            case .tooManyTokens: throw tokenLimitFailure
+            case .unbalanced: throw invalidJSONFailure
             }
-            switch byte {
-            case 34:
-                tokens += 1
-                inString = true
-                inScalar = false
-            case 91, 123:
-                tokens += 1
-                depth += 1
-                inScalar = false
-                guard depth <= WireProtocol.maximumJSONDepth else { throw depthLimitFailure }
-            case 93, 125:
-                depth -= 1
-                inScalar = false
-            case 9, 10, 13, 32, 44, 58:
-                inScalar = false
-            default:
-                if !inScalar { tokens += 1 }
-                inScalar = true
-            }
-            guard tokens <= maximumTokens else { throw tokenLimitFailure }
         }
         try checkCancellation()
     }
@@ -190,7 +168,7 @@ public struct ValidatedRPCRequest: Sendable {
         guard body.utf8.count <= limits.maximumRequestBytes else { throw SafariRPCFailure.requestTooLarge }
         try SafariRPCJSONPreflight.validate(
             body.utf8, maximumTokens: limits.maximumRequestTokens,
-            tokenLimitFailure: .requestTooLarge, depthLimitFailure: .invalidRequest,
+            tokenLimitFailure: .requestTooLarge, depthLimitFailure: .invalidRequest, invalidJSONFailure: .invalidJSON,
             checkCancellation: checkCancellation
         )
         let decoded: Any

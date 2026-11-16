@@ -37,7 +37,7 @@ struct SafariVMApplicationServices {
             isExternalChange: { WalletStoreSync.isExternalChange($0) }
         ) : .live
         management.credentialAuthentication = fixtures.isLocal
-            ? .init(canUseBiometrics: { false }, attemptBiometrics: { _ in .failed }) : .live
+            ? .init(canUseBiometrics: { false }, attemptBiometrics: { _ in .failed }) : nil
         let authorization = SafariVMRPCFixtureAuthorization()
         let prices = PriceService(fetchPrices: { ["ETH": 2_000] })
 #if os(macOS)

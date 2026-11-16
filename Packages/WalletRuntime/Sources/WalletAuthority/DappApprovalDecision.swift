@@ -474,7 +474,7 @@ enum DappApprovalResolver {
         case .ethereum(let body):
             return body.method == .signTransaction
                 ? staleResolution
-                : .failure(.init(message: AuthorityStrings.somethingWentWrong))
+                : .failure(.init(messageKey: .somethingWentWrong))
         case .solana(let body):
             return .solanaAuthorizationDenied(publicKey: body.publicKey)
         case .unknown:
@@ -495,7 +495,7 @@ enum DappApprovalResolver {
     }
 
     private static var staleResolution: ImmediateResolution {
-        .failure(ProviderResponseError(message: AuthorityStrings.providerNotReady, code: 4100))
+        .failure(ProviderResponseError(messageKey: .providerNotReady, code: 4100))
     }
 }
 

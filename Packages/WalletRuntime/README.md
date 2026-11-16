@@ -34,6 +34,11 @@ Native approval construction requires its preparation, catalog, and finalization
 operations explicitly. Inert defaults belong to test fixtures, not production
 authority construction.
 
+Wallet-owned errors and popup feedback carry message keys until response encoding
+or presentation supplies a catalog. Upstream error text remains literal. Persisted
+responses retain the writer's concrete text when another runtime replays them;
+storage locks and detached execution do not carry localization context.
+
 ## Concurrency
 
 Default actor isolation is `nonisolated`, with `NonisolatedNonsendingByDefault` and `InferIsolatedConformances` enabled. UI and wallet presentation state belong to `MainActor`; shared storage and service state use actors or `Synchronization.Mutex`. Unannotated async functions stay on their caller's actor, and CPU-intensive work uses `@concurrent`. Values crossing actors must be `Sendable`. Synchronous cancellation, secret invalidation, and lease release use synchronized ownership. File locks continue to coordinate the app, Safari extensions, and approval helper across processes. Never suspend while holding an in-process mutex.
@@ -178,7 +183,7 @@ owns at most one replaceable operation and its challenge and task. Retiring an
 attempt invalidates its challenge before cancelling work and notifying its UI;
 successful completion detaches work without cancelling the completing task.
 Retained attempts and operations reject late grants and sessions after replacement,
-lock, or owner deallocation. Presentation generations remain separate so an old
+lock, or owner deallocation. Presentation ownership remains separate so an old
 screen transition cannot install content or retire a newer screen. Credential and
 grant validation stays inside Authority; the app ownership layer does not issue
 authorization or unify unlock grants with signing or export grants.
@@ -196,13 +201,19 @@ on close. Recovery explicitly reopens a closed window before installing its curr
 presentation; callbacks during close cannot reopen it. Onboarding forms use their
 flow's action validation without an unlocked wallet access requirement.
 
+Root and window replacements drain synchronously through one pending destination.
+Requests during teardown replace that destination instead of installing recursively.
+Lock still hides and clears sensitive content immediately. Installation callbacks
+run only for the current, installed destination.
+
 ### Account editing
 
 Healthy wallet refreshes retain the ready presentation and do not revoke in-flight
 imports, exports, or previews. Repository-observed catalog failures invalidate
 operation tokens before UI publication. Recovery permits new operations without
-reviving pre-failure tokens. One owner publishes each shared reload result;
-cancellation cannot conceal a storage failure that a started read already returned.
+reviving pre-failure tokens. One shared reload task finishes independently of its
+callers. Cancelled callers discard its result; cancellation cannot suppress the
+current snapshot or an observed storage failure.
 Source, credential, and capacity validation still run at the operation boundary.
 An external store notification withholds the approval catalog until a full read
 covers that notification. On macOS it also clears any displayed secret while
@@ -213,6 +224,9 @@ The account editor merges external account changes into its open draft. Local ad
 The shared preview state coalesces paging requests and waits for layout before
 asking the controller whether the viewport needs more accounts. It owns paging
 cancellation and throttling; controllers report demand and render changes.
+It also owns save and store-retry work and their control states. Save lifetime is
+independent of preview refreshes, so its own wallet notification cannot cancel it.
+Controllers retain platform presentation, access checks, and retirement.
 
 Removing the final account uses one confirmation containing both the last-account
 warning and the irreversible-removal warning, followed by fresh authentication.

@@ -131,43 +131,16 @@ public enum EIP712 {
 
         mutating func validateJSONBudget(_ data: Data) throws {
             try budget.bytes(data.count)
-            var tokens = 0
-            var depth = 0
-            var inString = false
-            var escaped = false
-            var inScalar = false
             let json = data.dropFirst(data.starts(with: [0xef, 0xbb, 0xbf]) ? 3 : 0)
-            for (offset, byte) in json.enumerated() {
-                if offset.isMultiple(of: 4_096) { try Task.checkCancellation() }
-                if inString {
-                    if escaped { escaped = false }
-                    else if byte == 92 { escaped = true }
-                    else if byte == 34 { inString = false }
-                    continue
+            do {
+                try JSONPreflight.validate(json, maximumDepth: limits.jsonDepth, maximumTokens: limits.jsonTokens)
+            } catch let failure as JSONPreflight.Failure {
+                switch failure {
+                case .tooDeep: throw PreparationError.jsonTooDeep
+                case .tooManyTokens: throw PreparationError.tooManyJSONTokens
+                case .unbalanced: throw PreparationError.invalid
                 }
-                switch byte {
-                case 34:
-                    tokens += 1
-                    inString = true
-                    inScalar = false
-                case 91, 123:
-                    tokens += 1
-                    depth += 1
-                    inScalar = false
-                    guard depth <= limits.jsonDepth else { throw PreparationError.jsonTooDeep }
-                case 93, 125:
-                    depth -= 1
-                    inScalar = false
-                    guard depth >= 0 else { throw PreparationError.invalid }
-                case 9, 10, 13, 32, 44, 58:
-                    inScalar = false
-                default:
-                    if !inScalar { tokens += 1 }
-                    inScalar = true
-                }
-                guard tokens <= limits.jsonTokens else { throw PreparationError.tooManyJSONTokens }
             }
-            guard !inString, depth == 0 else { throw PreparationError.invalid }
             try Task.checkCancellation()
         }
 

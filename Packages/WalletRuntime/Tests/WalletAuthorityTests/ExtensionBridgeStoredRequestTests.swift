@@ -211,7 +211,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 }
                 broadcastPermit.releaseLease()
                 let broadcastDelivery = try await deliveredAuthority(broadcast.handle)
-                XCTAssertTrue(NSDictionary(dictionary: recovery.json).isEqual(to: broadcastDelivery.response))
+                XCTAssertTrue(NSDictionary(dictionary: recovery.json(messages: .testingEnglish)).isEqual(to: broadcastDelivery.response))
                 let retainedGrant = try await deliveredAuthority(grant.handle)
                 XCTAssertTrue(NSDictionary(dictionary: grantResponse.response).isEqual(to: retainedGrant.response))
             }
@@ -636,7 +636,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let liveCompletion = await completeReviewedExecution(livePermit, in: bridge)
         XCTAssertEqual(liveCompletion, .persisted)
         let liveResponse = try await deliveredAuthority(liveHandle)
-        XCTAssertEqual(liveResponse.response as NSDictionary, livePermit.response.json as NSDictionary)
+        XCTAssertEqual(liveResponse.response as NSDictionary, livePermit.response.json(messages: .testingEnglish) as NSDictionary)
         XCTAssertEqual(liveResponse.response["approvalCommitted"] as? Bool, true)
         XCTAssertFalse(FileManager.default.fileExists(atPath: operationLockURL(liveHandle).path))
         let recoveryCompletion = await bridge.completeImmediate(handle: recoveryHandle, resolution: immediateResolution(for: recovery.request))
@@ -2029,7 +2029,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let completion = await completeReviewedExecution(permit, in: bridge)
             XCTAssertEqual(completion, .persisted)
             let broadcastReply = try await deliveredAuthority(broadcast.handle)
-            XCTAssertTrue(NSDictionary(dictionary: recovery.json).isEqual(to: broadcastReply.response))
+            XCTAssertTrue(NSDictionary(dictionary: recovery.json(messages: .testingEnglish)).isEqual(to: broadcastReply.response))
             let dormant = try await removalSnapshot(profileIdentifier: dormantID)
             XCTAssertNil(dormant.ethereumAccount)
         }
@@ -2101,7 +2101,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let completion = await completeReviewedExecution(execution, in: bridge)
         XCTAssertEqual(completion, .persisted)
         let recovered = try await deliveredAuthority(broadcast.handle)
-        XCTAssertTrue(NSDictionary(dictionary: recovered.response).isEqual(to: execution.recoveryResponse.json))
+        XCTAssertTrue(NSDictionary(dictionary: recovered.response).isEqual(to: execution.recoveryResponse.json(messages: .testingEnglish)))
         guard case .responded = await bridge.claim(handle: broadcast.handle) else {
             return XCTFail("Committed broadcasts must not receive another execution claim")
         }
@@ -3229,7 +3229,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(try firstStoredBody("broadcastPrepared"), try bodyData(for: fixture.ingress))
         XCTAssertEqual(
             broadcast["recoveryResponse"] as? Data,
-            ExtensionBridge.payloadData(recovery.json, options: [.sortedKeys])
+            ExtensionBridge.payloadData(recovery.json(messages: .testingEnglish), options: [.sortedKeys])
         )
         bridge = makeBridge(clock: { [clock = clock!] in clock.date })
         guard case .found(let prepared) = await bridge.load(handle: handle) else {
@@ -3245,7 +3245,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(completed["acknowledged"] as? Bool, false)
         XCTAssertEqual(
             completed["response"] as? Data,
-            ExtensionBridge.payloadData(response.json, options: [.sortedKeys])
+            ExtensionBridge.payloadData(response.json(messages: .testingEnglish), options: [.sortedKeys])
         )
         bridge = makeBridge(clock: { [clock = clock!] in clock.date })
         guard case .found(let terminal) = await bridge.load(handle: handle) else {
@@ -3329,7 +3329,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                   case .immediate(let actual) = prepareRequestSynchronouslyForTesting(requestProcessorForTesting(), binding: binding, catalog: nil) else {
                 return XCTFail("Expected the deferred provider error after restart")
             }
-            XCTAssertEqual(actual.response(for: binding.request)?.json as NSDictionary?, expected.response(for: originalBinding.request)?.json as NSDictionary?)
+            XCTAssertEqual(actual.response(for: binding.request)?.json(messages: .testingEnglish) as NSDictionary?, expected.response(for: originalBinding.request)?.json(messages: .testingEnglish) as NSDictionary?)
         }
     }
 
@@ -3468,7 +3468,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             revocationCursor: .init(epoch: UUID(), sequence: 0)
         )
         let data = try ExtensionRequestProfileCodec.encode(profile)
-        var codec = ExtensionRequestProfileCodec()
+        var codec = ExtensionRequestProfileCodec(messages: .testingEnglish)
         for expectedIdentifier in [profileIdentifier, profileIdentifier, nil, UUID(), profileIdentifier] {
             let decoded = codec.decodeProfile(
                 data, expectedIdentifier: expectedIdentifier, recoverAuthority: true, now: clock.date
@@ -3498,7 +3498,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         let expired = try await deliveredAuthority(pendingHandle)
         XCTAssertEqual((expired.response["error"] as? [String: Any])?["code"] as? Int, 4001)
         let recovered = try await deliveredAuthority(execution.handle)
-        XCTAssertTrue(NSDictionary(dictionary: recovered.response).isEqual(to: execution.permit.recoveryResponse.json))
+        XCTAssertTrue(NSDictionary(dictionary: recovered.response).isEqual(to: execution.permit.recoveryResponse.json(messages: .testingEnglish)))
     }
 
     @MainActor
@@ -3578,7 +3578,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 configurationKey: fixture.request.configurationKey, access: .worker
             ))
             let expected = expectedRecovery ?? ResponseToExtension(for: fixture.request, payload: .error(.userRejected))
-            XCTAssertEqual(terminal as NSDictionary, expected.json as NSDictionary)
+            XCTAssertEqual(terminal as NSDictionary, expected.json(messages: .testingEnglish) as NSDictionary)
         }
     }
 
@@ -4223,7 +4223,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             requestToken: claimAdmission.handle.requestToken,
             profileIdentifier: nil, access: .worker
         ))
-        XCTAssertEqual((recovered["error"] as? [String: Any])?["message"] as? String, AuthorityStrings.approvalInterrupted)
+        XCTAssertEqual((recovered["error"] as? [String: Any])?["message"] as? String, AuthorityMessages.testingEnglish[.approvalInterrupted])
 
         let completeFixture = try makeFixture(id: 89)
         let completeAdmission = try accepted(await bridge.enqueue(
@@ -6095,7 +6095,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                         ))
                         XCTAssertEqual(NSDictionary(dictionary: response), NSDictionary(dictionary: ResponseToExtension(
                             for: fixture.request, payload: .error(.approvalInterrupted)
-                        ).json))
+                        ).json(messages: .testingEnglish)))
                     } else {
                         let fresh = try approvalClaim(await observer.claim(handle: handle))
                         XCTAssertTrue(fresh.adoptForExecution())
@@ -6550,7 +6550,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             id: handle.id, configurationKey: fixture.request.configurationKey,
             requestToken: handle.requestToken, profileIdentifier: nil, access: .worker
         ))
-        XCTAssertEqual(NSDictionary(dictionary: delivered), NSDictionary(dictionary: execution.response.json))
+        XCTAssertEqual(NSDictionary(dictionary: delivered), NSDictionary(dictionary: execution.response.json(messages: .testingEnglish)))
     }
 
     @MainActor
@@ -6973,7 +6973,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                     ))
                     XCTAssertEqual(
                         NSDictionary(dictionary: response),
-                        NSDictionary(dictionary: expectedResponse.json)
+                        NSDictionary(dictionary: expectedResponse.json(messages: .testingEnglish))
                     )
                 }
             }
@@ -7079,7 +7079,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                                 id: handle.id, configurationKey: fixture.request.configurationKey,
                                 requestToken: handle.requestToken, profileIdentifier: nil, access: .worker
                             ))
-                        XCTAssertEqual(response as NSDictionary, expectedResponse.json as NSDictionary, label)
+                        XCTAssertEqual(response as NSDictionary, expectedResponse.json(messages: .testingEnglish) as NSDictionary, label)
                     }
                     if publication == .accountGrant {
                         guard case .snapshot(let authority) = await bridge.configurationSnapshot(
@@ -7177,7 +7177,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             handle: handle,
             configurationKey: fixture.request.configurationKey, access: .worker
         ))
-        XCTAssertEqual(recovered as NSDictionary, expectedResponse.json as NSDictionary)
+        XCTAssertEqual(recovered as NSDictionary, expectedResponse.json(messages: .testingEnglish) as NSDictionary)
         XCTAssertEqual(synchronizedPaths.value, expectedPaths)
     }
 
@@ -7253,7 +7253,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             requestToken: handle.requestToken,
             profileIdentifier: nil, access: .worker
         ))
-        XCTAssertEqual(recovered as NSDictionary, expected.json as NSDictionary)
+        XCTAssertEqual(recovered as NSDictionary, expected.json(messages: .testingEnglish) as NSDictionary)
         XCTAssertEqual(synchronizedURLs.value.count, 3)
     }
 
@@ -7326,7 +7326,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 requestToken: handle.requestToken,
                 profileIdentifier: profileIdentifier, access: .worker
             ))
-            XCTAssertEqual(recovered as NSDictionary, expected.json as NSDictionary)
+            XCTAssertEqual(recovered as NSDictionary, expected.json(messages: .testingEnglish) as NSDictionary)
         }
     }
 
@@ -7426,7 +7426,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             requestToken: handle.requestToken,
             profileIdentifier: nil, access: .worker
         ))
-        XCTAssertEqual(recovered as NSDictionary, recovery.json as NSDictionary)
+        XCTAssertEqual(recovered as NSDictionary, recovery.json(messages: .testingEnglish) as NSDictionary)
         let otherResponse = try responseJSON(await restarted.prepareResponseDelivery(
             id: otherHandle.id,
             configurationKey: other.request.configurationKey,
@@ -7554,7 +7554,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 requestToken: execution.handle.requestToken,
                 profileIdentifier: nil, access: .worker
             ))
-            XCTAssertEqual(response as NSDictionary, execution.permit.response.json as NSDictionary)
+            XCTAssertEqual(response as NSDictionary, execution.permit.response.json(messages: .testingEnglish) as NSDictionary)
             XCTAssertEqual(response["approvalCommitted"] as? Bool, true)
         }
     }
@@ -7831,7 +7831,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             let payload = String(repeating: "{\"value\":", count: depth) + "null" + String(repeating: "}", count: depth)
             let result = try XCTUnwrap(ApprovedCompletion.failure(.init(message: "Rejected", code: -32_000, context: .dataJSON(payload)), permit: execution.permit))
             let response = try XCTUnwrap(result.response(for: execution.permit))
-            XCTAssertEqual(ExtensionRequestProfileCodec.exactResponseData(response) != nil, depth == 61)
+            XCTAssertEqual(ExtensionResponseEncoder(messages: .testingEnglish).exactResponseData(response) != nil, depth == 61)
             if broadcast {
                 let prepared = await prepareReviewedBroadcast(execution)
                 XCTAssertEqual(prepared, .persisted)
@@ -7848,7 +7848,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             XCTAssertEqual(delivered["approvalCommitted"] as? Bool, true)
             if depth == 61 || broadcast {
                 let expected = depth == 61 ? response : execution.recoveryResponse
-                XCTAssertEqual(ExtensionBridge.payloadData(delivered, options: [.sortedKeys]), ExtensionBridge.payloadData(expected.json, options: [.sortedKeys]))
+                XCTAssertEqual(ExtensionBridge.payloadData(delivered, options: [.sortedKeys]), ExtensionBridge.payloadData(expected.json(messages: .testingEnglish), options: [.sortedKeys]))
             } else {
                 let error = try XCTUnwrap(delivered["error"] as? [String: Any])
                 XCTAssertEqual(error["code"] as? Int, ProviderResponseError.internalErrorCode)
@@ -7879,7 +7879,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             id: handle.id, configurationKey: fixture.request.configurationKey,
             requestToken: handle.requestToken, profileIdentifier: nil, access: .worker
         ))
-        XCTAssertEqual(delivered as NSDictionary, execution.recoveryResponse.json as NSDictionary)
+        XCTAssertEqual(delivered as NSDictionary, execution.recoveryResponse.json(messages: .testingEnglish) as NSDictionary)
         XCTAssertEqual(delivered["approvalCommitted"] as? Bool, true)
     }
 
@@ -8281,7 +8281,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             id: execution.handle.id, configurationKey: execution.request.configurationKey,
             requestToken: execution.handle.requestToken, profileIdentifier: nil, access: .worker
         ))
-        XCTAssertEqual((received["error"] as? [String: Any])?["message"] as? String, AuthorityStrings.approvalInterrupted)
+        XCTAssertEqual((received["error"] as? [String: Any])?["message"] as? String, AuthorityMessages.testingEnglish[.approvalInterrupted])
     }
 
     func testNativeExecutionRequiresExactReceiptAndValidApprovalTime() async throws {
@@ -8340,7 +8340,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             id: execution.handle.id, configurationKey: execution.request.configurationKey,
             requestToken: execution.handle.requestToken, profileIdentifier: nil, access: .worker
         ))
-        XCTAssertEqual((result["error"] as? [String: Any])?["message"] as? String, AuthorityStrings.approvalInterrupted)
+        XCTAssertEqual((result["error"] as? [String: Any])?["message"] as? String, AuthorityMessages.testingEnglish[.approvalInterrupted])
         let claimed = await claimDeliveredNativeExecution(in: observer, handle: execution.handle, approvedAt: clock.date)
         XCTAssertEqual(claimed, .responded)
         let lateCompletion = await completeReviewedExecution(execution.permit)
@@ -8349,7 +8349,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             id: execution.handle.id, configurationKey: execution.request.configurationKey,
             requestToken: execution.handle.requestToken, profileIdentifier: nil, access: .worker
         ))
-        XCTAssertEqual((unchanged["error"] as? [String: Any])?["message"] as? String, AuthorityStrings.approvalInterrupted)
+        XCTAssertEqual((unchanged["error"] as? [String: Any])?["message"] as? String, AuthorityMessages.testingEnglish[.approvalInterrupted])
     }
 
     @MainActor
@@ -8366,7 +8366,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             requestToken: execution.handle.requestToken, profileIdentifier: nil, access: .worker
         ))
         XCTAssertEqual(delivered["approvalCommitted"] as? Bool, true)
-        XCTAssertEqual(delivered as NSDictionary, recovery.json as NSDictionary)
+        XCTAssertEqual(delivered as NSDictionary, recovery.json(messages: .testingEnglish) as NSDictionary)
         XCTAssertEqual((delivered["error"] as? [String: Any])?["code"] as? Int, ProviderResponseError.transactionSubmissionUnknownCode)
     }
 
@@ -8399,7 +8399,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             id: admission.handle.id, configurationKey: fixture.request.configurationKey,
             requestToken: admission.handle.requestToken, profileIdentifier: nil, access: .worker
         ))
-        XCTAssertEqual((received["error"] as? [String: Any])?["message"] as? String, AuthorityStrings.approvalInterrupted)
+        XCTAssertEqual((received["error"] as? [String: Any])?["message"] as? String, AuthorityMessages.testingEnglish[.approvalInterrupted])
     }
 
     #if os(macOS)

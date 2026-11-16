@@ -404,7 +404,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(catalogAccess.orderedAccounts.count, 1)
 
         guard case .unlocked(let unlockedCatalog, let unlocked) = await vault.unlockResult(
-            reason: "Approve",
+            reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel],
             scope: walletSigningScopeForTesting(approvedAccount: WalletAccountDescriptor(walletID: "wallet", account: fixture.account))
         ) else {
             return XCTFail("Expected authenticated wallet catalog and signer")
@@ -522,12 +522,12 @@ final class SafariApprovalVaultTests: XCTestCase {
         XCTAssertEqual(available.orderedAccounts, [source.catalog.accounts[0], source.catalog.accounts[2]].map(\.specificAccount))
         XCTAssertTrue(keys.loadedIdentities.isEmpty)
         guard case .unavailable = await vault.unlockResult(
-            reason: "Missing", scope: walletSigningScopeForTesting(approvedAccount: identities[1].account)
+            reason: "Missing", cancelTitle: AuthorityMessages.testingEnglish[.cancel], scope: walletSigningScopeForTesting(approvedAccount: identities[1].account)
         ) else { return XCTFail("A missing account key must fail before authentication") }
         XCTAssertEqual(authenticationAttempts.value, 0)
         XCTAssertTrue(keys.loadedIdentities.isEmpty)
         guard case .unlocked(let catalog, let signer) = await vault.unlockResult(
-            reason: "Healthy", scope: walletSigningScopeForTesting(approvedAccount: identities[0].account)
+            reason: "Healthy", cancelTitle: AuthorityMessages.testingEnglish[.cancel], scope: walletSigningScopeForTesting(approvedAccount: identities[0].account)
         ) else { return XCTFail("Healthy accounts must remain available") }
         defer { signer.invalidate() }
         XCTAssertEqual(catalog.identity, original.identity)
@@ -584,7 +584,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let publication = try vault.publish(source: source, integrityKey: integrityKey)
         let selected = source.catalog.accounts[0]
         guard case .unlocked(_, let signer) = await vault.unlockResult(
-            reason: "Approve", scope: walletSigningScopeForTesting(approvedAccount: selected)
+            reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel], scope: walletSigningScopeForTesting(approvedAccount: selected)
         ) else { return XCTFail("Expected selected signer") }
         defer { signer.invalidate() }
         keys.removeKey(identity: SafariApprovalKeyIdentity(
@@ -639,7 +639,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             let publication = try vault.publish(source: source, integrityKey: integrityKey)
             let selected = source.catalog.accounts[0]
             guard case .unlocked(_, let signer) = await vault.unlockResult(
-                reason: "Approve", scope: walletSigningScopeForTesting(approvedAccount: selected)
+                reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel], scope: walletSigningScopeForTesting(approvedAccount: selected)
             ) else { return XCTFail("Expected selected signer") }
             defer { signer.invalidate() }
             let permit = try approvedWalletSigningPermitForTesting(
@@ -679,7 +679,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         let publication = try vault.publish(source: source, integrityKey: integrityKey)
         selectedIdentity.value = SafariApprovalKeyIdentity(generation: publication.generation, account: source.catalog.accounts[0])
         guard case .unavailable = await vault.unlockResult(
-            reason: "Approve", scope: walletSigningScopeForTesting(approvedAccount: source.catalog.accounts[0])
+            reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel], scope: walletSigningScopeForTesting(approvedAccount: source.catalog.accounts[0])
         ) else { return XCTFail("A deleted account key must not yield a signer") }
         XCTAssertEqual(vault.reviewCatalog()?.orderedAccounts, [source.catalog.accounts[1].specificAccount])
     }
@@ -731,7 +731,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             try writeEnvelope(envelope, at: url)
             let selected = envelope.accounts[selectedIndex].account
             guard case .unlocked(let catalog, let signer) = await vault.unlockResult(
-                reason: "Approve",
+                reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel],
                 scope: walletSigningScopeForTesting(approvedAccount: selected)
             ) else {
                 return XCTFail("Unrelated account ciphertexts must not be decrypted")
@@ -794,7 +794,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             try writeEnvelope(envelope, at: url)
             XCTAssertNil(vault.reviewCatalog(), name)
             guard case .unavailable = await vault.unlockResult(
-                reason: "Approve",
+                reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel],
                 scope: walletSigningScopeForTesting(approvedAccount: selected)
             ) else {
                 return XCTFail("Malformed record accepted: \(name)")
@@ -849,7 +849,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             XCTAssertNotNil(vault.reviewCatalog())
             for selected in [first.account, second.account] {
                 guard case .unavailable = await vault.unlockResult(
-                    reason: "Approve",
+                    reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel],
                     scope: walletSigningScopeForTesting(approvedAccount: selected)
                 ) else {
                     return XCTFail("Ciphertext must be bound to its exact approved account")
@@ -1023,7 +1023,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         try writeEnvelope(envelope, at: url)
         XCTAssertNotNil(vault.reviewCatalog())
         guard case .unavailable = await vault.unlockResult(
-            reason: "Approve",
+            reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel],
             scope: walletSigningScopeForTesting(
                 approvedAccount: try XCTUnwrap(source.catalog.accounts.first)
             )
@@ -1097,7 +1097,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             attempts.append(selectedIdentity)
             for requested in attempts {
                 guard case .unlocked(_, let preparation) = await vault.unlockResult(
-                    reason: "Approve", scope: walletSigningScopeForTesting(approvedAccount: selectedIdentity)
+                    reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel], scope: walletSigningScopeForTesting(approvedAccount: selectedIdentity)
                 ) else { return XCTFail("Expected selected account to unlock") }
                 try await assertSigningAccessForTesting(
                     preparation, walletID: requested.walletID, account: requested.account,
@@ -1145,7 +1145,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         ]
         for scope in scopes {
             guard case .unavailable = await vault.unlockResult(
-                reason: "Approve",
+                reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel],
                 scope: walletSigningScopeForTesting(approvedAccount: scope)
             ) else {
                 return XCTFail("Unreviewed account must fail closed")
@@ -1259,7 +1259,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         )
 
         let result = await vault.unlockResult(
-            reason: "Approve",
+            reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel],
             scope: walletSigningScopeForTesting(approvedAccount: try XCTUnwrap(fixture().source.catalog.accounts.first))
         )
 
@@ -1296,7 +1296,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             )
             let result = await Task {
                 if cancel { withUnsafeCurrentTask { $0?.cancel() } }
-                return await vault.unlockResult(reason: "Approve", scope: authorization)
+                return await vault.unlockResult(reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel], scope: authorization)
             }.value
 
             guard case .unavailable = result else {
@@ -1331,7 +1331,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 approvedAccount: try XCTUnwrap(fixture.source.catalog.accounts.first)
             )
             let result = await Task {
-                await vault.unlockResult(reason: "Approve", scope: authorization)
+                await vault.unlockResult(reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel], scope: authorization)
             }.value
 
             guard case .unavailable = result else {
@@ -1364,7 +1364,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         try vault.publish(source: fixture.source, integrityKey: integrityKey)
         deadline.value = Date().addingTimeInterval(1)
         let result = await vault.unlockResult(
-            reason: "Approve",
+            reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel],
             scope: walletSigningScopeForTesting(
                 approvedAccount: try XCTUnwrap(fixture.source.catalog.accounts.first),
                 deadline: deadline.value
@@ -1405,7 +1405,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         }
 
         let result = await vault.unlockResult(
-            reason: "Approve",
+            reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel],
             scope: walletSigningScopeForTesting(approvedAccount: try XCTUnwrap(source.catalog.accounts.first))
         )
 
@@ -1639,7 +1639,7 @@ final class SafariApprovalVaultTests: XCTestCase {
 
         XCTAssertNotNil(vault.reviewCatalog())
         guard case .unavailable = await vault.unlockResult(
-            reason: "Approve",
+            reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel],
             scope: walletSigningScopeForTesting(approvedAccount: accounts[0])
         ) else {
             return XCTFail("A change to a sibling catalog entry must invalidate the selected ciphertext")
@@ -1691,7 +1691,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 XCTAssertNotNil(vault.reviewCatalog(), mutation)
                 keys.loadedContext = nil
                 guard case .unavailable = await vault.unlockResult(
-                    reason: "Approve",
+                    reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel],
                     scope: walletSigningScopeForTesting(approvedAccount: selected)
                 ) else {
                     return XCTFail("Invalid selected account payload accepted: \(mutation)")
@@ -1759,7 +1759,7 @@ final class SafariApprovalVaultTests: XCTestCase {
 
             XCTAssertNil(vault.reviewCatalog())
             guard case .unavailable = await vault.unlockResult(
-                reason: "Approve",
+                reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel],
                 scope: walletSigningScopeForTesting(approvedAccount: descriptor)
             ) else {
                 return XCTFail("An invalid catalog must make the vault unavailable")
@@ -1806,7 +1806,7 @@ final class SafariApprovalVaultTests: XCTestCase {
                 account: selected.account
             )
             guard case .unlocked(let unlockedCatalog, let unlocked) = await vault.unlockResult(
-                reason: "Approve",
+                reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel],
                 scope: walletSigningScopeForTesting(approvedAccount: approvedAccount)
             ) else {
                 return XCTFail("Expected authenticated wallet catalog and signer")
@@ -2779,7 +2779,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         for reader in [vault, freshReader] {
             XCTAssertNil(reader.reviewCatalog())
             XCTAssertNil(reader.approvalCatalog())
-            guard case .unavailable = await reader.unlockResult(reason: "Approve", scope: scope) else {
+            guard case .unavailable = await reader.unlockResult(reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel], scope: scope) else {
                 return XCTFail("Uncertain publication must be unavailable before a crash")
             }
         }
@@ -2834,7 +2834,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             canEvaluateAuthentication: { _, _ in true }, authentication: { _, _, _ in true }, fileIO: fileIO)
         let scope = walletSigningScopeForTesting(approvedAccount: WalletAccountDescriptor(walletID: "wallet", account: fixture.account))
         XCTAssertNil(reader.reviewCatalog())
-        guard case .unavailable = await reader.unlockResult(reason: "Approve", scope: scope) else {
+        guard case .unavailable = await reader.unlockResult(reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel], scope: scope) else {
             return XCTFail("Expired reconciliation must not expose an uncertain publication")
         }
         XCTAssertTrue(keys.loadedIdentities.isEmpty)
@@ -2842,7 +2842,7 @@ final class SafariApprovalVaultTests: XCTestCase {
         rejectReadSynchronization.value = false
         XCTAssertNotNil(reader.reviewCatalog())
         XCTAssertEqual(disk.durablePublished, envelope)
-        guard case .unlocked(_, let preparation) = await reader.unlockResult(reason: "Approve", scope: scope) else {
+        guard case .unlocked(_, let preparation) = await reader.unlockResult(reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel], scope: scope) else {
             return XCTFail("A later successful durability barrier should permit recovery")
         }
         preparation.invalidate()
@@ -3239,7 +3239,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             _ = try XCTUnwrap(vault.reviewCatalog())
 
             let result = await vault.unlockResult(
-                reason: "Approve",
+                reason: "Approve", cancelTitle: AuthorityMessages.testingEnglish[.cancel],
                 scope: walletSigningScopeForTesting(approvedAccount: WalletAccountDescriptor(walletID: "wallet", account: fixture.account))
             )
 
@@ -4047,7 +4047,7 @@ final class SafariApprovalVaultTests: XCTestCase {
             return errSecIO
         })
         let repository = WalletRepository(keychain: keychain,
-            walletSourceMutator: ExtensionRequestFileStore(rootURL: requestRoot, directoryBoundary: requestRoot))
+            walletSourceMutator: ExtensionRequestFileStore(rootURL: requestRoot, directoryBoundary: requestRoot, dependencies: .init(messages: .testingEnglish)))
         let state = try await repository.reload()
         let wallet = try XCTUnwrap(state.wallets.first)
         let account = try XCTUnwrap(wallet.accounts.first)
@@ -5990,7 +5990,7 @@ private extension SafariApprovalVault {
     func unlockSignerForTesting(reason: String) async -> WalletSigningPreparation? {
         guard let selected = reviewCatalog()?.orderedAccounts.first,
               case .unlocked(_, let signer) = await unlockResult(
-                  reason: reason,
+                  reason: reason, cancelTitle: AuthorityMessages.testingEnglish[.cancel],
                   scope: walletSigningScopeForTesting(approvedAccount: WalletAccountDescriptor(walletID: selected.walletId, account: selected.account))
               ) else { return nil }
         return signer

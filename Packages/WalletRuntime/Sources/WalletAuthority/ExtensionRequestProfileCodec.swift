@@ -9,6 +9,12 @@ struct ExtensionRequestProfileCodec: Sendable {
     typealias OriginState = ExtensionRequestProfile.OriginState
     typealias ValidatedProfile = ExtensionRequestProfile
 
+    private let responses: ExtensionResponseEncoder
+
+    init(messages: AuthorityMessages) {
+        responses = ExtensionResponseEncoder(messages: messages)
+    }
+
     private var cachedProfile: (data: Data, profile: ValidatedProfile)?
 
     func bind(_ request: SafariRequest, data: Data, authority: RequestAuthoritySnapshot) -> (request: SafariRequest, payload: ExtensionRequestProfile.ActiveRequestPayload)? {
@@ -36,21 +42,6 @@ struct ExtensionRequestProfileCodec: Sendable {
         return (bound, payload)
     }
 
-    static func interruptionResponseData(for request: SafariRequest?) -> Data? {
-        guard let request else { return nil }
-        return boundedResponseData(
-            ResponseToExtension(for: request, payload: .error(.approvalInterrupted)),
-            request: request
-        )
-    }
-
-    static func expirationResponseData(for request: SafariRequest) -> Data? {
-        boundedResponseData(
-            ResponseToExtension(for: request, payload: .error(.userRejected)),
-            request: request
-        )
-    }
-
     private func resetAuthority(
         _ stored: ProfileState,
         expectedIdentifier: UUID?,
@@ -59,7 +50,7 @@ struct ExtensionRequestProfileCodec: Sendable {
         guard let state = ExtensionRequestProfile.resetAuthorityState(stored, expectedIdentifier: expectedIdentifier),
               var profile = validate(state, expectedIdentifier: expectedIdentifier) else { return nil }
         for key in profile.state.origins.keys {
-            guard profile.invalidateStaleRequests(configurationKey: key, excluding: nil, now: now) else { return nil }
+            guard profile.invalidateStaleRequests(configurationKey: key, excluding: nil, now: now, responses: responses) else { return nil }
         }
         return profile
     }
@@ -179,32 +170,10 @@ struct ExtensionRequestProfileCodec: Sendable {
         return ValidatedProfile(state: profile)
     }
 
-    static func boundedResponseData(
-        _ response: ResponseToExtension,
-        request: SafariRequest,
-        recoveryResponseData: Data? = nil
-    ) -> Data? {
-        if let data = exactResponseData(response) { return data }
-        if let recoveryResponseData { return recoveryResponseData }
-        var fallback = ResponseToExtension(
-            for: request,
-            payload: .error(.internalError)
-        )
-        if response.approvalCommitted {
-            fallback = fallback.markingApprovalCommitted()
-        }
-        return exactResponseData(fallback)
-    }
-
-    static func exactResponseData(_ response: ResponseToExtension) -> Data? {
-        guard let data = ExtensionBridge.payloadData(response.json, options: [.sortedKeys]),
-              data.count <= ExtensionBridge.maximumPayloadBytes,
-              decodeResponseData(data, id: response.id) != nil else { return nil }
-        return data
-    }
-
     static func responseJSON(_ data: Data, id: Int) -> [String: Any]? {
-        decodeResponseData(data, id: id)?.json
+        guard decodeResponseData(data, id: id) != nil,
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return object
     }
 
     static func decodeResponseData(_ data: Data, id: Int) -> ResponseToExtension? {
@@ -264,3 +233,46 @@ struct ExtensionRequestProfileCodec: Sendable {
     }
 }
 
+
+struct ExtensionResponseEncoder: Sendable {
+    let messages: AuthorityMessages
+
+    func interruptionResponseData(for request: SafariRequest?) -> Data? {
+        guard let request else { return nil }
+        return boundedResponseData(
+            ResponseToExtension(for: request, payload: .error(.approvalInterrupted)),
+            request: request
+        )
+    }
+
+    func expirationResponseData(for request: SafariRequest) -> Data? {
+        boundedResponseData(
+            ResponseToExtension(for: request, payload: .error(.userRejected)),
+            request: request
+        )
+    }
+
+    func boundedResponseData(
+        _ response: ResponseToExtension,
+        request: SafariRequest,
+        recoveryResponseData: Data? = nil
+    ) -> Data? {
+        if let data = exactResponseData(response) { return data }
+        if let recoveryResponseData { return recoveryResponseData }
+        var fallback = ResponseToExtension(
+            for: request,
+            payload: .error(.internalError)
+        )
+        if response.approvalCommitted {
+            fallback = fallback.markingApprovalCommitted()
+        }
+        return exactResponseData(fallback)
+    }
+
+    func exactResponseData(_ response: ResponseToExtension) -> Data? {
+        guard let data = ExtensionBridge.payloadData(response.json(messages: messages), options: [.sortedKeys]),
+              data.count <= ExtensionBridge.maximumPayloadBytes,
+              ExtensionRequestProfileCodec.decodeResponseData(data, id: response.id) != nil else { return nil }
+        return data
+    }
+}

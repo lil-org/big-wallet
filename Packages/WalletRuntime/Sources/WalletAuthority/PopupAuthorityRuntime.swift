@@ -46,8 +46,7 @@ public final class PopupAuthorityRuntime {
         executionEnvironment = .init(requestProcessor: processor, broadcaster: broadcaster,
             hooks: composition.dependencies.hooks, clock: composition.dependencies.clock)
         admission = DappRequestAdmission(store: composition.requests, requestProcessor: processor,
-            reviewCatalog: { await awaitBackgroundOperation { vault.reviewCatalog() } ?? nil },
-            messages: composition.configuration.messages)
+            reviewCatalog: { await awaitBackgroundOperation { vault.reviewCatalog() } ?? nil })
     }
 
     public func accountName(walletID: String, account: WalletAccount) -> String? {
@@ -62,7 +61,9 @@ public final class PopupAuthorityRuntime {
             walletEnvironment: PopupWalletEnvironment(
                 reviewCatalog: { [vault] in await awaitBackgroundOperation { vault.reviewCatalog() } ?? nil },
                 approvalCatalog: { [vault] in await awaitBackgroundOperation { vault.approvalCatalog() } ?? nil },
-                unlockWallets: { [vault] in await vault.unlockResult(reason: $0, scope: $1) },
+                unlockWallets: { [vault, messages] in
+                    await vault.unlockResult(reason: $0, cancelTitle: messages[.cancel], scope: $1)
+                },
                 reloadMetadata: { [metadata] in metadata.reload() }),
             loadsTransactionContext: true, transactionApprovalOperations: preparation,
             invalidateNetworkCache: invalidateCache,

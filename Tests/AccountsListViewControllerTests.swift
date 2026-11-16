@@ -371,7 +371,8 @@ final class AccountsListViewControllerTests: XCTestCase {
         _ = controller.perform(NSSelectorFromString("didClickImportAccount"))
 
         XCTAssertFalse(controller is any NativeApprovalReviewTeardown)
-        XCTAssertTrue(window.contentViewController === controller)
+        XCTAssertNil(window.contentViewController)
+        XCTAssertTrue(controller.view.isHidden)
         XCTAssertEqual(menu.cancellationCount, 1)
     }
 

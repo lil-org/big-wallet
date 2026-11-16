@@ -53,6 +53,7 @@ func requestProcessorForTesting(
         selectionNetworkResolver: selectionNetworkResolver,
         customDefinitionResult: customDefinitionResult,
         solanaEndpoints: solanaEndpoints,
+        solanaSummaryLabels: .english,
         solana: solana ?? SolanaSigner(),
         ethereumSigningContent: ethereumSigningContent
     )

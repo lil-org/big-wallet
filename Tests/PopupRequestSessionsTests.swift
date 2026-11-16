@@ -797,9 +797,9 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertEqual(review.reviewToken, session.reviewToken)
         XCTAssertFalse(session.hasActiveClaim)
 
-        session.fail("Unavailable")
+        session.fail(.failedToLoad)
         guard case .error(let message, let actions) = session.publicPresentation else { return XCTFail("Expected error presentation") }
-        XCTAssertEqual(message, "Unavailable")
+        XCTAssertEqual(message, .failedToLoad)
         XCTAssertEqual(actions, [.retry, .reject])
     }
 
@@ -811,7 +811,7 @@ final class PopupRequestSessionsTests: XCTestCase {
         XCTAssertFalse(session.acceptClaim(token: stale))
         XCTAssertTrue(session.acceptClaim(token: token))
         XCTAssertFalse(session.beginAuthentication(token: stale))
-        session.fail("stale", token: stale)
+        session.fail(.approvalInterrupted, token: stale)
         guard case .working = session.publicPresentation else { return XCTFail("Stale actions changed the presentation") }
     }
 
@@ -831,17 +831,17 @@ final class PopupRequestSessionsTests: XCTestCase {
 
     func testSessionPreservesFeedbackAcrossAuthentication() throws {
         let session = try makeSession()
-        session.setFeedback("Choose an account")
-        XCTAssertEqual(session.errorText, "Choose an account")
+        session.setFeedback(.addAccountToConnect)
+        XCTAssertEqual(session.feedback, .addAccountToConnect)
         let token = try XCTUnwrap(session.beginApproval())
-        XCTAssertNil(session.errorText)
+        XCTAssertNil(session.feedback)
         XCTAssertTrue(session.acceptClaim(token: token))
-        session.setFeedback("Try again")
+        session.setFeedback(.approvalInterrupted)
         XCTAssertTrue(session.beginAuthentication(token: token))
-        XCTAssertEqual(session.errorText, "Try again")
+        XCTAssertEqual(session.feedback, .approvalInterrupted)
         XCTAssertTrue(session.finishAuthentication(token: token))
         XCTAssertTrue(session.returnToReview(token: token))
-        XCTAssertEqual(session.errorText, "Try again")
+        XCTAssertEqual(session.feedback, .approvalInterrupted)
         XCTAssertFalse(session.hasActiveClaim)
         XCTAssertNotEqual(session.reviewToken, token)
         XCTAssertFalse(session.returnToReview(token: token))
@@ -854,12 +854,12 @@ final class PopupRequestSessionsTests: XCTestCase {
         guard case .review = session.publicPresentation else { return XCTFail("Expected review after abandoning claim") }
         let freshToken = session.reviewToken
         XCTAssertNotEqual(freshToken, token)
-        session.fail("Unavailable", token: token)
+        session.fail(.failedToLoad, token: token)
         guard case .review = session.publicPresentation else { return XCTFail("Stale failure replaced the review") }
         XCTAssertFalse(session.returnToReview(token: token))
-        session.fail("Unavailable", token: freshToken)
+        session.fail(.failedToLoad, token: freshToken)
         XCTAssertTrue(session.returnToReview(token: freshToken))
-        XCTAssertEqual(session.errorText, "Unavailable")
+        XCTAssertEqual(session.feedback, .failedToLoad)
         XCTAssertFalse(session.hasActiveClaim)
         XCTAssertNotEqual(session.reviewToken, freshToken)
     }
@@ -2507,8 +2507,7 @@ extension PopupRequestSessionsTests {
             reviewCatalog: {
                 catalogReads += 1
                 return catalog
-            },
-            messages: ApplicationServices.shared.messages
+            }
         )
         let disposition = await admission.materialize(handle: snapshot.handle)
         XCTAssertEqual(disposition, .responseReady)
@@ -2543,8 +2542,7 @@ extension PopupRequestSessionsTests {
                 reviewCatalog: {
                     catalogReads += 1
                     return catalog
-                },
-                messages: ApplicationServices.shared.messages
+                }
             )
             let disposition = await admission.materialize(handle: snapshot.handle)
             XCTAssertEqual(disposition, .approvalRequired, testCase.name)
@@ -2623,8 +2621,7 @@ extension PopupRequestSessionsTests {
             reviewCatalog: {
                 XCTFail("Wallet-independent rejection must not read the catalog")
                 return nil
-            },
-            messages: ApplicationServices.shared.messages
+            }
         )
         let disposition = await admission.materialize(handle: snapshot.handle)
         XCTAssertEqual(disposition, .responseReady)
@@ -2654,8 +2651,7 @@ extension PopupRequestSessionsTests {
             reviewCatalog: {
                 XCTFail("Receipt-owned work must not read the catalog")
                 return nil
-            },
-            messages: ApplicationServices.shared.messages
+            }
         )
         let disposition = await admission.materialize(handle: snapshot.handle)
 
@@ -2674,8 +2670,7 @@ extension PopupRequestSessionsTests {
             requestProcessor: CompactPopupProcessor { request in
                 preparations += 1
                 return .immediate(.failure(.internalError))
-            },
-            messages: ApplicationServices.shared.messages
+            }
         )
         let disposition = await admission.materialize(handle: snapshot.handle)
         XCTAssertEqual(disposition, .approvalRequired)
@@ -2700,8 +2695,7 @@ extension PopupRequestSessionsTests {
                     identity: fullCatalog.identity, orderedAccounts: [sibling], knownAccounts: fullCatalog.knownAccounts
                 )
                 let admission = DappRequestAdmission(
-                    store: store, requestProcessor: requestProcessorForTesting(), reviewCatalog: { catalog },
-                    messages: ApplicationServices.shared.messages
+                    store: store, requestProcessor: requestProcessorForTesting(), reviewCatalog: { catalog }
                 )
                 guard case .snapshot(let before) = await store.bridge.configurationSnapshot(
                     configurationKey: snapshot.configurationKey, profileIdentifier: snapshot.handle.profileIdentifier
@@ -2757,8 +2751,7 @@ extension PopupRequestSessionsTests {
             reviewCatalog: {
                 catalogReads += 1
                 return catalog
-            },
-            messages: ApplicationServices.shared.messages
+            }
         )
         let disposition = await admission.materialize(handle: snapshot.handle)
         XCTAssertEqual(disposition, .responseReady)
@@ -2783,8 +2776,7 @@ extension PopupRequestSessionsTests {
                 preparations += 1
                 return .immediate(.failure(.internalError))
             },
-            reviewCatalog: { WalletReviewCatalog(account: popupTestAccount()) },
-            messages: ApplicationServices.shared.messages
+            reviewCatalog: { WalletReviewCatalog(account: popupTestAccount()) }
         )
 
         let disposition = await admission.materialize(handle: snapshot.handle)
@@ -6045,7 +6037,7 @@ extension PopupRequestSessionsTests {
                 resolver.approvalResolution(chainId: chainID, freshCustomSnapshot: { cache.refreshSnapshot() })
             }
             let processor = requestProcessorForTesting(ethereumNetworkResolver: resolve)
-            let admission = DappRequestAdmission(store: store, requestProcessor: processor, messages: ApplicationServices.shared.messages)
+            let admission = DappRequestAdmission(store: store, requestProcessor: processor)
             let catalog = WalletReviewCatalog(account: popupTestAccount())
             let signingAccess = PopupSigningProbe()
             let controller = makePopupSessionsForTesting(
@@ -9894,12 +9886,12 @@ extension PopupRequestSessionsTests {
                 return XCTFail("Expected a terminal response for \(failure)")
             }
             if failure == "checkpointAfter" {
-                XCTAssertEqual(terminal.json as NSDictionary, recovery.markingApprovalCommitted().json as NSDictionary)
+                XCTAssertEqual(terminal.json(messages: .testingEnglish) as NSDictionary, recovery.markingApprovalCommitted().json(messages: .testingEnglish) as NSDictionary)
                 guard case .finished? = coordinator.currentPresentation?.presentation else {
                     return XCTFail("A persisted broadcast checkpoint must remain recoverable")
                 }
             } else {
-                XCTAssertEqual(terminal.json as NSDictionary, request.response(error: .approvalInterrupted).json as NSDictionary)
+                XCTAssertEqual(terminal.json(messages: .testingEnglish) as NSDictionary, request.response(error: .approvalInterrupted).json(messages: .testingEnglish) as NSDictionary)
                 guard case .interrupted? = coordinator.currentPresentation?.presentation else {
                     return XCTFail("Expected the interrupted presentation")
                 }
@@ -10032,7 +10024,7 @@ extension PopupRequestSessionsTests {
             }
             let expected = failure == "checkpointAfter"
                 ? recovery.markingApprovalCommitted() : request.response(error: .approvalInterrupted)
-            XCTAssertEqual(json["response"] as? NSDictionary, expected.json as NSDictionary)
+            XCTAssertEqual(json["response"] as? NSDictionary, expected.json(messages: .testingEnglish) as NSDictionary)
             let authorization = try XCTUnwrap(captured)
             let repeated = await finalizer.attempt(consent: authorization)
             XCTAssertEqual(repeated, .responseReady)

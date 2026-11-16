@@ -122,7 +122,7 @@ public final class SafariRPCClient: Sendable {
         let jsonBytes = data.dropFirst(data.starts(with: [0xEF, 0xBB, 0xBF]) ? 3 : 0)
         try SafariRPCJSONPreflight.validate(
             jsonBytes, maximumTokens: execution.limits.maximumResponseTokens,
-            tokenLimitFailure: .responseTooLarge, depthLimitFailure: .transport,
+            tokenLimitFailure: .responseTooLarge, depthLimitFailure: .transport, invalidJSONFailure: .transport,
             checkCancellation: execution.checkCancellationAndDeadline
         )
         guard let correlated = Self.responseDictionary(from: data, expectedResponseID: rpcRequest.id),

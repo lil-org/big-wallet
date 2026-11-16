@@ -13,7 +13,7 @@ public struct PopupAuthorityState {
     public enum Content {
         case review(PopupReviewSnapshot)
         case authenticating, working, missing
-        case error(message: String, actions: [PopupApprovalState.RecoveryAction])
+        case error(message: AuthorityMessages.Key, actions: [PopupApprovalState.RecoveryAction])
     }
 
     public let id: Int
@@ -52,5 +52,5 @@ public struct PopupReviewSnapshot {
     public let reviewToken: UUID
     public let content: Content
     public let reviewCatalog: WalletReviewCatalog?
-    public let feedback: String?
+    public let feedback: AuthorityMessages.Key?
 }

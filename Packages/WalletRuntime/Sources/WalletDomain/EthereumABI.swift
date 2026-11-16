@@ -164,26 +164,14 @@ public enum EthereumABI {
         }
 
         mutating func validateJSONDepth(_ data: Data) throws {
-            var depth = 0
-            var inString = false
-            var escaped = false
-            for (offset, byte) in data.enumerated() {
-                if offset.isMultiple(of: 1_024) { try budget.step() }
-                if inString {
-                    if escaped { escaped = false }
-                    else if byte == 92 { escaped = true }
-                    else if byte == 34 { inString = false }
-                } else if byte == 34 {
-                    inString = true
-                } else if byte == 91 || byte == 123 {
-                    depth += 1
-                    guard depth <= 128 else { throw DecodingFailure.limitExceeded }
-                } else if byte == 93 || byte == 125 {
-                    depth -= 1
-                    guard depth >= 0 else { throw DecodingFailure.invalid }
+            do {
+                try JSONPreflight.validate(data, maximumDepth: 128) { try budget.step() }
+            } catch let failure as JSONPreflight.Failure {
+                switch failure {
+                case .tooDeep, .tooManyTokens: throw DecodingFailure.limitExceeded
+                case .unbalanced: throw DecodingFailure.invalid
                 }
             }
-            guard depth == 0, !inString else { throw DecodingFailure.invalid }
         }
 
         mutating func parseParameter(_ object: [String: Any], depth: Int) throws -> Parameter {

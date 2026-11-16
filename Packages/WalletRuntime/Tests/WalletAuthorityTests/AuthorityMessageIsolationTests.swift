@@ -6,7 +6,7 @@ import XCTest
 
 @MainActor
 final class AuthorityMessageIsolationTests: XCTestCase {
-    func testConcurrentSystemsRetainTheirCatalogThroughLateDetachedCleanup() async throws {
+    func testConcurrentResponsesRenderOnlyWithTheirExplicitCatalog() async throws {
         let first = try system(label: "first")
         let second = try system(label: "second")
         defer {
@@ -17,22 +17,18 @@ final class AuthorityMessageIsolationTests: XCTestCase {
         }
         let entered = [TestGate<Void>(), TestGate<Void>()]
         let releases = [TestGate<Void>(), TestGate<Void>()]
-        let discarded = [TestGate<(String, String)>(), TestGate<(String, String)>()]
-        let operations = [first.system, second.system].enumerated().map { index, system in
+        let discarded = [TestGate<ProviderResponseError>(), TestGate<ProviderResponseError>()]
+        let operations = [first.system, second.system].enumerated().map { index, _ in
             Task {
-                await AuthorityMessageContext.$current.withValue(system.messages) {
-                    await ApprovalResolution<ProviderResponseError>().value(
-                        timeoutValue: system.error(.approvalInterrupted), callerCancellation: .resolveTimeout,
-                        onDiscardedValue: { error in
-                            discarded[index].resolve((error.message, AuthorityStrings.somethingWentWrong))
-                        },
-                        operation: {
-                            entered[index].resolve(())
-                            await releases[index].wait()
-                            return .internalError
-                        }
-                    )
-                }
+                await ApprovalResolution<ProviderResponseError>().value(
+                    timeoutValue: .approvalInterrupted, callerCancellation: .resolveTimeout,
+                    onDiscardedValue: { discarded[index].resolve($0) },
+                    operation: {
+                        entered[index].resolve(())
+                        await releases[index].wait()
+                        return .internalError
+                    }
+                )
             }
         }
         await entered[0].wait()
@@ -41,18 +37,74 @@ final class AuthorityMessageIsolationTests: XCTestCase {
         operations[1].cancel()
         let firstResult = await operations[0].value
         let secondResult = await operations[1].value
-        XCTAssertEqual(firstResult.message, "first.approvalInterrupted")
-        XCTAssertEqual(secondResult.message, "second.approvalInterrupted")
+        XCTAssertEqual(firstResult, secondResult)
+        XCTAssertEqual(firstResult.message.rendered(using: first.system.messages), "first.approvalInterrupted")
+        XCTAssertEqual(secondResult.message.rendered(using: second.system.messages), "second.approvalInterrupted")
         releases[1].resolve(())
         releases[0].resolve(())
         let firstDiscard = await discarded[0].wait()
         let secondDiscard = await discarded[1].wait()
-        XCTAssertEqual(firstDiscard.0, "first.somethingWentWrong")
-        XCTAssertEqual(firstDiscard.1, "first.somethingWentWrong")
-        XCTAssertEqual(secondDiscard.0, "second.somethingWentWrong")
-        XCTAssertEqual(secondDiscard.1, "second.somethingWentWrong")
-        XCTAssertEqual(first.system.error(.internalError).message, "first.somethingWentWrong")
-        XCTAssertEqual(second.system.error(.internalError).message, "second.somethingWentWrong")
+        XCTAssertEqual(firstDiscard, .internalError)
+        XCTAssertEqual(secondDiscard, .internalError)
+        XCTAssertEqual(firstDiscard.message.rendered(using: first.system.messages), "first.somethingWentWrong")
+        XCTAssertEqual(secondDiscard.message.rendered(using: second.system.messages), "second.somethingWentWrong")
+        XCTAssertEqual(first.system.error(.internalError).message, .literal("first.somethingWentWrong"))
+        XCTAssertEqual(second.system.error(.internalError).message, .literal("second.somethingWentWrong"))
+    }
+
+    func testPersistedResponsesKeepTheirWriterLocaleAndUpstreamErrorData() async throws {
+        let fixture = try composition(label: "writer")
+        defer {
+            UserDefaults.standard.removePersistentDomain(forName: fixture.suite)
+            try? FileManager.default.removeItem(at: fixture.root)
+        }
+        let writer = fixture.composition.requests
+        let readerMessages = AuthorityMessages(values: Dictionary(uniqueKeysWithValues:
+            AuthorityMessages.Key.allCases.map { ($0, "reader.\($0.rawValue)") }))
+        let reader = ExtensionBridge(store: ExtensionRequestFileStore(
+            containerURL: fixture.root, dependencies: .init(messages: readerMessages)
+        ))
+        let origin = "https://wallet.example"
+        let upstream = "Error returned by the RPC endpoint"
+        let upstreamData = #"{"detail":{"code":7}}"#
+        let errors: [ProviderResponseError] = [
+            .userRejected,
+            .approvalInterrupted,
+            .init(message: upstream, code: -32000, context: .dataJSON(upstreamData)),
+        ]
+        for (index, error) in errors.enumerated() {
+            guard case .snapshot(let authority) = await writer.configurationSnapshot(
+                configurationKey: origin, profileIdentifier: nil
+            ) else { return XCTFail("Expected initial authority") }
+            let raw: [String: Any] = [
+                "id": index + 1, "name": "requestAccounts", "provider": "ethereum", "body": ["address": ""],
+                "host": "wallet.example", "configurationKey": origin,
+                "enqueueAttempt": UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased(),
+                "admissionDeadline": Int(Date().addingTimeInterval(150).timeIntervalSince1970 * 1_000),
+                "workflowVersion": ExtensionBridge.workflowVersion, "authority": authority.version.json,
+            ]
+            let request = try XCTUnwrap(SafariRequest(json: raw))
+            guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(
+                request: request, rawObject: raw, responseOwner: testDocumentResponseOwner
+            ), case .accepted(let handle, _, _, _, _) = await writer.enqueue(ingress: ingress, profileIdentifier: nil)
+            else { return XCTFail("Expected admitted request") }
+            let completed = await writer.completeImmediate(handle: handle, resolution: .failure(error))
+            XCTAssertEqual(completed, .persisted)
+            guard case .response(let delivered) = await reader.prepareResponseDelivery(
+                id: handle.id, configurationKey: origin, requestToken: handle.requestToken,
+                profileIdentifier: nil, access: .worker
+            ) else { return XCTFail("Expected persisted response") }
+            let response = try XCTUnwrap(delivered.json["response"] as? [String: Any])
+            let concreteError = try XCTUnwrap(response["error"] as? [String: Any])
+            XCTAssertEqual(concreteError["message"] as? String, error.message.rendered(using: fixture.composition.configuration.messages))
+            XCTAssertEqual(concreteError["code"] as? Int, error.code)
+            let decoded = try XCTUnwrap(ResponseToExtension(json: response))
+            XCTAssertEqual(decoded.json(messages: readerMessages) as NSDictionary, response as NSDictionary)
+            if index == 2 {
+                XCTAssertEqual(concreteError["message"] as? String, upstream)
+                XCTAssertEqual(concreteError["data"] as? NSDictionary, ["detail": ["code": 7]] as NSDictionary)
+            }
+        }
     }
 
 #if os(macOS)

@@ -215,7 +215,7 @@ final class NativeMessageDispatcherTests: XCTestCase {
             XCTAssertEqual(try canonical(result), try canonical([
                 "id": 1, "name": "requestAccounts", "provider": "ethereum",
                 "kind": "error", "approvalCommitted": false, "authorizationFailure": false,
-                "error": ["code": 4200, "message": AuthorityStrings.privateBrowsingUnsupported],
+                "error": ["code": 4200, "message": AuthorityMessages.testingEnglish[.privateBrowsingUnsupported]],
             ]))
             XCTAssertTrue(fixture.calls.value.isEmpty)
             guard case .available(let requests) = await fixture.bridge.listRecoveryRequests(profileIdentifier: nil) else {
@@ -242,7 +242,7 @@ final class NativeMessageDispatcherTests: XCTestCase {
                 "response": [
                     "id": 1, "name": "signPersonalMessage", "provider": "ethereum",
                     "kind": "error", "approvalCommitted": false, "authorizationFailure": false,
-                    "error": ["code": 4100, "message": AuthorityStrings.providerNotReady],
+                    "error": ["code": 4100, "message": AuthorityMessages.testingEnglish[.providerNotReady]],
                 ],
                 "state": authority.json,
             ]))
@@ -711,7 +711,7 @@ final class NativeMessageDispatcherTests: XCTestCase {
         let rpcOperation: SafariRPCService.Operation?
 
         init(root: URL, rpcLimits: SafariRPCLimits, rpcOperation: SafariRPCService.Operation?) {
-            bridge = ExtensionBridge(store: ExtensionRequestFileStore(rootURL: root, directoryBoundary: root))
+            bridge = ExtensionBridge(store: ExtensionRequestFileStore(rootURL: root, directoryBoundary: root, dependencies: .init(messages: .testingEnglish)))
             rpcService = SafariRPCService(limits: rpcLimits)
             self.rpcOperation = rpcOperation
         }

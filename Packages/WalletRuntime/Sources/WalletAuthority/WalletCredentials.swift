@@ -22,15 +22,16 @@ struct WalletCredentialAuthentication: Sendable {
     let canUseBiometrics: @Sendable () -> Bool
     let attemptBiometrics: @MainActor @Sendable (String) async -> WalletAuthenticationOutcome
 
-    static let live = WalletCredentialAuthentication(
-        canUseBiometrics: { DeviceAuthentication.canUseBiometrics },
-        attemptBiometrics: { await DeviceAuthentication.attemptBiometrics(reason: $0) }
-    )
+    static func live(cancelTitle: String) -> WalletCredentialAuthentication {
+        WalletCredentialAuthentication(
+            canUseBiometrics: { DeviceAuthentication.canUseBiometrics },
+            attemptBiometrics: { await DeviceAuthentication.attemptBiometrics(reason: $0, cancelTitle: cancelTitle) }
+        )
+    }
 }
 
 public struct WalletCredentials: Sendable {
     private let keychain: Keychain
-    private let messages: AuthorityMessages
     private let authorityID: UUID
     private let authentication: WalletCredentialAuthentication
     private let accessClock: @Sendable () -> ContinuousClock.Instant
@@ -38,21 +39,19 @@ public struct WalletCredentials: Sendable {
 #if os(iOS) || os(visionOS)
     private let vaultHost: SafariApprovalVaultHost
 
-    init(keychain: Keychain, messages: AuthorityMessages, authorityID: UUID, vaultHost: SafariApprovalVaultHost, authentication: WalletCredentialAuthentication = .live, accessClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }, postCreation: @escaping @MainActor @Sendable () -> Void = {}) {
+    init(keychain: Keychain, messages: AuthorityMessages, authorityID: UUID, vaultHost: SafariApprovalVaultHost, authentication: WalletCredentialAuthentication? = nil, accessClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }, postCreation: @escaping @MainActor @Sendable () -> Void = {}) {
         self.keychain = keychain
-        self.messages = messages
         self.authorityID = authorityID
-        self.authentication = authentication
+        self.authentication = authentication ?? .live(cancelTitle: messages[.cancel])
         self.accessClock = accessClock
         self.postCreation = postCreation
         self.vaultHost = vaultHost
     }
 #else
-    init(keychain: Keychain, messages: AuthorityMessages, authorityID: UUID, authentication: WalletCredentialAuthentication = .live, accessClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }, postCreation: @escaping @MainActor @Sendable () -> Void = {}) {
+    init(keychain: Keychain, messages: AuthorityMessages, authorityID: UUID, authentication: WalletCredentialAuthentication? = nil, accessClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now }, postCreation: @escaping @MainActor @Sendable () -> Void = {}) {
         self.keychain = keychain
-        self.messages = messages
         self.authorityID = authorityID
-        self.authentication = authentication
+        self.authentication = authentication ?? .live(cancelTitle: messages[.cancel])
         self.accessClock = accessClock
         self.postCreation = postCreation
     }
@@ -133,9 +132,7 @@ public struct WalletCredentials: Sendable {
     public func attemptBiometrics(reason: String, challenge: WalletAuthenticationChallenge) async -> WalletAuthenticationResult {
         guard !Task.isCancelled else { return .cancelled }
         guard challenge.isPending(for: authorityID) else { return .failed }
-        let outcome = await AuthorityMessageContext.$current.withValue(messages) {
-            await authentication.attemptBiometrics(reason)
-        }
+        let outcome = await authentication.attemptBiometrics(reason)
         guard !Task.isCancelled else { return .cancelled }
         guard challenge.isPending(for: authorityID) else { return .failed }
         switch outcome {

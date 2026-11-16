@@ -209,8 +209,11 @@ final class StartupCredentialCoordinator: NSObject, WalletAccessObserver {
         }
         guard let windowController, accepts(generation) else { return }
         windowController.window?.delegate = nil
-        guard windowController.installContent(controller, while: { accepts(generation) }) else { return }
-        Window.reactivateWindow(windowController)
+        windowController.installContent(controller, while: { [weak self] in self?.accepts(generation) == true }) {
+            [weak self, weak windowController] in
+            guard self?.accepts(generation) == true, let windowController else { return }
+            Window.reactivateWindow(windowController)
+        }
     }
 
     private func closeWindow() {

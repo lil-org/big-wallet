@@ -591,7 +591,8 @@ struct ExtensionRequestProfile: Sendable {
     mutating func invalidateStaleRequests(
         configurationKey: String,
         excluding: RequestHandle?,
-        now: Date
+        now: Date,
+        responses: ExtensionResponseEncoder
     ) -> Bool {
         for index in self.state.records.indices {
             let record = self.state.records[index]
@@ -600,8 +601,8 @@ struct ExtensionRequestProfile: Sendable {
             case .pending, .claimed:
                 guard !Self.authorityIsCurrent(record, in: self.state) else { continue }
                 guard let request = self.request(for: record),
-                      let response = ExtensionRequestProfileCodec.boundedResponseData(ResponseToExtension(
-                        for: request, payload: .error(.init(message: AuthorityStrings.providerNotReady, code: 4100))
+                      let response = responses.boundedResponseData(ResponseToExtension(
+                        for: request, payload: .error(.init(messageKey: .providerNotReady, code: 4100))
                       ), request: request) else { return false }
                 self.complete(at: index, response: response, date: now)
             case .broadcastPrepared, .completed:
@@ -614,7 +615,8 @@ struct ExtensionRequestProfile: Sendable {
     mutating func applyAuthorityEffect(
         _ response: ResponseToExtension,
         record: Record,
-        now: Date
+        now: Date,
+        responses: ExtensionResponseEncoder
     ) -> Bool {
         guard let mutation = response.mutation else { return response.approvedAccounts.isEmpty }
         guard var origin = self.state.origins[record.configurationKey] else { return false }
@@ -679,7 +681,7 @@ struct ExtensionRequestProfile: Sendable {
         }
         self.state.origins[record.configurationKey] = origin
         guard Self.makeRoomForAuthority(in: &state, excluding: record.configurationKey) else { return false }
-        return invalidateStaleRequests(configurationKey: record.configurationKey, excluding: record.handle, now: now)
+        return invalidateStaleRequests(configurationKey: record.configurationKey, excluding: record.handle, now: now, responses: responses)
     }
 
     static func canonicalChainID(_ value: String) -> Bool {
@@ -732,7 +734,8 @@ struct ExtensionRequestProfile: Sendable {
 
     mutating func interruptNativeRecord(
         at index: Int,
-        now: Date
+        now: Date,
+        responses: ExtensionResponseEncoder
     ) -> Bool {
         let record = self.state.records[index]
         let response: Data
@@ -742,7 +745,7 @@ struct ExtensionRequestProfile: Sendable {
         case .broadcastPrepared(_, _, let recoveryResponse, _):
             response = recoveryResponse
         case .pending, .claimed:
-            guard let data = ExtensionRequestProfileCodec.interruptionResponseData(for: self.request(for: record)) else {
+            guard let data = responses.interruptionResponseData(for: self.request(for: record)) else {
                 return false
             }
             response = data
@@ -753,20 +756,22 @@ struct ExtensionRequestProfile: Sendable {
 
     mutating func transitionExpiredPending(
         at index: Int,
-        now: Date
+        now: Date,
+        responses: ExtensionResponseEncoder
     ) -> PendingDeadlineTransition {
         let request = self.request(for: self.state.records[index])
         return Self.transitionExpiredPending(
             &self.state.records[index],
             request: request,
-            now: now
+            now: now, responses: responses
         )
     }
 
     static func transitionExpiredPending(
         _ record: inout Record,
         request: SafariRequest?,
-        now: Date
+        now: Date,
+        responses: ExtensionResponseEncoder
     ) -> PendingDeadlineTransition {
         guard case .pending = record.state, let request else {
             return .unavailable
@@ -774,7 +779,7 @@ struct ExtensionRequestProfile: Sendable {
         guard request.admissionDeadline <= now else {
             return .active(request)
         }
-        guard let responseData = ExtensionRequestProfileCodec.expirationResponseData(for: request) else {
+        guard let responseData = responses.expirationResponseData(for: request) else {
             return .unavailable
         }
         record.complete(response: responseData, at: now)
@@ -899,7 +904,8 @@ struct ExtensionRequestProfile: Sendable {
 
     mutating func maintain(
         now: Date,
-        abandonedHandles: Set<RequestHandle>
+        abandonedHandles: Set<RequestHandle>,
+        responses: ExtensionResponseEncoder
     ) -> Maintenance? {
         var changed = false
         var locksToRemove = [RequestHandle]()
@@ -909,7 +915,7 @@ struct ExtensionRequestProfile: Sendable {
             case .claimed:
                 if abandonedHandles.contains(record.handle) {
                     if record.nativeApproval != nil {
-                        guard let response = ExtensionRequestProfileCodec.interruptionResponseData(for: self.request(for: record)) else {
+                        guard let response = responses.interruptionResponseData(for: self.request(for: record)) else {
                             return nil
                         }
                         record.complete(response: response, at: now)
@@ -934,7 +940,7 @@ struct ExtensionRequestProfile: Sendable {
                 switch Self.transitionExpiredPending(
                     &record,
                     request: request,
-                    now: now
+                    now: now, responses: responses
                 ) {
                 case .active:
                     break
@@ -966,7 +972,8 @@ struct ExtensionRequestProfile: Sendable {
 
     mutating func reconcileWalletAuthority(
         with ledger: WalletAuthorityRevocationLedger,
-        now: Date
+        now: Date,
+        responses: ExtensionResponseEncoder
     ) -> Bool? {
         let removals: [WalletAuthorityRemoval]
         if state.revocationCursor.epoch == ledger.epoch {
@@ -981,13 +988,13 @@ struct ExtensionRequestProfile: Sendable {
             removals = [.accounts(Set(connectedAccounts + admittedAccounts))]
         }
         for removal in removals {
-            guard revokeWalletAuthority(matching: removal, now: now) != nil else { return nil }
+            guard revokeWalletAuthority(matching: removal, now: now, responses: responses) != nil else { return nil }
         }
         state.revocationCursor = ledger.cursor
         return true
     }
 
-    mutating func revokeWalletAuthority(matching removal: WalletAuthorityRemoval, now: Date) -> Bool? {
+    mutating func revokeWalletAuthority(matching removal: WalletAuthorityRemoval, now: Date, responses: ExtensionResponseEncoder) -> Bool? {
         var changedOrigins = [String]()
         for key in self.state.origins.keys.sorted() {
             guard var origin = self.state.origins[key] else { continue }
@@ -1012,7 +1019,7 @@ struct ExtensionRequestProfile: Sendable {
             changedOrigins.append(key)
         }
         for key in changedOrigins {
-            guard self.invalidateStaleRequests(configurationKey: key, excluding: nil, now: now) else {
+            guard self.invalidateStaleRequests(configurationKey: key, excluding: nil, now: now, responses: responses) else {
                 return nil
             }
         }
@@ -1023,8 +1030,8 @@ struct ExtensionRequestProfile: Sendable {
             case .pending, .claimed:
                 guard let request = self.request(for: record),
                       Self.removalInvalidates(request, matching: removal) else { continue }
-                guard let response = ExtensionRequestProfileCodec.boundedResponseData(ResponseToExtension(
-                    for: request, payload: .error(.init(message: AuthorityStrings.providerNotReady, code: 4100))
+                guard let response = responses.boundedResponseData(ResponseToExtension(
+                    for: request, payload: .error(.init(messageKey: .providerNotReady, code: 4100))
                 ), request: request) else { return nil }
                 self.complete(at: index, response: response, date: now)
                 changed = true
@@ -1052,7 +1059,8 @@ struct ExtensionRequestProfile: Sendable {
         provider: InpageProvider,
         attempt: String,
         expected: RequestAuthorityVersion,
-        now: Date
+        now: Date,
+        responses: ExtensionResponseEncoder
     ) -> Bool {
         guard Self.pinOrigin(in: &state, configurationKey: configurationKey, now: now),
               let revision = Self.nextRevision(in: &state),
@@ -1074,7 +1082,7 @@ struct ExtensionRequestProfile: Sendable {
             state.mutationReceipts.removeFirst()
         }
         guard Self.makeRoomForAuthority(in: &state, excluding: configurationKey) else { return false }
-        return invalidateStaleRequests(configurationKey: configurationKey, excluding: nil, now: now)
+        return invalidateStaleRequests(configurationKey: configurationKey, excluding: nil, now: now, responses: responses)
     }
 
     static func resetAuthorityState(

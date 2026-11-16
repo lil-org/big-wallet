@@ -109,7 +109,7 @@ final class HarnessRuntime {
         self.networks = networks
         let persistence = HarnessPersistence(ipc: ipc)
         let fileStore = ExtensionRequestFileStore(rootURL: fixtures.root.appendingPathComponent("bridge", isDirectory: true),
-            directoryBoundary: fixtures.root, dependencies: .init(clock: fixtures.clock.now,
+            directoryBoundary: fixtures.root, dependencies: .init(messages: .testingEnglish, clock: fixtures.clock.now,
                 fileIO: persistence.fileIO(directoryBoundary: fixtures.root),
                 completeChainAddition: { permit in
                     EthereumDappRequestProcessor.completeApprovedChainAddition(permit: permit,
@@ -132,7 +132,7 @@ final class HarnessRuntime {
         processor = HarnessObservedProcessor(base: DappRequestProcessor(ethereumNetworkResolver: networks.approval,
             selectionNetworkResolver: networks.network, customDefinitionResult: networks.matches,
             solanaEndpoints: SolanaRPCClient.RPCConfiguration(trustsAlchemyURLBuilderOutput: false,
-                urlBuilder: { URL(string: "https://solana.fixture.invalid/" + $0) })), ipc: ipc)
+                urlBuilder: { URL(string: "https://solana.fixture.invalid/" + $0) }), solanaSummaryLabels: .english), ipc: ipc)
         identity = AmbientRuntimeIdentity(instanceIdentifier: UUID(), processIdentifier: Int32(ProcessInfo.processInfo.processIdentifier),
             bundlePath: fixtures.helperURL.path, version: .init(marketing: "1.0.0", build: "1"), workflowVersion: ExtensionBridge.workflowVersion,
             launchedAt: AmbientRuntimeIdentity.processStartDate(processIdentifier: Int32(ProcessInfo.processInfo.processIdentifier)) ?? Date())
@@ -286,7 +286,7 @@ final class HarnessRuntime {
             reviewCatalog = nil
         }
         return DappRequestAdmission(store: store, requestProcessor: processor,
-            reviewCatalog: reviewCatalog, messages: .testingEnglish)
+            reviewCatalog: reviewCatalog)
     }
 
     private lazy var popupSessions = makePopupSessions()
@@ -306,7 +306,7 @@ final class HarnessRuntime {
             defer { ipc.event("observation", details: .object(["handle": harnessHandle(authorization.handle), "boundary": .string("authentication.terminal")])) }
             do { try await ipc.checkpoint("authentication.before", details: .object(["handle": harnessHandle(authorization.handle)])) }
             catch { return .canceled }
-            return await vault.unlockResult(reason: reason, scope: authorization)
+            return await vault.unlockResult(reason: reason, cancelTitle: AuthorityMessages.testingEnglish[.cancel], scope: authorization)
         }, reloadMetadata: {}), loadsTransactionContext: false, transactionApprovalOperations: transactionOperations,
         invalidateNetworkCache: {}, selectionNetworkResolver: { [networks] in networks.network($0) },
         approvalNetworkResolver: networks.approval, executionEnvironment: executionEnvironment,
@@ -695,7 +695,7 @@ final class HarnessRuntime {
 
     private func durableFacts(profile: UUID?) -> [RequestHandle: HarnessValue]? {
         let files = ExtensionRequestStoreFiles(rootURL: fixtures.root.appendingPathComponent("bridge", isDirectory: true),
-            directoryBoundary: fixtures.root, dependencies: .init(clock: fixtures.clock.now, completeChainAddition: { _ in false }))
+            directoryBoundary: fixtures.root, dependencies: .init(messages: .testingEnglish, clock: fixtures.clock.now, completeChainAddition: { _ in false }))
         return files.withExistingStoreLock(unavailable: nil, missing: [:]) {
             let data: Data
             switch files.readProfileDataLocked(at: files.profileURL(profile)) {
@@ -703,7 +703,7 @@ final class HarnessRuntime {
             case .data(let value): data = value
             case .corrupt, .unavailable: return nil
             }
-            var codec = ExtensionRequestProfileCodec()
+            var codec = ExtensionRequestProfileCodec(messages: .testingEnglish)
             guard let decoded = codec.decodeProfile(data, expectedIdentifier: profile, recoverAuthority: false, now: fixtures.clock.now()) else { return nil }
             return Dictionary(uniqueKeysWithValues: decoded.profile.state.records.map { record in
                 var committed = false

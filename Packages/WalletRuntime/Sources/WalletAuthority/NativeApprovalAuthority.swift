@@ -347,9 +347,7 @@ public final class NativeApprovalAuthority {
                            environment.uptime() + NativeApprovalTiming.recoveryTimeout)
         guard deadline.isFinite, environment.uptime() < deadline else { return .unavailable }
         let revision = retireCurrentPreparation()
-        return await AuthorityMessageContext.$current.withValue(environment.messages) {
-            await prepareScoped(owner: owner, access: access, revision: revision, deadline: deadline)
-        }
+        return await prepareScoped(owner: owner, access: access, revision: revision, deadline: deadline)
     }
 
     private func retireCurrentPreparation() -> UInt64 {
@@ -414,10 +412,8 @@ public final class NativeApprovalAuthority {
                 clock: environment.now, monotonicClock: environment.monotonicClock,
                 hooks: environment.hooks, access: access, receipt: receipt,
                 finalize: { [environment] consent in
-                    await AuthorityMessageContext.$current.withValue(environment.messages) {
-                        await AuthorityExecutionHooks.$current.withValue(environment.hooks) {
-                            await environment.attemptNativeDecision(consent)
-                        }
+                    await AuthorityExecutionHooks.$current.withValue(environment.hooks) {
+                        await environment.attemptNativeDecision(consent)
                     }
                 })
             guard isCurrent(revision, access: access, deadline: deadline) else { review.invalidate(); return .unavailable }
@@ -428,11 +424,9 @@ public final class NativeApprovalAuthority {
             let handle = handle
             let nonce = nativeDeliveryNonce
             return .immediate(NativeApprovalResponse { [environment] in
-                await AuthorityMessageContext.$current.withValue(environment.messages) {
-                    await AuthorityExecutionHooks.$current.withValue(environment.hooks) {
-                        await store.completeNativeImmediate(handle: handle, nativeDeliveryNonce: nonce,
-                            runtimeInstanceIdentifier: owner.runtimeInstanceIdentifier, resolution: resolution)
-                    }
+                await AuthorityExecutionHooks.$current.withValue(environment.hooks) {
+                    await store.completeNativeImmediate(handle: handle, nativeDeliveryNonce: nonce,
+                        runtimeInstanceIdentifier: owner.runtimeInstanceIdentifier, resolution: resolution)
                 }
             })
         }

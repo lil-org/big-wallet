@@ -75,7 +75,8 @@ func accountSelectionWindow(controller: NSViewController) -> NSWindow {
     window.owner = owner
     if let protected = controller as? any NativeWalletProtectedContent {
         owner.bindAccess(protected.walletAccess.controller, unlock: {})
-        XCTAssertTrue(owner.installProtectedContent(controller, access: protected.walletAccess))
+        owner.installProtectedContent(controller, access: protected.walletAccess)
+        XCTAssertTrue(owner.contentViewController === controller)
     } else {
         owner.contentViewController = controller
     }

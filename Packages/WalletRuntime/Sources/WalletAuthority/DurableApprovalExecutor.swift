@@ -422,7 +422,7 @@ final class DurableApprovalExecutor {
     }
 
     private static var staleResolution: ImmediateResolution {
-        .failure(ProviderResponseError(message: AuthorityStrings.providerNotReady, code: 4100))
+        .failure(ProviderResponseError(messageKey: .providerNotReady, code: 4100))
     }
 
     private func boundedBroadcast(

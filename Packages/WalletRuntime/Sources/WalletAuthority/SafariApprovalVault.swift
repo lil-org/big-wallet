@@ -1057,6 +1057,7 @@ final class SafariApprovalVault: Sendable {
     @concurrent
     func unlockResult(
         reason: String,
+        cancelTitle: String,
         scope: WalletSigningScope
     ) async -> WalletUnlockResult {
         let approvedAccount = scope.approvedAccount
@@ -1080,7 +1081,7 @@ final class SafariApprovalVault: Sendable {
 
         let context = SafariApprovalAuthenticationContext()
         return await withTaskCancellationHandler {
-            context.read { $0.localizedCancelTitle = AuthorityStrings.cancel }
+            context.read { $0.localizedCancelTitle = cancelTitle }
             guard context.read({ canEvaluateAuthentication($0, .deviceOwnerAuthentication) }) else {
                 return .unavailable
             }
