@@ -394,11 +394,25 @@ final class MobileWalletAccessTests: XCTestCase {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
             .first { $0.activationState == .foregroundActive })
         let previousKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let authenticationStarted = expectation(description: "Initial authentication started")
+        let authenticationCancelled = expectation(description: "Initial authentication cancelled")
+        let authenticationReturned = expectation(description: "Cancelled authentication returned")
+        let authenticationResult = TestGate<WalletAuthenticationOutcome>()
         let controller = instantiate(PasswordViewController.self, from: .main)
         controller.credentials = WalletCredentials(
             keychain: fixture.keychain.keychain, messages: .testingEnglish, authorityID: fixture.authorityID,
             vaultHost: SafariApprovalVaultHost(vault: SafariApprovalVault(fileURL: nil), sourceSnapshot: { nil }),
-            authentication: .init(canUseBiometrics: { false }, attemptBiometrics: { _ in .failed })
+            authentication: .init(canUseBiometrics: { true }, attemptBiometrics: { _ in
+                await withTaskCancellationHandler {
+                    authenticationStarted.fulfill()
+                    let result = await authenticationResult.wait()
+                    XCTAssertTrue(Task.isCancelled)
+                    authenticationReturned.fulfill()
+                    return result
+                } onCancel: {
+                    authenticationCancelled.fulfill()
+                }
+            })
         )
         controller.access = fixture.access
         let navigation = controller.inNavigationController
@@ -406,6 +420,7 @@ final class MobileWalletAccessTests: XCTestCase {
         addTeardownBlock { @MainActor in
             let presented = controller.presentedViewController ?? navigation.presentedViewController
             fixture.access.lock(reason: .background)
+            authenticationResult.resolve(.failed)
             if let presented {
                 await withCheckedContinuation { continuation in
                     presented.dismissAfterCurrentTransition(animated: false) { continuation.resume() }
@@ -418,25 +433,31 @@ final class MobileWalletAccessTests: XCTestCase {
         window.rootViewController = navigation
         window.makeKeyAndVisible()
         window.layoutIfNeeded()
-        await expectEventually(timeout: 5) {
-            controller.viewIfLoaded?.window === window && navigation.visibleViewController === controller &&
-                controller.transitionCoordinator == nil && !controller.isBeingPresented
-        }
+        await fulfillment(of: [authenticationStarted], timeout: 5)
         guard controller.viewIfLoaded?.window === window, navigation.visibleViewController === controller,
               controller.transitionCoordinator == nil, !controller.isBeingPresented else {
             return XCTFail("Password form did not finish attaching to its source window")
         }
+        XCTAssertFalse(controller.initialOverlayView.isHidden)
+#if os(iOS)
+        XCTAssertTrue(navigation.isNavigationBarHidden)
+#endif
         controller.passwordTextField.text = "incorrect-password"
 
         controller.okButtonTapped(controller.okButton as Any)
 
+        let alert = try XCTUnwrap((controller.presentedViewController ?? navigation.presentedViewController) as? UIAlertController)
+        await fulfillment(of: [authenticationCancelled], timeout: 5)
+        authenticationResult.resolve(.succeeded)
+        await fulfillment(of: [authenticationReturned], timeout: 5)
         await expectEventually(timeout: 5) {
             guard let alert = (controller.presentedViewController ?? navigation.presentedViewController) as? UIAlertController else { return false }
             return alert.viewIfLoaded?.window != nil && !alert.isBeingPresented
         }
-        let alert = try XCTUnwrap((controller.presentedViewController ?? navigation.presentedViewController) as? UIAlertController)
+        XCTAssertTrue((controller.presentedViewController ?? navigation.presentedViewController) === alert)
         XCTAssertEqual(alert.title, Strings.passwordDoesNotMatch)
         XCTAssertTrue(controller.passwordTextField.text?.isEmpty ?? true)
+        XCTAssertFalse(controller.passwordTextField.isFirstResponder)
         XCTAssertTrue(controller.passwordTextField.isEnabled)
         XCTAssertTrue(controller.okButton.isEnabled)
         XCTAssertTrue(navigation.view.isUserInteractionEnabled)
