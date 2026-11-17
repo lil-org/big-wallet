@@ -338,29 +338,35 @@ final class NativeIngressGateTests: XCTestCase {
         assertDrained(gate)
     }
 
-    func testScopeAndProfileInventoriesAreBoundedAndRemovedWhenLeasesFinish() throws {
-        var limits = NativeIngressGate.Limits()
-        limits.ordinaryProcessSlots = 8
-        limits.ordinaryProfileSlots = 8
-        limits.maximumScopes = 2
-        limits.maximumProfiles = 1
-        let gate = NativeIngressGate(limits: limits)
-        let first = try gate.admit(normal(tab: 1), profileIdentifier: nil)
-        let second = try gate.admit(normal(tab: 2), profileIdentifier: nil)
-        defer { first.finish(); second.finish() }
-        assertRejected(gate, normal(tab: 3), reason: .busy)
-        assertRejected(gate, normal(tab: 1), profileIdentifier: UUID(), reason: .busy)
-        XCTAssertEqual(gate.statistics.scopes, 2)
-        XCTAssertEqual(gate.statistics.profiles, 1)
+    func testProductionLaneCapacityBoundsScopeAndProfileInventories() throws {
+        let gate = NativeIngressGate()
+        var admissions = [NativeIngressGate.Admission]()
+        defer { admissions.forEach { $0.finish() } }
+        for _ in 0..<8 {
+            admissions.append(try gate.admit(normal(), profileIdentifier: UUID()))
+        }
+        for _ in 0..<4 {
+            admissions.append(try gate.admit(poll(maintenance: "none"), profileIdentifier: UUID()))
+        }
+        admissions.append(try gate.admit(reject(), profileIdentifier: UUID()))
+        admissions.append(try gate.admit(disconnect(), profileIdentifier: UUID()))
+        let full = gate.statistics
+        XCTAssertEqual(full.scopes, 14)
+        XCTAssertEqual(full.profiles, 14)
+        for request in [normal(), poll(maintenance: "none"), reject(), disconnect()] {
+            assertRejected(gate, request, profileIdentifier: UUID(), reason: .busy)
+            XCTAssertEqual(gate.statistics, full)
+        }
 
-        second.finish()
-        assertRejected(gate, normal(tab: 1), profileIdentifier: UUID(), reason: .busy)
-        let replacementScope = try gate.admit(normal(tab: 3), profileIdentifier: nil)
-        replacementScope.finish()
-        first.finish()
+        admissions[0].finish()
+        XCTAssertEqual(gate.statistics.scopes, 13)
+        XCTAssertEqual(gate.statistics.profiles, 13)
+        admissions.append(try gate.admit(normal(tab: 2), profileIdentifier: UUID()))
+        XCTAssertEqual(gate.statistics, full)
+        admissions.forEach { $0.finish() }
         assertDrained(gate)
-        let replacementProfile = try gate.admit(normal(), profileIdentifier: UUID())
-        replacementProfile.finish()
+        let replacement = try gate.admit(normal(), profileIdentifier: UUID())
+        replacement.finish()
         assertDrained(gate)
     }
 

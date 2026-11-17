@@ -72,10 +72,6 @@ struct WalletManagementServices {
 @available(macOSApplicationExtension, unavailable)
 @available(visionOSApplicationExtension, unavailable)
 public final class AuthorityRuntime {
-    public enum ErrorKind: Sendable {
-        case userRejected, internalError, approvalInterrupted, privateBrowsingUnsupported
-    }
-
     public let wallets: WalletsManager
     public let credentials: WalletCredentials
     public let requests: ExtensionBridge
@@ -131,16 +127,6 @@ public final class AuthorityRuntime {
         vaultHost = management.vaultHost
     }
 #endif
-
-    public func error(_ kind: ErrorKind) -> ProviderResponseError {
-        let error: ProviderResponseError = switch kind {
-        case .userRejected: .userRejected
-        case .internalError: .internalError
-        case .approvalInterrupted: .approvalInterrupted
-        case .privateBrowsingUnsupported: .privateBrowsingUnsupported
-        }
-        return error.rendered(using: messages)
-    }
 
     nonisolated public func invalidateNetworkCache() { invalidateCache() }
 
@@ -206,7 +192,7 @@ private final class ApplicationNativeApprovals {
             store: composition.requests,
             environment: .live(processor: processor, wallets: management.wallets, finalizer: finalizer,
                 messages: composition.configuration.messages, authorityID: management.authorityID,
-                clock: composition.dependencies.clock, monotonicClock: composition.dependencies.monotonicClock,
+                timing: .live(now: composition.dependencies.clock, monotonicClock: composition.dependencies.monotonicClock),
                 hooks: composition.dependencies.hooks))
         authorities[key] = Reference(authority)
         return authority

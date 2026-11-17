@@ -171,7 +171,7 @@ public final class NativeApprovalCoordinator {
             handle = owner.handle
             nonce = owner.nativeDeliveryNonce
             runtime = owner.runtime
-            recoveryDeadline = environment.uptime() + NativeApprovalTiming.recoveryTimeout
+            recoveryDeadline = environment.timing.uptime() + NativeApprovalTiming.recoveryTimeout
         }
 
         var isCurrent: Bool {
@@ -179,8 +179,8 @@ public final class NativeApprovalCoordinator {
         }
 
         var mayAttempt: Bool {
-            isCurrent && environment.uptime() < recoveryDeadline &&
-                owner.map { environment.now() < $0.terminalDeadline } == true
+            isCurrent && environment.timing.uptime() < recoveryDeadline &&
+                owner.map { environment.timing.now() < $0.terminalDeadline } == true
         }
 
         @discardableResult
@@ -198,11 +198,11 @@ public final class NativeApprovalCoordinator {
         func retry() async -> Bool {
             guard mayAttempt else { return false }
             let remaining = min(
-                recoveryDeadline - environment.uptime(),
-                owner.map { $0.terminalDeadline.timeIntervalSince(environment.now()) } ?? 0
+                recoveryDeadline - environment.timing.uptime(),
+                owner.map { $0.terminalDeadline.timeIntervalSince(environment.timing.now()) } ?? 0
             )
             guard remaining > 0 else { return false }
-            await environment.wait(UInt64(
+            await environment.timing.wait(UInt64(
                 min(NativeApprovalTiming.recoveryRetryInterval, remaining) * 1_000_000_000
             ))
             return mayAttempt
@@ -254,7 +254,7 @@ public final class NativeApprovalCoordinator {
     }
     public var countsTowardUnverifiedLimit: Bool { !isFinished && !hasVerifiedReceipt }
     public var isExpiredDormant: Bool {
-        isPaused && environment.now() >= terminalDeadline
+        isPaused && environment.timing.now() >= terminalDeadline
     }
 
     public init(authority: NativeApprovalAuthority) {
@@ -262,7 +262,7 @@ public final class NativeApprovalCoordinator {
         nativeDeliveryNonce = authority.nativeDeliveryNonce
         store = authority.deliveryStore
         environment = authority
-        terminalDeadline = authority.now().addingTimeInterval(ExtensionBridge.requestTTL)
+        terminalDeadline = authority.timing.now().addingTimeInterval(ExtensionBridge.requestTTL)
     }
 
     isolated deinit {
@@ -285,7 +285,7 @@ public final class NativeApprovalCoordinator {
 
     public func retryRecovery() {
         guard case .paused(let intent) = state else { return }
-        guard environment.now() < terminalDeadline else {
+        guard environment.timing.now() < terminalDeadline else {
             finish()
             return
         }
@@ -470,7 +470,7 @@ public final class NativeApprovalCoordinator {
     }
 
     private func pause(for intent: RecoveryIntent) {
-        guard environment.now() < terminalDeadline else {
+        guard environment.timing.now() < terminalDeadline else {
             finish()
             return
         }
@@ -488,13 +488,13 @@ public final class NativeApprovalCoordinator {
     private static func awaitAuthenticationExpiry(_ work: Work) async {
         while work.isCurrent {
             let remaining = work.update {
-                $0.terminalDeadline.timeIntervalSince(work.environment.now())
+                $0.terminalDeadline.timeIntervalSince(work.environment.timing.now())
             } ?? 0
             guard remaining > 0 else {
                 work.update { $0.finish() }
                 return
             }
-            do { try await work.environment.waitForAuthenticationExpiry(remaining) }
+            do { try await work.environment.timing.waitForAuthenticationExpiry(remaining) }
             catch { return }
         }
     }
@@ -538,11 +538,11 @@ public final class NativeApprovalCoordinator {
                 work.update { $0.finish(.superseded) }
                 return
             case .retryablePersistenceFailure:
-                guard work.update({ work.environment.now() < $0.terminalDeadline }) == true else {
+                guard work.update({ work.environment.timing.now() < $0.terminalDeadline }) == true else {
                     work.update { $0.finish(.interrupted) }
                     return
                 }
-                await work.environment.wait(NativeApprovalTiming.recoveryRetryNanoseconds)
+                await work.environment.timing.wait(NativeApprovalTiming.recoveryRetryNanoseconds)
             }
         }
     }
@@ -805,7 +805,7 @@ public final class NativeApprovalCoordinator {
             guard let status = await work.load() else { return }
             switch status {
             case .pending(_, .current):
-                guard work.update({ work.environment.now() < $0.terminalDeadline }) == true else {
+                guard work.update({ work.environment.timing.now() < $0.terminalDeadline }) == true else {
                     work.update { $0.finish() }
                     return
                 }
@@ -823,7 +823,7 @@ public final class NativeApprovalCoordinator {
                     }
                 case .pending:
                     work.update {
-                        if work.environment.now() < $0.terminalDeadline {
+                        if work.environment.timing.now() < $0.terminalDeadline {
                             $0.beginExecutionObservation()
                         } else {
                             $0.finish()
@@ -850,8 +850,8 @@ public final class NativeApprovalCoordinator {
         var delay = NativeApprovalTiming.observationInitialDelayNanoseconds
         var outageDeadline: TimeInterval?
         while work.isCurrent {
-            await work.environment.wait(delay)
-            if let outageDeadline, work.environment.uptime() >= outageDeadline {
+            await work.environment.timing.wait(delay)
+            if let outageDeadline, work.environment.timing.uptime() >= outageDeadline {
                 handleObservationOutage(work, mode: mode)
                 return
             }
@@ -871,7 +871,7 @@ public final class NativeApprovalCoordinator {
                 unavailable = true
             case .pending(_, .current):
                 if case .execution = mode {
-                    guard work.update({ work.environment.now() < $0.terminalDeadline }) == true else {
+                    guard work.update({ work.environment.timing.now() < $0.terminalDeadline }) == true else {
                         work.update { $0.finish() }
                         return
                     }
@@ -879,12 +879,12 @@ public final class NativeApprovalCoordinator {
                     return
                 }
             }
-            guard work.update({ work.environment.now() < $0.terminalDeadline }) == true else {
+            guard work.update({ work.environment.timing.now() < $0.terminalDeadline }) == true else {
                 work.update { $0.finish() }
                 return
             }
             if unavailable {
-                let now = work.environment.uptime()
+                let now = work.environment.timing.uptime()
                 let deadline = outageDeadline ?? now + NativeApprovalTiming.recoveryTimeout
                 outageDeadline = deadline
                 guard now < deadline else {

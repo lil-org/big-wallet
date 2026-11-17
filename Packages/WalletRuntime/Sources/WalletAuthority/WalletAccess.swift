@@ -757,10 +757,6 @@ final class WalletSigningSession: WalletSigning {
     }
 
     func sign() async -> Result<WalletSigningOutput, WalletSigningFailure> {
-        return await performSigning()
-    }
-
-    private func performSigning() async -> Result<WalletSigningOutput, WalletSigningFailure> {
         guard phase.withLock({ phase in
             guard case .active = phase else { return false }
             return operation.beginAttempt()

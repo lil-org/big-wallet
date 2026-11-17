@@ -258,15 +258,6 @@ final class DurableApprovalExecutor {
         signing preparation: WalletSigningPreparation?,
         context: ClaimContext
     ) async -> Result {
-        return await performApproved(claim: claim, approval: approval, signing: preparation, context: context)
-    }
-
-    private func performApproved(
-        claim: ExtensionBridge.ApprovalClaim,
-        approval: ResolvedDappApproval,
-        signing preparation: WalletSigningPreparation?,
-        context: ClaimContext
-    ) async -> Result {
         guard claim.authority.allowsExecution(at: clock(), isCancelled: Task.isCancelled) else {
             return await abandon(claim: claim)
         }

@@ -48,8 +48,6 @@ final class AuthorityMessageIsolationTests: XCTestCase {
         XCTAssertEqual(secondDiscard, .internalError)
         XCTAssertEqual(firstDiscard.message.rendered(using: first.system.messages), "first.somethingWentWrong")
         XCTAssertEqual(secondDiscard.message.rendered(using: second.system.messages), "second.somethingWentWrong")
-        XCTAssertEqual(first.system.error(.internalError).message, .literal("first.somethingWentWrong"))
-        XCTAssertEqual(second.system.error(.internalError).message, .literal("second.somethingWentWrong"))
     }
 
     func testPersistedResponsesKeepTheirWriterLocaleAndUpstreamErrorData() async throws {

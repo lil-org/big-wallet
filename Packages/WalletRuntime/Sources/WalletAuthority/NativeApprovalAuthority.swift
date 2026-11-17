@@ -232,50 +232,48 @@ public final class NativeApprovalAuthority {
         case unavailable, changed, retry
     }
 
-    struct Environment: Sendable {
-        let messages: AuthorityMessages
-        let authorityID: UUID
-        let hooks: AuthorityExecutionHooks
-        let now: @Sendable () -> Date
+    public struct Timing: Sendable {
+        public let now: @Sendable () -> Date
         let monotonicClock: @Sendable () -> ContinuousClock.Instant
-        let uptime: @MainActor @Sendable () -> TimeInterval
-        let wait: @MainActor @Sendable (UInt64) async -> Void
-        let waitForAuthenticationExpiry: @MainActor @Sendable (TimeInterval) async throws -> Void
-        let prepare: @MainActor @Sendable (ExtensionBridge.RequestBinding, WalletReviewCatalog?) async -> DappRequestPreparation
-        let reloadWallets: @MainActor @Sendable () async -> Bool
-        let currentReviewCatalog: @MainActor @Sendable () -> WalletReviewCatalog?
-        let attemptNativeDecision: @MainActor @Sendable (ReviewConsent) async -> NativeApprovalOperation.Result
+        public let uptime: @MainActor @Sendable () -> TimeInterval
+        public let wait: @MainActor @Sendable (UInt64) async -> Void
+        public let waitForAuthenticationExpiry: @MainActor @Sendable (TimeInterval) async throws -> Void
 
         init(
             now: @escaping @Sendable () -> Date,
             monotonicClock: @escaping @Sendable () -> ContinuousClock.Instant = { .now },
-            messages: AuthorityMessages,
-            authorityID: UUID,
-            hooks: AuthorityExecutionHooks = .none,
             uptime: (@MainActor @Sendable () -> TimeInterval)? = nil,
             wait: @escaping @MainActor @Sendable (UInt64) async -> Void,
-            waitForAuthenticationExpiry: (@MainActor @Sendable (TimeInterval) async throws -> Void)? = nil,
-            prepare: @escaping @MainActor @Sendable (ExtensionBridge.RequestBinding, WalletReviewCatalog?) async -> DappRequestPreparation,
-            reloadWallets: @escaping @MainActor @Sendable () async -> Bool,
-            currentReviewCatalog: @escaping @MainActor @Sendable () -> WalletReviewCatalog?,
-            attemptNativeDecision: @escaping @MainActor @Sendable (ReviewConsent) async -> NativeApprovalOperation.Result
+            waitForAuthenticationExpiry: (@MainActor @Sendable (TimeInterval) async throws -> Void)? = nil
         ) {
             self.now = now
             self.monotonicClock = monotonicClock
-            self.messages = messages
-            self.authorityID = authorityID
-            self.hooks = hooks
             self.uptime = uptime ?? { ProcessInfo.processInfo.systemUptime }
             self.wait = wait
             self.waitForAuthenticationExpiry = waitForAuthenticationExpiry ?? { seconds in
                 let clock = ContinuousClock()
                 try await clock.sleep(until: clock.now.advanced(by: .seconds(seconds)), tolerance: nil)
             }
-            self.prepare = prepare
-            self.reloadWallets = reloadWallets
-            self.currentReviewCatalog = currentReviewCatalog
-            self.attemptNativeDecision = attemptNativeDecision
         }
+
+        static func live(now: @escaping @Sendable () -> Date,
+                         monotonicClock: @escaping @Sendable () -> ContinuousClock.Instant) -> Timing {
+            Timing(now: now, monotonicClock: monotonicClock, wait: { nanoseconds in
+                let clock = ContinuousClock()
+                try? await clock.sleep(until: clock.now.advanced(by: .nanoseconds(Int64(clamping: nanoseconds))), tolerance: nil)
+            })
+        }
+    }
+
+    struct Environment: Sendable {
+        let timing: Timing
+        let messages: AuthorityMessages
+        let authorityID: UUID
+        let hooks: AuthorityExecutionHooks
+        let prepare: @MainActor @Sendable (ExtensionBridge.RequestBinding, WalletReviewCatalog?) async -> DappRequestPreparation
+        let reloadWallets: @MainActor @Sendable () async -> Bool
+        let currentReviewCatalog: @MainActor @Sendable () -> WalletReviewCatalog?
+        let attemptNativeDecision: @MainActor @Sendable (ReviewConsent) async -> NativeApprovalOperation.Result
 
         static func live(
             processor: DappRequestProcessor,
@@ -283,20 +281,14 @@ public final class NativeApprovalAuthority {
             finalizer: NativeApprovalFinalizer,
             messages: AuthorityMessages,
             authorityID: UUID,
-            clock: @escaping @Sendable () -> Date,
-            monotonicClock: @escaping @Sendable () -> ContinuousClock.Instant,
+            timing: Timing,
             hooks: AuthorityExecutionHooks
         ) -> Environment {
             Environment(
-                now: clock,
-                monotonicClock: monotonicClock,
+                timing: timing,
                 messages: messages,
                 authorityID: authorityID,
                 hooks: hooks,
-                wait: { nanoseconds in
-                    let clock = ContinuousClock()
-                    try? await clock.sleep(until: clock.now.advanced(by: .nanoseconds(Int64(clamping: nanoseconds))), tolerance: nil)
-                },
                 prepare: { await processor.prepare($0, catalog: $1) },
                 reloadWallets: { await wallets.reloadFromStore() },
                 currentReviewCatalog: { wallets.reviewCatalog() },
@@ -308,22 +300,20 @@ public final class NativeApprovalAuthority {
 
     public let handle: RequestHandle
     public let nativeDeliveryNonce: NativeDeliveryNonce
-    public let deliveryStore: any NativeDeliveryStore
+    public var deliveryStore: any NativeDeliveryStore { store }
+    private let store: any NativeDeliveryStore & NativeImmediateCompleting
     private let environment: Environment
     private var authenticatedAccess: WalletAccessSession?
     private var preparationRevision: UInt64 = 0
     private var currentReview: NativeApprovalReview?
 
     public var messages: AuthorityMessages { environment.messages }
-    public var now: @Sendable () -> Date { environment.now }
-    public var uptime: @MainActor @Sendable () -> TimeInterval { environment.uptime }
-    public var wait: @MainActor @Sendable (UInt64) async -> Void { environment.wait }
-    public var waitForAuthenticationExpiry: @MainActor @Sendable (TimeInterval) async throws -> Void { environment.waitForAuthenticationExpiry }
+    public var timing: Timing { environment.timing }
 
-    init(handle: RequestHandle, nativeDeliveryNonce: NativeDeliveryNonce, store: any NativeDeliveryStore, environment: Environment) {
+    init(handle: RequestHandle, nativeDeliveryNonce: NativeDeliveryNonce, store: any NativeDeliveryStore & NativeImmediateCompleting, environment: Environment) {
         self.handle = handle
         self.nativeDeliveryNonce = nativeDeliveryNonce
-        deliveryStore = store
+        self.store = store
         self.environment = environment
     }
 
@@ -344,8 +334,8 @@ public final class NativeApprovalAuthority {
                               until uptimeDeadline: TimeInterval? = nil) async -> Preparation {
         guard !Task.isCancelled, permitsPresentation(access) else { return .unavailable }
         let deadline = min(uptimeDeadline ?? .greatestFiniteMagnitude,
-                           environment.uptime() + NativeApprovalTiming.recoveryTimeout)
-        guard deadline.isFinite, environment.uptime() < deadline else { return .unavailable }
+                           environment.timing.uptime() + NativeApprovalTiming.recoveryTimeout)
+        guard deadline.isFinite, environment.timing.uptime() < deadline else { return .unavailable }
         let revision = retireCurrentPreparation()
         return await prepareScoped(owner: owner, access: access, revision: revision, deadline: deadline)
     }
@@ -360,7 +350,7 @@ public final class NativeApprovalAuthority {
     }
 
     private func isCurrent(_ revision: UInt64, access: WalletAccessSession, deadline: TimeInterval) -> Bool {
-        !Task.isCancelled && preparationRevision == revision && environment.uptime() < deadline && permitsPresentation(access)
+        !Task.isCancelled && preparationRevision == revision && environment.timing.uptime() < deadline && permitsPresentation(access)
     }
 
     isolated deinit { currentReview?.invalidate() }
@@ -377,18 +367,18 @@ public final class NativeApprovalAuthority {
             return initial.nativeDeliveryReceipt?.owner.runtimeInstanceIdentifier == owner.runtimeInstanceIdentifier
                 ? .unavailable : .changed
         }
-        guard environment.now() < binding.request.admissionDeadline else { return .unavailable }
+        guard environment.timing.now() < binding.request.admissionDeadline else { return .unavailable }
         var preparation = await environment.prepare(binding, nil)
         guard isCurrent(revision, access: access, deadline: deadline),
-              environment.now() < binding.request.admissionDeadline else { return .unavailable }
+              environment.timing.now() < binding.request.admissionDeadline else { return .unavailable }
         if case .needsCatalog = preparation {
             guard await environment.reloadWallets() else { return .retry }
         }
         guard isCurrent(revision, access: access, deadline: deadline),
-              environment.now() < binding.request.admissionDeadline else { return .unavailable }
+              environment.timing.now() < binding.request.admissionDeadline else { return .unavailable }
         let refreshed = await deliveryStore.load(handle: handle)
         guard isCurrent(revision, access: access, deadline: deadline),
-              environment.now() < binding.request.admissionDeadline else { return .unavailable }
+              environment.timing.now() < binding.request.admissionDeadline else { return .unavailable }
         guard case .found(let current) = refreshed else {
             if case .unavailable = refreshed { return .retry }
             return .changed
@@ -402,14 +392,14 @@ public final class NativeApprovalAuthority {
             guard let catalog = environment.currentReviewCatalog() else { return .retry }
             preparation = resolve(catalog)
         }
-        guard isCurrent(revision, access: access, deadline: deadline), environment.now() < binding.request.admissionDeadline else { return .unavailable }
+        guard isCurrent(revision, access: access, deadline: deadline), environment.timing.now() < binding.request.admissionDeadline else { return .unavailable }
         let receipt = NativeDeliveryReceipt(nativeDeliveryNonce: nativeDeliveryNonce, owner: owner)
         switch preparation {
         case .needsCatalog, .unavailable: return .unavailable
         case .approval(let intent):
             guard intent.binding == binding else { return .unavailable }
             let review = NativeApprovalReview(intent: intent, authorityID: environment.authorityID,
-                clock: environment.now, monotonicClock: environment.monotonicClock,
+                clock: environment.timing.now, monotonicClock: environment.timing.monotonicClock,
                 hooks: environment.hooks, access: access, receipt: receipt,
                 finalize: { [environment] consent in
                     await AuthorityExecutionHooks.$current.withValue(environment.hooks) {
@@ -420,7 +410,7 @@ public final class NativeApprovalAuthority {
             currentReview = review
             return .review(review)
         case .immediate(let resolution):
-            guard let store = deliveryStore as? any NativeImmediateCompleting else { return .unavailable }
+            let store = store
             let handle = handle
             let nonce = nativeDeliveryNonce
             return .immediate(NativeApprovalResponse { [environment] in

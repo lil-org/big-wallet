@@ -1499,8 +1499,9 @@ func nativeApprovalEnvironmentForTesting(
     currentReviewCatalog: @escaping @MainActor @Sendable () -> WalletReviewCatalog? = { nil },
     attemptNativeDecision: @escaping @MainActor @Sendable (ReviewConsent) async -> NativeApprovalOperation.Result = { _ in .pending }
 ) -> NativeApprovalAuthority.Environment {
-    .init(now: now, monotonicClock: monotonicClock, messages: messages, authorityID: authorityID,
-          hooks: hooks, uptime: uptime, wait: wait, waitForAuthenticationExpiry: waitForAuthenticationExpiry,
+    .init(timing: .init(now: now, monotonicClock: monotonicClock, uptime: uptime,
+                       wait: wait, waitForAuthenticationExpiry: waitForAuthenticationExpiry),
+          messages: messages, authorityID: authorityID, hooks: hooks,
           prepare: prepare, reloadWallets: reloadWallets, currentReviewCatalog: currentReviewCatalog,
           attemptNativeDecision: attemptNativeDecision)
 }

@@ -27,8 +27,6 @@ public final class NativeIngressGate: Sendable {
         var completionProcessSlots = 4
         var completionProfileSlots = 2
         var completionScopeSlots = 2
-        var maximumScopes = 256
-        var maximumProfiles = 64
     }
 
     public enum RejectionReason: String, Sendable {
@@ -258,10 +256,6 @@ public final class NativeIngressGate: Sendable {
                 return true
             }
             let scope = Scope(context)
-            let scopes = Set(state.records.values.compactMap(\.scope))
-            let profiles = Set(scopes.map(\.profile))
-            guard scopes.contains(scope) || scopes.count < limits.maximumScopes,
-                  profiles.contains(scope.profile) || profiles.count < limits.maximumProfiles else { return false }
             let occupied = state.records.values.filter { $0.lane == lane }
             switch lane {
             case .ordinary, .completion:

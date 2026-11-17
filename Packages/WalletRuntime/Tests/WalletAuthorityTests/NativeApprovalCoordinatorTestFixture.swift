@@ -561,7 +561,7 @@ extension NativeApprovalCoordinator {
     typealias Environment = NativeApprovalAuthority.Environment
 
     convenience init(handle: RequestHandle, nativeDeliveryNonce: NativeDeliveryNonce,
-                     store: any NativeDeliveryStore, environment: Environment) {
+                     store: any NativeDeliveryStore & NativeImmediateCompleting, environment: Environment) {
         self.init(authority: NativeApprovalAuthority(handle: handle, nativeDeliveryNonce: nativeDeliveryNonce,
             store: store, environment: environment))
     }

@@ -194,7 +194,7 @@ final class ConsumerServices {
         }
         let coordinator = NativeApprovalCoordinator(authority: NativeApprovalAuthority(handle: handle, nativeDeliveryNonce: nonce, store: bridge,
             environment: .live(processor: processor, wallets: wallets, finalizer: finalizer, messages: .testingEnglish,
-                authorityID: authorityID, clock: Date.init, monotonicClock: { .now }, hooks: .none)))
+                authorityID: authorityID, timing: .live(now: Date.init, monotonicClock: { .now }), hooks: .none)))
         let resolved = ApprovalResolution<Result<Void, UpgradeFailure>>()
         var decided = false
         let credentials = credentials

@@ -59,24 +59,6 @@ struct LocalAuthentication {
         case password(reason: String?), unavailable, mismatch
     }
 
-    static func attempt(reason: String, presentPasswordAlertFrom presenter: @escaping @MainActor @Sendable () -> UIViewController?, passwordReason: String?) async -> Bool {
-        guard let session = await accessSession(reason: reason, presentPasswordAlertFrom: presenter,
-                                               passwordReason: passwordReason) else { return false }
-        session.invalidate()
-        return true
-    }
-
-    static func accessSession(
-        reason: String,
-        presentPasswordAlertFrom presenter: @escaping @MainActor @Sendable () -> UIViewController?,
-        passwordReason: String?,
-        credentials: WalletCredentials = ApplicationServices.shared.credentials
-    ) async -> WalletAccessSession? {
-        let challenge = credentials.makeWalletAccessChallenge()
-        guard let grant = await authorize(reason: reason, presentPasswordAlertFrom: presenter, passwordReason: passwordReason, challenge: challenge, credentials: credentials) else { return nil }
-        return credentials.accessSession(authorization: grant)
-    }
-
     static func authorize(
         reason: String,
         presentPasswordAlertFrom presenter: @escaping @MainActor @Sendable () -> UIViewController?,
